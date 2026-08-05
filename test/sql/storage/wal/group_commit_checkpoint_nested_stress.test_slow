@@ -1,0 +1,86 @@
+# name: test/sql/storage/wal/group_commit_checkpoint_nested_stress.test_slow
+# description: Group commit: deferred commits of nested (LIST/ARRAY) data racing checkpoints replay with exact counts and intact values
+# group: [wal]
+
+# Stresses the checkpoint linchpin under group commit: concurrent deferred commits append nested-typed rows while a
+# thread force-checkpoints. The checkpoint must (a) freeze each row group at its committed-as-of-snapshot count and
+# push concurrent appends to new row groups (REQUIRE_NEW), and (b) slice LIST/ARRAY child columns to the matching
+# child-entry count for the (possibly partial) last vector. A leak in either direction surfaces as
+# COUNT(*) != COUNT(DISTINCT i) (double-insert), a wrong total (lost rows), or a nested-value mismatch - on the live
+# database and again after WAL replay.
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# widen the checkpoint serialization window (debug_checkpoint_sleep_ms) so it overlaps in-flight commits
+foreach sleep_time 50
+
+statement ok
+SET debug_checkpoint_sleep_ms={sleep_time}
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_ckpt_nested{sleep_time}.db' AS gc
+
+statement ok
+CREATE TABLE gc.t(i INTEGER, l INTEGER[], a INTEGER[3])
+
+# threads 0-8 insert disjoint key ranges (every insert succeeds -> deterministic total); thread 9 force-checkpoints.
+# FORCE CHECKPOINT drains in-flight commits and then serializes the row groups; appends that land during the slept
+# serialization window are routed to fresh row groups (REQUIRE_NEW). A plain CHECKPOINT would bail while writers
+# are active and never reach the serialization path being exercised here.
+concurrentloop threadid 0 10
+
+loop x 0 8
+
+onlyif threadid<>9
+statement ok
+INSERT INTO gc.t SELECT i, [i + y FOR y IN range((i % 4) + 1)], [i, i + 10, i + 20] FROM range({threadid} * 100000 + {x} * 2000, {threadid} * 100000 + {x} * 2000 + 2000) t(i)
+
+onlyif threadid=9
+statement maybe
+FORCE CHECKPOINT gc
+----
+
+endloop
+
+endloop
+
+# 9 inserting threads x 8 iterations x 2000 rows = 144000 rows, every key present exactly once
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM gc.t
+----
+144000	144000
+
+# nested values intact for every row
+query I
+SELECT COUNT(*) FROM gc.t WHERE l != [i + y FOR y IN range((i % 4) + 1)] OR a != [i, i + 10, i + 20]
+----
+0
+
+# reopen: the data + nested values must be reconstructed from the checkpoint plus WAL replay
+statement ok
+DETACH gc
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_ckpt_nested{sleep_time}.db' AS gc
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM gc.t
+----
+144000	144000
+
+query I
+SELECT COUNT(*) FROM gc.t WHERE l != [i + y FOR y IN range((i % 4) + 1)] OR a != [i, i + 10, i + 20]
+----
+0
+
+statement ok
+DETACH gc
+
+statement ok
+SET debug_checkpoint_sleep_ms=0
+
+endloop

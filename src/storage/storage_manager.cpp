@@ -22,6 +22,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/path.hpp"
@@ -256,13 +257,23 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 		// not holding the WAL lock yet - grab it
 		guard = GetWALLock();
 	}
+	// drain under the WAL lock before the checkpoint transaction starts: its snapshot would
+	// otherwise be bounded below commits whose WAL this checkpoint deletes. No context, as an
+	// exception here would invalidate the database - Checkpoint() pre-drains cancellably
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	transaction_manager.WaitForDurability();
+	if (options.type == CheckpointType::FULL_CHECKPOINT &&
+	    !VisibleToSnapshot(transaction_manager.GetLastCommit(), transaction_manager.LowestActiveStart())) {
+		// an active bounded snapshot still needs state a full checkpoint would vacuum away
+		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+	}
+
 	if (active_checkpoint.HasCheckpointContext()) {
 		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
 		// The start time of this transaction defines the visibility for checkpointing, any new commits are written
 		// to the next WAL.
 		active_checkpoint.GetCheckpointTransaction(options);
 	} else {
-		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 		options.transaction_id = transaction_manager.GetLastCommit();
 	}
 
@@ -319,6 +330,8 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	}
 
 	// we have had writes to the checkpoint WAL - we need to override our WAL with the checkpoint WAL
+	// commits to the checkpoint WAL may still be syncing: drain before destroying the WAL object
+	DuckTransactionManager::Get(db).WaitForDurability();
 	// first close the WAL writer
 	auto checkpoint_wal_path = wal->GetPath();
 	wal.reset();
@@ -620,6 +633,9 @@ public:
 	void RevertCommit() override;
 	// Make the commit persistent
 	void FlushCommit() override;
+	idx_t GetWALSyncOffset() override {
+		return wal_sync_offset;
+	}
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -629,6 +645,7 @@ public:
 private:
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
+	idx_t wal_sync_offset = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
@@ -675,7 +692,8 @@ void SingleFileStorageCommitState::FlushCommit() {
 		return;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	wal.Flush();
+	// only the marker is written here: the sync happens once the locks are released
+	wal_sync_offset = wal.FlushMarker();
 	state = WALCommitState::FLUSHED;
 }
 

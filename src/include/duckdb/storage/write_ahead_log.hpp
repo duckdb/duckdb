@@ -16,6 +16,8 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/block.hpp"
 
+#include <condition_variable>
+
 namespace duckdb {
 
 struct AlterInfo;
@@ -121,6 +123,19 @@ public:
 	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
+	//! Write a WAL_FLUSH marker and push the buffer to the OS without syncing it. Returns the
+	//! offset covering the marker, to be passed to SyncUpTo. Caller must hold the WAL lock
+	idx_t FlushMarker();
+	//! Block until the WAL is durable up to the given offset. One caller syncs on behalf of every
+	//! offset pushed so far, so a single fsync can cover many commits. Called without the WAL lock
+	void SyncUpTo(idx_t offset);
+	//! Remove the never-durable tail after a failed sync (WAL lock held)
+	void TruncateUnsyncedTail();
+
+private:
+	void SyncAsLeader(unique_lock<mutex> &guard);
+
+public:
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
@@ -132,6 +147,24 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
+
+	//! Group-sync state (guarded by sync_lock, which is independent of the WAL lock)
+	mutex sync_lock;
+	std::condition_variable sync_cv;
+	//! Sync offsets are LOGICAL (BufferedFileWriter::GetTotalWritten), not file positions: a
+	//! truncation rewinds the file, so a file offset can be reused but a logical one never is
+	//! The WAL is durable up to this logical offset
+	idx_t durable_offset = 0;
+	//! An in-flight sync will make the WAL durable up to this logical offset
+	idx_t syncing_offset = 0;
+	//! The highest logical offset for which a sync has been requested
+	idx_t requested_sync_offset = 0;
+	//! File positions matching the two offsets above, needed only by the failure path
+	idx_t durable_file_offset = 0;
+	idx_t requested_sync_file_offset = 0;
+	//! Set when a sync has failed: the OS may have dropped the dirty pages, so all further
+	//! syncs of this WAL fail
+	bool sync_failed = false;
 };
 
 } // namespace duckdb
