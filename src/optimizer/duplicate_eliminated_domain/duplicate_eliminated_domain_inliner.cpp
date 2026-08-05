@@ -21,6 +21,7 @@ namespace duckdb {
 using operator_location_list_t = vector<reference<unique_ptr<LogicalOperator>>>;
 
 struct DomainAggregateUse {
+public:
 	bool contains_domain = false;
 	bool feeds_aggregate = false;
 };

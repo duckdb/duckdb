@@ -113,6 +113,7 @@ public:
 		CollectCTEs(root);
 	}
 
+public:
 	bool IsDuplicateFree(LogicalOperator &op, const vector<ColumnBinding> &bindings) {
 		unordered_set<TableIndex> visiting_ctes;
 		return IsDuplicateFree(op, bindings, visiting_ctes);

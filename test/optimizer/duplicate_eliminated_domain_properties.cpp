@@ -38,6 +38,7 @@ static unique_ptr<LogicalOperator> CreateGroupedInput(TableIndex input_index, Ta
 }
 
 struct SingleJoinTestPlan {
+public:
 	unique_ptr<LogicalOperator> root;
 	reference<LogicalComparisonJoin> single_join;
 };

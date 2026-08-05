@@ -27,6 +27,7 @@ public:
 	      candidate(std::move(candidate_p)) {
 	}
 
+public:
 	optional<DuplicateEliminatedDomainCandidate> candidate;
 };
 
@@ -89,8 +90,8 @@ DuplicateEliminatedDomainStrategy::TryOptimize(Binder &binder, unique_ptr<Logica
 	return DelimJoinCTEOptimizationResult::Alternative(std::move(alternative));
 }
 
-unique_ptr<DelimJoinCTEOptimization> CreateDuplicateEliminatedDomainStrategy(ClientContext &context) {
-	if (!DuplicateEliminatedDomainStrategy::Enabled(context)) {
+unique_ptr<DelimJoinCTEOptimization> DuplicateEliminatedDomainStrategy::Create(ClientContext &context) {
+	if (!Enabled(context)) {
 		return nullptr;
 	}
 	return make_uniq<DuplicateEliminatedDomainStrategy>();

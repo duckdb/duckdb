@@ -26,10 +26,12 @@ enum class DuplicateEliminatedDomainCoverage : uint8_t { EXACT, SUPERSET };
 enum class KeyMatch : uint8_t { IDENTICAL, NULL_SAFE_EQUALITY, EQUALITY };
 
 struct EquivalentBinding {
+public:
 	EquivalentBinding(ColumnBinding left_p, ColumnBinding right_p, bool null_safe_p)
 	    : left(left_p), right(right_p), null_safe(null_safe_p) {
 	}
 
+public:
 	ColumnBinding left;
 	ColumnBinding right;
 	bool null_safe;
@@ -42,7 +44,6 @@ public:
 			edges.emplace_back(left, right, null_safe);
 		}
 	}
-
 	bool FindMatch(ColumnBinding source, ColumnBinding target, KeyMatch &match) const {
 		if (source == target) {
 			match = KeyMatch::IDENTICAL;
@@ -90,10 +91,12 @@ private:
 		return false;
 	}
 
+private:
 	vector<EquivalentBinding> edges;
 };
 
 struct AnalyzedCandidate {
+public:
 	AnalyzedCandidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> source_path_p, vector<idx_t> key_indices_p,
 	                  DuplicateEliminatedDomainCoverage coverage_p, idx_t base_relation_count_p, idx_t depth_p,
 	                  idx_t order_p)
@@ -101,6 +104,7 @@ struct AnalyzedCandidate {
 	      coverage(coverage_p), base_relation_count(base_relation_count_p), depth(depth_p), order(order_p) {
 	}
 
+public:
 	reference<unique_ptr<LogicalOperator>> source;
 	vector<idx_t> source_path;
 	vector<idx_t> key_indices;
@@ -113,9 +117,16 @@ struct AnalyzedCandidate {
 };
 
 struct OperatorAnalysis {
+public:
 	column_binding_set_t source_bindings;
 	bool supported_source = false;
 	idx_t base_relation_count = 0;
+};
+
+struct CandidateTraversal {
+public:
+	DuplicateEliminatedDomainCoverage coverage;
+	bool discover;
 };
 
 static bool GetBinding(const Expression &expr, ColumnBinding &binding) {
@@ -258,6 +269,7 @@ public:
 	      allow_cte_candidates(allow_cte_candidates_p) {
 	}
 
+public:
 	vector<AnalyzedCandidate> Analyze(unique_ptr<LogicalOperator> &root) {
 		vector<idx_t> path;
 		Visit(root, DuplicateEliminatedDomainCoverage::EXACT, true, 0, path, true);
@@ -268,44 +280,7 @@ private:
 	OperatorAnalysis Visit(unique_ptr<LogicalOperator> &op, DuplicateEliminatedDomainCoverage coverage, bool discover,
 	                       idx_t depth, vector<idx_t> &path, bool is_root = false) {
 		auto can_factor_operator = DuplicateEliminatedDomainSafety::CanFactorOperator(context, *op);
-		vector<OperatorAnalysis> children;
-		children.reserve(op->children.size());
-		for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
-			auto child_coverage = coverage;
-			auto discover_child = false;
-			switch (op->type) {
-			case LogicalOperatorType::LOGICAL_PROJECTION:
-				discover_child = discover && can_factor_operator;
-				break;
-			case LogicalOperatorType::LOGICAL_FILTER:
-				discover_child = discover && can_factor_operator;
-				child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
-				break;
-			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-				if (IsInnerJoin(*op)) {
-					discover_child = discover && can_factor_operator;
-				} else {
-					auto &join = op->Cast<LogicalComparisonJoin>();
-					discover_child = discover && can_factor_operator && join.join_type == JoinType::SEMI &&
-					                 !join.HasProjectionMap() && child_idx == 0;
-				}
-				if (discover_child) {
-					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
-				}
-				break;
-			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-				discover_child = discover && can_factor_operator;
-				if (discover_child) {
-					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
-				}
-				break;
-			default:
-				break;
-			}
-			path.push_back(child_idx);
-			children.push_back(Visit(op->children[child_idx], child_coverage, discover_child, depth + 1, path));
-			path.pop_back();
-		}
+		auto children = AnalyzeChildren(op, coverage, discover, can_factor_operator, depth, path);
 
 		OperatorAnalysis result;
 		for (auto &child : children) {
@@ -334,19 +309,7 @@ private:
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_PROJECTION:
-			if (children.size() == 1) {
-				auto &projection = op->Cast<LogicalProjection>();
-				auto output_bindings = projection.GetColumnBindings();
-				for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
-					ColumnBinding child_binding;
-					if (GetBinding(*projection.expressions[expression_idx], child_binding) &&
-					    children[0].source_bindings.find(child_binding) != children[0].source_bindings.end()) {
-						result.source_bindings.insert(output_bindings[expression_idx]);
-					}
-				}
-				result.supported_source = children[0].supported_source;
-				result.base_relation_count = children[0].base_relation_count;
-			}
+			AnalyzeProjection(op->Cast<LogicalProjection>(), children, result);
 			break;
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 			auto &aggregate = op->Cast<LogicalAggregate>();
@@ -358,31 +321,7 @@ private:
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			auto &join = op->Cast<LogicalComparisonJoin>();
-			if (children.size() != 2) {
-				break;
-			}
-			if (join.join_type == JoinType::INNER) {
-				result.source_bindings = children[0].source_bindings;
-				result.source_bindings.insert(children[1].source_bindings.begin(), children[1].source_bindings.end());
-				if (join.HasProjectionMap()) {
-					column_binding_set_t output_bindings;
-					for (auto &binding : op->GetColumnBindings()) {
-						output_bindings.insert(binding);
-					}
-					for (auto entry = result.source_bindings.begin(); entry != result.source_bindings.end();) {
-						if (output_bindings.find(*entry) == output_bindings.end()) {
-							entry = result.source_bindings.erase(entry);
-						} else {
-							entry++;
-						}
-					}
-				}
-				result.supported_source = children[0].supported_source && children[1].supported_source;
-			} else if (join.join_type == JoinType::SEMI && !join.HasProjectionMap()) {
-				result.source_bindings = children[0].source_bindings;
-				result.supported_source = children[0].supported_source && children[1].supported_source;
-			}
+			AnalyzeComparisonJoin(op->Cast<LogicalComparisonJoin>(), children, result);
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
@@ -405,6 +344,100 @@ private:
 			}
 		}
 		return result;
+	}
+
+	static CandidateTraversal GetChildTraversal(const LogicalOperator &op, idx_t child_idx,
+	                                            DuplicateEliminatedDomainCoverage coverage, bool discover,
+	                                            bool can_factor_operator) {
+		CandidateTraversal result {coverage, false};
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			result.discover = discover && can_factor_operator;
+			break;
+		case LogicalOperatorType::LOGICAL_FILTER:
+			result.discover = discover && can_factor_operator;
+			result.coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+			break;
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			result.discover = discover && can_factor_operator &&
+			                  (join.join_type == JoinType::INNER ||
+			                   (join.join_type == JoinType::SEMI && !join.HasProjectionMap() && child_idx == 0));
+			if (result.discover) {
+				result.coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			result.discover = discover && can_factor_operator;
+			if (result.discover) {
+				result.coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+			}
+			break;
+		default:
+			break;
+		}
+		return result;
+	}
+
+	vector<OperatorAnalysis> AnalyzeChildren(unique_ptr<LogicalOperator> &op,
+	                                         DuplicateEliminatedDomainCoverage coverage, bool discover,
+	                                         bool can_factor_operator, idx_t depth, vector<idx_t> &path) {
+		vector<OperatorAnalysis> result;
+		result.reserve(op->children.size());
+		for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+			auto traversal = GetChildTraversal(*op, child_idx, coverage, discover, can_factor_operator);
+			path.push_back(child_idx);
+			result.push_back(Visit(op->children[child_idx], traversal.coverage, traversal.discover, depth + 1, path));
+			path.pop_back();
+		}
+		return result;
+	}
+
+	static void AnalyzeProjection(LogicalProjection &projection, const vector<OperatorAnalysis> &children,
+	                              OperatorAnalysis &result) {
+		if (children.size() != 1) {
+			return;
+		}
+		auto &child = children[0];
+		auto output_bindings = projection.GetColumnBindings();
+		for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
+			ColumnBinding child_binding;
+			if (GetBinding(*projection.expressions[expression_idx], child_binding) &&
+			    child.source_bindings.find(child_binding) != child.source_bindings.end()) {
+				result.source_bindings.insert(output_bindings[expression_idx]);
+			}
+		}
+		result.supported_source = child.supported_source;
+		result.base_relation_count = child.base_relation_count;
+	}
+
+	static void AnalyzeComparisonJoin(LogicalComparisonJoin &join, const vector<OperatorAnalysis> &children,
+	                                  OperatorAnalysis &result) {
+		if (children.size() != 2) {
+			return;
+		}
+		if (join.join_type == JoinType::INNER) {
+			result.source_bindings = children[0].source_bindings;
+			result.source_bindings.insert(children[1].source_bindings.begin(), children[1].source_bindings.end());
+			if (join.HasProjectionMap()) {
+				column_binding_set_t output_bindings;
+				for (auto &binding : join.GetColumnBindings()) {
+					output_bindings.insert(binding);
+				}
+				for (auto entry = result.source_bindings.begin(); entry != result.source_bindings.end();) {
+					if (output_bindings.find(*entry) == output_bindings.end()) {
+						entry = result.source_bindings.erase(entry);
+					} else {
+						entry++;
+					}
+				}
+			}
+			result.supported_source = children[0].supported_source && children[1].supported_source;
+		} else if (join.join_type == JoinType::SEMI && !join.HasProjectionMap()) {
+			result.source_bindings = children[0].source_bindings;
+			result.supported_source = children[0].supported_source && children[1].supported_source;
+		}
 	}
 
 private:
@@ -498,6 +531,7 @@ static bool FindPayloadKeyIndices(LogicalOperator &op, const vector<unique_ptr<E
 }
 
 struct CTEKeySource {
+public:
 	TableIndex cte_index;
 	vector<idx_t> column_indices;
 };
@@ -568,6 +602,7 @@ static optional<CTEKeySource> TraceBindingsToCTE(LogicalOperator &op, vector<Col
 }
 
 struct DomainKeyMapping {
+public:
 	idx_t domain_index;
 	ColumnBinding retained_binding;
 };
@@ -578,6 +613,7 @@ public:
 	    : payload_source(std::move(payload_source_p)), domain_cte_index(domain_cte_index_p) {
 	}
 
+public:
 	bool Analyze(LogicalOperator &rhs) {
 		return Analyze(rhs, false) && found_grouped_restriction;
 	}
@@ -753,6 +789,45 @@ bool DuplicateEliminatedDomainAnalyzer::CanEliminateEquivalentSourceDomain(Logic
 	return analyzer.Analyze(rhs);
 }
 
+struct CandidateScore {
+public:
+	bool IsBetterThan(const CandidateScore &other) const {
+		if (source_cardinality != other.source_cardinality) {
+			return source_cardinality < other.source_cardinality;
+		}
+		if (domain_cardinality != other.domain_cardinality) {
+			return domain_cardinality < other.domain_cardinality;
+		}
+		if (base_relation_count != other.base_relation_count) {
+			return base_relation_count < other.base_relation_count;
+		}
+		if (depth != other.depth) {
+			return depth < other.depth;
+		}
+		return order < other.order;
+	}
+
+public:
+	idx_t source_cardinality;
+	idx_t domain_cardinality;
+	idx_t base_relation_count;
+	idx_t depth;
+	idx_t order;
+};
+
+static optional<CandidateScore> TryScoreCandidate(RelationStatsExtractor &stats_extractor,
+                                                  AnalyzedCandidate &candidate) {
+	auto source_stats = stats_extractor.Extract(*candidate.source.get());
+	auto domain_estimate =
+	    TryEstimateDomainCardinality(stats_extractor, *candidate.source.get(), candidate.key_indices, false);
+	if (!source_stats || !source_stats->stats_initialized || !domain_estimate.IsValid()) {
+		return {};
+	}
+	return CandidateScore {MaxValue<idx_t>(source_stats->cardinality, 1),
+	                       MaxValue<idx_t>(domain_estimate.GetIndex(), 1), candidate.base_relation_count,
+	                       candidate.depth, candidate.order};
+}
+
 static optional_idx FindBestCandidate(RelationStatsExtractor &stats_extractor, LogicalOperator &payload,
                                       const vector<unique_ptr<Expression>> &keys, const BindingEquivalence &equivalence,
                                       vector<AnalyzedCandidate> &candidates, bool allow_superset,
@@ -772,46 +847,27 @@ static optional_idx FindBestCandidate(RelationStatsExtractor &stats_extractor, L
 	payload_cardinality = MaxValue<idx_t>(payload_stats->cardinality, 1);
 	payload_domain_cardinality = MaxValue<idx_t>(payload_domain.GetIndex(), 1);
 	optional_idx best;
-	idx_t best_rows = 0;
-	idx_t best_domain_rows = 0;
-	idx_t best_base_relations = 0;
-	idx_t best_depth = 0;
-	idx_t best_order = 0;
+	optional<CandidateScore> best_score;
 	for (idx_t candidate_idx = 0; candidate_idx < candidates.size(); candidate_idx++) {
 		auto &candidate = candidates[candidate_idx];
 		if (!allow_superset && candidate.coverage == DuplicateEliminatedDomainCoverage::SUPERSET) {
 			continue;
 		}
-		auto source_stats = stats_extractor.Extract(*candidate.source.get());
-		auto domain_estimate =
-		    TryEstimateDomainCardinality(stats_extractor, *candidate.source.get(), candidate.key_indices, false);
-		if (!source_stats || !source_stats->stats_initialized || !domain_estimate.IsValid()) {
+		auto score = TryScoreCandidate(stats_extractor, candidate);
+		if (!score) {
 			continue;
 		}
-		auto estimate = MaxValue<idx_t>(source_stats->cardinality, 1);
-		auto domain_rows = MaxValue<idx_t>(domain_estimate.GetIndex(), 1);
-		if (estimate >= payload_cardinality || domain_rows > payload_domain_cardinality) {
+		if (score->source_cardinality >= payload_cardinality ||
+		    score->domain_cardinality > payload_domain_cardinality) {
 			continue;
 		}
-		auto better = !best.IsValid() || estimate < best_rows ||
-		              (estimate == best_rows && domain_rows < best_domain_rows) ||
-		              (estimate == best_rows && domain_rows == best_domain_rows &&
-		               candidate.base_relation_count < best_base_relations) ||
-		              (estimate == best_rows && domain_rows == best_domain_rows &&
-		               candidate.base_relation_count == best_base_relations && candidate.depth < best_depth) ||
-		              (estimate == best_rows && domain_rows == best_domain_rows &&
-		               candidate.base_relation_count == best_base_relations && candidate.depth == best_depth &&
-		               candidate.order < best_order);
-		if (better) {
-			best = candidate_idx;
-			best_rows = estimate;
-			best_domain_rows = domain_rows;
-			best_base_relations = candidate.base_relation_count;
-			best_depth = candidate.depth;
-			best_order = candidate.order;
-			candidate.source_cardinality = estimate;
-			candidate.domain_cardinality = domain_rows;
+		if (best_score && !score->IsBetterThan(*best_score)) {
+			continue;
 		}
+		best = candidate_idx;
+		best_score = *score;
+		candidate.source_cardinality = score->source_cardinality;
+		candidate.domain_cardinality = score->domain_cardinality;
 	}
 	return best;
 }

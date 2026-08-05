@@ -29,6 +29,7 @@
 namespace duckdb {
 
 struct BigIntRange {
+public:
 	int64_t minimum;
 	int64_t maximum;
 };
@@ -264,6 +265,7 @@ public:
 	    : context(context_p), rewrite_root(root), cte_registry(cte_registry_p), domain_cte_index(domain_cte_index_p) {
 	}
 
+public:
 	bool CanEvaluate(LogicalOperator &root) {
 		unordered_set<TableIndex> visiting_ctes;
 		return SubtreeIsInspectable(root, visiting_ctes);

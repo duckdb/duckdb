@@ -18,6 +18,19 @@ class LogicalComparisonJoin;
 class DuplicateEliminatedDomainCTERegistry;
 
 class DuplicateEliminatedDomainCandidate {
+	friend class DuplicateEliminatedDomainAnalyzer;
+
+private:
+	DuplicateEliminatedDomainCandidate(LogicalOperator &source, vector<idx_t> source_path_p,
+	                                   vector<idx_t> key_indices_p, idx_t source_cardinality_p,
+	                                   idx_t domain_cardinality_p, idx_t payload_cardinality_p,
+	                                   idx_t payload_domain_cardinality_p)
+	    : source_path(std::move(source_path_p)), key_indices(std::move(key_indices_p)),
+	      source_cardinality(source_cardinality_p), domain_cardinality(domain_cardinality_p),
+	      payload_cardinality(payload_cardinality_p), payload_domain_cardinality(payload_domain_cardinality_p),
+	      source_type(source.type), source_types(source.types), source_bindings(source.GetColumnBindings()) {
+	}
+
 public:
 	optional_ptr<unique_ptr<LogicalOperator>> TryResolveSource(unique_ptr<LogicalOperator> &payload) const;
 	const vector<idx_t> &KeyIndices() const {
@@ -46,18 +59,6 @@ public:
 	}
 
 private:
-	friend class DuplicateEliminatedDomainAnalyzer;
-
-	DuplicateEliminatedDomainCandidate(LogicalOperator &source, vector<idx_t> source_path_p,
-	                                   vector<idx_t> key_indices_p, idx_t source_cardinality_p,
-	                                   idx_t domain_cardinality_p, idx_t payload_cardinality_p,
-	                                   idx_t payload_domain_cardinality_p)
-	    : source_path(std::move(source_path_p)), key_indices(std::move(key_indices_p)),
-	      source_cardinality(source_cardinality_p), domain_cardinality(domain_cardinality_p),
-	      payload_cardinality(payload_cardinality_p), payload_domain_cardinality(payload_domain_cardinality_p),
-	      source_type(source.type), source_types(source.types), source_bindings(source.GetColumnBindings()) {
-	}
-
 	vector<idx_t> source_path;
 	vector<idx_t> key_indices;
 	idx_t source_cardinality;

@@ -197,7 +197,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
-		auto duplicate_eliminated_domain_strategy = CreateDuplicateEliminatedDomainStrategy(context);
+		auto duplicate_eliminated_domain_strategy = DuplicateEliminatedDomainStrategy::Create(context);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan),
 		                                                           duplicate_eliminated_domain_strategy.get());
 		D_ASSERT(!ContainsDependentJoin(*this->plan));

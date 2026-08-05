@@ -494,6 +494,7 @@ static bool IsRedundantNullSafeSelfComparison(const Expression &expr) {
 }
 
 struct RewrittenOutputLayout {
+public:
 	vector<ColumnBinding> old_bindings;
 	vector<LogicalType> old_types;
 	vector<unique_ptr<Expression>> expressions;
