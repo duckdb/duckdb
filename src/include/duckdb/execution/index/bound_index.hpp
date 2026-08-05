@@ -172,6 +172,8 @@ public:
 	//! Creates a delta index - an empty copy of the index with the same schema, etc
 	//! This will only be called if SupportsDeltaIndexes returns true
 	virtual unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const;
+	//! Merges a checkpoint delta into this index
+	virtual ErrorData MergeCheckpointDelta(BoundIndex &delta_index);
 
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
 	virtual idx_t GetInMemorySize(IndexLock &state) const = 0;

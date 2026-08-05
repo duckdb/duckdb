@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -75,22 +74,22 @@ void IndexDeltas::Reset(const IndexEntryDelta delta) {
 	GetPointer(delta).reset();
 }
 
+ErrorData IndexDeltas::MergeCheckpointDeltas(BoundIndex &index) {
+	for (const auto delta : {&checkpoint.removed_data, &checkpoint.added_data}) {
+		if (!*delta) {
+			continue;
+		}
+		auto error = index.MergeCheckpointDelta(**delta);
+		if (error.HasError()) {
+			return error;
+		}
+		delta->reset();
+	}
+	return ErrorData();
+}
+
 void IndexDeltas::MarkWritten(const transaction_t checkpoint_id) {
 	checkpoint.last_written_checkpoint = checkpoint_id;
-}
-
-void IndexEntry::MergeRemovedDataDuringCheckpoint() {
-	auto &art = owned_index->Cast<ART>();
-	auto delta = deltas.Get(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT);
-	D_ASSERT(delta);
-	art.RemovalMerge(*delta);
-}
-
-ErrorData IndexEntry::MergeAddedDataDuringCheckpoint(const IndexAppendMode append_mode) {
-	auto &art = owned_index->Cast<ART>();
-	auto delta = deltas.Get(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT);
-	D_ASSERT(delta);
-	return art.InsertMerge(*delta, append_mode);
 }
 
 template <class T>
@@ -436,41 +435,19 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 	return result;
 }
 
-void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) const {
+void TableIndexList::MergeCheckpointDeltas(const transaction_t checkpoint_id) const {
 	for (auto index : MutableIndexHandles()) {
 		// Merge any data appended to the index while the checkpoint was running.
 		if (!index->IsBound()) {
 			continue;
 		}
-		auto removed_delta = index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT);
-		auto added_delta = index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT);
-		if (removed_delta || added_delta) {
-			if (index->GetIndexType() != ART::TYPE_NAME) {
-				throw InternalException("Concurrent changes made to a non-ART index");
-			}
-
-			if (removed_delta) {
-				index.MergeRemovedDataDuringCheckpoint();
-			}
-			if (added_delta) {
-				// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
-				// this is necessary due to the way that data is inserted into indexes during transaction commit
-				// essentially we always FIRST insert data into the index, THEN remove data
-				// even if the data was logically removed first
-				// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
-				// we will FIRST insert 42, THEN delete 42 from the index
-				// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
-				auto error = index.MergeAddedDataDuringCheckpoint(IndexAppendMode::INSERT_DUPLICATES);
-				if (error.HasError()) {
-					throw InternalException("Failed to append while merging checkpoint deltas - this "
-					                        "signifies a bug or broken index: %s",
-					                        error.Message());
-				}
-			}
-			index.ResetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT);
-			index.ResetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT);
+		auto bound_index = std::move(index).Into<BoundIndex>();
+		auto error = bound_index.MergeCheckpointDeltas();
+		if (error.HasError()) {
+			throw InternalException("Failed to merge checkpoint delta - this signifies a bug or broken index: %s",
+			                        error.Message());
 		}
-		index.MarkWrittenForCheckpoint(checkpoint_id);
+		bound_index.MarkWrittenForCheckpoint(checkpoint_id);
 	}
 }
 

@@ -143,6 +143,7 @@ public:
 
 	bool SupportsDeltaIndexes() const override;
 	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;
+	ErrorData MergeCheckpointDelta(BoundIndex &delta_index) override;
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>

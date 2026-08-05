@@ -65,6 +65,7 @@ public:
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	void Set(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
 	void Reset(IndexEntryDelta delta);
+	ErrorData MergeCheckpointDeltas(BoundIndex &index);
 	void MarkWritten(transaction_t checkpoint_id);
 
 private:
@@ -144,8 +145,7 @@ public:
 	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint);
 	void SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
 	void ResetDelta(IndexEntryDelta delta);
-	void MergeRemovedDataDuringCheckpoint();
-	ErrorData MergeAddedDataDuringCheckpoint(IndexAppendMode append_mode);
+	ErrorData MergeCheckpointDeltas();
 	void MarkWrittenForCheckpoint(transaction_t checkpoint_id);
 	void ReplaceIndex(unique_ptr<Index> index);
 
@@ -187,9 +187,6 @@ private:
 	friend class IndexHandle;
 	template <class>
 	friend class MutableIndexHandle;
-
-	void MergeRemovedDataDuringCheckpoint();
-	ErrorData MergeAddedDataDuringCheckpoint(IndexAppendMode append_mode);
 
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
@@ -294,13 +291,8 @@ void MutableIndexHandle<TARGET>::ResetDelta(IndexEntryDelta delta) {
 }
 
 template <class TARGET>
-void MutableIndexHandle<TARGET>::MergeRemovedDataDuringCheckpoint() {
-	GetMutableEntry().MergeRemovedDataDuringCheckpoint();
-}
-
-template <class TARGET>
-ErrorData MutableIndexHandle<TARGET>::MergeAddedDataDuringCheckpoint(IndexAppendMode append_mode) {
-	return GetMutableEntry().MergeAddedDataDuringCheckpoint(append_mode);
+ErrorData MutableIndexHandle<TARGET>::MergeCheckpointDeltas() {
+	return GetMutableEntry().deltas.MergeCheckpointDeltas(*this->operator->());
 }
 
 template <class TARGET>
