@@ -291,7 +291,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	if (!cached_valid_until.IsFinite()) {
 		return false; // The backend does not provide expiry information, so we cannot validate at all
 	}
-	return Timestamp::GetCurrentTimestamp() < cached_valid_until;
+	return Timestamp::GetCurrentTimestamp() <= cached_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
