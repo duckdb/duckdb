@@ -12,18 +12,27 @@
 
 namespace duckdb {
 
+class LogicalMaterializedCTE;
+class Optimizer;
+
 //! Reuses an exact aggregate payload already computed by a filtering SEMI join.
 class AggregateReuseOptimizer : public LogicalOperatorVisitor {
 public:
+	explicit AggregateReuseOptimizer(Optimizer &optimizer);
+
+	void CollectCTEs(LogicalOperator &op);
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expression,
 	                                    unique_ptr<Expression> *expression_ptr) override;
 	bool TryRewrite(unique_ptr<LogicalOperator> &op);
+	bool TryReuseMaterializedAggregate(unique_ptr<LogicalOperator> &op);
 
 private:
+	Optimizer &optimizer;
 	column_binding_map_t<ColumnBinding> replacement_map;
+	unordered_map<idx_t, reference<LogicalMaterializedCTE>> cte_definitions;
 };
 
 } // namespace duckdb
