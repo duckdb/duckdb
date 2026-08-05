@@ -1069,3 +1069,163 @@ SELECT count(*) FROM de_kahan_enabled e JOIN de_kahan_disabled f USING (g)
 WHERE abs(e.s - f.s) > 1e-9 * abs(f.s) + 1e-9
 ----
 0
+
+# A unique preserved key allows count to finish below an owner-outer join.
+statement ok
+CREATE TABLE outer_count_owner(k INTEGER PRIMARY KEY, label VARCHAR)
+
+statement ok
+INSERT INTO outer_count_owner VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd')
+
+statement ok
+CREATE TABLE outer_count_events(k INTEGER, event_id INTEGER, keep BOOLEAN)
+
+statement ok
+INSERT INTO outer_count_events
+SELECT 1 + i % 3, CASE WHEN i % 11 = 0 THEN NULL ELSE i END, i % 5 != 0 FROM range(100) t(i)
+
+statement ok
+ANALYZE
+
+query II
+EXPLAIN SELECT o.k, count(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<REGEX>:(?s).*COALESCE.*Hash Join.*Hash Group By.*
+
+statement ok
+SET debug_verify_serializer = true
+
+query II rowsort
+SELECT o.k, count(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+1	24
+2	25
+3	23
+4	0
+
+statement ok
+SET debug_verify_serializer = false
+
+statement ok
+CREATE TEMP TABLE outer_count_enabled AS
+SELECT o.k, count(e.event_id) c
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+CREATE TEMP TABLE outer_count_baseline AS
+SELECT o.k, count(e.event_id) c
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+
+statement ok
+PRAGMA enable_optimizer
+
+query I
+SELECT count(*) FROM (
+	(SELECT * FROM outer_count_enabled EXCEPT ALL SELECT * FROM outer_count_baseline)
+	UNION ALL
+	(SELECT * FROM outer_count_baseline EXCEPT ALL SELECT * FROM outer_count_enabled)
+) differences
+----
+0
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query II
+EXPLAIN SELECT o.k, count(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query I
+SELECT count(*) FROM (
+	(SELECT * FROM outer_count_enabled EXCEPT ALL
+	 SELECT o.k, count(e.event_id) FROM outer_count_owner o
+	 LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep GROUP BY o.k)
+	UNION ALL
+	(SELECT o.k, count(e.event_id) FROM outer_count_owner o
+	 LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep GROUP BY o.k
+	 EXCEPT ALL SELECT * FROM outer_count_enabled)
+) differences
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# An unproven owner key, extra grouping column, and other aggregates retain the established plan.
+statement ok
+CREATE TABLE outer_count_unproven AS SELECT * FROM outer_count_owner
+
+statement ok
+CREATE TABLE outer_count_nullable(k INTEGER UNIQUE, label VARCHAR)
+
+statement ok
+INSERT INTO outer_count_nullable VALUES (1, 'a'), (2, 'b'), (NULL, 'n')
+
+statement ok
+CREATE TABLE outer_count_sparse_events AS
+SELECT 1000 + i AS k, i AS event_id FROM range(100) t(i)
+
+statement ok
+ANALYZE outer_count_sparse_events
+
+query II
+EXPLAIN SELECT o.k, count(e.event_id)
+FROM outer_count_unproven o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+# Preaggregation is rejected when the owner join would discard most event rows.
+query II
+EXPLAIN SELECT o.k, count(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_sparse_events e ON o.k = e.k
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query II
+EXPLAIN SELECT o.k, count(e.event_id)
+FROM outer_count_nullable o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query II
+EXPLAIN SELECT o.k, o.label, count(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k, o.label
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query II
+EXPLAIN SELECT o.k, count(*)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query II
+EXPLAIN SELECT o.k, count(DISTINCT e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*
+
+query II
+EXPLAIN SELECT o.k, sum(e.event_id)
+FROM outer_count_owner o LEFT JOIN outer_count_events e ON o.k = e.k AND e.keep
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:.*COALESCE.*

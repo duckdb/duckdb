@@ -14,6 +14,7 @@ namespace duckdb {
 
 class LogicalGet;
 class LogicalOperator;
+class Expression;
 
 enum class UniqueKeyProof : uint8_t { PRIMARY_KEY, UNIQUE_NOT_NULL, AGGREGATE_GROUP, KEY_PRESERVING_JOIN };
 
@@ -26,5 +27,7 @@ struct UniqueKeyProperty {
 
 //! Proves that the output columns form a complete non-NULL unique key.
 optional<UniqueKeyProperty> GetUniqueKeyProperty(LogicalOperator &owner, const vector<idx_t> &output_columns);
+//! Returns the referenced output column when the expression directly references an operator input.
+optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input);
 
 } // namespace duckdb

@@ -32,24 +32,6 @@ struct AggregateJoinCandidate {
 	vector<ColumnBinding> owner_groups;
 };
 
-static optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		auto index = expression.Cast<BoundReferenceExpression>().Index();
-		return index < input.GetColumnBindings().size() ? optional_idx(index) : optional_idx();
-	}
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		return optional_idx();
-	}
-	auto binding = expression.Cast<BoundColumnRefExpression>().Binding();
-	auto bindings = input.GetColumnBindings();
-	for (idx_t index = 0; index < bindings.size(); index++) {
-		if (bindings[index] == binding) {
-			return optional_idx(index);
-		}
-	}
-	return optional_idx();
-}
-
 static optional_idx GetInvertibleReferenceIndex(const Expression &expression, LogicalOperator &input) {
 	auto result = GetDirectReferenceIndex(expression, input);
 	if (result.IsValid() || !BoundCastExpression::IsCast(expression)) {
