@@ -515,7 +515,7 @@ ifneq ($(SKIP_BUILD),1)
 unittest_release: release
 endif
 unittest_release:
-	 ~/sde/sde64 -wsm -- build/release/test/run $(T)
+	 build/release/test/run $(T)
 
 TEST_CONFIGS := \
 	test/configs/verify_statement_copy.json \
