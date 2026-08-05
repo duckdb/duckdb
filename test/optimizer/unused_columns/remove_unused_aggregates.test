@@ -519,3 +519,19 @@ query II
 EXPLAIN WITH c AS MATERIALIZED (SELECT col0, col1 FROM t0 GROUP BY ALL) SELECT * FROM (SELECT col0 FROM c GROUP BY col0) JOIN (SELECT col0 FROM c GROUP BY col0) USING (col0)
 ----
 logical_opt	<REGEX>:.*col1.*
+
+# removals cascade within a single top-down pass: dropping the middle GROUP BY makes its unreferenced `c`
+# group a dead projection expression, which drops the last reference to the inner count(*), which in turn
+# leaves the inner GROUP BY a pure duplicate eliminator that is removed as well. All three aggregations
+# collapse into one because the group pruning and the removal happen interleaved at every operator
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, c FROM (SELECT col0, count(*) c FROM t0 GROUP BY col0) GROUP BY col0, c) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT col0 FROM (SELECT col0, c FROM (SELECT col0, count(*) c FROM t0 GROUP BY col0) GROUP BY col0, c) GROUP BY col0 ORDER BY col0
+----
+0
+1
+2
