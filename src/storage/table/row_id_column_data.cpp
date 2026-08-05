@@ -67,14 +67,18 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	auto max_count = GetVectorCount(vector_index); // bitmap filters read the full vector domain
 	auto current_row = row_start + state.offset_in_column;
 	state.offset_in_column += max_count;
+	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
 	const auto rowid_end = current_row + max_count;
 	const auto prune_result = RowGroup::CheckRowIdFilter(filter, rowid_start, rowid_end);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		// We can just break out of the loop here.
 		count = 0;
 		return;
 	}
 
+	// Generate row ids
+	// Create sequence for row ids
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<row_t>(result);
 	for (idx_t i = 0; i < max_count; i++) {
@@ -82,9 +86,12 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	}
 	FlatVector::SetSize(result, count_t(max_count));
 
+	// Was this filter always true? If so, we dont need to apply it
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		return;
 	}
+
+	// Now apply the filter
 	ColumnSegment::FilterSelection(sel, result, filter_state, max_count, count);
 }
 

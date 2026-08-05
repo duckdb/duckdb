@@ -25,8 +25,21 @@
 
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 #define DUCKDB_AUTOVEC_TARGET __attribute__((target("avx2"))) // widened x86 kernels
+// Bulk form: every function between BEGIN/END gets the avx2 target. Only wrap code that is
+// unreachable when !CpuBenefitsFromAutoVec() - it would raise SIGILL on pre-AVX2 CPUs.
+// Note: GCC's pragma skips lambdas; they still inline into their attributed enclosing function.
+#if defined(__clang__)
+#define DUCKDB_AUTOVEC_TARGET_BEGIN                                                                                    \
+	_Pragma("clang attribute push(__attribute__((target(\"avx2\"))), apply_to = function)")
+#define DUCKDB_AUTOVEC_TARGET_END _Pragma("clang attribute pop")
+#else
+#define DUCKDB_AUTOVEC_TARGET_BEGIN _Pragma("GCC push_options") _Pragma("GCC target(\"avx2\")")
+#define DUCKDB_AUTOVEC_TARGET_END   _Pragma("GCC pop_options")
+#endif
 #else
 #define DUCKDB_AUTOVEC_TARGET
+#define DUCKDB_AUTOVEC_TARGET_BEGIN
+#define DUCKDB_AUTOVEC_TARGET_END
 #endif
 
 #if defined(_MSC_VER)
@@ -63,6 +76,7 @@ inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width)
 }
 
 #if DUCKDB_AUTOVEC
+DUCKDB_AUTOVEC_TARGET_BEGIN // all kernels below are gated behind CpuBenefitsFromAutoVec()
 
 typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));
 typedef uint8_t duckdb_av_u8x32 __attribute__((vector_size(32)));
@@ -75,20 +89,20 @@ typedef uint64_t duckdb_av_u64x4 __attribute__((vector_size(32)));
 
 // Shuffle bit-unpack primitives.
 template <class VEC, uint32_t WIDTH, uint32_t BASE, uint32_t WBYTE, std::size_t... I>
-DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleGatherImpl(duckdb_av_u8x16 w, std::index_sequence<I...>) {
+static inline VEC ShuffleGatherImpl(duckdb_av_u8x16 w, std::index_sequence<I...>) {
 	constexpr std::size_t LB = sizeof(VEC {}[0]);
 	return (VEC)__builtin_shufflevector(w, w, static_cast<int>(((BASE + I / LB) * WIDTH) / 8 - WBYTE + I % LB)...);
 }
 template <class VEC, uint32_t WIDTH, uint32_t BASE = 0, uint32_t WBYTE = 0>
-DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleGather(duckdb_av_u8x16 w) {
+static inline VEC ShuffleGather(duckdb_av_u8x16 w) {
 	return ShuffleGatherImpl<VEC, WIDTH, BASE, WBYTE>(w, std::make_index_sequence<sizeof(VEC)> {});
 }
 template <class VEC, uint32_t WIDTH, uint32_t BASE, std::size_t... K>
-DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleShiftsImpl(std::index_sequence<K...>) {
+static inline VEC ShuffleShiftsImpl(std::index_sequence<K...>) {
 	return VEC {static_cast<decltype(VEC {}[0])>(((BASE + K) * WIDTH) % 8)...};
 }
 template <class VEC, uint32_t WIDTH, uint32_t BASE = 0>
-DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleShifts() {
+static inline VEC ShuffleShifts() {
 	return ShuffleShiftsImpl<VEC, WIDTH, BASE>(std::make_index_sequence<sizeof(VEC) / sizeof(VEC {}[0])> {});
 }
 
@@ -97,17 +111,16 @@ static constexpr bool UseMulShift16() { // narrow outputs decode well in 16-bit 
 	return WIDTH > 0 && WIDTH + (WIDTH % 8 == 0 ? 0 : WIDTH % 4 == 0 ? 4 : WIDTH % 2 == 0 ? 6 : 7) <= 16;
 }
 template <uint32_t WIDTH, std::size_t... I>
-DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u16x16 ShuffleGatherPair(duckdb_av_u8x16 lo, duckdb_av_u8x16 hi,
-                                                                       std::index_sequence<I...>) {
+static inline duckdb_av_u16x16 ShuffleGatherPair(duckdb_av_u8x16 lo, duckdb_av_u8x16 hi, std::index_sequence<I...>) {
 	return (duckdb_av_u16x16)__builtin_shufflevector(
 	    lo, hi, static_cast<int>((I / 16) * 16 + (((I / 2) % 8) * WIDTH) / 8 + I % 2)...);
 }
 template <uint32_t WIDTH, std::size_t... K>
-DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u16x16 MulShift16(std::index_sequence<K...>) {
+static inline duckdb_av_u16x16 MulShift16(std::index_sequence<K...>) {
 	return duckdb_av_u16x16 {static_cast<uint16_t>(1u << ((16 - WIDTH) - ((K % 8) * WIDTH) % 8))...};
 }
 template <uint32_t WIDTH>
-DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u16x16 Decode16(const uint8_t *DUCKDB_BITPACKING_RESTRICT base) {
+static inline duckdb_av_u16x16 Decode16(const uint8_t *DUCKDB_BITPACKING_RESTRICT base) {
 	if constexpr (WIDTH == 8) {
 		duckdb_av_u8x16 b;
 		std::memcpy(&b, base, 16);
@@ -122,8 +135,8 @@ DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u16x16 Decode16(const uint8_t *DUC
 	}
 }
 template <uint32_t WIDTH, class OUT_T>
-DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpackIter32(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
-                                                             OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame) {
+static inline void ShuffleUnpackIter32(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
+                                       OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame) {
 	duckdb_av_u16x16 v0 = Decode16<WIDTH>(base) + static_cast<uint16_t>(frame); // first 16 values
 	duckdb_av_u16x16 v1 = Decode16<WIDTH>(base + 2 * WIDTH) + static_cast<uint16_t>(frame);
 	if constexpr (sizeof(OUT_T) == 2) {
@@ -137,9 +150,9 @@ DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpackIter32(const uint8_t *DUCK
 	}
 }
 template <uint32_t WIDTH, uint32_t BASE>
-DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpack2(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
-                                                        uint64_t *DUCKDB_BITPACKING_RESTRICT out, duckdb_av_u64x2 mask,
-                                                        duckdb_av_u64x2 frame) {
+static inline void ShuffleUnpack2(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
+                                  uint64_t *DUCKDB_BITPACKING_RESTRICT out, duckdb_av_u64x2 mask,
+                                  duckdb_av_u64x2 frame) {
 	duckdb_av_u8x16 w;
 	std::memcpy(&w, base + (BASE * WIDTH) / 8, 16); // two u64 values per window
 	duckdb_av_u64x2 v = ((ShuffleGather<duckdb_av_u64x2, WIDTH, BASE, (BASE * WIDTH) / 8>(w) >>
@@ -150,8 +163,8 @@ DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpack2(const uint8_t *DUCKDB_BI
 }
 
 template <uint32_t WIDTH, class OUT_T>
-DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpackIter(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
-                                                           OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame) {
+static inline void ShuffleUnpackIter(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
+                                     OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame) {
 	if constexpr (sizeof(OUT_T) == 2 || (sizeof(OUT_T) == 8 && WIDTH <= 13)) {
 		duckdb_av_u8x16 w;
 		std::memcpy(&w, base, 16);
@@ -210,9 +223,8 @@ static constexpr bool UseShuffleUnpack() { // exclude widths that overrun the sh
 }
 
 template <uint32_t WIDTH, class OUT_T>
-DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
-                                                              OUT_T *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups,
-                                                              OUT_T frame = 0) {
+static inline std::size_t ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
+                                        OUT_T *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups, OUT_T frame = 0) {
 	constexpr std::size_t width = WIDTH;
 	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
 	if constexpr (sizeof(OUT_T) <= 2 && UseMulShift16<WIDTH>()) {
@@ -234,20 +246,20 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 }
 
 // MoveMask packs lane comparison bits into a bitmap word.
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMaskReduce(duckdb_av_u32x8 v) {
+inline uint32_t MoveMaskReduce(duckdb_av_u32x8 v) {
 	uint32_t buf[8];
 	std::memcpy(buf, &v, 32);
 	return (buf[0] | buf[1]) | (buf[2] | buf[3]) | ((buf[4] | buf[5]) | (buf[6] | buf[7]));
 }
 
 template <class V, std::size_t... K>
-DUCKDB_AUTOVEC_TARGET inline V MoveMaskWeights(std::index_sequence<K...>) {
+inline V MoveMaskWeights(std::index_sequence<K...>) {
 	constexpr std::size_t CAP = sizeof(V {}[0]) == 1 ? 4 : 8 * sizeof(V {}[0]);
 	return V {static_cast<decltype(V {}[0])>(1ull << (K % CAP))...};
 }
 
 template <class V>
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(V v) {
+inline uint32_t MoveMask(V v) {
 	constexpr std::size_t LANE = sizeof(V {}[0]);
 	static_assert(LANE == 1 || LANE == 4 || LANE == 8, "16-bit lanes use the two-vector MoveMask");
 #if defined(__x86_64__)
@@ -280,7 +292,7 @@ DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(V v) {
 #endif
 }
 
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(duckdb_av_u16x16 lo, duckdb_av_u16x16 hi) {
+inline uint32_t MoveMask(duckdb_av_u16x16 lo, duckdb_av_u16x16 hi) {
 #if defined(__x86_64__)
 	typedef short duckdb_av_s16x16 __attribute__((vector_size(32)));
 	typedef char duckdb_av_c8x32 __attribute__((vector_size(32)));
@@ -298,6 +310,7 @@ DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(duckdb_av_u16x16 lo, duckdb_av_u1
 #endif
 }
 
+DUCKDB_AUTOVEC_TARGET_END
 #endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb

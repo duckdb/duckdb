@@ -81,6 +81,9 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 }
 
 inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or conjunction of comparisons
+#if !DUCKDB_AUTOVEC
+	return false; // bitmap kernels are not compiled in
+#else
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
@@ -91,6 +94,7 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or c
 		return true;
 	}
 	return IsBitmapComparisonCandidate(expr);
+#endif
 }
 
 //! Memoize an idempotent expression analysis in Expression::exec_analysis_cache (benign races);
@@ -113,6 +117,9 @@ inline bool IsStableExpressionCached(const Expression &expr) { // consistent, no
 	return CachedExprAnalysis(expr, 4,
 	                          [](const Expression &e) { return e.IsConsistent() && !e.IsVolatile() && !e.CanThrow(); });
 }
+
+#if DUCKDB_AUTOVEC
+DUCKDB_AUTOVEC_TARGET_BEGIN // kernels below are gated behind CpuBenefitsFromAutoVec()
 
 struct NarrowCol {
 	const_data_ptr_t data = nullptr;
@@ -324,5 +331,8 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	result = EmitBitmapSelection(t, t_bm, span, sel, count, bitmap_sel, true_sel, false_sel, tmp_sel2, tmp_sel3);
 	return true;
 }
+
+DUCKDB_AUTOVEC_TARGET_END
+#endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb

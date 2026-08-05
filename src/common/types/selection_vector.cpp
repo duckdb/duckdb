@@ -1,5 +1,6 @@
 #include "duckdb/common/types/selection_vector.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/algorithm.hpp"
@@ -11,6 +12,9 @@ void SelectionVector::Flatten() const {
 	if (sel_vector || !selection_data || !selection_data->is_bitmap) {
 		return;
 	}
+#if !DUCKDB_AUTOVEC
+	throw InternalException("bitmap selection vector in a build without autovec support");
+#else
 	auto keep = selection_data;
 	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
 	if (!keep->indices_cached) {
@@ -27,6 +31,7 @@ void SelectionVector::Flatten() const {
 	}
 	sel_vector = reinterpret_cast<sel_t *>(keep->owned_data.get());
 	capacity = keep->owned_data.GetSize() / sizeof(sel_t);
+#endif
 }
 
 SelectionData::SelectionData(idx_t count) {
