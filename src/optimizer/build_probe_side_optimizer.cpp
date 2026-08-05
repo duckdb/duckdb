@@ -395,7 +395,10 @@ RecursiveProbeSidePreference BuildProbeSideOptimizer::GetRecursiveProbeSidePrefe
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		auto previous_inside_recursive_anchor = inside_correlated_recursive_anchor;
+		inside_correlated_recursive_anchor = !op.Cast<LogicalCTE>().correlated_columns.empty();
 		VisitOperator(*op.children[0]);
+		inside_correlated_recursive_anchor = previous_inside_recursive_anchor;
 		active_recursive_cte_indexes.push_back(op.Cast<LogicalCTE>().table_index);
 		VisitOperator(*op.children[1]);
 		active_recursive_cte_indexes.pop_back();
@@ -452,7 +455,11 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		TryFlipJoinChildren(op);
+		// Keep the correlated domain in its original position in recursive anchors. Flipping this cross product
+		// changes the batching of the initial frontier based on speculative recursive cardinalities.
+		if (!inside_correlated_recursive_anchor) {
+			TryFlipJoinChildren(op);
+		}
 		break;
 	}
 	default:

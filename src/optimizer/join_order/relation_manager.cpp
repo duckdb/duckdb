@@ -613,19 +613,31 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		// create the stats for the CTE
 		auto child_2_card = rhs_stats.stats_initialized ? rhs_stats.cardinality : 0;
+		idx_t cte_cardinality;
 
 		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			// we cannot really estimate the cardinality of a recursive CTE
 			// because we don't know how many times it will be executed
 			// we just assume it will be executed 1000 times
-			op->SetEstimatedCardinality(child_1_card + child_2_card * 1000);
+			cte_cardinality = child_1_card + child_2_card * 1000;
 		} else if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			// for a materialized CTE, we just take the cardinality of the right children
-			op->SetEstimatedCardinality(child_2_card);
+			cte_cardinality = child_2_card;
+		} else {
+			throw InternalException("Unexpected CTE type in join order optimizer");
 		}
+		op->SetEstimatedCardinality(cte_cardinality);
 		auto output_stats = RelationStatisticsHelper::ProjectOutputStats(rhs_stats, input_op);
 		if (!output_stats) {
 			output_stats = RelationStatisticsHelper::RebindOutputStats(rhs_stats, input_op);
+		}
+		if (output_stats && op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			output_stats->cardinality = cte_cardinality;
+			// Statistics from one recursive term do not describe the complete fixpoint. Keep the output layout, but
+			// represent each fixpoint domain using the standard cardinality-based fallback.
+			for (auto &column : output_stats->columns) {
+				column.distinct_count = DistinctCount(cte_cardinality, DistinctCountSource::CARDINALITY);
+			}
 		}
 		if (!output_stats || !AddRelation(input_op, parent, *output_stats)) {
 			stats_complete = false;

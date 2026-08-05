@@ -1,6 +1,7 @@
 add_library_unity(
   test_optimizer
   OBJECT
+  build_probe_side_optimizer.cpp
   column_binding_rewrite.cpp
   common_subplan_nonserializable.cpp
   filter_pushdown_alias.cpp

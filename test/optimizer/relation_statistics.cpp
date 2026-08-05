@@ -2,9 +2,12 @@
 #include "test_helpers.hpp"
 
 #include "duckdb.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -352,6 +355,66 @@ TEST_CASE("Relation statistics extraction rebinds CTE outputs", "[optimizer][rel
 	REQUIRE(second_stats);
 	REQUIRE(second_stats->MatchesBindings(second_ref.GetColumnBindings()));
 	REQUIRE(extractor.ExtractedOperatorCount() == 4);
+}
+
+TEST_CASE("Linear recursive CTE statistics preserve their output layout", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	Parser parser(connection.context->GetParserOptions());
+	parser.ParseQuery(R"(
+		WITH RECURSIVE values(i) AS (
+			SELECT 1
+			UNION ALL
+			SELECT i + 1 FROM values WHERE i < 10
+		)
+		SELECT i FROM values
+	)");
+	REQUIRE(parser.statements.size() == 1);
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	auto plan = std::move(planner.plan);
+	JoinOrderOptimizer optimizer(*connection.context);
+	RelationStats stats;
+	plan = optimizer.Optimize(std::move(plan), stats);
+
+	REQUIRE(stats.stats_initialized);
+	REQUIRE(stats.cardinality == 1001);
+	REQUIRE(stats.MatchesBindings(plan->GetColumnBindings()));
+	REQUIRE(stats.columns.size() == 1);
+	REQUIRE(stats.columns[0].distinct_count.distinct_count == stats.cardinality);
+	REQUIRE(stats.columns[0].distinct_count.source == DistinctCountSource::CARDINALITY);
+	connection.Rollback();
+}
+
+TEST_CASE("Recursive CTE join terms use fixpoint cardinality fallbacks", "[optimizer][relation_statistics]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	Parser parser(connection.context->GetParserOptions());
+	parser.ParseQuery(R"(
+		WITH RECURSIVE values(i) AS (
+			SELECT 1
+			UNION ALL
+			SELECT i + 1 FROM values, (VALUES (1)) extra(j) WHERE i < 10
+		)
+		SELECT i FROM values
+	)");
+	REQUIRE(parser.statements.size() == 1);
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	auto plan = std::move(planner.plan);
+	JoinOrderOptimizer optimizer(*connection.context);
+	RelationStats stats;
+	plan = optimizer.Optimize(std::move(plan), stats);
+
+	REQUIRE(stats.stats_initialized);
+	REQUIRE(stats.cardinality == 1001);
+	REQUIRE(stats.MatchesBindings(plan->GetColumnBindings()));
+	REQUIRE(stats.columns.size() == 1);
+	REQUIRE(stats.columns[0].distinct_count.distinct_count == stats.cardinality);
+	REQUIRE(stats.columns[0].distinct_count.source == DistinctCountSource::CARDINALITY);
+	connection.Rollback();
 }
 
 TEST_CASE("Relation statistics extraction rejects recurring and cyclic CTEs", "[optimizer][relation_statistics]") {
