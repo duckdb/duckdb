@@ -1,5 +1,5 @@
 # name: test/sql/storage/partial_delete_pending_compress.test
-# description: An old snapshot blocks masking; the next checkpoint masks once the delete is visible
+# description: Single-transaction partial deletes mask even under an older snapshot, which still sees the rows
 # group: [storage]
 
 # the BASE_TABLE byte thresholds below are calibrated for the default 256KB block size
@@ -8,8 +8,7 @@ require block_size 262144
 statement ok
 SET immediate_transaction_mode=true
 
-# force every CHECKPOINT to run even with an empty WAL: the retry that masks the previously-pending
-# deletes happens inside a checkpoint pass, and the final checkpoint below has no WAL changes of its own
+# force every CHECKPOINT to run even with an empty WAL
 statement ok
 PRAGMA force_checkpoint
 
@@ -31,22 +30,29 @@ DELETE FROM p WHERE i % 2 = 0
 statement ok con2
 CHECKPOINT
 
-# con1 started before the delete committed - the delete ids are >= lowest_active_start, so the
-# partial deletes are NOT masked yet: arrays are retained (memory stays high) and con1 sees all rows
+# every deleted row in a vector shares con2's single commit id, so the checkpoint folds the per-row
+# arrays into ~256 byte masks carrying that id - the arrays are freed even though con1 is still open
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+# con1 started before the delete committed - the masked id is >= con1's start, so con1 still sees all rows
 query I con1
 SELECT COUNT(*) FROM p
 ----
 1228800
 
-query I
-SELECT COALESCE(SUM(memory_usage_bytes), 0) > 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+# a transaction that starts after the delete committed sees the deletes
+query II
+SELECT COUNT(*), MIN(i) FROM p
 ----
-true
+614400	1
 
 statement ok con1
 COMMIT
 
-# the delete is now visible to all transactions - the next checkpoint masks the partial deletes
+# the delete is now visible to all transactions - a further checkpoint keeps the masks and stays small
 statement ok
 CHECKPOINT
 
