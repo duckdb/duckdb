@@ -70,8 +70,8 @@ parser.add_argument(
 parser.add_argument(
     "--min-confirmation-runs",
     type=int,
-    default=6,
-    help="Minimum paired timed runs used to confirm a regression (default: 6).",
+    default=15,
+    help="Minimum paired timed runs used to confirm a regression (default: 15).",
 )
 parser.add_argument(
     "--max-confirmation-runs",
@@ -666,14 +666,20 @@ def run_paired_benchmark(old_runner: BenchmarkRunner, new_runner: BenchmarkRunne
         REGRESSION_THRESHOLD_PERCENTAGE,
         REGRESSION_THRESHOLD_SECONDS,
     )
-    confirmed = confirmation_regression.ratio_interval[0] > 1.0
-    outcome = OUTCOME_CONFIRMED_REGRESSION if confirmed else OUTCOME_UNCONFIRMED_REGRESSION
+    lower_bound, upper_bound = confirmation_regression.ratio_interval
+    if lower_bound > 1.0:
+        outcome = OUTCOME_CONFIRMED_REGRESSION
+        decision = "confirmed regression"
+    elif upper_bound <= 1.0:
+        outcome = OUTCOME_NO_REGRESSION
+        decision = "regression rejected"
+    else:
+        outcome = OUTCOME_UNCONFIRMED_REGRESSION
+        decision = "regression inconclusive"
     all_old_timings = old_initial + old_confirmation
     all_new_timings = new_initial + new_confirmation
     combined_measurement = paired_measurement(all_old_timings, all_new_timings)
     if verbose:
-        decision = "confirmed regression" if confirmed else "regression not confirmed"
-        lower_bound, upper_bound = confirmation_regression.ratio_interval
         print(
             f"regression confirmation: {benchmark}: {confirmation_count} paired runs, "
             f"threshold interval {lower_bound:.3f}x to {upper_bound:.3f}x ({decision})"

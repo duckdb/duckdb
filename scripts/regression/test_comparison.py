@@ -108,14 +108,14 @@ class TestPairedComparison(unittest.TestCase):
             (0.02, 100),
             (0.05, 60),
             (0.1, 30),
-            (0.3, 10),
-            (0.5, 6),
-            (4.0, 6),
+            (0.3, 15),
+            (0.5, 15),
+            (4.0, 15),
         ]
         for timing, expected_runs in cases:
             with self.subTest(timing=timing):
                 measurement = paired_measurement([timing] * 10, [timing * 1.01] * 10)
-                self.assertEqual(confirmation_run_count(measurement, 3.0, 6, 100), expected_runs)
+                self.assertEqual(confirmation_run_count(measurement, 3.0, 15, 100), expected_runs)
 
     def test_confirmation_run_validation(self):
         measurement = paired_measurement([1.0] * 10, [1.0] * 10)
@@ -145,7 +145,7 @@ for run in range(1, runs + 1):
     print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
 """
 
-    noisy_runner_source = """#!/usr/bin/env python3
+    rejected_candidate_runner_source = """#!/usr/bin/env python3
 import os
 import sys
 from pathlib import Path
@@ -163,6 +163,32 @@ counter_path.write_text(str(invocation + 1), encoding="utf-8")
 timing = 1.3 if label == "new" and invocation < 2 else 1.0
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
+    print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
+"""
+
+    inconclusive_candidate_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+if "--help" in sys.argv:
+    print("--timed-runs")
+    raise SystemExit(0)
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(label + "\\n")
+counter_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / f"{label}.count"
+invocation = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
+counter_path.write_text(str(invocation + 1), encoding="utf-8")
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    if label == "old":
+        timing = 1.0
+    elif invocation < 2 or run % 2 == 0:
+        timing = 1.3
+    else:
+        timing = 1.0
     print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
 """
 
@@ -224,19 +250,28 @@ for run in range(1, runs + 1):
         self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
         self.assertEqual(order, ["old", "new", "new", "old", "old", "new", "new", "old"])
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("regression confirmation: fake.benchmark: 6 paired runs", plain_output)
+        self.assertIn("regression confirmation: fake.benchmark: 15 paired runs", plain_output)
         self.assertIn("confirmed regression", plain_output)
-        self.assertRegex(plain_output, r"fake\s+1\.000s\s+1\.300s\s+\+0\.300s\s+\+30\.0%\s+10\+6")
+        self.assertRegex(plain_output, r"fake\s+1\.000s\s+1\.300s\s+\+0\.300s\s+\+30\.0%\s+10\+15")
 
-    def test_noisy_regression_candidate_does_not_fail(self):
-        process, order = self.run_regression_test(self.noisy_runner_source, ci=True)
+    def test_rejected_regression_candidate_does_not_warn(self):
+        process, order = self.run_regression_test(self.rejected_candidate_runner_source, ci=True)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         self.assertEqual(order, ["old", "new", "new", "old", "old", "new", "new", "old"])
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("regression not confirmed", plain_output)
+        self.assertIn("regression rejected", plain_output)
+        self.assertIn("UNCONFIRMED REGRESSION CANDIDATES\n0 benchmarks", plain_output)
+        self.assertNotIn("::warning title=Unconfirmed regression benchmark::", plain_output)
+
+    def test_inconclusive_regression_candidate_warns(self):
+        process, order = self.run_regression_test(self.inconclusive_candidate_runner_source, ci=True)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old", "new", "new", "old", "old", "new", "new", "old"])
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn("regression inconclusive", plain_output)
         self.assertIn("UNCONFIRMED REGRESSION CANDIDATES", plain_output)
         self.assertIn("::warning title=Unconfirmed regression benchmark::", plain_output)
-        self.assertIn("10+6", plain_output)
+        self.assertIn("10+15", plain_output)
 
     def test_runner_without_timed_run_support_fails_early(self):
         runner_source = """#!/usr/bin/env python3
