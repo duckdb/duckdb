@@ -1,14 +1,25 @@
-commit 9e5c505de48669bbf14102a96780199b9d8a0c70
+commit b9615d99c7c44ef477d3aad540c5c342db9fdb68
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..219d81a 100644
+index 0fc503a..98cbca5 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
-@@ -473,6 +473,16 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
+@@ -7,8 +7,10 @@
+ #include "duckdb/common/file_opener.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "duckdb/common/http_util.hpp"
++#include "duckdb/common/operator/cast_operators.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/hash.hpp"
++#include "duckdb/common/types/interval.hpp"
+ #include "duckdb/common/types/time.hpp"
+ #include "duckdb/function/scalar/strftime_format.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+@@ -473,6 +475,16 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
  	return sfh.etag;
  }
  
@@ -25,25 +36,21 @@ index 0fc503a..219d81a 100644
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -574,6 +584,66 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -574,6 +586,58 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
 +static bool TryParseNonNegativeSeconds(const string &input, int64_t &result) {
-+	try {
-+		result = std::stoll(input);
-+	} catch (...) {
-+		return false;
-+	}
-+	return result >= 0;
++	return TryCast::Operation<string_t, int64_t>(string_t(input), result) && result >= 0;
 +}
 +
 +timestamp_t HTTPFileSystem::ComputeCacheValidUntil(const HTTPHeaders &headers) {
-+	static constexpr int64_t MICROS_PER_SECOND = 1000000LL;
 +	// Clamp the freshness lifetime to guard against overflow from absurd server-provided values
-+	static constexpr int64_t MAX_FRESHNESS_SECONDS = 365LL * 24 * 60 * 60;
++	static constexpr int64_t MAX_FRESHNESS_SECONDS = Interval::DAYS_PER_YEAR * Interval::SECS_PER_DAY;
 +
 +	// Freshness lifetime in seconds (RFC 9111): Cache-Control max-age takes precedence over Expires
++	// TODO: handle no-store/no-cache directives; note that this function is only consulted for responses
++	// without validators (no ETag/Last-Modified), and infinity means no freshness is granted
 +	int64_t freshness_lifetime = 0;
 +	bool has_freshness_lifetime = false;
 +	if (headers.HasHeader("Cache-Control")) {
@@ -51,10 +58,6 @@ index 0fc503a..219d81a 100644
 +		for (auto &directive_p : StringUtil::Split(headers.GetHeaderValue("Cache-Control"), ',')) {
 +			auto directive = StringUtil::Lower(directive_p);
 +			StringUtil::Trim(directive);
-+			if (StringUtil::StartsWith(directive, "no-store") || StringUtil::StartsWith(directive, "no-cache")) {
-+				// no-store: must not be cached, no-cache: must be revalidated before every use
-+				return timestamp_t::infinity();
-+			}
 +			if (StringUtil::StartsWith(directive, MAX_AGE_PREFIX)) {
 +				has_freshness_lifetime =
 +				    TryParseNonNegativeSeconds(directive.substr(MAX_AGE_PREFIX.size()), freshness_lifetime);
@@ -66,7 +69,7 @@ index 0fc503a..219d81a 100644
 +		timestamp_t date;
 +		if (TryParseLastModifiedTime(headers.GetHeaderValue("Expires"), expires) &&
 +		    TryParseLastModifiedTime(headers.GetHeaderValue("Date"), date)) {
-+			freshness_lifetime = (expires.value - date.value) / MICROS_PER_SECOND;
++			freshness_lifetime = (expires.value - date.value) / Interval::MICROS_PER_SEC;
 +			has_freshness_lifetime = true;
 +		}
 +	}
@@ -86,13 +89,13 @@ index 0fc503a..219d81a 100644
 +	if (remaining <= 0) {
 +		return timestamp_t::infinity(); // Already stale: no freshness to grant
 +	}
-+	return timestamp_t(Timestamp::GetCurrentTimestamp().value + remaining * MICROS_PER_SECOND);
++	return timestamp_t(Timestamp::GetCurrentTimestamp().value + remaining * Interval::MICROS_PER_SEC);
 +}
 +
  struct HTTPFileInfoParser {
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
  		if (!headers.HasHeader("Content-Range")) {
-@@ -675,6 +745,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -675,6 +739,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -100,7 +103,7 @@ index 0fc503a..219d81a 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -716,6 +787,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -716,6 +781,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -108,7 +111,7 @@ index 0fc503a..219d81a 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +798,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -726,6 +792,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
