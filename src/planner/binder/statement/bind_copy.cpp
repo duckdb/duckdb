@@ -183,6 +183,10 @@ struct CopyToParsedOptions {
 	bool Partitioned() const {
 		return !partition_cols.empty();
 	}
+
+	bool PartitionedOrOrdered() const {
+		return Partitioned() || !order_columns.empty();
+	}
 };
 
 struct CopyToResolvedOptions {
@@ -209,6 +213,10 @@ struct CopyToResolvedOptions {
 	bool Partitioned() const {
 		return !partition_cols.empty();
 	}
+
+	bool PartitionedOrOrdered() const {
+		return Partitioned() || !order_columns.empty();
+	}
 };
 
 static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, const CopyToParsedOptions &options) {
@@ -222,7 +230,7 @@ static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, c
 	auto &fs = FileSystem::GetFileSystem(context);
 	bool is_file_and_exists = fs.FileExists(file_path);
 	bool is_stdout = file_path == "/dev/stdout";
-	return is_file_and_exists && !options.PerThreadOutput() && !options.Partitioned() && !is_stdout;
+	return is_file_and_exists && !options.PerThreadOutput() && !options.PartitionedOrOrdered() && !is_stdout;
 }
 
 static CopyToResolvedOptions ResolveCopyToOptions(ClientContext &context, const string &file_path,
@@ -260,8 +268,14 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 	if (options.UserSetUseTmpFile() && options.Partitioned()) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
 	}
+	if (options.UserSetUseTmpFile() && !options.order_columns.empty()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER_BY for COPY");
+	}
 	if (options.PerThreadOutput() && options.Partitioned()) {
 		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+	}
+	if (options.PerThreadOutput() && !options.order_columns.empty()) {
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY");
 	}
 	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
 		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
@@ -274,13 +288,13 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 		if (options.Partitioned()) {
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
 		}
+		if (!options.order_columns.empty()) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER_BY");
+		}
 	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
 	    !function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", format);
-	}
-	if (!options.order_columns.empty() && !options.Partitioned()) {
-		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
 	}
 }
 
@@ -466,7 +480,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->batches_per_file = resolved_options.batches_per_file;
 	copy->file_size_bytes = resolved_options.file_size_bytes;
 	copy->rotate = resolved_options.Rotate();
-	copy->partition_output = resolved_options.Partitioned();
+	copy->partition_output = resolved_options.PartitionedOrOrdered();
 	copy->write_partition_columns = resolved_options.write_partition_columns;
 	copy->partition_columns = std::move(resolved_options.partition_cols);
 	copy->write_empty_file = resolved_options.write_empty_file;
