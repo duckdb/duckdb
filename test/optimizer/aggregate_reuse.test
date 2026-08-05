@@ -177,3 +177,150 @@ GROUP BY o.k
 ----
 1	60
 3	180
+
+# A correlated aggregate can reuse an equivalent materialized payload when the producer only adds a unique relation.
+statement ok
+SET delim_join_as_cte = true
+
+statement ok
+CREATE TABLE payload_part(k INTEGER PRIMARY KEY, size INTEGER, kind VARCHAR, label VARCHAR)
+
+statement ok
+CREATE TABLE payload_fact(k INTEGER, supplier_id INTEGER, cost INTEGER)
+
+statement ok
+CREATE TABLE payload_supplier(id INTEGER PRIMARY KEY, region_id INTEGER, name VARCHAR, address VARCHAR, phone VARCHAR)
+
+statement ok
+CREATE TABLE payload_region(id INTEGER PRIMARY KEY, name VARCHAR)
+
+statement ok
+INSERT INTO payload_part VALUES (1, 15, 'BRASS', 'p1'), (2, 15, 'BRASS', 'p2'), (3, 10, 'STEEL', 'p3')
+
+statement ok
+INSERT INTO payload_supplier VALUES (10, 1, 's1', 'a1', '1'), (20, 1, 's2', 'a2', '2'),
+                                   (30, 2, 's3', 'a3', '3')
+
+statement ok
+INSERT INTO payload_region VALUES (1, 'EUROPE'), (2, 'ASIA')
+
+statement ok
+INSERT INTO payload_fact VALUES (1, 10, 7), (1, 20, 5), (1, 30, 1), (2, 10, 9), (2, 20, 9), (3, 10, 2)
+
+statement ok
+PRAGMA explain_output = 'optimized_only'
+
+statement ok
+SET disabled_optimizers = 'aggregate_reuse'
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<!REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+SET debug_verify_serializer = true
+
+query TTTITI rowsort
+WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+s1	a1	1	2	p2	9
+s2	a2	2	1	p1	5
+s2	a2	2	2	p2	9
+
+statement ok
+SET debug_verify_serializer = false
+
+# Observed uniqueness is insufficient to prove that the added relation preserves multiplicity.
+statement ok
+CREATE TABLE payload_unproven_part AS SELECT * FROM payload_part
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.k, o.cost FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+# A different core filter changes the aggregate row domain.
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.cost >= 7 AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.k, o.cost FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+RESET delim_join_as_cte
+
+# A changed inner row domain cannot consume the materialized payload.
+query II
+EXPLAIN SELECT p.k, f.cost
+FROM payload_part p JOIN payload_fact f USING (k)
+WHERE p.size = 15 AND f.cost = (SELECT min(f2.cost) FROM payload_fact f2
+                                WHERE f2.k = p.k AND f2.supplier_id = 10)
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*

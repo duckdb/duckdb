@@ -315,7 +315,9 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Reuse exact aggregate payloads exposed by filtering SEMI joins.
 	RunOptimizer(OptimizerType::AGGREGATE_REUSE, [&]() {
-		AggregateReuseOptimizer aggregate_reuse;
+		plan->ResolveOperatorTypes();
+		AggregateReuseOptimizer aggregate_reuse(*this);
+		aggregate_reuse.CollectCTEs(*plan);
 		aggregate_reuse.VisitOperator(plan);
 	});
 
