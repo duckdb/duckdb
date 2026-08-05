@@ -1308,12 +1308,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - group: Verification
-            target: test_configs_verification
-          - group: Storage
-            target: test_configs_storage
+          - group: Query Verification
+            target: test_configs_query_verification
           - group: Execution
             target: test_configs_execution
+          - group: Persistence
+            target: test_configs_persistence
+          - group: Storage Engine
+            target: test_configs_storage_engine
 
     steps:
     - name: "Checkout"
@@ -1347,7 +1349,7 @@ jobs:
         make ${{ matrix.target }}
 
     - name: Test Storage Compatibility
-      if: ${{ (success() || failure()) && matrix.group == 'Storage' }}
+      if: ${{ (success() || failure()) && matrix.group == 'Persistence' }}
       run: |
         make test_storage
 
