@@ -37,7 +37,7 @@ public:
 		idx_t file_size = 0;
 		{
 			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-			file_size = cached_file->file_size;
+			file_size = cached_file->validation_info.file_size;
 		}
 		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
 		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
@@ -174,7 +174,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	idx_t file_size = 0;
 	{
 		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		file_size = cached_file.file_size;
+		file_size = cached_file.validation_info.file_size;
 	}
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
@@ -203,14 +203,9 @@ ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
 }
 
-bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
-                                            timestamp_t current_last_modified, idx_t current_file_size) {
-	if (!validate) {
-		return true; // Assume valid
-	}
-	annotated_lock_guard<annotated_mutex> guard(meta_lock);
-	return ExternalFileCache::IsValid(validate, version_tag, last_modified, cache_valid_until, file_size,
-	                                  current_version_tag, current_last_modified, current_file_size);
+//! Whether the last modified timestamp is usable as a cache validator (some storage backends do not provide it)
+static bool HasUsableLastModified(timestamp_t last_modified) {
+	return last_modified.IsFinite() && last_modified != timestamp_t(0);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
@@ -246,52 +241,27 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	return last_modified_time > LAST_MODIFIED_THRESHOLD;
 }
 
-bool ExternalFileCache::HasUsableLastModified(timestamp_t last_modified) {
-	return last_modified.IsFinite() && last_modified != timestamp_t(0);
+bool ExternalFileCache::HasValidationMetadata(const CacheValidationInfo &info) {
+	return !info.version_tag.empty() || HasUsableLastModified(info.last_modified);
 }
 
-bool ExternalFileCache::HasValidationMetadata(const string &version_tag, timestamp_t last_modified) {
-	return !version_tag.empty() || HasUsableLastModified(last_modified);
-}
-
-bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
-                                timestamp_t cached_valid_until, idx_t cached_file_size,
-                                const string &current_version_tag, timestamp_t current_last_modified,
-                                idx_t current_file_size) {
+bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached, const CacheValidationInfo &current) {
 	if (!validate) {
 		return true; // Assume valid
 	}
-	if (!current_version_tag.empty() || !cached_version_tag.empty()) {
-		return cached_version_tag == current_version_tag; // Validity checked by version tag
-	}
-	if (HasUsableLastModified(cached_last_modified) || HasUsableLastModified(current_last_modified)) {
-		if (cached_last_modified != current_last_modified) {
-			return false; // The file has certainly been modified
-		}
-		// The last modified time matches. However, we cannot blindly trust this,
-		// because some file systems use a low resolution clock to set the last modified time.
-		// So, we will require that the last modified time is more than 10 seconds ago.
-		static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10LL * 1000LL * 1000LL;
-		const auto access_time = Timestamp::GetCurrentTimestamp();
-		if (access_time < current_last_modified) {
-			return false; // Last modified in the future?
-		}
-		int64_t last_modified_time;
-		if (!TrySubtractOperator::Operation(access_time, current_last_modified, last_modified_time)) {
-			// out of range
-			return false;
-		}
-		return last_modified_time > LAST_MODIFIED_THRESHOLD;
+	if (HasValidationMetadata(cached) || HasValidationMetadata(current)) {
+		return IsValid(validate, cached.version_tag, cached.last_modified, current.version_tag,
+		               current.last_modified);
 	}
 	// No validators at all: cached data may be served within the freshness deadline the storage backend granted
 	// when the cache entry was created (e.g., HTTP Cache-Control), as long as the file size is unchanged.
-	if (cached_file_size != current_file_size) {
+	if (cached.file_size != current.file_size) {
 		return false; // The file has certainly been modified
 	}
-	if (!cached_valid_until.IsFinite()) {
+	if (!cached.cache_valid_until.IsFinite()) {
 		return false; // The backend does not provide expiry information, so we cannot validate at all
 	}
-	return Timestamp::GetCurrentTimestamp() <= cached_valid_until;
+	return Timestamp::GetCurrentTimestamp() <= cached.cache_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)

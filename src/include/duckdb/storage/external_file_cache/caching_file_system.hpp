@@ -115,11 +115,7 @@ private:
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
 	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
-	idx_t file_size = 0;
-	timestamp_t last_modified = timestamp_t(0);
-	string version_tag;
-	//! Freshness deadline for files without extra validation.
-	timestamp_t cache_valid_until = timestamp_t::infinity();
+	CacheValidationInfo validation_info;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;

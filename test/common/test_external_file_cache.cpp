@@ -517,7 +517,7 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 	timestamp_t original_valid_until;
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		original_valid_until = cached_file->cache_valid_until;
+		original_valid_until = cached_file->validation_info.cache_valid_until;
 	}
 
 	// Overwrite with same-size content. Within the freshness deadline the cached content is still served,
@@ -531,7 +531,7 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 	REQUIRE(CountCachedBlocks(cache) == 1);
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		REQUIRE(cached_file->cache_valid_until == original_valid_until);
+		REQUIRE(cached_file->validation_info.cache_valid_until == original_valid_until);
 	}
 }
 
@@ -584,7 +584,7 @@ TEST_CASE("Long-lived handle does not use cache after the freshness deadline", "
 	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		cached_file->cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
 	}
 
 	WriteTestContent(test_file.GetPath(), content_b);
