@@ -211,6 +211,8 @@ public:
 	atomic<bool> state_pressured;
 	//! The types of the exported form (group columns, hash, one column per aggregate state)
 	vector<LogicalType> exported_types;
+	//! The state export layouts of the aggregates, computed once
+	vector<AggregateStateLayout> state_layouts;
 	//! Uncombined exported data, aligned one-to-one with the partitions of uncombined_data
 	vector<unique_ptr<ColumnDataCollection>> uncombined_exported_data;
 	//! Allocators used during the Sink/Finalize
@@ -243,6 +245,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	state_pressured = false;
 	if (spill_states) {
 		exported_types = AggregateStateSpilling::ExportedTypes(radix_ht.GetLayout());
+		state_layouts = AggregateStateSpilling::StateLayouts(radix_ht.GetLayout());
 	}
 
 	// Compute minimum reservation
@@ -649,7 +652,7 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 		if (partition.Count() == 0) {
 			continue;
 		}
-		AggregateStateSpilling::ExportStates(context, gstate.radix_ht.GetLayout(), partition,
+		AggregateStateSpilling::ExportStates(context, gstate.radix_ht.GetLayout(), gstate.state_layouts, partition,
 		                                     lstate.abandoned_exported_data, exported_radix_bits, gstate.exported_types,
 		                                     scratch_allocator);
 	}
@@ -1211,8 +1214,8 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		// them like the rest. Combining may steal from the imported states, so the arena lives
 		// until the scan is done.
 		partition.import_allocator = make_shared_ptr<ArenaAllocator>(BufferAllocator::Get(gstate.context));
-		AggregateStateSpilling::ImportStates(gstate.context, sink.radix_ht.GetLayoutPtr(), *partition.exported_data,
-		                                     *partition.import_allocator,
+		AggregateStateSpilling::ImportStates(gstate.context, sink.radix_ht.GetLayoutPtr(), sink.state_layouts,
+		                                     *partition.exported_data, *partition.import_allocator,
 		                                     [&](TupleDataCollection &imported) { ht->Combine(imported); });
 		partition.exported_data.reset();
 	}

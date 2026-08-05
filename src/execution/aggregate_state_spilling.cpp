@@ -115,13 +115,13 @@ vector<LogicalType> AggregateStateSpilling::ExportedTypes(const TupleDataLayout 
 }
 
 void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDataLayout &layout,
+                                          const vector<AggregateStateLayout> &state_layouts,
                                           TupleDataCollection &source,
                                           vector<unique_ptr<ColumnDataCollection>> &exported, idx_t exported_radix_bits,
                                           const vector<LogicalType> &exported_types, ArenaAllocator &allocator) {
 	if (source.Count() == 0) {
 		return;
 	}
-	const auto state_layouts = StateLayouts(layout);
 	auto &aggregates = layout.GetAggregates();
 	const auto column_count = layout.ColumnCount();
 
@@ -202,12 +202,12 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 }
 
 void AggregateStateSpilling::ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
+                                          const vector<AggregateStateLayout> &state_layouts,
                                           ColumnDataCollection &exported, ArenaAllocator &allocator,
                                           const std::function<void(TupleDataCollection &)> &combine) {
 	if (exported.Count() == 0) {
 		return;
 	}
-	const auto state_layouts = StateLayouts(*layout);
 	auto &aggregates = layout->GetAggregates();
 	const auto column_count = layout->ColumnCount();
 
