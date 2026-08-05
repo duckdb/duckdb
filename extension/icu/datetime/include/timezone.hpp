@@ -40,9 +40,9 @@ public:
 		return id;
 	}
 	//! The offsets that apply at an instant
-	virtual void GetOffset(double millis, int32_t &raw_offset, int32_t &dst_offset) const = 0;
+	virtual void GetOffset(int64_t millis, int32_t &raw_offset, int32_t &dst_offset) const = 0;
 	//! The offsets that apply at a local (wall clock) time
-	virtual void GetOffsetFromLocal(double millis, LocalOption non_existing, LocalOption duplicated,
+	virtual void GetOffsetFromLocal(int64_t millis, LocalOption non_existing, LocalOption duplicated,
 	                                int32_t &raw_offset, int32_t &dst_offset) const = 0;
 	//! Whether the two zones describe the same offsets. Aliases of one another are equivalent.
 	bool Equals(const TimeZone &other) const {
@@ -65,8 +65,8 @@ public:
 	SimpleTimeZone(string id, int32_t raw_offset);
 	SimpleTimeZone(string id, int32_t raw_offset, const TZRule &rule);
 
-	void GetOffset(double millis, int32_t &raw_offset, int32_t &dst_offset) const override;
-	void GetOffsetFromLocal(double millis, LocalOption non_existing, LocalOption duplicated, int32_t &raw_offset,
+	void GetOffset(int64_t millis, int32_t &raw_offset, int32_t &dst_offset) const override;
+	void GetOffsetFromLocal(int64_t millis, LocalOption non_existing, LocalOption duplicated, int32_t &raw_offset,
 	                        int32_t &dst_offset) const override;
 	unique_ptr<TimeZone> Copy() const override;
 
@@ -106,8 +106,8 @@ class OlsonTimeZone : public TimeZone {
 public:
 	OlsonTimeZone(string id, const TZZoneData &data);
 
-	void GetOffset(double millis, int32_t &raw_offset, int32_t &dst_offset) const override;
-	void GetOffsetFromLocal(double millis, LocalOption non_existing, LocalOption duplicated, int32_t &raw_offset,
+	void GetOffset(int64_t millis, int32_t &raw_offset, int32_t &dst_offset) const override;
+	void GetOffsetFromLocal(int64_t millis, LocalOption non_existing, LocalOption duplicated, int32_t &raw_offset,
 	                        int32_t &dst_offset) const override;
 	unique_ptr<TimeZone> Copy() const override;
 
@@ -115,14 +115,14 @@ private:
 	//! The offsets around a transition. Index -1 refers to the offsets before the first transition.
 	const TZTypeOffset &OffsetsAt(int32_t transition_index) const;
 	//! The offsets at an instant (local == false) or a local time (local == true)
-	void GetHistoricalOffset(double millis, bool local, LocalOption non_existing, LocalOption duplicated,
+	void GetHistoricalOffset(int64_t millis, bool local, LocalOption non_existing, LocalOption duplicated,
 	                         int32_t &raw_offset, int32_t &dst_offset) const;
 
 	const TZZoneData &data;
 	//! The rule that applies after the transition data runs out, if any
 	unique_ptr<SimpleTimeZone> final_zone;
 	//! The first instant that final_zone applies to
-	double final_start_millis;
+	int64_t final_start_millis;
 };
 
 } // namespace datetime
