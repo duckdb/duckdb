@@ -130,8 +130,8 @@ struct ICUStrptime : public ICUDateFunc {
 		return nanos;
 	}
 
-	static inline void ParseOne(Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
-	                            timestamp_tz_t &result) {
+	static inline void ParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
+	                            vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -141,7 +141,7 @@ struct ICUStrptime : public ICUDateFunc {
 				} else {
 					// Set TZ first, if any.
 					if (!parsed.tz.empty()) {
-						SetTimeZone(calendar, parsed.tz);
+						cache.SetTimeZone(calendar, parsed.tz);
 					}
 
 					result = GetTime(calendar, ToMicros(calendar, parsed, format));
@@ -153,8 +153,8 @@ struct ICUStrptime : public ICUDateFunc {
 		throw InvalidInputException(parsed.FormatError(input, formats[0].format_specifier));
 	}
 
-	static inline void ParseOne(Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
-	                            timestamp_tz_ns_t &result) {
+	static inline void ParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
+	                            vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
@@ -164,7 +164,7 @@ struct ICUStrptime : public ICUDateFunc {
 				} else {
 					// Set TZ first, if any.
 					if (!parsed.tz.empty()) {
-						SetTimeZone(calendar, parsed.tz);
+						cache.SetTimeZone(calendar, parsed.tz);
 					}
 					result = GetTimeNS(calendar, ToNanos(calendar, parsed, format));
 					return;
@@ -183,26 +183,27 @@ struct ICUStrptime : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) {
 			T parsed;
-			ParseOne(calendar, input, info.formats, parsed);
+			ParseOne(calendar, cache, input, info.formats, parsed);
 			return parsed;
 		});
 	}
 
-	static inline bool TryParseOne(Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
-	                               timestamp_tz_t &result) {
+	static inline bool TryParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
+	                               vector<StrpTimeFormat> &formats, timestamp_tz_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
 					if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
 						return true;
 					}
@@ -213,15 +214,15 @@ struct ICUStrptime : public ICUDateFunc {
 		return false;
 	}
 
-	static inline bool TryParseOne(Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
-	                               timestamp_tz_ns_t &result) {
+	static inline bool TryParseOne(Calendar *calendar, CalendarCacheState &cache, string_t input,
+	                               vector<StrpTimeFormat> &formats, timestamp_tz_ns_t &result) {
 		ParseResult parsed;
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
 				if (parsed.is_special) {
 					result.value = parsed.ToTimestamp().value;
 					return true;
-				} else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+				} else if (parsed.tz.empty() || cache.TrySetTimeZone(calendar, parsed.tz)) {
 					if (TryGetTimeNS(calendar, ToNanos(calendar, parsed, format), result)) {
 						return true;
 					}
@@ -240,6 +241,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
@@ -250,7 +252,7 @@ struct ICUStrptime : public ICUDateFunc {
 		} else {
 			UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) -> optional<T> {
 				T result;
-				if (TryParseOne(calendar, input, info.formats, result)) {
+				if (TryParseOne(calendar, cache, input, info.formats, result)) {
 					return result;
 				}
 				return nullopt;
@@ -290,6 +292,7 @@ struct ICUStrptime : public ICUDateFunc {
 					function = is_try ? TryParse<timestamp_tz_ns_t> : Parse<timestamp_tz_ns_t>;
 				}
 				bound_function.SetFunctionCallback(function);
+				bound_function.SetInitStateCallback(InitCalendarCache);
 				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
@@ -317,6 +320,7 @@ struct ICUStrptime : public ICUDateFunc {
 					function = is_try ? TryParse<timestamp_tz_ns_t> : Parse<timestamp_tz_ns_t>;
 				}
 				bound_function.SetFunctionCallback(function);
+				bound_function.SetInitStateCallback(InitCalendarCache);
 				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, formats);
 			}
@@ -371,7 +375,8 @@ struct ICUStrptime : public ICUDateFunc {
 		TailPatch(name, loader, types);
 	}
 
-	static optional<timestamp_tz_t> VarcharToTimestampTZUS(CalendarPtr &cal, string_t input, CastParameters &parameters,
+	static optional<timestamp_tz_t> VarcharToTimestampTZUS(CalendarPtr &cal, CalendarCacheState &cache, string_t input,
+	                                                       CastParameters &parameters,
 	                                                       optional_ptr<int32_t> nanos = nullptr) {
 		timestamp_t us;
 		const auto str = input.GetData();
@@ -395,7 +400,7 @@ struct ICUStrptime : public ICUDateFunc {
 			// Change TZ if one was provided.
 			if (tz.GetSize()) {
 				string error_msg;
-				SetTimeZone(calendar, tz, &error_msg);
+				cache.SetTimeZone(calendar, tz, &error_msg);
 				if (!error_msg.empty()) {
 					HandleCastError::AssignError(error_msg, parameters);
 					return nullopt;
@@ -412,22 +417,25 @@ struct ICUStrptime : public ICUDateFunc {
 	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
+		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
-		UnaryExecutor::Execute<string_t, timestamp_tz_t>(
-		    source, result, count, [&](string_t input) { return VarcharToTimestampTZUS(cal, input, parameters); });
+		UnaryExecutor::Execute<string_t, timestamp_tz_t>(source, result, count, [&](string_t input) {
+			return VarcharToTimestampTZUS(cal, cache, input, parameters);
+		});
 		return true;
 	}
 
 	static bool VarcharToTimestampTZNS(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
+		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
 		UnaryExecutor::Execute<string_t, timestamp_tz_ns_t>(
 		    source, result, count, [&](string_t input) -> optional<timestamp_tz_ns_t> {
 			    int32_t nanos = 0;
-			    auto ts_us = VarcharToTimestampTZUS(cal, input, parameters, &nanos);
+			    auto ts_us = VarcharToTimestampTZUS(cal, cache, input, parameters, &nanos);
 			    if (!ts_us) {
 				    return nullopt;
 			    }
@@ -488,9 +496,9 @@ struct ICUStrptime : public ICUDateFunc {
 
 		switch (target.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return BoundCastInfo(VarcharToTimestampTZ, std::move(cast_data));
+			return BoundCastInfo(VarcharToTimestampTZ, std::move(cast_data), InitCastCalendarCache);
 		case LogicalTypeId::TIMESTAMP_TZ_NS:
-			return BoundCastInfo(VarcharToTimestampTZNS, std::move(cast_data));
+			return BoundCastInfo(VarcharToTimestampTZNS, std::move(cast_data), InitCastCalendarCache);
 		case LogicalTypeId::TIME_TZ:
 			return BoundCastInfo(VarcharToTimeTZ, std::move(cast_data));
 		default:
@@ -620,6 +628,8 @@ struct ICUStrftime : public ICUDateFunc {
 		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ_NS}, {"format", LogicalType::VARCHAR}},
 		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
+		// throws for unsupported format specifiers
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 

@@ -108,13 +108,11 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename T>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		CalendarPtr calendar_ptr(info.calendar->Copy());
-		auto calendar = calendar_ptr.get();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 
 		// Three cases: no TZ, constant TZ, variable TZ
 		if (input.ColumnCount() == 6) {
+			auto calendar = cache.GetBaseCalendar();
 			VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double>(
 			    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 				    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
@@ -126,7 +124,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 				if (ConstantVector::IsNull(tz_vec)) {
 					throw InternalException("ICUMakeTimestamp called with constant NULL tz");
 				}
-				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
+				auto calendar = cache.GetCalendar(*ConstantVector::GetData<string_t>(tz_vec));
 				VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
@@ -134,8 +132,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 			} else {
 				VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double, string_t>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss, string_t tz_id) {
-					    SetTimeZone(calendar, tz_id);
-					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
+					    return Operation<T>(cache.GetCalendar(tz_id), yyyy, mm, dd, hr, mn, ss);
 				    });
 			}
 		}
@@ -146,6 +143,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
 		                        Execute<TA>, Bind);
 		function.SetFallible();
+		function.SetInitStateCallback(InitCalendarCache);
 		return function;
 	}
 
@@ -154,6 +152,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
 		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
 		function.SetFallible();
+		function.SetInitStateCallback(InitCalendarCache);
 		return function;
 	}
 

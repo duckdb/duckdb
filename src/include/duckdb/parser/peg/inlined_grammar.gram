@@ -174,8 +174,9 @@ ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))?
 TupleType <- 'TUPLE' Parens(List(Type))
 ColIdType <- ColId Type
-ArrayBounds <- SquareBracketsArray / ArrayKeyword
+ArrayBounds <- ArrayKeywordWithBounds / SquareBracketsArray / ArrayKeyword
 ArrayKeyword <- 'ARRAY'
+ArrayKeywordWithBounds <- 'ARRAY' SquareBracketsArray
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
@@ -1856,9 +1857,10 @@ ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
 
 SetStatement <- 'SET' SetAssignmentOrTimeZone
-SetAssignmentOrTimeZone <- StandardAssignment / SetTimeZone
+SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
 ResetStatement <- 'RESET' SetVariableOrSetting
+SetSchema <- 'SCHEMA' StringLiteral
 StandardAssignment <- SetVariableOrSetting SetAssignment
 SetVariableOrSetting <- SetVariable / SetSetting
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
@@ -1884,7 +1886,6 @@ SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
-
 
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 

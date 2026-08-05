@@ -1050,6 +1050,11 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeArrayKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
 	static void InitializeSquareBracketsArrayTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeSquareBracketsArrayTrampoline(PEGTransformer &transformer,
@@ -4506,6 +4511,10 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeStandardAssignmentTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                   TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeStandardAssignmentTrampoline(PEGTransformer &transformer,
@@ -5275,6 +5284,9 @@ public:
 	static unique_ptr<TransformResultValue> TransformArrayKeywordInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static int64_t TransformArrayKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformArrayKeywordWithBoundsInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static int64_t TransformArrayKeywordWithBounds(PEGTransformer &transformer, const int64_t &square_brackets_array);
 	static unique_ptr<TransformResultValue> TransformSquareBracketsArrayInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer,
@@ -8205,6 +8217,9 @@ public:
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        const SettingInfo &set_variable_or_setting);
+	static unique_ptr<TransformResultValue> TransformSetSchemaInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetSchema(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformStandardAssignmentInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,

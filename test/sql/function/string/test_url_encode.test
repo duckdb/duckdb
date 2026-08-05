@@ -47,3 +47,7 @@ SELECT COUNT(*) FROM t24268 WHERE TRY(url_decode(c)) IS NULL
 ----
 4096
 
+statement error
+SELECT url_decode(c) FROM t24268
+----
+decoded value is invalid UTF8

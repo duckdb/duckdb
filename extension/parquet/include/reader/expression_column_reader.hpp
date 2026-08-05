@@ -42,9 +42,9 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers,
+	ExpressionColumnReader(ClientContext &context_p, vector<unique_ptr<ColumnReader>> child_readers,
 	                       unique_ptr<Expression> expr, const ParquetColumnSchema &schema);
-	ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers,
+	ExpressionColumnReader(ClientContext &context_p, vector<unique_ptr<ColumnReader>> child_readers,
 	                       unique_ptr<Expression> expr, unique_ptr<ParquetColumnSchema> owned_schema);
 
 	//! Reader(s) to produce the input(s) for the expression
@@ -61,6 +61,7 @@ public:
 	                    TProtocol &protocol_p) override;
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) override;
 
 	void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
 	            idx_t approved_tuple_count) override;
@@ -87,6 +88,7 @@ public:
 	}
 
 private:
+	ClientContext &context;
 	void InitializeChunk();
 };
 

@@ -125,7 +125,7 @@ void GregorianCalendar::HandleComputeFields(int32_t julian_day) {
 		// the Julian calendar epoch day is zero on Saturday December 30, 0 (Gregorian)
 		const auto julian_epoch_day = julian_day - (JULIAN_1_CE - 2);
 		int32_t unused;
-		eyear = int32_t(FloorDiv::Divide(4.0 * julian_epoch_day + 1464.0, int32_t(1461), unused));
+		eyear = int32_t(FloorDiv::Divide(4 * int64_t(julian_epoch_day) + 1464, int32_t(1461), unused));
 
 		const auto january1 = 365 * (eyear - 1) + FloorDiv::Divide(eyear - 1, 4);
 		doy = julian_epoch_day - january1;

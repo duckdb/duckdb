@@ -1336,6 +1336,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformArrayKeywordInt
 }
 
 unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto square_brackets_array = transformer.Transform<int64_t>(list_pr.GetChild(1));
+	auto result = TransformArrayKeywordWithBounds(transformer, square_brackets_array);
+	return make_uniq<TypedTransformResult<int64_t>>(result);
+}
+
+unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSquareBracketsArrayInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	optional<unique_ptr<ParsedExpression>> expression {};
@@ -10024,6 +10032,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformResetStatementI
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetSchemaInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
+	auto result = TransformSetSchema(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStandardAssignmentInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10722,6 +10738,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColIdType", &PEGTransformerFactory::TransformColIdTypeInternal},
 	    {"ArrayBounds", &PEGTransformerFactory::TransformArrayBoundsInternal},
 	    {"ArrayKeyword", &PEGTransformerFactory::TransformArrayKeywordInternal},
+	    {"ArrayKeywordWithBounds", &PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal},
 	    {"SquareBracketsArray", &PEGTransformerFactory::TransformSquareBracketsArrayInternal},
 	    {"TimeType", &PEGTransformerFactory::TransformTimeTypeInternal},
 	    {"TimeOrTimestamp", &PEGTransformerFactory::TransformTimeOrTimestampInternal},
@@ -11529,6 +11546,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"SetStatement", &PEGTransformerFactory::TransformSetStatementInternal},
 	    {"SetAssignmentOrTimeZone", &PEGTransformerFactory::TransformSetAssignmentOrTimeZoneInternal},
 	    {"ResetStatement", &PEGTransformerFactory::TransformResetStatementInternal},
+	    {"SetSchema", &PEGTransformerFactory::TransformSetSchemaInternal},
 	    {"StandardAssignment", &PEGTransformerFactory::TransformStandardAssignmentInternal},
 	    {"SetVariableOrSetting", &PEGTransformerFactory::TransformSetVariableOrSettingInternal},
 	    {"SetTimeZone", &PEGTransformerFactory::TransformSetTimeZoneInternal},

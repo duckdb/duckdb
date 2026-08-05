@@ -194,9 +194,9 @@ idx_t DebugFileSystem::SeekPosition(FileHandle &handle) {
 	return inner.file_system.SeekPosition(inner);
 }
 
-bool DebugFileSystem::SupportsPositionalWrites(FileHandle &handle) {
+FileWriteMode DebugFileSystem::GetWriteMode(FileHandle &handle) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
-	return inner.file_system.SupportsPositionalWrites(inner);
+	return inner.file_system.GetWriteMode(inner);
 }
 
 bool DebugFileSystem::OnDiskFile(FileHandle &handle) {
