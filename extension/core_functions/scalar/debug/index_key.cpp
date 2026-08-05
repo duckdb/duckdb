@@ -127,14 +127,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(input.GetConstant(0));
 	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
 
-	auto &entry = Catalog::GetEntry(
-	    context, CatalogType::TABLE_ENTRY,
-	    QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(), path.qualified_name.Name()));
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
-	if (entry.type != CatalogType::TABLE_ENTRY) {
-		throw BinderException("index_key: '%s' is not a table", qualified_table);
-	}
-	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
 	if (!table_entry.IsDuckTable()) {
 		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
 	}

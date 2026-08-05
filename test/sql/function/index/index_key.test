@@ -471,4 +471,4 @@ CREATE VIEW tbl1_view AS SELECT * FROM tbl1;
 statement error
 SELECT index_key({'table': 'tbl1_view'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: 'tbl1_view' is not a table
+Catalog Error: tbl1_view is not an table
