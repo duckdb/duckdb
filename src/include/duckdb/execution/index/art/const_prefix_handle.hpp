@@ -13,49 +13,39 @@
 
 namespace duckdb {
 
-//! ConstPrefixHandle is a read-only wrapper to access a prefix node.
-//! The prefix contains up to the ART's prefix size bytes, an additional byte for the count,
-//! and a Node pointer to a child node.
-//! A segment handle is used for memory management, but it is not marked as modified.
+//! ConstPrefixHandle provides static methods for read-only prefix operations.
 class ConstPrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
-	ConstPrefixHandle(const ART &art, const Node node);
-	ConstPrefixHandle() = delete;
-	ConstPrefixHandle(const ConstPrefixHandle &) = delete;
-	ConstPrefixHandle &operator=(const ConstPrefixHandle &) = delete;
-	ConstPrefixHandle(ConstPrefixHandle &&) = delete;
-	ConstPrefixHandle &operator=(ConstPrefixHandle &&) = delete;
-
-public:
-	uint8_t GetCount(const ART &art) const;
-	uint8_t GetByte(const idx_t pos) const;
+	//! Get a const reference to the child slot of the prefix.
+	static const NodePtr &ChildRef(const ART &art, ConstNodeHandle &handle) {
+		return *reinterpret_cast<const NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
+	}
 
 	//! Traverses and verifies the node and its subtree.
-	static void Verify(ART &art, const Node &node);
+	static void Verify(ART &art, const NodePtr &node);
 
 	//! Returns the string representation of the node using ToStringOptions.
-	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
+	static string ToString(ART &art, const NodePtr &node, const ToStringOptions &options);
 
 private:
 	template <class F>
-	static void Iterator(ART &art, reference<const Node> &ref, const bool exit_gate, F &&lambda) {
-		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
-			ConstPrefixHandle handle(art, ref);
-			lambda(handle);
+	static NodePtr Iterator(ART &art, NodePtr node, const bool exit_gate, F &&lambda) {
+		while (node.HasMetadata() && node.GetType() == PREFIX) {
+			ConstNodeHandle handle(art, node);
+			auto data = handle.GetPtr();
+			auto child = ChildRef(art, handle);
 
-			ref = *handle.child;
-			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
+			lambda(handle, data, child);
+
+			node = child;
+			if (exit_gate && node.GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}
 		}
+		return node;
 	}
-
-private:
-	SegmentHandle segment_handle;
-	data_ptr_t data;
-	Node *child;
 };
 
 } // namespace duckdb
