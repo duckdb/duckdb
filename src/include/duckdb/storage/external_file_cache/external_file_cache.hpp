@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/string.hpp"
@@ -32,14 +33,17 @@ class BufferManager;
 
 //! File metadata used to determine whether cached file data is still valid.
 struct CacheValidationInfo {
+	bool IsExplicitlyStale() const;
+
 	//! Version tag (e.g., HTTP ETag). Empty if the storage backend does not provide one.
 	string version_tag;
 	//! Last modified time. Zero/non-finite if the storage backend does not provide one.
 	timestamp_t last_modified = timestamp_t(0);
 	//! Freshness deadline for files without validators (e.g., HTTP Cache-Control).
 	//! The deadline is inclusive: cached data may be served while the current time is at or before it.
-	//! If unset (infinite), the storage backend does not provide expiry information.
-	timestamp_t cache_valid_until = timestamp_t::infinity();
+	//! Unset means the storage backend does not provide expiry information.
+	//! Positive/negative infinity mean always valid/invalid.
+	optional<timestamp_t> cache_valid_until;
 	idx_t file_size = 0;
 };
 

@@ -198,20 +198,24 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 }
 
 bool CachingFileHandle::CanUseCache() {
-	if (!Validate()) {
-		return true;
-	}
 	auto current_cached_file = EnsureCachedFileCurrent();
+	if (!Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		const auto &valid_until = current_cached_file->validation_info.cache_valid_until;
+		return !valid_until || Timestamp::GetCurrentTimestamp() <= *valid_until;
+	}
+	bool has_validation_metadata;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-		if (ExternalFileCache::HasValidationMetadata(validation_info)) {
-			return true;
-		}
+		has_validation_metadata = ExternalFileCache::HasValidationMetadata(validation_info);
 	}
 
 	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-	return current_cached_file->validation_info.cache_valid_until.IsFinite() &&
-	       Timestamp::GetCurrentTimestamp() <= current_cached_file->validation_info.cache_valid_until;
+	const auto &cached_validation_info = current_cached_file->validation_info;
+	if (!cached_validation_info.cache_valid_until) {
+		return has_validation_metadata;
+	}
+	return Timestamp::GetCurrentTimestamp() <= *cached_validation_info.cache_valid_until;
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
@@ -275,9 +279,10 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 				cached_file->blocks.clear();
 				cached_file->cached_block_size.SetInvalid();
 			}
-			// The freshness deadline is only adopted when the entry is (re)initialized, not refreshed while valid
-			const auto valid_until =
-			    cache_is_valid ? cached_file->validation_info.cache_valid_until : validation_info.cache_valid_until;
+			// A successful validator check refreshes freshness. Without validators, preserve the original deadline.
+			const bool revalidated = cache_is_valid && ExternalFileCache::HasValidationMetadata(validation_info);
+			const auto valid_until = (!cache_is_valid || revalidated) ? validation_info.cache_valid_until
+			                                                          : cached_file->validation_info.cache_valid_until;
 			cached_file->validation_info = validation_info;
 			cached_file->validation_info.cache_valid_until = valid_until;
 			cached_file->can_seek = file_handle->CanSeek();

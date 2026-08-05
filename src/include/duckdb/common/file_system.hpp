@@ -17,6 +17,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
@@ -72,10 +73,9 @@ struct FileMetadata {
 	//! Optional: tag that uniquely identifies the version of the file (e.g., HTTP ETag).
 	//! Empty if the storage backend does not provide one.
 	string version_tag;
-	//! Optional: time until which (inclusive) cached data of the file may be served without revalidation,
-	//! e.g., derived from HTTP Cache-Control/Expires.
-	//! If unset (infinite), the storage backend does not provide information on when cached data expires.
-	timestamp_t cache_valid_until = timestamp_t::infinity();
+	//! Time until which (inclusive) cached data may be served without revalidation.
+	//! Unset means the backend provides no freshness information; infinities mean always valid/invalid.
+	optional<timestamp_t> cache_valid_until;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;

@@ -14,6 +14,10 @@
 
 namespace duckdb {
 
+bool CacheValidationInfo::IsExplicitlyStale() const {
+	return cache_valid_until && *cache_valid_until == timestamp_t::ninfinity();
+}
+
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
 	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p, idx_t generation_p)
@@ -246,6 +250,9 @@ bool ExternalFileCache::HasValidationMetadata(const CacheValidationInfo &info) {
 }
 
 bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached, const CacheValidationInfo &current) {
+	if (cached.IsExplicitlyStale() || current.IsExplicitlyStale()) {
+		return false;
+	}
 	if (!validate) {
 		return true; // Assume valid
 	}
@@ -257,10 +264,10 @@ bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached
 	if (cached.file_size != current.file_size) {
 		return false; // The file has certainly been modified
 	}
-	if (!cached.cache_valid_until.IsFinite()) {
+	if (!cached.cache_valid_until) {
 		return false; // The backend does not provide expiry information, so we cannot validate at all
 	}
-	return Timestamp::GetCurrentTimestamp() <= cached.cache_valid_until;
+	return Timestamp::GetCurrentTimestamp() <= *cached.cache_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
