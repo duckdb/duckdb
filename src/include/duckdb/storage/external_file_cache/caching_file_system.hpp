@@ -87,6 +87,8 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Whether cached metadata can be used without reopening the file for validation.
+	bool HasFreshImmutableMetadata();
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Record a timed read of a local file into the throughput estimate

@@ -76,6 +76,8 @@ struct FileMetadata {
 	//! e.g., derived from HTTP Cache-Control/Expires.
 	//! If unset (infinite), the storage backend does not provide information on when cached data expires.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
+	//! Whether the file is guaranteed not to change during its freshness lifetime.
+	bool cache_immutable = false;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;

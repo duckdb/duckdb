@@ -197,6 +197,14 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 	return current_cached_file;
 }
 
+bool CachingFileHandle::HasFreshImmutableMetadata() {
+	auto current_cached_file = EnsureCachedFileCurrent();
+	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+	const auto &info = current_cached_file->validation_info;
+	return info.immutable && info.cache_valid_until.IsFinite() &&
+	       Timestamp::GetCurrentTimestamp() <= info.cache_valid_until;
+}
+
 bool CachingFileHandle::CanUseCache() {
 	if (!Validate()) {
 		return true;
@@ -223,8 +231,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
-	if (!external_file_cache.IsEnabled() || Validate()) {
-		// If caching is disabled, or if we must validate cache entries, we always have to open the file
+	const bool should_validate = Validate();
+	const bool skip_validation = should_validate && HasFreshImmutableMetadata();
+	if (!external_file_cache.IsEnabled() || (should_validate && !skip_validation)) {
+		// Open the file unless a fresh immutable cache entry can satisfy reads without revalidation.
 		GetFileHandle();
 		return;
 	}
@@ -263,6 +273,7 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	validation_info.last_modified = stats.last_modification_time;
 	validation_info.cache_valid_until = stats.cache_valid_until;
 	validation_info.version_tag = std::move(stats.version_tag);
+	validation_info.immutable = stats.cache_immutable;
 
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
@@ -394,7 +405,7 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (!Validate()) {
+	if (!Validate() || HasFreshImmutableMetadata()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 		return current_cached_file->validation_info.file_size;
@@ -405,7 +416,7 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	if (!Validate()) {
+	if (!Validate() || HasFreshImmutableMetadata()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 		return current_cached_file->validation_info.last_modified;
@@ -416,7 +427,7 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
-	if (!Validate()) {
+	if (!Validate() || HasFreshImmutableMetadata()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 		return current_cached_file->validation_info.version_tag;
@@ -444,7 +455,7 @@ bool CachingFileHandle::Validate() const {
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (!Validate()) {
+	if (!Validate() || HasFreshImmutableMetadata()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 		return current_cached_file->can_seek;
@@ -457,7 +468,7 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (!Validate()) {
+	if (!Validate() || HasFreshImmutableMetadata()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 		return current_cached_file->on_disk_file;

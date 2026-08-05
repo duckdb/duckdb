@@ -69,8 +69,10 @@ string FreshnessOnlyFileSystem::GetName() const {
 }
 
 FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
+	stats_count++;
 	auto metadata = NoValidationMetadataFileSystem::Stats(handle);
 	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
+	metadata.cache_immutable = immutable;
 	return metadata;
 }
 

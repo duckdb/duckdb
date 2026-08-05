@@ -535,6 +535,30 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 	}
 }
 
+TEST_CASE("Fresh immutable cache entry skips revalidation", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+	fresh_fs->immutable = true;
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const string content(block_size, 'A');
+	EFCTestFileGuard test_file("test_efc_immutable.bin", content);
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+	}
+	REQUIRE(fresh_fs->stats_count == 1);
+
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+	}
+	REQUIRE(fresh_fs->stats_count == 1);
+}
+
 TEST_CASE("File with freshness deadline is invalidated when the file size changes", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
