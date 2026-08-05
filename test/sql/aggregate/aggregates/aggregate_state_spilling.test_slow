@@ -107,3 +107,45 @@ ORDER BY iter;
 0	2000000	2000000
 1	2000000	2000000
 2	2000000	2000000
+
+# few groups with very large states: the arena pressure check must trigger the export before
+# the hash table ever fills, and the exported partitions grow until finalize fits in memory
+query II
+SELECT count(*), sum(length(w)) FROM (
+  SELECT k, first(wide) AS w
+  FROM (SELECT i % 100000 AS k, repeat(md5((i % 100000)::VARCHAR), 64) AS wide FROM range(200000) t(i))
+  GROUP BY k);
+----
+100000	204800000
+
+# an aggregate that cannot spill (histogram owns a map) keeps the whole layout on the arena,
+# and the query must still be correct alongside a spillable-looking aggregate
+statement ok
+SET memory_limit='512MB';
+
+query I
+SELECT count(*) FROM (
+  SELECT k, first(wide) AS w, histogram(i % 4) AS h
+  FROM (SELECT i, i % 50000 AS k, repeat(md5((i % 50000)::VARCHAR), 4) AS wide FROM range(100000) t(i))
+  GROUP BY k
+) s
+WHERE w != repeat(md5(k::VARCHAR), 4) OR cardinality(h) != 1 OR h[k % 4] != 2;
+----
+0
+
+# inline-only string states: external aggregation with an empty arena must not export anything
+statement ok
+SET debug_force_external=true;
+
+query I
+SELECT count(*) FROM (
+  SELECT k, first(s) AS f
+  FROM (SELECT i % 100000 AS k, substr(md5((i % 100000)::VARCHAR), 1, 8) AS s FROM range(200000) t(i))
+  GROUP BY k
+) q
+WHERE f != substr(md5(k::VARCHAR), 1, 8);
+----
+0
+
+statement ok
+SET debug_force_external=false;

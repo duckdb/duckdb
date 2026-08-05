@@ -520,22 +520,4 @@ struct AggregateStateLayout {
 	unordered_map<idx_t, Value> constant_parameters;
 };
 
-class BoundAggregateFunction;
-class Vector;
-class ArenaAllocator;
-struct FunctionData;
-
-//! Serializes aggregate states to their exported logical form and back (implemented with the
-//! aggregate state export machinery). Used to move states through spillable storage.
-struct AggregateStateSerialization {
-	//! Serialize `count` states into `result` (of the layout's logical type) at [offset, offset + count)
-	static void SerializeStates(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
-	                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
-	                            ArenaAllocator &allocator, idx_t offset);
-	//! Deserialize `count` rows of `input` into consecutive packed states in `dest_buffer`,
-	//! allocating variable size data from `allocator`
-	static void DeserializeStates(const BoundAggregateFunction &aggr, const AggregateStateLayout &layout,
-	                              const Vector &input, idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator);
-};
-
 } // namespace duckdb

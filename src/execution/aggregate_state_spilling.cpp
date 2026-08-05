@@ -1,5 +1,7 @@
 #include "duckdb/execution/aggregate_state_spilling.hpp"
 
+#include "duckdb/function/aggregate_state_serialization.hpp"
+
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -8,44 +10,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-
-// The deserialization of primitive string fields stores string_t values that point into the
-// input vector. Sort keys and lists already copy into the allocator; this pass copies the rest,
-// so that the imported states do not dangle once the exported data is destroyed.
-static void MaterializeStateStrings(const LogicalType &type, const AggregateStateField &field, data_ptr_t state,
-                                    idx_t base, ArenaAllocator &allocator) {
-	switch (field.kind) {
-	case AggregateFieldKind::OPTIONAL_VALUE:
-		D_ASSERT(field.children.size() == 1);
-		if (!Load<bool>(state + base + field.field_offset)) {
-			return;
-		}
-		MaterializeStateStrings(type, field.children[0], state, base, allocator);
-		break;
-	case AggregateFieldKind::STRUCT: {
-		const auto &child_types = StructType::GetChildTypes(type);
-		const idx_t new_base = base + field.field_offset;
-		for (idx_t child_idx = 0; child_idx < field.children.size(); child_idx++) {
-			MaterializeStateStrings(child_types[child_idx].second, field.children[child_idx], state, new_base,
-			                        allocator);
-		}
-		break;
-	}
-	case AggregateFieldKind::PRIMITIVE:
-		if (type.InternalType() == PhysicalType::VARCHAR) {
-			const auto value = Load<string_t>(state + base + field.field_offset);
-			if (!value.IsInlined()) {
-				const auto size = value.GetSize();
-				auto buf = char_ptr_cast(allocator.Allocate(size));
-				memcpy(buf, value.GetData(), size);
-				Store<string_t>(string_t(buf, UnsafeNumericCast<uint32_t>(size)), state + base + field.field_offset);
-			}
-		}
-		break;
-	default:
-		break;
-	}
-}
 
 // Whether this field can hold a reference into the aggregate arena. Pointer-free states
 // (counts, sums, inline values) never need exporting, their rows spill on their own.
@@ -256,11 +220,7 @@ void AggregateStateSpilling::ImportStates(ClientContext &context, shared_ptr<Tup
 			}
 			AggregateStateSerialization::DeserializeStates(aggr.function, state_layout,
 			                                               exported_chunk.data[column_count + aggr_idx], count,
-			                                               state_buffer.get(), allocator);
-			for (idx_t i = 0; i < count; i++) {
-				MaterializeStateStrings(state_layout.type, state_layout.field, state_buffer.get() + i * state_size, 0,
-				                        allocator);
-			}
+			                                               state_buffer.get(), allocator, StateMemoryOwnership::OWNED);
 			for (idx_t i = 0; i < count; i++) {
 				memcpy(row_locations[i] + aggr_offset, state_buffer.get() + i * state_size, state_size);
 			}
