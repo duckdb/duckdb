@@ -1281,6 +1281,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_global_s3_configuration", "httpfs"},
     {"enable_server_cert_verification", "httpfs"},
+    {"extra_http_headers", "httpfs"},
     {"force_download", "httpfs"},
     {"force_download_threshold", "httpfs"},
     {"geometry_always_xy", "spatial"},
