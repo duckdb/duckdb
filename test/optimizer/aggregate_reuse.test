@@ -1,0 +1,179 @@
+# name: test/optimizer/aggregate_reuse.test
+# description: Reuse exact grouped payloads retained by SEMI joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE reuse_dim(id INTEGER PRIMARY KEY, label VARCHAR)
+
+statement ok
+INSERT INTO reuse_dim VALUES (10, 'x'), (20, 'b'), (30, 'x'), (40, 'd')
+
+statement ok
+CREATE TABLE reuse_owner(k INTEGER PRIMARY KEY, dim_id INTEGER)
+
+statement ok
+INSERT INTO reuse_owner VALUES (1, 10), (2, 20), (3, 30), (4, 40)
+
+statement ok
+CREATE TABLE reuse_fact(k INTEGER, v INTEGER, w INTEGER)
+
+statement ok
+INSERT INTO reuse_fact VALUES (1, 10, 1), (1, 20, 2), (2, 5, 3), (3, 40, 4), (3, 50, 5), (4, NULL, 6)
+
+statement ok
+PRAGMA explain_output = 'physical_only'
+
+# The baseline scans the fact table once for the SEMI join and again for the outer aggregate.
+statement ok
+SET disabled_optimizers = 'aggregate_reuse'
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+statement ok
+RESET disabled_optimizers
+
+# The unique key survives the dimension join, so the retained grouped payload replaces the outer scan and aggregate.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<!REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+statement ok
+SET debug_verify_serializer = true
+
+query IIT rowsort
+SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+1	x	30
+3	x	90
+
+# NULL aggregate results remain NULL when carried through the inner join.
+query IIT rowsort
+SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) IS NULL)
+GROUP BY o.k, d.label
+----
+4	d	NULL
+
+# A key can determine the output label without making the label a unique grouping key.
+query II
+EXPLAIN SELECT d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query IT
+SELECT d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY d.label
+----
+x	120
+
+statement ok
+SET debug_verify_serializer = false
+
+# DISTINCT has a separate state lifecycle and is not reused.
+query II
+EXPLAIN SELECT o.k, d.label, count(DISTINCT f.w)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING count(DISTINCT w) > 1)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# Every outer aggregate would have to be available in the retained payload.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v), count(*)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# A different argument or function is not an exact payload match.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.w)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, max(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# Filters on either aggregate input change the row domain.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact WHERE w >= 2 GROUP BY k HAVING sum(v) > 15)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f ON o.k = f.k AND f.w >= 2
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# The SEMI join must consume the grouped key, not another output of the aggregate.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT CAST(sum(v) AS INTEGER) FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# A duplicate owner would multiply the reused payload and still requires an outer aggregate.
+statement ok
+CREATE TABLE reuse_duplicate_owner AS SELECT * FROM reuse_owner UNION ALL SELECT * FROM reuse_owner
+
+query II
+EXPLAIN SELECT o.k, sum(f.v)
+FROM reuse_duplicate_owner o JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II rowsort
+SELECT o.k, sum(f.v)
+FROM reuse_duplicate_owner o JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k
+----
+1	60
+3	180

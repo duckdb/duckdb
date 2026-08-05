@@ -165,6 +165,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
+#include "duckdb/optimizer/key_properties.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
@@ -3958,19 +3959,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::GROUPING_SETS), "GROUPING_SETS" },
 		{ static_cast<uint32_t>(OptimizerType::TYPE_PUSHDOWN), "TYPE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::SCALAR_FN_PUSHDOWN), "SCALAR_FN_PUSHDOWN" },
-		{ static_cast<uint32_t>(OptimizerType::DISTINCT_AGGREGATE_REWRITE), "DISTINCT_AGGREGATE_REWRITE" }
+		{ static_cast<uint32_t>(OptimizerType::DISTINCT_AGGREGATE_REWRITE), "DISTINCT_AGGREGATE_REWRITE" },
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 44, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 45, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 44, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 45, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
@@ -6491,6 +6493,26 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	return static_cast<UnionInvalidReason>(StringUtil::StringToEnum(GetUnionInvalidReasonValues(), 6, "UnionInvalidReason", value));
+}
+
+const StringUtil::EnumStringLiteral *GetUniqueKeyProofValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(UniqueKeyProof::PRIMARY_KEY), "PRIMARY_KEY" },
+		{ static_cast<uint32_t>(UniqueKeyProof::UNIQUE_NOT_NULL), "UNIQUE_NOT_NULL" },
+		{ static_cast<uint32_t>(UniqueKeyProof::AGGREGATE_GROUP), "AGGREGATE_GROUP" },
+		{ static_cast<uint32_t>(UniqueKeyProof::KEY_PRESERVING_JOIN), "KEY_PRESERVING_JOIN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<UniqueKeyProof>(UniqueKeyProof value) {
+	return StringUtil::EnumToString(GetUniqueKeyProofValues(), 4, "UniqueKeyProof", static_cast<uint32_t>(value));
+}
+
+template<>
+UniqueKeyProof EnumUtil::FromString<UniqueKeyProof>(const char *value) {
+	return static_cast<UniqueKeyProof>(StringUtil::StringToEnum(GetUniqueKeyProofValues(), 4, "UniqueKeyProof", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVacuumIndexStrategyValues() {
