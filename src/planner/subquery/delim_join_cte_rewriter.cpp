@@ -481,6 +481,18 @@ static bool GetBoundColumnRefBinding(const Expression &expr, ColumnBinding &bind
 	return true;
 }
 
+static bool IsRedundantNullSafeSelfComparison(const Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return false;
+	}
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
+	ColumnBinding left_binding;
+	ColumnBinding right_binding;
+	return GetBoundColumnRefBinding(BoundComparisonExpression::Left(comparison), left_binding) &&
+	       GetBoundColumnRefBinding(BoundComparisonExpression::Right(comparison), right_binding) &&
+	       left_binding == right_binding;
+}
+
 struct RewrittenOutputLayout {
 	vector<ColumnBinding> old_bindings;
 	vector<LogicalType> old_types;
@@ -1323,6 +1335,9 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join, 
 			ReplaceExpressionBindings(expr, base_replacement_bindings, base_replacement_expressions);
 			if (ExpressionReferencesGeneratedSide(*expr, *dedup_ref)) {
 				return false;
+			}
+			if (IsRedundantNullSafeSelfComparison(*expr)) {
+				continue;
 			}
 			filter_expressions.push_back(std::move(expr));
 		}

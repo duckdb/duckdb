@@ -58,6 +58,97 @@ logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 statement ok
 SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
+# Removing an equivalent generated domain must not leave a null-safe self-filter on the correlated input.
+statement ok
+CREATE TABLE self_filter_dim(dimension_key INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO self_filter_dim SELECT i, i < 4 FROM range(100) r(i);
+
+statement ok
+INSERT INTO self_filter_dim VALUES (NULL, true);
+
+statement ok
+CREATE TABLE self_filter_fact(fact_key INTEGER, quantity INTEGER);
+
+statement ok
+INSERT INTO self_filter_fact SELECT i % 100, i % 17 FROM range(10000) r(i);
+
+statement ok
+INSERT INTO self_filter_fact VALUES (NULL, 1), (NULL, 10);
+
+statement ok
+CREATE TABLE self_filter_measure(measure_key INTEGER, quantity INTEGER);
+
+statement ok
+INSERT INTO self_filter_measure SELECT i % 100, i % 19 FROM range(10000) r(i);
+
+statement ok
+INSERT INTO self_filter_measure VALUES (NULL, 2), (NULL, 6);
+
+query I
+SELECT count(*)
+FROM self_filter_fact f
+JOIN self_filter_dim d ON f.fact_key = d.dimension_key
+WHERE d.selected
+  AND f.quantity < (
+      SELECT avg(m.quantity)
+      FROM self_filter_measure m
+      WHERE m.measure_key = d.dimension_key
+  );
+----
+214
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT f.fact_key
+FROM self_filter_fact f
+JOIN self_filter_dim d ON f.fact_key = d.dimension_key
+WHERE d.selected
+  AND f.quantity < (
+      SELECT avg(m.quantity)
+      FROM self_filter_measure m
+      WHERE m.measure_key = d.dimension_key
+  );
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*measure_key = dimension_key.*
+
+query II
+EXPLAIN
+SELECT f.fact_key
+FROM self_filter_fact f
+JOIN self_filter_dim d ON f.fact_key = d.dimension_key
+WHERE d.selected
+  AND f.quantity < (
+      SELECT avg(m.quantity)
+      FROM self_filter_measure m
+      WHERE m.measure_key = d.dimension_key
+  );
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|measure_key IS NOT DISTINCT FROM measure_key).*
+
+# A null-safe correlation still matches the NULL domain after removing the redundant generated condition.
+query I
+SELECT f.quantity
+FROM self_filter_fact f
+JOIN self_filter_dim d ON f.fact_key IS NOT DISTINCT FROM d.dimension_key
+WHERE d.selected
+  AND d.dimension_key IS NULL
+  AND f.quantity < (
+      SELECT avg(m.quantity)
+      FROM self_filter_measure m
+      WHERE m.measure_key IS NOT DISTINCT FROM d.dimension_key
+  )
+ORDER BY f.quantity;
+----
+1
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
 # Factoring the candidate source must preserve duplicate payload rows.
 statement ok
 CREATE TABLE domain_duplicate_dim(k INTEGER, state VARCHAR, tag VARCHAR);
