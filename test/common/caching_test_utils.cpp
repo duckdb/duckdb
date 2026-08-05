@@ -63,13 +63,18 @@ timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &hand
 	return timestamp_t(0);
 }
 
+FileMetadata NoValidationMetadataFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.last_modification_time = timestamp_t(0);
+	return metadata;
+}
+
 string FreshnessOnlyFileSystem::GetName() const {
 	return "FreshnessOnlyFileSystem";
 }
 
 FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
-	auto metadata = LocalFileSystem::Stats(handle);
-	metadata.last_modification_time = timestamp_t(0);
+	auto metadata = NoValidationMetadataFileSystem::Stats(handle);
 	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
 	return metadata;
 }

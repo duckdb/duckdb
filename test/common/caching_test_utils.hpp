@@ -42,6 +42,7 @@ public:
 	bool CanSeek() override;
 	string GetVersionTag(FileHandle &handle) override;
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
 };
 
 //! A file system without validators that grants a freshness deadline, simulating servers that send

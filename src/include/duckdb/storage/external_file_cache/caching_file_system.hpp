@@ -114,8 +114,9 @@ private:
 	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
-	//! Last modified time and version tag (if FileHandle is opened)
-	timestamp_t last_modified;
+	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
+	idx_t file_size = 0;
+	timestamp_t last_modified = timestamp_t(0);
 	string version_tag;
 	//! Freshness deadline for files without extra validation.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
