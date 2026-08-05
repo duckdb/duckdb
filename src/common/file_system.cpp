@@ -489,6 +489,7 @@ FileMetadata FileSystem::Stats(FileHandle &handle) {
 	metadata.file_size = GetFileSize(handle);
 	metadata.last_modification_time = GetLastModifiedTime(handle);
 	metadata.file_type = GetFileType(handle);
+	metadata.version_tag = GetVersionTag(handle);
 	return metadata;
 }
 

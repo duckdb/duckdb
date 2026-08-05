@@ -30,7 +30,7 @@ public:
 	string GetName() const override;
 	bool CanHandleFile(const string &path) override;
 	bool CanSeek() override;
-	string GetVersionTag(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
 };
 
 //! A file system that returns no ETag and timestamp_t(0) for Last-Modified, simulating servers that do not
@@ -40,8 +40,6 @@ public:
 	string GetName() const override;
 	bool CanHandleFile(const string &path) override;
 	bool CanSeek() override;
-	string GetVersionTag(FileHandle &handle) override;
-	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 	FileMetadata Stats(FileHandle &handle) override;
 };
 

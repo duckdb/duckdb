@@ -1,25 +1,27 @@
-commit b9615d99c7c44ef477d3aad540c5c342db9fdb68
+commit bb8994c854cc556fafaf672906fabd636f9b6175
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..98cbca5 100644
+index 0fc503a..e2d2de0 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
-@@ -7,8 +7,10 @@
+@@ -7,8 +7,12 @@
  #include "duckdb/common/file_opener.hpp"
  #include "duckdb/common/helper.hpp"
  #include "duckdb/common/http_util.hpp"
++#include "duckdb/common/operator/add.hpp"
 +#include "duckdb/common/operator/cast_operators.hpp"
++#include "duckdb/common/operator/multiply.hpp"
  #include "duckdb/common/thread.hpp"
  #include "duckdb/common/types/hash.hpp"
 +#include "duckdb/common/types/interval.hpp"
  #include "duckdb/common/types/time.hpp"
  #include "duckdb/function/scalar/strftime_format.hpp"
  #include "duckdb/logging/file_system_logger.hpp"
-@@ -473,6 +475,16 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
+@@ -473,6 +477,17 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
  	return sfh.etag;
  }
  
@@ -30,13 +32,14 @@ index 0fc503a..98cbca5 100644
 +	metadata.last_modification_time = sfh.last_modified;
 +	metadata.file_type = FileType::FILE_TYPE_REGULAR;
 +	metadata.cache_valid_until = sfh.cache_valid_until;
++	metadata.version_tag = sfh.etag;
 +	return metadata;
 +}
 +
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -574,6 +586,58 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -574,6 +589,62 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -45,9 +48,6 @@ index 0fc503a..98cbca5 100644
 +}
 +
 +timestamp_t HTTPFileSystem::ComputeCacheValidUntil(const HTTPHeaders &headers) {
-+	// Clamp the freshness lifetime to guard against overflow from absurd server-provided values
-+	static constexpr int64_t MAX_FRESHNESS_SECONDS = Interval::DAYS_PER_YEAR * Interval::SECS_PER_DAY;
-+
 +	// Freshness lifetime in seconds (RFC 9111): Cache-Control max-age takes precedence over Expires
 +	// TODO: handle no-store/no-cache directives; note that this function is only consulted for responses
 +	// without validators (no ETag/Last-Modified), and infinity means no freshness is granted
@@ -85,17 +85,24 @@ index 0fc503a..98cbca5 100644
 +		}
 +	}
 +
-+	const int64_t remaining = MinValue<int64_t>(freshness_lifetime - age, MAX_FRESHNESS_SECONDS);
++	const int64_t remaining = freshness_lifetime - age;
 +	if (remaining <= 0) {
 +		return timestamp_t::infinity(); // Already stale: no freshness to grant
 +	}
-+	return timestamp_t(Timestamp::GetCurrentTimestamp().value + remaining * Interval::MICROS_PER_SEC);
++	// Absurd server-provided lifetimes that would overflow the deadline grant no freshness
++	int64_t remaining_micros;
++	int64_t deadline_micros;
++	if (!TryMultiplyOperator::Operation(remaining, Interval::MICROS_PER_SEC, remaining_micros) ||
++	    !TryAddOperator::Operation(Timestamp::GetCurrentTimestamp().value, remaining_micros, deadline_micros)) {
++		return timestamp_t::infinity();
++	}
++	return timestamp_t(deadline_micros);
 +}
 +
  struct HTTPFileInfoParser {
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
  		if (!headers.HasHeader("Content-Range")) {
-@@ -675,6 +739,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -675,6 +746,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -103,7 +110,7 @@ index 0fc503a..98cbca5 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -716,6 +781,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -716,6 +788,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -111,7 +118,7 @@ index 0fc503a..98cbca5 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +792,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -726,6 +799,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;

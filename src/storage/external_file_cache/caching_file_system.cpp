@@ -258,11 +258,11 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
-	const auto stats = caching_file_system.file_system.Stats(*file_handle);
+	auto stats = caching_file_system.file_system.Stats(*file_handle);
 	validation_info.file_size = NumericCast<idx_t>(stats.file_size);
 	validation_info.last_modified = stats.last_modification_time;
 	validation_info.cache_valid_until = stats.cache_valid_until;
-	validation_info.version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
+	validation_info.version_tag = std::move(stats.version_tag);
 
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
