@@ -23,7 +23,7 @@ static optional_idx FindBinding(const ColumnBinding &binding, LogicalOperator &i
 	return optional_idx();
 }
 
-static optional_idx GetKeyPropertyDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
+optional_idx GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 		auto index = expression.Cast<BoundReferenceExpression>().Index();
 		return index < input.GetColumnBindings().size() ? optional_idx(index) : optional_idx();
@@ -61,7 +61,7 @@ static bool TraceBaseColumns(LogicalOperator &op, vector<idx_t> &column_indices,
 			if (index >= projection.expressions.size()) {
 				return false;
 			}
-			auto child_index = GetKeyPropertyDirectReferenceIndex(*projection.expressions[index], child);
+			auto child_index = GetDirectReferenceIndex(*projection.expressions[index], child);
 			if (!child_index.IsValid()) {
 				return false;
 			}
@@ -120,8 +120,7 @@ optional<UniqueKeyProperty> GetUniqueKeyProperty(LogicalOperator &owner, const v
 				if (index >= projection.expressions.size()) {
 					return nullopt;
 				}
-				auto child_index =
-				    GetKeyPropertyDirectReferenceIndex(*projection.expressions[index], *current.get().children[0]);
+				auto child_index = GetDirectReferenceIndex(*projection.expressions[index], *current.get().children[0]);
 				if (!child_index.IsValid()) {
 					return nullopt;
 				}
@@ -216,8 +215,8 @@ optional<UniqueKeyProperty> GetUniqueKeyProperty(LogicalOperator &owner, const v
 				    condition.GetLHS().GetReturnType() != condition.GetRHS().GetReturnType()) {
 					return nullopt;
 				}
-				auto left = GetKeyPropertyDirectReferenceIndex(condition.GetLHS(), *join.children[0]);
-				auto right = GetKeyPropertyDirectReferenceIndex(condition.GetRHS(), *join.children[1]);
+				auto left = GetDirectReferenceIndex(condition.GetLHS(), *join.children[0]);
+				auto right = GetDirectReferenceIndex(condition.GetRHS(), *join.children[1]);
 				if (!left.IsValid() || !right.IsValid()) {
 					return nullopt;
 				}
