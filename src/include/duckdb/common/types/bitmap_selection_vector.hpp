@@ -18,7 +18,6 @@
 namespace duckdb {
 
 #if DUCKDB_AUTOVEC
-DUCKDB_AUTOVEC_TARGET_BEGIN // bitmaps only exist behind CpuBenefitsFromAutoVec()
 
 // Per-byte selection extraction lookup.
 // Low 4 bits contain popcount(byte), high 12 bits contain the offset into BITMAP_SELVEC_POSITIONS.
@@ -64,10 +63,11 @@ inline constexpr sel_t BITMAP_SELVEC_POSITIONS[321] = {
 // clang-format on
 
 // Emit the set-bit positions of one byte (forward): writes 8 slots (padded), returns the popcount.
-static inline sel_t BitmapSelectionEmitByte(sel_t *__restrict dst, sel_t base, uint8_t pattern) {
+DUCKDB_AUTOVEC_TARGET static inline sel_t BitmapSelectionEmitByte(sel_t *__restrict dst, sel_t base, uint8_t pattern) {
 	const auto packed = BITMAP_SELVEC_OFFSETS[pattern];
 	const auto len = UnsafeNumericCast<sel_t>(packed & 0xF);
 	const auto *src = BITMAP_SELVEC_POSITIONS + (packed >> 4);
+	DUCKDB_UNROLL_LOOP
 	for (idx_t j = 0; j < 8; j++) {
 		dst[j] = base + src[j];
 	}
@@ -82,7 +82,8 @@ static inline validity_t BitmapSelectionLoadWord(const validity_t *bm, idx_t wor
 	return word;
 }
 
-static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, SelectionVector &sel) {
+DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count,
+                                                                  SelectionVector &sel) {
 	const auto word_count = (count + 63) / 64;
 	if (word_count == 0) {
 		return 0;
@@ -106,6 +107,7 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 	const auto sample = MinValue<idx_t>(word_count, 2);
 	for (idx_t w = 0; w < sample; w++) {
 		auto base = UnsafeNumericCast<sel_t>(w * 64);
+		DUCKDB_UNROLL_LOOP
 		for (auto word = BitmapSelectionLoadWord(bm, w, word_count, count); word; word >>= 8, base += 8) {
 			dst += BitmapSelectionEmitByte(dst, base, static_cast<uint8_t>(word));
 		}
@@ -116,6 +118,7 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		for (idx_t w = sample; w < word_count; w++) {
 			auto base = UnsafeNumericCast<sel_t>(w * 64);
 			auto word = BitmapSelectionLoadWord(bm, w, word_count, count);
+			DUCKDB_UNROLL_LOOP
 			while (word) {
 				*dst++ = base + UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word));
 				word &= word - 1;
@@ -126,6 +129,7 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		for (idx_t w = sample; w < word_count; w++) {
 			auto base = UnsafeNumericCast<sel_t>(w * 64);
 			auto word = BitmapSelectionLoadWord(bm, w, word_count, count);
+			DUCKDB_UNROLL_LOOP
 			for (; word; word >>= 8, base += 8) {
 				dst += BitmapSelectionEmitByte(dst, base, static_cast<uint8_t>(word));
 			}
@@ -136,7 +140,6 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 	return result_count;
 }
 
-DUCKDB_AUTOVEC_TARGET_END
 #endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb
