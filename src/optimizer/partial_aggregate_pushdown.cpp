@@ -587,7 +587,9 @@ static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &con
 }
 
 struct DoubleEagerHeuristics {
-	static constexpr idx_t MIN_COLLAPSE = 2;
+	static constexpr idx_t MAX_SMALL_GROUP_COUNT = 2 * STANDARD_VECTOR_SIZE;
+	static constexpr idx_t MIN_SMALL_COLLAPSE = 2;
+	static constexpr idx_t MIN_LARGE_COLLAPSE = 8;
 };
 
 static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effective_ndv) {
@@ -601,8 +603,10 @@ static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effecti
 	double ndv = MaxValue<double>(1.0, (c0 * c1) / cj);
 	ndv = MinValue<double>(ndv, MinValue<double>(c0, c1));
 	effective_ndv = MaxValue<idx_t>(static_cast<idx_t>(ndv), 1);
-	return c0 >= static_cast<double>(DoubleEagerHeuristics::MIN_COLLAPSE) * ndv &&
-	       c1 >= static_cast<double>(DoubleEagerHeuristics::MIN_COLLAPSE) * ndv;
+	const auto min_collapse = effective_ndv <= DoubleEagerHeuristics::MAX_SMALL_GROUP_COUNT
+	                              ? DoubleEagerHeuristics::MIN_SMALL_COLLAPSE
+	                              : DoubleEagerHeuristics::MIN_LARGE_COLLAPSE;
+	return c0 >= static_cast<double>(min_collapse) * ndv && c1 >= static_cast<double>(min_collapse) * ndv;
 }
 
 static bool DECanRepeatAggregateState(const BoundAggregateExpression &aggr) {
