@@ -11,8 +11,8 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_cte_registry.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
-#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -417,196 +417,20 @@ private:
 	idx_t next_order = 0;
 };
 
-class RelationStatsExtractor {
-public:
-	RelationStatsExtractor(ClientContext &context_p, const DuplicateEliminatedDomainCTERegistry &cte_registry_p)
-	    : context(context_p), cte_registry(cte_registry_p) {
-	}
-
-	optional<RelationStats> Extract(LogicalOperator &op) {
-		unordered_set<TableIndex> visiting_ctes;
-		return ExtractInternal(op, visiting_ctes);
-	}
-
-private:
-	optional<RelationStats> ExtractCTERef(LogicalCTERef &cte_ref, unordered_set<TableIndex> &visiting_ctes) {
-		if (cte_ref.is_recurring) {
-			return {};
-		}
-		auto cached = cte_stats.find(cte_ref.cte_index);
-		if (cached != cte_stats.end()) {
-			return cached->second;
-		}
-		auto definition = cte_registry.FindDefinition(cte_ref.cte_index);
-		if (!definition || !visiting_ctes.insert(cte_ref.cte_index).second) {
-			return {};
-		}
-		auto result = ExtractInternal(*definition, visiting_ctes);
-		visiting_ctes.erase(cte_ref.cte_index);
-		if (!result || result->column_distinct_count.size() != cte_ref.chunk_types.size() ||
-		    result->column_names.size() != cte_ref.chunk_types.size()) {
-			return {};
-		}
-		cte_stats.emplace(cte_ref.cte_index, *result);
-		return result;
-	}
-
-	optional<RelationStats> ExtractInternal(LogicalOperator &op, unordered_set<TableIndex> &visiting_ctes) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_GET:
-			return RelationStatisticsHelper::ExtractGetStats(op.Cast<LogicalGet>(), context, false);
-		case LogicalOperatorType::LOGICAL_CTE_REF:
-			return ExtractCTERef(op.Cast<LogicalCTERef>(), visiting_ctes);
-		case LogicalOperatorType::LOGICAL_FILTER: {
-			if (op.children.size() != 1) {
-				return {};
-			}
-			auto child = ExtractInternal(*op.children[0], visiting_ctes);
-			if (!child) {
-				return {};
-			}
-			if (child->cardinality > 0) {
-				child->cardinality = MaxValue<idx_t>(
-				    LossyNumericCast<idx_t>(double(child->cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
-				    1);
-			}
-			for (auto &distinct_count : child->column_distinct_count) {
-				distinct_count.distinct_count = MinValue(distinct_count.distinct_count, child->cardinality);
-			}
-			return child;
-		}
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			if (op.children.size() != 1) {
-				return {};
-			}
-			auto child = ExtractInternal(*op.children[0], visiting_ctes);
-			if (!child) {
-				return {};
-			}
-			return RelationStatisticsHelper::ExtractProjectionStats(op.Cast<LogicalProjection>(), *child);
-		}
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-			if (op.children.size() != 1) {
-				return {};
-			}
-			auto child = ExtractInternal(*op.children[0], visiting_ctes);
-			if (!child) {
-				return {};
-			}
-			auto result = RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), *child);
-			auto output_count = op.GetColumnBindings().size();
-			if (result.column_distinct_count.size() < output_count || result.column_names.size() < output_count) {
-				return {};
-			}
-			auto column_offset = result.column_distinct_count.size() - output_count;
-			auto name_offset = result.column_names.size() - output_count;
-			result.column_distinct_count.erase(result.column_distinct_count.begin(),
-			                                   result.column_distinct_count.begin() +
-			                                       NumericCast<vector<DistinctCount>::difference_type>(column_offset));
-			result.column_names.erase(result.column_names.begin(),
-			                          result.column_names.begin() +
-			                              NumericCast<vector<Identifier>::difference_type>(name_offset));
-			D_ASSERT(result.column_distinct_count.size() == output_count);
-			D_ASSERT(result.column_names.size() == output_count);
-			return result;
-		}
-		case LogicalOperatorType::LOGICAL_WINDOW: {
-			if (op.children.size() != 1) {
-				return {};
-			}
-			auto child = ExtractInternal(*op.children[0], visiting_ctes);
-			if (!child) {
-				return {};
-			}
-			return RelationStatisticsHelper::ExtractWindowStats(op.Cast<LogicalWindow>(), *child);
-		}
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-			auto &join = op.Cast<LogicalComparisonJoin>();
-			if (op.children.size() != 2 || (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI &&
-			                                join.join_type != JoinType::LEFT && join.join_type != JoinType::RIGHT &&
-			                                join.join_type != JoinType::OUTER)) {
-				return {};
-			}
-			auto left = ExtractInternal(*op.children[0], visiting_ctes);
-			auto right = ExtractInternal(*op.children[1], visiting_ctes);
-			if (!left || !right) {
-				return {};
-			}
-			RelationStats result;
-			result.cardinality = join.join_type == JoinType::SEMI
-			                         ? left->cardinality
-			                         : MaxValue<idx_t>(left->cardinality, right->cardinality);
-			auto output_bindings = op.GetColumnBindings();
-			auto left_bindings = op.children[0]->GetColumnBindings();
-			auto right_bindings = op.children[1]->GetColumnBindings();
-			for (auto &output_binding : output_bindings) {
-				optional<DistinctCount> distinct_count;
-				for (idx_t binding_idx = 0; binding_idx < left_bindings.size(); binding_idx++) {
-					if (left_bindings[binding_idx] == output_binding &&
-					    binding_idx < left->column_distinct_count.size()) {
-						distinct_count = left->column_distinct_count[binding_idx];
-						break;
-					}
-				}
-				if (!distinct_count) {
-					for (idx_t binding_idx = 0; binding_idx < right_bindings.size(); binding_idx++) {
-						if (right_bindings[binding_idx] == output_binding &&
-						    binding_idx < right->column_distinct_count.size()) {
-							distinct_count = right->column_distinct_count[binding_idx];
-							break;
-						}
-					}
-				}
-				if (!distinct_count) {
-					return {};
-				}
-				distinct_count->distinct_count = MinValue(distinct_count->distinct_count, result.cardinality);
-				result.column_distinct_count.push_back(*distinct_count);
-				result.column_names.emplace_back("duplicate_eliminated_domain");
-			}
-			result.stats_initialized = true;
-			return result;
-		}
-		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-			if (op.children.size() != 2) {
-				return {};
-			}
-			auto left = ExtractInternal(*op.children[0], visiting_ctes);
-			auto right = ExtractInternal(*op.children[1], visiting_ctes);
-			if (!left || !right) {
-				return {};
-			}
-			auto result = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(op, {*left, *right});
-			if (!TryMultiplyOperator::Operation(left->cardinality, right->cardinality, result.cardinality)) {
-				result.cardinality = NumericLimits<idx_t>::Maximum();
-			}
-			return result;
-		}
-		default:
-			return {};
-		}
-	}
-
-private:
-	ClientContext &context;
-	const DuplicateEliminatedDomainCTERegistry &cte_registry;
-	unordered_map<TableIndex, RelationStats> cte_stats;
-};
-
 static optional_idx TryEstimateDomainCardinality(RelationStatsExtractor &stats_extractor, LogicalOperator &op,
                                                  const vector<idx_t> &key_indices,
                                                  bool require_reliable_payload_stats) {
 	auto stats = stats_extractor.Extract(op);
-	if (!stats || !stats->stats_initialized || stats->column_distinct_count.size() != op.GetColumnBindings().size()) {
+	if (!stats || stats->columns.size() != op.GetColumnBindings().size()) {
 		return {};
 	}
 	vector<DistinctCount> key_distinct_counts;
 	key_distinct_counts.reserve(key_indices.size());
 	for (auto key_idx : key_indices) {
-		if (key_idx >= stats->column_distinct_count.size()) {
+		if (key_idx >= stats->columns.size()) {
 			return {};
 		}
-		auto distinct_count = stats->column_distinct_count[key_idx];
+		auto distinct_count = stats->columns[key_idx].distinct_count;
 		if (require_reliable_payload_stats && distinct_count.source == DistinctCountSource::CARDINALITY) {
 			return {};
 		}
@@ -635,7 +459,7 @@ static bool FindPayloadKeyIndices(LogicalOperator &op, const vector<unique_ptr<E
                                   const BindingEquivalence &equivalence, const RelationStats &stats,
                                   vector<idx_t> &key_indices) {
 	auto bindings = op.GetColumnBindings();
-	if (bindings.size() != stats.column_distinct_count.size()) {
+	if (bindings.size() != stats.columns.size()) {
 		return false;
 	}
 	key_indices.clear();
@@ -656,7 +480,7 @@ static bool FindPayloadKeyIndices(LogicalOperator &op, const vector<unique_ptr<E
 			if (!equivalence.FindMatch(key_binding, bindings[binding_idx], match)) {
 				continue;
 			}
-			auto distinct_rank = DistinctCountRank(stats.column_distinct_count[binding_idx].source);
+			auto distinct_rank = DistinctCountRank(stats.columns[binding_idx].distinct_count.source);
 			auto match_rank = MatchRank(match);
 			if (!best.IsValid() || distinct_rank < best_distinct_rank ||
 			    (distinct_rank == best_distinct_rank && match_rank < best_match_rank)) {
@@ -1007,7 +831,8 @@ DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context,
 	CandidateAnalyzer analyzer(context, cte_registry, join.duplicate_eliminated_columns, equivalence,
 	                           join.join_type == JoinType::MARK);
 	auto candidates = analyzer.Analyze(join.children[0]);
-	RelationStatsExtractor stats_extractor(context, cte_registry);
+	RelationStatsExtractor stats_extractor(
+	    context, [&](TableIndex cte_index) { return cte_registry.FindDefinition(cte_index); });
 	idx_t payload_cardinality;
 	idx_t payload_domain_cardinality;
 	auto selected_index =
