@@ -1328,8 +1328,15 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	const auto delta = Hugeint::Cast<double>(hi - lo);
-	return lo + Hugeint::Convert(delta * d);
+	hugeint_t delta_hugeint = hi;
+	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
+		const auto delta = Hugeint::Cast<double>(delta_hugeint);
+		return lo + Hugeint::Convert(delta * d);
+	}
+
+	// if delta overflows, we fall back to original subtraction to avoid UB
+	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
+	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 
 template <>
