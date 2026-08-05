@@ -52,8 +52,6 @@ public:
 
 	//! Freshness lifetime granted on each stat; negative values produce an already-expired deadline.
 	int64_t max_age_micros = 600 * 1000000LL;
-	bool immutable = false;
-	idx_t stats_count = 0;
 };
 
 //! In-memory DuckDB with the external file cache forced to also cache local files (off by default), so the external

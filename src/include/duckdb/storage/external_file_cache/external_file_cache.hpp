@@ -40,8 +40,6 @@ struct CacheValidationInfo {
 	//! The deadline is inclusive: cached data may be served while the current time is at or before it.
 	//! If unset (infinite), the storage backend does not provide expiry information.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
-	//! Whether the file is guaranteed not to change during its freshness lifetime.
-	bool immutable = false;
 	idx_t file_size = 0;
 };
 
