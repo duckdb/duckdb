@@ -513,15 +513,26 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
 	}
 	REQUIRE(CountCachedBlocks(cache) == 1);
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	timestamp_t original_valid_until;
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		original_valid_until = cached_file->cache_valid_until;
+	}
 
 	// Overwrite with same-size content. Within the freshness deadline the cached content is still served,
 	// because the file provides no validators to detect the change.
 	WriteTestContent(test_file.GetPath(), content_b);
+	fresh_fs->max_age_micros *= 2;
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
 	}
 	REQUIRE(CountCachedBlocks(cache) == 1);
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		REQUIRE(cached_file->cache_valid_until == original_valid_until);
+	}
 }
 
 TEST_CASE("File with freshness deadline is invalidated when the file size changes", "[external_file_cache]") {

@@ -254,17 +254,18 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 		const bool first_access = (cached_file->file_size == 0);
 		if (first_access || Validate()) {
 			const idx_t current_file_size = file_handle->GetFileSize();
-			if (!ExternalFileCache::IsValid(Validate(), cached_file->version_tag, cached_file->last_modified,
-			                                cached_file->cache_valid_until, cached_file->file_size, version_tag,
-			                                last_modified, current_file_size)) {
+			const bool cache_is_valid = ExternalFileCache::IsValid(
+			    Validate(), cached_file->version_tag, cached_file->last_modified, cached_file->cache_valid_until,
+			    cached_file->file_size, version_tag, last_modified, current_file_size);
+			if (!cache_is_valid) {
 				annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
 				cached_file->blocks.clear();
 				cached_file->cached_block_size.SetInvalid();
+				cached_file->cache_valid_until = cache_valid_until;
 			}
 			cached_file->file_size = current_file_size;
 			cached_file->last_modified = last_modified;
 			cached_file->version_tag = version_tag;
-			cached_file->cache_valid_until = cache_valid_until;
 			cached_file->can_seek = file_handle->CanSeek();
 			cached_file->on_disk_file = file_handle->OnDiskFile();
 		}
