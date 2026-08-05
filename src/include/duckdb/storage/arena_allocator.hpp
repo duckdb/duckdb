@@ -62,6 +62,8 @@ public:
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
+	//! Like Reset, but also destroys the current chunk, so no memory stays allocated
+	DUCKDB_API void FreeAll();
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(ArenaAllocator &allocator);
 
@@ -80,18 +82,18 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	T *Make(ARGS &&... args) {
+	T *Make(ARGS &&...args) {
 		auto mem = AllocateAligned(sizeof(T));
 		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
 	template <class T, class... ARGS>
-	arena_ptr<T> MakePtr(ARGS &&... args) {
+	arena_ptr<T> MakePtr(ARGS &&...args) {
 		return arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
 	}
 
 	template <class T, class... ARGS>
-	unsafe_arena_ptr<T> MakeUnsafePtr(ARGS &&... args) {
+	unsafe_arena_ptr<T> MakeUnsafePtr(ARGS &&...args) {
 		return unsafe_arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
 	}
 

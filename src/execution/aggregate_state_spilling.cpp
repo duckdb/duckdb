@@ -47,6 +47,32 @@ static void MaterializeStateStrings(const LogicalType &type, const AggregateStat
 	}
 }
 
+// Whether this field can hold a reference into the aggregate arena. Pointer-free states
+// (counts, sums, inline values) never need exporting, their rows spill on their own.
+static bool FieldHasArenaReferences(const LogicalType &type, const AggregateStateField &field) {
+	switch (field.kind) {
+	case AggregateFieldKind::OPTIONAL_VALUE:
+		D_ASSERT(field.children.size() == 1);
+		return FieldHasArenaReferences(type, field.children[0]);
+	case AggregateFieldKind::STRUCT: {
+		const auto &child_types = StructType::GetChildTypes(type);
+		for (idx_t child_idx = 0; child_idx < field.children.size(); child_idx++) {
+			if (FieldHasArenaReferences(child_types[child_idx].second, field.children[child_idx])) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case AggregateFieldKind::PRIMITIVE:
+		return type.InternalType() == PhysicalType::VARCHAR;
+	case AggregateFieldKind::SORT_KEY:
+	case AggregateFieldKind::LIST:
+		return true;
+	default:
+		return true;
+	}
+}
+
 bool AggregateStateSpilling::CanSpill(const TupleDataLayout &layout) {
 	auto &aggregates = layout.GetAggregates();
 	if (aggregates.empty()) {
@@ -62,7 +88,13 @@ bool AggregateStateSpilling::CanSpill(const TupleDataLayout &layout) {
 			return false;
 		}
 	}
-	return true;
+	// only layouts whose states can reference the arena benefit from exporting
+	for (auto &state_layout : StateLayouts(layout)) {
+		if (FieldHasArenaReferences(state_layout.type, state_layout.field)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 vector<AggregateStateLayout> AggregateStateSpilling::StateLayouts(const TupleDataLayout &layout) {
@@ -83,7 +115,7 @@ vector<LogicalType> AggregateStateSpilling::ExportedTypes(const TupleDataLayout 
 }
 
 void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDataLayout &layout,
-                                          TupleDataCollection &source, PartitionedTupleData &exported,
+                                          TupleDataCollection &source, ColumnDataCollection &exported,
                                           ArenaAllocator &allocator) {
 	if (source.Count() == 0) {
 		return;
@@ -100,8 +132,8 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 	Vector state_addresses(LogicalType::POINTER);
 	auto state_address_data = FlatVector::GetDataMutable<data_ptr_t>(state_addresses);
 
-	PartitionedTupleDataAppendState append_state;
-	exported.InitializeAppendState(append_state, TupleDataPinProperties::UNPIN_AFTER_DONE);
+	ColumnDataAppendState append_state;
+	exported.InitializeAppend(append_state);
 
 	TupleDataScanState scan_state;
 	source.InitializeScan(scan_state, TupleDataPinProperties::DESTROY_AFTER_DONE);
@@ -127,24 +159,20 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 		exported_chunk.SetChildCardinality(count);
 		exported.Append(append_state, exported_chunk);
 	}
-	exported.FlushAppendState(append_state);
 }
 
-unique_ptr<TupleDataCollection> AggregateStateSpilling::ImportStates(ClientContext &context,
-                                                                     shared_ptr<TupleDataLayout> layout,
-                                                                     TupleDataCollection &exported,
-                                                                     ArenaAllocator &allocator) {
-	auto result = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), layout,
-	                                             MemoryTag::HASH_TABLE, nullptr, context);
+void AggregateStateSpilling::ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
+                                          ColumnDataCollection &exported, ArenaAllocator &allocator,
+                                          const std::function<void(TupleDataCollection &)> &combine) {
 	if (exported.Count() == 0) {
-		return result;
+		return;
 	}
 	const auto state_layouts = StateLayouts(*layout);
 	auto &aggregates = layout->GetAggregates();
 	const auto column_count = layout->ColumnCount();
 
 	DataChunk exported_chunk;
-	exported_chunk.Initialize(Allocator::Get(context), exported.GetLayout().GetTypes());
+	exported_chunk.Initialize(Allocator::Get(context), exported.Types());
 	DataChunk group_chunk;
 	group_chunk.Initialize(Allocator::Get(context), layout->GetTypes());
 
@@ -157,13 +185,14 @@ unique_ptr<TupleDataCollection> AggregateStateSpilling::ImportStates(ClientConte
 	Vector state_addresses(LogicalType::POINTER);
 	auto state_address_data = FlatVector::GetDataMutable<data_ptr_t>(state_addresses);
 
-	TupleDataAppendState append_state;
-	result->InitializeAppend(append_state, TupleDataPinProperties::UNPIN_AFTER_DONE);
-
-	TupleDataScanState scan_state;
-	exported.InitializeScan(scan_state, TupleDataPinProperties::DESTROY_AFTER_DONE);
+	ColumnDataScanState scan_state;
+	exported.InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 	while (exported.Scan(scan_state, exported_chunk)) {
 		const auto count = exported_chunk.size();
+		auto result = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), layout,
+		                                             MemoryTag::HASH_TABLE, nullptr, context);
+		TupleDataAppendState append_state;
+		result->InitializeAppend(append_state, TupleDataPinProperties::UNPIN_AFTER_DONE);
 		group_chunk.Reset();
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			group_chunk.data[col_idx].Reference(exported_chunk.data[col_idx]);
@@ -197,9 +226,9 @@ unique_ptr<TupleDataCollection> AggregateStateSpilling::ImportStates(ClientConte
 			}
 			aggr_offset += aggr.payload_size;
 		}
+		combine(*result);
 	}
 	exported.Reset();
-	return result;
 }
 
 } // namespace duckdb

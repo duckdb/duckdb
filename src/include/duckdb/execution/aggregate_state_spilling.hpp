@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
+
+#include <functional>
 
 namespace duckdb {
 
@@ -27,12 +30,14 @@ public:
 	//! The types of the exported form: the layout's group columns (including the hash),
 	//! followed by one column per aggregate state
 	static vector<LogicalType> ExportedTypes(const TupleDataLayout &layout);
-	//! Rewrite native rows into exported rows, appending them to `exported`
+	//! Rewrite native rows into exported rows, appending them sequentially to `exported`
 	static void ExportStates(ClientContext &context, const TupleDataLayout &layout, TupleDataCollection &source,
-	                         PartitionedTupleData &exported, ArenaAllocator &allocator);
-	//! Rewrite exported rows back into native rows, allocating variable size state data from `allocator`
-	static unique_ptr<TupleDataCollection> ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
-	                                                    TupleDataCollection &exported, ArenaAllocator &allocator);
+	                         ColumnDataCollection &exported, ArenaAllocator &allocator);
+	//! Rewrite exported rows back into native rows, allocating variable size state data from
+	//! `allocator`. The native rows are produced one chunk-sized collection at a time, so that the
+	//! whole partition is never materialized alongside its exported copy.
+	static void ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout, ColumnDataCollection &exported,
+	                         ArenaAllocator &allocator, const std::function<void(TupleDataCollection &)> &combine);
 
 private:
 	//! The state layouts of the layout's aggregates, in aggregate order
