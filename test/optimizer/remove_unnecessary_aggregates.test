@@ -1,6 +1,6 @@
-# name: test/optimizer/unused_columns/remove_unused_aggregates.test
-# description: Test pruning of unreferenced groups from an aggregate below a not-distinct-dependent aggregate
-# group: [unused_columns]
+# name: test/optimizer/remove_unnecessary_aggregates.test
+# description: Test removal of aggregates that only eliminate duplicate rows no ancestor can observe
+# group: [optimizer]
 
 statement ok
 create table t0 as select range%3 col0, range%2 col1, range%5 col2 from range(1000);
@@ -27,6 +27,25 @@ query II
 EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
 ----
 logical_opt	<!REGEX>:.*col1.*
+
+# and disabling the optimizer keeps both aggregates
+statement ok
+SET disabled_optimizers='unnecessary_aggregates';
+
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0
+1
+2
+
+statement ok
+RESET disabled_optimizers;
 
 # min is marked NOT_DISTINCT_DEPENDENT (not affected by duplicate input rows), so col1 can still be pruned
 query II
@@ -521,10 +540,11 @@ EXPLAIN WITH c AS MATERIALIZED (SELECT col0, col1 FROM t0 GROUP BY ALL) SELECT *
 ----
 logical_opt	<REGEX>:.*col1.*
 
-# removals cascade within a single top-down pass: dropping the middle GROUP BY makes its unreferenced `c`
-# group a dead projection expression, which drops the last reference to the inner count(*), which in turn
-# leaves the inner GROUP BY a pure duplicate eliminator that is removed as well. All three aggregations
-# collapse into one because the group pruning and the removal happen interleaved at every operator
+# removals cascade: dropping the middle GROUP BY makes its unreferenced `c` group a dead projection
+# expression, which drops the last reference to the inner count(*), which in turn leaves the inner
+# GROUP BY a pure duplicate eliminator that is removed as well. All three aggregations collapse into one
+# because each removal prunes its own subtree right away, so the reference is already gone by the time we
+# descend to the inner GROUP BY
 query II
 EXPLAIN SELECT col0 FROM (SELECT col0, c FROM (SELECT col0, count(*) c FROM t0 GROUP BY col0) GROUP BY col0, c) GROUP BY col0
 ----
