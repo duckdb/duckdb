@@ -517,31 +517,41 @@ endif
 unittest_release:
 	build/release/test/run $(T)
 
-TEST_CONFIGS := \
+TEST_CONFIGS_VERIFICATION := \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
-	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
+	test/configs/disable_optimizer.json \
+	test/configs/internal_vector_serialization.json \
+	test/configs/internal_vector_verification.json \
+	test/configs/verify_fetch_row.json \
+	test/configs/disable_caching_operators.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json \
+	test/configs/verify_aggregate_state_export.json \
+	test/configs/verify_functions.json \
+	test/configs/transformer_trampoline_style.json
+
+TEST_CONFIGS_STORAGE := \
 	test/configs/force_storage.json \
 	test/configs/force_storage_restart.json \
 	test/configs/latest_storage.json \
 	test/configs/block_verification.json \
 	test/configs/block_verification_latest.json \
-	test/configs/disable_optimizer.json \
-	test/configs/internal_vector_serialization.json \
-	test/configs/internal_vector_verification.json \
-	test/configs/force_external.json \
-	test/configs/verify_fetch_row.json \
-	test/configs/disable_caching_operators.json \
 	test/configs/wal_verification.json \
 	test/configs/vacuum_rebuild_indexes_force_storage.json \
-	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json \
 	test/configs/no_local_filesystem.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json \
+	test/configs/force_storage_mmap.json
+
+TEST_CONFIGS_EXECUTION := \
+	test/configs/verify_compression.json \
+	test/configs/force_external.json \
 	test/configs/block_size_16kB.json \
 	test/configs/latest_storage_block_size_16kB.json \
 	test/configs/block_allocator_100mib.json \
@@ -549,16 +559,23 @@ TEST_CONFIGS := \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
 	test/configs/encryption.json \
-	test/configs/v1_storage.json \
-	test/configs/v1_storage_block_size_16kB.json \
-	test/configs/force_storage_mmap.json \
-	test/configs/verify_aggregate_state_export.json \
-	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/shredded_vector.json
+
+TEST_CONFIGS := $(TEST_CONFIGS_VERIFICATION) $(TEST_CONFIGS_STORAGE) $(TEST_CONFIGS_EXECUTION)
+
+.PHONY: test_configs test_configs_verification test_configs_storage test_configs_execution
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
+
+test_configs_verification:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_VERIFICATION),--test-config=$(cfg))
+
+test_configs_storage:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_STORAGE),--test-config=$(cfg))
+
+test_configs_execution:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))
 
 test_vector:
 	./build/release/test/run --test-flags="--verify-vector dictionary_expression --skip-compiled"
