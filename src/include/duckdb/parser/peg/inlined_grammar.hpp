@@ -1548,7 +1548,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias?\n"
 	"BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?\n"
 	"TableAliasColon <- ColIdOrString ':'\n"
-	"ValuesRef <- ValuesClause TableAlias?\n"
+	"ValuesRef <- TableAliasColon? ValuesClause TableAlias?\n"
 	"ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?\n"
 	"JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause\n"
 	"TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?\n"

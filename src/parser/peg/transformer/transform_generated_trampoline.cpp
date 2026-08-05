@@ -20721,23 +20721,32 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableAliasColonT
 void PEGTransformerFactory::InitializeValuesRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                           TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(2);
-	auto &table_alias_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &table_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
-		stack.PushFrame(table_alias_opt.GetResult(), TABLE_ALIAS_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+		stack.PushFrame(table_alias_opt.GetResult(), TABLE_ALIAS_OPS, TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	stack.PushFrame(list_pr.GetChild(0), VALUES_CLAUSE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(list_pr.GetChild(1), VALUES_CLAUSE_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &table_alias_colon_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (table_alias_colon_opt.HasResult()) {
+		stack.PushFrame(table_alias_colon_opt.GetResult(), TABLE_ALIAS_COLON_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeValuesRefTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
-	auto values_clause = frame.TakeResult<unique_ptr<SelectStatement>>(0);
-	optional<TableAlias> table_alias {};
-	if (frame.child_results[1]) {
-		table_alias = frame.TakeResult<TableAlias>(1);
+	optional<Identifier> table_alias_colon {};
+	if (frame.child_results[0]) {
+		table_alias_colon = frame.TakeResult<Identifier>(0);
 	}
-	auto result = TransformValuesRef(transformer, std::move(values_clause), table_alias);
+	auto values_clause = frame.TakeResult<unique_ptr<SelectStatement>>(1);
+	optional<TableAlias> table_alias {};
+	if (frame.child_results[2]) {
+		table_alias = frame.TakeResult<TableAlias>(2);
+	}
+	auto result = TransformValuesRef(transformer, table_alias_colon, std::move(values_clause), table_alias);
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 

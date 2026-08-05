@@ -7739,6 +7739,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformValuesRefInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformValuesRef(PEGTransformer &transformer,
+	                                               const optional<Identifier> &table_alias_colon,
 	                                               unique_ptr<SelectStatement> values_clause,
 	                                               const optional<TableAlias> &table_alias);
 	static unique_ptr<TransformResultValue> TransformParensTableRefInternal(PEGTransformer &transformer,
