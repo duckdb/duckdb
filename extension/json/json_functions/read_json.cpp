@@ -113,7 +113,8 @@ public:
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 				continue;
 			}
-			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers);
+			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers,
+			                              options.detect_string_types);
 			node.RefineCandidateTypes(scan_state.values, next, string_vector, allocator,
 			                          auto_detect_state.date_format_map);
 		}
@@ -258,6 +259,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["detect_string_types"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }

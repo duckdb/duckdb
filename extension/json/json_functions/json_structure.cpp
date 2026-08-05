@@ -111,7 +111,7 @@ bool JSONStructureNode::ContainsVarchar() const {
 }
 
 void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bool convert_strings_to_integers,
-                                                 const idx_t depth) {
+                                                 const bool detect_string_types, const idx_t depth) {
 	if (depth >= max_depth) {
 		return;
 	}
@@ -122,17 +122,17 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 	auto &description = descriptions[0];
 	if (description.type == LogicalTypeId::VARCHAR && !initialized) {
 		// We loop through the candidate types and format templates from back to front
-		if (convert_strings_to_integers) {
-			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
-			                               LogicalTypeId::DATE, LogicalTypeId::TIME};
-		} else {
+		if (detect_string_types) {
 			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
 			                               LogicalTypeId::TIME};
+		}
+		if (convert_strings_to_integers) {
+			description.candidate_types.emplace_back(LogicalTypeId::BIGINT);
 		}
 		initialized = true;
 	} else {
 		for (auto &child : description.children) {
-			child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, depth + 1);
+			child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, detect_string_types, depth + 1);
 		}
 	}
 }
