@@ -1,6 +1,7 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -285,14 +286,16 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 
 bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<const Value> constants) {
 	auto &type = stats.GetType();
-	auto physical_type = type.InternalType();
-	// hugeint_t holds every integral type exactly, except the 128-bit ones
-	if (!type.IsIntegral() || physical_type == PhysicalType::INT128 || physical_type == PhysicalType::UINT128 ||
-	    !NumericStats::HasMinMax(stats)) {
+	// values are compared as hugeint_t, which cannot hold large UINT128 values
+	if (!type.IsIntegral() || type.InternalType() == PhysicalType::UINT128 || !NumericStats::HasMinMax(stats)) {
 		return false;
 	}
 	auto min_value = NumericStats::Min(stats).GetValue<hugeint_t>();
 	auto max_value = NumericStats::Max(stats).GetValue<hugeint_t>();
+	// covering [min, max] requires at least max - min + 1 constants
+	if (max_value - min_value >= NumericCast<int64_t>(constants.size())) {
+		return false;
+	}
 	vector<hugeint_t> values;
 	for (auto &constant_value : constants) {
 		if (constant_value.type() != type) {
