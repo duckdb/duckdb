@@ -15,17 +15,18 @@ SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-# the outer GROUP BY does not care about duplicate rows, so the inner GROUP BY only needs to group by col0
-query II
-EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
-----
-logical_opt	<!REGEX>:.*col1.*
-
-# after which the inner GROUP BY only eliminates duplicates the outer GROUP BY ignores, so it is removed entirely
+# the outer GROUP BY does not care about duplicate rows, so the inner GROUP BY has no observable effect
+# and is removed entirely
 query II
 EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
 ----
 logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+# after which col1 is not read at all anymore
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
 
 # min is marked NOT_DISTINCT_DEPENDENT (not affected by duplicate input rows), so col1 can still be pruned
 query II
