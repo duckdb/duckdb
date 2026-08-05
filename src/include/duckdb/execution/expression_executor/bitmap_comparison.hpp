@@ -79,6 +79,9 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 }
 
 inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or conjunction of comparisons
+#if !DUCKDB_AUTOVEC
+	return false; // bitmap kernels are not compiled in
+#else
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
@@ -89,6 +92,7 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or c
 		return true;
 	}
 	return IsBitmapComparisonCandidate(expr);
+#endif
 }
 
 //! Memoize an idempotent expression analysis in Expression::exec_analysis_cache (benign races);
@@ -112,10 +116,14 @@ inline bool IsStableExpressionCached(const Expression &expr) { // consistent, no
 	                          [](const Expression &e) { return e.IsConsistent() && !e.IsVolatile() && !e.CanThrow(); });
 }
 
-inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk, const SelectionVector *sel,
-                                      idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
-                                      SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
-                                      SelectionResult &tmp_sel3, idx_t &result) {
+#if DUCKDB_AUTOVEC
+// target attr: only reachable behind CpuBenefitsFromAutoVec(); lets the bitmap kernels inline here
+DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk,
+                                                            const SelectionVector *sel, idx_t count,
+                                                            SelectionResult *bitmap_sel, SelectionVector *true_sel,
+                                                            SelectionVector *false_sel, SelectionResult &tmp_sel1,
+                                                            SelectionResult &tmp_sel2, SelectionResult &tmp_sel3,
+                                                            idx_t &result) {
 	if (!AutoVecCountPaysOff(count)) { // sparse/small inputs stay on the classic select path
 		return false;
 	}
@@ -186,5 +194,6 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	}
 	return true;
 }
+#endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb

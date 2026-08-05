@@ -103,7 +103,8 @@ static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 			out[i] = frame;
 		}
 	} else if constexpr (WIDTH == 8 * sizeof(OUT_T)) {
-		std::memcpy(out, in, BITPACKING_GROUP_SIZE * sizeof(OUT_T));
+		// void casts: the word pointers carry no alignment guarantee at narrow-type offsets
+		std::memcpy(static_cast<void *>(out), static_cast<const void *>(in), BITPACKING_GROUP_SIZE * sizeof(OUT_T));
 		if (frame) {
 			for (uint32_t i = 0; i < BITPACKING_GROUP_SIZE; i++) {
 				out[i] = OUT_T(out[i] + frame);
@@ -153,7 +154,8 @@ static inline void PackBlock(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t
 	if constexpr (WIDTH == 0) {
 		return;
 	} else if constexpr (WIDTH == 8 * sizeof(IN_T)) {
-		std::memcpy(out, in, BITPACKING_GROUP_SIZE * sizeof(IN_T));
+		// void casts: the word pointers carry no alignment guarantee at narrow-type offsets
+		std::memcpy(static_cast<void *>(out), static_cast<const void *>(in), BITPACKING_GROUP_SIZE * sizeof(IN_T));
 	} else {
 		std::memset(out, 0, WIDTH * sizeof(uint32_t));
 		ForEachIndex([&](auto i) { PackValue<WIDTH, IN_T, decltype(i)::value>(in, out); },
