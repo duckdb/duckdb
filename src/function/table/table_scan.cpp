@@ -738,16 +738,17 @@ bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctio
 			return false;
 		}
 		for (auto delta : {IndexEntryDelta::DELETED_ROWS_IN_USE, IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT}) {
-			if (!art.HasDelta(delta)) {
+			auto delta_index = art.GetDelta<ART>(delta);
+			if (!delta_index) {
 				continue;
 			}
-			auto delta_scan_state = art.GetDelta<ART>(delta).TryInitializeScan(*index_expr, *filter_expr);
+			auto delta_scan_state = delta_index->TryInitializeScan(*index_expr, *filter_expr);
 			if (!delta_scan_state) {
 				return false;
 			}
 
 			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!art.GetDelta<ART>(delta).Scan(*delta_scan_state, max_count, row_ids)) {
+			if (!delta_index->Scan(*delta_scan_state, max_count, row_ids)) {
 				row_ids.clear();
 				return false;
 			}

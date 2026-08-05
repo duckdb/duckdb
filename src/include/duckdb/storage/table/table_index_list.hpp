@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/index.hpp"
@@ -56,6 +57,30 @@ enum class IndexEntryDelta : uint8_t {
 	REMOVED_DATA_DURING_CHECKPOINT
 };
 
+//! Owns the optional indexes used to represent transaction and checkpoint deltas for an IndexEntry.
+class IndexDeltas {
+public:
+	optional_ptr<const BoundIndex> Get(IndexEntryDelta delta) const;
+	optional_ptr<BoundIndex> Get(IndexEntryDelta delta);
+	bool ShouldUse(optional_idx active_checkpoint) const;
+	void Set(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
+	void Reset(IndexEntryDelta delta);
+	void MarkWritten(transaction_t checkpoint_id);
+
+private:
+	const unique_ptr<BoundIndex> &GetPointer(IndexEntryDelta delta) const;
+	unique_ptr<BoundIndex> &GetPointer(IndexEntryDelta delta);
+
+	struct CheckpointDeltas {
+		optional_idx last_written_checkpoint;
+		unique_ptr<BoundIndex> added_data;
+		unique_ptr<BoundIndex> removed_data;
+	};
+
+	unique_ptr<BoundIndex> deleted_rows_in_use;
+	CheckpointDeltas checkpoint;
+};
+
 //! IndexReadHandle provides shared access to a stable physical index.
 //! Other readers can access the entry concurrently, while replacement and entry-level mutations are blocked.
 template <class TARGET>
@@ -73,11 +98,9 @@ public:
 	IndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER>
-	const OTHER &GetDelta(IndexEntryDelta delta) const &;
+	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const &;
 	template <class OTHER>
-	const OTHER &GetDelta(IndexEntryDelta delta) const && = delete;
-
-	bool HasDelta(IndexEntryDelta delta) const;
+	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const && = delete;
 
 private:
 	friend class IndexEntry;
@@ -114,9 +137,9 @@ public:
 	MutableIndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER>
-	OTHER &GetDelta(IndexEntryDelta delta) &;
+	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) &;
 	template <class OTHER>
-	OTHER &GetDelta(IndexEntryDelta delta) && = delete;
+	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) && = delete;
 
 	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint);
 	void SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
@@ -165,27 +188,15 @@ private:
 	template <class>
 	friend class MutableIndexHandle;
 
-	const BoundIndex &GetDelta(IndexEntryDelta delta) const;
-	BoundIndex &GetDelta(IndexEntryDelta delta);
-	bool HasDelta(IndexEntryDelta delta) const;
-	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint) const;
-	void SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
-	void ResetDelta(IndexEntryDelta delta);
 	void MergeRemovedDataDuringCheckpoint();
 	ErrorData MergeAddedDataDuringCheckpoint(IndexAppendMode append_mode);
 
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
-	//! The last checkpoint index that was written with this index
-	optional_idx last_written_checkpoint;
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
-	unique_ptr<BoundIndex> deleted_rows_in_use;
-	//! Data that was added to the index during the last checkpoint
-	unique_ptr<BoundIndex> added_data_during_checkpoint;
-	//! Data that was removed from the index during the last checkpoint
-	unique_ptr<BoundIndex> removed_data_during_checkpoint;
+	IndexDeltas deltas;
 };
 
 template <class TARGET>
@@ -223,13 +234,12 @@ IndexHandle<OTHER> IndexHandle<TARGET>::Into() && {
 
 template <class TARGET>
 template <class OTHER>
-const OTHER &IndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) const & {
-	return GetEntry().GetDelta(delta).template Cast<OTHER>();
-}
-
-template <class TARGET>
-bool IndexHandle<TARGET>::HasDelta(IndexEntryDelta delta) const {
-	return GetEntry().HasDelta(delta);
+optional_ptr<const OTHER> IndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) const & {
+	auto index = GetEntry().deltas.Get(delta);
+	if (!index) {
+		return nullptr;
+	}
+	return index->template Cast<OTHER>();
 }
 
 template <class TARGET>
@@ -260,23 +270,27 @@ MutableIndexHandle<OTHER> MutableIndexHandle<TARGET>::Into() && {
 
 template <class TARGET>
 template <class OTHER>
-OTHER &MutableIndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) & {
-	return GetMutableEntry().GetDelta(delta).template Cast<OTHER>();
+optional_ptr<OTHER> MutableIndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) & {
+	auto index = GetMutableEntry().deltas.Get(delta);
+	if (!index) {
+		return nullptr;
+	}
+	return index->template Cast<OTHER>();
 }
 
 template <class TARGET>
 bool MutableIndexHandle<TARGET>::ShouldUseDeltaIndexes(optional_idx active_checkpoint) {
-	return GetMutableEntry().ShouldUseDeltaIndexes(active_checkpoint);
+	return GetMutableEntry().deltas.ShouldUse(active_checkpoint);
 }
 
 template <class TARGET>
 void MutableIndexHandle<TARGET>::SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index) {
-	GetMutableEntry().SetDelta(delta, std::move(index));
+	GetMutableEntry().deltas.Set(delta, std::move(index));
 }
 
 template <class TARGET>
 void MutableIndexHandle<TARGET>::ResetDelta(IndexEntryDelta delta) {
-	GetMutableEntry().ResetDelta(delta);
+	GetMutableEntry().deltas.Reset(delta);
 }
 
 template <class TARGET>
@@ -291,7 +305,7 @@ ErrorData MutableIndexHandle<TARGET>::MergeAddedDataDuringCheckpoint(IndexAppend
 
 template <class TARGET>
 void MutableIndexHandle<TARGET>::MarkWrittenForCheckpoint(transaction_t checkpoint_id) {
-	GetMutableEntry().last_written_checkpoint = checkpoint_id;
+	GetMutableEntry().deltas.MarkWritten(checkpoint_id);
 }
 
 template <class TARGET>

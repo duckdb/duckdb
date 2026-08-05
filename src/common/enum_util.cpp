@@ -2911,6 +2911,25 @@ IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value)
 	return static_cast<IndexConstraintType>(StringUtil::StringToEnum(GetIndexConstraintTypeValues(), 4, "IndexConstraintType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetIndexEntryDeltaValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IndexEntryDelta::DELETED_ROWS_IN_USE), "DELETED_ROWS_IN_USE" },
+		{ static_cast<uint32_t>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT), "ADDED_DATA_DURING_CHECKPOINT" },
+		{ static_cast<uint32_t>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT), "REMOVED_DATA_DURING_CHECKPOINT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<IndexEntryDelta>(IndexEntryDelta value) {
+	return StringUtil::EnumToString(GetIndexEntryDeltaValues(), 3, "IndexEntryDelta", static_cast<uint32_t>(value));
+}
+
+template<>
+IndexEntryDelta EnumUtil::FromString<IndexEntryDelta>(const char *value) {
+	return static_cast<IndexEntryDelta>(StringUtil::StringToEnum(GetIndexEntryDeltaValues(), 3, "IndexEntryDelta", value));
+}
+
 const StringUtil::EnumStringLiteral *GetInsertColumnOrderValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(InsertColumnOrder::INSERT_BY_POSITION), "INSERT_BY_POSITION" },

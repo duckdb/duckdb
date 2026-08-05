@@ -274,6 +274,8 @@ enum class IndexBindState : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
+enum class IndexEntryDelta : uint8_t;
+
 enum class InsertColumnOrder : uint8_t;
 
 enum class InterruptMode : uint8_t;
@@ -969,6 +971,9 @@ const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
+
+template<>
+const char* EnumUtil::ToChars<IndexEntryDelta>(IndexEntryDelta value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -1831,6 +1836,9 @@ IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
+
+template<>
+IndexEntryDelta EnumUtil::FromString<IndexEntryDelta>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);

@@ -438,8 +438,8 @@ void DataTable::VerifyIndexBuffers() const {
 
 void DataTableInfo::VerifyIndexBuffers() const {
 	for (auto index : indexes.MutableIndexHandles()) {
-		if (index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
-			index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE).VerifyBuffers();
+		if (auto delta = index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			delta->VerifyBuffers();
 		}
 		if (index->IsBound()) {
 			auto bound_index = std::move(index).Into<BoundIndex>();
@@ -849,9 +849,8 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 					(*delete_handle)->AddToDeleteIndexes(index_append_info);
 				}
 			}
-			if (bound_index.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
-				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)
-				    .AddToDeleteIndexes(index_append_info);
+			if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+				delta->AddToDeleteIndexes(index_append_info);
 			}
 			bound_index->VerifyAppend(chunk, index_append_info, nullptr);
 		}
@@ -1356,9 +1355,8 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 				row_id_writer.WriteValue(NumericCast<row_t>(current_row_base + i));
 			}
 			for (auto index : info->indexes.MutableIndexHandles()) {
-				if (index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
-					index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
-					    .Delete(chunk, row_identifiers);
+				if (auto delta = index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+					delta->Delete(chunk, row_identifiers);
 				} else {
 					if (!index->IsBound()) {
 						// We cannot add to unbound indexes, so there is no need to revert them.
@@ -1435,7 +1433,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		bool append_to_delta = false;
 
 		if (bound_index->SupportsDeltaIndexes() && bound_index.ShouldUseDeltaIndexes(active_checkpoint)) {
-			if (!bound_index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+			if (!bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 				bound_index.SetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
 				                     bound_index->CreateDeltaIndex(DeltaIndexType::ADDED_DURING_CHECKPOINT));
 			}
@@ -1454,9 +1452,8 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				if (delete_handle) {
 					(*delete_handle)->AddToDeleteIndexes(lookup_append_info);
 				}
-				if (bound_index.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
-					bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)
-					    .AddToDeleteIndexes(lookup_append_info);
+				if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+					delta->AddToDeleteIndexes(lookup_append_info);
 				}
 				bound_index->VerifyAppend(table_chunk, lookup_append_info, optional_ptr<ConflictManager>());
 			}
@@ -1468,7 +1465,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			}
 			if (append_to_delta) {
 				error = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
-				            .Append(table_chunk, row_ids, index_append_info);
+				            ->Append(table_chunk, row_ids, index_append_info);
 			} else {
 				error = bound_index->Append(table_chunk, row_ids, index_append_info);
 			}
@@ -1490,7 +1487,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			auto bound_index = appended.entry.get().GetMutableHandle<BoundIndex>();
 			if (appended.is_delta) {
 				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
-				    .Delete(table_chunk, row_ids);
+				    ->Delete(table_chunk, row_ids);
 			} else {
 				bound_index->Delete(table_chunk, row_ids);
 			}
