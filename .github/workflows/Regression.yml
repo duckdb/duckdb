@@ -141,10 +141,8 @@ jobs:
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           - name: Recursive CTE
             benchmark: benchmark/recursive_cte/recursive_cte.csv
-            regression_threshold_seconds: 0.01
           - name: AoC24
             benchmark: benchmark/aoc24/aoc24.csv
-            regression_threshold_seconds: 0.01
 
     steps:
       - uses: actions/checkout@v6
@@ -183,13 +181,9 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          extra_args=(--clear-benchmark-cache)
+          extra_args=(--benchmark-cache=clear)
           if [[ "${{ matrix.benchmark }}" == ".github/regression/realnest.csv" ]]; then
             extra_args=()
-          fi
-
-          if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
-            extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
           fi
 
           python scripts/regression/test_runner.py \
@@ -260,9 +254,8 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
-            --clear-benchmark-cache \
+            --benchmark-cache=clear \
             --disable-timeout \
-            --max-timeout 3600 \
             --threads ${{ matrix.threads }}
 
   regression-bench-fivetran:
@@ -314,7 +307,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --benchmark-cache=clear
 
   regression-test-storage:
     name: Storage Size Regression Test
