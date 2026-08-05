@@ -389,6 +389,9 @@ static const TransformFrameOps ARRAY_BOUNDS_OPS = {"ArrayBounds",
 static const TransformFrameOps ARRAY_KEYWORD_OPS = {"ArrayKeyword",
                                                     &PEGTransformerFactory::InitializeArrayKeywordTrampoline,
                                                     &PEGTransformerFactory::FinalizeArrayKeywordTrampoline};
+static const TransformFrameOps ARRAY_KEYWORD_WITH_BOUNDS_OPS = {
+    "ArrayKeywordWithBounds", &PEGTransformerFactory::InitializeArrayKeywordWithBoundsTrampoline,
+    &PEGTransformerFactory::FinalizeArrayKeywordWithBoundsTrampoline};
 static const TransformFrameOps SQUARE_BRACKETS_ARRAY_OPS = {
     "SquareBracketsArray", &PEGTransformerFactory::InitializeSquareBracketsArrayTrampoline,
     &PEGTransformerFactory::FinalizeSquareBracketsArrayTrampoline};
@@ -2993,6 +2996,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColIdType", &COL_ID_TYPE_OPS},
 	    {"ArrayBounds", &ARRAY_BOUNDS_OPS},
 	    {"ArrayKeyword", &ARRAY_KEYWORD_OPS},
+	    {"ArrayKeywordWithBounds", &ARRAY_KEYWORD_WITH_BOUNDS_OPS},
 	    {"SquareBracketsArray", &SQUARE_BRACKETS_ARRAY_OPS},
 	    {"TimeType", &TIME_TYPE_OPS},
 	    {"TimeOrTimestamp", &TIME_OR_TIMESTAMP_OPS},
@@ -6531,6 +6535,22 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeArrayKeywordTram
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
 	auto result = TransformArrayKeyword(transformer);
+	return make_uniq<TypedTransformResult<int64_t>>(result);
+}
+
+void PEGTransformerFactory::InitializeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer,
+                                                                       TransformStack &stack,
+                                                                       TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), SQUARE_BRACKETS_ARRAY_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto square_brackets_array = frame.TakeResult<int64_t>(0);
+	auto result = TransformArrayKeywordWithBounds(transformer, square_brackets_array);
 	return make_uniq<TypedTransformResult<int64_t>>(result);
 }
 

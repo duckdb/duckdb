@@ -1336,6 +1336,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformArrayKeywordInt
 }
 
 unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto square_brackets_array = transformer.Transform<int64_t>(list_pr.GetChild(1));
+	auto result = TransformArrayKeywordWithBounds(transformer, square_brackets_array);
+	return make_uniq<TypedTransformResult<int64_t>>(result);
+}
+
+unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSquareBracketsArrayInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	optional<unique_ptr<ParsedExpression>> expression {};
@@ -10730,6 +10738,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColIdType", &PEGTransformerFactory::TransformColIdTypeInternal},
 	    {"ArrayBounds", &PEGTransformerFactory::TransformArrayBoundsInternal},
 	    {"ArrayKeyword", &PEGTransformerFactory::TransformArrayKeywordInternal},
+	    {"ArrayKeywordWithBounds", &PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal},
 	    {"SquareBracketsArray", &PEGTransformerFactory::TransformSquareBracketsArrayInternal},
 	    {"TimeType", &PEGTransformerFactory::TransformTimeTypeInternal},
 	    {"TimeOrTimestamp", &PEGTransformerFactory::TransformTimeOrTimestampInternal},
