@@ -14,9 +14,10 @@ class PairedBenchmarkMeasurement:
 
 
 @dataclass
-class SamplingDecision:
-    collect_more: bool
-    reason: str
+class RegressionMeasurement:
+    ratio: float
+    ratio_interval: Tuple[float, float]
+    runs: int
 
 
 def median_confidence_interval(values: List[float], confidence: float = 0.95) -> Tuple[float, float]:
@@ -38,11 +39,15 @@ def median_confidence_interval(values: List[float], confidence: float = 0.95) ->
     return ordered[lower_order - 1], ordered[count - lower_order]
 
 
-def paired_measurement(old_timings: List[float], new_timings: List[float]) -> PairedBenchmarkMeasurement:
+def validate_paired_timings(old_timings: List[float], new_timings: List[float]):
     if not old_timings or len(old_timings) != len(new_timings):
         raise ValueError("Paired benchmark timings must be non-empty and have equal length")
     if any(not math.isfinite(timing) or timing <= 0 for timing in old_timings + new_timings):
         raise ValueError("Benchmark timings must be finite and greater than zero")
+
+
+def paired_measurement(old_timings: List[float], new_timings: List[float]) -> PairedBenchmarkMeasurement:
+    validate_paired_timings(old_timings, new_timings)
 
     ratios = [new_timing / old_timing for old_timing, new_timing in zip(old_timings, new_timings)]
     old_timing = float(statistics.median(old_timings))
@@ -56,42 +61,39 @@ def paired_measurement(old_timings: List[float], new_timings: List[float]) -> Pa
     )
 
 
-def sampling_decision(
-    measurement: PairedBenchmarkMeasurement,
-    measured_seconds: float,
-    minimum_runs: int,
-    maximum_runs: int,
-    maximum_adaptive_seconds: float,
-    display_threshold_percentage: float,
+def regression_measurement(
+    old_timings: List[float],
+    new_timings: List[float],
     regression_threshold_percentage: float,
     regression_threshold_seconds: float,
-) -> SamplingDecision:
-    if measurement.runs < minimum_runs:
-        return SamplingDecision(True, "minimum timed runs not reached")
-    if measurement.runs >= maximum_runs:
-        return SamplingDecision(False, "maximum timed runs reached")
-    if measured_seconds >= maximum_adaptive_seconds:
-        return SamplingDecision(False, "adaptive timing budget reached")
+) -> RegressionMeasurement:
+    validate_paired_timings(old_timings, new_timings)
+    if regression_threshold_percentage < 0 or regression_threshold_seconds < 0:
+        raise ValueError("Regression thresholds must not be negative")
 
-    display_ratio = display_threshold_percentage / 100.0
-    change = measurement.ratio - 1.0
-    lower_ratio, upper_ratio = measurement.ratio_interval
-    if abs(change) <= display_ratio:
-        return SamplingDecision(False, "old and new timings are within the display threshold")
+    threshold_multiplier = 1.0 + regression_threshold_percentage
+    ratios = [
+        new_timing / ((old_timing + regression_threshold_seconds) * threshold_multiplier)
+        for old_timing, new_timing in zip(old_timings, new_timings)
+    ]
+    return RegressionMeasurement(
+        ratio=float(statistics.median(ratios)),
+        ratio_interval=median_confidence_interval(ratios),
+        runs=len(ratios),
+    )
 
-    if change < 0:
-        if upper_ratio < 1.0 - display_ratio:
-            return SamplingDecision(False, "improvement is statistically stable")
-        return SamplingDecision(True, "visible improvement is statistically uncertain")
 
-    regression_ratio = (
-        (measurement.old_timing + regression_threshold_seconds) * (1.0 + regression_threshold_percentage)
-    ) / measurement.old_timing
-    if measurement.ratio > regression_ratio:
-        if lower_ratio > regression_ratio:
-            return SamplingDecision(False, "regression is statistically stable")
-        return SamplingDecision(True, "regression is statistically uncertain")
+def confirmation_run_count(
+    measurement: PairedBenchmarkMeasurement,
+    target_seconds: float,
+    minimum_runs: int,
+    maximum_runs: int,
+) -> int:
+    if target_seconds <= 0:
+        raise ValueError("Confirmation time must be greater than zero")
+    if minimum_runs <= 0 or maximum_runs < minimum_runs:
+        raise ValueError("Invalid confirmation run bounds")
 
-    if lower_ratio > 1.0 + display_ratio:
-        return SamplingDecision(False, "slowdown is statistically stable")
-    return SamplingDecision(True, "visible slowdown is statistically uncertain")
+    faster_timing = min(measurement.old_timing, measurement.new_timing)
+    estimated_runs = math.ceil(target_seconds / faster_timing)
+    return max(minimum_runs, min(maximum_runs, estimated_runs))

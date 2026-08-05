@@ -8,26 +8,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.regression.comparison import median_confidence_interval, paired_measurement, sampling_decision
+from scripts.regression.comparison import (
+    confirmation_run_count,
+    median_confidence_interval,
+    paired_measurement,
+    regression_measurement,
+)
 
 
 class TestPairedComparison(unittest.TestCase):
-    def make_decision(self, measurement, measured_seconds=1.0, minimum_runs=20, maximum_runs=100):
-        return sampling_decision(
-            measurement,
-            measured_seconds=measured_seconds,
-            minimum_runs=minimum_runs,
-            maximum_runs=maximum_runs,
-            maximum_adaptive_seconds=10.0,
-            display_threshold_percentage=2.0,
-            regression_threshold_percentage=0.1,
-            regression_threshold_seconds=0.05,
-        )
-
     def test_median_confidence_interval(self):
         lower, upper = median_confidence_interval(list(range(1, 21)))
         self.assertEqual((lower, upper), (6, 15))
         self.assertEqual(median_confidence_interval([1.0] * 20), (1.0, 1.0))
+        self.assertEqual(median_confidence_interval([1.0] * 6), (1.0, 1.0))
         self.assertEqual(median_confidence_interval([1.0] * 4), (-math.inf, math.inf))
 
     def test_q53_uses_paired_change_instead_of_pooled_medians(self):
@@ -97,46 +91,44 @@ class TestPairedComparison(unittest.TestCase):
         ]
 
         measurement = paired_measurement(old, new)
-        pooled_change = sorted(new)[14:16]
-        pooled_new = sum(pooled_change) / 2
+        pooled_new = sum(sorted(new)[14:16]) / 2
         pooled_old = sum(sorted(old)[14:16]) / 2
         self.assertAlmostEqual((pooled_new / pooled_old - 1.0) * 100.0, 18.1, places=1)
         self.assertAlmostEqual((measurement.ratio - 1.0) * 100.0, -2.2, places=1)
-        self.assertTrue(self.make_decision(measurement).collect_more)
 
-    def test_close_results_stop_at_the_minimum(self):
-        measurement = paired_measurement([1.0] * 20, [1.01] * 20)
-        decision = self.make_decision(measurement)
-        self.assertFalse(decision.collect_more)
-        self.assertIn("display threshold", decision.reason)
+    def test_regression_measurement_includes_both_thresholds(self):
+        below_threshold = regression_measurement([1.0] * 10, [1.15] * 10, 0.1, 0.05)
+        above_threshold = regression_measurement([1.0] * 10, [1.20] * 10, 0.1, 0.05)
+        self.assertLess(below_threshold.ratio, 1.0)
+        self.assertGreater(above_threshold.ratio, 1.0)
+        self.assertGreater(above_threshold.ratio_interval[0], 1.0)
 
-    def test_stable_visible_results_stop(self):
-        improvement = paired_measurement([1.0] * 20, [0.95] * 20)
-        slowdown = paired_measurement([1.0] * 20, [1.05] * 20)
-        regression = paired_measurement([1.0] * 20, [1.20] * 20)
-        self.assertFalse(self.make_decision(improvement).collect_more)
-        self.assertFalse(self.make_decision(slowdown).collect_more)
-        self.assertFalse(self.make_decision(regression).collect_more)
+    def test_confirmation_runs_scale_with_runtime(self):
+        cases = [
+            (0.02, 100),
+            (0.05, 60),
+            (0.1, 30),
+            (0.3, 10),
+            (0.5, 6),
+            (4.0, 6),
+        ]
+        for timing, expected_runs in cases:
+            with self.subTest(timing=timing):
+                measurement = paired_measurement([timing] * 10, [timing * 1.01] * 10)
+                self.assertEqual(confirmation_run_count(measurement, 3.0, 6, 100), expected_runs)
 
-    def test_minimum_run_time_and_sample_caps(self):
-        measurement = paired_measurement([1.0] * 10, [1.05] * 10)
-        self.assertTrue(self.make_decision(measurement, measured_seconds=20.0).collect_more)
-
-        measurement = paired_measurement([1.0] * 20, [1.01, 1.10] * 10)
-        time_decision = self.make_decision(measurement, measured_seconds=10.0)
-        self.assertFalse(time_decision.collect_more)
-        self.assertIn("budget", time_decision.reason)
-
-        measurement = paired_measurement([1.0] * 100, [1.01, 1.10] * 50)
-        run_decision = self.make_decision(measurement, maximum_runs=100)
-        self.assertFalse(run_decision.collect_more)
-        self.assertIn("maximum timed runs", run_decision.reason)
+    def test_confirmation_run_validation(self):
+        measurement = paired_measurement([1.0] * 10, [1.0] * 10)
+        with self.assertRaises(ValueError):
+            confirmation_run_count(measurement, 0.0, 6, 100)
+        with self.assertRaises(ValueError):
+            confirmation_run_count(measurement, 3.0, 10, 6)
 
 
 class TestRegressionRunnerIntegration(unittest.TestCase):
-    def test_adaptive_runner_alternates_batches_and_reports_runs(self):
-        repository_root = Path(__file__).resolve().parents[2]
-        runner_source = '''#!/usr/bin/env python3
+    repository_root = Path(__file__).resolve().parents[2]
+
+    runner_source = """#!/usr/bin/env python3
 import os
 import sys
 
@@ -144,16 +136,37 @@ label = os.path.basename(sys.argv[0])
 if "--help" in sys.argv:
     print("--timed-runs")
     raise SystemExit(0)
-runs = 5
-if "--timed-runs" in sys.argv:
-    runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
 with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
     order_log.write(label + "\\n")
-timing = 0.95 if label == "new" else 1.0
+timing = float(os.environ["BENCHMARK_NEW_TIMING"]) if label == "new" else 1.0
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
     print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
-'''
+"""
+
+    noisy_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+if "--help" in sys.argv:
+    print("--timed-runs")
+    raise SystemExit(0)
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(label + "\\n")
+counter_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / f"{label}.count"
+invocation = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
+counter_path.write_text(str(invocation + 1), encoding="utf-8")
+timing = 1.3 if label == "new" and invocation < 2 else 1.0
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
+"""
+
+    def run_regression_test(self, runner_source, new_timing="0.95", extra_args=None, ci=False):
         with tempfile.TemporaryDirectory() as temp_directory:
             temp_path = Path(temp_directory)
             for label in ("old", "new"):
@@ -165,38 +178,68 @@ for run in range(1, runs + 1):
             order_log = temp_path / "order.log"
             env = os.environ.copy()
             env["BENCHMARK_ORDER_LOG"] = str(order_log)
+            env["BENCHMARK_COUNTER_DIR"] = str(temp_path)
+            env["BENCHMARK_NEW_TIMING"] = new_timing
+            if ci:
+                env["CI"] = "true"
 
+            command = [
+                sys.executable,
+                str(self.repository_root / "scripts/regression/test_runner.py"),
+                "--old",
+                str(temp_path / "old"),
+                "--new",
+                str(temp_path / "new"),
+                "--benchmarks",
+                str(benchmark_list),
+                "--verbose",
+            ]
+            if extra_args:
+                command.extend(extra_args)
             process = subprocess.run(
-                [
-                    sys.executable,
-                    str(repository_root / "scripts/regression/test_runner.py"),
-                    "--old",
-                    str(temp_path / "old"),
-                    "--new",
-                    str(temp_path / "new"),
-                    "--benchmarks",
-                    str(benchmark_list),
-                ],
-                cwd=repository_root,
+                command,
+                cwd=self.repository_root,
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 check=False,
             )
+            order = order_log.read_text(encoding="utf-8").splitlines() if order_log.exists() else []
+            return process, order
 
-            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-            self.assertEqual(
-                order_log.read_text(encoding="utf-8").splitlines(),
-                ["old", "new", "new", "old", "old", "new", "new", "old"],
-            )
-            plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-            self.assertIn("paired median, 20-100 timed runs", plain_output)
-            self.assertRegex(plain_output, r"fake\s+1\.000s\s+0\.950s\s+-0\.050s\s+-5\.0%\s+20")
+    def test_non_regression_stops_after_initial_runs(self):
+        process, order = self.run_regression_test(self.runner_source)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old", "new", "new", "old"])
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn(
+            "timing: 10 initial runs; regression confirmation targets 3s",
+            plain_output,
+        )
+        self.assertRegex(plain_output, r"fake\s+1\.000s\s+0\.950s\s+-0\.050s\s+-5\.0%\s+10")
+
+    def test_stable_regression_is_confirmed(self):
+        process, order = self.run_regression_test(self.runner_source, new_timing="1.3")
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertEqual(order, ["old", "new", "new", "old", "old", "new", "new", "old"])
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn("regression confirmation: fake.benchmark: 6 paired runs", plain_output)
+        self.assertIn("confirmed regression", plain_output)
+        self.assertRegex(plain_output, r"fake\s+1\.000s\s+1\.300s\s+\+0\.300s\s+\+30\.0%\s+10\+6")
+
+    def test_noisy_regression_candidate_does_not_fail(self):
+        process, order = self.run_regression_test(self.noisy_runner_source, ci=True)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(order, ["old", "new", "new", "old", "old", "new", "new", "old"])
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn("regression not confirmed", plain_output)
+        self.assertIn("UNCONFIRMED REGRESSION CANDIDATES", plain_output)
+        self.assertIn("::warning title=Unconfirmed regression benchmark::", plain_output)
+        self.assertIn("10+6", plain_output)
 
     def test_runner_without_timed_run_support_fails_early(self):
-        repository_root = Path(__file__).resolve().parents[2]
-        runner_source = '''#!/usr/bin/env python3
+        runner_source = """#!/usr/bin/env python3
 import os
 import sys
 
@@ -206,47 +249,11 @@ if "--help" in sys.argv:
     raise SystemExit(0)
 with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
     order_log.write(label + "\\n")
-timing = 0.95 if label == "new" else 1.0
-print("name\\trun\\ttiming", file=sys.stderr)
-for run in range(1, 6):
-    print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
-'''
-        with tempfile.TemporaryDirectory() as temp_directory:
-            temp_path = Path(temp_directory)
-            for label in ("old", "new"):
-                runner_path = temp_path / label
-                runner_path.write_text(runner_source, encoding="utf-8")
-                runner_path.chmod(runner_path.stat().st_mode | stat.S_IXUSR)
-            benchmark_list = temp_path / "benchmarks.csv"
-            benchmark_list.write_text("fake.benchmark\n", encoding="utf-8")
-            order_log = temp_path / "order.log"
-            env = os.environ.copy()
-            env["BENCHMARK_ORDER_LOG"] = str(order_log)
-
-            process = subprocess.run(
-                [
-                    sys.executable,
-                    str(repository_root / "scripts/regression/test_runner.py"),
-                    "--old",
-                    str(temp_path / "old"),
-                    "--new",
-                    str(temp_path / "new"),
-                    "--benchmarks",
-                    str(benchmark_list),
-                    "--timed-runs",
-                    "20",
-                ],
-                cwd=repository_root,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
-
-            self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
-            self.assertIn("requires both benchmark runners to support --timed-runs", process.stdout)
-            self.assertFalse(order_log.exists())
+"""
+        process, order = self.run_regression_test(runner_source)
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn("requires both benchmark runners to support --timed-runs", process.stdout)
+        self.assertEqual(order, [])
 
 
 if __name__ == "__main__":

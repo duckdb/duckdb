@@ -141,11 +141,9 @@ jobs:
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           - name: Recursive CTE
             benchmark: benchmark/recursive_cte/recursive_cte.csv
-            timed_runs: 7
             regression_threshold_seconds: 0.01
           - name: AoC24
             benchmark: benchmark/aoc24/aoc24.csv
-            timed_runs: 7
             regression_threshold_seconds: 0.01
 
     steps:
@@ -190,9 +188,6 @@ jobs:
             extra_args=()
           fi
 
-          if [[ -n "${{ matrix.timed_runs }}" ]]; then
-            extra_args+=(--timed-runs "${{ matrix.timed_runs }}")
-          fi
           if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
             extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
           fi
@@ -268,8 +263,7 @@ jobs:
             --clear-benchmark-cache \
             --disable-timeout \
             --max-timeout 3600 \
-            --threads ${{ matrix.threads }} \
-            --timed-runs 30
+            --threads ${{ matrix.threads }}
 
   regression-bench-fivetran:
     name: Bench Fivetran
