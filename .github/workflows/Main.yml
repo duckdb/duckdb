@@ -479,6 +479,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+      LTO: thin
+      LTO_JOBS: 8
+      CC: clang-20
+      CXX: clang++-20
 
     steps:
     - name: "Checkout"
@@ -671,6 +675,8 @@ jobs:
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
+        -e LTO=full                                                            \
+        -e LTO_JOBS=8                                                          \
         -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
