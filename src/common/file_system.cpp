@@ -485,7 +485,6 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 }
 
 FileMetadata FileSystem::Stats(FileHandle &handle) {
-	// Synthesized from the individual accessors for file systems without a native stat call
 	FileMetadata metadata;
 	metadata.file_size = GetFileSize(handle);
 	metadata.last_modification_time = GetLastModifiedTime(handle);

@@ -117,8 +117,7 @@ private:
 	//! Last modified time and version tag (if FileHandle is opened)
 	timestamp_t last_modified;
 	string version_tag;
-	//! Freshness deadline for files without validators (if FileHandle is opened).
-	//! If unset (infinite), the storage backend does not provide expiry information.
+	//! Freshness deadline for files without extra validation.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
 
 	//! Current position (if non-seeking reads)

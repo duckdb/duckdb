@@ -212,7 +212,7 @@ bool CachingFileHandle::CanUseCache() {
 
 	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
 	return current_cached_file->cache_valid_until.IsFinite() &&
-	       Timestamp::GetCurrentTimestamp() < current_cached_file->cache_valid_until;
+	       Timestamp::GetCurrentTimestamp() <= current_cached_file->cache_valid_until;
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,

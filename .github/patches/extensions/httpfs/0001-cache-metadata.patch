@@ -1,0 +1,164 @@
+commit 9e5c505de48669bbf14102a96780199b9d8a0c70
+Author: dentinyhao <dentinyhao@gmail.com>
+Date:   Tue Aug 4 02:50:57 2026 -0700
+
+    Consider HTTP cache
+
+diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
+index 0fc503a..219d81a 100644
+--- a/src/http/httpfs.cpp
++++ b/src/http/httpfs.cpp
+@@ -473,6 +473,16 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
+ 	return sfh.etag;
+ }
+ 
++FileMetadata HTTPFileSystem::Stats(FileHandle &handle) {
++	auto &sfh = handle.Cast<HTTPFileHandle>();
++	FileMetadata metadata;
++	metadata.file_size = NumericCast<int64_t>(sfh.length);
++	metadata.last_modification_time = sfh.last_modified;
++	metadata.file_type = FileType::FILE_TYPE_REGULAR;
++	metadata.cache_valid_until = sfh.cache_valid_until;
++	return metadata;
++}
++
+ bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+ 	try {
+ 		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+@@ -574,6 +584,66 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+ 	return true;
+ }
+ 
++static bool TryParseNonNegativeSeconds(const string &input, int64_t &result) {
++	try {
++		result = std::stoll(input);
++	} catch (...) {
++		return false;
++	}
++	return result >= 0;
++}
++
++timestamp_t HTTPFileSystem::ComputeCacheValidUntil(const HTTPHeaders &headers) {
++	static constexpr int64_t MICROS_PER_SECOND = 1000000LL;
++	// Clamp the freshness lifetime to guard against overflow from absurd server-provided values
++	static constexpr int64_t MAX_FRESHNESS_SECONDS = 365LL * 24 * 60 * 60;
++
++	// Freshness lifetime in seconds (RFC 9111): Cache-Control max-age takes precedence over Expires
++	int64_t freshness_lifetime = 0;
++	bool has_freshness_lifetime = false;
++	if (headers.HasHeader("Cache-Control")) {
++		const string MAX_AGE_PREFIX = "max-age=";
++		for (auto &directive_p : StringUtil::Split(headers.GetHeaderValue("Cache-Control"), ',')) {
++			auto directive = StringUtil::Lower(directive_p);
++			StringUtil::Trim(directive);
++			if (StringUtil::StartsWith(directive, "no-store") || StringUtil::StartsWith(directive, "no-cache")) {
++				// no-store: must not be cached, no-cache: must be revalidated before every use
++				return timestamp_t::infinity();
++			}
++			if (StringUtil::StartsWith(directive, MAX_AGE_PREFIX)) {
++				has_freshness_lifetime =
++				    TryParseNonNegativeSeconds(directive.substr(MAX_AGE_PREFIX.size()), freshness_lifetime);
++			}
++		}
++	}
++	if (!has_freshness_lifetime && headers.HasHeader("Expires") && headers.HasHeader("Date")) {
++		timestamp_t expires;
++		timestamp_t date;
++		if (TryParseLastModifiedTime(headers.GetHeaderValue("Expires"), expires) &&
++		    TryParseLastModifiedTime(headers.GetHeaderValue("Date"), date)) {
++			freshness_lifetime = (expires.value - date.value) / MICROS_PER_SECOND;
++			has_freshness_lifetime = true;
++		}
++	}
++	if (!has_freshness_lifetime) {
++		return timestamp_t::infinity();
++	}
++
++	// The response may have already spent time in intermediate caches (RFC 9111 current age)
++	int64_t age = 0;
++	if (headers.HasHeader("Age")) {
++		if (!TryParseNonNegativeSeconds(headers.GetHeaderValue("Age"), age)) {
++			age = 0;
++		}
++	}
++
++	const int64_t remaining = MinValue<int64_t>(freshness_lifetime - age, MAX_FRESHNESS_SECONDS);
++	if (remaining <= 0) {
++		return timestamp_t::infinity(); // Already stale: no freshness to grant
++	}
++	return timestamp_t(Timestamp::GetCurrentTimestamp().value + remaining * MICROS_PER_SECOND);
++}
++
+ struct HTTPFileInfoParser {
+ 	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
+ 		if (!headers.HasHeader("Content-Range")) {
+@@ -675,6 +745,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+ 	if (response.headers.HasHeader("ETag")) {
+ 		etag = response.headers.GetHeaderValue("ETag");
+ 	}
++	cache_valid_until = HTTPFileSystem::ComputeCacheValidUntil(response.headers);
+ 	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
+ 	    response.headers.HasHeader("x-amz-version-id")) {
+ 		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
+@@ -716,6 +787,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+ 	last_modified = cache_entry.last_modified;
+ 	length = cache_entry.length;
+ 	etag = cache_entry.etag;
++	cache_valid_until = cache_entry.cache_valid_until;
+ 	SetVersionId(cache_entry.version_id);
+ 
+ 	// TODO: handle properties
+@@ -726,6 +798,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+ 	result.length = length;
+ 	result.last_modified = last_modified;
+ 	result.etag = etag;
++	result.cache_valid_until = cache_valid_until;
+ 	result.version_id = GetVersionId();
+ 	// TODO: handle properties
+ 	return result;
+diff --git a/src/include/http/http_metadata_cache.hpp b/src/include/http/http_metadata_cache.hpp
+index 2908a43..540d96f 100644
+--- a/src/include/http/http_metadata_cache.hpp
++++ b/src/include/http/http_metadata_cache.hpp
+@@ -19,6 +19,8 @@ struct HTTPMetadataCacheEntry {
+ 	idx_t length;
+ 	timestamp_t last_modified;
+ 	string etag;
++	//! Freshness deadline; if unset (infinite), the server does not provide expiry information
++	timestamp_t cache_valid_until = timestamp_t::infinity();
+ 	string version_id;
+ 	unordered_map<string, string> properties;
+ };
+diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
+index 1764acc..6d77d08 100644
+--- a/src/include/http/httpfs.hpp
++++ b/src/include/http/httpfs.hpp
+@@ -64,6 +64,10 @@ public:
+ 	idx_t length;
+ 	timestamp_t last_modified;
+ 	string etag;
++	//! Freshness deadline derived from HTTP caching headers (Cache-Control/Expires).
++	//! If unset (infinite), the server does not provide information on when cached data expires.
++	//! Used to cache files that provide no validators (no ETag/Last-Modified).
++	timestamp_t cache_valid_until = timestamp_t::infinity();
+ 	bool force_full_download;
+ 	bool initialized = false;
+ 
+@@ -133,6 +137,9 @@ private:
+ class HTTPFileSystem : public FileSystem {
+ public:
+ 	static bool TryParseLastModifiedTime(const string &timestamp, timestamp_t &result);
++	//! Compute the freshness deadline from HTTP caching headers (RFC 9111): Cache-Control max-age,
++	//! falling back to Expires/Date, adjusted by the response's current age. Infinite if not provided.
++	static timestamp_t ComputeCacheValidUntil(const HTTPHeaders &headers);
+ 
+ 	//! FileSystem overrides.
+ 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
+@@ -155,6 +162,7 @@ public:
+ 	int64_t GetFileSize(FileHandle &handle) override;
+ 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+ 	string GetVersionTag(FileHandle &handle) override;
++	FileMetadata Stats(FileHandle &handle) override;
+ 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
+ 	idx_t SeekPosition(FileHandle &handle) override;
