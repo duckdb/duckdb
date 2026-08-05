@@ -1545,7 +1545,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DistinctOnTargets <- 'ON' Parens(List(Expression))\n"
 	"InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef\n"
 	"TableRef <- InnerTableRef JoinOrPivot*\n"
-	"TableSubquery <- Lateral? SubqueryReference TableAlias?\n"
+	"TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias?\n"
 	"BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?\n"
 	"TableAliasColon <- ColIdOrString ':'\n"
 	"ValuesRef <- ValuesClause TableAlias?\n"

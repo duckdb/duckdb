@@ -1536,9 +1536,16 @@ PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer,
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
+                                                                   const optional<Identifier> &table_alias_colon,
                                                                    const optional<bool> &lateral,
                                                                    unique_ptr<TableRef> subquery_reference,
                                                                    const optional<TableAlias> &table_alias) {
+	if (table_alias_colon && table_alias) {
+		throw ParserException("Table reference %s cannot have two aliases", subquery_reference->ToString());
+	}
+	if (table_alias_colon) {
+		subquery_reference->alias = *table_alias_colon;
+	}
 	if (table_alias) {
 		subquery_reference->alias = table_alias->name;
 		subquery_reference->column_name_alias = table_alias->column_name_alias;
