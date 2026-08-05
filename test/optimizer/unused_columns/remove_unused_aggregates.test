@@ -479,6 +479,26 @@ SELECT ascii(s) x FROM (SELECT s FROM tc GROUP BY s) GROUP BY 1
 ----
 97
 
+# VARIANT keeps its payload in a fixed physical layout, so the types stored inside it are invisible to the
+# type check, while its comparator inherits their normalization: a VARIANT holding -0.0 compares equal to one
+# holding 0.0, and a VARCHAR cast tells them apart. Grouping by it also goes through a hidden
+# __collated_group aggregate expression that blocks the removal by itself
+statement ok
+CREATE TABLE tvar(v variant);
+
+statement ok
+INSERT INTO tvar VALUES ((-(0.0::double))::variant), ((0.0::double)::variant);
+
+query II
+EXPLAIN SELECT v::varchar x FROM (SELECT v FROM tvar GROUP BY v) GROUP BY 1
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT v::varchar x FROM (SELECT v FROM tvar GROUP BY v) GROUP BY 1
+----
+-0.0
+
 # the not-distinct-dependent property is currently not propagated across materialized CTE boundaries at
 # all; if that is ever added, it must consider all readers, not just one (count(*) here needs duplicates)
 query II

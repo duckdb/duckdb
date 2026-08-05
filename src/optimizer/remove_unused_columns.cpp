@@ -340,8 +340,12 @@ static bool GroupingMergesDistinguishableValues(const LogicalType &type) {
 		case LogicalTypeId::ARRAY:
 		case LogicalTypeId::MAP:
 		case LogicalTypeId::UNION:
-		case LogicalTypeId::VARIANT:
 			return false;
+		// VARIANT holds its payload in a fixed physical layout, so TypeVisitor cannot visit the types actually
+		// stored inside it. Its comparator recurses into those values, inheriting their normalization: a VARIANT
+		// holding -0.0 compares equal to one holding 0.0, while a cast to VARCHAR tells them apart
+		case LogicalTypeId::VARIANT:
+			return true;
 		// normalizing comparator (EqualsFloat): -0.0 and 0.0 merge, as do all NaN bit patterns;
 		// a VARCHAR cast or signbit() tells both pairs apart ('0.0' vs '-0.0', 'nan' vs '-nan'),
 		// and 1/x additionally tells the zeros apart (inf vs -inf)
