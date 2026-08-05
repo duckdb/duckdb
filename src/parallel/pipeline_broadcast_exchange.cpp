@@ -1404,7 +1404,7 @@ void PipelineBroadcastExchange::Cancel() {
 
 SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk,
                                                  PipelineBroadcastExchangeScanState &scan_state,
-                                                 optional_idx &batch_index, bool &batch_index_advanced,
+                                                 optional_idx &batch_index, SourceBatchIndexState &batch_index_state,
                                                  const InterruptState &interrupt_state) {
 	vector<InterruptState> writers;
 	vector<InterruptState> readers;
@@ -1413,11 +1413,11 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 	SpoolReadReservation spool_read;
 	SourceResultType result;
 	batch_index = optional_idx();
-	batch_index_advanced = false;
+	batch_index_state = SourceBatchIndexState::UNCHANGED;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		result = ReserveScanLocked(consumer_idx, interrupt_state, scan_state, next_chunk, batch_index,
-		                           batch_index_advanced, spool_read, readers, writers, log_entries);
+		                           batch_index_state, spool_read, readers, writers, log_entries);
 	}
 
 	if (spool_read.IsSet()) {
@@ -1463,7 +1463,7 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 
 SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
     idx_t consumer_idx, const InterruptState &interrupt_state, PipelineBroadcastExchangeScanState &scan_state,
-    shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index, bool &batch_index_advanced,
+    shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index, SourceBatchIndexState &batch_index_state,
     SpoolReadReservation &spool_read, vector<InterruptState> &readers, vector<InterruptState> &writers,
     vector<ExchangeLogEntry> &log_entries) {
 	D_ASSERT(consumer_idx < consumers.size());
@@ -1473,7 +1473,7 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
 	}
 	if (consumer.scan_mode == PipelineBroadcastExchangeScanMode::BATCH) {
 		return ReserveBatchScanLocked(consumer_idx, interrupt_state, scan_state, next_chunk, batch_index,
-		                              batch_index_advanced, spool_read, readers, writers, log_entries);
+		                              batch_index_state, spool_read, readers, writers, log_entries);
 	}
 	if (consumer.position < buffer->NextPosition()) {
 		auto position = consumer.position++;
@@ -1506,7 +1506,7 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
 
 SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
     idx_t consumer_idx, const InterruptState &interrupt_state, PipelineBroadcastExchangeScanState &scan_state,
-    shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index, bool &batch_index_advanced,
+    shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index, SourceBatchIndexState &batch_index_state,
     SpoolReadReservation &spool_read, vector<InterruptState> &readers, vector<InterruptState> &writers,
     vector<ExchangeLogEntry> &log_entries) {
 	auto &consumer = consumers[consumer_idx];
@@ -1560,7 +1560,7 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 					}
 					scan_state.reported_batch_index = successor_batch_index;
 					batch_index = successor_batch_index;
-					batch_index_advanced = true;
+					batch_index_state = SourceBatchIndexState::ADVANCED;
 					RetireChunksLocked();
 					WakeReadersLocked(readers);
 					WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
@@ -1609,7 +1609,7 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 		    (!scan_state.reported_batch_index.IsValid() || scan_state.reported_batch_index.GetIndex() < batch_floor)) {
 			scan_state.reported_batch_index = batch_floor;
 			batch_index = batch_floor;
-			batch_index_advanced = true;
+			batch_index_state = SourceBatchIndexState::ADVANCED;
 			WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 			return SourceResultType::BLOCKED;
 		}

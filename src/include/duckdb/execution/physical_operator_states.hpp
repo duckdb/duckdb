@@ -200,8 +200,7 @@ struct OperatorSourceInput {
 	GlobalSourceState &global_state;
 	LocalSourceState &local_state;
 	InterruptState &interrupt_state;
-	//! The source advanced its partition batch without returning a chunk
-	bool batch_index_advanced = false;
+	SourceBatchIndexState batch_index_state = SourceBatchIndexState::UNCHANGED;
 };
 
 struct OperatorSinkCombineInput {

@@ -5502,6 +5502,24 @@ SortKeyType EnumUtil::FromString<SortKeyType>(const char *value) {
 	return static_cast<SortKeyType>(StringUtil::StringToEnum(GetSortKeyTypeValues(), 10, "SortKeyType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSourceBatchIndexStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SourceBatchIndexState::UNCHANGED), "UNCHANGED" },
+		{ static_cast<uint32_t>(SourceBatchIndexState::ADVANCED), "ADVANCED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value) {
+	return StringUtil::EnumToString(GetSourceBatchIndexStateValues(), 2, "SourceBatchIndexState", static_cast<uint32_t>(value));
+}
+
+template<>
+SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *value) {
+	return static_cast<SourceBatchIndexState>(StringUtil::StringToEnum(GetSourceBatchIndexStateValues(), 2, "SourceBatchIndexState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SourceResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },

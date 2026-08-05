@@ -502,6 +502,8 @@ enum class SinkResultType : uint8_t;
 
 enum class SortKeyType : uint8_t;
 
+enum class SourceBatchIndexState : uint8_t;
+
 enum class SourceResultType : uint8_t;
 
 enum class StarExpressionType : uint8_t;
@@ -1313,6 +1315,9 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
+
+template<>
+const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
@@ -2178,6 +2183,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
+
+template<>
+SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);

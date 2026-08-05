@@ -133,7 +133,8 @@ public:
 	void Cancel();
 
 	SourceResultType Scan(idx_t consumer_idx, DataChunk &chunk, PipelineBroadcastExchangeScanState &scan_state,
-	                      optional_idx &batch_index, bool &batch_index_advanced, const InterruptState &interrupt_state);
+	                      optional_idx &batch_index, SourceBatchIndexState &batch_index_state,
+	                      const InterruptState &interrupt_state);
 	void UnregisterConsumer(idx_t consumer_idx);
 
 	ProgressData ScanProgress(idx_t consumer_idx, idx_t estimated_cardinality) const;
@@ -230,13 +231,13 @@ private:
 	SourceResultType ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
 	                                   PipelineBroadcastExchangeScanState &scan_state,
 	                                   shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index,
-	                                   bool &batch_index_advanced, SpoolReadReservation &spool_read,
+	                                   SourceBatchIndexState &batch_index_state, SpoolReadReservation &spool_read,
 	                                   vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                                   vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
 	SourceResultType ReserveBatchScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
 	                                        PipelineBroadcastExchangeScanState &scan_state,
 	                                        shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index,
-	                                        bool &batch_index_advanced, SpoolReadReservation &spool_read,
+	                                        SourceBatchIndexState &batch_index_state, SpoolReadReservation &spool_read,
 	                                        vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                                        vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
 	void CompleteSpoolReadLocked(idx_t consumer_idx, const SpoolReadReservation &spool_read, DataChunk &chunk,

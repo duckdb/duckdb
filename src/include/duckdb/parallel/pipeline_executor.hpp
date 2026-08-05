@@ -106,6 +106,10 @@ private:
 	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
 	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
 	enum class PendingBatchAdvanceState : uint8_t { NONE, NEXT_BATCH, MINIMUM_UPDATE };
+	struct SourceFetchResult {
+		SourceResultType result = SourceResultType::BLOCKED;
+		SourceBatchIndexState batch_index_state = SourceBatchIndexState::UNCHANGED;
+	};
 
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -161,8 +165,6 @@ private:
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline
 	bool next_batch_blocked = false;
-	//! A source advanced its batch index without producing another chunk
-	optional_idx pending_source_batch_index;
 	PendingBatchAdvanceState pending_batch_advance_state = PendingBatchAdvanceState::NONE;
 
 	//! Current operator being flushed
@@ -180,7 +182,7 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	SourceResultType FetchFromSource(DataChunk &result, bool &batch_index_advanced);
+	SourceFetchResult FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	void NotifySourceFinished();
@@ -199,7 +201,7 @@ private:
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	//! Notifies the sink that a new batch has started
-	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
+	SinkNextBatchType NextBatch(DataChunk &source_chunk, const SourceFetchResult &source_result);
 	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false,
 	                            optional_idx external_min_batch_index = optional_idx());
 	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
