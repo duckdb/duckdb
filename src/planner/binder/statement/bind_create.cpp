@@ -59,7 +59,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->SetQualifiedName(QualifiedName(table.catalog.GetName(), table.schema.name, table.name));
+	alias_table_ref->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -140,39 +140,65 @@ Identifier Binder::BindCatalog(const Identifier &catalog) {
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
-	BindSchemaOrCatalog(info.GetQualifiedNameMutable());
-	auto catalog = info.GetQualifiedName().Catalog();
-	auto schema = info.GetQualifiedName().Schema();
+	auto &search_path = ClientData::Get(context).catalog_search_path;
+	// determine the catalog and the (possibly nested) schema path. ResolveCatalog (via BindSchemaOrCatalog) decides
+	// which leading components form the catalog; we pass default_catalog=false so the catalog is left empty when none
+	// is given - that lets us tell "no catalog specified" apart from an explicit catalog when applying defaults below.
+	auto resolved = ResolveCatalog(context, info.GetQualifiedName(), false);
+	auto &path = resolved.Path();
+	Identifier name = path.back();
+	Identifier catalog = path.front();
+	// the schema components sit between the catalog and the name; skip empty placeholders (e.g. from
+	// QualifiedName(catalog, "", name)) so that "no schema given" applies the default schema below
+	vector<Identifier> schema_path;
+	for (idx_t i = 1; i + 1 < path.size(); i++) {
+		if (!path[i].empty()) {
+			schema_path.push_back(path[i]);
+		}
+	}
+
 	if (IsInvalidCatalog(catalog) && info.temporary) {
 		catalog = Identifier::TempCatalog();
 	}
-	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
+	if (IsInvalidCatalog(catalog) && schema_path.empty()) {
+		// no catalog and no schema given: use the search path default for both
 		auto &default_entry = search_path->GetDefault();
 		catalog = default_entry.GetCatalog();
-		schema = default_entry.GetSchema();
-	} else if (IsInvalidSchema(schema)) {
-		schema = Identifier(search_path->GetDefaultSchema(context, catalog));
+		schema_path.push_back(default_entry.GetSchema());
+	} else if (schema_path.empty()) {
+		// a catalog was given but no schema: use the catalog's default schema
+		schema_path.push_back(Identifier(search_path->GetDefaultSchema(context, catalog)));
 	} else if (IsInvalidCatalog(catalog)) {
-		catalog = Identifier(search_path->GetDefaultCatalog(schema));
+		// a schema was given but no catalog: resolve the catalog that holds it
+		catalog = Identifier(search_path->GetDefaultCatalog(schema_path[0]));
 	}
 	if (IsInvalidCatalog(catalog)) {
 		catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
-	info.SetQualifiedName(QualifiedName(std::move(catalog), std::move(schema), info.GetQualifiedName().Name()));
 	if (!info.temporary) {
-		// non-temporary create: not read only
-		if (info.GetQualifiedName().Catalog() == TEMP_CATALOG) {
+		if (catalog == TEMP_CATALOG) {
 			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
-	} else {
-		if (info.GetQualifiedName().Catalog() != TEMP_CATALOG) {
-			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
-		}
+	} else if (catalog != TEMP_CATALOG) {
+		throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 	}
+	// store the resolved name as [catalog, schema_path..., name]
+	vector<Identifier> resolved_path;
+	resolved_path.push_back(std::move(catalog));
+	for (auto &schema : schema_path) {
+		resolved_path.push_back(std::move(schema));
+	}
+	info.SetQualifiedName(QualifiedName(std::move(resolved_path), std::move(name)));
 }
 
-QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name) {
+QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog) {
+	CatalogEntryRetriever retriever(context);
+	return ResolveCatalog(retriever, name, default_catalog);
+}
+
+QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const QualifiedName &name,
+                                     bool default_catalog) {
+	auto &context = retriever.GetContext();
 	auto path = name.Path();
 	if (path.empty()) {
 		return name;
@@ -181,27 +207,63 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 	Identifier trailing = std::move(path.back());
 	path.pop_back();
 	Identifier catalog;
-	if (!path.empty()) {
-		// try to interpret the leading component as a catalog (i.e. an attached database)
+	if (path.size() == 1) {
+		// a single qualifier ("x.name"): x may be a schema, or a catalog - and if it names both it is ambiguous
 		Identifier candidate;
 		Identifier first = path[0];
-		BindSchemaOrCatalog(context, candidate, first);
+		BindSchemaOrCatalog(retriever, candidate, first);
 		if (!candidate.empty()) {
 			catalog = std::move(candidate);
 			path.erase(path.begin());
 		}
+	} else if (path.size() > 1) {
+		// multiple qualifiers ("cat.schema.name" or a nested "s1.s2.name"): the leading component is the catalog when
+		// it names an attached database. It is positionally unambiguous, so we do not run the catalog/schema ambiguity
+		// check (which is only relevant for a lone qualifier).
+		auto &db_manager = DatabaseManager::Get(context);
+		if (db_manager.GetDatabase(context, path[0])) {
+			catalog = std::move(path[0]);
+			path.erase(path.begin());
+		}
 	}
-	if (IsInvalidCatalog(catalog)) {
+	if (default_catalog && IsInvalidCatalog(catalog)) {
 		// the leading component (if any) is a schema - resolve the catalog that holds it, else the default database
-		auto &search_path = ClientData::Get(context).catalog_search_path;
+		auto &search_path = retriever.GetSearchPath();
 		catalog =
-		    path.empty() ? search_path->GetDefault().GetCatalog() : Identifier(search_path->GetDefaultCatalog(path[0]));
+		    path.empty() ? search_path.GetDefault().GetCatalog() : Identifier(search_path.GetDefaultCatalog(path[0]));
 		if (IsInvalidCatalog(catalog)) {
 			catalog = DatabaseManager::GetDefaultDatabase(context);
 		}
 	}
 	path.insert(path.begin(), std::move(catalog));
 	return QualifiedName(std::move(path), std::move(trailing));
+}
+
+QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name) {
+	auto resolved = ResolveCatalog(retriever, name, false);
+	auto &path = resolved.Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	if (schema_path.size() <= 1) {
+		// unqualified, or qualified with a single schema level: keep the (catalog, schema, name) shape so that the
+		// regular search-path based lookup applies
+		return QualifiedName(path.front(), schema_path.empty() ? Identifier() : schema_path[0], resolved.Name());
+	}
+	// a nested schema path was given - resolve the catalog holding the outermost schema so that the resulting
+	// [catalog, schema path..., name] is fully qualified
+	auto catalog = path.front();
+	if (IsInvalidCatalog(catalog)) {
+		catalog = Identifier(retriever.GetSearchPath().GetDefaultCatalog(schema_path[0]));
+		if (IsInvalidCatalog(catalog)) {
+			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
+		}
+	}
+	schema_path.insert(schema_path.begin(), std::move(catalog));
+	return QualifiedName(std::move(schema_path), resolved.Name());
+}
+
+QualifiedName Binder::BindTableName(const QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	return BindTableName(retriever, name);
 }
 
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
@@ -225,12 +287,12 @@ void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 }
 
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
+	// resolve the target into [catalog, schema_path..., name] and fetch the (possibly nested) schema it lives in
 	SearchSchema(info);
-	// fetch the schema in which we want to create the object
-	auto &schema_obj = Catalog::GetSchema(context, info.GetQualifiedName().Catalog(), info.GetQualifiedName().Schema());
+	auto &path = info.GetQualifiedName().Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto &schema_obj = *Catalog::GetSchema(context, path.front(), schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
-	info.SetQualifiedName(
-	    QualifiedName(info.GetQualifiedName().Catalog(), schema_obj.name, info.GetQualifiedName().Name()));
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
@@ -268,7 +330,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->SetCanContainNulls(true);
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();
@@ -295,6 +357,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
 		    t == QueryNodeType::DELETE_QUERY_NODE) {
 			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
+		if (t == QueryNodeType::COPY_QUERY_NODE) {
+			throw BinderException("COPY statements are not allowed as CTE bodies inside a VIEW");
 		}
 	}
 	optional_ptr<LogicalDependencyList> dependencies;
@@ -569,9 +634,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	auto &table = *table_ptr;
 
-	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.SetQualifiedName(
-	    QualifiedName(table.catalog.GetName(), table.schema.name, create_trigger_info.GetQualifiedName().Name()));
+	// Trigger inherits the catalog and the (possibly nested) schema from the base table
+	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -587,6 +651,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
 			throw BinderException(msg);
 		}
+	}
+
+	if (create_trigger_info.timing == TriggerTiming::INSTEAD_OF) {
+		throw NotImplementedException("INSTEAD OF triggers are not yet supported");
 	}
 
 	// Validate UPDATE OF columns exist
@@ -619,9 +687,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (!create_trigger_info.referencing_old_table.empty()) {
 		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
 			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
-		}
-		if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
-			throw NotImplementedException("REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers");
 		}
 	}
 	if (!create_trigger_info.referencing_new_table.empty() &&
@@ -770,10 +835,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
-		// Plan the table scan.
-		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(),
-		                                                 create_index_info.GetQualifiedName().Schema(),
-		                                                 create_index_info.table));
+		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
+		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);
@@ -795,6 +858,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// Skip real catalog/schema resolution in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES mode
+		if (GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+		    GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+			auto &create_info = stmt.info->Cast<CreateTableInfo>();
+			if (GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+				AddTableName(create_info.GetQualifiedName().ToString());
+			} else {
+				AddTableName(create_info.GetQualifiedName().Name().GetIdentifierName());
+			}
+			if (create_info.query) {
+				auto query_obj = Bind(*create_info.query);
+				result.plan = std::move(query_obj.plan);
+			}
+			break;
+		}
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
 

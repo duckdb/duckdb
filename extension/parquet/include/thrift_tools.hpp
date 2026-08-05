@@ -182,13 +182,24 @@ public:
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
-			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_handle.GetFileSize() - location));
+			auto file_size = file_handle.GetFileSize();
+			if (location >= file_size) {
+				file_handle.GetFileHandle()->Read(context, buf, len, location);
+				location += len;
+				return len;
+			}
+			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_size - location));
 			auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
-			D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
+			if (!prefetch_buffer_fallback ||
+			    location - prefetch_buffer_fallback->location + len > prefetch_buffer_fallback->size) {
+				file_handle.GetFileHandle()->Read(context, buf, len, location);
+				location += len;
+				return len;
+			}
 			memcpy(buf, prefetch_buffer_fallback->buffer_ptr + location - prefetch_buffer_fallback->location, len);
 		} else {
 			// No prefetch, do a regular (non-caching) read
-			file_handle.GetFileHandle().Read(context, buf, len, location);
+			file_handle.GetFileHandle()->Read(context, buf, len, location);
 		}
 
 		location += len;

@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-//! Helper class to rewrite correlated expressions within a single LogicalOperator
+//! Rewrites correlated expressions through converted algebra, stopping at unconverted dependent-join children.
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
 	static void Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,

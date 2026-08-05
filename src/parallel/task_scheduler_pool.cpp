@@ -27,6 +27,8 @@ namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
+// Threshold for AUTO thread pinning.
+static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
 
 struct LightWeightSemaphoreWrapper {
 	lightweight_semaphore_t s;
@@ -115,6 +117,37 @@ static void SetThreadAffinity(thread &thread, const vector<int> &available_cpus,
 	}
 #endif
 }
+
+// Returns the available CPU ids when the pool should pin its threads, or an empty vector to skip pinning.
+// Thread count means the number of threads that the pool should contain.
+static vector<int> GetAvailableCPUsForPinning(TaskSchedulerType pool_type, ThreadPinMode pin_thread_mode,
+                                              idx_t thread_count) {
+	if (pin_thread_mode == ThreadPinMode::OFF) {
+		return {};
+	}
+	// Only pin regular threads.
+	if (pool_type != TaskSchedulerType::REGULAR) {
+		return {};
+	}
+
+	// Only pin when there're enough cores available.
+	auto available_cpus = GetProcessCPUMask();
+	if (available_cpus.size() < thread_count) {
+		return {};
+	}
+
+	// If mode is ON, we need to pin the threads.
+	if (pin_thread_mode == ThreadPinMode::ON) {
+		return available_cpus;
+	}
+
+	// Under AUTO mode, only pin when thread count from user setting exceeds the threshold.
+	if (thread_count >= THREAD_PIN_THRESHOLD) {
+		return available_cpus;
+	}
+
+	return {};
+}
 #endif
 
 #ifndef DUCKDB_NO_THREADS
@@ -160,22 +193,14 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		// we are increasing the number of threads: launch them and run tasks on them
 		idx_t create_new_threads = new_thread_count - threads.size();
 
-		// Whether to pin threads to cores
-		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
-		const auto pin_threads =
-		    pool_type == TaskSchedulerType::REGULAR && // Only pin regular threads!
-		    (pin_thread_mode == ThreadPinMode::ON ||
-		     (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD));
-		const auto available_cpus = pin_threads ? GetProcessCPUMask() : vector<int>();
-		// If we have fewer available cores than threads, do not pin and let OS scheduler handle it
-		const auto can_pin = pin_threads && new_thread_count <= available_cpus.size();
+		const auto available_cpus = GetAvailableCPUsForPinning(pool_type, pin_thread_mode, new_thread_count);
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
 			unique_ptr<thread> worker_thread;
 			try {
 				worker_thread = make_uniq<thread>(ThreadExecuteTasks, &scheduler, marker.get(), pool_type);
-				if (can_pin) {
+				if (!available_cpus.empty()) {
 					SetThreadAffinity(*worker_thread, available_cpus, threads.size());
 				}
 			} catch (std::exception &ex) {

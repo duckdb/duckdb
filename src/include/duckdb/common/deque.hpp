@@ -41,7 +41,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within deque of size %ld", index, size);
+			ThrowDequeIndexOutOfBounds(index, size);
 		}
 #endif
 	}
@@ -89,28 +89,28 @@ public:
 
 	typename original::reference front() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'front' called on an empty deque!");
+			ThrowDequeFrontOnEmpty();
 		}
 		return get<SAFE>(0);
 	}
 
 	typename original::const_reference front() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'front' called on an empty deque!");
+			ThrowDequeFrontOnEmpty();
 		}
 		return get<SAFE>(0);
 	}
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty deque!");
+			ThrowDequeBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty deque!");
+			ThrowDequeBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}

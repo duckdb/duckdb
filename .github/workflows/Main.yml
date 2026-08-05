@@ -24,7 +24,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -40,7 +39,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -118,6 +116,9 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
+            effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+          fi
           echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
 
@@ -144,13 +145,6 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
-            capi:
-              - src/include/duckdb.h
-              - src/common/types.cpp
-              - src/include/duckdb/common/types.hpp
-              - src/function/table/system/test_all_types.cpp
-            julia:
-              - tools/juliapkg/**
 
       - name: Lint CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -233,6 +227,16 @@ jobs:
       - name: Install tools
         timeout-minutes: 10
         run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install C API header generation tools
+        run: |
+          python3 -m pip install -U pip
+          python3 -m pip install --group api_spec/pyproject.toml:generate
+          python3 -m pip install cxxheaderparser pcpp
 
       - name: Check format
         run: |
@@ -320,8 +324,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       timeout-minutes: 10
@@ -365,6 +371,7 @@ jobs:
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  tidy-check:
@@ -379,9 +386,11 @@ jobs:
       CLANGD_BINARY: clangd-20
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
@@ -395,9 +404,14 @@ jobs:
     - name: Install clangd-tidy
       run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-    - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
+    - name: Tidy Check (clangd)
+      run: |
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd 'CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*'
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}
@@ -421,8 +435,9 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
-      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  wasm-eh:
@@ -436,8 +451,10 @@ jobs:
       GEN: make
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: emscripten-core/setup-emsdk@v16
@@ -623,11 +640,12 @@ jobs:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
+        fetch_depth: 0
 
     - name: Install tools
       timeout-minutes: 10
@@ -670,7 +688,7 @@ jobs:
             python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
+          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
         "
 
     - name: CLI check
@@ -690,7 +708,7 @@ jobs:
       run: |
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v7
@@ -728,11 +746,13 @@ jobs:
       - prepare
       - extensions
       - linux-release-cli
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Check staged extension install/load
@@ -758,11 +778,12 @@ jobs:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
+        fetch_depth: 0
 
     - name: Install tools
       timeout-minutes: 10
@@ -803,7 +824,7 @@ jobs:
             python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
+          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
         "
 
     - name: Deploy
@@ -815,7 +836,7 @@ jobs:
       run: |
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - uses: actions/upload-artifact@v7
@@ -858,68 +879,6 @@ jobs:
           build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
         "
 
- main_julia:
-    name: Julia ${{ matrix.version }}
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'main_julia') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.10'
-          - '1'
-        arch:
-          - x64
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: julia-actions/setup-julia@v2
-      with:
-        version: ${{ matrix.version }}
-        arch: ${{ matrix.arch }}
-
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-linux-amd64
-        path: linux-release-artifacts
-
-    - name: Extract DuckDB Linux release artifacts
-      shell: bash
-      run: |
-        mkdir -p build/release/src
-        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
-        chmod +x build/release/duckdb
-        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
-        ls -lah build/release/duckdb
-        ls -lah build/release/src/libduckdb.so*
-
-    - name: Run Tests
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      shell: bash
-      run: |
-        JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
-        export JULIA_DUCKDB_LIBRARY
-        export JULIA_NUM_THREADS=2
-        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-        ls "$JULIA_DUCKDB_LIBRARY"
-        cd tools/juliapkg
-        julia --project -e "import Pkg; Pkg.test()"
-
-    - name: Format Check
-      if: ${{ always() && matrix.version == '1.10' }}
-      shell: bash
-      run: |
-        cd tools/juliapkg
-        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-        ./format_check.sh
-
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
@@ -930,6 +889,7 @@ jobs:
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
  windows:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'windows') }}
@@ -942,6 +902,7 @@ jobs:
       override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -977,9 +938,11 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
@@ -1208,8 +1171,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
@@ -1260,8 +1225,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
@@ -1293,8 +1260,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
@@ -1337,8 +1306,10 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: actions/setup-python@v6
@@ -1398,7 +1369,6 @@ jobs:
       - linux-release-cli
       - staged-extension-install
       - linux-musl-release-cli
-      - main_julia
       - swift
       - windows
       - osx
@@ -1433,8 +1403,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
-          GIT_REF: ${{ github.ref }}
-          INPUT_GIT_REF: ${{ inputs.git_ref }}
           OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
@@ -1448,96 +1416,46 @@ jobs:
             is_duckdb_repo=true
           fi
 
-          target_branch="$GIT_REF"
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_GIT_REF" ]]; then
-            target_branch="$INPUT_GIT_REF"
-          fi
-
           has_no_override=false
           if [[ "$EVENT_NAME" != "workflow_dispatch" || -z "$OVERRIDE_GIT_DESCRIBE" ]]; then
             has_no_override=true
           fi
 
-          run_vendor=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && "$has_no_override" == "true" ]]; then
-            run_vendor=true
-          fi
-
-          run_nightly=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" ]]; then
-            run_nightly=true
-          fi
-
-          run_python=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$has_no_override" == "true" ]]; then
-            run_python=true
+          run_release_dispatch=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$OVERRIDE_GIT_DESCRIBE" ]]; then
+            run_release_dispatch=true
           fi
 
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
-          echo "  git_ref=$GIT_REF"
-          echo "  input_git_ref=$INPUT_GIT_REF"
-          echo "  target_branch=$target_branch"
           echo "  override_git_describe=$OVERRIDE_GIT_DESCRIBE"
           echo "  release_status_success=$RELEASE_STATUS_SUCCESS"
           echo "  is_release_event=$is_release_event"
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  has_no_override=$has_no_override"
-          echo "  run_vendor=$run_vendor"
-          echo "  run_nightly=$run_nightly"
-          echo "  run_python=$run_python"
+          echo "  run_release_dispatch=$run_release_dispatch"
 
           {
-            echo "target_branch=$target_branch"
-            echo "run_vendor=$run_vendor"
-            echo "run_nightly=$run_nightly"
-            echo "run_python=$run_python"
+            echo "run_release_dispatch=$run_release_dispatch"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run ODBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
+      - name: Run release dispatch
+        if: ${{ always() && steps.summary-context.outputs.run_release_dispatch == 'true' }}
         shell: bash
         env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run JDBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run Nightly build status
-        if: ${{ always() && steps.summary-context.outputs.run_nightly == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"event": "${{ github.event_name }}", "should_publish": "true"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Call /dispatch
-        if: ${{ always() && steps.summary-context.outputs.run_python == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}", "pypi-index": "prod" }}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+          gh workflow run dispatch.yml \
+            --repo duckdb/duckdb-workflow-trigger \
+            --ref main \
+            --field event=core_ready \
+            --field duckdb_version="${{ needs.prepare.outputs.effective_git_describe }}" \
+            --field duckdb_commit="${{ needs.prepare.outputs.git_sha }}" \
+            --field status=success \
+            --field source_run_url="$SOURCE_RUN_URL" \
+            --field message="DuckDB Main CI release artifacts are ready"
 
       - name: Check CI status
         shell: bash

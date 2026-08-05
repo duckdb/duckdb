@@ -1,17 +1,18 @@
-#include "core_functions/scalar/list_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
+#include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/create_sort_key.hpp"
-#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -233,7 +234,8 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr.Function().GetStateSizeCallback()(aggr.Function());
+	AggregateStateInput state_input(aggr.Function(), aggr.BindInfo().get());
+	idx_t size = aggr.Function().GetStateSizeCallback()(state_input);
 	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
@@ -252,7 +254,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
-		aggr.Function().GetStateInitCallback()(aggr.Function(), states[i]);
+		aggr.Function().GetStateInitCallback()(state_input, &states[i], 1);
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -302,7 +304,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		auto key_type = aggr.Function().GetArguments()[0];
 
 		switch (key_type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(list_aggregate_types)
 		case PhysicalType::BOOL:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, bool>(
 			    result, state_vector.state_vector, count);
@@ -436,12 +438,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
-		if (!arguments[1]->IsFoldable()) {
-			throw InvalidInputException("Aggregate function name must be a constant");
-		}
-		// get the function name
-		Value function_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		function_name = function_value.ToString();
+		function_name = input.GetConstant(1).ToString();
 	}
 
 	// look up the aggregate function in the catalog
@@ -474,7 +471,10 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	// found a matching function, bind it as an aggregate
 	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
-		bound_function.SetErrorMode(best_function.GetErrorMode());
+		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
+			bound_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
+		}
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 

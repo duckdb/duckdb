@@ -1,0 +1,452 @@
+# name: test/sql/json/scalar/test_json_set.test
+# description: Test JSON set (set value at path, create if missing, overwrite if exists)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: add new key to object
+query T
+SELECT json_set('{"a":1}', '$.b', '2')
+----
+{"a":1,"b":2}
+
+# Overwrite existing key
+query T
+SELECT json_set('{"a":1}', '$.a', '99')
+----
+{"a":99}
+
+# JSON Pointer syntax works too
+query T
+SELECT json_set('{"a":1}', '/b', '2')
+----
+{"a":1,"b":2}
+
+# Nested path: set inside nested object
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a.y', '2')
+----
+{"a":{"x":1,"y":2}}
+
+# Nested path: overwrite inside nested object
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a.x', '99')
+----
+{"a":{"x":99}}
+
+# Create intermediate parents
+query T
+SELECT json_set('{}', '$.a.b.c', '1')
+----
+{"a":{"b":{"c":1}}}
+
+# Array index: overwrite element
+query T
+SELECT json_set('[1,2,3]', '$[1]', '99')
+----
+[1,99,3]
+
+# Array append with JSON Pointer /- syntax
+query T
+SELECT json_set('[1,2]', '/-', '3')
+----
+[1,2,3]
+
+# Set inside object in array
+query T
+SELECT json_set('[{"a":1}]', '$[0].b', '2')
+----
+[{"a":1,"b":2}]
+
+# Set different value types
+query T
+SELECT json_set('{}', '$.s', '"hello"')
+----
+{"s":"hello"}
+
+query T
+SELECT json_set('{}', '$.b', 'true')
+----
+{"b":true}
+
+query T
+SELECT json_set('{}', '$.n', 'null')
+----
+{"n":null}
+
+query T
+SELECT json_set('{}', '$.arr', '[1,2,3]')
+----
+{"arr":[1,2,3]}
+
+query T
+SELECT json_set('{}', '$.obj', '{"x":1}')
+----
+{"obj":{"x":1}}
+
+# Overwrite with different type (number to object)
+query T
+SELECT json_set('{"a":1}', '$.a', '{"nested":true}')
+----
+{"a":{"nested":true}}
+
+# Overwrite with different type (object to scalar)
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a', '42')
+----
+{"a":42}
+
+# Deeply nested set
+query T
+SELECT json_set('{"a":{"b":{"c":1}}}', '$.a.b.c', '99')
+----
+{"a":{"b":{"c":99}}}
+
+# Set on nested array path with JSON Pointer
+query T
+SELECT json_set('{"a":[1,[2,3],4]}', '/a/1/0', '99')
+----
+{"a":[1,[99,3],4]}
+
+# NULL handling: NULL in any argument produces NULL
+query T
+SELECT json_set(NULL, '$.a', '1')
+----
+NULL
+
+query T
+SELECT json_set('{"a":1}', NULL, '1')
+----
+NULL
+
+query T
+SELECT json_set('{"a":1}', '$.a', NULL)
+----
+NULL
+
+# Empty object
+query T
+SELECT json_set('{}', '$.a', '1')
+----
+{"a":1}
+
+# Set preserves existing keys
+query T
+SELECT json_set('{"a":1,"b":2,"c":3}', '$.b', '99')
+----
+{"a":1,"b":99,"c":3}
+
+# Bare key name (treated as top-level key)
+query T
+SELECT json_set('{"a":1}', 'b', '2')
+----
+{"a":1,"b":2}
+
+# Explicit ::JSON cast also works
+query T
+SELECT json_set('{"a":1}', '$.b', '2'::JSON)
+----
+{"a":1,"b":2}
+
+# Constant vector test
+query T
+SELECT json_set('{"a":1}', '$.b', '2') FROM range(3)
+----
+{"a":1,"b":2}
+{"a":1,"b":2}
+{"a":1,"b":2}
+
+# Table-based test
+statement ok
+CREATE TABLE entities (id INTEGER, data JSON, path VARCHAR, val JSON);
+
+statement ok
+INSERT INTO entities VALUES
+    (1, '{"a":1}', '$.b', '2'),
+    (2, '{"x":{"y":1}}', '$.x.z', '3'),
+    (3, '{"arr":[1,2]}', '/arr/-', '3');
+
+query IT
+SELECT id, json_set(data, path, val) FROM entities ORDER BY id
+----
+1	{"a":1,"b":2}
+2	{"x":{"y":1,"z":3}}
+3	{"arr":[1,2,3]}
+
+# Real-world: add relationship to entity
+query T
+SELECT json_set(
+    '{"typeName":"Column","attributes":{"name":"col1","dataType":"VARCHAR"}}',
+    '$.attributes.table',
+    '{"typeName":"Table","uniqueAttributes":{"qualifiedName":"t1"}}'
+)
+----
+{"typeName":"Column","attributes":{"name":"col1","dataType":"VARCHAR","table":{"typeName":"Table","uniqueAttributes":{"qualifiedName":"t1"}}}}
+
+# Composability: set then normalize
+query T
+SELECT json_normalize(json_set('{"z":1}', '$.a', '2'))
+----
+{"a":2,"z":1}
+
+# Quoted key with an escaped quote addresses the key a"b, not its sibling
+query T
+SELECT json_set('{"a\"b":1,"a\\":2}', '$."a\"b"', '9')
+----
+{"a\"b":9,"a\\":2}
+
+# Quoted key with an escaped backslash addresses the key a\
+query T
+SELECT json_set('{"a\\":1,"b":2}', '$."a\\"', '9')
+----
+{"a\\":9,"b":2}
+
+# Empty quoted keys are not valid JSONPath, same as json_extract
+statement error
+SELECT json_set('{"":1,"a":2}', '$.""', '9')
+----
+JSON path error
+
+# The empty string key is addressable with a JSON Pointer
+query T
+SELECT json_set('{"":1,"a":2}', '/', '9')
+----
+{"":9,"a":2}
+
+# Quoted key containing a tilde
+query T
+SELECT json_set('{"a~b":1}', '$."a~b"', '9')
+----
+{"a~b":9}
+
+# Unicode key
+query T
+SELECT json_set('{}', '$.日本', '1')
+----
+{"日本":1}
+
+# Set at the root replaces the whole document
+query T
+SELECT json_set('{"a":1}', '$', '{"b":2}')
+----
+{"b":2}
+
+# [#-1] addresses the last array element
+query T
+SELECT json_set('[1,2]', '$[#-1]', '9')
+----
+[1,9]
+
+# [#-1] works below the top level
+query T
+SELECT json_set('{"log":[{"v":1},{"v":2}]}', '$.log[#-1].v', '9')
+----
+{"log":[{"v":1},{"v":9}]}
+
+# Chained reverse indexes
+query T
+SELECT json_set('[[1,2],[3,4]]', '$[#-1][#-1]', '9')
+----
+[[1,2],[3,9]]
+
+# [#-0] is the array length, so set appends
+query T
+SELECT json_set('[1,2]', '$[#-0]', '9')
+----
+[1,2,9]
+
+# Setting at an index equal to the length also appends
+query T
+SELECT json_set('[1,2]', '$[2]', '9')
+----
+[1,2,9]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_set('[1,2]', '$[#-5]', '9')
+----
+[1,2]
+
+# Reverse index into an empty array is a no-op
+query T
+SELECT json_set('[]', '$[#-1]', '9')
+----
+[]
+
+# Reverse index into something that is not an array is a no-op
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a[#-1]', '9')
+----
+{"a":{"x":1}}
+
+# Negative indexes count from the back, same as json_extract
+query T
+SELECT json_set('[1,2]', '$[-1]', '9')
+----
+[1,9]
+
+# Setting a key inside a null root is a no-op
+query T
+SELECT json_set('null', '$.a', '1')
+----
+null
+
+# Setting a key inside a scalar root is a no-op
+query T
+SELECT json_set('1', '$.a', '2')
+----
+1
+
+# Setting below a scalar does not replace it
+query T
+SELECT json_set('{"a":1}', '$.a.b', '2')
+----
+{"a":1}
+
+# [#] is the array length, so set appends
+query T
+SELECT json_set('[1,2]', '$[#]', '3')
+----
+[1,2,3]
+
+# [#-] without digits is not a valid path
+statement error
+SELECT json_set('[1,2]', '$[#-]', '9')
+----
+JSON path error
+
+# A reverse offset too large to represent is not a valid path
+statement error
+SELECT json_set('[1,2]', '$[#-18446744073709551617]', '9')
+----
+JSON path error
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_set('{"a":1}', '$not_a_path', '2')
+----
+JSON path error
+
+# Constant modification path errors remain catchable by TRY
+query T
+SELECT TRY(json_set('{}', '$not_a_path', '1'))
+----
+NULL
+
+query T
+SELECT TRY(json_set('{"a":1}', '$.a[*]', '1'))
+----
+NULL
+
+# Unreachable modification calls must not fail before execution either
+query T
+SELECT CASE WHEN false THEN json_set('{}', '$not_a_path', '1') ELSE '{}'::JSON END
+----
+{}
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_set('{"a":[1,2]}', '$.a[*]', '9')
+----
+not supported
+
+# A missing array leg is created
+query T
+SELECT json_set('{}', '$.a[0]', '1')
+----
+{"a":[1]}
+
+# Created containers nest further
+query T
+SELECT json_set('{}', '$.a[0].b', '1')
+----
+{"a":[{"b":1}]}
+
+# Only index 0 is valid in a newly created array
+query T
+SELECT json_set('{}', '$.a[2]', '1')
+----
+{}
+
+# Append also creates a missing array leg
+query T
+SELECT json_set('{}', '$.a[#]', '1')
+----
+{"a":[1]}
+
+# An array leg does not convert an object root
+query T
+SELECT json_set('{}', '$[0]', '1')
+----
+{}
+
+# An array leg does not replace a scalar
+query T
+SELECT json_set('{"a":1}', '$.a[0]', '2')
+----
+{"a":1}
+
+# Creation below an appended element of an existing array
+query T
+SELECT json_set('{"a":[0]}', '$.a[1].b', '5')
+----
+{"a":[0,{"b":5}]}
+
+# Creation below an append leg of an existing array
+query T
+SELECT json_set('[]', '$[#].b', '5')
+----
+[{"b":5}]
+
+# Chained numeric indexes
+query T
+SELECT json_set('{"a":[[1]]}', '$.a[0][0]', '9')
+----
+{"a":[[9]]}
+
+# Quoted key containing a dot creates containers too
+query T
+SELECT json_set('{}', '$."a.b".c', '1')
+----
+{"a.b":{"c":1}}
+
+# A huge but representable index is out of range, not an error
+query T
+SELECT json_set('[1,2]', '$[9999999999999999999]', '9')
+----
+[1,2]
+
+# Unterminated array index is not a valid path
+statement error
+SELECT json_set('[1,2]', '$[1', '9')
+----
+JSON path error
+
+# The empty path is the JSON Pointer for the whole document, like $
+query T
+SELECT json_set('{"a":1}', '', '2')
+----
+2
+
+# Vectorized execution with NULLs mixed in
+query T
+SELECT json_set(d, '$.a', '1') FROM (VALUES ('{"x":1}'), (NULL), ('{}')) t(d)
+----
+{"x":1,"a":1}
+NULL
+{"a":1}
+
+# Malformed document
+statement error
+SELECT json_set('{bad', '$.a', '1')
+----
+Malformed JSON
+
+# Malformed value
+statement error
+SELECT json_set('{}', '$.a', '{bad')
+----
+Malformed JSON

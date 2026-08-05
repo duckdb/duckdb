@@ -24,6 +24,8 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 class LogicalAggregate;
+class LogicalColumnDataGet;
+class LogicalRecursiveCTE;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -83,6 +85,8 @@ public:
 	unordered_set<TableIndex> seen_readers;
 	bool everything_referenced = true;
 };
+
+enum class RemoveUnusedColumnsMode : uint8_t { APPLY, ANALYZE };
 
 class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
@@ -151,6 +155,8 @@ private:
 	//! The operators the not-distinct-dependent property propagated through. When an aggregate is removed, these
 	//! operators suddenly process many more rows, so their cardinality estimates have to be corrected.
 	vector<reference<LogicalOperator>> not_distinct_dependent_path;
+	bool allow_missing_cte_references = false;
+	RemoveUnusedColumnsMode mode = RemoveUnusedColumnsMode::APPLY;
 
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
@@ -158,6 +164,7 @@ private:
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void RemoveUnusedGroups(LogicalAggregate &aggr);
 	bool CanReplaceAggregateWithProjection(const LogicalAggregate &aggr);
@@ -166,6 +173,14 @@ private:
 	void VisitProjectionChildren(LogicalOperator &proj, AggregateDistinctDependent parent_distinct_dependent);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
+	void GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
+	                                 const unordered_set<ProjectionIndex> &required_columns,
+	                                 unordered_set<ProjectionIndex> &recursive_dependencies);
+	bool ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec, unordered_set<ProjectionIndex> &required_columns);
+	void ApplyRecursiveProjections(LogicalRecursiveCTE &rec, const unordered_set<ProjectionIndex> &required_columns);
+	void RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+	                                   const unordered_set<ProjectionIndex> &required_columns);
+	bool TryPruneRecursiveCTE(LogicalRecursiveCTE &rec);
 	void WritePushdownExtractColumns(
 	    ReferencedColumn &col,
 	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>

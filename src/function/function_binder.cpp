@@ -948,8 +948,10 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 
 // Drain all named argument and insert them in the correct position according to the function signature.
 // Also insert default arguments where needed.
-static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
-                             vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+// Returns the resolved name of every argument slot: the signature parameter name for positional slots, the
+// caller-provided name for named varargs, and an empty identifier for unnamed varargs.
+static vector<Identifier> ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
+                                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
 
 	const auto kwargs_offset = arguments.size();
@@ -961,7 +963,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 	identifier_set_t seen_names;
 
-	vector<unique_ptr<Expression>> trailing_kwargs;
+	vector<pair<Identifier, unique_ptr<Expression>>> trailing_kwargs;
 
 	// We now need to reorder them to match the function signature, before appending them to the argument list.
 	for (idx_t kwarg_idx = 0; kwarg_idx < named_arguments.size(); kwarg_idx++) {
@@ -991,7 +993,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 			}
 
 			// This is a named vararg argument, come back for it later
-			trailing_kwargs.push_back(std::move(arg));
+			trailing_kwargs.emplace_back(name, std::move(arg));
 			continue;
 		}
 
@@ -1026,27 +1028,39 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 		}
 	}
 
+	// Every slot covered by the signature is now filled, and sits at the position of its parameter.
+	vector<Identifier> argument_names(arguments.size());
+	for (idx_t i = 0; i < MinValue<idx_t>(arguments.size(), sig.GetParameterCount()); i++) {
+		argument_names[i] = sig.GetParameter(i).GetName();
+	}
+
 	// Now spread out any trailing named vararg arguments into the remaining argument slots, wherever they may be
 	idx_t kwarg_idx = 0;
 	for (idx_t slot_idx = kwargs_offset; slot_idx < arguments.size(); slot_idx++) {
 		if (!arguments[slot_idx]) {
-			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx++]);
+			argument_names[slot_idx] = trailing_kwargs[kwarg_idx].first;
+			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx].second);
+			kwarg_idx++;
 		}
 	}
 
 	// And if there are still some left, just append them to the end
 	idx_t kwargs_remaining = trailing_kwargs.size() - kwarg_idx;
 	while (kwargs_remaining) {
-		arguments.push_back(std::move(trailing_kwargs[kwarg_idx++]));
+		argument_names.push_back(trailing_kwargs[kwarg_idx].first);
+		arguments.push_back(std::move(trailing_kwargs[kwarg_idx].second));
+		kwarg_idx++;
 		kwargs_remaining--;
 	}
+
+	return argument_names;
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	ResolveArguments(function, arguments, named_arguments);
+	auto argument_names = ResolveArguments(function, arguments, named_arguments);
 
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(function);
@@ -1065,7 +1079,7 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		BindScalarFunctionInput input(context, bound_function, arguments, binder);
+		BindScalarFunctionInput input(context, bound_function, arguments, argument_names, binder);
 		bind_info = bound_function.GetBindCallback()(input);
 	}
 
@@ -1121,7 +1135,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	ResolveArguments(function, children, named_arguments);
+	auto argument_names = ResolveArguments(function, children, named_arguments);
 
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(function);
@@ -1139,7 +1153,7 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.GetCallbacks().HasBindCallback()) {
-		BindAggregateFunctionInput input(context, bound_function, children);
+		BindAggregateFunctionInput input(context, bound_function, children, argument_names);
 		bind_info = bound_function.GetCallbacks().GetBindCallback()(input);
 
 		// we may have lost some arguments in the bind
@@ -1198,7 +1212,7 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
 	// Reorder named args
-	ResolveArguments(function, children, named_arguments);
+	auto argument_names = ResolveArguments(function, children, named_arguments);
 
 	BoundWindowFunction bound_function(function);
 
@@ -1215,7 +1229,7 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		BindWindowFunctionInput input(context, bound_function, children, orders, arg_orders);
+		BindWindowFunctionInput input(context, bound_function, children, argument_names, orders, arg_orders);
 		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));

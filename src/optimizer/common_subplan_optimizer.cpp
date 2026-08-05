@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -64,7 +65,7 @@ class PlanSignatureTableIndexMap {
 public:
 	explicit PlanSignatureTableIndexMap(ArenaAllocator &allocator_p)
 	    : allocator(allocator_p), table_index_map(allocator), to_canonical_table_index(allocator),
-	      restore_original_table_index(allocator) {
+	      restore_original_table_index(allocator), restore_original_table_filter_index(allocator) {
 	}
 
 public:
@@ -89,7 +90,9 @@ private:
 			// Clear temporary data structures
 			to_canonical_table_index.clear();
 			restore_original_table_index.clear();
+			restore_original_table_filter_index.clear();
 			column_ids.clear();
+			chunk_column_ids.clear();
 			projection_ids.clear();
 			table_indices.clear();
 			projection_maps.clear();
@@ -267,6 +270,25 @@ private:
 					}
 				}
 
+				for (auto &entry : get.table_filters) {
+					D_ASSERT(entry.GetIndex().GetIndex() < column_ids.size());
+					const auto canonical_index =
+					    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
+					if (!restore_original_table_filter_index.emplace(canonical_index, entry.GetIndex()).second) {
+						restore_original_table_filter_index.clear();
+						return false;
+					}
+				}
+				if (!restore_original_table_filter_index.empty()) {
+					TableFilterSet remapped_filters;
+					for (auto &entry : get.table_filters) {
+						const auto canonical_index =
+						    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
+						remapped_filters.PushFilter(canonical_index, entry.TakeFilter());
+					}
+					get.table_filters = std::move(remapped_filters);
+				}
+
 				// Store mapping for base tables
 				auto &column_index_map = table_index_map.at(table_indices[0]);
 				if (projection_ids.empty()) {
@@ -287,6 +309,47 @@ private:
 				get.GetMutableColumnIds() = std::move(column_ids);
 				D_ASSERT(get.projection_ids.empty());
 				get.projection_ids = std::move(projection_ids);
+				if (!restore_original_table_filter_index.empty()) {
+					TableFilterSet remapped_filters;
+					for (auto &entry : get.table_filters) {
+						remapped_filters.PushFilter(restore_original_table_filter_index.at(entry.GetIndex()),
+						                            entry.TakeFilter());
+					}
+					get.table_filters = std::move(remapped_filters);
+				}
+				break;
+			}
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
+			auto &get = op.Cast<LogicalColumnDataGet>();
+			switch (TYPE) {
+			case ConversionType::TO_CANONICAL: {
+				D_ASSERT(chunk_column_ids.empty());
+				chunk_column_ids = get.GetColumnIds();
+
+				unordered_set<column_t> selected_columns;
+				for (auto column_id : chunk_column_ids) {
+					if (!selected_columns.insert(column_id).second) {
+						return false;
+					}
+				}
+
+				// Expose all collection columns so pruning does not change the scan signature.
+				vector<column_t> all_column_ids;
+				all_column_ids.reserve(get.chunk_types.size());
+				for (idx_t column_id = 0; column_id < get.chunk_types.size(); column_id++) {
+					all_column_ids.push_back(column_id);
+				}
+				get.SetColumnIds(std::move(all_column_ids));
+
+				auto &column_index_map = table_index_map.at(table_indices[0]);
+				for (idx_t column_idx = 0; column_idx < chunk_column_ids.size(); column_idx++) {
+					column_index_map.Insert(ProjectionIndex(column_idx), ProjectionIndex(chunk_column_ids[column_idx]));
+				}
+				break;
+			}
+			case ConversionType::RESTORE_ORIGINAL:
+				get.SetColumnIds(std::move(chunk_column_ids));
 				break;
 			}
 		}
@@ -378,6 +441,8 @@ private:
 	//! Temporary map from original table index to canonical table index (and reverse)
 	arena_unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	arena_unordered_map<TableIndex, TableIndex> restore_original_table_index;
+	//! Temporary map from canonical table filter index to original table filter index
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> restore_original_table_filter_index;
 	//! Temporary vector to store table indices
 	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
@@ -385,6 +450,7 @@ private:
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
+	vector<column_t> chunk_column_ids;
 	vector<ProjectionIndex> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;
@@ -906,8 +972,11 @@ public:
 					new_bindings = cte_refs.back()->GetColumnBindings();
 				}
 				D_ASSERT(old_bindings[subplan_idx].size() == new_bindings.size());
+				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
 					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
+					D_ASSERT(inserted.second);
 				}
 			}
 
@@ -1056,6 +1125,11 @@ private:
 		const auto &table_index_map = state.table_index_map.GetMap();
 		arena_vector<ColumnBinding> canonical_bindings(state.allocator);
 		for (auto &cb : original_bindings) {
+			auto generated_entry = generated_binding_map.find(cb);
+			if (generated_entry != generated_binding_map.end()) {
+				canonical_bindings.push_back(generated_entry->second);
+				continue;
+			}
 			const auto canonical_table_index = to_canonical_table_index.at(cb.table_index);
 			auto &table_map = table_index_map.at(cb.table_index);
 			if (table_map.Empty<ConversionType::TO_CANONICAL>()) {
@@ -1161,6 +1235,8 @@ private:
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
 	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
+	//! Mapping from generated CTE bindings to canonical bindings
+	column_binding_map_t<ColumnBinding> generated_binding_map;
 	//! Minimum CTE index created by this optimizer
 	TableIndex min_cte_idx;
 };

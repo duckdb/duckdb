@@ -212,7 +212,7 @@
       {
         "id": 100,
         "name": "types",
-        "type": "identifier_map_t<ShreddingType>",
+        "type": "unordered_map<string, ShreddingType>",
         "serialize_property": "types.operator*()",
         "deserialize_property": "types.operator*()"
       }

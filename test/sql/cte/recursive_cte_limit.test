@@ -1,0 +1,81 @@
+# name: test/sql/cte/recursive_cte_limit.test
+# description: LIMIT can stop recursive CTE input before caching operators fill a vector
+# group: [cte]
+
+statement ok
+SET threads=1
+
+statement ok
+SET max_execution_time=5000
+
+# A selective filter must yield its small chunks to LIMIT instead of accumulating a full vector.
+query I
+WITH RECURSIVE t(i) AS (
+	SELECT 0
+	UNION ALL
+	SELECT i + 1 FROM t
+)
+SELECT i FROM t WHERE i % 2000 = 0 LIMIT 10;
+----
+0
+2000
+4000
+6000
+8000
+10000
+12000
+14000
+16000
+18000
+
+# Original reproducer from issue #20838.
+query I
+WITH RECURSIVE
+	"@loop" ("$label", "$output", "0") AS (
+		(SELECT '$'::VARCHAR AS "$label", NULL::BIGINT AS "$output", NULL::BIGINT AS "0")
+		UNION ALL
+		(WITH
+			"0" AS (SELECT NULL FROM "@loop" WHERE "$label" IS NOT DISTINCT FROM '$'),
+			"1" (i) AS (SELECT 0 AS i FROM "0"),
+			"2" (i) AS (SELECT "0" AS i FROM "@loop" WHERE "$label" IS NOT DISTINCT FROM '$loop0'),
+			"3" (i) AS (
+				SELECT i FROM "1"
+				UNION ALL
+				SELECT i FROM "2"
+			),
+			"4" (i) AS (SELECT (i + 1) % 1000 AS i FROM "3"),
+			"5" ("$output") AS (SELECT i FROM "4"),
+			"6" ("$label", i) AS (SELECT '$loop0', i FROM "4")
+			SELECT NULL::VARCHAR, "$output"::BIGINT, NULL::BIGINT FROM "5"
+			UNION ALL
+			SELECT "$label"::VARCHAR, NULL::BIGINT, i::BIGINT FROM "6"
+		)
+	)
+SELECT "$output" FROM "@loop" WHERE "$label" IS NULL LIMIT 10;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+# Requesting a complete vector remains correct.
+query I
+SELECT count(*) FROM (
+	WITH RECURSIVE t(i) AS (
+		SELECT 0
+		UNION ALL
+		SELECT i + 1 FROM t
+	)
+	SELECT i FROM t LIMIT 2048
+);
+----
+2048
+
+statement ok
+RESET max_execution_time

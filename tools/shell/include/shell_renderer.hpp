@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
@@ -162,7 +163,7 @@ public:
 
 class ShellLogStorage : public duckdb::LogStorage {
 public:
-	explicit ShellLogStorage(ShellState &state) : shell_highlight(state) {};
+	explicit ShellLogStorage(ShellState &state);
 
 	~ShellLogStorage() override = default;
 
@@ -183,10 +184,13 @@ protected:
 private:
 	ShellHighlight shell_highlight;
 
-	// Logs that have already been printed to avoid spamming the shell
+	// Warnings/errors that have already been printed, to avoid spamming the shell (loud logs only)
 	duckdb::unordered_set<uint64_t> printed_logs;
 
-	// lock to ensure thread safety of the printed_logs set
+	// Monotonic zero point for elapsed time in compact log lines.
+	duckdb::TimePoint start_time;
+
+	// lock to ensure thread safety of the printed_logs set and the elapsed-time state
 	mutable duckdb::mutex lock;
 };
 

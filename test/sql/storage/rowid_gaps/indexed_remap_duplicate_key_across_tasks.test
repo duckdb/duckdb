@@ -1,0 +1,79 @@
+# name: test/sql/storage/rowid_gaps/indexed_remap_duplicate_key_across_tasks.test
+# description: two vacuum tasks remap rowids of the same duplicated index key in disjoint windows
+# group: [rowid_gaps]
+
+# Duplicate key g=7 appears in two vacuum task windows.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_remap_tasks.db' AS remap_tasks (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE remap_tasks.t AS
+SELECT i, CASE WHEN i IN (1, 3, 8193, 8195) THEN 7 ELSE i + 100000 END AS g
+FROM range(16384) tbl(i);
+
+statement ok
+CHECKPOINT remap_tasks;
+
+statement ok
+CREATE UNIQUE INDEX t_i_idx ON remap_tasks.t(i);
+
+statement ok
+CREATE INDEX t_g_idx ON remap_tasks.t(g);
+
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_tasks.t WHERE g = 7 ORDER BY i;
+----
+1	1
+3	3
+8193	8193
+8195	8195
+
+statement ok
+DELETE FROM remap_tasks.t WHERE i % 4 = 0;
+
+statement ok
+FORCE CHECKPOINT remap_tasks;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('remap_tasks.t');
+----
+6
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM remap_tasks.t;
+----
+0	14335	12288
+
+# The gap between task windows survives.
+query I
+SELECT count(*) FROM remap_tasks.t WHERE rowid >= 6144 AND rowid < 8192;
+----
+0
+
+query II
+SELECT rowid, i FROM remap_tasks.t WHERE g = 7 ORDER BY i;
+----
+0	1
+2	3
+8192	8193
+8194	8195
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_tasks.t WHERE g = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM remap_tasks.t WHERE i = 8195;
+----
+8194	8195
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_tasks.t WHERE i = 8195;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*

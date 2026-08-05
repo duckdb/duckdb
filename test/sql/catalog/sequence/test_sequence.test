@@ -81,12 +81,12 @@ NULL
 statement error
 SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 statement error
 SELECT currval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 # can't create a sequence that already exists
 statement error
@@ -493,12 +493,12 @@ seq2	2
 statement error
 SELECT s, nextval(s) FROM strings
 ----
-<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 statement error
 SELECT s, currval(s) FROM strings
 ----
-<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 # this will also cause an error if the sequence does not exist
 statement ok
@@ -507,7 +507,7 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 statement error
 SELECT s, nextval(s) FROM strings
 ----
-<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 # currval causes error for new sequence
 statement ok

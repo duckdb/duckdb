@@ -1,0 +1,98 @@
+# name: test/sql/function/variant/variant_keys_shredded.test
+# description: Test variant_keys with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_keys_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER, obj STRUCT(y INTEGER, x INTEGER))';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+    -- partially shredded
+	(1, {'z': 9, 'a': 1, 'b': 2, 'obj': {'x': 10, 'y': 20}}::VARIANT),
+	-- VARIANT_NULL
+	(2, {'a': 10, 'b': NULL, 'obj': NULL}::VARIANT),
+	-- missing value in shredded schema
+	(3, {'a': 20}::VARIANT),
+	-- root with different type than shredded schema
+	(4, 42::VARIANT),
+	-- SQL-NULL
+	(5, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_keys(v) FROM variants ORDER BY id;
+----
+[a, b, obj, z]
+[a, b, obj]
+[a]
+[]
+NULL
+
+query I
+SELECT variant_keys(v, 'obj') FROM variants ORDER BY id;
+----
+[x, y]
+[]
+NULL
+NULL
+NULL
+
+query I
+SELECT variant_keys(v, ['', 'obj', 'missing']) FROM variants ORDER BY id;
+----
+[[a, b, obj, z], [x, y], NULL]
+[[a, b, obj], [], NULL]
+[[a], NULL, NULL]
+[[], NULL, NULL]
+NULL
+
+# --- Fully consistent object VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
+
+statement ok
+CREATE TABLE fully_shredded_objects(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded_objects VALUES
+	(1, {'a': 1, 'b': 2}::VARIANT),
+	(2, {'a': 3, 'b': 4}::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded_objects;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_keys(v) FROM fully_shredded_objects ORDER BY id;
+----
+[a, b]
+[a, b]
+NULL

@@ -1,14 +1,15 @@
+#include "core_functions/aggregate/histogram_helpers.hpp"
+#include "core_functions/aggregate/nested_functions.hpp"
+#include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "core_functions/aggregate/histogram_helpers.hpp"
-#include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/algorithm.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -348,7 +349,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 		return GetHistogramBinFunction<HIST>(LogicalType::DOUBLE);
 	}
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binned_histogram_types)
 	case PhysicalType::BOOL:
 		return GetHistogramBinFunction<HistogramFunctor, bool, HIST>(type);
 	case PhysicalType::UINT8:

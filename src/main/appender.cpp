@@ -80,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetChildCardinality(chunk.size() + 1);
+	chunk.SetCardinalityUnsafe(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -395,6 +395,7 @@ void BaseAppender::FlushChunk() {
 	if (chunk.size() == 0) {
 		return;
 	}
+	chunk.SetChildCardinality(chunk.size());
 	collection->Append(chunk);
 	chunk.Reset();
 	if (ShouldFlush()) {

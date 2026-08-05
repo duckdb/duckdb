@@ -22,8 +22,8 @@ struct FileOpenerInfo;
 struct CreateSecretInfo;
 class FileOpener;
 
-//! Whether a secret is persistent or temporary
-enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
+//! The lifetime of a secret
+enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT, TRANSACTION };
 
 //! Input passed to a CreateSecretFunction
 struct CreateSecretInput {
@@ -41,7 +41,7 @@ struct CreateSecretInput {
 	case_insensitive_map_t<Value> options;
 	//! how to handle conflicts
 	OnCreateConflict on_conflict;
-	//! persistence of secret
+	//! lifetime of the secret
 	SecretPersistType persist_type;
 };
 
@@ -159,6 +159,18 @@ protected:
 	Identifier name;
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The KeyValueSecret is a class that implements a Secret as a set of key -> values. This class can be used
