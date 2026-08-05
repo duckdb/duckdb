@@ -115,8 +115,9 @@ vector<LogicalType> AggregateStateSpilling::ExportedTypes(const TupleDataLayout 
 }
 
 void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDataLayout &layout,
-                                          TupleDataCollection &source, ColumnDataCollection &exported,
-                                          ArenaAllocator &allocator) {
+                                          TupleDataCollection &source,
+                                          vector<unique_ptr<ColumnDataCollection>> &exported, idx_t exported_radix_bits,
+                                          const vector<LogicalType> &exported_types, ArenaAllocator &allocator) {
 	if (source.Count() == 0) {
 		return;
 	}
@@ -132,8 +133,10 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 	Vector state_addresses(LogicalType::POINTER);
 	auto state_address_data = FlatVector::GetDataMutable<data_ptr_t>(state_addresses);
 
-	ColumnDataAppendState append_state;
-	exported.InitializeAppend(append_state);
+	const auto hash_col_idx = layout.ColumnCount() - 1;
+	DataChunk target_chunk;
+	target_chunk.Initialize(Allocator::Get(context), exported_types);
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 
 	TupleDataScanState scan_state;
 	source.InitializeScan(scan_state, TupleDataPinProperties::DESTROY_AFTER_DONE);
@@ -157,7 +160,44 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 			aggr_offset += aggr.payload_size;
 		}
 		exported_chunk.SetChildCardinality(count);
-		exported.Append(append_state, exported_chunk);
+
+		// route the rows to their exported partitions. rows of one source partition can only go
+		// to the partitions covering the same hash prefix, so the number of targets is small
+		const auto hashes = FlatVector::GetData<hash_t>(group_chunk.data[hash_col_idx]);
+		idx_t partition_of[STANDARD_VECTOR_SIZE];
+		for (idx_t i = 0; i < count; i++) {
+			partition_of[i] = RadixPartitioning::ApplyMask(hashes[i], exported_radix_bits);
+		}
+		idx_t routed = 0;
+		while (routed < count) {
+			// find the first row that has not been routed yet, and route all rows of its partition
+			idx_t partition_idx = DConstants::INVALID_INDEX;
+			idx_t sel_count = 0;
+			for (idx_t i = 0; i < count; i++) {
+				if (partition_of[i] == DConstants::INVALID_INDEX) {
+					continue;
+				}
+				if (partition_idx == DConstants::INVALID_INDEX) {
+					partition_idx = partition_of[i];
+				}
+				if (partition_of[i] == partition_idx) {
+					sel.set_index(sel_count++, i);
+					partition_of[i] = DConstants::INVALID_INDEX;
+				}
+			}
+			routed += sel_count;
+			auto &target = exported[partition_idx];
+			if (!target) {
+				target = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), exported_types);
+			}
+			if (sel_count == count) {
+				target->Append(exported_chunk);
+				break;
+			}
+			target_chunk.Reset();
+			target_chunk.Slice(exported_chunk, sel, sel_count);
+			target->Append(target_chunk);
+		}
 	}
 }
 

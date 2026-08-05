@@ -137,9 +137,12 @@ public:
 private:
 	//! Sink radix bits to initialize with
 	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
+
+public:
 	//! Maximum Sink radix bits (independent of threads)
 	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 8;
 
+private:
 	//! Current thread-global sink radix bits
 	atomic<idx_t> sink_radix_bits;
 	//! Maximum Sink radix bits (set based on number of threads, if not external)
@@ -204,6 +207,8 @@ public:
 	unique_ptr<PartitionedTupleData> uncombined_data;
 	//! Whether the aggregate states can be exported to spillable storage under memory pressure
 	bool spill_states;
+	//! Whether any thread has hit aggregate state pressure (all threads then drain their states)
+	atomic<bool> state_pressured;
 	//! The types of the exported form (group columns, hash, one column per aggregate state)
 	vector<LogicalType> exported_types;
 	//! Uncombined exported data, aligned one-to-one with the partitions of uncombined_data
@@ -235,6 +240,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
       max_partition_size(0) {
 	spill_states = AggregateStateSpilling::CanSpill(radix_ht.GetLayout());
+	state_pressured = false;
 	if (spill_states) {
 		exported_types = AggregateStateSpilling::ExportedTypes(radix_ht.GetLayout());
 	}
@@ -632,7 +638,10 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 		// The abandoned data has grown to more radix bits since we last exported, grow to match
 		GrowExportedData(context, gstate, lstate.abandoned_exported_data, partition_count);
 	}
-	lstate.abandoned_exported_data.resize(partition_count);
+	if (lstate.abandoned_exported_data.size() < partition_count) {
+		lstate.abandoned_exported_data.resize(partition_count);
+	}
+	auto exported_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(lstate.abandoned_exported_data.size());
 	ArenaAllocator scratch_allocator(Allocator::Get(context));
 	auto &partitions = lstate.abandoned_data->GetPartitions();
 	for (idx_t partition_idx = 0; partition_idx < partition_count; partition_idx++) {
@@ -640,12 +649,21 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 		if (partition.Count() == 0) {
 			continue;
 		}
-		auto &exported = lstate.abandoned_exported_data[partition_idx];
-		if (!exported) {
-			exported = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), gstate.exported_types);
-		}
-		AggregateStateSpilling::ExportStates(context, gstate.radix_ht.GetLayout(), partition, *exported,
+		AggregateStateSpilling::ExportStates(context, gstate.radix_ht.GetLayout(), partition,
+		                                     lstate.abandoned_exported_data, exported_radix_bits, gstate.exported_types,
 		                                     scratch_allocator);
+	}
+	// The finalize phase imports and combines one exported partition at a time, so their size
+	// must stay well below the memory limit: grow the exported partitions when they get too big
+	idx_t exported_bytes = 0;
+	for (auto &exported : lstate.abandoned_exported_data) {
+		exported_bytes += exported ? exported->SizeInBytes() : 0;
+	}
+	while (exported_bytes / lstate.abandoned_exported_data.size() > gstate.GetThreadLimit() / 8 &&
+	       exported_radix_bits + 2 <= RadixHTConfig::MAXIMUM_FINAL_SINK_RADIX_BITS) {
+		GrowExportedData(context, gstate, lstate.abandoned_exported_data, lstate.abandoned_exported_data.size() * 4);
+		exported_radix_bits += 2;
+		gstate.state_pressured = true;
 	}
 	// The source rows were destroyed as they were exported, start over with an empty collection
 	lstate.abandoned_data =
@@ -799,6 +817,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 			// partition at a time, so the partitions must shrink to fit their states in memory
 			gstate.config.SetRadixBitsToExternal();
 			ht.SetRadixBits(gstate.config.GetRadixBits());
+			gstate.state_pressured = true;
 		}
 		ht.Abandon();
 		gstate.any_abandoned = true;
@@ -845,9 +864,10 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		lstate.abandoned_data = std::move(lstate_data);
 	}
 
-	if (gstate.spill_states && !lstate.abandoned_exported_data.empty()) {
-		// This thread has exported states before, so the arena must be drained completely:
-		// everything it produced is in abandoned_data now, export it and free the arena
+	if (gstate.spill_states && (!lstate.abandoned_exported_data.empty() || gstate.state_pressured)) {
+		// This thread has exported states before, or another thread hit state pressure: drain
+		// completely, so that all rows travel in the exported form and none reference the arena.
+		// Everything this thread produced is in abandoned_data now.
 		ExportAbandonedData(context.client, gstate, lstate);
 		ht.GetAggregateAllocator()->FreeAll();
 	}
@@ -896,7 +916,31 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
 	D_ASSERT(!gstate.finalized);
 
-	if (gstate.uncombined_data) {
+	if (!gstate.uncombined_exported_data.empty() &&
+	    (!gstate.uncombined_data ||
+	     gstate.uncombined_exported_data.size() != gstate.uncombined_data->PartitionCount())) {
+		// The exported side grew to more partitions than the native side, which only happens when
+		// state pressure made every thread drain: all rows travel in the exported form
+		D_ASSERT(gstate.state_pressured);
+		D_ASSERT(!gstate.uncombined_data || gstate.uncombined_data->Count() == 0);
+		gstate.count_before_combining = 0;
+		const auto n_partitions = gstate.uncombined_exported_data.size();
+		gstate.partitions.reserve(n_partitions);
+		for (idx_t i = 0; i < n_partitions; i++) {
+			auto empty_data =
+			    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(),
+			                                   MemoryTag::HASH_TABLE, nullptr, context);
+			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(empty_data)));
+			auto &partition = *gstate.partitions.back();
+			partition.exported_data = std::move(gstate.uncombined_exported_data[i]);
+			if (partition.exported_data) {
+				gstate.count_before_combining += partition.exported_data->Count();
+				gstate.max_partition_size =
+				    MaxValue(gstate.max_partition_size, 2 * partition.exported_data->SizeInBytes());
+			}
+		}
+		gstate.uncombined_exported_data.clear();
+	} else if (gstate.uncombined_data) {
 		auto &uncombined_data = *gstate.uncombined_data;
 		gstate.count_before_combining = uncombined_data.Count();
 

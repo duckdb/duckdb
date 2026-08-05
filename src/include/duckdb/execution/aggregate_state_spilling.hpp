@@ -30,9 +30,11 @@ public:
 	//! The types of the exported form: the layout's group columns (including the hash),
 	//! followed by one column per aggregate state
 	static vector<LogicalType> ExportedTypes(const TupleDataLayout &layout);
-	//! Rewrite native rows into exported rows, appending them sequentially to `exported`
+	//! Rewrite native rows into exported rows, routing them to the exported partitions by the
+	//! given radix bits. Only the partitions covered by the source's hash prefix are appended to.
 	static void ExportStates(ClientContext &context, const TupleDataLayout &layout, TupleDataCollection &source,
-	                         ColumnDataCollection &exported, ArenaAllocator &allocator);
+	                         vector<unique_ptr<ColumnDataCollection>> &exported, idx_t exported_radix_bits,
+	                         const vector<LogicalType> &exported_types, ArenaAllocator &allocator);
 	//! Rewrite exported rows back into native rows, allocating variable size state data from
 	//! `allocator`. The native rows are produced one chunk-sized collection at a time, so that the
 	//! whole partition is never materialized alongside its exported copy.
