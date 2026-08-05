@@ -166,9 +166,11 @@ def run_paired_benchmark(
         return failed_benchmark_result(benchmark, old_failure, new_failure, None, initial_count, 0)
 
     initial_measurement = benchmark_measurement(old_initial, new_initial)
-    is_candidate = initial_measurement.ratio > REGRESSION_LIMIT
+    is_candidate = (
+        initial_measurement.ratio < 1.0 - NOISE_THRESHOLD or initial_measurement.ratio > 1.0 + NOISE_THRESHOLD
+    )
     if verbose:
-        decision = "regression candidate" if is_candidate else "initial sampling complete"
+        decision = "additional sampling required" if is_candidate else "within noise threshold"
         print(
             f"initial sampling: {benchmark}: {initial_count} paired runs, "
             f"median PR/base {initial_measurement.ratio:.3f}x ({decision})"
@@ -203,21 +205,29 @@ def run_paired_benchmark(
 
     confirmation_measurement = benchmark_measurement(old_confirmation, new_confirmation)
     lower_bound, upper_bound = confirmation_measurement.ratio_interval
-    if lower_bound > REGRESSION_LIMIT:
-        outcome = OUTCOME_CONFIRMED_REGRESSION
-        decision = "confirmed regression"
-    elif upper_bound <= REGRESSION_LIMIT:
+    if confirmation_measurement.ratio > REGRESSION_LIMIT:
+        if lower_bound > REGRESSION_LIMIT:
+            outcome = OUTCOME_CONFIRMED_REGRESSION
+            decision = "confirmed regression"
+        else:
+            outcome = OUTCOME_UNCONFIRMED_REGRESSION
+            decision = "regression inconclusive"
+    elif confirmation_measurement.ratio > 1.0 + NOISE_THRESHOLD:
         outcome = OUTCOME_NO_REGRESSION
-        decision = "regression rejected"
+        decision = "slower below regression limit"
+    elif confirmation_measurement.ratio < 1.0 - NOISE_THRESHOLD:
+        outcome = OUTCOME_NO_REGRESSION
+        decision = "faster"
     else:
-        outcome = OUTCOME_UNCONFIRMED_REGRESSION
-        decision = "regression inconclusive"
+        outcome = OUTCOME_NO_REGRESSION
+        decision = "within noise threshold"
 
     if verbose:
         print(
-            f"regression confirmation: {benchmark}: {confirmation_count} paired runs, "
+            f"confirmation sampling: {benchmark}: {confirmation_count} paired runs, "
+            f"median PR/base {confirmation_measurement.ratio:.3f}x; "
             f"{CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio: {lower_bound:.3f}x to {upper_bound:.3f}x; "
-            f"regression limit: {REGRESSION_LIMIT:.3f}x ({decision})"
+            f"{decision}"
         )
 
     return BenchmarkResult(
@@ -316,8 +326,8 @@ def report_unconfirmed(result: BenchmarkResult, suite: str, summary_lines: List[
     delta = regression_delta(measurement)
     confidence = confidence_text(result)
     message = (
-        f"{suite}: {result.benchmark} looked regressive during initial sampling but remains inconclusive "
-        f"({delta}); {CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio {confidence}, "
+        f"{suite}: {result.benchmark} has a confirmation median above the regression limit but remains "
+        f"inconclusive ({delta}); {CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio {confidence}, "
         f"regression limit {REGRESSION_LIMIT:.3f}x"
     )
     emit_github_warning("Inconclusive regression benchmark", message)
@@ -359,10 +369,10 @@ def classify_result(result: BenchmarkResult) -> str:
         return BUCKET_UNCONFIRMED
 
     assert result.measurement is not None
-    lower_ratio, upper_ratio = result.measurement.ratio_interval
-    if lower_ratio > 1.0 + NOISE_THRESHOLD:
+    ratio = result.measurement.ratio
+    if ratio > 1.0 + NOISE_THRESHOLD:
         return BUCKET_SLOWER
-    if upper_ratio < 1.0 - NOISE_THRESHOLD:
+    if ratio < 1.0 - NOISE_THRESHOLD:
         return BUCKET_FASTER
     return BUCKET_UNCHANGED
 
@@ -451,7 +461,7 @@ def print_bucket(title: str, rows: List[BenchmarkRow], unchanged_count: int = 0)
     print("")
     print(title)
     if title == "UNCHANGED / NOISE":
-        print(f"{unchanged_count} benchmarks whose {CONFIDENCE_PERCENTAGE}% interval overlaps +/-2%")
+        print(f"{unchanged_count} benchmarks whose median change is within +/-2%")
     elif rows:
         render_table(rows)
     else:
@@ -514,8 +524,12 @@ def print_benchmark_report(
         f"confirmation sampling: ceil({CONFIRMATION_TARGET_SECONDS:g}s / faster-side median), "
         f"clamped to {MIN_CONFIRMATION_RUNS}-{MAX_CONFIRMATION_RUNS} runs per binary"
     )
+    print(f"confirmation candidates: initial median outside +/-{NOISE_THRESHOLD * 100:.0f}%")
     print(f"regression limit: {REGRESSION_LIMIT:.3f}x (+{(REGRESSION_LIMIT - 1.0) * 100:.0f}%)")
-    print(f"confidence: {CONFIDENCE_PERCENTAGE}%; noise threshold: +/-{NOISE_THRESHOLD * 100:.0f}%")
+    print(
+        f"reporting: confirmation median with +/-{NOISE_THRESHOLD * 100:.0f}% noise threshold; "
+        f"regressions require {CONFIDENCE_PERCENTAGE}% confidence"
+    )
     print(f"result: {result_text}")
     print_geomean_summary(old_geomean, new_geomean)
     print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], len(buckets[BUCKET_UNCHANGED]))

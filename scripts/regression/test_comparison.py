@@ -117,8 +117,31 @@ print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
     if label == "old":
         timing = 1.0
-    elif invocation < 2 or run % 2 == 0:
+    elif invocation < 2 or run % 3 != 0:
         timing = 1.3
+    else:
+        timing = 1.0
+    print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
+"""
+
+    noisy_improvement_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+counter_path = Path(os.environ["BENCHMARK_COUNTER_DIR"]) / f"{label}.count"
+invocation = int(counter_path.read_text(encoding="utf-8")) if counter_path.exists() else 0
+counter_path.write_text(str(invocation + 1), encoding="utf-8")
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    if label == "old":
+        timing = 1.0
+    elif invocation < 2 or run % 3 != 0:
+        timing = 0.95
     else:
         timing = 1.0
     print(f"fake.benchmark\\t{run}\\t{timing}", file=sys.stderr)
@@ -134,7 +157,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
     def run_regression_test(
         self,
         runner_source,
-        new_timing="0.95",
+        new_timing="1.0",
         extra_args=None,
         ci=False,
         create_cache=False,
@@ -201,7 +224,45 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5"])
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertIn("initial sampling: 10 runs per binary in 2 batches of 5", plain_output)
+        self.assertIn("within noise threshold", plain_output)
+        self.assertIn("geomean (initial 10 samples): 1.000s -> 1.000s  +0.0%", plain_output)
+
+    def test_noise_boundaries_do_not_receive_confirmation_samples(self):
+        for new_timing in ("0.98", "1.02"):
+            with self.subTest(new_timing=new_timing):
+                process, order = self.run_regression_test(self.stable_runner_source, new_timing=new_timing)
+                self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+                self.assertEqual(order, ["old:5", "new:5", "new:5", "old:5"])
+
+    def test_improvement_receives_confirmation_and_is_classified_by_median(self):
+        process, order = self.run_regression_test(self.noisy_improvement_runner_source)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(
+            order,
+            ["old:5", "new:5", "new:5", "old:5", "old:8", "new:8", "new:7", "old:7"],
+        )
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn("confirmation sampling: fake.benchmark: 15 paired runs", plain_output)
+        self.assertIn("95% CI for PR/base median ratio: 0.950x to 1.000x; faster", plain_output)
+        self.assertRegex(plain_output, r"FASTER\nbenchmark[^\n]*\n-+[^\n]*\nfake\s+1\.000s\s+0\.950s")
         self.assertIn("geomean (initial 10 samples): 1.000s -> 0.950s  -5.0%", plain_output)
+
+    def test_slowdown_below_regression_limit_receives_confirmation(self):
+        process, order = self.run_regression_test(self.stable_runner_source, new_timing="1.08", ci=True)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(
+            order,
+            ["old:5", "new:5", "new:5", "old:5", "old:8", "new:8", "new:7", "old:7"],
+        )
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertIn(
+            "1.080x; 95% CI for PR/base median ratio: 1.080x to 1.080x; slower below regression limit", plain_output
+        )
+        self.assertRegex(
+            plain_output,
+            r"SLOWER BELOW REGRESSION LIMIT\nbenchmark[^\n]*\n-+[^\n]*\nfake\s+1\.000s\s+1\.080s",
+        )
+        self.assertNotIn("::warning title=Inconclusive regression benchmark::", plain_output)
 
     def test_stable_regression_is_confirmed_from_independent_samples(self):
         process, order = self.run_regression_test(self.stable_runner_source, new_timing="1.3")
@@ -211,9 +272,9 @@ print("not-a-valid-timing-row", file=sys.stderr)
             ["old:5", "new:5", "new:5", "old:5", "old:8", "new:8", "new:7", "old:7"],
         )
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("regression confirmation: fake.benchmark: 15 paired runs", plain_output)
+        self.assertIn("confirmation sampling: fake.benchmark: 15 paired runs", plain_output)
         self.assertIn("95% CI for PR/base median ratio: 1.300x to 1.300x", plain_output)
-        self.assertIn("regression limit: 1.100x (confirmed regression)", plain_output)
+        self.assertIn("confirmed regression", plain_output)
         self.assertRegex(plain_output, r"fake\s+1\.000s\s+1\.300s\s+\+0\.300s\s+\+30\.0%\s+10\+15")
 
     def test_nofail_reports_confirmed_regression_without_failing(self):
@@ -255,7 +316,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
             ["old:5", "new:5", "new:5", "old:5", "old:8", "new:8", "new:7", "old:7"],
         )
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("regression rejected", plain_output)
+        self.assertIn("within noise threshold", plain_output)
         self.assertIn("geomean (initial 10 samples): 1.000s -> 1.300s  +30.0%", plain_output)
         self.assertIn("INCONCLUSIVE REGRESSION CANDIDATES\n0 benchmarks", plain_output)
         self.assertNotIn("::warning title=Inconclusive regression benchmark::", plain_output)
