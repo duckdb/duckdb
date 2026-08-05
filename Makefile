@@ -684,7 +684,7 @@ define ensure_apt_packages
 	fi
 endef
 
-APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=30
 
 .PHONY: toolsci
 
