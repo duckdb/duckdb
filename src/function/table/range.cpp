@@ -56,7 +56,7 @@ struct RangeFunctionBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
 		names.emplace_back("generate_series");
@@ -222,7 +222,7 @@ struct RangeDateTimeBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.push_back(LogicalType::TIMESTAMP);
 	if (GENERATE_SERIES) {
 		names.emplace_back("generate_series");

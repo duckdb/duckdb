@@ -205,9 +205,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
-			vector<string> operator_names;
-			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, operator_names);
-			return_names = StringsToIdentifiers(operator_names);
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
@@ -246,9 +244,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 			                      table_function.name);
 		}
-		vector<string> bind_names;
-		bind_data = table_function.bind(context, bind_input, return_types, bind_names);
-		return_names = StringsToIdentifiers(bind_names);
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
 			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
 			// found
