@@ -50,7 +50,6 @@ private:
 	ClientContext &context;
 	vector<ColumnBinding> preferred_on_probe_side;
 	vector<TableIndex> active_recursive_cte_indexes;
-	bool inside_correlated_recursive_anchor = false;
 };
 
 } // namespace duckdb
