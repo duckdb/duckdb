@@ -37,6 +37,7 @@ struct CacheValidationInfo {
 	//! Last modified time. Zero/non-finite if the storage backend does not provide one.
 	timestamp_t last_modified = timestamp_t(0);
 	//! Freshness deadline for files without validators (e.g., HTTP Cache-Control).
+	//! The deadline is inclusive: cached data may be served while the current time is at or before it.
 	//! If unset (infinite), the storage backend does not provide expiry information.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
 	idx_t file_size = 0;
@@ -95,7 +96,6 @@ public:
 	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 
-	//! Validator-only variant (version tag/last modified), e.g., used by the Parquet metadata cache
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 	//! Variant that can also validate files without validators using the freshness deadline and file size

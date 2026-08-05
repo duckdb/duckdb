@@ -41,8 +41,7 @@ bool SimpleTrackingFileSystem::CanSeek() {
 
 FileMetadata SimpleTrackingFileSystem::Stats(FileHandle &handle) {
 	auto metadata = LocalFileSystem::Stats(handle);
-	metadata.version_tag =
-	    StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
+	metadata.version_tag = StringUtil::Format("%lld:%lld", metadata.file_size, metadata.last_modification_time.value);
 	return metadata;
 }
 

@@ -72,7 +72,7 @@ struct FileMetadata {
 	//! Optional: tag that uniquely identifies the version of the file (e.g., HTTP ETag).
 	//! Empty if the storage backend does not provide one.
 	string version_tag;
-	//! Optional: time until which cached data of the file may be served without revalidation,
+	//! Optional: time until which (inclusive) cached data of the file may be served without revalidation,
 	//! e.g., derived from HTTP Cache-Control/Expires.
 	//! If unset (infinite), the storage backend does not provide information on when cached data expires.
 	timestamp_t cache_valid_until = timestamp_t::infinity();
