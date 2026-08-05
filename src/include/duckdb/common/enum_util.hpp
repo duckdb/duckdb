@@ -578,6 +578,8 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
+enum class UniqueKeyProof : uint8_t;
+
 enum class VacuumIndexStrategy : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
@@ -1427,6 +1429,9 @@ const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value);
 
 template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
+
+template<>
+const char* EnumUtil::ToChars<UniqueKeyProof>(UniqueKeyProof value);
 
 template<>
 const char* EnumUtil::ToChars<VacuumIndexStrategy>(VacuumIndexStrategy value);
@@ -2292,6 +2297,9 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);
 
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
+
+template<>
+UniqueKeyProof EnumUtil::FromString<UniqueKeyProof>(const char *value);
 
 template<>
 VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value);
