@@ -78,7 +78,8 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
+	auto &config = ClientConfig::GetConfig(context);
+	return is_explain_analyze || config.enable_profiler || config.enable_samply_markers;
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
@@ -292,7 +293,8 @@ idx_t QueryProfiler::GetBytesWritten() const {
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
-	return MetricsTimer(query_metrics, key, IsEnabled());
+	auto &config = ClientConfig::GetConfig(context);
+	return MetricsTimer(query_metrics, key, IsEnabled(), config.enable_samply_markers);
 }
 
 string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {

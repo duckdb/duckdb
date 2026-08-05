@@ -214,6 +214,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
 	    "enable_profiling",
+	    "enable_samply_markers", // platform-specific setting
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
 	    "extension_directories",

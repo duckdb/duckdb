@@ -30,6 +30,8 @@ typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, Prepa
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
+	//! If query profiler scopes are emitted as Samply marker spans.
+	bool enable_samply_markers = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
 	string profiler_print_format = "query_tree";
