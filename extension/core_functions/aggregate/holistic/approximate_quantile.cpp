@@ -269,6 +269,10 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 		if (!count_entry.IsValid() || !min_entry.IsValid() || !max_entry.IsValid() || !centroid_list.IsValid()) {
 			throw InvalidInputException("Invalid approx_quantile state - the state fields cannot be NULL");
 		}
+		if (count_entry.GetValue() != 0 && centroid_list.GetListLength() == 0) {
+			throw InvalidInputException(
+			    "Invalid approx_quantile state - non-zero count requires at least one centroid");
+		}
 		arena_vector<duckdb_tdigest::Centroid> centroids(input.allocator);
 		centroids.reserve(centroid_list.GetListLength());
 		for (const auto centroid_entry : centroid_list.GetChildValues()) {

@@ -171,6 +171,38 @@ WHERE list_extract(list_value, 1) = 101;
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 
+# IN filters over projected lists still use the primitive leaf Bloom filter
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] IN (101, 103);
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT list_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] IN (101, 103);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# NULL candidates do not block Bloom pruning for the non-NULL candidates
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] IN (101, NULL);
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT list_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] IN (101, NULL);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # Deeply nested lists
 query I
 SELECT count(*)
@@ -216,6 +248,22 @@ EXPLAIN ANALYZE
 SELECT struct_value, payload
 FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
 WHERE struct_value.level_1.level_2.value IS NOT DISTINCT FROM 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# IN filters over deeply nested structs follow the same leaf
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value IN (101, 103);
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT struct_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value IN (101, 103);
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 

@@ -65,6 +65,12 @@ SET SEARCH_PATH = 'does_not_exist';
 statement ok
 SET SCHEMA = 'test';
 
+statement ok
+SET SCHEMA 'main';
+
+statement ok
+SET SCHEMA 'test';
+
 statement error
 SET SCHEMA = 'test,test2';
 ----

@@ -68,6 +68,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -1552,10 +1553,9 @@ static optional_ptr<ColumnReader> TryGetBloomFilterSource(ColumnReader &column_r
 	return TryGetBloomFilterSource(*expr_reader.child_readers[0]);
 }
 
-static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
-                                  optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
-	auto &expr = *expr_filter.expr;
+static bool TryGetComparisonBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                            optional_ptr<ColumnReader> &leaf_reader,
+                                            unique_ptr<TableFilter> &leaf_filter) {
 	auto comparison_type = expr.GetExpressionType();
 	if (!BoundComparisonExpression::IsComparison(expr) ||
 	    (comparison_type != ExpressionType::COMPARE_EQUAL &&
@@ -1587,10 +1587,55 @@ static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter
 	}
 
 	auto leaf_comparison = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
+	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
 	    make_uniq<BoundConstantExpression>(constant->GetValue()));
 	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
 	return true;
+}
+
+static bool TryGetInBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                    optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+	    expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &in_expr = expr.Cast<BoundOperatorExpression>();
+	auto &children = in_expr.GetChildren();
+	if (children.size() <= 1 || !TryGetNestedBloomFilterLeaf(column_reader, *children[0], leaf_reader)) {
+		return false;
+	}
+
+	vector<Value> values;
+	values.reserve(children.size() - 1);
+	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
+		if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return false;
+		}
+		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull()) {
+			continue;
+		}
+		if (leaf_reader->Type() != constant.type()) {
+			return false;
+		}
+		values.push_back(constant);
+	}
+	if (values.empty()) {
+		return false;
+	}
+
+	auto column = make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL);
+	leaf_filter =
+	    make_uniq<ExpressionFilter>(ExpressionFilter::CreateInExpression(std::move(column), std::move(values)));
+	return true;
+}
+
+static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
+                                  optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
+	auto &expr = *expr_filter.expr;
+	return TryGetComparisonBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter) ||
+	       TryGetInBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter);
 }
 
 ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
