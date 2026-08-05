@@ -381,37 +381,7 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 	}
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
-	auto &column_ids = state.GetColumnIds();
-	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
-		return false;
-	}
-	if (!RefersToSameObject(node.GetNode(), *this)) {
-		throw InternalException("RowGroup::InitializeScanWithOffset segment node mismatch");
-	}
-
-	state.row_group = node;
-	state.vector_index = vector_offset;
-	auto row_start = node.GetRowStart();
-	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
-	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
-	if (state.max_row_group_row == 0) {
-		// exceeded row groups to scan
-		return false;
-	}
-	D_ASSERT(!state.column_scans.empty());
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		const auto &column = column_ids[i];
-		auto &column_data = GetColumn(column);
-		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
-		state.column_scans[i].scan_options = &state.GetOptions();
-	}
-	return true;
-}
-
-bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
-	auto &column_ids = state.GetColumnIds();
+bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
 	auto &filters = state.GetFilterInfo();
 	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
 		return false;
@@ -419,17 +389,41 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	auto row_start = node.GetRowStart();
+	D_ASSERT(!state.prepared_vector.prepared);
+	state.prepared_vector.Reset();
 	state.row_group = node;
-	state.vector_index = 0;
+	state.vector_index = vector_offset;
+	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
 	if (state.max_row_group_row == 0) {
+		// exceeded row groups to scan
 		return false;
 	}
 	D_ASSERT(!state.column_scans.empty());
+	return true;
+}
+
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
+	if (!InitializeScanInternal(state, node, vector_offset)) {
+		return false;
+	}
+	const auto &column_ids = state.GetColumnIds();
+	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
-		auto &column_data = GetColumn(column);
+		auto &column_data = GetColumn(column_ids[i]);
+		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
+		state.column_scans[i].scan_options = &state.GetOptions();
+	}
+	return true;
+}
+
+bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
+	if (!InitializeScanInternal(state, node, 0)) {
+		return false;
+	}
+	const auto &column_ids = state.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScan(state.column_scans[i]);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
@@ -651,8 +645,13 @@ void RowGroup::CommitDrop() {
 	drop_state.FinalizeCommit();
 }
 
-void RowGroup::NextVector(CollectionScanState &state) {
+void RowGroup::FinishVector(CollectionScanState &state) {
 	state.vector_index++;
+	state.prepared_vector.Reset();
+}
+
+void RowGroup::NextVector(CollectionScanState &state) {
+	FinishVector(state);
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
@@ -802,20 +801,40 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) {
+	if (!GetBlockManager().Prefetch()) {
+		return false;
+	}
 	const auto &column_ids = state.GetColumnIds();
-	auto &filter_info = state.GetFilterInfo();
-	auto &transaction = options.transaction;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		GetColumn(column_ids[i]).InitializePrefetch(prefetch_state, state.column_scans[i], row_count);
+	}
+	return true;
+}
+
+void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) {
+	PrefetchState prefetch_state;
+	if (!RegisterScanIO(state, row_count, prefetch_state)) {
+		return;
+	}
+	GetBlockManager().buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+}
+
+bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
+	auto &prepared = state.prepared_vector;
+	if (prepared.prepared) {
+		return true;
+	}
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
 			// exceeded the amount of rows to scan
-			return;
+			return false;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
-		SelectionVector sample_sel(STANDARD_VECTOR_SIZE);
+		auto &sample_sel = prepared.sample_sel;
 
 		// check the sampling info if we have to sample this chunk
 		if (state.GetSamplingInfo().do_system_sample) {
@@ -837,7 +856,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					has_sample_selection = true;
 				}
 			} else {
-				// Percentage-based system sampling: original behavior
+				// percentage based system sampling
 				if (state.random.NextRandom() > sampling_info.sample_rate) {
 					NextVector(state);
 					continue;
@@ -860,128 +879,142 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		}
 		state.rows_scanned += count;
 
-		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
-			PrefetchState prefetch_state;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
-			}
-			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
-		}
+		prepared.prepared = true;
+		prepared.max_count = max_count;
+		prepared.visible_count = count;
+		prepared.has_sample_selection = has_sample_selection;
+		prepared.sample_count = sample_count;
+		return true;
+	}
+}
 
-		bool has_filters = filter_info.HasFilters();
-		if (count == max_count && !has_filters) {
-			// scan all vectors completely: full scan without deletions or table filters
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = options.update_type;
-				// pass max_count explicitly so we never read past the row count we captured at scan
-				// init time (concurrent inserts can grow the column past max_count)
-				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
-				if (has_sample_selection) {
-					result.data[i].Slice(sample_sel, sample_count);
-				}
-			}
+void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+	const auto &column_ids = state.GetColumnIds();
+	auto &filter_info = state.GetFilterInfo();
+	auto &transaction = options.transaction;
+	auto &prepared = state.prepared_vector;
+	D_ASSERT(prepared.prepared);
+	idx_t max_count = prepared.max_count;
+	idx_t count = prepared.visible_count;
+	bool has_sample_selection = prepared.has_sample_selection;
+	idx_t sample_count = prepared.sample_count;
+	auto &sample_sel = prepared.sample_sel;
+
+	bool has_filters = filter_info.HasFilters();
+	if (count == max_count && !has_filters) {
+		// scan all vectors completely: full scan without deletions or table filters
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			const auto &column = column_ids[i];
+			auto &col_data = GetColumn(column);
+			state.column_scans[i].update_scan_type = options.update_type;
+			// pass max_count explicitly, concurrent inserts can grow the column past the count captured at scan init
+			col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
 			if (has_sample_selection) {
-				count = sample_count;
+				result.data[i].Slice(sample_sel, sample_count);
 			}
-		} else {
-			// partial scan: we have deletions or table filters
-			idx_t approved_tuple_count = count;
-			SelectionVector sel;
-			SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
-			if (has_sample_selection && count != max_count) {
-				approved_tuple_count =
-				    IntersectSelections(state.valid_sel, count, sample_sel, sample_count, intersect_sel);
-				if (approved_tuple_count == 0) {
-					NextVector(state);
-					continue;
-				}
-				sel.Initialize(intersect_sel);
-			} else if (has_sample_selection) {
-				approved_tuple_count = sample_count;
-				sel.Initialize(sample_sel);
-			} else if (count != max_count) {
-				sel.Initialize(state.valid_sel);
-			} else {
-				sel.Initialize(nullptr);
-			}
-			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
-			//! get runtime statistics
-			auto adaptive_filter = filter_info.GetAdaptiveFilter();
-			auto filter_state = filter_info.BeginFilter();
-			if (has_filters) {
-				auto &filter_list = filter_info.GetFilterList();
-				const auto &permutation = adaptive_filter->GetPermutation();
-				for (idx_t i = 0; i < filter_list.size(); i++) {
-					auto filter_idx = permutation[i];
-					auto &filter = filter_list[filter_idx];
-					if (filter.IsAlwaysTrue()) {
-						// this filter is always true - skip it
-						continue;
-					}
-					auto &table_filter_state = *filter.filter_state;
-
-					const auto scan_idx = filter.scan_column_index;
-					const auto column_idx = filter.table_column_index;
-
-					auto &result_vector = result.data[scan_idx];
-					if (approved_tuple_count == 0) {
-						auto &col_data = GetColumn(column_idx);
-						col_data.Skip(state.column_scans[scan_idx]);
-						continue;
-					}
-					auto &col_data = GetColumn(column_idx);
-					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
-					                approved_tuple_count, filter.filter, table_filter_state);
-				}
-				for (auto &table_filter : filter_list) {
-					if (table_filter.IsAlwaysTrue()) {
-						continue;
-					}
-					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
-				}
-			}
+		}
+		if (has_sample_selection) {
+			count = sample_count;
+		}
+	} else {
+		// partial scan: we have deletions or table filters
+		idx_t approved_tuple_count = count;
+		SelectionVector sel;
+		SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
+		if (has_sample_selection && count != max_count) {
+			approved_tuple_count = IntersectSelections(state.valid_sel, count, sample_sel, sample_count, intersect_sel);
 			if (approved_tuple_count == 0) {
-				// all rows were filtered out by the table filters
-				D_ASSERT(has_filters);
-				result.Reset();
-				// skip this vector in all the scans that were not scanned yet
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto &col_idx = column_ids[i];
-					if (has_filters && filter_info.ColumnHasFilters(i)) {
-						continue;
-					}
-					auto &col_data = GetColumn(col_idx);
-					col_data.Skip(state.column_scans[i]);
-				}
-				filter_info.EndFilter(filter_state);
-				state.vector_index++;
-				continue;
+				NextVector(state);
+				return;
 			}
-			//! Now we use the selection vector to fetch data for the other columns.
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (has_filters && filter_info.ColumnHasFilters(i)) {
-					// column has already been scanned as part of the filtering process
+			sel.Initialize(intersect_sel);
+		} else if (has_sample_selection) {
+			approved_tuple_count = sample_count;
+			sel.Initialize(sample_sel);
+		} else if (count != max_count) {
+			sel.Initialize(state.valid_sel);
+		} else {
+			sel.Initialize(nullptr);
+		}
+		//! first, we scan the columns with filters, fetch their data and generate a selection vector.
+		auto adaptive_filter = filter_info.GetAdaptiveFilter();
+		auto filter_state = filter_info.BeginFilter();
+		if (has_filters) {
+			auto &filter_list = filter_info.GetFilterList();
+			const auto &permutation = adaptive_filter->GetPermutation();
+			for (idx_t i = 0; i < filter_list.size(); i++) {
+				auto filter_idx = permutation[i];
+				auto &filter = filter_list[filter_idx];
+				if (filter.IsAlwaysTrue()) {
 					continue;
 				}
-				auto &column = column_ids[i];
-				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-				                approved_tuple_count);
+				auto &table_filter_state = *filter.filter_state;
+
+				const auto scan_idx = filter.scan_column_index;
+				const auto column_idx = filter.table_column_index;
+
+				auto &result_vector = result.data[scan_idx];
+				if (approved_tuple_count == 0) {
+					auto &col_data = GetColumn(column_idx);
+					col_data.Skip(state.column_scans[scan_idx]);
+					continue;
+				}
+				auto &col_data = GetColumn(column_idx);
+				col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
+				                approved_tuple_count, filter.filter, table_filter_state);
+			}
+			for (auto &table_filter : filter_list) {
+				if (table_filter.IsAlwaysTrue()) {
+					continue;
+				}
+				result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+			}
+		}
+		if (approved_tuple_count == 0) {
+			// all rows were filtered out by the table filters
+			D_ASSERT(has_filters);
+			result.Reset();
+			// skip this vector in all the scans that were not scanned yet
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_idx = column_ids[i];
+				if (has_filters && filter_info.ColumnHasFilters(i)) {
+					continue;
+				}
+				auto &col_data = GetColumn(col_idx);
+				col_data.Skip(state.column_scans[i]);
 			}
 			filter_info.EndFilter(filter_state);
-
-			D_ASSERT(approved_tuple_count > 0);
-			count = approved_tuple_count;
+			FinishVector(state);
+			return;
 		}
-		result.SetChildCardinality(count);
-		state.vector_index++;
-		break;
+		//! Now we use the selection vector to fetch data for the other columns.
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (has_filters && filter_info.ColumnHasFilters(i)) {
+				// column has already been scanned as part of the filtering process
+				continue;
+			}
+			auto &column = column_ids[i];
+			auto &col_data = GetColumn(column);
+			state.column_scans[i].update_scan_type = options.update_type;
+			col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+			                approved_tuple_count);
+		}
+		filter_info.EndFilter(filter_state);
+
+		D_ASSERT(approved_tuple_count > 0);
+		count = approved_tuple_count;
+	}
+	result.SetChildCardinality(count);
+	FinishVector(state);
+}
+
+void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
+	while (PrepareScan(options, state)) {
+		PrefetchScanIO(state, state.prepared_vector.max_count);
+		ProcessPreparedScan(options, state, result);
+		if (result.size() > 0) {
+			return;
+		}
 	}
 }
 

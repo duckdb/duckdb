@@ -244,6 +244,8 @@ enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
 
+enum class FileWriteMode : uint8_t;
+
 enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
@@ -579,6 +581,8 @@ enum class UnionInvalidReason : uint8_t;
 enum class VacuumIndexStrategy : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
+
+enum class VariantComparisonType : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
 
@@ -922,6 +926,9 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
+
+template<>
+const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value);
@@ -1428,6 +1435,9 @@ template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
 
 template<>
+const char* EnumUtil::ToChars<VariantComparisonType>(VariantComparisonType value);
+
+template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
@@ -1781,6 +1791,9 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
+
+template<>
+FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
 
 template<>
 FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *value);
@@ -2285,6 +2298,9 @@ VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value)
 
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
+
+template<>
+VariantComparisonType EnumUtil::FromString<VariantComparisonType>(const char *value);
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);

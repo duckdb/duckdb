@@ -4,9 +4,6 @@
 
 require vector_size 2048
 
-# Failing randomly in CI: https://github.com/duckdb/duckdb/actions/runs/30609212704/job/91088291869#step:8:440
-mode skip flaky
-
 statement ok
 PRAGMA threads=4;
 

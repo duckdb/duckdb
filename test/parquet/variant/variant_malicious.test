@@ -7,3 +7,8 @@ statement error
 SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/variant_malicious.parquet');
 ----
 IO Error: Data corruption detected, read of length_in_bytes (1) would exceed buffer capacity
+
+statement error
+SELECT variant_bytes_to_variant('\x01\x02\xC8\x05\x0A\x00\x00\x00\x00\x00'::BLOB);
+----
+IO Error: Corrupted VARIANT 'metadata' buffer, the next dictionary offset is smaller than the last offset

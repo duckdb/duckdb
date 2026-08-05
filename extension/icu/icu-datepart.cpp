@@ -16,127 +16,127 @@
 namespace duckdb {
 
 struct ICUDatePart : public ICUDateFunc {
-	typedef int64_t (*part_bigint_t)(icu::Calendar *calendar, const uint64_t micros);
-	typedef double (*part_double_t)(icu::Calendar *calendar, const uint64_t micros);
+	typedef int64_t (*part_bigint_t)(Calendar *calendar, const uint64_t micros);
+	typedef double (*part_double_t)(Calendar *calendar, const uint64_t micros);
 
 	// Date part adapters
-	static int64_t ExtractEra(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_ERA);
+	static int64_t ExtractEra(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_ERA);
 	}
 
-	static int64_t ExtractYear(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_YEAR);
+	static int64_t ExtractYear(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_YEAR);
 	}
 
-	static int64_t ExtractDecade(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDecade(Calendar *calendar, const uint64_t micros) {
 		return ExtractYear(calendar, micros) / 10;
 	}
 
-	static int64_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractCentury(Calendar *calendar, const uint64_t micros) {
 		const auto era = ExtractEra(calendar, micros);
 		const auto cccc = ((ExtractYear(calendar, micros) - 1) / 100) + 1;
 		return era > 0 ? cccc : -cccc;
 	}
 
-	static int64_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMillenium(Calendar *calendar, const uint64_t micros) {
 		const auto era = ExtractEra(calendar, micros);
 		const auto mmmm = ((ExtractYear(calendar, micros) - 1) / 1000) + 1;
 		return era > 0 ? mmmm : -mmmm;
 	}
 
-	static int64_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_MONTH) + 1;
+	static int64_t ExtractMonth(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_MONTH) + 1;
 	}
 
-	static int64_t ExtractQuarter(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_MONTH) / Interval::MONTHS_PER_QUARTER + 1;
+	static int64_t ExtractQuarter(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_MONTH) / Interval::MONTHS_PER_QUARTER + 1;
 	}
 
-	static int64_t ExtractDay(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_DATE);
+	static int64_t ExtractDay(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_DATE);
 	}
 
-	static int64_t ExtractDayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDayOfWeek(Calendar *calendar, const uint64_t micros) {
 		// [Sun(0), Sat(6)]
-		return ExtractField(calendar, UCAL_DAY_OF_WEEK) - UCAL_SUNDAY;
+		return ExtractField(calendar, CAL_DAY_OF_WEEK) - CAL_SUNDAY;
 	}
 
-	static int64_t ExtractISODayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractISODayOfWeek(Calendar *calendar, const uint64_t micros) {
 		// [Mon(1), Sun(7)]
-		return 1 + (ExtractField(calendar, UCAL_DAY_OF_WEEK) + 7 - UCAL_MONDAY) % 7;
+		return 1 + (ExtractField(calendar, CAL_DAY_OF_WEEK) + 7 - CAL_MONDAY) % 7;
 	}
 
-	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_MONDAY);
-		calendar->setMinimalDaysInFirstWeek(4);
-		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
+	static int64_t ExtractWeek(Calendar *calendar, const uint64_t micros) {
+		calendar->SetFirstDayOfWeek(CAL_MONDAY);
+		calendar->SetMinimalDaysInFirstWeek(4);
+		return ExtractField(calendar, CAL_WEEK_OF_YEAR);
 	}
 
-	static int64_t ExtractISOYear(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_MONDAY);
-		calendar->setMinimalDaysInFirstWeek(4);
-		return ExtractField(calendar, UCAL_YEAR_WOY);
+	static int64_t ExtractISOYear(Calendar *calendar, const uint64_t micros) {
+		calendar->SetFirstDayOfWeek(CAL_MONDAY);
+		calendar->SetMinimalDaysInFirstWeek(4);
+		return ExtractField(calendar, CAL_YEAR_WOY);
 	}
 
-	static int64_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_MONDAY);
-		calendar->setMinimalDaysInFirstWeek(4);
-		const auto iyyy = ExtractField(calendar, UCAL_YEAR_WOY);
-		const auto ww = ExtractField(calendar, UCAL_WEEK_OF_YEAR);
+	static int64_t ExtractYearWeek(Calendar *calendar, const uint64_t micros) {
+		calendar->SetFirstDayOfWeek(CAL_MONDAY);
+		calendar->SetMinimalDaysInFirstWeek(4);
+		const auto iyyy = ExtractField(calendar, CAL_YEAR_WOY);
+		const auto ww = ExtractField(calendar, CAL_WEEK_OF_YEAR);
 		return iyyy * 100 + ((iyyy > 0) ? ww : -ww);
 	}
 
-	static int64_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_DAY_OF_YEAR);
+	static int64_t ExtractDayOfYear(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_DAY_OF_YEAR);
 	}
 
-	static int64_t ExtractHour(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_HOUR_OF_DAY);
+	static int64_t ExtractHour(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_HOUR_OF_DAY);
 	}
 
-	static int64_t ExtractMinute(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_MINUTE);
+	static int64_t ExtractMinute(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_MINUTE);
 	}
 
-	static int64_t ExtractSecond(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractField(calendar, UCAL_SECOND);
+	static int64_t ExtractSecond(Calendar *calendar, const uint64_t micros) {
+		return ExtractField(calendar, CAL_SECOND);
 	}
 
-	static int64_t ExtractMillisecond(icu::Calendar *calendar, const uint64_t micros) {
-		return ExtractSecond(calendar, micros) * Interval::MSECS_PER_SEC + ExtractField(calendar, UCAL_MILLISECOND);
+	static int64_t ExtractMillisecond(Calendar *calendar, const uint64_t micros) {
+		return ExtractSecond(calendar, micros) * Interval::MSECS_PER_SEC + ExtractField(calendar, CAL_MILLISECOND);
 	}
 
-	static int64_t ExtractMicrosecond(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMicrosecond(Calendar *calendar, const uint64_t micros) {
 		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
 	}
 
-	static double ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
-		UErrorCode status = U_ZERO_ERROR;
-		auto result = calendar->getTime(status) / Interval::MSECS_PER_SEC;
+	static double ExtractEpoch(Calendar *calendar, const uint64_t micros) {
+		// the milliseconds carry the fraction of a second, so the division has to keep it
+		auto result = double(calendar->GetTime()) / double(Interval::MSECS_PER_SEC);
 		result += micros / double(Interval::MICROS_PER_SEC);
 		return result;
 	}
 
-	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
-		auto millis = ExtractField(calendar, UCAL_ZONE_OFFSET);
-		millis += ExtractField(calendar, UCAL_DST_OFFSET);
+	static int64_t ExtractTimezone(Calendar *calendar, const uint64_t micros) {
+		auto millis = ExtractField(calendar, CAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, CAL_DST_OFFSET);
 		return millis / Interval::MSECS_PER_SEC;
 	}
 
-	static int64_t ExtractTimezoneHour(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractTimezoneHour(Calendar *calendar, const uint64_t micros) {
 		auto secs = ExtractTimezone(calendar, micros);
 		return secs / Interval::SECS_PER_HOUR;
 	}
 
-	static int64_t ExtractTimezoneMinute(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractTimezoneMinute(Calendar *calendar, const uint64_t micros) {
 		auto secs = ExtractTimezone(calendar, micros);
 		return (secs % Interval::SECS_PER_HOUR) / Interval::SECS_PER_MINUTE;
 	}
 
 	//	PG uses doubles for JDs so we can only use them with other double types
-	static double ExtractJulianDay(icu::Calendar *calendar, const uint64_t micros) {
+	static double ExtractJulianDay(Calendar *calendar, const uint64_t micros) {
 		//	We need days + fraction
-		auto days = ExtractField(calendar, UCAL_JULIAN_DAY);
+		auto days = ExtractField(calendar, CAL_JULIAN_DAY);
 		auto frac = ExtractHour(calendar, micros);
 
 		frac *= Interval::MINS_PER_HOUR;
@@ -214,30 +214,29 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 	}
 
-	static date_t MakeLastDay(icu::Calendar *calendar, const uint64_t micros) {
+	static date_t MakeLastDay(Calendar *calendar, const uint64_t micros) {
 		// Set the calendar to midnight on the last day of the month
-		calendar->set(UCAL_MILLISECOND, 0);
-		calendar->set(UCAL_SECOND, 0);
-		calendar->set(UCAL_MINUTE, 0);
-		calendar->set(UCAL_HOUR_OF_DAY, 0);
+		calendar->Set(CAL_MILLISECOND, 0);
+		calendar->Set(CAL_SECOND, 0);
+		calendar->Set(CAL_MINUTE, 0);
+		calendar->Set(CAL_HOUR_OF_DAY, 0);
 
-		UErrorCode status = U_ZERO_ERROR;
-		const auto dd = calendar->getActualMaximum(UCAL_DATE, status);
-		if (U_FAILURE(status)) {
-			throw InternalException("Unable to extract ICU last day.");
+		const auto dd = calendar->GetActualMaximum(CAL_DATE);
+		if (calendar->HasFailed()) {
+			throw InternalException("Unable to extract last day.");
 		}
 
-		calendar->set(UCAL_DATE, dd);
+		calendar->Set(CAL_DATE, dd);
 
 		//	Offset to UTC
-		auto millis = calendar->getTime(status);
-		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
-		millis += ExtractField(calendar, UCAL_DST_OFFSET);
+		auto millis = calendar->GetTime();
+		millis += ExtractField(calendar, CAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, CAL_DST_OFFSET);
 
 		return Date::EpochToDate(millis / Interval::MSECS_PER_SEC);
 	}
 
-	static string_t MonthName(icu::Calendar *calendar, const uint64_t micros) {
+	static string_t MonthName(Calendar *calendar, const uint64_t micros) {
 		const auto mm = ExtractMonth(calendar, micros) - 1;
 		if (mm == 12) {
 			return "Undecimber";
@@ -245,14 +244,14 @@ struct ICUDatePart : public ICUDateFunc {
 		return Date::MONTH_NAMES[mm];
 	}
 
-	static string_t DayName(icu::Calendar *calendar, const uint64_t micros) {
+	static string_t DayName(Calendar *calendar, const uint64_t micros) {
 		return Date::DAY_NAMES[ExtractDayOfWeek(calendar, micros)];
 	}
 
 	template <typename RESULT_TYPE>
 	struct BindAdapterData : public BindData {
 		using result_t = RESULT_TYPE;
-		typedef result_t (*adapter_t)(icu::Calendar *calendar, const uint64_t micros);
+		typedef result_t (*adapter_t)(Calendar *calendar, const uint64_t micros);
 		using adapters_t = vector<adapter_t>;
 
 		BindAdapterData(ClientContext &context, adapter_t adapter_p) : BindData(context), adapters(1, adapter_p) {
@@ -282,7 +281,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BIND_TYPE>();
-		CalendarPtr calendar_ptr(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
 		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result,
@@ -305,7 +304,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BIND_TYPE>();
-		CalendarPtr calendar_ptr(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
 		BinaryExecutor::Execute<string_t, INPUT_TYPE, RESULT_TYPE>(
@@ -370,7 +369,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindStructData>();
-		CalendarPtr calendar_ptr(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(args.ColumnCount() == 1);
@@ -642,7 +641,7 @@ struct ICUDatePart : public ICUDateFunc {
 void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	// register the individual operators
 
-	// year/decade use UCAL_YEAR (year-of-era, positive in both BC and AD), which is non-monotonic
+	// year/decade use CAL_YEAR (year-of-era, positive in both BC and AD), which is non-monotonic
 	// across the BC/AD flip; leave them unannotated. era/century/millennium/isoyear are signed.
 
 	//	BIGINTs

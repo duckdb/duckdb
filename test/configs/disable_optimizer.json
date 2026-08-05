@@ -120,19 +120,10 @@
       ]
     },
     {
-      "reason": "FIXME: crash.",
-      "paths": [
-        "test/sql/join/asof/test_asof_join_filter_pushdown.test"
-        ]
-    },
-    {
       "reason": "FIXME: binding bug.",
       "paths": [
-        "test/sql/merge/merge_into_invalid_column_reference.test",
-        "test/sql/merge/merge_into_by_source.test",
-        "test/sql/subquery/scalar/test_complex_correlated_subquery.test",
         "test/sql/join/natural/natural_join.test"
-        ]
+      ]
     }
   ]
 }

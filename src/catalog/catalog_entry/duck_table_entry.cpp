@@ -1377,7 +1377,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {
-		throw InternalException("unsupported constraint type in ALTER TABLE statement");
+		throw NotImplementedException("No support for adding %s constraints with ALTER TABLE",
+		                              EnumUtil::ToString(info.constraint->type));
 	}
 
 	// We create a physical table with a new constraint and a new unique index.

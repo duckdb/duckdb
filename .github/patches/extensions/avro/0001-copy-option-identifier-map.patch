@@ -1,0 +1,101 @@
+diff --git a/src/avro_copy.cpp b/src/avro_copy.cpp
+index 8c1af31..a6b44c8 100644
+--- a/src/avro_copy.cpp
++++ b/src/avro_copy.cpp
+@@ -190,7 +190,7 @@ public:
+ 	}
+ 
+ public:
+-	void ParseFieldIds(const case_insensitive_map_t<vector<Value>> &options, case_insensitive_set_t &recognized) {
++	void ParseFieldIds(const identifier_map_t<vector<Value>> &options, identifier_set_t &recognized) {
+ 		auto it = options.find("FIELD_IDS");
+ 		if (it == options.end()) {
+ 			return;
+@@ -201,7 +201,7 @@ public:
+ 		field_ids = avro::FieldIDUtils::ParseFieldIds(it->second[0], names, types);
+ 		recognized.insert(it->first);
+ 	}
+-	void ParseRootName(const case_insensitive_map_t<vector<Value>> &options, case_insensitive_set_t &recognized) {
++	void ParseRootName(const identifier_map_t<vector<Value>> &options, identifier_set_t &recognized) {
+ 		auto it = options.find("ROOT_NAME");
+ 		if (it == options.end()) {
+ 			return;
+@@ -445,8 +445,8 @@ public:
+ 	unordered_set<string> named_schemas;
+ };
+ 
+-static string CreateJSONSchema(const case_insensitive_map_t<vector<Value>> &options, const vector<string> &names,
+-                               const vector<LogicalType> &types, case_insensitive_set_t &recognized) {
++static string CreateJSONSchema(const identifier_map_t<vector<Value>> &options, const vector<string> &names,
++                               const vector<LogicalType> &types, identifier_set_t &recognized) {
+ 	JSONSchemaGenerator state(names, types);
+ 
+ 	state.ParseFieldIds(options, recognized);
+@@ -454,8 +454,8 @@ static string CreateJSONSchema(const case_insensitive_map_t<vector<Value>> &opti
+ 	return state.GenerateJSON();
+ }
+ 
+-static string CreateJSONMetadata(const case_insensitive_map_t<vector<Value>> &options,
+-                                 case_insensitive_set_t &recognized) {
++static string CreateJSONMetadata(const identifier_map_t<vector<Value>> &options,
++                                 identifier_set_t &recognized) {
+ 	auto it = options.find("METADATA");
+ 	if (it == options.end()) {
+ 		return "";
+@@ -505,7 +505,7 @@ static string CreateJSONMetadata(const case_insensitive_map_t<vector<Value>> &op
+ //! defaults to "null"). The codec name itself is validated by avro-c when the writer is created
+ //! (it reports "Unknown codec X" for anything the library was not built with), so this stays in
+ //! lock-step with avro-c's actual capabilities instead of duplicating a list that could drift.
+-static string ParseCodec(const case_insensitive_map_t<vector<Value>> &options, case_insensitive_set_t &recognized) {
++static string ParseCodec(const identifier_map_t<vector<Value>> &options, identifier_set_t &recognized) {
+ 	auto it = options.find("CODEC");
+ 	if (it == options.end()) {
+ 		return "";
+@@ -525,7 +525,7 @@ WriteAvroBindData::WriteAvroBindData(CopyFunctionBindInput &input, const vector<
+                                      const vector<LogicalType> &types)
+     : names(IdentifiersToStrings(names)), types(types) {
+ 
+-	case_insensitive_set_t recognized;
++	identifier_set_t recognized;
+ 
+ 	json_metadata = CreateJSONMetadata(input.info.options, recognized);
+ 	json_schema = CreateJSONSchema(input.info.options, this->names, types, recognized);
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index 3a01904..e8fcb2f 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -14,14 +14,14 @@ unique_ptr<BaseFileReaderOptions> AvroMultiFileInfo::InitializeOptions(ClientCon
+ 	return make_uniq<AvroFileReaderOptions>();
+ }
+ 
+-bool AvroMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
++bool AvroMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+                                         BaseFileReaderOptions &options_p, vector<string> &expected_names,
+                                         vector<LogicalType> &expected_types) {
+ 	// We currently do not have any options for the scanner, so we always return false
+ 	return false;
+ }
+ 
+-bool AvroMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
++bool AvroMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
+                                     MultiFileOptions &file_options, BaseFileReaderOptions &options) {
+ 	return false;
+ }
+diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
+index 4c43fed..a9eba17 100644
+--- a/src/include/avro_multi_file_info.hpp
++++ b/src/include/avro_multi_file_info.hpp
+@@ -19,11 +19,11 @@ struct AvroMultiFileInfo : MultiFileReaderInterface {
+ 
+ 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+ 	                                                    optional_ptr<TableFunctionInfo> info) override;
+-	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
++	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+ 	                     BaseFileReaderOptions &options, vector<string> &expected_names,
+ 	                     vector<LogicalType> &expected_types) override;
+ 
+-	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
++	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
+ 	                 BaseFileReaderOptions &options) override;
+ 
+ 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,

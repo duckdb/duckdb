@@ -150,7 +150,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			auto &i_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.GetValueMutable().IsNull() && const_exp.GetReturnType().IsNumeric()) {
+				if (!const_exp.GetValueMutable().IsNull() && const_exp.GetReturnType().IsIntegral()) {
 					const_exp.GetValueMutable() =
 					    const_exp.GetValueMutable().DefaultCastAs(LogicalType::UINTEGER, true);
 					const_exp.SetReturnType(LogicalType::UINTEGER);

@@ -48,6 +48,21 @@ qualify filled <> permuted
 
 endloop
 
+# Regression: large DOUBLE ordering span should not overflow
+query R
+SELECT fill(y ORDER BY x) OVER ()
+FROM (
+    VALUES
+        (-1e308::DOUBLE, 1::DOUBLE),
+        (0::DOUBLE, NULL),
+        (1e308::DOUBLE, 3::DOUBLE)
+) t(x, y)
+ORDER BY x;
+----
+1.0
+2.0
+3.0
+
 # Single values
 query III
 with source as (

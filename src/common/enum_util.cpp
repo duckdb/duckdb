@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
@@ -113,6 +114,7 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/types/variant_comparison.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
@@ -163,7 +165,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -2533,6 +2535,25 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileWriteModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileWriteMode::SEQUENTIAL), "SEQUENTIAL" },
+		{ static_cast<uint32_t>(FileWriteMode::CONCURRENT_SEQUENTIAL), "CONCURRENT_SEQUENTIAL" },
+		{ static_cast<uint32_t>(FileWriteMode::POSITIONAL), "POSITIONAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value) {
+	return StringUtil::EnumToString(GetFileWriteModeValues(), 3, "FileWriteMode", static_cast<uint32_t>(value));
+}
+
+template<>
+FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value) {
+	return static_cast<FileWriteMode>(StringUtil::StringToEnum(GetFileWriteModeValues(), 3, "FileWriteMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFilterPropagateResultValues() {
@@ -6435,6 +6456,38 @@ const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode val
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value) {
 	return static_cast<VariantChildLookupMode>(StringUtil::StringToEnum(GetVariantChildLookupModeValues(), 3, "VariantChildLookupMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVariantComparisonTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantComparisonType::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(VariantComparisonType::NUMBER), "NUMBER" },
+		{ static_cast<uint32_t>(VariantComparisonType::REAL), "REAL" },
+		{ static_cast<uint32_t>(VariantComparisonType::VARCHAR), "VARCHAR" },
+		{ static_cast<uint32_t>(VariantComparisonType::BLOB), "BLOB" },
+		{ static_cast<uint32_t>(VariantComparisonType::UUID), "UUID" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIMESTAMP), "TIMESTAMP" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIMESTAMP_TZ), "TIMESTAMP_TZ" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIME), "TIME" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIME_TZ), "TIME_TZ" },
+		{ static_cast<uint32_t>(VariantComparisonType::INTERVAL), "INTERVAL" },
+		{ static_cast<uint32_t>(VariantComparisonType::GEOMETRY), "GEOMETRY" },
+		{ static_cast<uint32_t>(VariantComparisonType::BITSTRING), "BITSTRING" },
+		{ static_cast<uint32_t>(VariantComparisonType::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(VariantComparisonType::OBJECT), "OBJECT" },
+		{ static_cast<uint32_t>(VariantComparisonType::NULL_VALUE), "NULL_VALUE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VariantComparisonType>(VariantComparisonType value) {
+	return StringUtil::EnumToString(GetVariantComparisonTypeValues(), 16, "VariantComparisonType", static_cast<uint32_t>(value));
+}
+
+template<>
+VariantComparisonType EnumUtil::FromString<VariantComparisonType>(const char *value) {
+	return static_cast<VariantComparisonType>(StringUtil::StringToEnum(GetVariantComparisonTypeValues(), 16, "VariantComparisonType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
