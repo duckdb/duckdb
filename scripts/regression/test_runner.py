@@ -12,15 +12,17 @@ from comparison import (
     CONFIRMATION_TARGET_SECONDS,
     MAX_CONFIRMATION_RUNS,
     MIN_CONFIRMATION_RUNS,
+    SAMPLE_BATCH_SIZE,
     BenchmarkMeasurement,
     benchmark_measurement,
     confirmation_run_count,
+    sampling_batch_sizes,
 )
 
 
 print = functools.partial(print, flush=True)
 
-INITIAL_BATCH_SIZE = 5
+INITIAL_BATCH_SIZE = SAMPLE_BATCH_SIZE
 INITIAL_RUNS = 2 * INITIAL_BATCH_SIZE
 REGRESSION_LIMIT = 1.10
 NOISE_THRESHOLD = 0.02
@@ -68,6 +70,8 @@ class BenchmarkRow:
     new_timing: str
     delta: str
     change: str
+    confidence_interval: str
+    confidence: str
     runs: str
     bucket: str
     percentage: float = 0
@@ -111,9 +115,7 @@ def run_paired_samples(
     old_timings = []
     new_timings = []
     batch_index = initial_batch_index
-    batch_sizes = [(requested_runs + 1) // 2, requested_runs // 2]
-
-    for batch_size in batch_sizes:
+    for batch_size in sampling_batch_sizes(requested_runs):
         if batch_index % 2 == 0:
             old_batch, old_failure = old_runner.run(benchmark, batch_size)
             new_batch, new_failure = new_runner.run(benchmark, batch_size)
@@ -169,11 +171,12 @@ def run_paired_benchmark(
     is_candidate = (
         initial_measurement.ratio < 1.0 - NOISE_THRESHOLD or initial_measurement.ratio > 1.0 + NOISE_THRESHOLD
     )
+    requested_confirmation_runs = confirmation_run_count(initial_measurement) if is_candidate else 0
     if verbose:
-        decision = "additional sampling required" if is_candidate else "within noise threshold"
+        decision = f"confirming with {requested_confirmation_runs} pairs" if is_candidate else "within ±2%; done"
         print(
-            f"initial sampling: {benchmark}: {initial_count} paired runs, "
-            f"median PR/base {initial_measurement.ratio:.3f}x ({decision})"
+            f"initial: {benchmark}: {initial_count} pairs | "
+            f"median change {format_ratio_change(initial_measurement.ratio)} | {decision}"
         )
 
     if not is_candidate:
@@ -184,7 +187,6 @@ def run_paired_benchmark(
             initial_runs=initial_count,
         )
 
-    requested_confirmation_runs = confirmation_run_count(initial_measurement)
     old_confirmation, new_confirmation, old_failure, new_failure, _ = run_paired_samples(
         old_runner,
         new_runner,
@@ -208,26 +210,17 @@ def run_paired_benchmark(
     if confirmation_measurement.ratio > REGRESSION_LIMIT:
         if lower_bound > REGRESSION_LIMIT:
             outcome = OUTCOME_CONFIRMED_REGRESSION
-            decision = "confirmed regression"
         else:
             outcome = OUTCOME_UNCONFIRMED_REGRESSION
-            decision = "regression inconclusive"
-    elif confirmation_measurement.ratio > 1.0 + NOISE_THRESHOLD:
-        outcome = OUTCOME_NO_REGRESSION
-        decision = "slower below regression limit"
-    elif confirmation_measurement.ratio < 1.0 - NOISE_THRESHOLD:
-        outcome = OUTCOME_NO_REGRESSION
-        decision = "faster"
     else:
         outcome = OUTCOME_NO_REGRESSION
-        decision = "within noise threshold"
 
     if verbose:
         print(
-            f"confirmation sampling: {benchmark}: {confirmation_count} paired runs, "
-            f"median PR/base {confirmation_measurement.ratio:.3f}x; "
-            f"{CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio: {lower_bound:.3f}x to {upper_bound:.3f}x; "
-            f"{decision}"
+            f"confirmation: {benchmark}: {confirmation_count} pairs | "
+            f"median change {format_ratio_change(confirmation_measurement.ratio)} | "
+            f"{CONFIDENCE_PERCENTAGE}% CI {format_ratio_interval((lower_bound, upper_bound))} | "
+            f"{measurement_status(confirmation_measurement, outcome)}"
         )
 
     return BenchmarkResult(
@@ -266,20 +259,53 @@ def format_delta_seconds(delta: float) -> str:
 
 
 def format_percentage(value: float) -> str:
-    return f"{value:+.1f}%" if math.isfinite(value) else "+inf%"
+    if math.isfinite(value):
+        return f"{value:+.1f}%"
+    return "-inf%" if value < 0 else "+inf%"
 
 
-def regression_delta(measurement: BenchmarkMeasurement) -> str:
-    delta_seconds = measurement.new_timing - measurement.old_timing
-    delta_percentage = ((measurement.new_timing / measurement.old_timing) - 1.0) * 100.0
-    return f"{format_delta_seconds(delta_seconds)} ({format_percentage(delta_percentage)})"
+def ratio_change(ratio: float) -> float:
+    return (ratio - 1.0) * 100.0
+
+
+def format_ratio_change(ratio: float) -> str:
+    return format_percentage(ratio_change(ratio))
+
+
+def format_ratio_interval(ratio_interval: Tuple[float, float]) -> str:
+    lower_bound, upper_bound = ratio_interval
+    return f"{format_ratio_change(lower_bound)}…{format_ratio_change(upper_bound)}"
+
+
+def direction_confidence(measurement: BenchmarkMeasurement) -> str:
+    lower_bound, upper_bound = measurement.ratio_interval
+    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
+        return "confident" if upper_bound < 1.0 - NOISE_THRESHOLD else "uncertain"
+    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
+        return "confident" if lower_bound > 1.0 + NOISE_THRESHOLD else "uncertain"
+    return "within noise"
+
+
+def measurement_status(measurement: BenchmarkMeasurement, outcome: str) -> str:
+    if outcome == OUTCOME_CONFIRMED_REGRESSION:
+        return "regression (confirmed)"
+    if outcome == OUTCOME_UNCONFIRMED_REGRESSION:
+        return "regression (uncertain; budget exhausted)"
+    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
+        confidence = direction_confidence(measurement)
+        suffix = "confident" if confidence == "confident" else "uncertain; budget exhausted"
+        return f"faster ({suffix})"
+    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
+        confidence = direction_confidence(measurement)
+        suffix = "confident" if confidence == "confident" else "uncertain; budget exhausted"
+        return f"slower ({suffix})"
+    return "within ±2%; no change"
 
 
 def confidence_text(result: BenchmarkResult) -> str:
     if result.measurement is None:
         return "unavailable"
-    lower_bound, upper_bound = result.measurement.ratio_interval
-    return f"{lower_bound:.3f}x to {upper_bound:.3f}x"
+    return format_ratio_interval(result.measurement.ratio_interval)
 
 
 def emit_github_error(title: str, message: str):
@@ -299,22 +325,27 @@ def report_regression(
         message = f"{suite}: {result.benchmark} failed while comparing base and PR benchmark runs"
         old_timing = "failed"
         new_timing = "failed"
-        summary_delta = "benchmark run failed"
+        delta = "failed"
+        median_change = "failed"
+        confidence = "unavailable"
         failure_summary.append(result)
     else:
         measurement = result.measurement
         assert measurement is not None
         old_timing = format_seconds(measurement.old_timing)
         new_timing = format_seconds(measurement.new_timing)
-        summary_delta = regression_delta(measurement)
+        delta = format_delta_seconds(measurement.new_timing - measurement.old_timing)
+        median_change = format_ratio_change(measurement.ratio)
+        confidence = confidence_text(result)
         message = (
-            f"{suite}: {result.benchmark} regressed from {old_timing} to {new_timing} ({summary_delta}); "
-            f"{CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio {confidence_text(result)}, "
-            f"regression limit {REGRESSION_LIMIT:.3f}x"
+            f"{suite}: {result.benchmark} regressed from {old_timing} to {new_timing}; "
+            f"median change {median_change}, delta {delta}, {CONFIDENCE_PERCENTAGE}% CI {confidence}, "
+            f"regression limit {format_ratio_change(REGRESSION_LIMIT)}"
         )
     emit_github_error("Regression benchmark", message)
     summary_lines.append(
-        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{summary_delta}` | `{format_run_count(result)}` |"
+        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{delta}` | `{median_change}` | "
+        f"`{confidence}` | `{format_run_count(result)}` |"
     )
 
 
@@ -323,17 +354,18 @@ def report_unconfirmed(result: BenchmarkResult, suite: str, summary_lines: List[
     assert measurement is not None
     old_timing = format_seconds(measurement.old_timing)
     new_timing = format_seconds(measurement.new_timing)
-    delta = regression_delta(measurement)
+    delta = format_delta_seconds(measurement.new_timing - measurement.old_timing)
+    median_change = format_ratio_change(measurement.ratio)
     confidence = confidence_text(result)
     message = (
-        f"{suite}: {result.benchmark} has a confirmation median above the regression limit but remains "
-        f"inconclusive ({delta}); {CONFIDENCE_PERCENTAGE}% CI for PR/base median ratio {confidence}, "
-        f"regression limit {REGRESSION_LIMIT:.3f}x"
+        f"{suite}: {result.benchmark} has median change {median_change}, delta {delta}, and "
+        f"{CONFIDENCE_PERCENTAGE}% CI {confidence}; regression limit {format_ratio_change(REGRESSION_LIMIT)} "
+        f"is uncertain after the confirmation budget"
     )
     emit_github_warning("Inconclusive regression benchmark", message)
     summary_lines.append(
-        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{delta}` | "
-        f"`{format_run_count(result)}` | `{confidence}` |"
+        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{delta}` | `{median_change}` | "
+        f"`{confidence}` | `{format_run_count(result)}` |"
     )
 
 
@@ -383,17 +415,35 @@ def format_run_count(result: BenchmarkResult) -> str:
     return str(result.initial_runs)
 
 
+def result_confidence(result: BenchmarkResult) -> str:
+    if result.outcome == OUTCOME_CONFIRMED_REGRESSION:
+        return "confirmed regression"
+    if result.outcome == OUTCOME_UNCONFIRMED_REGRESSION:
+        return "uncertain regression"
+    assert result.measurement is not None
+    return direction_confidence(result.measurement)
+
+
 def benchmark_row(result: BenchmarkResult, display_name: str) -> BenchmarkRow:
     bucket = classify_result(result)
     if result.outcome == OUTCOME_FAILURE:
         return BenchmarkRow(
-            result, display_name, "failed", "failed", "failed", "failed", format_run_count(result), bucket
+            result=result,
+            display_name=display_name,
+            old_timing="failed",
+            new_timing="failed",
+            delta="failed",
+            change="failed",
+            confidence_interval="unavailable",
+            confidence="failed",
+            runs=format_run_count(result),
+            bucket=bucket,
         )
 
     measurement = result.measurement
     assert measurement is not None
     delta = measurement.new_timing - measurement.old_timing
-    percentage = ((measurement.new_timing / measurement.old_timing) - 1.0) * 100.0
+    percentage = ratio_change(measurement.ratio)
     return BenchmarkRow(
         result=result,
         display_name=display_name,
@@ -401,6 +451,8 @@ def benchmark_row(result: BenchmarkResult, display_name: str) -> BenchmarkRow:
         new_timing=format_seconds(measurement.new_timing),
         delta=format_delta_seconds(delta),
         change=format_percentage(percentage),
+        confidence_interval=format_ratio_interval(measurement.ratio_interval),
+        confidence=result_confidence(result),
         runs=format_run_count(result),
         bucket=bucket,
         percentage=percentage,
@@ -438,8 +490,20 @@ def row_sort_key(row: BenchmarkRow):
 def render_table(rows: List[BenchmarkRow]):
     if not rows:
         return
-    headers = ["benchmark", "base", "PR", "delta", "change", "runs"]
-    plain_rows = [[row.display_name, row.old_timing, row.new_timing, row.delta, row.change, row.runs] for row in rows]
+    headers = ["benchmark", "base", "PR", "delta", "median change", "95% CI", "confidence", "runs"]
+    plain_rows = [
+        [
+            row.display_name,
+            row.old_timing,
+            row.new_timing,
+            row.delta,
+            row.change,
+            row.confidence_interval,
+            row.confidence,
+            row.runs,
+        ]
+        for row in rows
+    ]
     widths = [len(header) for header in headers]
     for plain_row in plain_rows:
         for index, value in enumerate(plain_row):
@@ -451,7 +515,7 @@ def render_table(rows: List[BenchmarkRow]):
         cells = []
         for index, value in enumerate(plain_row):
             padded = value.ljust(widths[index])
-            if headers[index] == "change":
+            if headers[index] == "median change":
                 padded = color_change(row.bucket, padded)
             cells.append(padded)
         print("  ".join(cells))
@@ -461,7 +525,7 @@ def print_bucket(title: str, rows: List[BenchmarkRow], unchanged_count: int = 0)
     print("")
     print(title)
     if title == "UNCHANGED / NOISE":
-        print(f"{unchanged_count} benchmarks whose median change is within +/-2%")
+        print(f"{unchanged_count} benchmarks whose median change is within ±2%")
     elif rows:
         render_table(rows)
     else:
@@ -522,12 +586,13 @@ def print_benchmark_report(
     print(f"initial sampling: {INITIAL_RUNS} runs per binary in 2 batches of {INITIAL_BATCH_SIZE}")
     print(
         f"confirmation sampling: ceil({CONFIRMATION_TARGET_SECONDS:g}s / faster-side median), "
-        f"clamped to {MIN_CONFIRMATION_RUNS}-{MAX_CONFIRMATION_RUNS} runs per binary"
+        f"clamped to {MIN_CONFIRMATION_RUNS}-{MAX_CONFIRMATION_RUNS} runs per binary in batches of "
+        f"{SAMPLE_BATCH_SIZE}"
     )
-    print(f"confirmation candidates: initial median outside +/-{NOISE_THRESHOLD * 100:.0f}%")
-    print(f"regression limit: {REGRESSION_LIMIT:.3f}x (+{(REGRESSION_LIMIT - 1.0) * 100:.0f}%)")
+    print(f"confirmation candidates: initial median change outside ±{NOISE_THRESHOLD * 100:.0f}%")
+    print(f"regression limit: {format_ratio_change(REGRESSION_LIMIT)}")
     print(
-        f"reporting: confirmation median with +/-{NOISE_THRESHOLD * 100:.0f}% noise threshold; "
+        f"reporting: confirmation median with ±{NOISE_THRESHOLD * 100:.0f}% noise threshold; "
         f"regressions require {CONFIDENCE_PERCENTAGE}% confidence"
     )
     print(f"result: {result_text}")
@@ -593,8 +658,8 @@ def main() -> int:
         summary_lines = [
             f"## Regression Suite: `{suite}`",
             "",
-            "| Benchmark | Base | PR | Delta | Runs |",
-            "| --- | --- | --- | --- | --- |",
+            "| Benchmark | Base | PR | Delta | Median change | 95% CI | Runs |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ]
         for result in failing_results:
             report_regression(result, suite, failure_summary, summary_lines)
@@ -604,8 +669,8 @@ def main() -> int:
         summary_lines = [
             f"## Inconclusive Regression Candidates: `{suite}`",
             "",
-            "| Benchmark | Base | PR | Delta | Runs | 95% PR/base median ratio interval |",
-            "| --- | --- | --- | --- | --- | --- |",
+            "| Benchmark | Base | PR | Delta | Median change | 95% CI | Runs |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ]
         for result in inconclusive_results:
             report_unconfirmed(result, suite, summary_lines)

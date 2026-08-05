@@ -7,6 +7,7 @@ from typing import List, Tuple
 CONFIRMATION_TARGET_SECONDS = 3.0
 MIN_CONFIRMATION_RUNS = 15
 MAX_CONFIRMATION_RUNS = 100
+SAMPLE_BATCH_SIZE = 5
 
 
 @dataclass
@@ -57,3 +58,13 @@ def confirmation_run_count(measurement: BenchmarkMeasurement) -> int:
     faster_side_median = min(measurement.old_timing, measurement.new_timing)
     estimated_runs = math.ceil(CONFIRMATION_TARGET_SECONDS / faster_side_median)
     return max(MIN_CONFIRMATION_RUNS, min(MAX_CONFIRMATION_RUNS, estimated_runs))
+
+
+def sampling_batch_sizes(requested_runs: int) -> List[int]:
+    if requested_runs <= 0:
+        raise ValueError("Requested benchmark runs must be greater than zero")
+    full_batches, remainder = divmod(requested_runs, SAMPLE_BATCH_SIZE)
+    batch_sizes = [SAMPLE_BATCH_SIZE] * full_batches
+    if remainder:
+        batch_sizes.append(remainder)
+    return batch_sizes
