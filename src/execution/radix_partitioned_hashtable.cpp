@@ -439,6 +439,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	}
 	registered = false;
 	abandoned_data.reset();
+	abandoned_exported_data.reset();
 	if (!ht) {
 		adapted = false;
 		local_sink_capacity = DConstants::INVALID_INDEX;
@@ -475,6 +476,7 @@ void RadixPartitionedHashTable::ResetGlobalSinkState(ClientContext &context, Glo
 	gstate.any_abandoned = false;
 	gstate.config.Reset();
 	gstate.uncombined_data.reset();
+	gstate.uncombined_exported_data.reset();
 	gstate.stored_allocators.clear();
 	gstate.stored_allocators_size = 0;
 	gstate.partitions.clear();

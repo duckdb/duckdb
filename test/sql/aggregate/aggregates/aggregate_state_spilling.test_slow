@@ -84,3 +84,26 @@ SELECT count(*) FROM (
 WHERE f <> repeat(md5(g::VARCHAR), 10);
 ----
 0
+
+# reusable external aggregation must reset the exported collections between iterations
+statement ok
+SET memory_limit='64MB';
+
+query III
+WITH RECURSIVE r(iter, k, c) AS (
+  SELECT 0::INTEGER, i, 1::BIGINT
+  FROM range(2000000) t(i)
+  UNION ALL
+  SELECT iter + 1, k, count(*)
+  FROM r
+  WHERE iter < 2
+  GROUP BY iter, k
+)
+SELECT iter, count(*), sum(c)
+FROM r
+GROUP BY iter
+ORDER BY iter;
+----
+0	2000000	2000000
+1	2000000	2000000
+2	2000000	2000000
