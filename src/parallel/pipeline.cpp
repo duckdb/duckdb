@@ -14,6 +14,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -74,7 +75,8 @@ TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 }
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr) {
+    : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr),
+      samply_pipeline_id(++executor_p.next_pipeline_id) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -558,6 +560,40 @@ void Pipeline::Ready() {
 	}
 	ready = true;
 	std::reverse(operators.begin(), operators.end());
+
+	if (!ClientConfig::GetConfig(GetClientContext()).enable_samply_markers) {
+		return;
+	}
+
+	samply_marker_name = "Pipeline " + std::to_string(samply_pipeline_id) + ": ";
+	auto pipeline_operators = GetOperators();
+	for (idx_t operator_idx = 0; operator_idx < pipeline_operators.size(); operator_idx++) {
+		auto &op = pipeline_operators[operator_idx].get();
+		string operator_name = EnumUtil::ToChars(op.type);
+
+		const bool is_source = operator_idx == 0;
+		const bool is_sink = sink && operator_idx + 1 == pipeline_operators.size();
+		if (op.type == PhysicalOperatorType::HASH_JOIN) {
+			if (is_sink) {
+				operator_name += "[build]";
+			} else if (is_source) {
+				operator_name += "[scan]";
+			} else {
+				operator_name += "[probe]";
+			}
+		} else if (is_sink) {
+			operator_name += "[sink]";
+		} else if (is_source) {
+			operator_name += "[source]";
+		}
+
+		const string separator = operator_idx == 0 ? "" : " → ";
+		if (samply_marker_name.size() + separator.size() + operator_name.size() > 900) {
+			samply_marker_name += " → …";
+			break;
+		}
+		samply_marker_name += separator + operator_name;
+	}
 }
 
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {

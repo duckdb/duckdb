@@ -1,0 +1,63 @@
+# name: test/sql/pragma/profiling/test_samply_markers.test
+# description: Test Samply marker profiling setting
+# group: [profiling]
+
+require notwindows
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/samply_profile.txt';
+
+query I
+SELECT current_setting('enable_samply_markers');
+----
+false
+
+statement ok
+PRAGMA enable_samply_markers;
+
+query I
+SELECT current_setting('enable_samply_markers');
+----
+true
+
+statement ok
+CREATE TABLE build_side AS SELECT i FROM range(10) t(i);
+
+statement ok
+CREATE TABLE probe_side AS SELECT i FROM range(20) t(i);
+
+query I
+SELECT count(*) FROM probe_side JOIN build_side USING (i);
+----
+10
+
+statement ok
+PRAGMA disable_samply_markers;
+
+query I
+SELECT current_setting('enable_samply_markers');
+----
+false
+
+# Enabling Samply markers also produced the normal query profile for the join.
+query I
+SELECT contains(content, 'Hash Join') FROM read_text('{TEST_DIR}/samply_profile.txt');
+----
+true
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET enable_samply_markers = true;
+
+statement ok
+RESET enable_samply_markers;
+
+query II
+SELECT current_setting('enable_samply_markers'), current_setting('enable_profiling');
+----
+false	json
+
+statement ok
+RESET enable_profiling;

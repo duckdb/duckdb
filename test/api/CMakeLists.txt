@@ -49,7 +49,7 @@ set(TEST_API_OBJECTS
     test_block_allocator_tls.cpp)
 
 if(NOT WIN32)
-  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)
+  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp test_samply.cpp)
 endif()
 
 if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)

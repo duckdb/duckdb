@@ -256,9 +256,17 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		// overwriting the profiling output file with the EXPLAIN's profiling data.
 		auto &client_config = ClientConfig::GetConfig(*this);
 		bool saved_profiler = client_config.enable_profiler;
+		bool saved_samply_markers = client_config.enable_samply_markers;
 		ScopedConfigSetting suppress_profiling(
-		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
-		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
+		    client_config,
+		    [](ClientConfig &config) {
+			    config.enable_profiler = false;
+			    config.enable_samply_markers = false;
+		    },
+		    [saved_profiler, saved_samply_markers](ClientConfig &config) {
+			    config.enable_profiler = saved_profiler;
+			    config.enable_samply_markers = saved_samply_markers;
+		    });
 		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

@@ -899,6 +899,27 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Samply Markers
+//===----------------------------------------------------------------------===//
+void EnableSamplyMarkersSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto enabled = input.GetValue<bool>();
+#if !defined(__linux__) && !defined(__APPLE__)
+	if (enabled) {
+		throw NotImplementedException("Samply markers are only supported on Linux and macOS");
+	}
+#endif
+	ClientConfig::GetConfig(context).enable_samply_markers = enabled;
+}
+
+void EnableSamplyMarkersSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_samply_markers = ClientConfig().enable_samply_markers;
+}
+
+Value EnableSamplyMarkersSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).enable_samply_markers);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
