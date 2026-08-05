@@ -2,6 +2,10 @@
 # description: MODE aggregate rewrite memory usage
 # group: [aggregates]
 
+require exact_vector_size 2048
+
+require no_alternative_verify
+
 statement ok
 SET threads=4;
 
