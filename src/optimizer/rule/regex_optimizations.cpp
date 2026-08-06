@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
@@ -17,7 +18,7 @@ namespace duckdb {
 
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
-	func->function = make_uniq<SpecificFunctionMatcher>("regexp_matches");
+	func->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"regexp_matches", "regexp_full_match"});
 	func->policy = SetMatcher::Policy::SOME_ORDERED;
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
@@ -154,6 +155,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
+	bool is_full_match = (root.Function().GetName() == "regexp_full_match");
 	auto regexp_bind_data = root.BindInfo().get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
@@ -181,25 +183,33 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	// optimizer will further optimize suffix and prefix things.
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		// convert to contains.
+		// extract the raw literal string.
 		LikeString escaped_like_string = GetLikeStringEscaped(pattern.Regexp(), true);
 		if (!escaped_like_string.exists) {
 			return nullptr;
 		}
 
-		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
+		// if regexp had options, remove them so the new Contains/Equality Expression can be matched for other
+		// optimizers.
 		if (root.GetChildrenMutable().size() == 3) {
 			root.GetChildrenMutable().pop_back();
 			D_ASSERT(root.GetChildrenMutable().size() == 2);
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
 
-		contains->GetChildrenMutable()[1] = std::move(parameter);
+		if (is_full_match) {
+			// Build an EQUALITY node
+			return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+			                                         std::move(root.GetChildrenMutable()[0]), std::move(parameter));
+		} else {
+			// Build a CONTAINS node
+			auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
+			contains->GetChildrenMutable()[1] = std::move(parameter);
+			return std::move(contains);
+		}
 
-		return std::move(contains);
-	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
+	} else if (!is_full_match && pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
 		like_string = LikeMatchFromRegex(pattern);
 	} else {
 		like_string.exists = false;
