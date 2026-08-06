@@ -301,11 +301,6 @@ static bool IsColumnEqualityPredicate(Expression &expr) {
 	return lhs.Cast<BoundColumnRefExpression>().Depth() == 0 && rhs.Cast<BoundColumnRefExpression>().Depth() == 0;
 }
 
-static bool IsNestedComparison(const LogicalType &type) {
-	// Eliminating this join changes nested child-NULL semantics; top-level nullability is not sufficient.
-	return type.IsNested();
-}
-
 static bool IsNonSelectiveJoinPredicate(Expression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		bool all_children_non_selective = true;

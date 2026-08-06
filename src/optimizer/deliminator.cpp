@@ -184,11 +184,6 @@ static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 	}
 }
 
-static bool IsNestedComparison(const LogicalType &type) {
-	// Eliminating this join changes nested child-NULL semantics; top-level nullability is not sufficient.
-	return type.IsNested();
-}
-
 bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
                                          unique_ptr<LogicalOperator> &join, bool &all_equality_conditions) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
