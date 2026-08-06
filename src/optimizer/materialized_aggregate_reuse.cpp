@@ -1,6 +1,6 @@
 #include "duckdb/optimizer/aggregate_reuse.hpp"
 
-#include "aggregate_reuse_internal.hpp"
+#include "duckdb/optimizer/aggregate_reuse_internal.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
@@ -530,7 +530,9 @@ bool AggregateReuseOptimizer::TryReuseMaterializedAggregate(unique_ptr<LogicalOp
 
 	auto cte_ref_index = optimizer.binder.GenerateTableIndex();
 	auto names = AggregateRewriteHelper::GenerateColumnNames("__aggregate_reuse", cte.column_count);
-	vector<LogicalType> types(producer_op.types.begin(), producer_op.types.begin() + cte.column_count);
+	vector<LogicalType> types(producer_op.types.begin(),
+	                          producer_op.types.begin() +
+	                              NumericCast<vector<LogicalType>::difference_type>(cte.column_count));
 	auto replacement = make_uniq<LogicalCTERef>(cte_ref_index, cte.table_index, std::move(types), std::move(names));
 	replacement->estimated_cardinality = producer_op.estimated_cardinality;
 	replacement->has_estimated_cardinality = producer_op.has_estimated_cardinality;
