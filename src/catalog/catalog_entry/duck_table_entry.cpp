@@ -484,6 +484,23 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(*bound_create_info, info);
+
+	// Update any UPDATE OF triggers whose column list references the renamed column
+	auto txn = catalog.GetCatalogTransaction(context);
+	vector<Identifier> triggers_to_update;
+	triggers->Scan(txn, [&](CatalogEntry &raw_entry) {
+		auto &trig = raw_entry.Cast<TriggerCatalogEntry>();
+		for (const auto &col : trig.columns) {
+			if (col == info.old_name) {
+				triggers_to_update.push_back(trig.name);
+				break;
+			}
+		}
+	});
+	for (const auto &trigger_name : triggers_to_update) {
+		triggers->AlterEntry(txn, trigger_name, info);
+	}
+
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
