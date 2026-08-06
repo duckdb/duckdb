@@ -443,7 +443,9 @@ TEST_CASE("Scalar selection preserves result mappings and NULL semantics", "[sca
 	}
 
 	REQUIRE(BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, right, nullptr, 0, &true_sel, &false_sel) == 0);
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	REQUIRE_THROWS(BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, right, nullptr, COUNT, nullptr, nullptr));
+#endif
 
 	auto middle = MakeFlatVector(COUNT, 10);
 	auto right_flat = MakeFlatVector(COUNT, 1);
