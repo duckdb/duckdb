@@ -112,7 +112,7 @@ static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, uni
 	if (projection->GetColumnBindings() != domain_ref.GetColumnBindings()) {
 		throw InternalException("Inlined duplicate-eliminated domain changed its output bindings");
 	}
-	return projection;
+	return unique_ptr<LogicalOperator>(std::move(projection));
 }
 
 bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs,
