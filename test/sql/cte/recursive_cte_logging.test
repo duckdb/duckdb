@@ -578,8 +578,7 @@ WITH RECURSIVE t(k, v) USING KEY (k) AS (
 	UNION ALL
 	SELECT r.k, r.v + 1
 	FROM range(current_setting('standard_vector_size')::BIGINT * 4) n(i)
-	JOIN recurring.t r ON r.k = n.i
-	WHERE r.v < 2
+	JOIN (SELECT * FROM recurring.t WHERE v < 2) r ON r.k = n.i
 )
 SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 4, max(v) FROM t;
 ----
