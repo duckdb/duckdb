@@ -1211,9 +1211,10 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
 			auto test_env_defined = test_config.HasTestEnv(env_var);
+			auto env_passed_through = GetEnvPassthroughNames().count(env_var) != 0;
 			string env_actual_value;
 			const char *env_actual = nullptr;
-			if (test_env_defined) {
+			if (test_env_defined || env_passed_through) {
 				env_actual_value = test_config.GetTestEnv(env_var, "");
 				env_actual = env_actual_value.c_str();
 			} else {
@@ -1245,7 +1246,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (!test_env_defined && environment_variables.count(env_var)) {
+			if (!test_env_defined && !env_passed_through && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;

@@ -23,7 +23,7 @@ struct ICUTimeZoneData : public GlobalTableFunctionState {
 };
 
 static duckdb::unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
-                                                        vector<LogicalType> &return_types, vector<string> &names) {
+                                                        vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
@@ -499,10 +499,7 @@ void ICUToTimeTZ::AddCasts(ExtensionLoader &loader) {
 struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP, typename SRC, typename DST>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		CalendarPtr calendar_ptr(info.calendar->Copy());
-		auto calendar = calendar_ptr.get();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 
 		// Two cases: constant TZ, variable TZ
 		D_ASSERT(input.ColumnCount() == 2);
@@ -512,13 +509,12 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 			if (ConstantVector::IsNull(tz_vec)) {
 				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
-			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
+			auto calendar = cache.GetCalendar(*ConstantVector::GetData<string_t>(tz_vec));
 			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, [&](SRC ts) { return OP::Operation(calendar, ts); });
 		} else {
 			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, [&](string_t tz_id, SRC ts) {
 				if (ts.IsFinite()) {
-					SetTimeZone(calendar, tz_id);
-					return OP::Operation(calendar, ts);
+					return OP::Operation(cache.GetCalendar(tz_id), ts);
 				} else {
 					return Cast::Operation<SRC, DST>(ts);
 				}
@@ -536,6 +532,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		                               Execute<ICUToTimeTZ, dtime_tz_t, dtime_tz_t>, Bind));
 		for (auto &func : set.functions) {
 			func.SetFallible();
+			func.SetInitStateCallback(InitCalendarCache);
 		}
 		loader.RegisterFunction(set);
 	}

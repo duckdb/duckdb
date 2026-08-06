@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -106,7 +107,7 @@ struct TimeBucket {
 			result_micros =
 			    SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(result_micros, bucket_width_micros);
 		}
-		result_micros += origin_micros;
+		result_micros = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(result_micros, origin_micros);
 
 		return Timestamp::FromEpochMicroSeconds(result_micros);
 	}
@@ -121,7 +122,7 @@ struct TimeBucket {
 			result_months =
 			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_months, bucket_width_months);
 		}
-		result_months += origin_months;
+		result_months = AddOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_months, origin_months);
 
 		int32_t year =
 		    (result_months < 0 && result_months % 12 != 0) ? 1970 + result_months / 12 - 1 : 1970 + result_months / 12;

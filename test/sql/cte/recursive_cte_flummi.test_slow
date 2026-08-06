@@ -187,6 +187,55 @@ DROP TABLE edges;
 statement ok
 DROP TABLE nodes;
 
+# High thread counts must retain the frontier parallelism that the available work can amortize.
+statement ok
+SET threads=32;
+
+statement ok
+CREATE TABLE nodes AS SELECT i::INTEGER id FROM range(120000) nodes(i);
+
+statement ok
+CREATE TABLE edges AS
+SELECT (i * 2)::INTEGER here,
+       (i * 2 + 1)::INTEGER there
+FROM range(60000) pairs(i);
+
+statement ok
+INSERT INTO edges SELECT there, here FROM edges;
+
+statement ok
+INSERT INTO edges SELECT id, id FROM nodes;
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query III
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+60000	60000	3599940000
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_tasks::UBIGINT > info.scheduled_workers::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+statement ok
+SET threads=4;
+
 # Recursive k-means
 statement ok
 CREATE TYPE point AS STRUCT(x REAL, y REAL);
@@ -330,7 +379,7 @@ CALL enable_logging('PhysicalOperator', storage='memory');
 statement ok
 CALL truncate_duckdb_logs();
 
-# Materialized fan-out work justifies two workers, but not four.
+# Materialized fan-out work justifies two workers, so higher thread counts are capped.
 statement ok
 SET VARIABLE flummi_sql = (
 	SELECT replace(
@@ -393,7 +442,7 @@ statement ok
 CALL disable_logging();
 
 query I
-SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
        OR current_setting('standard_vector_size')::UBIGINT < 1024
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';

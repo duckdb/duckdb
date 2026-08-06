@@ -98,8 +98,8 @@ static const int32_t SHARED_LIMITS[CAL_FIELD_COUNT][4] = {
 };
 
 //! The largest and smallest instants that can be represented
-static const double MAX_MILLIS = double(MAX_JULIAN - JULIAN_1970_CE) * double(MILLIS_PER_DAY);
-static const double MIN_MILLIS = double(MIN_JULIAN - JULIAN_1970_CE) * double(MILLIS_PER_DAY);
+static constexpr int64_t MAX_MILLIS = int64_t(MAX_JULIAN - JULIAN_1970_CE) * MILLIS_PER_DAY;
+static constexpr int64_t MIN_MILLIS = int64_t(MIN_JULIAN - JULIAN_1970_CE) * MILLIS_PER_DAY;
 
 //===--------------------------------------------------------------------===//
 // Construction
@@ -123,9 +123,9 @@ FieldCalendar::FieldCalendar(const FieldCalendar &other)
 	}
 }
 
-double Calendar::GetNow() {
+int64_t Calendar::GetNow() {
 	const auto now = std::chrono::system_clock::now().time_since_epoch();
-	return double(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+	return int64_t(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
 }
 
 void FieldCalendar::SetTimeZone(unique_ptr<TimeZone> zone_p) {
@@ -164,16 +164,16 @@ void FieldCalendar::SetMinimalDaysInFirstWeek(int32_t days) {
 //===--------------------------------------------------------------------===//
 // Getting and setting
 //===--------------------------------------------------------------------===//
-void FieldCalendar::SetTime(double millis) {
+void FieldCalendar::SetTime(int64_t millis) {
 	failed = false;
 	SetTimeChecked(millis);
 }
 
-void FieldCalendar::SetTimeChecked(double millis) {
+void FieldCalendar::SetTimeChecked(int64_t millis) {
 	if (failed) {
 		return;
 	}
-	time = MinValue<double>(MaxValue<double>(millis, MIN_MILLIS), MAX_MILLIS);
+	time = MinValue<int64_t>(MaxValue<int64_t>(millis, MIN_MILLIS), MAX_MILLIS);
 	fields_set = false;
 	all_fields_set = false;
 	time_set = true;
@@ -184,13 +184,13 @@ void FieldCalendar::SetTimeChecked(double millis) {
 	}
 }
 
-double FieldCalendar::GetTime() {
+int64_t FieldCalendar::GetTime() {
 	// the time is what an operation is read back out of, so a failure along the way is still
 	// the answer to this call rather than something that happened before it
 	return GetTimeChecked();
 }
 
-double FieldCalendar::GetTimeChecked() {
+int64_t FieldCalendar::GetTimeChecked() {
 	if (failed) {
 		return 0;
 	}
@@ -391,10 +391,10 @@ int32_t FieldCalendar::InternalGetMonth(int32_t default_value) const {
 	return InternalGet(CAL_ORDINAL_MONTH, default_value);
 }
 
-double FieldCalendar::ComputeMillisInDay() const {
+int64_t FieldCalendar::ComputeMillisInDay() const {
 	// there are two ways of specifying the time of day: the hour of the day, or the hour
 	// together with the half of the day
-	double millis_in_day = 0;
+	int64_t millis_in_day = 0;
 	const auto hour_of_day_stamp = stamp[CAL_HOUR_OF_DAY];
 	const auto hour_stamp = MaxValue(stamp[CAL_HOUR], stamp[CAL_AM_PM]);
 	const auto best_stamp = MaxValue(hour_stamp, hour_of_day_stamp);
@@ -417,7 +417,7 @@ double FieldCalendar::ComputeMillisInDay() const {
 	return millis_in_day;
 }
 
-int32_t FieldCalendar::ComputeZoneOffset(double millis, double millis_in_day) const {
+int32_t FieldCalendar::ComputeZoneOffset(int64_t millis, int64_t millis_in_day) const {
 	int32_t raw_offset;
 	int32_t dst_offset;
 	// a local time that occurs twice is the latter of the two, and a local time that does not
@@ -450,7 +450,7 @@ void FieldCalendar::ComputeTime() {
 
 	// the milliseconds in the day are only used if the caller set them more recently than any
 	// of the time fields
-	double millis_in_day;
+	int64_t millis_in_day;
 	if (stamp[CAL_MILLISECONDS_IN_DAY] >= STAMP_MINIMUM_USER &&
 	    NewestStamp(CAL_AM_PM, CAL_MILLISECOND, STAMP_UNSET) <= stamp[CAL_MILLISECONDS_IN_DAY]) {
 		millis_in_day = InternalGet(CAL_MILLISECONDS_IN_DAY);
@@ -711,7 +711,7 @@ void FieldCalendar::ComputeFields() {
 
 	int32_t millis_in_day;
 	const auto days = FloorDiv::Divide(local_millis, int32_t(MILLIS_PER_DAY), millis_in_day) + JULIAN_1970_CE;
-	if (days > double(NumericLimits<int32_t>::Maximum()) || days < double(NumericLimits<int32_t>::Minimum())) {
+	if (days > int64_t(NumericLimits<int32_t>::Maximum()) || days < int64_t(NumericLimits<int32_t>::Minimum())) {
 		failed = true;
 		return;
 	}
@@ -826,7 +826,7 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 	// For fields of a day or more the wall clock time has to stay the same across a change in the
 	// zone offset, which is corrected for afterwards. For smaller fields no correction is made,
 	// because it would undo the addition itself.
-	double delta = amount;
+	int64_t delta = amount;
 	bool keep_wall_time = true;
 
 	switch (field) {
@@ -874,29 +874,29 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 	case CAL_WEEK_OF_YEAR:
 	case CAL_WEEK_OF_MONTH:
 	case CAL_DAY_OF_WEEK_IN_MONTH:
-		delta *= double(MILLIS_PER_WEEK);
+		delta *= MILLIS_PER_WEEK;
 		break;
 	case CAL_AM_PM:
-		delta *= 12 * double(MILLIS_PER_HOUR);
+		delta *= 12 * MILLIS_PER_HOUR;
 		break;
 	case CAL_DATE:
 	case CAL_DAY_OF_YEAR:
 	case CAL_DAY_OF_WEEK:
 	case CAL_DOW_LOCAL:
 	case CAL_JULIAN_DAY:
-		delta *= double(MILLIS_PER_DAY);
+		delta *= MILLIS_PER_DAY;
 		break;
 	case CAL_HOUR_OF_DAY:
 	case CAL_HOUR:
-		delta *= double(MILLIS_PER_HOUR);
+		delta *= MILLIS_PER_HOUR;
 		keep_wall_time = false;
 		break;
 	case CAL_MINUTE:
-		delta *= double(MILLIS_PER_MINUTE);
+		delta *= MILLIS_PER_MINUTE;
 		keep_wall_time = false;
 		break;
 	case CAL_SECOND:
-		delta *= double(MILLIS_PER_SECOND);
+		delta *= MILLIS_PER_SECOND;
 		keep_wall_time = false;
 		break;
 	case CAL_MILLISECOND:
@@ -982,7 +982,7 @@ static double ApproximateFieldLength(CalendarField field) {
 	}
 }
 
-int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarField field, int32_t &result) {
+int32_t FieldCalendar::TryGuessDifference(int64_t start, int64_t target, CalendarField field, int32_t &result) {
 	const auto length = ApproximateFieldLength(field);
 	if (length <= 0) {
 		return false;
@@ -1000,7 +1000,7 @@ int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarF
 	// count that lands on or before the target. The guess is only a starting point, and it is
 	// walked to the answer rather than trusted, so a guess that is wrong only costs a step.
 	const auto step = (target < start) ? -1 : 1;
-	const auto reaches = [&](int32_t count, double &reached) {
+	const auto reaches = [&](int32_t count, int64_t &reached) {
 		SetTimeChecked(start);
 		AddChecked(field, count);
 		reached = GetTimeChecked();
@@ -1012,7 +1012,7 @@ int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarF
 
 	static constexpr int32_t MAX_STEPS = 4;
 	auto count = int32_t(estimate);
-	double reached;
+	int64_t reached;
 	if (!reaches(count, reached)) {
 		if (failed) {
 			return false;
@@ -1032,7 +1032,7 @@ int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarF
 	}
 	// the guess lands on or before the target, so walk forward while the next one still does
 	for (int32_t i = 0; i < MAX_STEPS; i++) {
-		double next;
+		int64_t next;
 		if (!reaches(count + step, next)) {
 			if (failed) {
 				return false;
@@ -1045,7 +1045,7 @@ int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarF
 	return false;
 }
 
-int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
+int32_t FieldCalendar::FieldDifference(int64_t target, CalendarField field) {
 	failed = false;
 	int32_t min = 0;
 	const auto start = GetTimeChecked();

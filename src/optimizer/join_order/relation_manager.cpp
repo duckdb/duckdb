@@ -5,7 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -26,6 +26,24 @@ SingleJoinRelation::SingleJoinRelation(LogicalOperator &op, optional_ptr<Logical
 RelationManager::RelationManager(ClientContext &context) : context(context) {
 }
 
+static bool OperatorNeedsRelation(LogicalOperatorType op_type);
+static bool OperatorIsNonReorderable(LogicalOperatorType op_type);
+
+static bool CanReuseAlignedStats(LogicalOperatorType op_type) {
+	if (OperatorNeedsRelation(op_type) || OperatorIsNonReorderable(op_type)) {
+		return true;
+	}
+	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 const vector<RelationStats> RelationManager::GetRelationStats() {
 	vector<RelationStats> ret;
 	for (idx_t i = 0; i < relations.size(); i++) {
@@ -42,78 +60,101 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
-void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
-                                                   const RelationStats &stats, LogicalOperatorType op_type) {
-	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
-	RelationIndex relation_id(relations.size());
-
-	auto op_bindings = op.GetColumnBindings();
-	for (auto &binding : op_bindings) {
-		if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
-			relation_mapping[binding.table_index] = relation_id;
-		}
-	}
-	operator_relations[op] = relation_id;
-	relations.push_back(std::move(relation));
-	op.estimated_cardinality = stats.cardinality;
-	op.has_estimated_cardinality = true;
-}
-
-void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+bool RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                   const RelationStats &stats) {
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
-	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
+	auto aligned_stats = AlignStatsWithRelationRoot(op, stats);
+	if (!aligned_stats) {
+		stats_complete = false;
+		return false;
+	}
+	auto relation = make_uniq<SingleJoinRelation>(op, parent, std::move(*aligned_stats));
 	RelationIndex relation_id(relations.size());
 
+	unordered_set<TableIndex> relation_bindings;
 	auto table_indexes = op.GetTableIndex();
-	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	auto is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	               op.Cast<LogicalComparisonJoin>().join_type == JoinType::MARK;
-	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
-	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		get_all_child_bindings = !op.children.empty();
-	}
 	if (table_indexes.empty() || is_mark) {
-		// relation represents a non-reorderable relation, most likely a join relation
-		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
-		// This should all table references, even if there are nested non-reorderable joins.
-		unordered_set<TableIndex> table_references;
-		LogicalJoin::GetTableReferences(op, table_references);
-		D_ASSERT(!table_references.empty());
-		for (auto &reference : table_references) {
-			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
-			relation_mapping[reference] = relation_id;
-		}
-	} else if (get_all_child_bindings) {
-		// logical get has a logical_get index, but if a function is present other bindings can refer to
-		// columns that are not unnested, and from the child of the logical get.
-		auto bindings = op.GetColumnBindings();
-		for (auto &binding : bindings) {
-			if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
-				relation_mapping[binding.table_index] = relation_id;
-			}
-		}
+		LogicalJoin::GetTableReferences(op, relation_bindings);
 	} else {
-		// Map all table indexes produced by this operator to this relation.
-		// Most operators have exactly one table index, but some (e.g. LogicalAggregate)
-		// return multiple. All should map to the same atomic relation in the join order.
-		D_ASSERT(!table_indexes.empty());
-		for (auto &table_index : table_indexes) {
-			D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
-			relation_mapping[table_index] = relation_id;
+		relation_bindings.insert(table_indexes.begin(), table_indexes.end());
+	}
+	for (auto &column : relation->stats.columns) {
+		relation_bindings.insert(column.binding.table_index);
+	}
+	for (auto &binding : relation_bindings) {
+		auto entry = relation_mapping.find(binding);
+		if (entry == relation_mapping.end()) {
+			relation_mapping.emplace(binding, relation_id);
+		} else {
+			D_ASSERT(entry->second == relation_id);
 		}
 	}
+	RegisterRelationBindings(op, relation_id, relation->stats);
 	operator_relations[op] = relation_id;
-	relations.push_back(std::move(relation));
-	op.estimated_cardinality = stats.cardinality;
+	op.estimated_cardinality = relation->stats.cardinality;
 	op.has_estimated_cardinality = true;
+	relations.push_back(std::move(relation));
+	return true;
+}
+
+optional<RelationStats> RelationManager::AlignStatsWithRelationRoot(LogicalOperator &op, const RelationStats &stats) {
+	auto projected = RelationStatisticsHelper::ProjectOutputStats(stats, op);
+	if (projected && (op.children.size() != 1 || CanReuseAlignedStats(op.type))) {
+		return projected;
+	}
+	if (op.children.size() != 1) {
+		return {};
+	}
+	auto child_stats = AlignStatsWithRelationRoot(*op.children[0], stats);
+	if (!child_stats) {
+		return {};
+	}
+	vector<reference<const RelationStats>> children {*child_stats};
+	auto derived = RelationStatisticsHelper::ExtractOperatorStats(op, context, children);
+	if (derived) {
+		return derived;
+	}
+
+	return {};
+}
+
+bool RelationManager::HasCompleteStats() const {
+	return stats_complete;
+}
+
+void RelationManager::RegisterRelationBindings(LogicalOperator &op, RelationIndex relation_id,
+                                               const RelationStats &stats) {
+	auto bindings = op.GetColumnBindings();
+	stats.Verify(bindings);
+	for (idx_t column_idx = 0; column_idx < bindings.size(); column_idx++) {
+		auto normalized = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(column_idx));
+		auto entry = normalized_bindings.find(bindings[column_idx]);
+		if (entry == normalized_bindings.end()) {
+			normalized_bindings.emplace(bindings[column_idx], normalized);
+		} else {
+			D_ASSERT(entry->second == normalized);
+		}
+	}
+}
+
+bool RelationManager::TryNormalizeBinding(ColumnBinding binding, ColumnBinding &normalized) const {
+	auto entry = normalized_bindings.find(binding);
+	if (entry == normalized_bindings.end()) {
+		return false;
+	}
+	normalized = entry->second;
+	return true;
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -257,19 +298,92 @@ static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationS
 	}
 }
 
-void RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
+static optional<RelationStats> CombineNonReorderableStats(LogicalOperator &op, const vector<RelationStats> &child_stats,
+                                                          ClientContext &context) {
+	if (child_stats.size() != op.children.size()) {
+		return {};
+	}
+	vector<reference<const RelationStats>> child_references;
+	for (idx_t child_idx = 0; child_idx < child_stats.size(); child_idx++) {
+		if (!child_stats[child_idx].stats_initialized ||
+		    !child_stats[child_idx].MatchesBindings(op.children[child_idx]->GetColumnBindings())) {
+			return {};
+		}
+		child_references.push_back(child_stats[child_idx]);
+	}
+	auto derived = RelationStatisticsHelper::ExtractOperatorStats(op, context, child_references);
+	if (derived) {
+		return derived;
+	}
+
+	RelationStats result;
+	result.cardinality = 0;
+	result.stats_initialized = true;
+	for (auto &stats : child_stats) {
+		result.cardinality = MaxValue(result.cardinality, stats.cardinality);
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_UNION) {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.setop_all) {
+			result.cardinality = 0;
+			for (auto &stats : child_stats) {
+				result.cardinality += stats.cardinality;
+			}
+		}
+	} else if (op.type == LogicalOperatorType::LOGICAL_INTERSECT && child_stats.size() == 2) {
+		result.cardinality = MinValue(child_stats[0].cardinality, child_stats[1].cardinality);
+	} else if (op.type == LogicalOperatorType::LOGICAL_EXCEPT && child_stats.size() == 2) {
+		result.cardinality = child_stats[0].cardinality;
+	} else if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN && child_stats.size() == 2) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		result.cardinality = join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER
+		                         ? child_stats[1].cardinality
+		                         : child_stats[0].cardinality;
+	}
+
+	auto bindings = op.GetColumnBindings();
+	auto ordinal_set_output = op.type == LogicalOperatorType::LOGICAL_UNION ||
+	                          op.type == LogicalOperatorType::LOGICAL_INTERSECT ||
+	                          op.type == LogicalOperatorType::LOGICAL_EXCEPT;
+	for (idx_t column_idx = 0; column_idx < bindings.size(); column_idx++) {
+		optional_ptr<const RelationColumnStats> source;
+		for (auto &stats : child_stats) {
+			source = stats.GetColumnStats(bindings[column_idx]);
+			if (source) {
+				break;
+			}
+		}
+		if (!source && ordinal_set_output && !child_stats.empty() && column_idx < child_stats[0].columns.size()) {
+			source = child_stats[0].columns[column_idx];
+		}
+		if (!source) {
+			return {};
+		}
+		result.columns.emplace_back(bindings[column_idx], source->distinct_count, source->name);
+	}
+	result.Verify(bindings);
+	return result;
+}
+
+bool RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
                                               LogicalOperator &input_op, optional_ptr<LogicalOperator> parent,
                                               RelationStats &child_stats, optional_ptr<LogicalOperator> limit_op,
                                               vector<reference<LogicalOperator>> &datasource_filters) {
 	D_ASSERT(!op.children.empty());
 	auto child_optimizer = optimizer.CreateChildOptimizer();
 	op.children[0] = child_optimizer.Optimize(std::move(op.children[0]), &child_stats);
-	if (!datasource_filters.empty()) {
-		child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
-		                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+	vector<reference<const RelationStats>> children_stats {child_stats};
+	auto operator_stats = RelationStatisticsHelper::ExtractOperatorStats(op, context, children_stats);
+	if (!operator_stats) {
+		stats_complete = false;
+		return false;
 	}
-	ModifyStatsIfLimit(limit_op.get(), child_stats);
-	AddRelation(input_op, parent, child_stats);
+	if (!datasource_filters.empty()) {
+		operator_stats->cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats->cardinality) *
+		                                                      RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+	}
+	ModifyStatsIfLimit(limit_op.get(), *operator_stats);
+	return AddRelation(input_op, parent, *operator_stats);
 }
 
 bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
@@ -322,14 +436,17 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			children_stats.push_back(stats);
 		}
 
-		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
-		op->SetEstimatedCardinality(combined_stats.cardinality);
-		if (!datasource_filters.empty()) {
-			combined_stats.cardinality = (idx_t)MaxValue(
-			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+		auto combined_stats = CombineNonReorderableStats(*op, children_stats, context);
+		if (!combined_stats) {
+			stats_complete = false;
+			return false;
 		}
-		AddRelation(input_op, parent, combined_stats);
-		return true;
+		op->SetEstimatedCardinality(combined_stats->cardinality);
+		if (!datasource_filters.empty()) {
+			combined_stats->cardinality = (idx_t)MaxValue(
+			    double(combined_stats->cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+		}
+		return AddRelation(input_op, parent, *combined_stats);
 	}
 
 	switch (op->type) {
@@ -340,15 +457,18 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
+		if (!operator_stats) {
+			stats_complete = false;
+			return false;
+		}
 		// the extracted cardinality should be set for aggregate
-		aggr.SetEstimatedCardinality(operator_stats.cardinality);
+		aggr.SetEstimatedCardinality(operator_stats->cardinality);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
-			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+			operator_stats->cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats->cardinality) *
+			                                                      RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
-		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
-		return true;
+		return AddRelation(input_op, parent, *operator_stats);
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		// optimize children
@@ -357,21 +477,23 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
+		if (!operator_stats) {
+			stats_complete = false;
+			return false;
+		}
 		// the extracted cardinality should be set for window
-		window.SetEstimatedCardinality(operator_stats.cardinality);
+		window.SetEstimatedCardinality(operator_stats->cardinality);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
-			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+			operator_stats->cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats->cardinality) *
+			                                                      RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
-		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
-		return true;
+		return AddRelation(input_op, parent, *operator_stats);
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		// optimize children of unnest
 		RelationStats child_stats;
-		AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
-		return true;
+		return AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op->Cast<LogicalComparisonJoin>();
@@ -393,7 +515,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			// optimize the child and copy the stats
 			auto child_optimizer = optimizer.CreateChildOptimizer();
 			op->children[1] = child_optimizer.Optimize(std::move(op->children[1]), &child_stats);
-			AddRelation(*op->children[1], op, child_stats);
+			if (!AddRelation(*op->children[1], op, child_stats)) {
+				return false;
+			}
 			auto right_child_bindings = op->children[1]->GetColumnBindings();
 			for (auto &bindings : right_child_bindings) {
 				relation_mapping[bindings.table_index] = RelationIndex(relations.size() - 1);
@@ -411,16 +535,18 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 		auto &dummy_scan = op->Cast<LogicalDummyScan>();
 		auto stats = RelationStatisticsHelper::ExtractDummyScanStats(dummy_scan, context);
-		AddRelation(input_op, parent, stats);
-		return true;
+		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations.
 		// create empty stats for dummy scan or logical expression get
 		auto &expression_get = op->Cast<LogicalExpressionGet>();
 		auto stats = RelationStatisticsHelper::ExtractExpressionGetStats(expression_get, context);
-		AddRelation(input_op, parent, stats);
-		return true;
+		return AddRelation(input_op, parent, stats);
+	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		auto stats = RelationStatisticsHelper::ExtractColumnDataGetStats(op->Cast<LogicalColumnDataGet>(), context);
+		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		// TODO: Get stats from a logical GET
@@ -430,8 +556,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// be used in joins
 		if (!op->children.empty()) {
 			RelationStats child_stats;
-			AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
-			return true;
+			return AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 		}
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);
 		// if there is another logical filter that could not be pushed down into the
@@ -442,8 +567,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		ModifyStatsIfLimit(limit_op.get(), stats);
-		AddRelation(input_op, parent, stats);
-		return true;
+		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		RelationStats child_stats;
@@ -453,10 +577,13 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
-		proj.SetEstimatedCardinality(proj_stats.cardinality);
-		ModifyStatsIfLimit(limit_op.get(), proj_stats);
-		AddRelation(input_op, parent, proj_stats);
-		return true;
+		if (!proj_stats) {
+			stats_complete = false;
+			return false;
+		}
+		proj.SetEstimatedCardinality(proj_stats->cardinality);
+		ModifyStatsIfLimit(limit_op.get(), *proj_stats);
+		return AddRelation(input_op, parent, *proj_stats);
 	}
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
 		// optimize the child and copy the stats
@@ -464,8 +591,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Projection can create columns so we need to add them here
 		auto stats = RelationStatisticsHelper::ExtractEmptyResultStats(empty_result);
 		empty_result.SetEstimatedCardinality(stats.cardinality);
-		AddRelation(input_op, parent, stats);
-		return true;
+		return AddRelation(input_op, parent, stats);
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
@@ -487,15 +613,34 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		// create the stats for the CTE
 		auto child_2_card = rhs_stats.stats_initialized ? rhs_stats.cardinality : 0;
+		idx_t cte_cardinality;
 
 		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			// we cannot really estimate the cardinality of a recursive CTE
 			// because we don't know how many times it will be executed
 			// we just assume it will be executed 1000 times
-			op->SetEstimatedCardinality(child_1_card + child_2_card * 1000);
+			cte_cardinality = child_1_card + child_2_card * 1000;
 		} else if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			// for a materialized CTE, we just take the cardinality of the right children
-			op->SetEstimatedCardinality(child_2_card);
+			cte_cardinality = child_2_card;
+		} else {
+			throw InternalException("Unexpected CTE type in join order optimizer");
+		}
+		op->SetEstimatedCardinality(cte_cardinality);
+		auto output_stats = RelationStatisticsHelper::ProjectOutputStats(rhs_stats, input_op);
+		if (!output_stats) {
+			output_stats = RelationStatisticsHelper::RebindOutputStats(rhs_stats, input_op);
+		}
+		if (output_stats && op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			output_stats->cardinality = cte_cardinality;
+			// Statistics from one recursive term do not describe the complete fixpoint. Keep the output layout, but
+			// represent each fixpoint domain using the standard cardinality-based fallback.
+			for (auto &column : output_stats->columns) {
+				column.distinct_count = DistinctCount(cte_cardinality, DistinctCountSource::CARDINALITY);
+			}
+		}
+		if (!output_stats || !AddRelation(input_op, parent, *output_stats)) {
+			stats_complete = false;
 		}
 
 		return false;
@@ -503,8 +648,15 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op->Cast<LogicalCTERef>();
 		auto cte_stats = optimizer.GetMaterializedCTEStats(cte_ref.cte_index);
+		auto rebound_stats = RelationStatisticsHelper::RebindOutputStats(cte_stats, cte_ref);
+		if (!rebound_stats) {
+			stats_complete = false;
+			return false;
+		}
 		cte_ref.SetEstimatedCardinality(cte_stats.cardinality);
-		AddRelation(input_op, parent, cte_stats);
+		if (!AddRelation(input_op, parent, *rebound_stats)) {
+			return false;
+		}
 
 		auto is_recursive = optimizer.recursive_cte_indexes.find(cte_ref.cte_index);
 		if (is_recursive != optimizer.recursive_cte_indexes.end()) {
@@ -533,11 +685,15 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			dummy_aggr->groups.push_back(delim_col->Copy());
 		}
 		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
+		if (!lhs_delim_stats) {
+			stats_complete = false;
+			return false;
+		}
 
 		// optimize the other child, which will now have access to the stats
 		RelationStats rhs_stats;
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
-		rhs_optimizer.AddDelimScanStats(lhs_delim_stats);
+		rhs_optimizer.AddDelimScanStats(*lhs_delim_stats);
 		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), rhs_stats);
 
 		RelationStats dj_stats;
@@ -568,7 +724,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			                    1);
 		}
 
-		AddAggregateOrWindowRelation(input_op, parent, dj_stats, op->type);
+		if (!AddRelation(input_op, parent, dj_stats)) {
+			return false;
+		}
 
 		return false;
 	}
@@ -577,9 +735,13 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// but ran into terrible join orders (see internal issue #596), so we removed it again
 		// We now have proper statistics for DelimGets, and get an even better query plan for #596
 		auto delim_scan_stats = optimizer.GetDelimScanStats();
+		auto rebound_stats = RelationStatisticsHelper::RebindOutputStats(delim_scan_stats, *op);
+		if (!rebound_stats) {
+			stats_complete = false;
+			return false;
+		}
 		op->SetEstimatedCardinality(delim_scan_stats.cardinality);
-		AddAggregateOrWindowRelation(input_op, parent, delim_scan_stats, op->type);
-		return true;
+		return AddRelation(input_op, parent, *rebound_stats);
 	}
 	default:
 		return false;
@@ -594,13 +756,11 @@ void RelationManager::GetColumnBindingsFromExpression(const Expression &expressi
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.Depth() == 0);
 		D_ASSERT(colref.Binding().table_index.IsValid());
-		// only add column bindings that map to relations.
-		if (relation_mapping.find(colref.Binding().table_index) == relation_mapping.end()) {
+		ColumnBinding normalized;
+		if (!TryNormalizeBinding(colref.Binding(), normalized)) {
 			return;
 		}
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		column_bindings.insert(ColumnBinding(TableIndex(relation_mapping[colref.Binding().table_index].index),
-		                                     colref.Binding().column_index));
+		column_bindings.insert(normalized);
 	}
 
 	// TODO: handle inequality filters with functions.
@@ -610,11 +770,11 @@ void RelationManager::GetColumnBindingsFromExpression(const Expression &expressi
 
 void RelationManager::GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings) {
 	for (auto &binding : op.GetColumnBindings()) {
-		auto entry = relation_mapping.find(binding.table_index);
-		if (entry == relation_mapping.end()) {
+		ColumnBinding normalized;
+		if (!TryNormalizeBinding(binding, normalized)) {
 			continue;
 		}
-		column_bindings.insert(ColumnBinding(TableIndex(entry->second.index), binding.column_index));
+		column_bindings.insert(normalized);
 	}
 }
 
@@ -986,10 +1146,8 @@ void RelationManager::PrintRelationStats() {
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &relation = relations.at(i);
 		auto &stats = relation->stats;
-		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
-		for (idx_t i = 0; i < stats.column_names.size(); i++) {
-			to_print = stats.column_names.at(i) + " has estimated distinct count " +
-			           to_string(stats.column_distinct_count.at(i).distinct_count);
+		for (auto &column : stats.columns) {
+			to_print = column.name + " has estimated distinct count " + to_string(column.distinct_count.distinct_count);
 			Printer::Print(to_print);
 		}
 		to_print = stats.table_name + " has estimated cardinality " + to_string(stats.cardinality);
