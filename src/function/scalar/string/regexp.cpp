@@ -442,6 +442,8 @@ ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
 	                                           {"options", LogicalType::VARCHAR}},
 	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr,
 	                                          RegexInitLocalState));
+	// throws for invalid replacement strings
+	regexp_replace.SetFallible();
 	return (regexp_replace);
 }
 
@@ -515,6 +517,8 @@ ScalarFunctionSet RegexpExtractAllFun::GetFunctions() {
 	    LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced in bind
 	    RegexpExtractAllStruct::Execute, RegexpExtractAllStruct::Bind, nullptr, RegexpExtractAllStruct::InitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	// throws when accessing a group that the pattern does not have
+	regexp_extract_all.SetFallible();
 	return (regexp_extract_all);
 }
 

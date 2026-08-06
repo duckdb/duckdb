@@ -31,7 +31,7 @@ struct ThrottlingSum {
 
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
-	                                             duckdb::vector<string> &names) {
+	                                             duckdb::vector<Identifier> &names) {
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
 		return make_uniq<TableFunctionData>();
@@ -105,7 +105,7 @@ struct ThrottlingSum {
 struct LateralStructEcho {
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
-	                                             duckdb::vector<string> &names) {
+	                                             duckdb::vector<Identifier> &names) {
 		return_types.emplace_back(LogicalType::BIGINT);
 		names.emplace_back("outer_i");
 		return_types.emplace_back(LogicalType::BIGINT);

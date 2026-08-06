@@ -111,7 +111,8 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static double ExtractEpoch(Calendar *calendar, const uint64_t micros) {
-		auto result = calendar->GetTime() / Interval::MSECS_PER_SEC;
+		// the milliseconds carry the fraction of a second, so the division has to keep it
+		auto result = double(calendar->GetTime()) / double(Interval::MSECS_PER_SEC);
 		result += micros / double(Interval::MICROS_PER_SEC);
 		return result;
 	}

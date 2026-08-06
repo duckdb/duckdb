@@ -784,7 +784,12 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
-		return true;
+		// We can stream first values if the frame start is fixed at the partition start
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       (wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_RANGE ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_GROUPS ||
+		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state);

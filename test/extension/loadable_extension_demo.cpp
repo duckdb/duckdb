@@ -154,7 +154,7 @@ public:
 	};
 
 	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
 		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));

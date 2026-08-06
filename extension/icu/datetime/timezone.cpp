@@ -161,7 +161,7 @@ int32_t SimpleTimeZone::GetOffsetForFields(int32_t year, int8_t month, int8_t do
 	return raw_offset;
 }
 
-void SimpleTimeZone::GetOffset(double millis, int32_t &raw_offset_out, int32_t &dst_offset_out) const {
+void SimpleTimeZone::GetOffset(int64_t millis, int32_t &raw_offset_out, int32_t &dst_offset_out) const {
 	raw_offset_out = raw_offset;
 	dst_offset_out = 0;
 
@@ -178,7 +178,7 @@ void SimpleTimeZone::GetOffset(double millis, int32_t &raw_offset_out, int32_t &
 	dst_offset_out = GetOffsetForFields(year, month, dom, dow, mid) - raw_offset;
 }
 
-void SimpleTimeZone::GetOffsetFromLocal(double millis, LocalOption non_existing, LocalOption duplicated,
+void SimpleTimeZone::GetOffsetFromLocal(int64_t millis, LocalOption non_existing, LocalOption duplicated,
                                         int32_t &raw_offset_out, int32_t &dst_offset_out) const {
 	raw_offset_out = raw_offset;
 	dst_offset_out = 0;
@@ -221,7 +221,7 @@ OlsonTimeZone::OlsonTimeZone(string id_p, const TZZoneData &data_p)
 	final_zone = make_uniq<SimpleTimeZone>(string(), data.final_raw * int32_t(MILLIS_PER_SECOND),
 	                                       GetTZData().rules[data.final_rule]);
 	// the final rule applies from the start of its first year onwards
-	final_start_millis = double(Grego::FieldsToDay(data.final_year, 0, 1)) * double(MILLIS_PER_DAY);
+	final_start_millis = Grego::FieldsToDay(data.final_year, 0, 1) * MILLIS_PER_DAY;
 }
 
 const TZTypeOffset &OlsonTimeZone::OffsetsAt(int32_t transition_index) const {
@@ -229,7 +229,7 @@ const TZTypeOffset &OlsonTimeZone::OffsetsAt(int32_t transition_index) const {
 	return data.type_offsets[type];
 }
 
-void OlsonTimeZone::GetHistoricalOffset(double millis, bool local, LocalOption non_existing, LocalOption duplicated,
+void OlsonTimeZone::GetHistoricalOffset(int64_t millis, bool local, LocalOption non_existing, LocalOption duplicated,
                                         int32_t &raw_offset, int32_t &dst_offset) const {
 	// the maximum absolute offset of a zone, used as a safety margin when scanning the transitions
 	static constexpr int64_t MAX_OFFSET_SECONDS = 86400;
@@ -237,13 +237,13 @@ void OlsonTimeZone::GetHistoricalOffset(double millis, bool local, LocalOption n
 	const auto transition_count = int32_t(data.transition_count);
 	int32_t transition_index = -1;
 	if (transition_count > 0) {
-		const auto sec = std::floor(millis / double(MILLIS_PER_SECOND));
-		if (local || sec >= double(data.transitions[0])) {
+		const auto sec = FloorDiv::Divide(millis, MILLIS_PER_SECOND);
+		if (local || sec >= data.transitions[0]) {
 			// searching backwards is the fastest approach, since most lookups are at or near the end
 			for (transition_index = transition_count - 1; transition_index >= 0; transition_index--) {
 				auto transition = data.transitions[transition_index];
 
-				if (local && sec >= double(transition - MAX_OFFSET_SECONDS)) {
+				if (local && sec >= transition - MAX_OFFSET_SECONDS) {
 					const auto &before = OffsetsAt(transition_index - 1);
 					const auto &after = OffsetsAt(transition_index);
 					const auto offset_before = before.raw_offset + before.dst_offset;
@@ -257,7 +257,7 @@ void OlsonTimeZone::GetHistoricalOffset(double millis, bool local, LocalOption n
 						transition += duplicated == LocalOption::FORMER ? offset_before : offset_after;
 					}
 				}
-				if (sec >= double(transition)) {
+				if (sec >= transition) {
 					break;
 				}
 			}
@@ -268,7 +268,7 @@ void OlsonTimeZone::GetHistoricalOffset(double millis, bool local, LocalOption n
 	dst_offset = offsets.dst_offset * int32_t(MILLIS_PER_SECOND);
 }
 
-void OlsonTimeZone::GetOffset(double millis, int32_t &raw_offset, int32_t &dst_offset) const {
+void OlsonTimeZone::GetOffset(int64_t millis, int32_t &raw_offset, int32_t &dst_offset) const {
 	if (final_zone && millis >= final_start_millis) {
 		final_zone->GetOffset(millis, raw_offset, dst_offset);
 	} else {
@@ -276,7 +276,7 @@ void OlsonTimeZone::GetOffset(double millis, int32_t &raw_offset, int32_t &dst_o
 	}
 }
 
-void OlsonTimeZone::GetOffsetFromLocal(double millis, LocalOption non_existing, LocalOption duplicated,
+void OlsonTimeZone::GetOffsetFromLocal(int64_t millis, LocalOption non_existing, LocalOption duplicated,
                                        int32_t &raw_offset, int32_t &dst_offset) const {
 	if (final_zone && millis >= final_start_millis) {
 		final_zone->GetOffsetFromLocal(millis, non_existing, duplicated, raw_offset, dst_offset);

@@ -4,7 +4,7 @@
 
 name name fsst Compression Write
 group fsst
-storage persistent
+storage persistent v1.2.0
 require_reinit
 
 load

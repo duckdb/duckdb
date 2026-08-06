@@ -151,6 +151,11 @@ struct JSONConverterBase {
 		} else {
 			throw InternalException("Unhandled decimal type");
 		}
+		if (width == scale) {
+			// Decimal::ToString omits the zero before the decimal point when all digits are fractional.
+			// JSON numbers require an integer component.
+			val_str.insert(val_str[0] == '-' ? 1 : 0, 1, '0');
+		}
 		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
 	}
 
