@@ -177,13 +177,28 @@ static string GetAlias(const TableFunctionRef &ref) {
 	return string();
 }
 
-static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
-                                                 vector<Identifier> &return_names) {
+//! Postgres names the single column of a set-returning function after the alias of the function
+//! (e.g. "SELECT t FROM generate_series(1, 2) t" returns the values, not a struct)
+//! returns the original column name, which is kept available as a column alias
+static Identifier ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
+                                                       vector<Identifier> &return_names) {
 	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
 	    !ref.column_name_alias.empty() || return_names.size() != 1) {
+		return Identifier();
+	}
+	auto original_name = return_names[0];
+	return_names[0] = ref.alias;
+	return original_name;
+}
+
+//! Keep the original column name of a set-returning function bindable, e.g. "SELECT t.generate_series FROM
+//! generate_series(1, 2) t" - the original name is hidden from * since the column is emitted under the alias
+static void AddPostgresSetofColumnAlias(BindContext &bind_context, TableIndex bind_index,
+                                        const Identifier &original_name) {
+	if (original_name.empty()) {
 		return;
 	}
-	return_names[0] = ref.alias;
+	bind_context.AddColumnAlias(bind_index, original_name, 0);
 }
 
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
@@ -205,9 +220,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
-			vector<string> operator_names;
-			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, operator_names);
-			return_names = StringsToIdentifiers(operator_names);
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
@@ -221,9 +234,10 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 						    table_function.name);
 					}
 				}
-				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
+				auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
 				bind_context.AddGenericBinding(bind_index, Identifier(function_name), return_names, new_plan->types);
+				AddPostgresSetofColumnAlias(bind_context, bind_index, setof_column_name);
 				result.names = return_names;
 				result.types = new_plan->types;
 				result.plan = std::move(new_plan);
@@ -246,9 +260,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 			                      table_function.name);
 		}
-		vector<string> bind_names;
-		bind_data = table_function.bind(context, bind_input, return_types, bind_names);
-		return_names = StringsToIdentifiers(bind_names);
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
 			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
 			// found
@@ -284,7 +296,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
-	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
+	auto setof_column_name = ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];
@@ -317,6 +329,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
 		bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
 		                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
+		AddPostgresSetofColumnAlias(bind_context, bind_index, setof_column_name);
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
@@ -348,6 +361,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	BoundStatement result;
 	bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
 	                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
+	AddPostgresSetofColumnAlias(bind_context, bind_index, setof_column_name);
 	result.names = std::move(return_names);
 	result.types = std::move(return_types);
 	result.plan = std::move(get);

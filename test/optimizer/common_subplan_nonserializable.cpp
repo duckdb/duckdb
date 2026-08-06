@@ -28,7 +28,7 @@ struct NonSerializableBindData : public TableFunctionData {
 };
 
 unique_ptr<FunctionData> NonSerializableBind(ClientContext &, TableFunctionBindInput &,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::INTEGER);
 	names.emplace_back("i");
 	return make_uniq<NonSerializableBindData>();

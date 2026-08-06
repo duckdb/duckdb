@@ -101,7 +101,7 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context,
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
+	                                                      vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
@@ -120,7 +120,7 @@ public:
 			result->names.emplace_back("empty");
 			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
 			return std::move(result);
 		}
 
@@ -143,7 +143,7 @@ public:
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
 		} else {
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
@@ -183,14 +183,14 @@ public:
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
-			result->table_columns = names;
+			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names) {
+	                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
@@ -249,8 +249,12 @@ public:
 		}
 		interface->FinalizeCopyBind(context, *options, expected_names, expected_types);
 
-		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-		                             expected_names, std::move(file_options), std::move(options), std::move(interface));
+		// the COPY bind still operates on plain strings - convert around the table function bind
+		auto names = StringsToIdentifiers(expected_names);
+		auto result = MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
+		                                    names, std::move(file_options), std::move(options), std::move(interface));
+		expected_names = IdentifiersToStrings(names);
+		return result;
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,

@@ -22060,7 +22060,7 @@ void PEGTransformerFactory::InitializeJoinWithoutOnClauseTrampoline(PEGTransform
                                                                     TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.ReserveChildSlots(2);
-	stack.PushFrame(list_pr.GetChild(2), TABLE_REF_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	stack.PushFrame(list_pr.GetChild(2), INNER_TABLE_REF_OPS, TransformFrameResultTarget(frame.frame_index, 1));
 	stack.PushFrame(list_pr.GetChild(0), JOIN_PREFIX_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -22068,8 +22068,8 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeJoinWithoutOnClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                              TransformStackFrame &frame) {
 	auto join_prefix = frame.TakeResult<JoinPrefix>(0);
-	auto table_ref = frame.TakeResult<unique_ptr<TableRef>>(1);
-	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(table_ref));
+	auto inner_table_ref = frame.TakeResult<unique_ptr<TableRef>>(1);
+	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(inner_table_ref));
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 
