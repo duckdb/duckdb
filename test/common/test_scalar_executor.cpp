@@ -545,6 +545,9 @@ TEST_CASE("Executor facade operation conventions remain compatible", "[scalar_ex
 }
 
 TEST_CASE("Executor facades preserve vector-size errors", "[scalar_executor]") {
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	return;
+#endif
 	auto short_vector = MakeFlatVector(3);
 	auto long_vector = MakeFlatVector(4);
 	Vector result(LogicalType::BIGINT, 4);
