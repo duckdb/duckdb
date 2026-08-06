@@ -1,5 +1,8 @@
 #include "duckdb/main/profiler/samply.hpp"
 
+#include "duckdb/common/string_util.hpp"
+#include "utf8proc_wrapper.hpp"
+
 #include <cerrno>
 #include <cstdio>
 
@@ -23,6 +26,57 @@
 #endif
 
 namespace duckdb {
+
+string SamplyQueryMarkerName(const string &query) {
+	static constexpr idx_t MAX_QUERY_CHARACTERS = 500;
+	static constexpr idx_t MAX_MARKER_NAME_BYTES = 900;
+	const string prefix = "Query: ";
+	const string ellipsis = "…";
+
+	string normalized_query;
+	normalized_query.reserve(MinValue<idx_t>(query.size(), MAX_MARKER_NAME_BYTES));
+	bool pending_space = false;
+	for (const auto character : query) {
+		if (StringUtil::CharacterIsSpace(character)) {
+			pending_space = !normalized_query.empty();
+			continue;
+		}
+		if (pending_space) {
+			normalized_query += ' ';
+			pending_space = false;
+		}
+		normalized_query += character == '\0' ? '?' : character;
+	}
+	if (normalized_query.empty()) {
+		return prefix + "<empty>";
+	}
+	if (!Utf8Proc::IsValid(normalized_query.c_str(), normalized_query.size())) {
+		Utf8Proc::MakeValid(&normalized_query[0], normalized_query.size());
+	}
+
+	idx_t character_count = 0;
+	idx_t query_bytes = 0;
+	while (query_bytes < normalized_query.size() && character_count < MAX_QUERY_CHARACTERS) {
+		auto next_position =
+		    Utf8Proc::NextGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
+		if (prefix.size() + next_position > MAX_MARKER_NAME_BYTES) {
+			break;
+		}
+		query_bytes = next_position;
+		character_count++;
+	}
+
+	if (query_bytes == normalized_query.size()) {
+		return prefix + normalized_query;
+	}
+	if (character_count == MAX_QUERY_CHARACTERS) {
+		query_bytes = Utf8Proc::PreviousGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
+	}
+	while (prefix.size() + query_bytes + ellipsis.size() > MAX_MARKER_NAME_BYTES) {
+		query_bytes = Utf8Proc::PreviousGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
+	}
+	return prefix + normalized_query.substr(0, query_bytes) + ellipsis;
+}
 
 #if defined(__linux__) || defined(__APPLE__)
 
