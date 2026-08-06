@@ -28,7 +28,7 @@ static string DatePartUnaryFunctionName(DatePartSpecifier part) {
 	case DatePartSpecifier::MICROSECONDS:
 		return "microsecond";
 	default:
-		return EnumUtil::ToChars(part);
+		return StringUtil::Lower(EnumUtil::ToChars(part));
 	}
 }
 

@@ -24,30 +24,8 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, const Logica
 	case LogicalType::TIMESTAMP_MS:
 	case LogicalType::TIMESTAMP_NS:
 	case LogicalType::TIMESTAMP_TZ:
-		return part;
 	case LogicalType::DATE:
-		switch (part) {
-		case DatePartSpecifier::YEAR:
-		case DatePartSpecifier::MONTH:
-		case DatePartSpecifier::DAY:
-		case DatePartSpecifier::DECADE:
-		case DatePartSpecifier::CENTURY:
-		case DatePartSpecifier::MILLENNIUM:
-		case DatePartSpecifier::DOW:
-		case DatePartSpecifier::ISODOW:
-		case DatePartSpecifier::ISOYEAR:
-		case DatePartSpecifier::WEEK:
-		case DatePartSpecifier::QUARTER:
-		case DatePartSpecifier::DOY:
-		case DatePartSpecifier::YEARWEEK:
-		case DatePartSpecifier::ERA:
-		case DatePartSpecifier::EPOCH:
-		case DatePartSpecifier::JULIAN_DAY:
-			return part;
-		default:
-			break;
-		}
-		break;
+		return part;
 	case LogicalType::TIME:
 	case LogicalType::TIME_NS:
 	case LogicalType::TIME_TZ:
@@ -812,6 +790,12 @@ struct DatePart {
 				if (double_data) {
 					double_data[idx] = double(Date::ExtractJulianDay(input));
 				}
+			}
+
+			const part_mask_t time_mask = (mask & TIME) | (mask & ZONE);
+			if (time_mask) {
+				dtime_t zero(0);
+				Operation(bigint_values, double_values, zero, idx, time_mask);
 			}
 		}
 	};
@@ -2014,7 +1998,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 	const auto type = (arguments[0]->GetReturnType().id());
 	const auto part_code = GetDateTypePartSpecifier(part_name, type);
-	bound_function.SetName(Identifier(DatePartUnaryFunctionName(part_code)));
+	bound_function.SetName(Identifier(StringUtil::Lower(DatePartUnaryFunctionName(part_code))));
 
 	if (IsBigintDatepart(part_code)) {
 		bound_function.SetReturnType(LogicalType::BIGINT);
