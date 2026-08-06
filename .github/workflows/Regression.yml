@@ -208,8 +208,8 @@ jobs:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
             threads: 4
-          - name: TPCDS SF3
-            benchmarks: .github/regression/tpcds_sf3.csv
+          - name: TPCDS SF10
+            benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
