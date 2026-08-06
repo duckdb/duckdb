@@ -71,7 +71,25 @@ GROUP BY d_a, d_b, d_c, d_d
 ----
 physical_plan	<REGEX>:.*combine_aggr.*
 
-# Preserved-side LEFT/RIGHT joins can use the one-sided state-export path.
+# Grouping only by the dimension join key does not make a second aggregate pass worthwhile.
+query II
+EXPLAIN
+SELECT dim.dim_key, sum(measure)
+FROM fact JOIN dim ON fact.dim_key = dim.dim_key
+GROUP BY dim.dim_key
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
+# Replacing one grouping key with another does not offset an extra aggregate pass.
+query II
+EXPLAIN
+SELECT d_a, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY d_a
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
+# Preserved-side LEFT/RIGHT joins remain correct when equal-width grouping skips pushdown.
 statement ok
 CREATE TABLE pap_oj_fact(k INTEGER, m INTEGER)
 
@@ -129,7 +147,7 @@ SELECT d.g, count(*) AS c, sum(f.m) AS s
 FROM pap_oj_fact f LEFT JOIN pap_oj_dim d ON f.k = d.k
 GROUP BY d.g
 ----
-physical_plan	<REGEX>:.*combine_aggr.*
+physical_plan	<!REGEX>:.*combine_aggr.*
 
 query II
 EXPLAIN
@@ -137,7 +155,7 @@ SELECT d.g, count(*) AS c, sum(f.m) AS s
 FROM pap_oj_dim d RIGHT JOIN pap_oj_fact f ON d.k = f.k
 GROUP BY d.g
 ----
-physical_plan	<REGEX>:.*combine_aggr.*
+physical_plan	<!REGEX>:.*combine_aggr.*
 
 # Nullable-side aggregate inputs remain unsafe for one-sided outer join pushdown.
 query II

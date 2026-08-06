@@ -377,8 +377,9 @@ static void BuildLowerGroupMap(LogicalAggregate &aggr, LogicalComparisonJoin &jo
 	                           info.side_bindings, info.lower_groups, info.lower_group_map, info.lower_group_types);
 }
 
-static bool PassesLowerGroupHeuristic(const PartialAggregatePushdownInfo &info) {
-	return info.lower_groups.size() <= info.join_key_count + PartialAggregatePushdownHeuristics::MAX_EXTRA_LOWER_GROUPS;
+static bool PassesLowerGroupHeuristic(const LogicalAggregate &aggr, const PartialAggregatePushdownInfo &info) {
+	return info.lower_groups.size() < aggr.groups.size() &&
+	       info.lower_groups.size() <= info.join_key_count + PartialAggregatePushdownHeuristics::MAX_EXTRA_LOWER_GROUPS;
 }
 
 static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &aggr, TableIndex lower_aggregate_index,
@@ -1128,7 +1129,7 @@ bool PartialAggregatePushdown::TryPushdownAggregate(unique_ptr<LogicalOperator> 
 	info.upper_group_index = optimizer.binder.GenerateTableIndex();
 	info.upper_aggregate_index = optimizer.binder.GenerateTableIndex();
 	BuildLowerGroupMap(*aggr, *join, info);
-	if (!PassesLowerGroupHeuristic(info)) {
+	if (!PassesLowerGroupHeuristic(*aggr, info)) {
 		return false;
 	}
 
