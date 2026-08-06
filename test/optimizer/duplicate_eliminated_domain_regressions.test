@@ -323,7 +323,8 @@ SELECT * FROM dedup_reg_scalar_aggregate_join;
 statement ok
 SET debug_verify_aggregate_state_export=getvariable('dedup_reg_original_verify_aggregate_state_export');
 
-# Reused UNNEST CTEs retain tag multiplicity and ordered aggregate results.
+# Reused UNNEST CTEs retain tag multiplicity and ordered aggregate results. The potentially fallible substring is
+# evaluated below the generated-domain restriction, so removing that restriction does not change its evaluation set.
 statement ok
 CREATE TABLE dedup_reg_tag_lists(post_id INTEGER, tags VARCHAR[]);
 
@@ -346,7 +347,7 @@ WITH ranked_posts AS (
     SELECT post_id, title, creation_date, score, view_count, tags
     FROM ranked_posts WHERE tag_rank <= 5
 ), post_tags AS (
-    SELECT fp.post_id, unnest(tl.tags) AS tag
+    SELECT fp.post_id, substring(unnest(tl.tags), 1, fp.post_id) AS tag
     FROM filtered_posts fp
     JOIN dedup_reg_tag_lists tl ON fp.post_id = tl.post_id
 ), tag_usage AS (

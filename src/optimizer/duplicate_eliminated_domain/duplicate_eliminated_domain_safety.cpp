@@ -268,21 +268,42 @@ public:
 public:
 	bool CanEvaluate(LogicalOperator &root) {
 		unordered_set<TableIndex> visiting_ctes;
-		return SubtreeIsInspectable(root, visiting_ctes);
+		auto result = Analyze(root, visiting_ctes);
+		return result.contains_domain && result.safe;
 	}
 
 private:
-	bool SubtreeIsInspectable(LogicalOperator &op, unordered_set<TableIndex> &visiting_ctes) const {
+	struct AnalysisResult {
+	public:
+		bool contains_domain = false;
+		bool safe = true;
+	};
+
+	AnalysisResult AnalyzeCTERef(LogicalCTERef &cte_ref, unordered_set<TableIndex> &visiting_ctes) const {
+		if (cte_ref.cte_index == domain_cte_index) {
+			return {true, true};
+		}
+		if (cte_ref.is_recurring) {
+			return {};
+		}
+		auto cte_definition = cte_registry.FindDefinition(cte_ref.cte_index);
+		if (!cte_definition || cte_registry.IsAlwaysMaterialized(cte_ref.cte_index) ||
+		    !visiting_ctes.insert(cte_ref.cte_index).second) {
+			return {};
+		}
+		auto result = Analyze(*cte_definition, visiting_ctes);
+		visiting_ctes.erase(cte_ref.cte_index);
+		return result;
+	}
+
+	bool OperatorCanEvaluateAdditionalGroups(LogicalOperator &op) const {
 		if (!OperatorExpressionsAreSafe(context, op)) {
 			return false;
 		}
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_GET: {
 			auto &get = op.Cast<LogicalGet>();
-			if (!CanEvaluateAdditionalGroupsForScan(context, get)) {
-				return false;
-			}
-			break;
+			return CanEvaluateAdditionalGroupsForScan(context, get);
 		}
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -293,29 +314,7 @@ private:
 			                                                                       rewrite_root))) {
 				return false;
 			}
-			break;
-		case LogicalOperatorType::LOGICAL_CTE_REF: {
-			auto &cte_ref = op.Cast<LogicalCTERef>();
-			if (cte_ref.cte_index == domain_cte_index) {
-				return true;
-			}
-			if (cte_ref.is_recurring) {
-				return false;
-			}
-			auto cte_definition = cte_registry.FindDefinition(cte_ref.cte_index);
-			if (!cte_definition) {
-				return false;
-			}
-			if (cte_registry.IsAlwaysMaterialized(cte_ref.cte_index)) {
-				return true;
-			}
-			if (!visiting_ctes.insert(cte_ref.cte_index).second) {
-				return false;
-			}
-			auto result = SubtreeIsInspectable(*cte_definition, visiting_ctes);
-			visiting_ctes.erase(cte_ref.cte_index);
-			return result;
-		}
+			return true;
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_FILTER:
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -333,16 +332,30 @@ private:
 		case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-			break;
+			return true;
 		default:
 			return false;
 		}
-		for (auto &child : op.children) {
-			if (!SubtreeIsInspectable(*child, visiting_ctes)) {
-				return false;
-			}
+	}
+
+	AnalysisResult Analyze(LogicalOperator &op, unordered_set<TableIndex> &visiting_ctes) const {
+		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			return AnalyzeCTERef(op.Cast<LogicalCTERef>(), visiting_ctes);
 		}
-		return true;
+
+		// Only operators between a generated domain reference and the root can receive additional groups.
+		// Expressions in sibling subtrees retain their original evaluation set.
+		AnalysisResult result;
+		for (auto &child : op.children) {
+			auto child_result = Analyze(*child, visiting_ctes);
+			result.contains_domain |= child_result.contains_domain;
+			result.safe &= child_result.safe;
+		}
+		if (!result.contains_domain) {
+			return result;
+		}
+		result.safe &= OperatorCanEvaluateAdditionalGroups(op);
+		return result;
 	}
 
 private:
