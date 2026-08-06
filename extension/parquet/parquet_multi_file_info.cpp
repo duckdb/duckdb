@@ -304,7 +304,7 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto &context = deserializer.Get<ClientContext &>();
 	auto files = deserializer.ReadProperty<vector<string>>(100, "files");
 	auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
-	auto names = deserializer.ReadProperty<vector<string>>(102, "names");
+	auto names = StringsToIdentifiers(deserializer.ReadProperty<vector<string>>(102, "names"));
 	auto serialization = deserializer.ReadProperty<ParquetOptionsSerialization>(103, "parquet_options");
 	auto table_columns =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});

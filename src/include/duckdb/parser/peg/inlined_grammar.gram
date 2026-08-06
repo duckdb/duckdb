@@ -174,8 +174,9 @@ ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))?
 TupleType <- 'TUPLE' Parens(List(Type))
 ColIdType <- ColId Type
-ArrayBounds <- SquareBracketsArray / ArrayKeyword
+ArrayBounds <- ArrayKeywordWithBounds / SquareBracketsArray / ArrayKeyword
 ArrayKeyword <- 'ARRAY'
+ArrayKeywordWithBounds <- 'ARRAY' SquareBracketsArray
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
@@ -1766,7 +1767,7 @@ NearestSimilarity <- 'SIMILARITY'
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
 JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'
-JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
+JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))

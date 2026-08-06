@@ -1161,6 +1161,7 @@ Int64:
   by_value: false
   rules:
     - ArrayBounds
+    - ArrayKeywordWithBounds
     - SquareBracketsArray
     - ArrayKeyword
 

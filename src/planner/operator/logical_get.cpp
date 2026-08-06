@@ -380,7 +380,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		                             empty_ref, nullptr);
 
 		vector<LogicalType> bind_return_types;
-		vector<string> bind_names;
+		vector<Identifier> bind_names;
 		if (!function.bind) {
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
