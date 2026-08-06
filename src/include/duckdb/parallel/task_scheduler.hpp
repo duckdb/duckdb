@@ -47,6 +47,7 @@ public:
 	idx_t GetNumberOfTasks() const;
 	idx_t GetProducerCount() const;
 	idx_t GetTaskCountForProducer(ProducerToken &token) const;
+	idx_t GetTaskCountForProducerLocked(ProducerToken &token) const DUCKDB_REQUIRES(token.producer_lock);
 
 	//! Schedule a task to be executed by the task scheduler in the given pool
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task, TaskSchedulerType pool_type);
