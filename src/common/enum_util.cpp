@@ -165,7 +165,6 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
-#include "duckdb/optimizer/key_properties.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
@@ -6419,26 +6418,6 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	return static_cast<UnionInvalidReason>(StringUtil::StringToEnum(GetUnionInvalidReasonValues(), 6, "UnionInvalidReason", value));
-}
-
-const StringUtil::EnumStringLiteral *GetUniqueKeyProofValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(UniqueKeyProof::PRIMARY_KEY), "PRIMARY_KEY" },
-		{ static_cast<uint32_t>(UniqueKeyProof::UNIQUE_NOT_NULL), "UNIQUE_NOT_NULL" },
-		{ static_cast<uint32_t>(UniqueKeyProof::AGGREGATE_GROUP), "AGGREGATE_GROUP" },
-		{ static_cast<uint32_t>(UniqueKeyProof::KEY_PRESERVING_JOIN), "KEY_PRESERVING_JOIN" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<UniqueKeyProof>(UniqueKeyProof value) {
-	return StringUtil::EnumToString(GetUniqueKeyProofValues(), 4, "UniqueKeyProof", static_cast<uint32_t>(value));
-}
-
-template<>
-UniqueKeyProof EnumUtil::FromString<UniqueKeyProof>(const char *value) {
-	return static_cast<UniqueKeyProof>(StringUtil::StringToEnum(GetUniqueKeyProofValues(), 4, "UniqueKeyProof", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVacuumIndexStrategyValues() {

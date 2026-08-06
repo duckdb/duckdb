@@ -15,7 +15,7 @@ namespace duckdb {
 class LogicalMaterializedCTE;
 class Optimizer;
 
-//! Reuses an exact aggregate payload already computed by a filtering SEMI join.
+//! Reuses grouped aggregate work already available through SEMI joins or materialized CTEs.
 class AggregateReuseOptimizer : public LogicalOperatorVisitor {
 public:
 	explicit AggregateReuseOptimizer(Optimizer &optimizer);
@@ -26,7 +26,7 @@ public:
 private:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expression,
 	                                    unique_ptr<Expression> *expression_ptr) override;
-	bool TryRewrite(unique_ptr<LogicalOperator> &op);
+	bool TryReuseSemiAggregate(unique_ptr<LogicalOperator> &op);
 	bool TryReuseMaterializedAggregate(unique_ptr<LogicalOperator> &op);
 
 private:

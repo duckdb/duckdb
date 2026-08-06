@@ -8,7 +8,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/optimizer/key_properties.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -930,28 +930,43 @@ bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOper
 	    group_key != owner_key) {
 		return false;
 	}
-	auto owner_key_index = GetDirectReferenceIndex(**owner_key_expr, *join.children[info.dimension_side]);
-	if (!owner_key_index.IsValid() ||
-	    !GetDirectReferenceIndex(**aggregate_key_expr, *join.children[info.aggregate_side]).IsValid() ||
-	    !GetUniqueKeyProperty(*join.children[info.dimension_side], {owner_key_index.GetIndex()})) {
+	ColumnBinding aggregate_key;
+	if (!GetColumnBinding(**aggregate_key_expr, aggregate_key)) {
 		return false;
 	}
 	auto &aggregate = aggr.expressions[0]->Cast<BoundAggregateExpression>();
-	if (aggregate.Function().GetName() != "count" || aggregate.IsDistinct() || aggregate.GetFilter() ||
-	    aggregate.GetOrderBys() || aggregate.GetChildren().size() != 1 || aggregate.IsVolatile() ||
+	auto &aggregate_name = aggregate.Function().GetName();
+	const bool count_star = aggregate_name == "count_star";
+	if ((!count_star && aggregate_name != "count") || aggregate.IsDistinct() || aggregate.GetFilter() ||
+	    aggregate.GetOrderBys() || (!count_star && aggregate.GetChildren().size() != 1) ||
+	    (count_star && !aggregate.GetChildren().empty()) || aggregate.IsVolatile() ||
 	    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
 		return false;
 	}
-	if (!GetDirectReferenceIndex(*aggregate.GetChildren()[0], *join.children[info.aggregate_side]).IsValid()) {
+	if (!count_star && !GetColumnBinding(*aggregate.GetChildren()[0], group_key)) {
 		return false;
 	}
-	if (!join.children[info.dimension_side]->has_estimated_cardinality ||
-	    !join.children[info.aggregate_side]->has_estimated_cardinality || !join.has_estimated_cardinality ||
-	    static_cast<double>(join.children[info.aggregate_side]->estimated_cardinality) <
-	        4.0 * static_cast<double>(MaxValue<idx_t>(join.children[info.dimension_side]->estimated_cardinality, 1)) ||
+	if (!count_star && info.side_bindings[info.aggregate_side].find(group_key.table_index) ==
+	                       info.side_bindings[info.aggregate_side].end()) {
+		return false;
+	}
+	RelationStatsExtractor stats_extractor(optimizer.context);
+	auto aggregate_stats = stats_extractor.Extract(*join.children[info.aggregate_side]);
+	auto key_stats = aggregate_stats ? aggregate_stats->GetColumnStats(aggregate_key) : nullptr;
+	if (!aggregate_stats || !key_stats ||
+	    (key_stats->distinct_count.source != DistinctCountSource::EXACT &&
+	     key_stats->distinct_count.source != DistinctCountSource::HLL)) {
+		return false;
+	}
+	const auto aggregate_cardinality = aggregate_stats->cardinality;
+	const auto key_count = MinValue(key_stats->distinct_count.distinct_count, aggregate_cardinality);
+	if (aggregate_cardinality == 0 || key_count == 0 ||
+	    static_cast<double>(aggregate_cardinality) <
+	        static_cast<double>(PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO) *
+	            static_cast<double>(key_count) ||
+	    !join.children[info.dimension_side]->has_estimated_cardinality || !join.has_estimated_cardinality ||
 	    static_cast<double>(join.estimated_cardinality) <
-	        PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION *
-	            static_cast<double>(join.children[info.aggregate_side]->estimated_cardinality)) {
+	        PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * static_cast<double>(aggregate_cardinality)) {
 		return false;
 	}
 
@@ -963,8 +978,7 @@ bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOper
 	lower->groups.push_back((*aggregate_key_expr)->Copy());
 	lower->children.push_back(std::move(join.children[info.aggregate_side]));
 	lower->ResolveOperatorTypes();
-	lower->SetEstimatedCardinality(
-	    MinValue(join.children[info.dimension_side]->estimated_cardinality, lower->children[0]->estimated_cardinality));
+	lower->SetEstimatedCardinality(key_count);
 
 	auto aggregate_key_type = (*aggregate_key_expr)->GetReturnType();
 	*aggregate_key_expr =
@@ -973,20 +987,46 @@ bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOper
 	join.ResolveOperatorTypes();
 	CopyCardinality(join, *join.children[info.dimension_side]);
 
+	auto count_type = aggregate.GetReturnType();
+	auto count_alias = aggregate.GetAlias();
+	auto count_ref =
+	    make_uniq<BoundColumnRefExpression>(count_type, ColumnBinding(lower_aggregate_index, ProjectionIndex(0)));
+	auto count_value = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, count_type);
+	count_value->GetChildrenMutable().push_back(std::move(count_ref));
+	count_value->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(count_star ? 1 : 0)));
+	vector<unique_ptr<Expression>> sum_children;
+	sum_children.push_back(std::move(count_value));
+	auto upper_sum = DEBindAggregate(optimizer.context, "sum", std::move(sum_children));
+	if (!upper_sum) {
+		return false;
+	}
+	upper_sum->SetAlias(count_alias);
+	vector<unique_ptr<Expression>> upper_aggregates;
+	upper_aggregates.push_back(std::move(upper_sum));
+	auto upper_group_index = optimizer.binder.GenerateTableIndex();
+	auto upper_aggregate_index = optimizer.binder.GenerateTableIndex();
+	auto upper = make_uniq<LogicalAggregate>(upper_group_index, upper_aggregate_index, std::move(upper_aggregates));
+	for (auto &group : aggr.groups) {
+		upper->groups.push_back(group->Copy());
+	}
+	upper->grouping_sets = aggr.grouping_sets;
+	upper->estimated_cardinality = aggr.estimated_cardinality;
+	upper->has_estimated_cardinality = aggr.has_estimated_cardinality;
+	upper->children.push_back(std::move(aggr.children[0]));
+	upper->ResolveOperatorTypes();
+
 	auto projection_index = optimizer.binder.GenerateTableIndex();
 	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(aggr.groups[0]->Copy());
-	auto count_ref = make_uniq<BoundColumnRefExpression>(aggregate.GetReturnType(),
-	                                                     ColumnBinding(lower_aggregate_index, ProjectionIndex(0)));
-	auto count_value = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggregate.GetReturnType());
-	count_value->GetChildrenMutable().push_back(std::move(count_ref));
-	count_value->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
-	count_value->SetAlias(aggregate.GetAlias());
-	expressions.push_back(std::move(count_value));
+	expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(upper->types[0], ColumnBinding(upper_group_index, ProjectionIndex(0))));
+	auto sum_ref =
+	    make_uniq<BoundColumnRefExpression>(upper->types[1], ColumnBinding(upper_aggregate_index, ProjectionIndex(0)));
+	auto count_result = BoundCastExpression::AddCastToType(optimizer.context, std::move(sum_ref), count_type);
+	count_result->SetAlias(count_alias);
+	expressions.push_back(std::move(count_result));
 
-	auto join_plan = std::move(aggr.children[0]);
 	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(expressions));
-	projection->children.push_back(std::move(join_plan));
+	projection->children.push_back(std::move(upper));
 	projection->ResolveOperatorTypes();
 	CopyCardinality(*projection, aggr);
 	AddReplacement(replacement_map, ColumnBinding(aggr.group_index, ProjectionIndex(0)),
