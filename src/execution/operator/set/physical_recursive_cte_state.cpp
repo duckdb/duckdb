@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -76,10 +77,7 @@ idx_t RecursiveCTEPartialKeyIndex::SizeInBytes() const {
 }
 
 void RecursiveCTEMetricDistribution::Add(idx_t value) {
-	auto bucket = idx_t(0);
-	for (auto remaining = value; remaining > 0; remaining >>= 1) {
-		bucket++;
-	}
+	const auto bucket = value == 0 ? idx_t(0) : BIT_COUNT - CountZeros<uint64_t>::Leading(value);
 	D_ASSERT(bucket < buckets.size());
 	buckets[bucket]++;
 	count++;
@@ -100,8 +98,8 @@ idx_t RecursiveCTEMetricDistribution::MedianUpperBound() const {
 		if (bucket == 0) {
 			return 0;
 		}
-		if (bucket == std::numeric_limits<idx_t>::digits) {
-			return std::numeric_limits<idx_t>::max();
+		if (bucket == BIT_COUNT) {
+			return ~idx_t(0);
 		}
 		return (idx_t(1) << bucket) - 1;
 	}

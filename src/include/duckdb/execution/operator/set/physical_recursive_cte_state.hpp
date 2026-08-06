@@ -8,8 +8,6 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
 
-#include <limits>
-
 namespace duckdb {
 
 class Logger;
@@ -87,7 +85,8 @@ struct RecursiveCTEPipelineSchedulePlan {
 };
 
 struct RecursiveCTEMetricDistribution {
-	static constexpr idx_t BUCKET_COUNT = std::numeric_limits<idx_t>::digits + 1;
+	static constexpr idx_t BIT_COUNT = sizeof(idx_t) * 8;
+	static constexpr idx_t BUCKET_COUNT = BIT_COUNT + 1;
 
 	void Add(idx_t value);
 	idx_t MedianUpperBound() const;
