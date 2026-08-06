@@ -19,6 +19,8 @@ TEST_CASE("Recursive CTE metric distribution uses binary magnitude buckets", "[c
 	REQUIRE(next_bucket.MedianUpperBound() == (idx_t(1) << 21) - 1);
 
 	RecursiveCTEMetricDistribution terminal;
-	terminal.Add(std::numeric_limits<idx_t>::max());
-	REQUIRE(terminal.MedianUpperBound() == std::numeric_limits<idx_t>::max());
+	const auto maximum = std::numeric_limits<idx_t>::max();
+	terminal.Add(maximum);
+	const auto terminal_upper_bound = terminal.MedianUpperBound();
+	REQUIRE((terminal_upper_bound == maximum));
 }
