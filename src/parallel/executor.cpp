@@ -290,9 +290,9 @@ void Executor::CancelTasks() {
 #ifndef DUCKDB_NO_THREADS
 		auto &scheduler = TaskScheduler::GetScheduler(context);
 		annotated_unique_lock<annotated_mutex> l(producer->producer_lock);
-		while (executor_tasks > 0 && scheduler.GetTaskCountForProducerLocked(*producer) == 0) {
-			producer->producer_cv.wait(l);
-		}
+		producer->producer_cv.wait(l, [&]() DUCKDB_REQUIRES(producer->producer_lock) {
+			return executor_tasks == 0 || scheduler.GetTaskCountForProducerLocked(*producer) > 0;
+		});
 #endif
 	}
 #ifndef DUCKDB_NO_THREADS
