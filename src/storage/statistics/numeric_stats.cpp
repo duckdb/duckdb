@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -293,7 +294,9 @@ bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<co
 	auto min_value = NumericStats::Min(stats).GetValue<hugeint_t>();
 	auto max_value = NumericStats::Max(stats).GetValue<hugeint_t>();
 	// covering [min, max] requires at least max - min + 1 constants
-	if (max_value - min_value >= NumericCast<int64_t>(constants.size())) {
+	hugeint_t range;
+	if (!TrySubtractOperator::Operation(max_value, min_value, range) ||
+	    range >= NumericCast<int64_t>(constants.size())) {
 		return false;
 	}
 	vector<hugeint_t> values;
