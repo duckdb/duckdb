@@ -191,6 +191,7 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
+            --early-stop \
             --threads 2 \
             "${extra_args[@]}"
 
@@ -254,6 +255,7 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
+            --early-stop \
             --benchmark-cache=clear \
             --disable-timeout \
             --threads ${{ matrix.threads }}
@@ -307,7 +309,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --benchmark-cache=clear
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
 
   regression-test-storage:
     name: Storage Size Regression Test

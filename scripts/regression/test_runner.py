@@ -21,11 +21,10 @@ from comparison import (
 
 print = functools.partial(print, flush=True)
 
-INITIAL_BATCH_SIZE = SAMPLE_BATCH_SIZE
-INITIAL_RUNS = 2 * INITIAL_BATCH_SIZE
+INITIAL_RUNS = 2 * SAMPLE_BATCH_SIZE
 REGRESSION_LIMIT = 1.10
 NOISE_THRESHOLD = 0.02
-CONFIDENCE_PERCENTAGE = 95
+GEOMEAN_REGRESSION_SECONDS = 0.050
 
 ANSI_RED = "\033[31m"
 ANSI_GREEN = "\033[32m"
@@ -37,12 +36,10 @@ BUCKET_UNCHANGED = "unchanged"
 BUCKET_FASTER = "faster"
 BUCKET_SLOWER = "slower"
 BUCKET_REGRESSION = "regression"
-BUCKET_UNCONFIRMED = "unconfirmed"
 BUCKET_FAILURE = "failure"
 
 OUTCOME_NO_REGRESSION = "no_regression"
-OUTCOME_CONFIRMED_REGRESSION = "confirmed_regression"
-OUTCOME_UNCONFIRMED_REGRESSION = "unconfirmed_regression"
+OUTCOME_REGRESSION = "regression"
 OUTCOME_FAILURE = "failure"
 
 
@@ -57,24 +54,25 @@ class BenchmarkResult:
     confirmation_runs: int = 0
     outcome: str = OUTCOME_NO_REGRESSION
 
-    @property
-    def runs(self) -> int:
-        return self.initial_runs + self.confirmation_runs
-
 
 @dataclass
 class BenchmarkRow:
-    result: Optional[BenchmarkResult]
     display_name: str
     old_timing: str
+    old_range: str
     new_timing: str
+    new_range: str
     delta: str
-    change: str
-    confidence_interval: str
-    confidence: str
     runs: str
     bucket: str
     percentage: float = 0
+
+
+def positive_integer(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
 
 
 def parse_arguments():
@@ -84,8 +82,14 @@ def parse_arguments():
     parser.add_argument("--benchmarks", required=True, help="Path to the benchmark list.")
     parser.add_argument("--threads", type=int, help="Number of threads used by each benchmark runner.")
     parser.add_argument("--memory-limit", help="Memory limit used by each benchmark runner.")
+    parser.add_argument(
+        "--samples", type=positive_integer, help="Fixed samples per binary; rounded up to a batch of five."
+    )
+    parser.add_argument(
+        "--early-stop", action="store_true", help="Stop after a ten-sample checkpoint within ±2 percent."
+    )
     parser.add_argument("--verbose", action="store_true", help="Print raw benchmark runner output.")
-    parser.add_argument("--nofail", action="store_true", help="Report confirmed regressions without failing.")
+    parser.add_argument("--nofail", action="store_true", help="Report a geomean regression without failing.")
     parser.add_argument("--disable-timeout", action="store_true", help="Disable the benchmark runner timeout.")
     parser.add_argument(
         "--benchmark-cache",
@@ -105,39 +109,52 @@ def clear_benchmark_caches(runner_paths: List[str]):
         shutil.rmtree(cache_path, ignore_errors=True)
 
 
+def within_noise(measurement: BenchmarkMeasurement) -> bool:
+    return 1.0 - NOISE_THRESHOLD <= measurement.ratio <= 1.0 + NOISE_THRESHOLD
+
+
+def measurement_outcome(measurement: BenchmarkMeasurement) -> str:
+    return OUTCOME_REGRESSION if measurement.ratio >= REGRESSION_LIMIT else OUTCOME_NO_REGRESSION
+
+
 def run_paired_samples(
     old_runner: BenchmarkRunner,
     new_runner: BenchmarkRunner,
     benchmark: str,
     requested_runs: int,
-    stop_on_confident_noise: bool = False,
+    initial_batch_index: int,
+    early_stop: bool = False,
 ):
     old_timings = []
     new_timings = []
+    batch_index = initial_batch_index
     batch_sizes = sampling_batch_sizes(requested_runs)
     planned_runs = sum(batch_sizes)
     for batch_size in batch_sizes:
-        old_batch, old_failure = old_runner.run(benchmark, batch_size)
-        new_batch, new_failure = new_runner.run(benchmark, batch_size)
+        if batch_index % 2 == 0:
+            old_batch, old_failure = old_runner.run(benchmark, batch_size)
+            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+        else:
+            new_batch, new_failure = new_runner.run(benchmark, batch_size)
+            old_batch, old_failure = old_runner.run(benchmark, batch_size)
 
         old_batch = old_batch or []
         new_batch = new_batch or []
         if old_failure or new_failure:
-            return old_timings, new_timings, old_failure, new_failure, False
+            return old_timings, new_timings, old_failure, new_failure, batch_index, False
         if len(old_batch) != len(new_batch):
             failure = f"Paired benchmark batches produced different run counts: {len(old_batch)} and {len(new_batch)}"
-            return old_timings, new_timings, failure, failure, False
+            return old_timings, new_timings, failure, failure, batch_index, False
 
         old_timings.extend(old_batch)
         new_timings.extend(new_batch)
+        batch_index += 1
         completed_runs = len(old_timings)
-        if stop_on_confident_noise and completed_runs < planned_runs and completed_runs % (2 * SAMPLE_BATCH_SIZE) == 0:
-            measurement = benchmark_measurement(old_timings, new_timings)
-            lower_bound, upper_bound = measurement.ratio_interval
-            if lower_bound >= 1.0 - NOISE_THRESHOLD and upper_bound <= 1.0 + NOISE_THRESHOLD:
-                return old_timings, new_timings, None, None, True
+        if early_stop and completed_runs < planned_runs and completed_runs % (2 * SAMPLE_BATCH_SIZE) == 0:
+            if within_noise(benchmark_measurement(old_timings, new_timings)):
+                return old_timings, new_timings, None, None, batch_index, True
 
-    return old_timings, new_timings, None, None, False
+    return old_timings, new_timings, None, None, batch_index, False
 
 
 def failed_benchmark_result(
@@ -159,20 +176,64 @@ def failed_benchmark_result(
     )
 
 
-def run_paired_benchmark(
-    old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark: str, verbose: bool
+def measurement_status(measurement: BenchmarkMeasurement, stopped_early: bool = False) -> str:
+    if stopped_early:
+        return "within ±2% (stopped early)"
+    if measurement.ratio >= REGRESSION_LIMIT:
+        return "regression"
+    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
+        return "slower"
+    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
+        return "faster"
+    return "within ±2%; no change"
+
+
+def run_fixed_benchmark(
+    old_runner: BenchmarkRunner,
+    new_runner: BenchmarkRunner,
+    benchmark: str,
+    samples: int,
+    early_stop: bool,
+    verbose: bool,
 ) -> BenchmarkResult:
-    old_initial, new_initial, old_failure, new_failure, _ = run_paired_samples(
-        old_runner, new_runner, benchmark, INITIAL_RUNS
+    old_timings, new_timings, old_failure, new_failure, _, stopped_early = run_paired_samples(
+        old_runner, new_runner, benchmark, samples, 0, early_stop
+    )
+    run_count = min(len(old_timings), len(new_timings))
+    if old_failure or new_failure:
+        return failed_benchmark_result(benchmark, old_failure, new_failure, None, run_count, 0)
+
+    measurement = benchmark_measurement(old_timings, new_timings)
+    if verbose:
+        print(
+            f"samples: {benchmark}: {run_count} pairs | "
+            f"median change {format_ratio_change(measurement.ratio)} | {measurement_status(measurement, stopped_early)}"
+        )
+    return BenchmarkResult(
+        benchmark=benchmark,
+        initial_measurement=measurement,
+        measurement=measurement,
+        initial_runs=run_count,
+        outcome=measurement_outcome(measurement),
+    )
+
+
+def run_adaptive_benchmark(
+    old_runner: BenchmarkRunner,
+    new_runner: BenchmarkRunner,
+    benchmark: str,
+    early_stop: bool,
+    verbose: bool,
+) -> BenchmarkResult:
+    old_initial, new_initial, old_failure, new_failure, batch_index, _ = run_paired_samples(
+        old_runner, new_runner, benchmark, INITIAL_RUNS, 0
     )
     initial_count = min(len(old_initial), len(new_initial))
     if old_failure or new_failure:
         return failed_benchmark_result(benchmark, old_failure, new_failure, None, initial_count, 0)
 
     initial_measurement = benchmark_measurement(old_initial, new_initial)
-    is_candidate = (
-        initial_measurement.ratio < 1.0 - NOISE_THRESHOLD or initial_measurement.ratio > 1.0 + NOISE_THRESHOLD
-    )
+    is_candidate = not within_noise(initial_measurement)
     requested_confirmation_runs = confirmation_run_count(initial_measurement) if is_candidate else 0
     if verbose:
         decision = f"confirming with {requested_confirmation_runs} pairs" if is_candidate else "within ±2%; done"
@@ -187,14 +248,16 @@ def run_paired_benchmark(
             initial_measurement=initial_measurement,
             measurement=initial_measurement,
             initial_runs=initial_count,
+            outcome=measurement_outcome(initial_measurement),
         )
 
-    old_confirmation, new_confirmation, old_failure, new_failure, stopped_early = run_paired_samples(
+    old_confirmation, new_confirmation, old_failure, new_failure, _, stopped_early = run_paired_samples(
         old_runner,
         new_runner,
         benchmark,
         requested_confirmation_runs,
-        stop_on_confident_noise=True,
+        batch_index,
+        early_stop,
     )
     confirmation_count = min(len(old_confirmation), len(new_confirmation))
     if old_failure or new_failure:
@@ -207,31 +270,19 @@ def run_paired_benchmark(
             confirmation_count,
         )
 
-    confirmation_measurement = benchmark_measurement(old_confirmation, new_confirmation)
-    lower_bound, upper_bound = confirmation_measurement.ratio_interval
-    if confirmation_measurement.ratio > REGRESSION_LIMIT:
-        if lower_bound > REGRESSION_LIMIT:
-            outcome = OUTCOME_CONFIRMED_REGRESSION
-        else:
-            outcome = OUTCOME_UNCONFIRMED_REGRESSION
-    else:
-        outcome = OUTCOME_NO_REGRESSION
-
+    measurement = benchmark_measurement(old_confirmation, new_confirmation)
     if verbose:
         print(
             f"confirm: {benchmark}: {confirmation_count} pairs | "
-            f"median change {format_ratio_change(confirmation_measurement.ratio)} | "
-            f"{CONFIDENCE_PERCENTAGE}% CI {format_ratio_interval((lower_bound, upper_bound))} | "
-            f"{measurement_status(confirmation_measurement, outcome, stopped_early)}"
+            f"median change {format_ratio_change(measurement.ratio)} | {measurement_status(measurement, stopped_early)}"
         )
-
     return BenchmarkResult(
         benchmark=benchmark,
         initial_measurement=initial_measurement,
-        measurement=confirmation_measurement,
+        measurement=measurement,
         initial_runs=initial_count,
         confirmation_runs=confirmation_count,
-        outcome=outcome,
+        outcome=measurement_outcome(measurement),
     )
 
 
@@ -248,18 +299,6 @@ def append_step_summary(lines: List[str]):
         summary_file.write("\n")
 
 
-def format_seconds(value: float) -> str:
-    return f"{value:.3f}s"
-
-
-def format_delta_seconds(delta: float) -> str:
-    if delta == 0:
-        return "0.000s"
-    if abs(delta) < 0.001:
-        return "-<0.001s" if delta < 0 else "<0.001s"
-    return f"{delta:+.3f}s"
-
-
 def format_percentage(value: float) -> str:
     if math.isfinite(value):
         return f"{value:+.1f}%"
@@ -274,42 +313,48 @@ def format_ratio_change(ratio: float) -> str:
     return format_percentage(ratio_change(ratio))
 
 
-def format_ratio_interval(ratio_interval: Tuple[float, float]) -> str:
-    lower_bound, upper_bound = ratio_interval
-    return f"{format_ratio_change(lower_bound)}…{format_ratio_change(upper_bound)}"
+def duration_unit(value: float):
+    value = abs(value)
+    if value >= 1.0:
+        return 1.0, "s"
+    if value >= 0.001:
+        return 1000.0, "ms"
+    if value >= 0.000001:
+        return 1000000.0, "µs"
+    return 1000000000.0, "ns"
 
 
-def direction_confidence(measurement: BenchmarkMeasurement) -> str:
-    lower_bound, upper_bound = measurement.ratio_interval
-    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
-        return "confident" if upper_bound < 1.0 - NOISE_THRESHOLD else "uncertain"
-    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
-        return "confident" if lower_bound > 1.0 + NOISE_THRESHOLD else "uncertain"
-    return "within noise"
+def format_duration(value: float, unit=None, signed: bool = False) -> str:
+    scale, suffix = unit or duration_unit(value)
+    scaled = value * scale
+    if signed and scaled > 0:
+        prefix = "+"
+    else:
+        prefix = ""
+    return f"{prefix}{scaled:.3g}{suffix}"
 
 
-def measurement_status(measurement: BenchmarkMeasurement, outcome: str, stopped_early: bool = False) -> str:
-    if stopped_early:
-        return "within ±2% (confident; stopped early)"
-    if outcome == OUTCOME_CONFIRMED_REGRESSION:
-        return "regression (confirmed)"
-    if outcome == OUTCOME_UNCONFIRMED_REGRESSION:
-        return "regression (uncertain; budget exhausted)"
-    if measurement.ratio < 1.0 - NOISE_THRESHOLD:
-        confidence = direction_confidence(measurement)
-        suffix = "confident" if confidence == "confident" else "uncertain; budget exhausted"
-        return f"faster ({suffix})"
-    if measurement.ratio > 1.0 + NOISE_THRESHOLD:
-        confidence = direction_confidence(measurement)
-        suffix = "confident" if confidence == "confident" else "uncertain; budget exhausted"
-        return f"slower ({suffix})"
-    return "within ±2%; no change"
+def timing_parts(timing: float, minimum: float, maximum: float) -> Tuple[str, str]:
+    unit = duration_unit(timing)
+    return format_duration(timing, unit), f"[{format_duration(minimum, unit)}…{format_duration(maximum, unit)}]"
 
 
-def confidence_text(result: BenchmarkResult) -> str:
-    if result.measurement is None:
-        return "unavailable"
-    return format_ratio_interval(result.measurement.ratio_interval)
+def delta_text(measurement: BenchmarkMeasurement) -> str:
+    delta = measurement.new_timing - measurement.old_timing
+    unit = duration_unit(delta) if delta else duration_unit(measurement.old_timing)
+    return f"{format_duration(delta, unit, signed=True)} ({format_ratio_change(measurement.ratio)})"
+
+
+def gray(value: str) -> str:
+    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
+
+
+def color_change(bucket: str, value: str) -> str:
+    if bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
+        return f"{ANSI_RED}{value}{ANSI_RESET}"
+    if bucket == BUCKET_FASTER:
+        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
+    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
 
 
 def emit_github_error(title: str, message: str):
@@ -320,57 +365,6 @@ def emit_github_error(title: str, message: str):
 def emit_github_warning(title: str, message: str):
     if in_ci():
         print(f"::warning title={title}::{message}")
-
-
-def report_regression(
-    result: BenchmarkResult, suite: str, failure_summary: List[BenchmarkResult], summary_lines: List[str]
-):
-    if result.outcome == OUTCOME_FAILURE:
-        message = f"{suite}: {result.benchmark} failed while comparing base and PR benchmark runs"
-        old_timing = "failed"
-        new_timing = "failed"
-        delta = "failed"
-        median_change = "failed"
-        confidence = "unavailable"
-        failure_summary.append(result)
-    else:
-        measurement = result.measurement
-        assert measurement is not None
-        old_timing = format_seconds(measurement.old_timing)
-        new_timing = format_seconds(measurement.new_timing)
-        delta = format_delta_seconds(measurement.new_timing - measurement.old_timing)
-        median_change = format_ratio_change(measurement.ratio)
-        confidence = confidence_text(result)
-        message = (
-            f"{suite}: {result.benchmark} regressed from {old_timing} to {new_timing}; "
-            f"median change {median_change}, delta {delta}, {CONFIDENCE_PERCENTAGE}% CI {confidence}, "
-            f"regression limit {format_ratio_change(REGRESSION_LIMIT)}"
-        )
-    emit_github_error("Regression benchmark", message)
-    summary_lines.append(
-        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{delta}` | `{median_change}` | "
-        f"`{confidence}` | `{format_run_count(result)}` |"
-    )
-
-
-def report_unconfirmed(result: BenchmarkResult, suite: str, summary_lines: List[str]):
-    measurement = result.measurement
-    assert measurement is not None
-    old_timing = format_seconds(measurement.old_timing)
-    new_timing = format_seconds(measurement.new_timing)
-    delta = format_delta_seconds(measurement.new_timing - measurement.old_timing)
-    median_change = format_ratio_change(measurement.ratio)
-    confidence = confidence_text(result)
-    message = (
-        f"{suite}: {result.benchmark} has median change {median_change}, delta {delta}, and "
-        f"{CONFIDENCE_PERCENTAGE}% CI {confidence}; regression limit {format_ratio_change(REGRESSION_LIMIT)} "
-        f"is uncertain after the confirmation budget"
-    )
-    emit_github_warning("Inconclusive regression benchmark", message)
-    summary_lines.append(
-        f"| `{result.benchmark}` | `{old_timing}` | `{new_timing}` | `{delta}` | `{median_change}` | "
-        f"`{confidence}` | `{format_run_count(result)}` |"
-    )
 
 
 def benchmark_common_prefix(benchmarks: List[str]) -> str:
@@ -399,16 +393,12 @@ def benchmark_display_names(benchmarks: List[str]) -> Dict[str, str]:
 def classify_result(result: BenchmarkResult) -> str:
     if result.outcome == OUTCOME_FAILURE:
         return BUCKET_FAILURE
-    if result.outcome == OUTCOME_CONFIRMED_REGRESSION:
+    if result.outcome == OUTCOME_REGRESSION:
         return BUCKET_REGRESSION
-    if result.outcome == OUTCOME_UNCONFIRMED_REGRESSION:
-        return BUCKET_UNCONFIRMED
-
     assert result.measurement is not None
-    ratio = result.measurement.ratio
-    if ratio > 1.0 + NOISE_THRESHOLD:
+    if result.measurement.ratio > 1.0 + NOISE_THRESHOLD:
         return BUCKET_SLOWER
-    if ratio < 1.0 - NOISE_THRESHOLD:
+    if result.measurement.ratio < 1.0 - NOISE_THRESHOLD:
         return BUCKET_FASTER
     return BUCKET_UNCHANGED
 
@@ -419,81 +409,26 @@ def format_run_count(result: BenchmarkResult) -> str:
     return str(result.initial_runs)
 
 
-def result_confidence(result: BenchmarkResult) -> str:
-    if result.outcome == OUTCOME_CONFIRMED_REGRESSION:
-        return "confirmed regression"
-    if result.outcome == OUTCOME_UNCONFIRMED_REGRESSION:
-        return "uncertain regression"
-    assert result.measurement is not None
-    return direction_confidence(result.measurement)
-
-
 def benchmark_row(result: BenchmarkResult, display_name: str) -> BenchmarkRow:
     bucket = classify_result(result)
     if result.outcome == OUTCOME_FAILURE:
-        return BenchmarkRow(
-            result=result,
-            display_name=display_name,
-            old_timing="failed",
-            new_timing="failed",
-            delta="failed",
-            change="failed",
-            confidence_interval="unavailable",
-            confidence="failed",
-            runs=format_run_count(result),
-            bucket=bucket,
-        )
+        return BenchmarkRow(display_name, "failed", "", "failed", "", "failed", format_run_count(result), bucket)
 
     measurement = result.measurement
     assert measurement is not None
-    delta = measurement.new_timing - measurement.old_timing
-    percentage = ratio_change(measurement.ratio)
+    old_timing, old_range = timing_parts(measurement.old_timing, measurement.old_min, measurement.old_max)
+    new_timing, new_range = timing_parts(measurement.new_timing, measurement.new_min, measurement.new_max)
     return BenchmarkRow(
-        result=result,
-        display_name=display_name,
-        old_timing=format_seconds(measurement.old_timing),
-        new_timing=format_seconds(measurement.new_timing),
-        delta=format_delta_seconds(delta),
-        change=format_percentage(percentage),
-        confidence_interval=format_ratio_interval(measurement.ratio_interval),
-        confidence=result_confidence(result),
-        runs=format_run_count(result),
-        bucket=bucket,
-        percentage=percentage,
+        display_name,
+        old_timing,
+        old_range,
+        new_timing,
+        new_range,
+        delta_text(measurement),
+        format_run_count(result),
+        bucket,
+        ratio_change(measurement.ratio),
     )
-
-
-def color_change(bucket: str, value: str) -> str:
-    if bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
-        return f"{ANSI_RED}{value}{ANSI_RESET}"
-    if bucket == BUCKET_UNCONFIRMED:
-        return f"{ANSI_YELLOW}{value}{ANSI_RESET}"
-    if bucket == BUCKET_FASTER:
-        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
-    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
-
-
-def gray(value: str) -> str:
-    return f"{ANSI_GRAY}{value}{ANSI_RESET}"
-
-
-def color_result(result_text: str) -> str:
-    if result_text == "no regressions":
-        color = ANSI_GREEN
-    elif result_text == "uncertain regressions":
-        color = ANSI_YELLOW
-    else:
-        color = ANSI_RED
-    return f"{color}{result_text}{ANSI_RESET}"
-
-
-def color_geomean_change(percentage: float) -> str:
-    value = format_percentage(percentage)
-    if percentage < 0:
-        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
-    if percentage > 0:
-        return f"{ANSI_RED}{value}{ANSI_RESET}"
-    return value
 
 
 def row_sort_key(row: BenchmarkRow):
@@ -501,32 +436,36 @@ def row_sort_key(row: BenchmarkRow):
         BUCKET_UNCHANGED: 0,
         BUCKET_FASTER: 1,
         BUCKET_SLOWER: 2,
-        BUCKET_UNCONFIRMED: 3,
-        BUCKET_REGRESSION: 4,
-        BUCKET_FAILURE: 5,
+        BUCKET_REGRESSION: 3,
+        BUCKET_FAILURE: 4,
     }
     if row.bucket == BUCKET_FASTER:
         bucket_value = -row.percentage
-    elif row.bucket in (BUCKET_SLOWER, BUCKET_UNCONFIRMED, BUCKET_REGRESSION):
+    elif row.bucket in (BUCKET_SLOWER, BUCKET_REGRESSION):
         bucket_value = row.percentage
     else:
         bucket_value = 0
     return bucket_order[row.bucket], bucket_value, row.display_name
 
 
+def plain_timing_cell(timing: str, timing_range: str) -> str:
+    return f"{timing} {timing_range}" if timing_range else timing
+
+
+def styled_timing_cell(timing: str, timing_range: str) -> str:
+    return f"{timing} {gray(timing_range)}" if timing_range else timing
+
+
 def render_table(rows: List[BenchmarkRow]):
     if not rows:
         return
-    headers = ["benchmark", "base", "PR", "delta", "median change", "95% CI", "confidence", "runs"]
+    headers = ["benchmark", "base median", "PR median", "delta median", "runs"]
     plain_rows = [
         [
             row.display_name,
-            row.old_timing,
-            row.new_timing,
+            plain_timing_cell(row.old_timing, row.old_range),
+            plain_timing_cell(row.new_timing, row.new_range),
             row.delta,
-            row.change,
-            row.confidence_interval,
-            row.confidence,
             row.runs,
         ]
         for row in rows
@@ -539,12 +478,16 @@ def render_table(rows: List[BenchmarkRow]):
     print("  ".join(headers[index].ljust(widths[index]) for index in range(len(headers))))
     print("  ".join("-" * widths[index] for index in range(len(headers))))
     for row, plain_row in zip(rows, plain_rows):
+        styled_row = [
+            row.display_name,
+            styled_timing_cell(row.old_timing, row.old_range),
+            styled_timing_cell(row.new_timing, row.new_range),
+            color_change(row.bucket, row.delta),
+            row.runs,
+        ]
         cells = []
-        for index, value in enumerate(plain_row):
-            padded = value.ljust(widths[index])
-            if headers[index] == "median change":
-                padded = color_change(row.bucket, padded)
-            cells.append(padded)
+        for index, value in enumerate(styled_row):
+            cells.append(value + " " * (widths[index] - len(plain_row[index])))
         print("  ".join(cells))
 
 
@@ -569,54 +512,143 @@ def geomean(values: List[float]) -> Optional[float]:
     return math.exp(math.fsum(math.log(value) for value in values) / len(values))
 
 
-def print_geomean_summary(old_geomean: Optional[float], new_geomean: Optional[float]):
-    print("")
-    sample_text = gray(f"(initial {INITIAL_RUNS} samples)")
+def geomean_regressed(old_geomean: Optional[float], new_geomean: Optional[float]) -> bool:
     if old_geomean is None or new_geomean is None:
-        print(f"geomean: unavailable  {sample_text}")
+        return False
+    return new_geomean / old_geomean >= REGRESSION_LIMIT or new_geomean - old_geomean >= GEOMEAN_REGRESSION_SECONDS
+
+
+def print_geomean_summary(old_geomean: Optional[float], new_geomean: Optional[float], sample_text: str):
+    print("")
+    if old_geomean is None or new_geomean is None:
+        print(f"geomean: unavailable  {gray(sample_text)}")
         return
-    percentage = ((new_geomean / old_geomean) - 1.0) * 100.0
-    change = color_geomean_change(percentage)
-    print(f"geomean: {format_seconds(old_geomean)} -> {format_seconds(new_geomean)}  " f"{change}  {sample_text}")
+    old_text = format_duration(old_geomean)
+    new_text = format_duration(new_geomean)
+    measurement = BenchmarkMeasurement(
+        old_timing=old_geomean,
+        old_min=old_geomean,
+        old_max=old_geomean,
+        new_timing=new_geomean,
+        new_min=new_geomean,
+        new_max=new_geomean,
+        ratio=new_geomean / old_geomean,
+        runs=0,
+    )
+    if new_geomean > old_geomean:
+        bucket = BUCKET_SLOWER
+    elif new_geomean < old_geomean:
+        bucket = BUCKET_FASTER
+    else:
+        bucket = BUCKET_UNCHANGED
+    print(f"geomean: {old_text} -> {new_text}  {color_change(bucket, delta_text(measurement))}  {gray(sample_text)}")
+
+
+def sampling_description(samples: Optional[int], rounded_samples: Optional[int], early_stop: bool) -> str:
+    if samples is None:
+        description = (
+            f"sampling: adaptive; {INITIAL_RUNS} initial pairs, then "
+            f"{MIN_CONFIRMATION_RUNS}–{MAX_CONFIRMATION_RUNS} confirmation pairs outside ±2%"
+        )
+    else:
+        assert rounded_samples is not None
+        description = f"sampling: fixed; {rounded_samples} samples per binary"
+        if rounded_samples != samples:
+            description += f" (--samples={samples} rounded up)"
+        else:
+            description += f" (--samples={samples})"
+    if early_stop:
+        description += "; median early stop"
+    return description
 
 
 def print_benchmark_report(
     rows: List[BenchmarkRow],
     common_prefix: str,
+    samples: Optional[int],
+    rounded_samples: Optional[int],
+    early_stop: bool,
 ):
     buckets = {
         bucket: [row for row in rows if row.bucket == bucket]
-        for bucket in (
-            BUCKET_UNCHANGED,
-            BUCKET_FASTER,
-            BUCKET_SLOWER,
-            BUCKET_UNCONFIRMED,
-            BUCKET_REGRESSION,
-            BUCKET_FAILURE,
-        )
+        for bucket in (BUCKET_UNCHANGED, BUCKET_FASTER, BUCKET_SLOWER, BUCKET_REGRESSION, BUCKET_FAILURE)
     }
-
     print("")
     suite_text = f"{common_prefix} ({len(rows)} benchmarks)" if common_prefix else f"{len(rows)} benchmarks"
     print(gray(f"suite: {suite_text}"))
-    print(
-        gray(
-            f"sampling: {INITIAL_RUNS} initial pairs; {MIN_CONFIRMATION_RUNS}–{MAX_CONFIRMATION_RUNS} "
-            f"confirmation pairs outside ±{NOISE_THRESHOLD * 100:.0f}%, with early noise stop"
-        )
-    )
-    print(
-        gray(
-            f"regression: fail when the {CONFIDENCE_PERCENTAGE}% CI is above "
-            f"{format_ratio_change(REGRESSION_LIMIT)}"
-        )
-    )
+    print(gray(sampling_description(samples, rounded_samples, early_stop)))
+    print(gray("query regression: median change ≥ +10.0% (warning)"))
+    print(gray("CI failure: geomean change ≥ +10.0% or ≥ +50.0ms"))
     print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], len(buckets[BUCKET_UNCHANGED]))
     print_bucket("FASTER", buckets[BUCKET_FASTER])
-    print_bucket("SLOWER (+2%…+10%)", buckets[BUCKET_SLOWER])
-    print_bucket("UNCERTAIN REGRESSIONS", buckets[BUCKET_UNCONFIRMED])
-    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
+    print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER])
+    print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION])
     print_bucket("FAILURES", buckets[BUCKET_FAILURE])
+
+
+def markdown_row(result: BenchmarkResult) -> str:
+    measurement = result.measurement
+    if measurement is None:
+        return f"| `{result.benchmark}` | failed | failed | failed | `{format_run_count(result)}` |"
+    old_timing, old_range = timing_parts(measurement.old_timing, measurement.old_min, measurement.old_max)
+    new_timing, new_range = timing_parts(measurement.new_timing, measurement.new_min, measurement.new_max)
+    return (
+        f"| `{result.benchmark}` | `{old_timing} {old_range}` | `{new_timing} {new_range}` | "
+        f"`{delta_text(measurement)}` | `{format_run_count(result)}` |"
+    )
+
+
+def report_query_regressions(results: List[BenchmarkResult], suite: str):
+    if not results:
+        return
+    summary_lines = [
+        f"## Query Regressions: `{suite}`",
+        "",
+        "| Benchmark | Base median | PR median | Delta median | Runs |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for result in results:
+        measurement = result.measurement
+        assert measurement is not None
+        emit_github_warning(
+            "Benchmark query regression",
+            f"{suite}: {result.benchmark} median changed by {format_ratio_change(measurement.ratio)} "
+            f"({format_duration(measurement.old_timing)} to {format_duration(measurement.new_timing)})",
+        )
+        summary_lines.append(markdown_row(result))
+    append_step_summary(summary_lines + [""])
+
+
+def report_failures(results: List[BenchmarkResult], suite: str):
+    if not results:
+        return
+    summary_lines = [
+        f"## Benchmark Failures: `{suite}`",
+        "",
+        "| Benchmark | Base median | PR median | Delta median | Runs |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for result in results:
+        emit_github_error(
+            "Regression benchmark failure",
+            f"{suite}: {result.benchmark} failed while comparing base and PR benchmark runs",
+        )
+        summary_lines.append(markdown_row(result))
+    append_step_summary(summary_lines + [""])
+
+
+def report_geomean_regression(old_geomean: float, new_geomean: float, nofail: bool):
+    delta = new_geomean - old_geomean
+    ratio = new_geomean / old_geomean
+    message = (
+        f"geomean changed from {format_duration(old_geomean)} to {format_duration(new_geomean)}; "
+        f"{format_duration(delta, signed=True)} ({format_ratio_change(ratio)})"
+    )
+    if nofail:
+        emit_github_warning("Geomean benchmark regression", message)
+    else:
+        emit_github_error("Geomean benchmark regression", message)
+    append_step_summary(["## Geomean Regression", "", message, ""])
 
 
 def print_failure_summary(failures: List[BenchmarkResult]):
@@ -630,14 +662,41 @@ def print_failure_summary(failures: List[BenchmarkResult]):
 """
     )
     for index, result in enumerate(failures, start=1):
-        prefix = "::error::" if in_ci() else ""
-        print(f"{prefix}{index}: {result.benchmark}")
+        print(f"{index}: {result.benchmark}")
         if result.old_failure != result.new_failure:
             print("Base:\n", result.old_failure)
             print("PR:\n", result.new_failure)
         else:
             print(result.old_failure)
         print("-", 52)
+
+
+def query_regression_text(count: int) -> str:
+    if count == 0:
+        return "no query regressions"
+    if count == 1:
+        return "1 query regression"
+    return f"{count} query regressions"
+
+
+def print_result(execution_failed: bool, gate_failed: bool, nofail: bool, query_regressions: int):
+    query_text = query_regression_text(query_regressions)
+    colored_query_text = (
+        f"{ANSI_YELLOW}{query_text}{ANSI_RESET}" if query_regressions else f"{ANSI_GRAY}{query_text}{ANSI_RESET}"
+    )
+    if execution_failed:
+        print(f"result: {ANSI_RED}failed; benchmark failure{ANSI_RESET}; {colored_query_text}")
+    elif gate_failed and nofail:
+        print(
+            f"result: {ANSI_GREEN}passed (--nofail){ANSI_RESET}; "
+            f"{ANSI_RED}geomean regression{ANSI_RESET}; {colored_query_text}"
+        )
+    elif gate_failed:
+        print(f"result: {ANSI_RED}failed; geomean regression{ANSI_RESET}; {colored_query_text}")
+    elif query_regressions:
+        print(f"result: {ANSI_GREEN}passed{ANSI_RESET}; {colored_query_text}")
+    else:
+        print(f"result: {ANSI_GREEN}passed; no query regressions{ANSI_RESET}")
 
 
 def main() -> int:
@@ -658,60 +717,60 @@ def main() -> int:
     suite = Path(args.benchmarks).stem
     old_runner = BenchmarkRunner(args.old, "base", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
     new_runner = BenchmarkRunner(args.new, "PR", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
-    results = [run_paired_benchmark(old_runner, new_runner, benchmark, args.verbose) for benchmark in benchmarks]
-
-    failing_results = [
-        result
-        for result in results
-        if result.outcome == OUTCOME_FAILURE or (result.outcome == OUTCOME_CONFIRMED_REGRESSION and not args.nofail)
-    ]
-    inconclusive_results = [result for result in results if result.outcome == OUTCOME_UNCONFIRMED_REGRESSION]
-    failure_summary = []
-    if failing_results:
-        summary_lines = [
-            f"## Regression Suite: `{suite}`",
-            "",
-            "| Benchmark | Base | PR | Delta | Median change | 95% CI | Runs |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
+    rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
+    if args.samples is None:
+        results = [
+            run_adaptive_benchmark(old_runner, new_runner, benchmark, args.early_stop, args.verbose)
+            for benchmark in benchmarks
         ]
-        for result in failing_results:
-            report_regression(result, suite, failure_summary, summary_lines)
-        append_step_summary(summary_lines + [""])
-
-    if inconclusive_results:
-        summary_lines = [
-            f"## Inconclusive Regression Candidates: `{suite}`",
-            "",
-            "| Benchmark | Base | PR | Delta | Median change | 95% CI | Runs |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
+    else:
+        results = [
+            run_fixed_benchmark(old_runner, new_runner, benchmark, args.samples, args.early_stop, args.verbose)
+            for benchmark in benchmarks
         ]
-        for result in inconclusive_results:
-            report_unconfirmed(result, suite, summary_lines)
-        append_step_summary(summary_lines + [""])
+
+    execution_failures = [result for result in results if result.outcome == OUTCOME_FAILURE]
+    query_regressions = [result for result in results if result.outcome == OUTCOME_REGRESSION]
+    report_failures(execution_failures, suite)
+    report_query_regressions(query_regressions, suite)
 
     display_names = benchmark_display_names([result.benchmark for result in results])
     rows = [benchmark_row(result, display_names[result.benchmark]) for result in results]
     rows.sort(key=row_sort_key)
-    if any(result.outcome == OUTCOME_FAILURE for result in results):
-        result_text = "benchmark failure"
-    elif any(result.outcome == OUTCOME_CONFIRMED_REGRESSION for result in results):
-        result_text = "regression detected"
-    elif inconclusive_results:
-        result_text = "uncertain regressions"
-    else:
-        result_text = "no regressions"
+    geomean_measurements = [
+        result.initial_measurement if args.samples is None else result.measurement
+        for result in results
+        if (result.initial_measurement if args.samples is None else result.measurement) is not None
+    ]
+    old_geomean = geomean([measurement.old_timing for measurement in geomean_measurements])
+    new_geomean = geomean([measurement.new_timing for measurement in geomean_measurements])
+    gate_failed = geomean_regressed(old_geomean, new_geomean)
+    if gate_failed:
+        assert old_geomean is not None and new_geomean is not None
+        report_geomean_regression(old_geomean, new_geomean, args.nofail)
 
-    initial_measurements = [result.initial_measurement for result in results if result.initial_measurement]
-    old_geomean = geomean([measurement.old_timing for measurement in initial_measurements])
-    new_geomean = geomean([measurement.new_timing for measurement in initial_measurements])
     print_benchmark_report(
         rows,
         benchmark_common_prefix([result.benchmark for result in results]),
+        args.samples,
+        rounded_samples,
+        args.early_stop,
     )
-    print_failure_summary(failure_summary)
-    print_geomean_summary(old_geomean, new_geomean)
-    print(f"result: {color_result(result_text)}")
-    return 1 if failing_results else 0
+    print_failure_summary(execution_failures)
+    if args.samples is None:
+        sample_text = f"(initial {INITIAL_RUNS} samples)"
+    elif args.early_stop:
+        sample_text = f"(up to {rounded_samples} samples)"
+    else:
+        sample_text = f"({rounded_samples} samples)"
+    print_geomean_summary(old_geomean, new_geomean, sample_text)
+    print_result(bool(execution_failures), gate_failed, args.nofail, len(query_regressions))
+
+    if execution_failures:
+        return 1
+    if gate_failed and not args.nofail:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

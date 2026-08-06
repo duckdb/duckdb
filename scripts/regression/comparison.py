@@ -1,7 +1,7 @@
 import math
 import statistics
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 
 CONFIRMATION_TARGET_SECONDS = 3.0
@@ -13,29 +13,13 @@ SAMPLE_BATCH_SIZE = 5
 @dataclass
 class BenchmarkMeasurement:
     old_timing: float
+    old_min: float
+    old_max: float
     new_timing: float
+    new_min: float
+    new_max: float
     ratio: float
-    ratio_interval: Tuple[float, float]
     runs: int
-
-
-def median_confidence_interval(values: List[float], confidence: float = 0.95) -> Tuple[float, float]:
-    """Return a distribution-free confidence interval for the population median."""
-    if not values:
-        raise ValueError("Cannot compute a confidence interval without values")
-
-    ordered = sorted(values)
-    count = len(ordered)
-    lower_order = None
-    for order in range(1, count // 2 + 1):
-        tail_probability = sum(math.comb(count, index) for index in range(order)) / (2**count)
-        coverage = 1.0 - 2.0 * tail_probability
-        if coverage >= confidence:
-            lower_order = order
-
-    if lower_order is None:
-        return -math.inf, math.inf
-    return ordered[lower_order - 1], ordered[count - lower_order]
 
 
 def benchmark_measurement(old_timings: List[float], new_timings: List[float]) -> BenchmarkMeasurement:
@@ -44,13 +28,17 @@ def benchmark_measurement(old_timings: List[float], new_timings: List[float]) ->
     if any(not math.isfinite(timing) or timing <= 0 for timing in old_timings + new_timings):
         raise ValueError("Benchmark timings must be finite and greater than zero")
 
-    ratios = [new_timing / old_timing for old_timing, new_timing in zip(old_timings, new_timings)]
+    old_timing = float(statistics.median(old_timings))
+    new_timing = float(statistics.median(new_timings))
     return BenchmarkMeasurement(
-        old_timing=float(statistics.median(old_timings)),
-        new_timing=float(statistics.median(new_timings)),
-        ratio=float(statistics.median(ratios)),
-        ratio_interval=median_confidence_interval(ratios),
-        runs=len(ratios),
+        old_timing=old_timing,
+        old_min=min(old_timings),
+        old_max=max(old_timings),
+        new_timing=new_timing,
+        new_min=min(new_timings),
+        new_max=max(new_timings),
+        ratio=new_timing / old_timing,
+        runs=len(old_timings),
     )
 
 
