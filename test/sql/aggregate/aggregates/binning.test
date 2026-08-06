@@ -344,3 +344,27 @@ statement error
 SELECT equi_width_bins('a'::VARCHAR, 'z'::VARCHAR, 2, true)
 ----
 Unsupported type "VARCHAR"
+
+# equi_width_bins: reject bin_count that truncates integer step to zero
+statement error
+SELECT equi_width_bins(1::BIGINT, 2::BIGINT, 1000000, false);
+----
+the bin count is too large for the given range
+
+# same input must fail before nice_rounding arithmetic (MakeNumberNice(0) divides by zero)
+statement error
+SELECT equi_width_bins(1::BIGINT, 2::BIGINT, 1000000, true);
+----
+the bin count is too large for the given range
+
+# double variant: subnormal span underflows to step=0.0 (min==max is intercepted by wrapper)
+statement error
+SELECT equi_width_bins(0.0, 5e-324, 2, false);
+----
+the bin count is too large for the given range
+
+# existing valid behavior must remain unaffected
+query I
+SELECT equi_width_bins(1::BIGINT, 2::BIGINT, 5, false);
+----
+[1, 2]

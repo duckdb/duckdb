@@ -130,6 +130,11 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
+		if (step == 0) {
+			throw InvalidInputException(expr,
+			                            "Invalid input for equi_width_bins - the bin count is too large for the given "
+			                            "range, resulting in a step size of 0");
+		}
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
 			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
@@ -178,6 +183,11 @@ struct EquiWidthBinsDouble {
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
+		if (step == 0) {
+			throw InvalidInputException(expr,
+			                            "Invalid input for equi_width_bins - the bin count is too large for the given "
+			                            "range, resulting in a step size of 0");
+		}
 		const double step_power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
@@ -185,9 +195,6 @@ struct EquiWidthBinsDouble {
 			max = RoundToNumber(input_max, step, NiceRounding::CEILING);
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
-		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
 		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
