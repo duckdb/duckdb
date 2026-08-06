@@ -258,10 +258,12 @@ EXPLAIN SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHER
 ----
 logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
 
+# Marker-only EXISTS joins can be converted to a RIGHT_SEMI join when the RHS key is null-rejected and the filtered
+# LHS can act as a runtime-filter build side.
 query II
 EXPLAIN SELECT x FROM range(1000000) o(x) WHERE x < 10000 AND EXISTS (SELECT 1 FROM range(10000000) l(y) WHERE y = x AND y > 0);
 ----
-logical_opt	<REGEX>:.*Join Type: MARK.*x IS NOT DISTINCT FROM x.*Join Type: SEMI.*y = x.*
+logical_opt	<REGEX>:.*Join Type: RIGHT_SEMI.*x = x.*
 
 # Q 22: the selected duplicate-eliminated domain should still restrict the NOT EXISTS evidence side. Factoring is
 # optional: if its source is not estimated cheaper, retain the canonical selected-domain CTE.
