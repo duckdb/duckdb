@@ -49,6 +49,23 @@ SELECT x FROM (SELECT 'a' COLLATE nocase x UNION ALL SELECT 'A' x) q WHERE ascii
 ----
 A
 
+# Non-string types whose set equality is not byte equality follow the same rule.
+# INTERVAL: 30 days and 1 month are set-equal but extract() distinguishes them.
+query T
+SELECT i FROM (SELECT INTERVAL '30 days' i EXCEPT SELECT INTERVAL '1 month' i) q WHERE extract(day from i) = 30
+----
+
+# VARIANT: 1 and 1.0 are set-equal but their string representations distinguish them.
+query T
+SELECT v FROM (SELECT 1::VARIANT v EXCEPT SELECT 1.0::VARIANT v) q WHERE v::VARCHAR = '1'
+----
+
+# Mixed conjuncts split per conjunct: the collation-sensitive half stays above the
+# set operation while the uncollated half still pushes into both inputs.
+query TI
+SELECT x, n FROM (SELECT 'A' COLLATE nocase x, 1 n EXCEPT SELECT 'a' x, 1 n) q WHERE ascii(x) = 65 AND n = 1
+----
+
 statement ok
 CREATE TABLE fp_left(s VARCHAR COLLATE nocase, n INTEGER)
 
@@ -84,3 +101,16 @@ query II
 EXPLAIN SELECT * FROM (SELECT * FROM fp_left UNION ALL SELECT * FROM fp_right) q WHERE ascii(s) = 65
 ----
 logical_opt	<REGEX>:.*UNION.*Filters: ascii\(s\) = 65.*Filters: ascii\(s\) = 65.*
+
+# Conjunct splitting: the collated conjunct stays above the set operation while the
+# uncollated conjunct still pushes into both inputs.
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM fp_left EXCEPT SELECT * FROM fp_right) q WHERE ascii(s) = 65 AND n = 1
+----
+logical_opt	<REGEX>:.*FILTER.*DISTINCT.*EXCEPT.*Filters: n = 1.*Filters: n = 1.*
+
+# An INTERVAL filter that can distinguish set-equal values stays above the set operation.
+query II
+EXPLAIN SELECT i FROM (SELECT INTERVAL '30 days' i EXCEPT SELECT INTERVAL '1 month' i) q WHERE extract(day from i) = 30
+----
+logical_opt	<REGEX>:.*FILTER.*EXCEPT.*
