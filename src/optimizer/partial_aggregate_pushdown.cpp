@@ -590,7 +590,7 @@ static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &con
 }
 
 struct DoubleEagerHeuristics {
-	static constexpr idx_t MAX_SMALL_GROUP_COUNT = 2 * STANDARD_VECTOR_SIZE;
+	static constexpr idx_t MAX_SMALL_GROUP_COUNT = 2 * static_cast<idx_t>(STANDARD_VECTOR_SIZE);
 	static constexpr idx_t MIN_SMALL_COLLAPSE = 2;
 	static constexpr idx_t MIN_LARGE_COLLAPSE = 8;
 };
