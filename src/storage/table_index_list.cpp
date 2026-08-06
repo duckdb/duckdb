@@ -93,9 +93,8 @@ void IndexDeltas::MarkWritten(const transaction_t checkpoint_id) {
 }
 
 template <class T>
-TableIndexIterationHelper<T>::TableIndexIterationHelper(mutex &index_lock,
-                                                        const vector<shared_ptr<IndexEntry>> &index_entries)
-    : lock(index_lock), index_entries(index_entries) {
+TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list)
+	: lock(index_list.index_entries_lock), index_entries(index_list.index_entries) {
 }
 
 template <class T>
@@ -133,26 +132,17 @@ bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableInd
 	return index != other.index || index_entries != other.index_entries;
 }
 
-TableIndexIterationHelper<IndexEntry> TableIndexList::IndexEntries() const {
-	return TableIndexIterationHelper<IndexEntry>(index_entries_lock, index_entries);
-}
-
 TableIndexIterationHelper<IndexHandle<Index>> TableIndexList::IndexHandles() const {
-	return TableIndexIterationHelper<IndexHandle<Index>>(index_entries_lock, index_entries);
+	return TableIndexIterationHelper<IndexHandle<Index>>(*this);
 }
 
 TableIndexIterationHelper<MutableIndexHandle<Index>> TableIndexList::MutableIndexHandles() const {
-	return TableIndexIterationHelper<MutableIndexHandle<Index>>(index_entries_lock, index_entries);
+	return TableIndexIterationHelper<MutableIndexHandle<Index>>(*this);
 }
 
 vector<shared_ptr<IndexEntry>> TableIndexList::GetEntries() const {
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	return index_entries;
-}
-
-template <>
-IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const {
-	return *index_entries->at(index.GetIndex());
 }
 
 template <>
@@ -165,13 +155,12 @@ MutableIndexHandle<Index> TableIndexIterationHelper<MutableIndexHandle<Index>>::
 	return index_entries->at(index.GetIndex())->GetMutableHandle();
 }
 
-template class TableIndexIterationHelper<IndexEntry>;
 template class TableIndexIterationHelper<IndexHandle<Index>>;
 template class TableIndexIterationHelper<MutableIndexHandle<Index>>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index));
 	index_entries.push_back(std::move(index_entry));
 	const auto index_handle = index_entries.back()->GetHandle();
@@ -181,7 +170,7 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 }
 
 void TableIndexList::RemoveIndex(const Identifier &name) {
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	for (idx_t i = 0; i < index_entries.size(); i++) {
 		auto index = index_entries[i]->GetMutableHandle();
 		if (index->GetIndexName() == name) {
@@ -225,7 +214,7 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 }
 
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		const auto index = entry->GetHandle();
 		if (index->GetIndexName() != name) {
@@ -242,7 +231,7 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
 	{
 		// Early-out, if we have no unbound indexes.
-		lock_guard<mutex> lock(index_entries_lock);
+		annotated_lock_guard lock(index_entries_lock);
 		if (unbound_count == 0) {
 			return;
 		}
@@ -264,7 +253,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		column_names.emplace_back(col.Name());
 	}
 
-	unique_lock<mutex> lock(index_entries_lock);
+	annotated_unique_lock lock(index_entries_lock);
 	// Busy-spin trying to bind all indexes.
 	while (true) {
 		shared_ptr<IndexEntry> index_entry;
@@ -357,7 +346,7 @@ bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const IndexHandle<I
 
 shared_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
                                                            const ForeignKeyType fk_type) {
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		auto index = entry->GetHandle();
 		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
@@ -412,7 +401,7 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() const {
 }
 
 IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
-	lock_guard<mutex> lock(index_entries_lock);
+	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
 
 	IndexSerializationResult result;
 

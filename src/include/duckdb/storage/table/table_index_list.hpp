@@ -33,11 +33,6 @@ struct DataTableInfo;
 template <class T>
 class TableIndexIterationHelper;
 
-template <class T>
-struct TableIndexIterationResult {
-	using type = T &;
-};
-
 template <>
 struct TableIndexIterationResult<IndexHandle<Index>> {
 	using type = IndexHandle<Index>;
@@ -320,7 +315,6 @@ struct IndexSerializationResult {
 
 class TableIndexList {
 public:
-	TableIndexIterationHelper<IndexEntry> IndexEntries() const;
 	TableIndexIterationHelper<IndexHandle<Index>> IndexHandles() const;
 	TableIndexIterationHelper<MutableIndexHandle<Index>> MutableIndexHandles() const;
 	//! Returns shared ownership of the stable logical index entries.
@@ -341,12 +335,12 @@ public:
 	}
 	//! Returns the number of index entries.
 	idx_t Count() const {
-		lock_guard<mutex> lock(index_entries_lock);
+		annotated_lock_guard lock(index_entries_lock);
 		return index_entries.size();
 	}
 	//! Returns true, if there are unbound indexes.
 	bool HasUnbound() const {
-		lock_guard<mutex> lock(index_entries_lock);
+		annotated_lock_guard lock(index_entries_lock);
 		return unbound_count != 0;
 	}
 	//! Returns the set of distinct index types across all bound indexes.
@@ -354,9 +348,15 @@ public:
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).
 	bool AllIndexesBoundOfType(const char *index_type) const;
 	//! Overwrite this list with the other list.
-	void Move(TableIndexList &other) {
+	void Move(TableIndexList &other) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+		D_ASSERT(this != &other);
+		annotated_unique_lock lock(index_entries_lock, std::defer_lock);
+		annotated_unique_lock other_lock(other.index_entries_lock, std::defer_lock);
+		std::lock(lock, other_lock);
 		D_ASSERT(index_entries.empty());
 		index_entries = std::move(other.index_entries);
+		unbound_count = other.unbound_count;
+		other.unbound_count = 0;
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
 	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
@@ -380,21 +380,24 @@ public:
 	                                vector<StorageIndex> &mapped_column_ids);
 
 private:
+	template <class>
+	friend class TableIndexIterationHelper;
+
 	//! A lock to prevent any concurrent changes to the index entries.
-	mutable mutex index_entries_lock;
+	mutable annotated_mutex index_entries_lock;
 	//! The index entries of the table.
-	vector<shared_ptr<IndexEntry>> index_entries;
+	vector<shared_ptr<IndexEntry>> index_entries DUCKDB_GUARDED_BY(index_entries_lock);
 	//! Contains the number of unbound indexes.
-	idx_t unbound_count = 0;
+	idx_t unbound_count DUCKDB_GUARDED_BY(index_entries_lock) = 0;
 };
 
 template <class T>
 class TableIndexIterationHelper {
 public:
-	TableIndexIterationHelper(mutex &index_lock, const vector<shared_ptr<IndexEntry>> &index_entries);
+	explicit TableIndexIterationHelper(const TableIndexList &index_list);
 
 private:
-	unique_lock<mutex> lock;
+	annotated_unique_lock<annotated_mutex> lock;
 	const vector<shared_ptr<IndexEntry>> &index_entries;
 
 private:
@@ -421,9 +424,6 @@ public:
 		return TableIndexIterator(nullptr);
 	}
 };
-
-template <>
-IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const;
 
 template <>
 IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIterator::operator*() const;
