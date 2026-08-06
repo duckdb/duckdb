@@ -651,9 +651,8 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
+bool TryScanIndex(IndexHandle<Index> index, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
-	auto index = entry.GetHandle();
 	if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
 		return false;
 	}
@@ -815,8 +814,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto &entry : indexes.IndexEntries()) {
-		index_scan = TryScanIndex(entry, column_list, input, filter_set, max_count, row_ids);
+	for (auto index : indexes.IndexHandles()) {
+		index_scan = TryScanIndex(std::move(index), column_list, input, filter_set, max_count, row_ids);
 		if (index_scan) {
 			// found an index - break
 			break;

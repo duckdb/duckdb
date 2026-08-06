@@ -33,6 +33,11 @@ struct DataTableInfo;
 template <class T>
 class TableIndexIterationHelper;
 
+template <class T>
+struct TableIndexIterationResult {
+	using type = T &;
+};
+
 template <>
 struct TableIndexIterationResult<IndexHandle<Index>> {
 	using type = IndexHandle<Index>;
@@ -41,6 +46,11 @@ struct TableIndexIterationResult<IndexHandle<Index>> {
 template <>
 struct TableIndexIterationResult<MutableIndexHandle<Index>> {
 	using type = MutableIndexHandle<Index>;
+};
+
+template <>
+struct TableIndexIterationResult<shared_ptr<IndexEntry>> {
+	using type = shared_ptr<IndexEntry>;
 };
 
 //! IndexBindState transitions index binding phases while preventing lock order inversion.
@@ -317,6 +327,8 @@ class TableIndexList {
 public:
 	TableIndexIterationHelper<IndexHandle<Index>> IndexHandles() const;
 	TableIndexIterationHelper<MutableIndexHandle<Index>> MutableIndexHandles() const;
+	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
+	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Returns shared ownership of the stable logical index entries.
 	vector<shared_ptr<IndexEntry>> GetEntries() const;
 	//! Adds an index entry to the list of index entries.
@@ -430,5 +442,8 @@ IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIter
 
 template <>
 MutableIndexHandle<Index> TableIndexIterationHelper<MutableIndexHandle<Index>>::TableIndexIterator::operator*() const;
+
+template <>
+shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const;
 
 } // namespace duckdb

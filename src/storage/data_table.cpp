@@ -1400,7 +1400,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);
 
 	struct AppendedIndex {
-		reference<IndexEntry> entry;
+		shared_ptr<IndexEntry> entry;
 		bool is_delta;
 	};
 	auto index_entries = indexes.IndexEntries();
@@ -1409,8 +1409,8 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 
 	// Append the entries to the indexes.
 	ErrorData error;
-	for (auto &entry : index_entries) {
-		auto index = entry.GetMutableHandle();
+	for (const auto &entry : index_entries) {
+		auto index = entry->GetMutableHandle();
 		if (!index->IsBound()) {
 			// Buffer the append: the unbound index buffers its own columns of the table chunk.
 			auto unbound_index = std::move(index).Into<UnboundIndex>();
@@ -1484,7 +1484,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	if (append_failed) {
 		// Constraint violation: remove any appended entries from previous indexes (if any).
 		for (auto &appended : already_appended) {
-			auto bound_index = appended.entry.get().GetMutableHandle<BoundIndex>();
+			auto bound_index = appended.entry->GetMutableHandle<BoundIndex>();
 			if (appended.is_delta) {
 				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
 				    ->Delete(table_chunk, row_ids);

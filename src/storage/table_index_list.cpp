@@ -140,6 +140,10 @@ TableIndexIterationHelper<MutableIndexHandle<Index>> TableIndexList::MutableInde
 	return TableIndexIterationHelper<MutableIndexHandle<Index>>(*this);
 }
 
+TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries() const {
+	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
+}
+
 vector<shared_ptr<IndexEntry>> TableIndexList::GetEntries() const {
 	annotated_lock_guard lock(index_entries_lock);
 	return index_entries;
@@ -155,8 +159,14 @@ MutableIndexHandle<Index> TableIndexIterationHelper<MutableIndexHandle<Index>>::
 	return index_entries->at(index.GetIndex())->GetMutableHandle();
 }
 
+template <>
+shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const {
+	return index_entries->at(index.GetIndex());
+}
+
 template class TableIndexIterationHelper<IndexHandle<Index>>;
 template class TableIndexIterationHelper<MutableIndexHandle<Index>>;
+template class TableIndexIterationHelper<shared_ptr<IndexEntry>>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
