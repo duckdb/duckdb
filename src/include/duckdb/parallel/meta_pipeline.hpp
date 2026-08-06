@@ -92,6 +92,10 @@ public:
 	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
 
 private:
+	//! Register that 'dependant' depends on 'dependency', both within this MetaPipeline
+	void AddPipelineDependency(Pipeline &dependant, Pipeline &dependency);
+
+private:
 	//! The executor for all MetaPipelines in the query plan
 	Executor &executor;
 	//! The PipelineBuildState for all MetaPipelines in the query plan

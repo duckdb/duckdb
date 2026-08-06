@@ -86,7 +86,11 @@ public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
+	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	//! All pipelines that must complete before this pipeline can start: the dependencies within the owning
+	//! MetaPipeline, followed by the dependencies across MetaPipelines
+	vector<reference<Pipeline>> GetAllDependencies() const;
 
 	void Ready();
 	void Reset();
@@ -142,8 +146,10 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline
+	//! The dependencies of this pipeline in other MetaPipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The dependencies of this pipeline within its MetaPipeline (mirror of MetaPipeline::pipeline_dependencies)
+	vector<weak_ptr<Pipeline>> intra_dependencies;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
