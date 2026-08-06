@@ -32,6 +32,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_MULTI_CLIENT_ACCESS = idx_t(1 << 11);
 	static constexpr idx_t FILE_FLAGS_DISABLE_LOGGING = idx_t(1 << 12);
 	static constexpr idx_t FILE_FLAGS_ENABLE_EXTENSION_INSTALL = idx_t(1 << 13);
+	static constexpr idx_t FILE_FLAGS_COMPRESSION_WRAPPER_UPSTREAM = idx_t(1 << 14);
 
 public:
 	FileOpenFlags() = default;
@@ -131,6 +132,9 @@ public:
 	}
 	inline bool EnableExtensionInstall() const {
 		return flags & FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
+	}
+	inline bool HasUpstreamCompressionWrapper() const {
+		return flags & FILE_FLAGS_COMPRESSION_WRAPPER_UPSTREAM;
 	}
 	inline idx_t GetFlagsInternal() const {
 		return flags;
