@@ -295,11 +295,6 @@ idx_t TaskScheduler::GetProducerCount() const {
 	return GetQueue(TaskSchedulerType::REGULAR).GetProducerCount();
 }
 
-idx_t TaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
-	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
-	return GetTaskCountForProducerLocked(token);
-}
-
 idx_t TaskScheduler::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	idx_t task_count = 0;
 	for (uint8_t i = 0; i < TASK_SCHEDULER_TYPE_COUNT; i++) {

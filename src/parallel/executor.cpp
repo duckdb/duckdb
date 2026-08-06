@@ -366,10 +366,13 @@ void Executor::WaitForTask() {
 		return;
 	}
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
-		blocked_thread_time += blocked_micros;
-		return;
+	{
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		if (scheduler.GetTaskCountForProducerLocked(*producer) > 0) {
+			// A task is available for the calling thread, the next step will make progress without waiting
+			blocked_thread_time += blocked_micros;
+			return;
+		}
 	}
 	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
 	// Wait (bounded), but wake up on task completion or reschedule.
