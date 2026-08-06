@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -33,6 +35,29 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 
 		for (auto &bound_order : over_expr.ArgOrdersMutable()) {
 			bound_order.stats = PropagateExpression(bound_order.expression);
+		}
+
+		// propagate to the window function arguments and, for aggregate window functions, invoke the
+		// aggregate statistics callback so stats-dependent aggregates like BITSTRING_AGG receive their
+		// required statistics (issue #23663).
+		if (over_expr.AggregateFunction()) {
+			auto &agg_children = over_expr.GetChildrenMutable();
+			vector<BaseStatistics> child_stats;
+			child_stats.reserve(agg_children.size());
+			for (auto &child : agg_children) {
+				auto stat = PropagateExpression(child);
+				if (!stat) {
+					child_stats.push_back(BaseStatistics::CreateUnknown(child->GetReturnType()));
+				} else {
+					child_stats.push_back(stat->Copy());
+				}
+			}
+			auto &aggregate = *over_expr.AggregateFunctionMutable();
+			if (aggregate.GetCallbacks().HasStatisticsCallback()) {
+				AggregateStatisticsInput input(over_expr.BindInfo(), child_stats, node_stats.get());
+				aggregate.GetCallbacks().GetStatisticsCallback()(context, aggregate, over_expr.Distinct(), agg_children,
+				                                                 input);
+			}
 		}
 	}
 	return std::move(node_stats);

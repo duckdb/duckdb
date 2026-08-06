@@ -228,7 +228,8 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 	return range;
 }
 
-unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
+unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateFunction &function,
+                                                   bool is_distinct, vector<unique_ptr<Expression>> &children,
                                                    AggregateStatisticsInput &input) {
 	if (NumericStats::HasMinMax(input.child_stats[0])) {
 		auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
