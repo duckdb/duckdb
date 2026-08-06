@@ -11,6 +11,7 @@
 #include "duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
@@ -51,6 +52,10 @@ static unique_ptr<LogicalOperator> TryCopyAlternative(Binder &binder, LogicalOpe
 	} catch (NotImplementedException &) {
 		return nullptr;
 	}
+	auto parameters = binder.GetParameters();
+	unordered_map<TableIndex, TableIndex> table_idx_replacements;
+	TableBindingReplacer replacer(table_idx_replacements, parameters ? parameters->GetParametersPtr() : nullptr);
+	replacer.VisitOperator(*alternative);
 	alternative->ResolveOperatorTypes();
 	if (live_output_types != alternative->types ||
 	    !TryAddLayoutReplacements(live_output_bindings, alternative->GetColumnBindings(), output_replacements)) {

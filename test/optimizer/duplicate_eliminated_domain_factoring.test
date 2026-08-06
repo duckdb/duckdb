@@ -314,6 +314,32 @@ WHERE f.v < (
 1	2
 2	1
 
+# Factoring a prepared candidate must preserve the live parameter data across logical-plan copies.
+statement ok
+PREPARE grouped_domain_candidate AS
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT k
+    FROM domain_dim
+    GROUP BY k
+    HAVING min(state) = $1
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+
+query II rowsort
+EXECUTE grouped_domain_candidate('selected');
+----
+1	2
+2	1
+
+statement ok
+DEALLOCATE grouped_domain_candidate;
+
 statement ok
 SET debug_verify_aggregate_state_export=false;
 

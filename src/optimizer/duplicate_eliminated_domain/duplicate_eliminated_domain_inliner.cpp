@@ -90,7 +90,8 @@ static bool CanDuplicateCandidateSource(ClientContext &context, LogicalOperator 
 static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, unique_ptr<LogicalOperator> &source,
                                                              const DuplicateEliminatedDomainCandidate &candidate,
                                                              LogicalCTERef &domain_ref) {
-	LogicalOperatorDeepCopy deep_copy(binder, nullptr);
+	auto parameters = binder.GetParameters();
+	LogicalOperatorDeepCopy deep_copy(binder, parameters ? parameters->GetParametersPtr() : nullptr);
 	auto source_copy = deep_copy.DeepCopy(source);
 	auto distinct_domain = DuplicateEliminatedDomainBuilder::TryBuild(binder, std::move(source_copy),
 	                                                                  candidate.KeyIndices(), domain_ref.chunk_types);
