@@ -60,6 +60,12 @@ explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELE
 ----
 logical_opt	<REGEX>:.*Join Type: (RIGHT_)?SEMI.*((l_partkey = ps_partkey|ps_partkey = l_partkey).*(l_suppkey = ps_suppkey|ps_suppkey = l_suppkey)|(l_suppkey = ps_suppkey|ps_suppkey = l_suppkey).*(l_partkey = ps_partkey|ps_partkey = l_partkey)).*(DELIM_GET|CTE_SCAN).*
 
+# Q 20: the selective part predicate belongs inside the payload CTE, before the correlated aggregate domain is built.
+query II
+explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date))) AND s_nationkey = n_nationkey AND n_name = 'CANADA' ORDER BY s_name;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim_[0-9]+.*Expressions: SUBQUERY.*Join Type: MARK.*ps_partkey = #0.*
+
 # Reduced SQLStorm 6064: a pair-dependent predicate below a reused window CTE remains in the
 # normal decorrelation pipeline and exposes both join keys to the optimizer. MARK is retained
 # when column liveness cannot prove that conversion to SEMI is safe.
@@ -271,6 +277,12 @@ query II
 EXPLAIN SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal FROM customer WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT avg(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode;
 ----
 logical_opt	<REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
+
+# Q 22: ordinary left-side filters must be applied before the NOT EXISTS payload is materialized.
+query II
+EXPLAIN SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal FROM customer WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT avg(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim_[0-9]+.*Join Type: INNER.*Expressions: IN \(\.\.\.\).*(CTE_SCAN|CTE Scan).*
 
 # Delimiter CTE fanout should stay runnable with grouped build-side consumers
 query I

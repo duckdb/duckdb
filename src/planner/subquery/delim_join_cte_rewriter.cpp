@@ -233,12 +233,6 @@ static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalO
 	if (!CanRewriteDelimJoinAsCTE(delim_join)) {
 		return false;
 	}
-	for (auto &expr : filter.expressions) {
-		if (expr->IsVolatile() || expr->CanThrow() || expr->HasSubquery()) {
-			return false;
-		}
-	}
-
 	bool changed = false;
 	vector<unique_ptr<Expression>> remaining_expressions;
 	vector<unique_ptr<Expression>> expressions;
@@ -248,7 +242,8 @@ static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalO
 	}
 	LogicalFilter::SplitPredicates(expressions);
 	for (auto &expr : expressions) {
-		if (FilterReferencesDelimInput(delim_join, *expr)) {
+		// CanThrow alone does not prevent left-side join filter pushdown; match the regular filter pushdown rules.
+		if (FilterReferencesDelimInput(delim_join, *expr) && !expr->IsVolatile() && !expr->HasSubquery()) {
 			AddFilterToOperator(delim_join.children[0], std::move(expr));
 			changed = true;
 		} else {
