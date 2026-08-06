@@ -29,6 +29,8 @@ bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &re
 	if (type.IsNested()) {
 		switch (logical_type) {
 		case LogicalTypeId::MAP:
+			return ConvertMapToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec, values_index_selvec,
+			                                                     is_root);
 		case LogicalTypeId::LIST:
 			return ConvertListToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec, values_index_selvec,
 			                                                      is_root);
