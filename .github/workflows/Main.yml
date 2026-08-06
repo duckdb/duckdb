@@ -746,7 +746,7 @@ jobs:
       - prepare
       - extensions
       - linux-release-cli
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
 
     steps:
     - name: "Checkout"
@@ -1298,12 +1298,24 @@ jobs:
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
-    name: Tests a release build with different configurations
+    name: Linux Config (${{ matrix.group }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-configs') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
       - linux-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: Query Verification
+            target: test_configs_query_verification
+          - group: Execution
+            target: test_configs_execution
+          - group: Persistence
+            target: test_configs_persistence
+          - group: Storage Engine
+            target: test_configs_storage_engine
 
     steps:
     - name: "Checkout"
@@ -1334,22 +1346,22 @@ jobs:
     - name: Test Configurations
       if: success() || failure()
       run: |
-        make test_configs
+        make ${{ matrix.target }}
+
+    - name: Test Storage Compatibility
+      if: ${{ (success() || failure()) && matrix.group == 'Persistence' }}
+      run: |
+        make test_storage
 
     - name: Test Vector Verification
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_vector
 
     - name: Test Synchronous Table Scan
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_table_scan
-
-    - name: Test Storage Compatibility
-      if: success() || failure()
-      run: |
-        make test_storage
 
  summary:
     name: Summary

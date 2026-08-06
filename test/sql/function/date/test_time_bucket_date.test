@@ -598,3 +598,8 @@ SELECT time_bucket(i, t, t)
 FROM cte
 ----
 NULL
+
+statement error
+SELECT time_bucket(INTERVAL '2147483647' MONTH, DATE '1700-01-01', DATE '1800-01-01');
+----
+Out of Range Error: Overflow in addition

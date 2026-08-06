@@ -8,7 +8,7 @@ template <>
 bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t col, idx_t row) {
 	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
 	auto &query_result = result_data->result;
-	auto &source_type = query_result->types[col];
+	auto &source_type = query_result->GetTypes()[col];
 	auto width = duckdb::DecimalType::GetWidth(source_type);
 	auto scale = duckdb::DecimalType::GetScale(source_type);
 	StringHeap heap;
@@ -108,7 +108,7 @@ duckdb_hugeint FetchInternals<hugeint_t>(void *source_address) {
 template <>
 bool CastDecimalCInternal(duckdb_result *source, duckdb_decimal &result, idx_t col, idx_t row) {
 	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
-	result_data->result->types[col].GetDecimalProperties(result.width, result.scale);
+	result_data->result->GetTypes()[col].GetDecimalProperties(result.width, result.scale);
 	auto source_address = UnsafeFetchPtr<hugeint_t>(source, col, row);
 
 	if (result.width > duckdb::Decimal::MAX_WIDTH_INT64) {

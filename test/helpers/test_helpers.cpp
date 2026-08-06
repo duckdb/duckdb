@@ -650,7 +650,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 }
 
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
-	if (result_.type == QueryResultType::STREAM_RESULT) {
+	if (result_.GetResultType() == QueryResultType::STREAM_RESULT) {
 		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");
 		return false;
 	}
@@ -659,7 +659,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 		return false;
 	}
-	if (result.names.size() != result.types.size()) {
+	if (result.GetNames().size() != result.GetTypes().size()) {
 		// column names do not match
 		result.Print();
 		return false;
@@ -676,7 +676,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		result.Print();
 		return false;
 	}
-	if (column_number >= result.types.size()) {
+	if (column_number >= result.GetTypes().size()) {
 		result.Print();
 		return false;
 	}
@@ -699,7 +699,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 }
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
-	if (result->type == QueryResultType::STREAM_RESULT) {
+	if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream = (StreamQueryResult &)*result;
 		result = stream.Materialize();
 	}
@@ -712,14 +712,14 @@ bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, s
 }
 
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result.GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
 	if (materialized.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
 		return materialized.GetError();
 	}
 	string error;
-	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {
+	if (!compare_result(csv, materialized.Collection(), materialized.GetTypes(), header, error)) {
 		return error;
 	}
 	return "";

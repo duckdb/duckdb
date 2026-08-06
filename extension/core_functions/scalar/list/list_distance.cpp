@@ -91,6 +91,9 @@ ScalarFunctionSet ListInnerProductFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<InnerProductOp>(set, type);
 	}
+	for (auto &func : set.functions) {
+		func.SetFallible();
+	}
 	return set;
 }
 
@@ -98,6 +101,9 @@ ScalarFunctionSet ListNegativeInnerProductFun::GetFunctions() {
 	ScalarFunctionSet set("list_negative_inner_product");
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<NegativeInnerProductOp>(set, type);
+	}
+	for (auto &func : set.functions) {
+		func.SetFallible();
 	}
 	return set;
 }
@@ -117,6 +123,9 @@ ScalarFunctionSet ListCosineDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("list_cosine_distance");
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<CosineDistanceOp>(set, type);
+	}
+	for (auto &func : set.functions) {
+		func.SetFallible();
 	}
 	return set;
 }

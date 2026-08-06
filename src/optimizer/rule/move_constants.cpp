@@ -201,7 +201,7 @@ static bool CanDuplicateForNaNGuard(const Expression &expr) {
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
-static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {
+static unique_ptr<Expression> CreateIsNanCall(ClientContext &context, const Expression &expr) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(expr.Copy());
 
@@ -211,10 +211,22 @@ static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const 
 	if (!isnan) {
 		error.Throw();
 	}
+	return isnan;
+}
 
+static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {
 	auto not_isnan = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-	not_isnan->GetChildrenMutable().push_back(std::move(isnan));
+	not_isnan->GetChildrenMutable().push_back(CreateIsNanCall(context, expr));
 	return std::move(not_isnan);
+}
+
+//! -NaN is still NaN, and DuckDB orders NaN above every other value, so [-x > c] and [-x >= c] are TRUE for a
+//! NaN input while the flipped [x < -c] / [x <= -c] are FALSE. Those two need [OR isnan(x)]; [-x < c] and
+//! [-x <= c] have the mirrored problem and need [AND NOT isnan(x)]. The comparison type passed here must
+//! already be oriented with the negation on the left.
+static bool NaNGuardIsDisjunctive(ExpressionType comparison_type) {
+	return comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 }
 
 MoveUnaryMinusRule::MoveUnaryMinusRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -254,13 +266,22 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 
 	auto &constant_type = outer_constant.GetReturnType();
 	unique_ptr<Expression> nan_guard;
+	bool nan_guard_disjunctive = false;
 	if (constant_type.IsFloating()) {
 		if (IsOrderedComparison(comparison.GetExpressionType())) {
 			auto &input = *negation.GetChildren()[0];
 			if (!CanDuplicateForNaNGuard(input)) {
 				return nullptr;
 			}
-			nan_guard = CreateNotIsNanGuard(GetContext(), input);
+			// the guard depends on the direction of the comparison AS SEEN BY the negation, so [c > -x]
+			// must be read as [-x < c] first
+			auto negation_type = comparison.GetExpressionType();
+			if (!RefersToSameObject(BoundComparisonExpression::Left(comparison), negation)) {
+				negation_type = FlipComparisonExpression(negation_type);
+			}
+			nan_guard_disjunctive = NaNGuardIsDisjunctive(negation_type);
+			nan_guard =
+			    nan_guard_disjunctive ? CreateIsNanCall(GetContext(), input) : CreateNotIsNanGuard(GetContext(), input);
 		}
 		double val = 0.0;
 		if (constant_type.id() == LogicalTypeId::FLOAT) {
@@ -326,8 +347,9 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 	}
 	BoundComparisonExpression::FlipType(comparison);
 	if (nan_guard) {
-		auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, comparison.Copy(),
-		                                                    std::move(nan_guard));
+		auto conjunction_type =
+		    nan_guard_disjunctive ? ExpressionType::CONJUNCTION_OR : ExpressionType::CONJUNCTION_AND;
+		auto result = make_uniq<BoundConjunctionExpression>(conjunction_type, comparison.Copy(), std::move(nan_guard));
 		return std::move(result);
 	}
 	changes_made = true;

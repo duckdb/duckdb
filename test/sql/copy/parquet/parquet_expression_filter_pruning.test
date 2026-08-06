@@ -401,3 +401,40 @@ FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
 WHERE s ILIKE 'İ%'
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 5 / 5.*
+
+# Exact equal Parquet min/max values imply exact string lengths for the row group
+statement ok
+COPY (
+	SELECT
+		repeat('x', CASE WHEN range < 2048 THEN 4 WHEN range < 4096 THEN 20 ELSE 40 END) AS s,
+		repeat('y', CASE WHEN range < 2048 THEN 4 WHEN range < 4096 THEN 20 ELSE 40 END)::BLOB AS b
+	FROM range(6144)
+) TO '{TEST_DIR}/expr_prune_string_length.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_string_length.parquet'
+WHERE strlen(s) > 30
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(strlen(s))
+FROM '{TEST_DIR}/expr_prune_string_length.parquet'
+WHERE strlen(s) > 30
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_string_length.parquet'
+WHERE octet_length(b) > 30
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(octet_length(b))
+FROM '{TEST_DIR}/expr_prune_string_length.parquet'
+WHERE octet_length(b) > 30
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 3.*
