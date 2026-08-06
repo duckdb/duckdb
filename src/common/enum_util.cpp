@@ -1502,6 +1502,25 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	return static_cast<DefaultOrderByNullType>(StringUtil::StringToEnum(GetDefaultOrderByNullTypeValues(), 5, "DefaultOrderByNullType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetDeleteIdStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DeleteIdState::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(DeleteIdState::MASKED), "MASKED" },
+		{ static_cast<uint32_t>(DeleteIdState::ARRAY), "ARRAY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value) {
+	return StringUtil::EnumToString(GetDeleteIdStateValues(), 3, "DeleteIdState", static_cast<uint32_t>(value));
+}
+
+template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value) {
+	return static_cast<DeleteIdState>(StringUtil::StringToEnum(GetDeleteIdStateValues(), 3, "DeleteIdState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetDependencyEntryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DependencyEntryType::SUBJECT), "SUBJECT" },
