@@ -79,7 +79,7 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 
 bool QueryProfiler::IsEnabled() const {
 	auto &config = ClientConfig::GetConfig(context);
-	return is_explain_analyze || config.enable_profiler || config.enable_samply_markers;
+	return is_explain_analyze || config.enable_profiler || SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY);
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
@@ -125,11 +125,12 @@ void QueryProfiler::Start(const string &query) {
 	query_metrics.query_sql = query;
 	auto &config = ClientConfig::GetConfig(context);
 	string samply_marker_name;
-	if (config.enable_samply_markers) {
+	const auto samply_query_enabled = SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY);
+	if (samply_query_enabled) {
 		samply_marker_name = SamplyQueryMarkerName(query);
 	}
 	query_metrics.latency_timer = make_uniq<MetricsTimer>(query_metrics, MetricQueryTotalTime::Name, IsEnabled(),
-	                                                      config.enable_samply_markers, std::move(samply_marker_name));
+	                                                      samply_query_enabled, std::move(samply_marker_name));
 }
 
 void QueryProfiler::Reset() {
@@ -300,7 +301,7 @@ idx_t QueryProfiler::GetBytesWritten() const {
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
 	auto &config = ClientConfig::GetConfig(context);
-	return MetricsTimer(query_metrics, key, IsEnabled(), config.enable_samply_markers);
+	return MetricsTimer(query_metrics, key, IsEnabled(), SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY));
 }
 
 string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {

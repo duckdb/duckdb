@@ -10,6 +10,7 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -561,7 +562,7 @@ void Pipeline::Ready() {
 	ready = true;
 	std::reverse(operators.begin(), operators.end());
 
-	if (!ClientConfig::GetConfig(GetClientContext()).enable_samply_markers) {
+	if (!SamplyTrackEnabled(ClientConfig::GetConfig(GetClientContext()).samply_tracks, SamplyTrack::QUERY)) {
 		return;
 	}
 

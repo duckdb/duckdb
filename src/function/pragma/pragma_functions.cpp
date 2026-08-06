@@ -37,14 +37,6 @@ static void PragmaDisableProfiling(ClientContext &context, const FunctionParamet
 	config.enable_profiler = false;
 }
 
-static void PragmaEnableSamplyMarkers(ClientContext &context, const FunctionParameters &parameters) {
-	EnableSamplyMarkersSetting::SetLocal(context, Value::BOOLEAN(true));
-}
-
-static void PragmaDisableSamplyMarkers(ClientContext &context, const FunctionParameters &parameters) {
-	EnableSamplyMarkersSetting::SetLocal(context, Value::BOOLEAN(false));
-}
-
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_progress_bar = true;
 }
@@ -111,9 +103,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_samply_markers", PragmaEnableSamplyMarkers));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_samply_markers", PragmaDisableSamplyMarkers));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
 
