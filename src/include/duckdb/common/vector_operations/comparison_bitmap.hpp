@@ -124,7 +124,6 @@ DUCKDB_AUTOVEC_TARGET static inline void CmpMaskToBitmap(const T *__restrict a, 
                                                          idx_t count, validity_t *__restrict bitmap) {
 	idx_t i = 0;
 #if DUCKDB_AUTOVEC
-	DUCKDB_UNROLL_LOOP
 	for (; i + 64 <= count; i += 64) { // whole words via movemask
 		bitmap[i / 64] = validity_t(CmpMask32<T, OP, COL>(a + i, b + i, constant)) |
 		                 validity_t(CmpMask32<T, OP, COL>(a + i + 32, b + i + 32, constant)) << 32;
