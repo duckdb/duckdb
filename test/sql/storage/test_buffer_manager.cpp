@@ -56,7 +56,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	// now reload the database, but this time with a max memory of 5MB
 	{
-		config->options.maximum_memory = 5000000;
+		config->SetMaximumMemory(5000000);
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// we can still select the integer
@@ -67,7 +67,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	{
 		// reloading with a bigger limit again makes it work
-		config->options.maximum_memory = (idx_t)-1;
+		config->SetMaximumMemory((idx_t)-1);
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");

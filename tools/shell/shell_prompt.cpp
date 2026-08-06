@@ -232,7 +232,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 	auto &context = *con.context;
 	if (component.literal == "memory_limit") {
 		auto &config = duckdb::DBConfig::GetConfig(context);
-		return StringUtil::BytesToHumanReadableString(config.options.maximum_memory, 1000);
+		return StringUtil::BytesToHumanReadableString(config.GetMaximumMemory(), 1000);
 	}
 	if (component.literal == "memory_usage") {
 		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);

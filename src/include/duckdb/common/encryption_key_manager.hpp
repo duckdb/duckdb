@@ -48,7 +48,6 @@ private:
 
 class EncryptionKeyManager : public ObjectCacheEntry {
 public:
-	static EncryptionKeyManager &GetInternal(ObjectCache &cache);
 	static EncryptionKeyManager &Get(ClientContext &context);
 	static EncryptionKeyManager &Get(DatabaseInstance &db);
 
@@ -83,6 +82,9 @@ public:
 	//! constants
 	static constexpr idx_t KEY_ID_BYTES = 8;
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
+
+private:
+	static EncryptionKeyManager &GetInternal(BoundObjectCache &cache);
 
 private:
 	mutable mutex lock;

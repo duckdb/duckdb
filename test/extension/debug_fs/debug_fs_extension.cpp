@@ -34,7 +34,7 @@ private:
 };
 
 void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
-	auto &cache = db.GetObjectCache();
+	auto &cache = ObjectCache::Get(db);
 	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>("instance")) {
 		return;
 	}
@@ -46,7 +46,7 @@ void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
 }
 
 DebugFileSystem &GetDebugFileSystemOrThrow(DatabaseInstance &db) {
-	auto entry = db.GetObjectCache().GetWithTypePrefix<DebugFileSystemCacheEntry>("instance");
+	auto entry = ObjectCache::Get(db).GetWithTypePrefix<DebugFileSystemCacheEntry>("instance");
 	if (!entry) {
 		throw InternalException("DebugFileSystem is not installed");
 	}

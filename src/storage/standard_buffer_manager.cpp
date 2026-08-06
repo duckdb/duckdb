@@ -7,6 +7,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_memory_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
@@ -69,7 +70,8 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
-    : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
+    : BufferManager(), db(db), memory_context_id(db.GetMemoryContextId()),
+      buffer_pool(db.GetMemoryManager()->GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
 	temp_block_manager =
@@ -126,7 +128,7 @@ template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
                                                                     ARGS... args) {
-	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
+	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, GetMaxMemory(), buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
 		                                       StringUtil::BytesToHumanReadableString(GetMaxMemory()));
@@ -328,6 +330,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 
 	idx_t required_memory;
 	auto &block_memory = handle->GetMemory();
+	D_ASSERT(block_memory.GetMemoryContextId() == memory_context_id);
 	{
 		// lock the block
 		auto lock = block_memory.GetLock();
@@ -413,6 +416,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
 	auto &block_memory = handle->GetMemory();
+	D_ASSERT(block_memory.GetMemoryContextId() == memory_context_id);
 	{
 		auto lock = block_memory.GetLock();
 		if (!block_memory.GetBuffer(lock) || block_memory.GetBufferType() == FileBufferType::TINY_BUFFER) {
