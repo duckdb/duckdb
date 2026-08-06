@@ -324,6 +324,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertNotIn("\nSLOWER (+2%…+10%)\n", plain_output)
         self.assertNotIn("\nUNCERTAIN REGRESSIONS\n", plain_output)
         self.assertNotIn("\nREGRESSIONS\n", plain_output)
+        self.assertLess(plain_output.index("UNCHANGED (±2%)"), plain_output.index("geomean:"))
+        self.assertTrue(plain_output.rstrip().endswith("result: no regressions"))
         self.assertIn("\033[90msuite: 1 benchmarks\033[0m", process.stdout)
         self.assertIn(
             "\033[90msampling: 10 initial pairs; 30–100 confirmation pairs outside ±2%, "
@@ -331,7 +333,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
             process.stdout,
         )
         self.assertIn("\033[90mregression: fail when the 95% CI is above +10.0%\033[0m", process.stdout)
-        self.assertIn("\033[90m+0.0%\033[0m  \033[90m(initial 10 samples)\033[0m", process.stdout)
+        self.assertIn("\033[90mUNCHANGED (±2%)\033[0m\n\033[90m1 benchmarks\033[0m", process.stdout)
+        self.assertIn("  +0.0%  \033[90m(initial 10 samples)\033[0m", process.stdout)
         self.assertIn("result: \033[32mno regressions\033[0m", process.stdout)
 
     def test_noise_boundaries_do_not_receive_confirmation_samples(self):
@@ -340,6 +343,21 @@ print("not-a-valid-timing-row", file=sys.stderr)
                 process, order = self.run_regression_test(self.stable_runner_source, new_timing=new_timing)
                 self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
                 self.assertEqual(order, self.expected_order())
+
+    def test_within_noise_geomean_uses_sign_color(self):
+        cases = [
+            ("0.999", "\033[32m-0.1%\033[0m"),
+            ("1.001", "\033[31m+0.1%\033[0m"),
+        ]
+        for new_timing, colored_change in cases:
+            with self.subTest(new_timing=new_timing):
+                process, order = self.run_regression_test(self.stable_runner_source, new_timing=new_timing)
+                self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+                self.assertEqual(order, self.expected_order())
+                self.assertIn(
+                    f"{colored_change}  \033[90m(initial 10 samples)\033[0m",
+                    process.stdout,
+                )
 
     def test_improvement_receives_confirmation_and_is_classified_by_median(self):
         process, order = self.run_regression_test(self.noisy_improvement_runner_source)
@@ -480,6 +498,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertIn("::warning title=Inconclusive regression benchmark::", plain_output)
         self.assertIn("10+30", plain_output)
         self.assertIn("result: \033[33muncertain regressions\033[0m", process.stdout)
+        self.assertLess(plain_output.index("UNCERTAIN REGRESSIONS"), plain_output.index("geomean:"))
+        self.assertTrue(plain_output.rstrip().endswith("result: uncertain regressions"))
 
     def test_malformed_runner_output_is_a_failure(self):
         process, _ = self.run_regression_test(self.malformed_runner_source)
@@ -487,6 +507,9 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertIn("Could not parse benchmark timings", process.stdout)
         self.assertIn("benchmark failure", process.stdout)
         self.assertIn("result: \033[31mbenchmark failure\033[0m", process.stdout)
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        self.assertLess(plain_output.index("FAILURES SUMMARY"), plain_output.index("geomean:"))
+        self.assertTrue(plain_output.rstrip().endswith("result: benchmark failure"))
 
     def test_removed_sampling_option_is_rejected(self):
         process, order = self.run_regression_test(self.stable_runner_source, extra_args=["--initial-runs", "20"])

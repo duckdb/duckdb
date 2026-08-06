@@ -487,6 +487,15 @@ def color_result(result_text: str) -> str:
     return f"{color}{result_text}{ANSI_RESET}"
 
 
+def color_geomean_change(percentage: float) -> str:
+    value = format_percentage(percentage)
+    if percentage < 0:
+        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
+    if percentage > 0:
+        return f"{ANSI_RED}{value}{ANSI_RESET}"
+    return value
+
+
 def row_sort_key(row: BenchmarkRow):
     bucket_order = {
         BUCKET_UNCHANGED: 0,
@@ -546,10 +555,11 @@ def print_bucket(title: str, rows: List[BenchmarkRow], unchanged_count: int = 0)
     elif not rows:
         return
     print("")
-    print(title)
     if title == "UNCHANGED (±2%)":
-        print(f"{unchanged_count} benchmarks")
+        print(gray(title))
+        print(gray(f"{unchanged_count} benchmarks"))
     else:
+        print(title)
         render_table(rows)
 
 
@@ -566,22 +576,13 @@ def print_geomean_summary(old_geomean: Optional[float], new_geomean: Optional[fl
         print(f"geomean: unavailable  {sample_text}")
         return
     percentage = ((new_geomean / old_geomean) - 1.0) * 100.0
-    if percentage > NOISE_THRESHOLD * 100.0:
-        bucket = BUCKET_SLOWER
-    elif percentage < -NOISE_THRESHOLD * 100.0:
-        bucket = BUCKET_FASTER
-    else:
-        bucket = BUCKET_UNCHANGED
-    change = color_change(bucket, format_percentage(percentage))
+    change = color_geomean_change(percentage)
     print(f"geomean: {format_seconds(old_geomean)} -> {format_seconds(new_geomean)}  " f"{change}  {sample_text}")
 
 
 def print_benchmark_report(
     rows: List[BenchmarkRow],
     common_prefix: str,
-    result_text: str,
-    old_geomean: Optional[float],
-    new_geomean: Optional[float],
 ):
     buckets = {
         bucket: [row for row in rows if row.bucket == bucket]
@@ -610,8 +611,6 @@ def print_benchmark_report(
             f"{format_ratio_change(REGRESSION_LIMIT)}"
         )
     )
-    print_geomean_summary(old_geomean, new_geomean)
-    print(f"result: {color_result(result_text)}")
     print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], len(buckets[BUCKET_UNCHANGED]))
     print_bucket("FASTER", buckets[BUCKET_FASTER])
     print_bucket("SLOWER (+2%…+10%)", buckets[BUCKET_SLOWER])
@@ -708,11 +707,10 @@ def main() -> int:
     print_benchmark_report(
         rows,
         benchmark_common_prefix([result.benchmark for result in results]),
-        result_text,
-        old_geomean,
-        new_geomean,
     )
     print_failure_summary(failure_summary)
+    print_geomean_summary(old_geomean, new_geomean)
+    print(f"result: {color_result(result_text)}")
     return 1 if failing_results else 0
 
 
