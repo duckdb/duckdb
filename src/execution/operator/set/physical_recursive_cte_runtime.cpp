@@ -1006,7 +1006,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, frontier_chunks,
 		                                scheduler_input_rows);
 		const auto epoch_tasks = gstate.GetMetrics().TaskCount() - epoch_task_start;
-		gstate.GetEpochMetrics().Record(frontier_rows, parallelism.worker_count, epoch_tasks, elapsed_us,
+		gstate.GetEpochMetrics().Record(frontier_rows, max_worker_count, epoch_tasks, elapsed_us,
 		                                frontier_storage_bytes, frontier_allocation_bytes);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
