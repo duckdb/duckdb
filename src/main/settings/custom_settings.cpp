@@ -39,6 +39,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 
@@ -673,6 +674,19 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 			}
 			if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
 				throw InvalidInputException("STRUCT types in the shredding can not be empty");
+			}
+			if (type.id() == LogicalTypeId::STRUCT) {
+				//! STRUCT field names are case-insensitive, but VARIANT object keys are case-sensitive;
+				//! colliding fields would shred distinct keys into the same STRUCT field.
+				case_insensitive_set_t field_names;
+				for (auto &child : StructType::GetChildTypes(type)) {
+					if (!field_names.insert(child.first.GetIdentifierName()).second) {
+						throw InvalidInputException(
+						    "STRUCT field names in the shredding must be unique, but field \"%s\" collides with "
+						    "another field when compared case-insensitively",
+						    child.first.GetIdentifierName());
+					}
+				}
 			}
 			return false;
 		}
