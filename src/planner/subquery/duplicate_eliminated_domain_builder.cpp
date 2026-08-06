@@ -37,7 +37,7 @@ unique_ptr<LogicalOperator> DuplicateEliminatedDomainBuilder::TryBuild(Binder &b
 	}
 	domain->children.push_back(std::move(source));
 	domain->ResolveOperatorTypes();
-	return domain;
+	return std::move(domain);
 }
 
 } // namespace duckdb

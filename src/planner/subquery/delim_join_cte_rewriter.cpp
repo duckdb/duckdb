@@ -636,7 +636,7 @@ private:
 	bool ExpressionReferencesGeneratedSide(const Expression &expr, const GeneratedDedupRef &dedup_ref) const;
 	bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const;
 	bool RewriteSubtree(unique_ptr<LogicalOperator> &op, BindingReplacementGraph &replacements,
-	                    bool under_grouping_operator = false);
+	                    bool &has_grouped_domain_guard, bool under_grouping_operator = false);
 	idx_t CountGeneratedDedupRefs(LogicalOperator &op) const;
 	bool TryPlanInequalityJoinConditions(LogicalOperator &target_op, const vector<JoinCondition> &join_conditions,
 	                                     idx_t dedup_idx, vector<JoinCondition> &rewritten_conditions);
@@ -766,13 +766,16 @@ bool GeneratedDedupRefEliminator::FilterIsGeneratedDedupCrossProduct(LogicalOper
 }
 
 bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op, BindingReplacementGraph &replacements,
-                                                 bool under_grouping_operator) {
+                                                 bool &has_grouped_domain_guard, bool under_grouping_operator) {
 	auto old_output_bindings = op->GetColumnBindings();
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		has_grouped_domain_guard = false;
 		if (!op->children.empty()) {
 			auto old_child_bindings = op->children[0]->GetColumnBindings();
 			BindingReplacementGraph child_replacements;
-			if (RewriteSubtree(op->children[0], child_replacements, under_grouping_operator)) {
+			bool child_has_grouped_domain_guard = false;
+			if (RewriteSubtree(op->children[0], child_replacements, child_has_grouped_domain_guard,
+			                   under_grouping_operator)) {
 				ColumnBindingRewrite::ApplyToChild(op, 0, std::move(old_child_bindings), child_replacements);
 				replacements = ColumnBindingRewrite::ScopeToOutput(old_output_bindings, op->GetColumnBindings(),
 				                                                   child_replacements);
@@ -784,16 +787,19 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 
 	bool rewritten = false;
 	BindingReplacementGraph accumulated_replacements;
+	vector<bool> child_has_grouped_domain_guard(op->children.size(), false);
 	auto child_under_grouping_operator =
 	    under_grouping_operator || op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		auto old_child_bindings = op->children[child_idx]->GetColumnBindings();
 		BindingReplacementGraph child_replacements;
-		if (RewriteSubtree(op->children[child_idx], child_replacements, child_under_grouping_operator)) {
+		bool child_guard = false;
+		if (RewriteSubtree(op->children[child_idx], child_replacements, child_guard, child_under_grouping_operator)) {
 			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
 			accumulated_replacements.Merge(child_replacements);
 			rewritten = true;
 		}
+		child_has_grouped_domain_guard[child_idx] = child_guard;
 	}
 
 	bool filter_cross_product = false;
@@ -802,6 +808,16 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 	} else if (FilterIsGeneratedDedupCrossProduct(*op)) {
 		filter_cross_product = true;
 	} else {
+		if (op->children.size() == 1) {
+			has_grouped_domain_guard = child_has_grouped_domain_guard[0];
+		} else if (op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT && op->children.size() == 2) {
+			auto left_is_generated = GetGeneratedDedupRef(*op->children[0]) != nullptr;
+			auto right_is_generated = GetGeneratedDedupRef(*op->children[1]) != nullptr;
+			has_grouped_domain_guard =
+			    left_is_generated != right_is_generated && child_has_grouped_domain_guard[left_is_generated ? 1 : 0];
+		} else {
+			has_grouped_domain_guard = false;
+		}
 		if (rewritten) {
 			replacements = ColumnBindingRewrite::ScopeToOutput(old_output_bindings, op->GetColumnBindings(),
 			                                                   accumulated_replacements);
@@ -811,9 +827,19 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 
 	bool local_rewrite;
 	BindingReplacementGraph local_replacements;
-	if (!can_evaluate_additional_groups || (under_grouping_operator && !can_eliminate_equivalent_source_domain)) {
-		// Unsafe RHSs retain every restriction. A restriction below a grouping operator remains the boundary that
-		// prevents global aggregation.
+	bool retained_side_has_grouped_domain_guard = false;
+	if (filter_cross_product) {
+		retained_side_has_grouped_domain_guard = child_has_grouped_domain_guard[0];
+	} else {
+		auto generated_child = GetGeneratedDedupRef(*op->children[0], false, true) ? 0 : 1;
+		retained_side_has_grouped_domain_guard = child_has_grouped_domain_guard[1 - generated_child];
+	}
+	auto preserve_domain_join =
+	    !retained_side_has_grouped_domain_guard &&
+	    (!can_evaluate_additional_groups || (under_grouping_operator && !can_eliminate_equivalent_source_domain));
+	if (preserve_domain_join) {
+		// The first restriction below a grouping operator protects fallible aggregate input. Once retained, equivalent
+		// restrictions above it are redundant because RemoveJoin keeps their predicates on the retained side.
 		local_rewrite = filter_cross_product ? PreserveFilterCrossProductAsSemi(op, local_replacements)
 		                                     : PreserveJoinAsSemi(op, local_replacements);
 	} else {
@@ -824,6 +850,8 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 		accumulated_replacements.Merge(local_replacements);
 		rewritten = true;
 	}
+	has_grouped_domain_guard =
+	    retained_side_has_grouped_domain_guard || (local_rewrite && preserve_domain_join && under_grouping_operator);
 	if (rewritten) {
 		replacements =
 		    ColumnBindingRewrite::ScopeToOutput(old_output_bindings, op->GetColumnBindings(), accumulated_replacements);
@@ -1510,7 +1538,8 @@ idx_t GeneratedDedupRefEliminator::Remove(BindingReplacementGraph &replacements)
 	auto old_output_bindings = delim_join_op->GetColumnBindings();
 	auto old_right_bindings = delim_join.children[1]->GetColumnBindings();
 	BindingReplacementGraph right_replacements;
-	if (RewriteSubtree(delim_join.children[1], right_replacements)) {
+	bool has_grouped_domain_guard = false;
+	if (RewriteSubtree(delim_join.children[1], right_replacements, has_grouped_domain_guard)) {
 		ColumnBindingRewrite::ApplyToChild(delim_join_op, 1, std::move(old_right_bindings), right_replacements);
 		replacements = ColumnBindingRewrite::ScopeToOutput(old_output_bindings, delim_join_op->GetColumnBindings(),
 		                                                   right_replacements);

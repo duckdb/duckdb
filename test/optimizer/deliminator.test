@@ -295,3 +295,64 @@ query II
 EXPLAIN SELECT s_name, count(*) AS numwait FROM supplier, lineitem l1, orders, nation WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F' AND l1.l_receiptdate > l1.l_commitdate AND EXISTS (SELECT * FROM lineitem l2 WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey) AND NOT EXISTS (SELECT * FROM lineitem l3 WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate) AND s_nationkey = n_nationkey AND n_name = 'SAUDI ARABIA' GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100;
 ----
 logical_opt	<!REGEX>:.*(DELIM_JOIN|DELIM_GET).*
+
+# Once a correlated aggregate retains a generated domain guard below its grouping operator, an equivalent
+# post-aggregate domain join is redundant. The lower guard must remain so unreachable fallible input is not evaluated.
+statement ok
+CREATE TABLE grouped_domain_outer(a INTEGER, b INTEGER, threshold INTEGER);
+
+statement ok
+INSERT INTO grouped_domain_outer VALUES (1, 1, 10), (1, 2, 1), (2, 1, 5), (NULL, 1, 10);
+
+statement ok
+CREATE TABLE grouped_domain_inner(a INTEGER, b INTEGER, v VARCHAR);
+
+statement ok
+INSERT INTO grouped_domain_inner VALUES (1, 1, '2'), (1, 1, '3'), (1, 2, '4'), (2, 1, NULL), (3, 3, 'bad'), (NULL, 1, '7');
+
+query II
+EXPLAIN
+SELECT a, b
+FROM grouped_domain_outer o
+WHERE threshold > (
+    SELECT sum(CAST(v AS INTEGER))
+    FROM grouped_domain_inner i
+    WHERE i.a = o.a AND i.b = o.b
+);
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*
+
+query II
+EXPLAIN
+SELECT a, b
+FROM grouped_domain_outer o
+WHERE threshold > (
+    SELECT sum(CAST(v AS INTEGER))
+    FROM grouped_domain_inner i
+    WHERE i.a = o.a AND i.b = o.b
+);
+----
+logical_opt	<!REGEX>:.*Join Type: SEMI.*Join Type: SEMI.*
+
+query II rowsort
+SELECT a, b
+FROM grouped_domain_outer o
+WHERE threshold > (
+    SELECT sum(CAST(v AS INTEGER))
+    FROM grouped_domain_inner i
+    WHERE i.a = o.a AND i.b = o.b
+);
+----
+1	1
+
+query II rowsort
+SELECT a, b
+FROM grouped_domain_outer o
+WHERE threshold > (
+    SELECT sum(CAST(v AS INTEGER))
+    FROM grouped_domain_inner i
+    WHERE i.a IS NOT DISTINCT FROM o.a AND i.b IS NOT DISTINCT FROM o.b
+);
+----
+1	1
+NULL	1
