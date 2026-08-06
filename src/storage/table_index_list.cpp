@@ -94,7 +94,7 @@ void IndexDeltas::MarkWritten(const transaction_t checkpoint_id) {
 
 template <class T>
 TableIndexIterationHelper<T>::TableIndexIterationHelper(const TableIndexList &index_list)
-	: lock(index_list.index_entries_lock), index_entries(index_list.index_entries) {
+    : lock(index_list.index_entries_lock), index_entries(index_list.index_entries) {
 }
 
 template <class T>
