@@ -51,10 +51,10 @@ struct QualifiedName {
 		path.push_back(std::move(name_p));
 	}
 
-	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog, schema,
-	//! name])
+	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog,
+	//! schema..., name])
 	const Identifier &Catalog() const {
-		return path.size() == 3 ? path[0] : empty;
+		return path.size() >= 3 ? path[0] : empty;
 	}
 	//! The schema is the element directly before the name (or empty if there is no schema)
 	const Identifier &Schema() const {
@@ -70,13 +70,37 @@ struct QualifiedName {
 		return path;
 	}
 
-	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
+	//! Return a copy of this name with the name replaced, keeping the (possibly nested) catalog/schema qualification
 	QualifiedName WithName(Identifier name) const {
-		return QualifiedName(Catalog(), Schema(), std::move(name));
+		vector<Identifier> qualification;
+		if (!path.empty()) {
+			qualification.insert(qualification.end(), path.begin(), path.end() - 1);
+		}
+		return QualifiedName(std::move(qualification), std::move(name));
 	}
 	//! Return a copy of this name with the catalog/schema qualification replaced by the given path, keeping the name
 	QualifiedName WithQualification(vector<Identifier> schema_path) const {
 		return QualifiedName(std::move(schema_path), Name());
+	}
+	//! Drop the catalog component (if any), keeping the (possibly nested) schema path and the name
+	void StripCatalog() {
+		if (path.size() < 3) {
+			return;
+		}
+		path.erase(path.begin());
+	}
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has
+	QualifiedName WithCatalog(Identifier catalog) const {
+		if (path.size() < 2) {
+			return QualifiedName(std::move(catalog), Identifier(), Name());
+		}
+		vector<Identifier> qualification;
+		qualification.push_back(std::move(catalog));
+		// keep the (possibly nested) schema path, skipping the catalog component when the name is fully qualified
+		for (idx_t i = path.size() >= 3 ? 1 : 0; i + 1 < path.size(); i++) {
+			qualification.push_back(path[i]);
+		}
+		return QualifiedName(std::move(qualification), Name());
 	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot

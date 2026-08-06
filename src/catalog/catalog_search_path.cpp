@@ -182,13 +182,21 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (path.GetCatalog().empty()) {
 			auto catalog = Catalog::GetCatalogEntry(context, path.GetSchema());
 			if (catalog) {
-				auto schema =
-				    catalog->GetSchema(context, Identifier(catalog->GetDefaultSchema()), OnEntryNotFound::RETURN_NULL);
+				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.SetCatalog(path.GetSchema());
 					path.SetSchema(schema->name);
 					continue;
 				}
+			}
+		}
+		if (!path.GetCatalog().empty()) {
+			// "a.b" can also name a nested schema - give a clearer error in that case
+			vector<Identifier> nested_path {path.GetCatalog(), path.GetSchema()};
+			if (Catalog::GetSchema(context, Identifier(), nested_path, OnEntryNotFound::RETURN_NULL)) {
+				throw NotImplementedException("%s: \"%s\" is a nested schema - nested schemas cannot be used in the "
+				                              "search path",
+				                              GetSetName(set_type), path.ToString());
 			}
 		}
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
@@ -241,7 +249,7 @@ Identifier CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Ide
 	}
 	auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
 	if (catalog_entry) {
-		return Identifier(catalog_entry->GetDefaultSchema());
+		return catalog_entry->GetDefaultSchema();
 	}
 	return DEFAULT_SCHEMA;
 }
@@ -308,7 +316,7 @@ vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientCon
 			if (!catalog_entry) {
 				continue;
 			}
-			res.emplace_back(path.GetCatalog(), Identifier(catalog_entry->GetDefaultSchema()));
+			res.emplace_back(path.GetCatalog(), catalog_entry->GetDefaultSchema());
 		} else {
 			res.emplace_back(path);
 		}

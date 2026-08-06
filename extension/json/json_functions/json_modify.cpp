@@ -364,6 +364,8 @@ ScalarFunctionSet JSONFunctions::GetSetFunction() {
 	ScalarFunction fun("json_set", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
 	                   LogicalType::JSON(), JsonSetFunction, JSONModifyFunctionData::Bind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	// throws for invalid JSON paths
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -371,6 +373,8 @@ ScalarFunctionSet JSONFunctions::GetInsertFunction() {
 	ScalarFunction fun("json_insert", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
 	                   LogicalType::JSON(), JsonInsertFunction, JSONModifyFunctionData::Bind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	// throws for invalid JSON paths
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -378,12 +382,16 @@ ScalarFunctionSet JSONFunctions::GetReplaceFunction() {
 	ScalarFunction fun("json_replace", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
 	                   LogicalType::JSON(), JsonReplaceFunction, JSONModifyFunctionData::Bind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	// throws for invalid JSON paths
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRemoveFunction() {
 	ScalarFunction fun("json_remove", {LogicalType::JSON(), LogicalType::VARCHAR}, LogicalType::JSON(),
 	                   JsonRemoveFunction, JSONModifyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
+	// throws for invalid JSON paths
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 

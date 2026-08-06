@@ -105,11 +105,35 @@ public:
 	static void AppendSelectTagSet(const Value &tag_set);
 	static void AppendSkipTagSet(const Value &tag_set);
 
+	//! --temp-dir-* family + run-id + env-passthrough: on_set_option hooks bridging the generic option
+	//! table to the test_helpers setters of record (see test_helpers.hpp).
+	static void SetTempDirRootOption(const Value &input);
+	static void SetLocalTempDirRootOption(const Value &input);
+	static void SetRunIdOption(const Value &input);
+	static void SetTempDirRunIdOption(const Value &input);
+	static void SetTempDirTestIdOption(const Value &input);
+	static void SetTempDirDestroyOption(const Value &input);
+	static void SetDatabaseDestroyOption(const Value &input);
+	static void AppendEnvPassthrough(const Value &input);
+	static void CheckLocalDataDir(const Value &input);
+
+	//! false + `error` set when LOCAL_DATA_DIR was pinned away from a DATA_DIR that is itself local.
+	//! Call after UpdateEnvironment(), which is where both are resolved.
+	bool ValidateDataDirs(string &error);
+	//! false + `error` set when a config `test_env` entry names a runner-resolved variable
+	//! (IsReservedEnvName). Engine-populated names are reserved against every external input.
+	bool ValidateTestEnv(string &error);
+
 	string GetLocalExtensionRepository() const;
 	void SetLocalExtensionRepository(const string &repo);
 
 private:
 	void LoadTestEnvFromConfig();
+
+	//! Parse options into this instance without running their on_set_option hooks. Set on a
+	//! throwaway config loaded only for its `skip_tests` -- the hooks write process-global
+	//! lifecycle state that belongs to the selected invocation, not to an inherited file.
+	bool ignore_option_side_effects = false;
 
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;

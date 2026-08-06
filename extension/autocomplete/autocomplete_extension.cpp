@@ -382,7 +382,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -476,7 +477,7 @@ unique_ptr<GlobalTableFunctionState> SQLTokenizeInit(ClientContext &context, Tab
 }
 
 static unique_ptr<FunctionData> SQLTokenizeBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -526,7 +527,8 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 }
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}

@@ -217,6 +217,51 @@ SELECT count(*) FROM floats WHERE -x > 1.0
 ----
 1
 
+# Statistics remove both NaN guard polarities when the input cannot contain NaN or NULL
+statement ok
+CREATE TABLE floats_no_nan(x DOUBLE NOT NULL)
+
+statement ok
+INSERT INTO floats_no_nan VALUES (-3.14), (-1.0), (0.0), (2.5), (7.7)
+
+query I nosort float_neg_lt_no_nan
+EXPLAIN SELECT -x < -2.5 FROM floats_no_nan
+----
+
+query I nosort float_neg_lt_no_nan
+EXPLAIN SELECT x > 2.5 FROM floats_no_nan
+----
+
+query I nosort float_neg_gt_no_nan
+EXPLAIN SELECT -x > 2.5 FROM floats_no_nan
+----
+
+query I nosort float_neg_gt_no_nan
+EXPLAIN SELECT x < -2.5 FROM floats_no_nan
+----
+
+statement ok
+SET disabled_optimizers='statistics_propagation'
+
+query I nosort float_neg_lt_no_stats
+EXPLAIN SELECT -x < -2.5 FROM floats_no_nan
+----
+
+query I nosort float_neg_lt_no_stats
+EXPLAIN SELECT x > 2.5 AND NOT isnan(x) FROM floats_no_nan
+----
+
+query I nosort float_neg_gt_no_stats
+EXPLAIN SELECT -x > 2.5 FROM floats_no_nan
+----
+
+query I nosort float_neg_gt_no_stats
+EXPLAIN SELECT x < -2.5 OR isnan(x) FROM floats_no_nan
+----
+
+statement ok
+RESET disabled_optimizers
+
 # Ordered floating point rewrites need to preserve NaN semantics
 statement ok
 CREATE TABLE floats_nan(x DOUBLE);

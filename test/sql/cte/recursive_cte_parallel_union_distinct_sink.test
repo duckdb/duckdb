@@ -1,0 +1,90 @@
+# name: test/sql/cte/recursive_cte_parallel_union_distinct_sink.test
+# description: Partition-owned duplicate elimination for recursive UNION DISTINCT
+# group: [cte]
+
+statement ok
+SET threads=8;
+
+# A CPU-heavy broad frontier promotes its persistent visited set to partition-owned hash tables.
+query IIII
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	UNION
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*), min(i), max(i), max(level) FROM t;
+----
+400000	0	49999	7
+
+# Heavy duplicate production remains globally distinct across workers and epochs.
+query IIII
+WITH RECURSIVE t(i) AS (
+	SELECT i FROM range(1024) r(i)
+	UNION
+	SELECT (i * 8 + d) % 16384
+	FROM t, range(8) r(d)
+)
+SELECT count(*), min(i), max(i), sum(i) FROM t;
+----
+16384	0	16383	134209536
+
+# NULLs and duplicates retain ordinary UNION identity semantics.
+query II rowsort
+WITH RECURSIVE t(i, level) AS (
+	SELECT * FROM (VALUES (NULL::INTEGER, 0), (NULL, 0), (1, 0), (1, 0))
+	UNION
+	SELECT i, level + 1 FROM t WHERE level < 2
+)
+SELECT i, level FROM t;
+----
+1	0
+1	1
+1	2
+NULL	0
+NULL	1
+NULL	2
+
+# Filtered vectors can be partitioned without losing their dictionary selection.
+query III
+WITH RECURSIVE t(i, level) AS (
+	SELECT i, 0 FROM range(4096) r(i) WHERE i % 2 = 0
+	UNION
+	SELECT i + 1, level + 1 FROM t WHERE level < 3 AND i % 2 = 0
+)
+SELECT count(*), min(i), max(i) FROM t;
+----
+4096	0	4095
+
+# Small and single-thread recursions retain the serial visited-set path.
+statement ok
+SET threads=1;
+
+query I
+WITH RECURSIVE t(i) AS (
+	SELECT 1
+	UNION
+	SELECT i + 1 FROM t WHERE i < 1000
+)
+SELECT sum(i) FROM t;
+----
+500500
+
+# Disabling executor reuse does not change partition ownership or results.
+statement ok
+SET threads=8;
+
+statement ok
+SET enable_caching_operators=false;
+
+query II
+WITH RECURSIVE t(i, level) AS (
+	SELECT i, 0 FROM range(4096) r(i)
+	UNION
+	SELECT i, level + 1 FROM t WHERE level < 4
+)
+SELECT count(*), max(level) FROM t;
+----
+20480	4
+
+statement ok
+RESET enable_caching_operators;

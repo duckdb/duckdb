@@ -54,8 +54,6 @@ enum class AsyncResultType : uint8_t {
 	        // of AsyncResult, BLOCKED will be associated with a vector of AsyncTasks to be scheduled)
 };
 
-bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out);
-
 //! The SinkResultType is used to indicate the result of data flowing into a sink
 //! There are three possible results:
 //! NEED_MORE_INPUT means the sink needs more input

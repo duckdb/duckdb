@@ -228,7 +228,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
+		// carry the full (possibly nested) schema path of the exported table
+		info->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
@@ -245,8 +246,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.qualified_name =
-		    QualifiedName(Identifier(catalog), info->GetQualifiedName().Schema(), info->Table());
+		exported_data.qualified_name = info->GetQualifiedName();
 
 		exported_data.file_path = info->file_path;
 
@@ -298,7 +298,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	auto &function = copy_function.function;
 	if (function.copy_options) {
 		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_ONLY);
-		vector<string> erased_options;
+		vector<Identifier> erased_options;
 		for (auto &entry : options) {
 			if (copy_options.find(entry.first) == copy_options.end()) {
 				erased_options.push_back(entry.first);

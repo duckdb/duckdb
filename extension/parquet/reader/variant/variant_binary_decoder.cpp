@@ -80,6 +80,10 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset,
 		                                                  metadata_buffer_capacity);
+		if (next_offset < last_offset) {
+			throw IOException(
+			    "Corrupted VARIANT 'metadata' buffer, the next dictionary offset is smaller than the last offset");
+		}
 		const idx_t string_size = next_offset - last_offset;
 		if (data_start + last_offset + string_size > metadata_buffer_capacity) {
 			throw IOException("Corrupted VARIANT 'metadata' buffer");

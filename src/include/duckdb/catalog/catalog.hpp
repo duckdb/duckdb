@@ -262,6 +262,8 @@ public:
 	//! Look up a (possibly nested) schema by its path (outermost first) in this catalog
 	DUCKDB_API optional_ptr<SchemaCatalogEntry>
 	GetSchema(CatalogTransaction transaction, const vector<Identifier> &schema_path, OnEntryNotFound if_not_found);
+	//! Resolve the (possibly nested) schema an entry lives in from its qualified name ([catalog, schema..., name])
+	DUCKDB_API SchemaCatalogEntry &GetEntrySchema(CatalogTransaction transaction, const QualifiedName &name);
 	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(context, "
 	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>
 	GetSchema(ClientContext &context, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup,
@@ -408,14 +410,14 @@ public:
 	}
 
 	//! Returns the default schema of the catalog
-	virtual string GetDefaultSchema() const;
+	virtual Identifier GetDefaultSchema() const;
 
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const Identifier &schema, const Identifier &name);
-	DUCKDB_API string GetDefaultTable() const;
-	DUCKDB_API string GetDefaultTableSchema() const;
+	DUCKDB_API Identifier GetDefaultTable() const;
+	DUCKDB_API Identifier GetDefaultTableSchema() const;
 
 	//! Returns the dependency manager of this catalog - if the catalog has any
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
@@ -485,8 +487,8 @@ protected:
 	AttachedDatabase &db;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
-	string default_table;
-	string default_table_schema;
+	Identifier default_table;
+	Identifier default_table_schema;
 
 public:
 	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION

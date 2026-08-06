@@ -7,6 +7,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -83,12 +85,63 @@ static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundFunctio
 	                                           replacement);
 }
 
+static unique_ptr<Expression> CreateNullCheckExpression(ExpressionType expression_type, unique_ptr<Expression> child) {
+	D_ASSERT(expression_type == ExpressionType::OPERATOR_IS_NULL ||
+	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
+	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
+	result->GetChildrenMutable().push_back(std::move(child));
+	return std::move(result);
+}
+
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
+}
+
+RowComparisonSimplificationRule::RowComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto comparison = make_uniq<ComparisonExpressionMatcher>();
+	comparison->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	comparison->matchers.push_back(make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION));
+	comparison->matchers.push_back(make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION));
+	root = std::move(comparison);
+}
+
+unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &op,
+                                                              vector<reference<Expression>> &bindings,
+                                                              bool &changes_made, bool is_root) {
+	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return nullptr;
+	}
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &left = bindings[1].get().Cast<BoundFunctionExpression>();
+	auto &right = bindings[2].get().Cast<BoundFunctionExpression>();
+	if (left.Function().GetName() != "row" || right.Function().GetName() != "row") {
+		return nullptr;
+	}
+	auto &left_children = left.GetChildrenMutable();
+	auto &right_children = right.GetChildrenMutable();
+	if (left_children.empty() || left_children.size() != right_children.size()) {
+		return nullptr;
+	}
+	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+		auto &left_child = *left_children[child_idx];
+		auto &right_child = *right_children[child_idx];
+		if (left_child.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right_child.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    left_child.GetReturnType().IsNested() || left_child.GetReturnType() != right_child.GetReturnType()) {
+			return nullptr;
+		}
+	}
+
+	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+		result->GetChildrenMutable().push_back(BoundComparisonExpression::Create(
+		    comparison.GetExpressionType(), std::move(left_children[child_idx]), std::move(right_children[child_idx])));
+	}
+	return std::move(result);
 }
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -105,6 +158,16 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	Value constant_value;
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, constant_value)) {
 		return nullptr;
+	}
+	if (constant_value.IsNull() && column_ref_expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return CreateNullCheckExpression(ExpressionType::OPERATOR_IS_NULL,
+			                                 column_ref_left ? std::move(left) : std::move(right));
+		}
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM) {
+			return CreateNullCheckExpression(ExpressionType::OPERATOR_IS_NOT_NULL,
+			                                 column_ref_left ? std::move(left) : std::move(right));
+		}
 	}
 	if (constant_value.IsNull() && !(expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
 	                                 expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)) {

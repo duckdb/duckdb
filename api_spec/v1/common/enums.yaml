@@ -2,11 +2,13 @@ module: common_enums
 aliases:
   type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     underlying: TYPE
     description: "Alias for the DUCKDB_TYPE enum."
 enums:
   TYPE:
+    lifecycle:
+      - ["stable", "v0.1.0", "2019-06-27"]
     description: "An enum over DuckDB's internal types."
     values:
       TYPE_INVALID: {value: 0}
@@ -54,7 +56,7 @@ enums:
       TYPE_TIMESTAMP_TZ_NS: {value: 42, description: "duckdb_timestamp (nanoseconds)"}
   pending_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     description: "An enum over the pending state of a pending query result."
     values:
       PENDING_RESULT_READY: {value: 0}
@@ -63,7 +65,7 @@ enums:
       PENDING_NO_TASKS_AVAILABLE: {value: 3}
   result_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     description: "An enum over DuckDB's different result types."
     values:
       RESULT_TYPE_INVALID: {value: 0}
@@ -72,7 +74,7 @@ enums:
       RESULT_TYPE_QUERY_RESULT: {value: 3}
   statement_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     description: "An enum over DuckDB's different statement types."
     values:
       STATEMENT_TYPE_INVALID: {value: 0}
@@ -108,7 +110,7 @@ enums:
       STATEMENT_TYPE_MERGE_INTO: {value: 30}
   error_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     description: "An enum over DuckDB's different error types."
     values:
       ERROR_INVALID: {value: 0}
@@ -157,14 +159,15 @@ enums:
       INVALID_CONFIGURATION: {value: 42}
   cast_mode:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     description: "An enum over DuckDB's different cast modes."
     values:
       CAST_NORMAL: {value: 0}
       CAST_TRY: {value: 1}
   file_flag:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     description: "Flags for opening files."
     values:
       FILE_FLAG_INVALID: {value: 0}
@@ -175,7 +178,8 @@ enums:
       FILE_FLAG_APPEND: {value: 5, description: "Open the file in append mode."}
   config_option_scope:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     description: "An enum over DuckDB's configuration option scopes."
     values:
       CONFIG_OPTION_SCOPE_INVALID: {value: 0}
@@ -184,7 +188,8 @@ enums:
       CONFIG_OPTION_SCOPE_GLOBAL: {value: 3, description: "Set the option globally for all sessions/connections."}
   catalog_entry_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     description: "An enum over DuckDB's catalog entry types."
     values:
       CATALOG_ENTRY_TYPE_INVALID: {value: 0}

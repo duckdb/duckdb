@@ -17,7 +17,7 @@ template <class RESULT_TYPE>
 bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col, idx_t row) {
 	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
 	auto &query_result = result_data->result;
-	auto &source_type = query_result->types[col];
+	auto &source_type = query_result->GetTypes()[col];
 	auto width = duckdb::DecimalType::GetWidth(source_type);
 	auto scale = duckdb::DecimalType::GetScale(source_type);
 	auto source_value = UnsafeFetch<hugeint_t>(source, col, row);

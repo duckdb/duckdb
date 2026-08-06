@@ -275,8 +275,11 @@ endif
 ifeq (${FORCE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
 endif
-ifeq (${SMALLER_BINARY}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
+ifneq (${SMALLER_BINARY},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY='${SMALLER_BINARY}'
+endif
+ifneq (${SMALLER_BINARY_EXCEPT},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY_EXCEPT='${SMALLER_BINARY_EXCEPT}'
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
@@ -514,48 +517,72 @@ endif
 unittest_release:
 	build/release/test/run $(T)
 
-TEST_CONFIGS := \
+TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
-	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
-	test/configs/force_storage.json \
-	test/configs/force_storage_restart.json \
-	test/configs/latest_storage.json \
-	test/configs/block_verification.json \
-	test/configs/block_verification_latest.json \
 	test/configs/disable_optimizer.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json \
+	test/configs/transformer_trampoline_style.json
+
+TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \
 	test/configs/force_external.json \
 	test/configs/verify_fetch_row.json \
 	test/configs/disable_caching_operators.json \
+	test/configs/variant_vector.json \
+	test/configs/verify_aggregate_state_export.json \
+	test/configs/verify_functions.json \
+	test/configs/shredded_vector.json
+
+TEST_CONFIGS_PERSISTENCE := \
+	test/configs/force_storage.json \
+	test/configs/force_storage_restart.json \
+	test/configs/latest_storage.json \
 	test/configs/wal_verification.json \
 	test/configs/vacuum_rebuild_indexes_force_storage.json \
-	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json \
 	test/configs/no_local_filesystem.json \
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json
+
+TEST_CONFIGS_STORAGE_ENGINE := \
+	test/configs/verify_compression.json \
+	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
 	test/configs/block_size_16kB.json \
 	test/configs/latest_storage_block_size_16kB.json \
 	test/configs/block_allocator_100mib.json \
-	test/configs/variant_vector.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
-	test/configs/encryption.json \
-	test/configs/v1_storage.json \
-	test/configs/v1_storage_block_size_16kB.json \
-	test/configs/force_storage_mmap.json \
-	test/configs/verify_aggregate_state_export.json \
-	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/force_storage_mmap.json
+
+TEST_CONFIGS := $(TEST_CONFIGS_QUERY_VERIFICATION) $(TEST_CONFIGS_EXECUTION) $(TEST_CONFIGS_PERSISTENCE) \
+	$(TEST_CONFIGS_STORAGE_ENGINE)
+
+.PHONY: test_configs test_configs_query_verification test_configs_execution test_configs_persistence \
+	test_configs_storage_engine
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
+
+test_configs_query_verification:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_QUERY_VERIFICATION),--test-config=$(cfg))
+
+test_configs_execution:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))
+
+test_configs_persistence:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_PERSISTENCE),--test-config=$(cfg))
+
+test_configs_storage_engine:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_STORAGE_ENGINE),--test-config=$(cfg))
 
 test_vector:
 	./build/release/test/run --test-flags="--verify-vector dictionary_expression --skip-compiled"
@@ -657,7 +684,7 @@ define ensure_apt_packages
 	fi
 endef
 
-APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=30
 
 .PHONY: toolsci
 

@@ -1,5 +1,4 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -194,32 +193,115 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	return true;
 }
 
-bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast) {
-	if (try_cast) {
-		// try_cast turns conversion errors into NULL values instead of throwing
+//! The child type of a LIST or ARRAY
+static const LogicalType &ListOrArrayChildType(const LogicalType &type) {
+	return type.id() == LogicalTypeId::ARRAY ? ArrayType::GetChildType(type) : ListType::GetChildType(type);
+}
+
+//! Whether a cast of a nested type can throw a runtime error
+//! Nested casts are executed on the child types, so they throw if any of the child casts throws, or if the
+//! structure of the source does not fit into the structure of the target
+static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType &target_type) {
+	// Casts to and from UNION validate the union tags, which can throw
+	if (source_type.id() == LogicalTypeId::UNION || target_type.id() == LogicalTypeId::UNION) {
+		return true;
+	}
+	switch (source_type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+		if (target_type.id() == LogicalTypeId::ARRAY) {
+			// Casting into a fixed-size ARRAY throws whenever the source length differs
+			if (source_type.id() != LogicalTypeId::ARRAY || ArrayType::IsAnySize(source_type) ||
+			    ArrayType::IsAnySize(target_type) ||
+			    ArrayType::GetSize(source_type) != ArrayType::GetSize(target_type)) {
+				return true;
+			}
+		} else if (target_type.id() != LogicalTypeId::LIST) {
+			return true;
+		}
+		return BoundCastExpression::CastCanThrow(ListOrArrayChildType(source_type), ListOrArrayChildType(target_type),
+		                                         false);
+	case LogicalTypeId::STRUCT: {
+		if (target_type.id() != LogicalTypeId::STRUCT) {
+			return true;
+		}
+		auto &source_children = StructType::GetChildTypes(source_type);
+		auto &target_children = StructType::GetChildTypes(target_type);
+		if (source_children.size() != target_children.size()) {
+			return true;
+		}
+		for (idx_t child_idx = 0; child_idx < source_children.size(); child_idx++) {
+			if (BoundCastExpression::CastCanThrow(source_children[child_idx].second, target_children[child_idx].second,
+			                                      false)) {
+				return true;
+			}
+		}
 		return false;
 	}
+	case LogicalTypeId::MAP:
+		if (target_type.id() != LogicalTypeId::MAP) {
+			return true;
+		}
+		// Map keys cannot be NULL, so a failing key cast throws even when the value cast would default to NULL
+		return BoundCastExpression::CastCanThrow(MapType::KeyType(source_type), MapType::KeyType(target_type), false) ||
+		       BoundCastExpression::CastCanThrow(MapType::ValueType(source_type), MapType::ValueType(target_type),
+		                                         false);
+	default:
+		return true;
+	}
+}
+
+bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast) {
 	if (source_type == target_type) {
 		return false;
 	}
-	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input
-	if (target_type.IsJSONType() && !source_type.IsJSONType()) {
+	// Casts involving custom types are implemented by extensions, so we cannot reason about them - they can throw
+	// even for a try_cast, e.g. casting JSON into a MAP throws when a key fails to cast, since map keys cannot be NULL
+	if (source_type.HasAlias() || target_type.HasAlias()) {
 		return true;
+	}
+	if (try_cast) {
+		// try_cast turns conversion errors into NULL values instead of throwing
+		return false;
 	}
 	// Every value has a string representation, so casting to VARCHAR never throws. VARCHAR is not the maximum
 	// of the coercion lattice (you do not implicitly widen to it), so the max-type check below would miss this.
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
 		return false;
 	}
-	// Casting into a fixed-size ARRAY throws whenever the source length differs. ARRAY is nevertheless the
-	// maximum of LIST and ARRAY, so the check below would consider such a cast safe.
-	if (TypeVisitor::Contains(target_type, LogicalTypeId::ARRAY)) {
+	// Casting from a string requires parsing it, which throws whenever the string is not a valid representation of
+	// the target type. Types that sit above VARCHAR in the coercion lattice (e.g. UUID, BLOB, BIT, nested types)
+	// would otherwise be considered safe by the max-type check below.
+	// ENUM values are cast through their string value, so casting from an ENUM parses a string as well
+	if (source_type.id() == LogicalTypeId::VARCHAR || source_type.id() == LogicalTypeId::ENUM) {
+		return true;
+	}
+	// BIGNUM has arbitrary precision, so its values do not necessarily fit in any other type, e.g. BIGNUM -> DOUBLE
+	// overflows for large values, even though BIGNUM implicitly casts to DOUBLE
+	if (source_type.id() == LogicalTypeId::BIGNUM) {
+		return true;
+	}
+	// Casts of nested types are executed on the child types - recurse into them
+	if (source_type.IsNested() || target_type.IsNested()) {
+		return NestedCastCanThrow(source_type, target_type);
+	}
+	// Casting to DECIMAL overflows whenever the value does not fit in the width and scale, e.g. 100 -> DECIMAL(38,37)
+	if (target_type.id() == LogicalTypeId::DECIMAL) {
+		return true;
+	}
+	// Casting to a TIMESTAMP overflows for values outside of the timestamp range, even when widening the type,
+	// e.g. a DATE far in the future does not fit in a TIMESTAMP
+	if (LogicalType::TypeIsTimestamp(target_type) || target_type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
 		return true;
 	}
 	// A cast only succeeds for every input if the target type can represent every value of the source type,
 	// i.e. if the target is the maximum of the two types. Narrowing casts can overflow, and casts between types
-	// that have no ordering (e.g. ENUM -> BIGINT, whose maximum is VARCHAR) can fail to convert.
-	return LogicalType::DefaultForceMaxLogicalType(source_type, target_type) != target_type;
+	// that have no ordering in the lattice can fail to convert - or not be implemented at all, e.g. INTEGER -> DATE
+	LogicalType max_type;
+	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(source_type, target_type, max_type)) {
+		return true;
+	}
+	return max_type != target_type;
 }
 
 } // namespace duckdb

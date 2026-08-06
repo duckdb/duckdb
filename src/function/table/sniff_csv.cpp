@@ -37,7 +37,7 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 }
 
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sniff_csv cannot take NULL as a file path parameter");

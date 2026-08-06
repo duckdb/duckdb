@@ -254,6 +254,10 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	JSONFunctionLocalState local_state(context);
 	auto alc = local_state.json_allocator->GetYYAlc();
 
+	if (parameters.values[0].IsNull()) {
+		throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
+	}
+
 	auto input = parameters.values[0].GetValueUnsafe<string_t>();
 	auto stmts = DeserializeSelectStatement(input, alc);
 	if (stmts.size() != 1) {
@@ -278,7 +282,7 @@ struct ExecuteSqlTableFunction {
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		JSONFunctionLocalState local_state(context);
 		auto alc = local_state.json_allocator->GetYYAlc();
 
