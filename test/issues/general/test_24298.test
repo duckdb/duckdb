@@ -66,3 +66,25 @@ FROM nested
 ----
 [A]	NULL	2
 [a]	1	NULL
+
+# Forcing a shredding type whose STRUCT fields collide case-insensitively
+# would build the same colliding STRUCT the inference guard prevents:
+# extraction resolves both spellings to the first matching field, returning
+# wrong values and losing the other spelling.  The setting must reject it.
+statement error
+SET force_variant_shredding = 'STRUCT("a" INTEGER, "A" INTEGER)'
+----
+collides with another field
+
+# The check applies to nested STRUCTs as well.
+statement error
+SET force_variant_shredding = 'STRUCT(obj STRUCT("a" INTEGER, "A" INTEGER))'
+----
+collides with another field
+
+# A forced shredding type without colliding fields is still accepted.
+statement ok
+SET force_variant_shredding = 'STRUCT("a" INTEGER, "b" INTEGER)'
+
+statement ok
+RESET force_variant_shredding
