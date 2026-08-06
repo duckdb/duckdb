@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/aggregate_reuse.hpp"
 
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
-#include "aggregate_reuse_internal.hpp"
+#include "duckdb/optimizer/aggregate_reuse_internal.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
