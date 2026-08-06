@@ -5,6 +5,9 @@
 require skip_reload
 
 statement ok
+SET threads=4;
+
+statement ok
 SET memory_limit='256MB';
 
 statement ok
@@ -85,28 +88,29 @@ WHERE f <> repeat(md5(g::VARCHAR), 10);
 ----
 0
 
-# reusable external aggregation must reset the exported collections between iterations
+# reusable external aggregation must reset the exported collections and the spill phase
+# between iterations, with states that actually spill
 statement ok
 SET memory_limit='64MB';
 
 query III
-WITH RECURSIVE r(iter, k, c) AS (
-  SELECT 0::INTEGER, i, 1::BIGINT
-  FROM range(2000000) t(i)
+WITH RECURSIVE r(iter, k, s) AS (
+  SELECT 0::INTEGER, i, repeat(md5(i::VARCHAR), 25)
+  FROM range(300000) t(i)
   UNION ALL
-  SELECT iter + 1, k, count(*)
+  SELECT iter + 1, k, first(s)
   FROM r
   WHERE iter < 2
   GROUP BY iter, k
 )
-SELECT iter, count(*), sum(c)
+SELECT iter, count(*), sum(CASE WHEN s = repeat(md5(k::VARCHAR), 25) THEN 1 ELSE 0 END)
 FROM r
 GROUP BY iter
 ORDER BY iter;
 ----
-0	2000000	2000000
-1	2000000	2000000
-2	2000000	2000000
+0	300000	300000
+1	300000	300000
+2	300000	300000
 
 # few groups with very large states: the arena pressure check must trigger the export before
 # the hash table ever fills, and the exported partitions grow until finalize fits in memory

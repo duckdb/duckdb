@@ -37,52 +37,50 @@ static bool FieldHasArenaReferences(const LogicalType &type, const AggregateStat
 	}
 }
 
-bool AggregateStateSpilling::CanSpill(const TupleDataLayout &layout) {
+unique_ptr<AggregateStateSpillPlan> AggregateStateSpilling::TryCreateSpillPlan(const TupleDataLayout &layout) {
 	auto &aggregates = layout.GetAggregates();
 	if (aggregates.empty()) {
-		return false;
+		return nullptr;
 	}
 	for (auto &aggr : aggregates) {
 		if (!aggr.function.HasGetStateTypeCallback()) {
 			// the aggregate cannot describe its state
-			return false;
+			return nullptr;
 		}
 		if (aggr.function.HasStateDestructorCallback()) {
 			// the state owns resources beyond the arena
-			return false;
+			return nullptr;
 		}
 	}
-	// only layouts whose states can reference the arena benefit from exporting
-	for (auto &state_layout : StateLayouts(layout)) {
+	auto plan = make_uniq<AggregateStateSpillPlan>();
+	plan->state_layouts.reserve(aggregates.size());
+	for (auto &aggr : aggregates) {
+		plan->state_layouts.push_back(aggr.function.GetStateType(aggr.GetFunctionData()));
+	}
+	// only layouts whose states can reference the arena benefit from spilling
+	bool arena_backed = false;
+	for (auto &state_layout : plan->state_layouts) {
 		if (FieldHasArenaReferences(state_layout.type, state_layout.field)) {
-			return true;
+			arena_backed = true;
+			break;
 		}
 	}
-	return false;
-}
-
-vector<AggregateStateLayout> AggregateStateSpilling::StateLayouts(const TupleDataLayout &layout) {
-	vector<AggregateStateLayout> result;
-	result.reserve(layout.GetAggregates().size());
-	for (auto &aggr : layout.GetAggregates()) {
-		result.push_back(aggr.function.GetStateType(aggr.GetFunctionData()));
+	if (!arena_backed) {
+		return nullptr;
 	}
-	return result;
-}
-
-vector<LogicalType> AggregateStateSpilling::ExportedTypes(const TupleDataLayout &layout) {
-	auto types = layout.GetTypes();
-	for (auto &state_layout : StateLayouts(layout)) {
-		types.push_back(state_layout.type);
+	plan->exported_types = layout.GetTypes();
+	for (auto &state_layout : plan->state_layouts) {
+		plan->exported_types.push_back(state_layout.type);
 	}
-	return types;
+	return plan;
 }
 
 void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDataLayout &layout,
-                                          const vector<AggregateStateLayout> &state_layouts,
-                                          TupleDataCollection &source,
+                                          const AggregateStateSpillPlan &plan, TupleDataCollection &source,
                                           vector<unique_ptr<ColumnDataCollection>> &exported, idx_t exported_radix_bits,
-                                          const vector<LogicalType> &exported_types, ArenaAllocator &allocator) {
+                                          ArenaAllocator &allocator) {
+	auto &state_layouts = plan.state_layouts;
+	auto &exported_types = plan.exported_types;
 	if (source.Count() == 0) {
 		return;
 	}
@@ -92,7 +90,7 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 	DataChunk group_chunk;
 	group_chunk.Initialize(Allocator::Get(context), layout.GetTypes());
 	DataChunk exported_chunk;
-	exported_chunk.Initialize(Allocator::Get(context), ExportedTypes(layout));
+	exported_chunk.Initialize(Allocator::Get(context), exported_types);
 
 	Vector state_addresses(LogicalType::POINTER);
 	auto state_address_data = FlatVector::GetDataMutable<data_ptr_t>(state_addresses);
@@ -166,9 +164,10 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 }
 
 void AggregateStateSpilling::ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
-                                          const vector<AggregateStateLayout> &state_layouts,
-                                          ColumnDataCollection &exported, ArenaAllocator &allocator,
+                                          const AggregateStateSpillPlan &plan, ColumnDataCollection &exported,
+                                          ArenaAllocator &allocator,
                                           const std::function<void(TupleDataCollection &)> &combine) {
+	auto &state_layouts = plan.state_layouts;
 	if (exported.Count() == 0) {
 		return;
 	}
