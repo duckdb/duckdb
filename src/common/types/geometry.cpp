@@ -1057,7 +1057,17 @@ constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
 bool Geometry::FromBinary(const string_t &wkb, string_t &result, StringHeap &heap, bool strict) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
-	const auto analysis = AnalyzeWKB(reader);
+	WKBAnalysis analysis;
+	try {
+		analysis = AnalyzeWKB(reader);
+	} catch (InvalidInputException &) {
+		// Truncated input (e.g. a collection declaring more children than are present) must
+		// uphold the non-strict contract: report failure instead of throwing.
+		if (strict) {
+			throw;
+		}
+		return false;
+	}
 	if (analysis.has_trailing_data) {
 		if (strict) {
 			throw InvalidInputException("Unexpected trailing data at position %zu", reader.GetPosition());

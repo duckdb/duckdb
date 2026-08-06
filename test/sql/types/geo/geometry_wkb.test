@@ -35,10 +35,21 @@ SELECT ST_GeomFromWKB(ST_AsWKB('POINT(1 2)'::GEOMETRY) || ST_AsWKB('POINT(9 9)':
 ----
 Unexpected trailing data at position 21
 
-query I
-SELECT TRY_CAST(ST_AsWKB('POINT(1 2)'::GEOMETRY) || ST_AsWKB('POINT(9 9)'::GEOMETRY) AS GEOMETRY) IS NULL;
+# An empty blob is not a valid geometry (previously accepted, producing a value
+# that threw when converted back to text). The octet_length wrapper forces
+# evaluation without stringifying the geometry.
+statement error
+SELECT octet_length(ST_AsWKB(g)) FROM (SELECT ST_GeomFromWKB(x) AS g FROM (VALUES (''::BLOB)) t(x));
 ----
-true
+Unexpected end of binary data at position 0
+
+# A collection must contain as many children as its header declares
+# (GEOMETRYCOLLECTION claiming two children but containing one; previously
+# accepted silently)
+statement error
+SELECT octet_length(ST_AsWKB(g)) FROM (SELECT ST_GeomFromWKB(x) AS g FROM (VALUES (unhex('0107000000020000000101000000000000000000F03F0000000000000040'))) t(x));
+----
+Unexpected end of binary data at position 30
 
 # Create a table with all types and all z/m combinations
 statement ok
