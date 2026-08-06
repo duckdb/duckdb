@@ -388,12 +388,12 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 			(*delete_handle)->AddToDeleteIndexes(index_append_info);
 		}
 	}
-	if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = bound_index.GetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
 		delta->AddToDeleteIndexes(index_append_info);
 	}
 
 	bound_index->VerifyConstraint(chunk, index_append_info, conflict_manager);
-	if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+	if (auto delta = bound_index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 		// if we have added any rows during checkpoint - check in that index as well
 		IndexAppendInfo added_during_checkpoint_info;
 		delta->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);

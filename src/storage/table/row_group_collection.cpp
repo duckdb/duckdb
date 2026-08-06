@@ -1025,14 +1025,14 @@ struct IndexRemovalTargets {
 void GetIndexRemovalTargetsActiveCheckpoint(MutableIndexHandle<BoundIndex> &index, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
 	// create "removed_data_during_checkpoint" if it does not exist
-	if (!index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+	if (!index.GetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
 		index.SetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT,
 		               index->CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT));
 	}
 	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
 		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
 		// add removal to delta index
-		if (index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+		if (index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 			// if we have also added data during this checkpoint - we might need to remove from there instead
 			// we FIRST try to remove from "added_data_during_checkpoint"
 			// any rows that are not there we add to "removed_data_during_checkpoint"
@@ -1047,7 +1047,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(MutableIndexHandle<BoundIndex> &inde
 		}
 		if (removal_type == IndexRemovalType::MAIN_INDEX) {
 			// we also need to append to "deleted_rows_in_use"
-			if (!index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (!index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				// create "deleted_rows_in_use" if it does not exist yet
 				index.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
 				               index->CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE));
@@ -1060,7 +1060,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(MutableIndexHandle<BoundIndex> &inde
 	if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY ||
 	    removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 		// revert adding to main index
-		if (index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+		if (index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 			// we have added data during this checkpoint as well, remove might have EITHER:
 			// (1) added to "removed_data_during_checkpoint"
 			// (2) removed data from "added_data_during_checkpoint"
@@ -1076,7 +1076,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(MutableIndexHandle<BoundIndex> &inde
 		}
 		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 			// we also need to remove from "deleted_rows_in_use"
-			if (index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 				targets.has_remove_target = true;
 			}
@@ -1108,7 +1108,7 @@ void GetIndexRemovalTargets(MutableIndexHandle<BoundIndex> &index, IndexRemovalT
 	case IndexRemovalType::MAIN_INDEX:
 		// regular removal from main index - add rows to delta index if required
 		if (supports_delta_indexes) {
-			if (!index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (!index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				// create "deleted_rows_in_use" if it does not exist yet
 				index.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
 				               index->CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE));
@@ -1121,14 +1121,14 @@ void GetIndexRemovalTargets(MutableIndexHandle<BoundIndex> &index, IndexRemovalT
 	case IndexRemovalType::REVERT_MAIN_INDEX:
 		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
 		targets.append_to_main = true;
-		if (supports_delta_indexes && index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+		if (supports_delta_indexes && index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 			targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 			targets.has_remove_target = true;
 		}
 		break;
 	case IndexRemovalType::DELETED_ROWS_IN_USE:
 		// remove from removal index if we appended any rows
-		if (supports_delta_indexes && index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+		if (supports_delta_indexes && index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 			targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 			targets.has_remove_target = true;
 		}
@@ -1201,7 +1201,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			bool removal_succeeded = false;
 			if (targets.has_conditional_remove_target) {
 				// if we have an conditional remove target, we first try to remove the chunk from there
-				idx_t delete_count = bound_index.GetDelta<BoundIndex>(targets.conditional_remove_target)
+				idx_t delete_count = bound_index.GetDelta(targets.conditional_remove_target)
 				                         ->TryDelete(result_chunk, row_identifiers, nullptr, nullptr);
 				if (delete_count > 0) {
 					if (delete_count != result_chunk.size()) {
@@ -1221,7 +1221,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (targets.has_conditional_append_target && !removal_succeeded) {
 				// for any rows that were not removed - append them to the conditional append target instead
 				IndexAppendInfo append_info;
-				auto error = bound_index.GetDelta<BoundIndex>(targets.conditional_append_target)
+				auto error = bound_index.GetDelta(targets.conditional_append_target)
 				                 ->Append(result_chunk, row_identifiers, append_info);
 				if (error.HasError()) {
 					throw InternalException("Failed to append to %s: %s", bound_index->GetIndexName(), error.Message());
@@ -1230,8 +1230,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			// perform the targeted append / removal
 			if (targets.has_append_target) {
 				IndexAppendInfo append_info;
-				auto error = bound_index.GetDelta<BoundIndex>(targets.append_target)
-				                 ->Append(result_chunk, row_identifiers, append_info);
+				auto error =
+				    bound_index.GetDelta(targets.append_target)->Append(result_chunk, row_identifiers, append_info);
 				if (error.HasError()) {
 					throw InternalException("Failed to append to %s: %s", bound_index->GetIndexName(), error.Message());
 				}
@@ -1244,7 +1244,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 				}
 			}
 			if (targets.has_remove_target) {
-				bound_index.GetDelta<BoundIndex>(targets.remove_target)->Delete(result_chunk, row_identifiers);
+				bound_index.GetDelta(targets.remove_target)->Delete(result_chunk, row_identifiers);
 			}
 			if (targets.remove_from_main) {
 				bound_index->Delete(result_chunk, row_identifiers);

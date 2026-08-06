@@ -180,13 +180,13 @@ private:
 	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
 	                      idx_t max_count, set<row_t> &row_ids) const;
 
-	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;
 	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
 	                optional_idx &conflict_idx, idx_t i) const;
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-	                                     DataChunk &input) override;
+	                                     DataChunk &input) const override;
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
 	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);

@@ -816,7 +816,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 // More Constraint Checking
 //===--------------------------------------------------------------------===//
 
-string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) {
+string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) const {
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
@@ -831,7 +831,7 @@ string ART::GenerateErrorKeyName(DataChunk &input, idx_t row_idx) {
 	return key_name;
 }
 
-string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) {
+string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const {
 	switch (verify_type) {
 	case VerifyExistenceType::APPEND: {
 		// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table.
@@ -973,7 +973,8 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 	throw ConstraintException(exception_msg);
 }
 
-string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+                                          DataChunk &input) const {
 	lock_guard<mutex> l(lock);
 	auto key_name = GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);

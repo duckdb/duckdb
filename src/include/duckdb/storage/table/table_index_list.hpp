@@ -103,9 +103,9 @@ public:
 	template <class OTHER>
 	IndexHandle<OTHER> Into() & = delete;
 
-	template <class OTHER>
+	template <class OTHER = BoundIndex>
 	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const &;
-	template <class OTHER>
+	template <class OTHER = BoundIndex>
 	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const && = delete;
 
 private:
@@ -142,9 +142,9 @@ public:
 	template <class OTHER>
 	MutableIndexHandle<OTHER> Into() & = delete;
 
-	template <class OTHER>
+	template <class OTHER = BoundIndex>
 	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) &;
-	template <class OTHER>
+	template <class OTHER = BoundIndex>
 	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) && = delete;
 
 	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint);

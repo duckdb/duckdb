@@ -143,7 +143,7 @@ idx_t BoundIndex::GetInMemorySize() const {
 	return GetInMemorySize(state);
 }
 
-void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
+void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) const {
 	executor.Execute(input, result);
 }
 

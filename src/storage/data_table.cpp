@@ -438,7 +438,7 @@ void DataTable::VerifyIndexBuffers() const {
 
 void DataTableInfo::VerifyIndexBuffers() const {
 	for (auto index : indexes.MutableIndexHandles()) {
-		if (auto delta = index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+		if (auto delta = index.GetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 			delta->VerifyBuffers();
 		}
 		if (index->IsBound()) {
@@ -659,7 +659,7 @@ idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx
 
 static string ConstructForeignKeyError(optional_idx conflict, bool is_append, const shared_ptr<IndexEntry> &entry,
                                        DataChunk &input) {
-	auto index = entry->GetMutableHandle<BoundIndex>();
+	auto index = entry->GetHandle<BoundIndex>();
 	const auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 	return index->GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
 }
@@ -849,7 +849,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 					(*delete_handle)->AddToDeleteIndexes(index_append_info);
 				}
 			}
-			if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+			if (auto delta = bound_index.GetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
 				delta->AddToDeleteIndexes(index_append_info);
 			}
 			bound_index->VerifyAppend(chunk, index_append_info, nullptr);
@@ -1355,7 +1355,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 				row_id_writer.WriteValue(NumericCast<row_t>(current_row_base + i));
 			}
 			for (auto index : info->indexes.MutableIndexHandles()) {
-				if (auto delta = index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+				if (auto delta = index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 					delta->Delete(chunk, row_identifiers);
 				} else {
 					if (!index->IsBound()) {
@@ -1433,7 +1433,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		bool append_to_delta = false;
 
 		if (bound_index->SupportsDeltaIndexes() && bound_index.ShouldUseDeltaIndexes(active_checkpoint)) {
-			if (!bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+			if (!bound_index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 				bound_index.SetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
 				                     bound_index->CreateDeltaIndex(DeltaIndexType::ADDED_DURING_CHECKPOINT));
 			}
@@ -1452,7 +1452,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				if (delete_handle) {
 					(*delete_handle)->AddToDeleteIndexes(lookup_append_info);
 				}
-				if (auto delta = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+				if (auto delta = bound_index.GetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
 					delta->AddToDeleteIndexes(lookup_append_info);
 				}
 				bound_index->VerifyAppend(table_chunk, lookup_append_info, optional_ptr<ConflictManager>());
@@ -1464,7 +1464,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				(*delete_handle)->AddToDeleteIndexes(index_append_info);
 			}
 			if (append_to_delta) {
-				error = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
+				error = bound_index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
 				            ->Append(table_chunk, row_ids, index_append_info);
 			} else {
 				error = bound_index->Append(table_chunk, row_ids, index_append_info);
@@ -1486,8 +1486,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		for (auto &appended : already_appended) {
 			auto bound_index = appended.entry->GetMutableHandle<BoundIndex>();
 			if (appended.is_delta) {
-				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
-				    ->Delete(table_chunk, row_ids);
+				bound_index.GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)->Delete(table_chunk, row_ids);
 			} else {
 				bound_index->Delete(table_chunk, row_ids);
 			}

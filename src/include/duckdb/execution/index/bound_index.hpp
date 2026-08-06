@@ -209,12 +209,12 @@ public:
 	virtual IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
 	//! Execute the index expressions on an input chunk
-	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+	void ExecuteExpressions(DataChunk &input, DataChunk &result) const;
 	static string AppendRowError(DataChunk &input, idx_t index);
 
 	//! Throw a constraint violation exception
 	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-	                                             DataChunk &input) = 0;
+	                                             DataChunk &input) const = 0;
 
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
@@ -236,7 +236,7 @@ protected:
 
 private:
 	//! Expression executor to execute the index expressions
-	ExpressionExecutor executor;
+	mutable ExpressionExecutor executor;
 
 	//! Bind the unbound expressions of the index
 	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
