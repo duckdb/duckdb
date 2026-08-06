@@ -21,6 +21,7 @@ namespace duckdb {
 class ClientContext;
 struct DBConfig;
 class DatabaseInstance;
+class Executor;
 class TaskScheduler;
 class TaskSchedulerPool;
 class TaskSchedulerQueue;
@@ -47,7 +48,6 @@ public:
 	idx_t GetNumberOfTasks() const;
 	idx_t GetProducerCount() const;
 	idx_t GetTaskCountForProducer(ProducerToken &token) const;
-	idx_t GetTaskCountForProducerLocked(ProducerToken &token) const DUCKDB_REQUIRES(token.producer_lock);
 
 	//! Schedule a task to be executed by the task scheduler in the given pool
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task, TaskSchedulerType pool_type);
@@ -85,6 +85,9 @@ public:
 	static idx_t GetEstimatedCPUId();
 
 private:
+	friend class Executor;
+
+	idx_t GetTaskCountForProducerLocked(ProducerToken &token) const DUCKDB_REQUIRES(token.producer_lock);
 	TaskSchedulerPool &GetPool(TaskSchedulerType pool_type);
 	TaskSchedulerQueue &GetQueue(TaskSchedulerType pool_type) const;
 
