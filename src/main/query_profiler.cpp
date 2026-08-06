@@ -123,7 +123,13 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_sql = query;
-	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTotalTime>());
+	auto &config = ClientConfig::GetConfig(context);
+	string samply_marker_name;
+	if (config.enable_samply_markers) {
+		samply_marker_name = SamplyQueryMarkerName(query);
+	}
+	query_metrics.latency_timer = make_uniq<MetricsTimer>(query_metrics, MetricQueryTotalTime::Name, IsEnabled(),
+	                                                      config.enable_samply_markers, std::move(samply_marker_name));
 }
 
 void QueryProfiler::Reset() {

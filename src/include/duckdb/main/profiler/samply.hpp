@@ -12,6 +12,9 @@
 
 namespace duckdb {
 
+//! Creates a single-line query label that fits in a Samply marker record.
+string SamplyQueryMarkerName(const string &query);
+
 //! Writes the marker-file format consumed by Samply. This is public only for unit testing.
 class SamplyMarkerWriter {
 public:

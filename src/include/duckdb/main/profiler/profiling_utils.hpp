@@ -144,8 +144,9 @@ public:
 	MetricsTimer() : metric_name(""), is_active(false) {
 	}
 	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true,
-	             const bool samply_markers_enabled = false)
-	    : query_metrics(query_metrics), metric_name(std::move(key)), samply_marker(samply_markers_enabled),
+	             const bool samply_markers_enabled = false, string samply_marker_name_p = string())
+	    : query_metrics(query_metrics), metric_name(std::move(key)),
+	      samply_marker_name(std::move(samply_marker_name_p)), samply_marker(samply_markers_enabled),
 	      is_active(is_active) {
 		if (!is_active) {
 			return;
@@ -164,6 +165,7 @@ public:
 	MetricsTimer(MetricsTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(samply_marker_name, other.samply_marker_name);
 		std::swap(profiler, other.profiler);
 		std::swap(samply_marker, other.samply_marker);
 		std::swap(is_active, other.is_active);
@@ -171,6 +173,7 @@ public:
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(samply_marker_name, other.samply_marker_name);
 		std::swap(profiler, other.profiler);
 		std::swap(samply_marker, other.samply_marker);
 		std::swap(is_active, other.is_active);
@@ -184,7 +187,7 @@ public:
 		}
 		is_active = false;
 		profiler.End();
-		samply_marker.End(metric_name.c_str());
+		samply_marker.End(samply_marker_name.empty() ? metric_name.c_str() : samply_marker_name.c_str());
 		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
 	}
 
@@ -200,6 +203,7 @@ public:
 private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
+	string samply_marker_name;
 	Profiler profiler;
 	SamplyMarker samply_marker;
 	bool is_active;
