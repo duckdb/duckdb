@@ -26,9 +26,6 @@ SELECT map_contains(
 ----
 Cannot combine types with different collation!
 
-statement ok
-SET debug_verify_serializer = false;
-
 query I
 WITH data(m, key) AS (
     VALUES (MAP {'Apple': 1}, 'APPLE'),
