@@ -539,19 +539,6 @@ static void UnionComparator(const Vector &left, const Vector &right, int8_t *res
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
-			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
-			                     remaining_rhs_sel, remaining_count, comp, child_validity);
-			//	tags compare normally.
-			if (!child_idx) {
-				break;
-			}
-
-			//	For equals and not equals we can only finalize rows that we know to be not equal and not NULL
-			remaining_count = NestedScatter(child_result.get(), result_data, remaining_count, remaining_lhs_sel,
-			                                remaining_rhs_sel, remaining_result_sel, child_validity, result_validity,
-			                                [](int8_t c, bool n) { return c != Comparator::VALUES_ARE_EQUAL && !n; });
-			continue;
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:

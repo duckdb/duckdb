@@ -21,11 +21,11 @@ order by all;
 1	NULL	NULL	NULL
 two	1	false	true
 two	two	true	false
-two	NULL	true	false
+two	NULL	NULL	NULL
 two	NULL	NULL	NULL
 NULL	1	false	true
-NULL	two	true	false
-NULL	NULL	true	false
+NULL	two	NULL	NULL
+NULL	NULL	NULL	NULL
 NULL	NULL	NULL	NULL
 NULL	1	NULL	NULL
 NULL	two	NULL	NULL
@@ -35,4 +35,21 @@ NULL	NULL	NULL	NULL
 query I
 select union_value(str := NULL) = union_value(str := NULL);
 ----
-true
+NULL
+
+query IIIII
+WITH vals AS (
+    SELECT
+        union_value(str := 'a')::UNION(num INT, str VARCHAR) AS a,
+        union_value(str := NULL)::UNION(num INT, str VARCHAR) AS n,
+        union_value(str := 'b')::UNION(num INT, str VARCHAR) AS b
+)
+SELECT
+    a = n,
+    n = b,
+    a = b,
+    a IS NOT DISTINCT FROM n,
+    {'u': a} = {'u': n}
+FROM vals;
+----
+NULL	NULL	false	false	false

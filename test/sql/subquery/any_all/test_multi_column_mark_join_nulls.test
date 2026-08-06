@@ -140,7 +140,7 @@ SELECT row(array_value(1, 2), 0) IN (
 	       FROM (VALUES (union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
        )
 ----
-false	false	false	false
+false	false	false	NULL
 
 query I
 SELECT row(array_value(1, NULL::INT), 0) IN (
@@ -168,7 +168,7 @@ SELECT row(union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0) IN (
 	SELECT * FROM (VALUES (union_value(num := 1)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
 )
 ----
-false
+NULL
 
 # A decisive nested mismatch still produces FALSE.
 query I
