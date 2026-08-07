@@ -159,6 +159,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -5116,6 +5117,26 @@ const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
 template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
 	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSamplyTrackValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SamplyTrack::QUERY), "QUERY" },
+		{ static_cast<uint32_t>(SamplyTrack::MEMORY), "MEMORY" },
+		{ static_cast<uint32_t>(SamplyTrack::NETWORK), "NETWORK" },
+		{ static_cast<uint32_t>(SamplyTrack::HTTP), "HTTP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SamplyTrack>(SamplyTrack value) {
+	return StringUtil::EnumToString(GetSamplyTrackValues(), 4, "SamplyTrack", static_cast<uint32_t>(value));
+}
+
+template<>
+SamplyTrack EnumUtil::FromString<SamplyTrack>(const char *value) {
+	return static_cast<SamplyTrack>(StringUtil::StringToEnum(GetSamplyTrackValues(), 4, "SamplyTrack", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {
