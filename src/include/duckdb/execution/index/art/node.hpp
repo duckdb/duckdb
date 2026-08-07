@@ -228,6 +228,17 @@ private:
 	string ToStringChildren(ART &art, const ToStringOptions &options) const;
 };
 
+//! NodeChildren holds the extracted bytes of a node, and their respective children.
+//! The bytes and children are valid as long as the arena is valid,
+//! even if the original node has been freed.
+struct NodeChildren {
+	NodeChildren() = delete;
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+
+	array_ptr<uint8_t> bytes;
+	array_ptr<Node> children;
+};
+
 //! OptionalNode either holds a valid node, or is empty.
 //! Emptiness is derived from the node itself: a node without metadata is the empty state.
 class OptionalNode {
@@ -249,17 +260,6 @@ public:
 
 private:
 	Node node;
-};
-
-//! NodeChildren holds the extracted bytes of a node, and their respective children.
-//! The bytes and children are valid as long as the arena is valid,
-//! even if the original node has been freed.
-struct NodeChildren {
-	NodeChildren() = delete;
-	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
-
-	array_ptr<uint8_t> bytes;
-	array_ptr<Node> children;
 };
 
 } // namespace duckdb
