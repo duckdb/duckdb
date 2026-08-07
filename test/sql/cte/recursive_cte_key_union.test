@@ -42,6 +42,22 @@ TABLE t;
 3	30
 4	40
 
+# Changes in later payload columns are detected after earlier columns narrow the candidate rows.
+query III rowsort
+WITH RECURSIVE t(k, a, b) USING KEY (k) AS (
+	VALUES (1, 0, 0), (2, 0, 0)
+	UNION
+	SELECT k,
+	       CASE WHEN k = 1 THEN 1 ELSE a END,
+	       CASE WHEN k = 2 THEN b + 1 ELSE b END
+	FROM t
+	WHERE (k = 1 AND a = 0) OR (k = 2 AND b < 2)
+)
+TABLE t;
+----
+1	1	0
+2	0	2
+
 # Aggregate output types are visible through the recursive CTE name.
 query I
 WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (

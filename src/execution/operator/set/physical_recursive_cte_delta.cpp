@@ -49,6 +49,18 @@ static void ScatterDeltaChunk(DataChunk &output_chunk, DataChunk &input_chunk, c
 	}
 }
 
+static idx_t SelectDistinctPayloadRows(const Vector &previous, const Vector &current,
+                                       optional_ptr<const SelectionVector> candidates, idx_t candidate_count,
+                                       SelectionVector &changed, SelectionVector &unchanged) {
+	if (!candidates) {
+		return VectorOperations::DistinctFrom(previous, current, nullptr, candidate_count, &changed, &unchanged);
+	}
+	Vector previous_candidates(previous, *candidates, candidate_count);
+	Vector current_candidates(current, *candidates, candidate_count);
+	return VectorOperations::DistinctFrom(previous_candidates, current_candidates, candidates, candidate_count,
+	                                      &changed, &unchanged);
+}
+
 void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
@@ -136,9 +148,9 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 		optional_ptr<const SelectionVector> equal_groups;
 		for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
 			auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
-			const auto changed_column_count = VectorOperations::DistinctFrom(
+			const auto changed_column_count = SelectDistinctPayloadRows(
 			    delta.previous_scan_rows.data[op.payload_idx[payload_idx]], delta.payload_rows.data[payload_idx],
-			    equal_groups, equal_count, &delta.changed_column_groups, &next_equal_groups);
+			    equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
 			for (idx_t changed_idx = 0; changed_idx < changed_column_count; changed_idx++) {
 				delta.changed_groups.set_index(changed_count++,
 				                               delta.changed_column_groups.get_index_unsafe(changed_idx));
