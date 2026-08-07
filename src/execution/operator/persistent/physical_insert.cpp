@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
+#include "duckdb/execution/operator/persistent/collection_merger.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -692,23 +694,21 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	auto &collection = *optimistic_collection.collection;
 	collection.FinalizeAppend(tdata, lstate.local_append_state);
 
-	auto append_count = collection.GetTotalRows();
+	const auto append_count = collection.GetTotalRows();
+
+	if (append_count >= row_group_size) {
+		// flush thread-local optimistic data
+		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
+		lstate.optimistic_writer->FinalFlush();
+	}
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
 	if (append_count < row_group_size) {
-		// we have few rows - append to the local storage directly
-		LocalAppendState append_state;
-		storage.InitializeLocalAppend(append_state, table, context.client, bound_constraints);
-		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		for (auto &insert_chunk : collection.Chunks(transaction)) {
-			storage.LocalAppend(append_state, context.client, insert_chunk, false);
-		}
-		storage.FinalizeLocalAppend(append_state);
+		// we have few rows - defer merging to Finalize, where the leftovers of all threads are compacted together
+		gstate.unmerged_collections.push_back(lstate.collection_index);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
-		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);
@@ -717,8 +717,90 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	return SinkCombineResultType::FINISHED;
 }
 
+class MergeCollectionsTask : public BaseExecutorTask {
+public:
+	MergeCollectionsTask(TaskExecutor &executor, CollectionMerger &merger, OptimisticDataWriter &writer,
+	                     PhysicalIndex &result)
+	    : BaseExecutorTask(executor), merger(merger), writer(writer), result(result) {
+	}
+
+	void ExecuteTask() override {
+		result = merger.Flush(writer);
+	}
+
+private:
+	CollectionMerger &merger;
+	OptimisticDataWriter &writer;
+	PhysicalIndex &result;
+};
+
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	if (gstate.unmerged_collections.empty()) {
+		return SinkFinalizeType::READY;
+	}
+	auto &table = gstate.table;
+	auto &data_table = table.GetStorage();
+	const idx_t row_group_size = data_table.GetRowGroupSize();
+
+	if (gstate.insert_count < row_group_size) {
+		// we are inserting a small amount of data - append directly to the transaction-local storage
+		LocalAppendState append_state;
+		data_table.InitializeLocalAppend(append_state, table, context, bound_constraints);
+		auto &transaction = DuckTransaction::Get(context, table.catalog);
+		for (auto &collection_index : gstate.unmerged_collections) {
+			auto &optimistic_collection = data_table.GetOptimisticCollection(context, collection_index);
+			for (auto &insert_chunk : optimistic_collection.collection->Chunks(transaction)) {
+				data_table.LocalAppend(append_state, context, insert_chunk, false);
+			}
+			data_table.ResetOptimisticCollection(context, collection_index);
+		}
+		data_table.FinalizeLocalAppend(append_state);
+		gstate.unmerged_collections.clear();
+		return SinkFinalizeType::READY;
+	}
+
+	// group the leftover thread-local collections into row-group-sized merge sets
+	vector<unique_ptr<CollectionMerger>> mergers;
+	unique_ptr<CollectionMerger> current_merger;
+	idx_t current_rows = 0;
+	for (auto &collection_index : gstate.unmerged_collections) {
+		if (!current_merger) {
+			current_merger = make_uniq<CollectionMerger>(context, data_table);
+		}
+		current_merger->AddCollection(collection_index, RowGroupBatchType::NOT_FLUSHED);
+		current_rows += data_table.GetOptimisticCollection(context, collection_index).collection->GetTotalRows();
+		if (current_rows >= row_group_size) {
+			mergers.push_back(std::move(current_merger));
+			current_rows = 0;
+		}
+	}
+	if (current_merger) {
+		mergers.push_back(std::move(current_merger));
+	}
+	gstate.unmerged_collections.clear();
+
+	// compact the merge sets in parallel
+	TaskExecutor executor(context);
+	vector<PhysicalIndex> merged_collections(mergers.size(), PhysicalIndex(DConstants::INVALID_INDEX));
+	vector<unique_ptr<OptimisticDataWriter>> writers;
+	for (idx_t i = 0; i < mergers.size(); i++) {
+		writers.push_back(make_uniq<OptimisticDataWriter>(context, data_table));
+		executor.ScheduleTask(
+		    make_uniq<MergeCollectionsTask>(executor, *mergers[i], *writers[i], merged_collections[i]));
+	}
+	executor.WorkOnTasks();
+
+	// merge the compacted collections into the transaction-local storage
+	auto &optimistic_writer = data_table.GetOptimisticWriter(context);
+	for (idx_t i = 0; i < mergers.size(); i++) {
+		auto &collection = data_table.GetOptimisticCollection(context, merged_collections[i]);
+		data_table.LocalMerge(context, collection);
+		data_table.ResetOptimisticCollection(context, merged_collections[i]);
+		optimistic_writer.Merge(*writers[i]);
+	}
+	optimistic_writer.FinalFlush();
 	return SinkFinalizeType::READY;
 }
 
