@@ -364,6 +364,9 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		auto file_handle = GetFileHandle();
+		if (file_handle->CanSeek()) {
+			file_handle->Seek(position);
+		}
 		nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
