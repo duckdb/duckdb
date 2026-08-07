@@ -57,11 +57,10 @@ CatalogException CatalogException::MissingEntry(const string &type, const Identi
 	if (!suggestions.empty()) {
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
-	return CatalogException(extra_info,
-	                        StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
-	                                           StringUtil::CandidatesErrorMessage(IdentifiersToStrings(suggestions),
-	                                                                             name.GetIdentifierName(),
-	                                                                             "Did you mean")));
+	return CatalogException(
+	    extra_info, StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
+	                                   StringUtil::CandidatesErrorMessage(IdentifiersToStrings(suggestions),
+	                                                                      name.GetIdentifierName(), "Did you mean")));
 }
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const Identifier &name,

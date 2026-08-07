@@ -317,13 +317,11 @@ optional_ptr<const ConfigurationAlias> DBConfig::GetAliasByIndex(idx_t target_in
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const Identifier &name) {
 	for (idx_t index = 0; internal_options[index].name; index++) {
-		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
 		if (internal_options[index].name == name) {
 			return internal_options + index;
 		}
 	}
 	for (idx_t index = 0; setting_aliases[index].alias; index++) {
-		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
 		if (setting_aliases[index].alias == name) {
 			return GetOptionByIndex(setting_aliases[index].option_index);
 		}
