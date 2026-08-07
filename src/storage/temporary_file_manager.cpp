@@ -738,6 +738,25 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
+	} else {
+		// the directory already existed. This can happen if a previous DuckDB process using this
+		// temp directory crashed (e.g. kill -9, OOM kill, power loss) without running its destructors.
+		// any duckdb_temp_* files left behind are orphaned: no live process holds them open, and the
+		// block ids they reference are meaningless to this new process. Remove them before we start
+		// writing new files of our own, so garbage doesn't accumulate indefinitely across crashes.
+		vector<string> orphaned_files;
+		fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
+			if (isdir) {
+				return;
+			}
+			if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
+				return;
+			}
+			orphaned_files.push_back(fs.JoinPath(temp_directory, path));
+		});
+		if (!orphaned_files.empty()) {
+			fs.RemoveFiles(orphaned_files);
+		}
 	}
 	temp_file->SetMaxSwapSpace(max_swap_space);
 }
