@@ -106,7 +106,7 @@ duckdb_function_info ToCTableFunctionInfo(duckdb::CTableInternalFunctionInfo &in
 //===--------------------------------------------------------------------===//
 
 unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                            vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto &info = input.info->Cast<CTableFunctionInfo>();
 	D_ASSERT(info.bind && info.function && info.init);
 

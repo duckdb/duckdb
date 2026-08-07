@@ -12,6 +12,38 @@
 
 namespace duckdb {
 
+static optional<RelationStats> CombineReorderableStats(const vector<ColumnBinding> &bindings,
+                                                       const vector<RelationStats> &relation_stats) {
+	RelationStats result;
+	result.cardinality = 0;
+	result.stats_initialized = true;
+	for (auto &stats : relation_stats) {
+		if (!stats.stats_initialized) {
+			return {};
+		}
+		result.cardinality = MaxValue(result.cardinality, stats.cardinality);
+		if (!result.table_name.empty()) {
+			result.table_name = Identifier(result.table_name + " joined with ");
+		}
+		result.table_name = Identifier(result.table_name + stats.table_name);
+	}
+	for (auto &binding : bindings) {
+		optional_ptr<const RelationColumnStats> source;
+		for (auto &stats : relation_stats) {
+			source = stats.GetColumnStats(binding);
+			if (source) {
+				break;
+			}
+		}
+		if (!source) {
+			return {};
+		}
+		result.columns.emplace_back(binding, source->distinct_count, source->name);
+	}
+	result.Verify(bindings);
+	return result;
+}
+
 JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context)
     : context(context), query_graph_manager(context), depth(1) {
 }
@@ -76,11 +108,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		auto cardinality = new_logical_plan->EstimateCardinality(context);
-		auto bindings = new_logical_plan->GetColumnBindings();
-		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
-		new_stats.cardinality = cardinality;
-		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
+		auto new_stats = query_graph_manager.relation_manager.HasCompleteStats()
+		                     ? CombineReorderableStats(new_logical_plan->GetColumnBindings(), relation_stats)
+		                     : optional<RelationStats>();
+		if (new_stats) {
+			new_stats->cardinality = new_logical_plan->EstimateCardinality(context);
+			*stats = std::move(*new_stats);
+		} else {
+			*stats = RelationStats();
+		}
 	} else {
 		// starts recursively setting cardinality
 		new_logical_plan->EstimateCardinality(context);

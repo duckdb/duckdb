@@ -467,6 +467,21 @@ hello
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_env_passthrough_satisfies_require_env(run):
+    body = """# name: probe.test
+# group: [compat]
+
+require-env MY_THING hello
+
+query I
+SELECT '{MY_THING}'
+----
+hello
+"""
+    result = run(body, "--env-passthrough", "MY_THING", env={"MY_THING": "hello"})
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_env_passthrough_missing_var_fails_the_whole_invocation(unittest_bin):
     """Unlike require-env's per-test skip, this is loud and total."""
     env = {k: v for k, v in os.environ.items() if k != "MY_THING"}

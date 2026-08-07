@@ -441,51 +441,6 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLi
 	return result;
 }
 
-static bool IsConditionlessJoin(const JoinRef &join) {
-	if (join.condition || !join.using_columns.empty()) {
-		return false;
-	}
-	if (join.ref_type != JoinRefType::CROSS && join.ref_type != JoinRefType::POSITIONAL &&
-	    join.ref_type != JoinRefType::NATURAL) {
-		return false;
-	}
-	return true;
-}
-
-static unique_ptr<TableRef> ReassociateJoins(unique_ptr<TableRef> root) {
-	// Left-rotate while the current node is a conditionless join and its right child is a join.
-	// This converts right-associative join trees (from PEG grammar) to left-associative.
-	while (root->type == TableReferenceType::JOIN) {
-		auto &current = root->Cast<JoinRef>();
-		if (!IsConditionlessJoin(current) || !current.right || current.right->type != TableReferenceType::JOIN) {
-			break;
-		}
-		// Left rotation:
-		//   current(left=A, right=inner(left=B, right=C))
-		//   => inner(left=current(left=A, right=B), right=C)
-		auto inner = std::move(current.right);
-		auto &inner_join = inner->Cast<JoinRef>();
-		current.right = std::move(inner_join.left);
-		inner_join.left = std::move(root);
-		root = std::move(inner);
-	}
-	return root;
-}
-
-//! Check whether the RHS TableRef of a JoinOrPivot parse result has its own JoinOrPivot* entries.
-//! This distinguishes PEG right-recursion (has entries) from parenthesized joins (no entries).
-//! Navigation: JoinOrPivot → Choice → JoinClause → Choice → JoinWithoutOnClause → child(2)=TableRef → child(1)=Optional
-static bool RHSTableRefHasJoinOrPivot(ParseResult &join_or_pivot_pr) {
-	auto &jop_list = join_or_pivot_pr.Cast<ListParseResult>();
-	auto &jop_choice = jop_list.Child<ChoiceParseResult>(0);
-	auto &join_clause = jop_choice.GetResult().Cast<ListParseResult>();
-	auto &jc_choice = join_clause.Child<ChoiceParseResult>(0);
-	auto &join_impl = jc_choice.GetResult().Cast<ListParseResult>();
-	// For JoinWithoutOnClause the TableRef is at index 2
-	auto &table_ref = join_impl.Child<ListParseResult>(2);
-	return table_ref.Child<OptionalParseResult>(1).HasResult();
-}
-
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto inner_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
@@ -499,11 +454,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
 			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
 			join_ref.left = std::move(inner_table_ref);
-			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(join_or_pivot)) {
-				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
-			} else {
-				inner_table_ref = std::move(transform_join_or_pivot);
-			}
+			inner_table_ref = std::move(transform_join_or_pivot);
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
@@ -553,11 +504,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoli
 		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
 			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
 			join_ref.left = std::move(inner_table_ref);
-			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(repeat_children[i].get())) {
-				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
-			} else {
-				inner_table_ref = std::move(transform_join_or_pivot);
-			}
+			inner_table_ref = std::move(transform_join_or_pivot);
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
@@ -1739,11 +1686,11 @@ unique_ptr<AtClause> PEGTransformerFactory::TransformAtSpecifier(PEGTransformer 
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinWithoutOnClause(PEGTransformer &transformer,
                                                                          const JoinPrefix &join_prefix,
-                                                                         unique_ptr<TableRef> table_ref) {
+                                                                         unique_ptr<TableRef> inner_table_ref) {
 	auto result = make_uniq<JoinRef>();
 	result->ref_type = join_prefix.ref_type;
 	result->type = join_prefix.join_type;
-	result->right = std::move(table_ref);
+	result->right = std::move(inner_table_ref);
 	return std::move(result);
 }
 

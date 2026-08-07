@@ -464,6 +464,19 @@ bool StringStatsAreValid(const string &stats, bool is_varchar, StringStatsType s
 	return StringColumnReader::IsValid(stats, is_varchar);
 }
 
+static bool TryGetStringStats(const string &value, bool has_value, const string &fallback, bool has_fallback,
+                              bool is_varchar, StringStatsType stats_type, string &result) {
+	if (has_value && StringStatsAreValid(value, is_varchar, stats_type)) {
+		result = value;
+		return true;
+	}
+	if (has_fallback && StringStatsAreValid(fallback, is_varchar, stats_type)) {
+		result = fallback;
+		return true;
+	}
+	return false;
+}
+
 unique_ptr<BaseStatistics>
 ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
@@ -505,7 +518,6 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
 		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
 		                          ? StringStatsType::EXACT_STATS
@@ -513,17 +525,26 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
 		                          ? StringStatsType::EXACT_STATS
 		                          : StringStatsType::TRUNCATED_STATS;
-		if (parquet_stats.__isset.min_value &&
-		    StringStatsAreValid(parquet_stats.min_value, is_varchar, min_stats_type)) {
-			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
-		} else if (parquet_stats.__isset.min && StringStatsAreValid(parquet_stats.min, is_varchar, min_stats_type)) {
-			StringStats::SetMin(string_stats, parquet_stats.min, min_stats_type);
+		string min_stats;
+		string max_stats;
+		const bool has_min_stats =
+		    TryGetStringStats(parquet_stats.min_value, parquet_stats.__isset.min_value, parquet_stats.min,
+		                      parquet_stats.__isset.min, is_varchar, min_stats_type, min_stats);
+		const bool has_max_stats =
+		    TryGetStringStats(parquet_stats.max_value, parquet_stats.__isset.max_value, parquet_stats.max,
+		                      parquet_stats.__isset.max, is_varchar, max_stats_type, max_stats);
+		if (has_min_stats && has_max_stats && min_stats_type == StringStatsType::EXACT_STATS &&
+		    max_stats_type == StringStatsType::EXACT_STATS && min_stats == max_stats) {
+			auto constant_stats = StringStats::CreateEmpty(type);
+			StringStats::FromConstant(constant_stats, string_t(min_stats));
+			return constant_stats.ToUnique();
 		}
-		if (parquet_stats.__isset.max_value &&
-		    StringStatsAreValid(parquet_stats.max_value, is_varchar, max_stats_type)) {
-			StringStats::SetMax(string_stats, parquet_stats.max_value, max_stats_type);
-		} else if (parquet_stats.__isset.max && StringStatsAreValid(parquet_stats.max, is_varchar, max_stats_type)) {
-			StringStats::SetMax(string_stats, parquet_stats.max, max_stats_type);
+		auto string_stats = StringStats::CreateUnknown(type);
+		if (has_min_stats) {
+			StringStats::SetMin(string_stats, string_t(min_stats), min_stats_type);
+		}
+		if (has_max_stats) {
+			StringStats::SetMax(string_stats, string_t(max_stats), max_stats_type);
 		}
 		return string_stats.ToUnique();
 	}

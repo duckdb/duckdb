@@ -155,12 +155,8 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 		auto expected_results = con.Query(target_stmt);
 		REQUIRE_NO_FAIL(*expected_results);
 
-		if (deserialized_results->names.size() == expected_results->names.size()) {
-			// ignore names
-			deserialized_results->names = expected_results->names;
-		}
-
-		if (!deserialized_results->Equals(*expected_results)) {
+		// ignore names
+		if (!deserialized_results->Equals(*expected_results, false)) {
 			fprintf(stderr, "-----------------------------------\n");
 			fprintf(stderr, "Deserialized result does not match!\n");
 			fprintf(stderr, "-----------------------------------\n");
@@ -209,12 +205,8 @@ void test_deserialization(const string &file_location) {
 		auto expected_results = con.Query(query);
 		REQUIRE_NO_FAIL(*expected_results);
 
-		if (deserialized_results->names.size() == expected_results->names.size()) {
-			// ignore names
-			deserialized_results->names = expected_results->names;
-		}
-
-		if (!deserialized_results->Equals(*expected_results)) {
+		// ignore names
+		if (!deserialized_results->Equals(*expected_results, false)) {
 			fprintf(stderr, "-----------------------------------\n");
 			fprintf(stderr, "Deserialized result does not match!\n");
 			fprintf(stderr, "-----------------------------------\n");

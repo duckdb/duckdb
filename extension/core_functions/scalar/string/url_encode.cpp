@@ -44,6 +44,7 @@ static void URLDecodeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunction UrlDecodeFun::GetFunction() {
 	ScalarFunction fun({LogicalType::VARCHAR}, LogicalType::VARCHAR, URLDecodeFunction);
+	// throws if the decoded value is not valid UTF8
 	fun.SetFallible();
 	return fun;
 }

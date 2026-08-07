@@ -1291,33 +1291,12 @@ template <class T>
 TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_type) {
 	TupleDataScatterFunction result;
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::SORT_KEY_TYPE>;                                      \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_VARIABLE_32>;
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("GetSortKeyScatterFunction for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -1940,33 +1919,12 @@ template <class T>
 TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_type) {
 	tuple_data_gather_function_t function = nullptr;
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		function = TupleDataSortKeyGather<T, SortKeyType::SORT_KEY_TYPE>;                                              \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_VARIABLE_32>;
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("GetSortKeyGatherFunction for %s", EnumUtil::ToString(sort_key_type));
 	}

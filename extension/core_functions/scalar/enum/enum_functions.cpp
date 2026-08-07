@@ -5,8 +5,9 @@ namespace duckdb {
 static void EnumFirstFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto types = input.GetTypes();
 	D_ASSERT(types.size() == 1);
+	auto enum_size = EnumType::GetSize(types[0]);
 	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
-	auto val = Value(enum_vector.GetValue(0));
+	auto val = enum_size == 0 ? Value(LogicalType::VARCHAR) : enum_vector.GetValue(0);
 	result.Reference(val, count_t(input.size()));
 }
 
@@ -15,7 +16,7 @@ static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &r
 	D_ASSERT(types.size() == 1);
 	auto enum_size = EnumType::GetSize(types[0]);
 	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
-	auto val = Value(enum_vector.GetValue(enum_size - 1));
+	auto val = enum_size == 0 ? Value(LogicalType::VARCHAR) : enum_vector.GetValue(enum_size - 1);
 	result.Reference(val, count_t(input.size()));
 }
 
