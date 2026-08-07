@@ -268,6 +268,16 @@ void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value 
 }
 
 //===----------------------------------------------------------------------===//
+// Show Behavior
+//===----------------------------------------------------------------------===//
+void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("show_behavior setting cannot be NULL");
+	}
+	EnumUtil::FromString<ShowBehaviorType>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Storage Block Prefetch
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

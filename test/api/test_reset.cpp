@@ -4,6 +4,7 @@
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
+#include "duckdb/common/enums/show_behavior.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -75,6 +76,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"dialect_compatibility_mode", {EnumUtil::ToString(DialectCompatibilityMode::SPARK)}},
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
+	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
