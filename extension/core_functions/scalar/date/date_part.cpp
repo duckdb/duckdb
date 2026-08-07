@@ -1439,6 +1439,12 @@ int64_t DatePart::TimezoneOperator::Operation(dtime_tz_t input) {
 }
 
 template <>
+unique_ptr<BaseStatistics> DatePart::TimezoneOperator::PropagateStatistics<dtime_tz_t>(ClientContext &context,
+                                                                                       FunctionStatisticsInput &input) {
+	return PropagateSimpleDatePartStatistics<-16 * 60 * 60 + 1, 16 * 60 * 60 - 1, dtime_tz_t>(input.child_stats);
+}
+
+template <>
 int64_t DatePart::TimezoneHourOperator::Operation(date_t input) {
 	throw NotImplementedException("\"date\" units \"timezone_hour\" not recognized");
 }
@@ -1454,6 +1460,13 @@ int64_t DatePart::TimezoneHourOperator::Operation(dtime_tz_t input) {
 }
 
 template <>
+unique_ptr<BaseStatistics>
+DatePart::TimezoneHourOperator::PropagateStatistics<dtime_tz_t>(ClientContext &context,
+                                                                FunctionStatisticsInput &input) {
+	return PropagateSimpleDatePartStatistics<-15, 15, dtime_tz_t>(input.child_stats);
+}
+
+template <>
 int64_t DatePart::TimezoneMinuteOperator::Operation(date_t input) {
 	throw NotImplementedException("\"date\" units \"timezone_minute\" not recognized");
 }
@@ -1466,6 +1479,13 @@ int64_t DatePart::TimezoneMinuteOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::TimezoneMinuteOperator::Operation(dtime_tz_t input) {
 	return (input.offset() / Interval::SECS_PER_MINUTE) % Interval::MINS_PER_HOUR;
+}
+
+template <>
+unique_ptr<BaseStatistics>
+DatePart::TimezoneMinuteOperator::PropagateStatistics<dtime_tz_t>(ClientContext &context,
+                                                                  FunctionStatisticsInput &input) {
+	return PropagateSimpleDatePartStatistics<-59, 59, dtime_tz_t>(input.child_stats);
 }
 
 template <>
