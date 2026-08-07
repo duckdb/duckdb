@@ -28,6 +28,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -896,6 +897,104 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value();
 	}
 	return Value(config.profiler_print_format);
+}
+
+//===----------------------------------------------------------------------===//
+// Samply Tracks
+//===----------------------------------------------------------------------===//
+void SamplyTracksSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto input_string = input.GetValue<string>();
+	auto trimmed_input = input_string;
+	StringUtil::Trim(trimmed_input);
+	if (trimmed_input.empty()) {
+		input_string = "all";
+	}
+	vector<string> values;
+	idx_t start = 0;
+	while (true) {
+		auto separator = input_string.find(',', start);
+		values.push_back(input_string.substr(start, separator - start));
+		if (separator == string::npos) {
+			break;
+		}
+		start = separator + 1;
+	}
+	uint8_t tracks = 0;
+	bool has_none = false;
+	bool has_all = false;
+	for (auto &value : values) {
+		StringUtil::Trim(value);
+		value = StringUtil::Lower(value);
+		if (value.empty()) {
+			throw InvalidInputException("samply_tracks contains an empty track");
+		} else if (value == "none") {
+			has_none = true;
+		} else if (value == "all") {
+			has_all = true;
+		} else if (value == "query") {
+			tracks |= static_cast<uint8_t>(SamplyTrack::QUERY);
+		} else if (value == "memory") {
+			tracks |= static_cast<uint8_t>(SamplyTrack::MEMORY);
+		} else if (value == "network") {
+			tracks |= static_cast<uint8_t>(SamplyTrack::NETWORK);
+		} else if (value == "http") {
+			tracks |= static_cast<uint8_t>(SamplyTrack::HTTP);
+		} else {
+			throw InvalidInputException(
+			    "Unknown Samply track '%s'; expected query, memory, network, http, none, or all", value);
+		}
+	}
+	if ((has_none || has_all) && (values.size() != 1 || has_none == has_all)) {
+		throw InvalidInputException("Samply tracks 'none' and 'all' cannot be combined with other values");
+	}
+	if (has_all) {
+		tracks = static_cast<uint8_t>(SamplyTrack::QUERY) | static_cast<uint8_t>(SamplyTrack::MEMORY) |
+		         static_cast<uint8_t>(SamplyTrack::NETWORK) | static_cast<uint8_t>(SamplyTrack::HTTP);
+	}
+#if !defined(__linux__) && !defined(__APPLE__)
+	if (tracks != 0) {
+		throw NotImplementedException("Samply tracks are only supported on Linux and macOS");
+	}
+#endif
+	auto &config = ClientConfig::GetConfig(context);
+	auto resource_tracks =
+	    tracks & (static_cast<uint8_t>(SamplyTrack::MEMORY) | static_cast<uint8_t>(SamplyTrack::NETWORK) |
+	              static_cast<uint8_t>(SamplyTrack::HTTP));
+	auto subscription = StartSamplyResourceSampling(resource_tracks);
+	config.samply_tracks = tracks;
+	config.samply_resource_subscription = std::move(subscription);
+}
+
+void SamplyTracksSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.samply_tracks = 0;
+	config.samply_resource_subscription.reset();
+}
+
+Value SamplyTracksSetting::GetSetting(const ClientContext &context) {
+	auto tracks = ClientConfig::GetConfig(context).samply_tracks;
+	if (tracks == 0) {
+		return Value("none");
+	}
+	auto all = static_cast<uint8_t>(SamplyTrack::QUERY) | static_cast<uint8_t>(SamplyTrack::MEMORY) |
+	           static_cast<uint8_t>(SamplyTrack::NETWORK) | static_cast<uint8_t>(SamplyTrack::HTTP);
+	if (tracks == all) {
+		return Value("all");
+	}
+	vector<string> result;
+	if (SamplyTrackEnabled(tracks, SamplyTrack::QUERY)) {
+		result.emplace_back("query");
+	}
+	if (SamplyTrackEnabled(tracks, SamplyTrack::MEMORY)) {
+		result.emplace_back("memory");
+	}
+	if (SamplyTrackEnabled(tracks, SamplyTrack::NETWORK)) {
+		result.emplace_back("network");
+	}
+	if (SamplyTrackEnabled(tracks, SamplyTrack::HTTP)) {
+		result.emplace_back("http");
+	}
+	return Value(StringUtil::Join(result, ","));
 }
 
 //===----------------------------------------------------------------------===//

@@ -12,6 +12,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 #include "duckdb/common/profiler.hpp"
 
 namespace duckdb_yyjson {
@@ -142,8 +143,11 @@ struct MetricsTimer {
 public:
 	MetricsTimer() : metric_name(""), is_active(false) {
 	}
-	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
-	    : query_metrics(query_metrics), metric_name(std::move(key)), is_active(is_active) {
+	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true,
+	             const bool samply_markers_enabled = false, string samply_marker_name_p = string())
+	    : query_metrics(query_metrics), metric_name(std::move(key)),
+	      samply_marker_name(std::move(samply_marker_name_p)), samply_marker(samply_markers_enabled),
+	      is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
@@ -161,13 +165,17 @@ public:
 	MetricsTimer(MetricsTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(samply_marker_name, other.samply_marker_name);
 		std::swap(profiler, other.profiler);
+		std::swap(samply_marker, other.samply_marker);
 		std::swap(is_active, other.is_active);
 	}
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
+		std::swap(samply_marker_name, other.samply_marker_name);
 		std::swap(profiler, other.profiler);
+		std::swap(samply_marker, other.samply_marker);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -179,6 +187,7 @@ public:
 		}
 		is_active = false;
 		profiler.End();
+		samply_marker.End(samply_marker_name.empty() ? metric_name.c_str() : samply_marker_name.c_str());
 		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
 	}
 
@@ -187,13 +196,16 @@ public:
 			return;
 		}
 		profiler.Reset();
+		samply_marker.Reset();
 		is_active = false;
 	}
 
 private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
+	string samply_marker_name;
 	Profiler profiler;
+	SamplyMarker samply_marker;
 	bool is_active;
 };
 

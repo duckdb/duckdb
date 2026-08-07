@@ -1827,6 +1827,16 @@ struct RegexMatchOperatorSemanticsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct SamplyTracksSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "samply_tracks";
+	static constexpr const char *Description = "Samply tracks to collect: query, memory, network, http, none, or all";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";

@@ -1,6 +1,7 @@
 #include "duckdb/common/http_util.hpp"
 
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -12,6 +13,9 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/profiler/samply.hpp"
+
+#include <cmath>
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
 #define DUCKDB_DISABLE_BUILTIN_HTTPLIB
@@ -283,11 +287,52 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
+		const bool track_samply_http = SamplyHTTPTrackEnabled();
 
 		// When logging is enabled, we collect request timings
 		if (request.params.logger) {
 			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
 		}
+		request.have_time_to_fst_byte = false;
+		request.time_to_fst_byte_sec = 0;
+		request.bytes_received = 0;
+
+		auto write_samply_attempt = [&](optional_ptr<HTTPResponse> http_response) noexcept {
+			if (!track_samply_http || request.request_system_start.value < 0) {
+				return;
+			}
+			try {
+				string request_range;
+				if (request.headers.HasHeader("Range")) {
+					request_range = request.headers.GetHeaderValue("Range");
+				}
+				string response_content_range;
+				int32_t status_code = -1;
+				if (http_response) {
+					status_code = static_cast<int32_t>(http_response->status);
+					if (http_response->HasHeader("Content-Range")) {
+						response_content_range = http_response->GetHeaderValue("Content-Range");
+					}
+				}
+				int64_t time_to_first_byte_ns = -1;
+				if (request.have_time_to_fst_byte && std::isfinite(request.time_to_fst_byte_sec) &&
+				    request.time_to_fst_byte_sec >= 0 &&
+				    request.time_to_fst_byte_sec <=
+				        static_cast<double>(NumericLimits<int64_t>::Maximum()) / 1000000000.0) {
+					time_to_first_byte_ns = static_cast<int64_t>(request.time_to_fst_byte_sec * 1000000000.0);
+				}
+				auto duration_ns =
+				    TimePoint::ElapsedNanos(request.request_monotonic_start, request.request_monotonic_end);
+				if (duration_ns < 0) {
+					return;
+				}
+				WriteSamplyHTTPAttempt(static_cast<uint64_t>(request.request_system_start.value) * 1000,
+				                       static_cast<uint64_t>(duration_ns), EnumUtil::ToChars(request.type), request.url,
+				                       status_code, request.bytes_received, time_to_first_byte_ns, request_range,
+				                       response_content_range);
+			} catch (...) {
+			}
+		};
 
 		try {
 			request.request_system_start = Timestamp::GetCurrentTimestamp();
@@ -295,10 +340,12 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 			response = client->Request(request);
 		} catch (...) {
 			request.request_monotonic_end = TimePoint::Tick();
+			write_samply_attempt(nullptr);
 			LogRequest(request, nullptr);
 			throw;
 		}
 		request.request_monotonic_end = TimePoint::Tick();
+		write_samply_attempt(response ? response.get() : nullptr);
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});

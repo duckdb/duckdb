@@ -1239,6 +1239,13 @@
         "default_value": "partial"
     },
     {
+        "name": "samply_tracks",
+        "description": "Samply tracks to collect: query, memory, network, http, none, or all",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",

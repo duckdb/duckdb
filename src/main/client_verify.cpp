@@ -4,6 +4,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -256,9 +257,17 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		// overwriting the profiling output file with the EXPLAIN's profiling data.
 		auto &client_config = ClientConfig::GetConfig(*this);
 		bool saved_profiler = client_config.enable_profiler;
+		auto saved_samply_tracks = client_config.samply_tracks;
 		ScopedConfigSetting suppress_profiling(
-		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
-		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
+		    client_config,
+		    [](ClientConfig &config) {
+			    config.enable_profiler = false;
+			    config.samply_tracks &= ~static_cast<uint8_t>(SamplyTrack::QUERY);
+		    },
+		    [saved_profiler, saved_samply_tracks](ClientConfig &config) {
+			    config.enable_profiler = saved_profiler;
+			    config.samply_tracks = saved_samply_tracks;
+		    });
 		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

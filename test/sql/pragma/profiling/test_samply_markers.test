@@ -1,0 +1,177 @@
+# name: test/sql/pragma/profiling/test_samply_markers.test
+# description: Test Samply query and resource track settings
+# group: [profiling]
+
+require notwindows
+
+query I
+SELECT current_setting('samply_tracks');
+----
+none
+
+statement ok
+SET samply_tracks = '';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+all
+
+statement ok
+SET samply_tracks = '   ';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+all
+
+statement ok
+SET samply_tracks = 'query';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+query
+
+statement ok
+SET samply_tracks = 'memory';
+
+query II
+SELECT current_setting('samply_tracks'), current_setting('enable_profiling');
+----
+memory	NULL
+
+statement ok
+SET samply_tracks = 'network';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+network
+
+statement ok
+SET samply_tracks = 'http';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+http
+
+statement ok
+SET samply_tracks = ' NETWORK , QUERY , memory, HTTP ';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+all
+
+statement ok
+SET samply_tracks = 'network,query';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+query,network
+
+statement ok
+SET samply_tracks = 'memory,query';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+query,memory
+
+statement ok
+SET samply_tracks = 'memory,network';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+memory,network
+
+statement ok
+SET samply_tracks = 'http,network';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+network,http
+
+statement ok
+SET samply_tracks = 'all';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+all
+
+statement ok
+SET samply_tracks = 'none';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+none
+
+statement error
+SET samply_tracks = 'cpu';
+----
+Unknown Samply track
+
+statement error
+SET samply_tracks = 'none,query';
+----
+cannot be combined
+
+statement error
+SET samply_tracks = 'all,memory';
+----
+cannot be combined
+
+statement error
+SET samply_tracks = 'query,';
+----
+empty track
+
+# Query tracking retains the existing query profiler and marker behavior.
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/samply_profile.txt';
+
+statement ok
+SET samply_tracks = 'query';
+
+statement ok
+CREATE TABLE build_side AS SELECT i FROM range(10) t(i);
+
+statement ok
+CREATE TABLE probe_side AS SELECT i FROM range(20) t(i);
+
+query I
+SELECT count(*) FROM probe_side JOIN build_side USING (i);
+----
+10
+
+statement ok
+SET samply_tracks = 'none';
+
+query I
+SELECT contains(content, 'Hash Join') FROM read_text('{TEST_DIR}/samply_profile.txt');
+----
+true
+
+statement ok
+SET enable_profiling = 'json';
+
+statement ok
+SET samply_tracks = 'all';
+
+statement ok
+RESET samply_tracks;
+
+query II
+SELECT current_setting('samply_tracks'), current_setting('enable_profiling');
+----
+none	json
+
+statement ok
+RESET enable_profiling;
