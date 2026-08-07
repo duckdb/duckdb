@@ -1196,6 +1196,24 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Preserve Identifier Case
+//===----------------------------------------------------------------------===//
+void PreserveIdentifierCaseSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("preserve_identifier_case setting cannot be NULL");
+	}
+	auto parameter = StringValue::Get(input);
+	try {
+		EnumUtil::FromString<IdentifierCaseMode>(parameter);
+	} catch (NotImplementedException &) {
+		// the boolean spellings are accepted for backwards compatibility, but are not advertised here
+		throw InvalidInputException("Unrecognized parameter for option preserve_identifier_case \"%s\", expected one "
+		                            "of: on, lowercase, uppercase",
+		                            parameter);
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Profile Output
 //===----------------------------------------------------------------------===//
 void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
