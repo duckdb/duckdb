@@ -38,6 +38,8 @@
         "test/sql/aggregate/aggregates/histogram_exact.test",
         "test/sql/aggregate/aggregates/histogram_table_function.test",
         "test/sql/aggregate/aggregates/max_n_all_types_grouped.test",
+        "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
+        "test/sql/aggregate/aggregates/mode_rewrite.test",
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
