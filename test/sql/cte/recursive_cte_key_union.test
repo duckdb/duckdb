@@ -90,6 +90,33 @@ TABLE t;
 ----
 1	3
 
+# Preaggregation combines duplicate-sensitive and extremum states for the same epoch groups.
+query IIIII
+WITH RECURSIVE t(k, total, n, lo, hi)
+USING KEY (k, sum(total), count(n) AS n, min(lo), max(hi)) AS (
+	VALUES (1, 1::BIGINT, 1::BIGINT, 10, 10), (1, 2::BIGINT, 1::BIGINT, 9, 11)
+	UNION
+	SELECT k, x, 1, x, x
+	FROM t, (VALUES (8), (12)) candidates(x)
+	WHERE n = 2
+)
+TABLE t;
+----
+1	23	4	8	12
+
+# Arena-backed aggregate state transferred from an epoch remains valid after that epoch table is destroyed.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, repeat('z', 32))
+	UNION
+	SELECT k, repeat(chr(ascii(v[1]) - 1), 32)
+	FROM t
+	WHERE v > repeat('w', 32)
+)
+TABLE t;
+----
+1	wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+
 # NULL payloads are compared with IS DISTINCT FROM semantics.
 query II
 WITH RECURSIVE t(k, v) USING KEY (k) AS (
@@ -146,6 +173,27 @@ WITH RECURSIVE t(k, v) USING KEY (k, avg(v) AS v) AS (
 TABLE t;
 ----
 1	1.0
+
+# Explicit order-dependent aggregates retain candidate order instead of preaggregating states.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, first(v) AS v) AS (
+	VALUES (1, 10)
+	UNION
+	SELECT k, v + 1 FROM t WHERE v = 10
+)
+TABLE t;
+----
+1	10
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, string_agg(v, '') AS v) AS (
+	VALUES (1, 'a')
+	UNION
+	SELECT k, v || 'b' FROM t WHERE length(v) < 4
+)
+TABLE t;
+----
+1	aabaabb
 
 # Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
 query III rowsort

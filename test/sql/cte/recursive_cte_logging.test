@@ -636,14 +636,49 @@ TABLE t;
 statement ok
 CALL disable_logging();
 
-query IIIIII
+query IIIIIIIIII
 SELECT info.key_delta_work_ns::UBIGINT > 0,
        info.key_delta_candidate_rows::UBIGINT = 5,
        info.key_delta_touched_keys::UBIGINT = 4,
        info.key_delta_new_keys::UBIGINT = 2,
        info.key_delta_changed_keys::UBIGINT = 1,
-       info.key_delta_unchanged_keys::UBIGINT = 1
+       info.key_delta_unchanged_keys::UBIGINT = 1,
+       info.key_preaggregation_work_ns::UBIGINT > 0,
+       info.key_preaggregation_combine_work_ns::UBIGINT > 0,
+       info.key_preaggregation_candidate_rows::UBIGINT = 5,
+       info.key_preaggregation_groups::UBIGINT = 4
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1	1	1	1
+1	1	1	1	1	1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# The default order-dependent last aggregate retains the candidate-update path.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, v + 1 FROM t WHERE v < 1
+)
+TABLE t;
+----
+1	1
+
+statement ok
+CALL disable_logging();
+
+query IIIII
+SELECT info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.key_preaggregation_work_ns::UBIGINT = 0,
+       info.key_preaggregation_combine_work_ns::UBIGINT = 0,
+       info.key_preaggregation_candidate_rows::UBIGINT = 0,
+       info.key_preaggregation_groups::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1

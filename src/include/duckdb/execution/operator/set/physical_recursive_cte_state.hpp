@@ -104,6 +104,8 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
 	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
 	void RecordKeyedHashCommit(idx_t elapsed_ns);
+	void RecordKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns);
+	void RecordKeyPreaggregationCombine(idx_t elapsed_ns);
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
 	void RecordKeyDelta(idx_t candidate_rows, idx_t touched_keys, idx_t new_keys, idx_t changed_keys, idx_t elapsed_ns);
 	void RecordRecurringScan(idx_t elapsed_ns);
@@ -123,6 +125,10 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> direct_probe_key_gather_work_ns {0};
 	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
 	atomic<idx_t> keyed_hash_commit_work_ns {0};
+	atomic<idx_t> key_preaggregation_work_ns {0};
+	atomic<idx_t> key_preaggregation_combine_work_ns {0};
+	atomic<idx_t> key_preaggregation_candidate_rows {0};
+	atomic<idx_t> key_preaggregation_groups {0};
 	atomic<idx_t> partial_index_maintenance_work_ns {0};
 	atomic<idx_t> key_delta_work_ns {0};
 	atomic<idx_t> key_delta_candidate_rows {0};

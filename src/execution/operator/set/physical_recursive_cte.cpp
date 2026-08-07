@@ -567,6 +567,7 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	}
 
 	auto epoch_ht = CreateUsingKeyHashTable();
+	idx_t preaggregation_work_ns = 0;
 	ColumnDataScanState update_scan_state;
 	intermediate_table.InitializeScan(update_scan_state);
 	while (intermediate_table.Scan(update_scan_state, update_rows)) {
@@ -585,9 +586,12 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 		epoch_ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
 		if constexpr (COLLECT_METRICS) {
 			const auto hash_end = std::chrono::steady_clock::now();
-			GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+			preaggregation_work_ns +=
+			    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
 		}
+	}
+	if constexpr (COLLECT_METRICS) {
+		GetEpochMetrics().RecordKeyPreaggregation(delta_candidate_count, epoch_ht->Count(), preaggregation_work_ns);
 	}
 
 	AggregateHTScanState epoch_scan_state;
@@ -611,7 +615,7 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	ht->Combine(*epoch_ht);
 	if constexpr (COLLECT_METRICS) {
 		const auto hash_end = std::chrono::steady_clock::now();
-		GetEpochMetrics().RecordKeyedHashCommit(
+		GetEpochMetrics().RecordKeyPreaggregationCombine(
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
 	}
 
