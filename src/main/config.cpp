@@ -290,8 +290,8 @@ idx_t DBConfig::GetAliasCount() {
 	return sizeof(setting_aliases) / sizeof(ConfigurationAlias) - 1;
 }
 
-vector<string> DBConfig::GetOptionNames() {
-	vector<string> names;
+vector<Identifier> DBConfig::GetOptionNames() {
+	vector<Identifier> names;
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		names.emplace_back(internal_options[index].name);
 	}
