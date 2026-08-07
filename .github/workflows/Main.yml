@@ -479,6 +479,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+      LTO: thin
+      LTO_JOBS: 8
+      CC: clang-20
+      CXX: clang++-20
 
     steps:
     - name: "Checkout"
@@ -671,6 +675,8 @@ jobs:
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
+        -e LTO=full                                                            \
+        -e LTO_JOBS=8                                                          \
         -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
@@ -699,6 +705,16 @@ jobs:
           # Fail on non-zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
         fi
+
+    - name: Verify architecture flags
+      shell: bash
+      run: |
+        if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
+          grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        else
+          grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
+        fi
+        grep -Fq -- '-mtune=generic' build/release/compile_commands.json
 
     - name: Deploy
       env:
