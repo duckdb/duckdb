@@ -1,4 +1,4 @@
-commit 7213f8e17ffd9ce52420154e217127b7059e0e3c
+commit 3f3f3fcc8563eea14fca49a3092c142b6da10219
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -202,7 +202,7 @@ index 0fc503a..2505821 100644
  		}
  	}
 diff --git a/src/include/http/http_metadata_cache.hpp b/src/include/http/http_metadata_cache.hpp
-index 2908a43..0011db0 100644
+index 2908a43..a8bc5e0 100644
 --- a/src/include/http/http_metadata_cache.hpp
 +++ b/src/include/http/http_metadata_cache.hpp
 @@ -4,6 +4,7 @@
@@ -222,6 +222,18 @@ index 2908a43..0011db0 100644
  	string version_id;
  	unordered_map<string, string> properties;
  };
+@@ -44,6 +47,11 @@ public:
+ 		if (lookup == map.end()) {
+ 			return false;
+ 		}
++		if (lookup->second.cache_valid_until &&
++		    Timestamp::GetCurrentTimestamp() > *lookup->second.cache_valid_until) {
++			map.erase(lookup);
++			return false;
++		}
+ 		ret_val = lookup->second;
+ 		return true;
+ 	};
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
 index 1764acc..8b23ecf 100644
 --- a/src/include/http/httpfs.hpp
