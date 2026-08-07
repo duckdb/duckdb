@@ -282,6 +282,15 @@ ExecutorBenchmark binary_flat_dictionary("ScalarExecutorBinaryFlatDictionary", E
                                          0x2);
 ExecutorBenchmark binary_dictionary_dictionary("ScalarExecutorBinaryDictionaryDictionary",
                                                ExecutorBenchmarkType::BINARY_EXECUTE, 0, 0x3);
+ExecutorBenchmark binary_dictionary_flat_sparse_null("ScalarExecutorBinaryDictionaryFlatNull01",
+                                                     ExecutorBenchmarkType::BINARY_EXECUTE, 0, 0x1,
+                                                     ExecutorNullProfile::SPARSE);
+ExecutorBenchmark binary_flat_dictionary_sparse_null("ScalarExecutorBinaryFlatDictionaryNull01",
+                                                     ExecutorBenchmarkType::BINARY_EXECUTE, 0, 0x2,
+                                                     ExecutorNullProfile::SPARSE);
+ExecutorBenchmark binary_dictionary_dictionary_sparse_null("ScalarExecutorBinaryDictionaryDictionaryNull01",
+                                                           ExecutorBenchmarkType::BINARY_EXECUTE, 0, 0x3,
+                                                           ExecutorNullProfile::SPARSE);
 ExecutorBenchmark binary_select_flat_flat("ScalarExecutorBinarySelectFlatFlat", ExecutorBenchmarkType::BINARY_SELECT);
 ExecutorBenchmark binary_select_flat_constant("ScalarExecutorBinarySelectFlatConstant",
                                               ExecutorBenchmarkType::BINARY_SELECT, 0x2);

@@ -153,7 +153,12 @@ public:
 #else
 		static constexpr uint64_t SPECIALIZED_MASKS = 0;
 #endif
-		return ScalarExecutor::Select<SPECIALIZED_MASKS, false, decltype(adapter), ARGS...>(
+#if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flags)
+		static constexpr bool SPECIALIZE_OUTPUTS = true;
+#else
+		static constexpr bool SPECIALIZE_OUTPUTS = false;
+#endif
+		return ScalarExecutor::Select<SPECIALIZED_MASKS, SPECIALIZE_OUTPUTS, decltype(adapter), ARGS...>(
 		    inputs, sel, count, true_sel, false_sel, adapter);
 	}
 };

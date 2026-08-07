@@ -187,17 +187,17 @@ private:
 	static void ExecuteSwitchInternal(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC &fun) {
 		std::array<ScalarExecutor::VectorRef, 2> inputs = {{left, right}};
 		BinaryScalarAdapter<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, ADDS_NULLS> adapter(fun);
-#if !DUCKDB_SMALLER_BINARY(binary_executor_generic_no_null)
-		static constexpr bool SPECIALIZE_GENERIC_SELECTIONS = true;
+#if !DUCKDB_SMALLER_BINARY(binary_executor_generic_nullable)
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = true;
 #else
-		static constexpr bool SPECIALIZE_GENERIC_SELECTIONS = false;
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
 #endif
 #if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
-		ScalarExecutor::Execute<true, SPECIALIZE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter), LEFT_TYPE,
-		                        RIGHT_TYPE>(inputs, result, count, adapter);
+		ScalarExecutor::Execute<true, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter),
+		                        LEFT_TYPE, RIGHT_TYPE>(inputs, result, count, adapter);
 #else
-		ScalarExecutor::Execute<false, SPECIALIZE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter), LEFT_TYPE,
-		                        RIGHT_TYPE>(inputs, result, count, adapter);
+		ScalarExecutor::Execute<false, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter),
+		                        LEFT_TYPE, RIGHT_TYPE>(inputs, result, count, adapter);
 #endif
 	}
 

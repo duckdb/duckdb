@@ -120,7 +120,7 @@ private:
 
 	DUCKDB_API static bool PrepareGenericResultValidity(const UnifiedVectorFormat *formats, idx_t format_count,
 	                                                    Vector &result, idx_t count, bool preserve_result_validity,
-	                                                    bool adds_nulls, ValidityMask &input_validity);
+	                                                    bool adds_nulls);
 
 	template <bool PRESERVE_RESULT_VALIDITY, uint64_t CONSTANT_MASK, class RESULT_TYPE, class ADAPTER, class... ARGS,
 	          size_t... Is>
@@ -204,52 +204,60 @@ private:
 		return row;
 	}
 
-	template <uint64_t SELECTION_MASK, class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
-	static void ExecuteGenericNoNullLoop(const std::tuple<const ARGS *...> &input_data,
-	                                     const std::array<const sel_t *, 2> &selections, RESULT_TYPE *result_data,
-	                                     idx_t count, ValidityMask &result_validity, ADAPTER &adapter,
-	                                     std::index_sequence<Is...>) {
-		auto result_ptr = result_data;
-		auto result_end = result_data + count;
-		idx_t result_idx = 0;
-		while (result_ptr != result_end) {
-			*result_ptr = adapter.Operation(
-			    result_validity, result_idx,
-			    std::get<Is>(input_data)[GenericInputIndex<Is, SELECTION_MASK>(selections, result_idx)]...);
-			result_ptr++;
-			result_idx++;
+	template <uint64_t SELECTION_MASK, class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void
+	ExecuteGenericBinaryNullable(const LEFT_TYPE *__restrict left_data, const RIGHT_TYPE *__restrict right_data,
+	                             const std::array<UnifiedVectorFormat, 2> &formats,
+	                             const std::array<const sel_t *, 2> &selections, RESULT_TYPE *__restrict result_data,
+	                             idx_t count, ValidityMask &result_validity, ADAPTER &adapter) {
+		auto &left_validity = formats[0].validity;
+		auto &right_validity = formats[1].validity;
+		for (idx_t row = 0; row < count; row++) {
+			auto left_index = GenericInputIndex<0, SELECTION_MASK>(selections, row);
+			auto right_index = GenericInputIndex<1, SELECTION_MASK>(selections, row);
+			if (left_validity.RowIsValid(left_index) && right_validity.RowIsValid(right_index)) {
+				result_data[row] =
+				    adapter.Operation(result_validity, row, left_data[left_index], right_data[right_index]);
+			} else {
+				result_validity.SetInvalid(row);
+			}
 		}
 	}
 
-	template <class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
-	static void ExecuteGenericNoNullSwitch(const std::tuple<const ARGS *...> &input_data,
-	                                       const std::array<UnifiedVectorFormat, 2> &formats, RESULT_TYPE *result_data,
-	                                       idx_t count, ValidityMask &result_validity, ADAPTER &adapter,
-	                                       std::index_sequence<Is...> indices) {
+	template <class RESULT_TYPE, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static void ExecuteGenericBinaryNullableSwitch(const LEFT_TYPE *__restrict left_data,
+	                                               const RIGHT_TYPE *__restrict right_data,
+	                                               const std::array<UnifiedVectorFormat, 2> &formats,
+	                                               RESULT_TYPE *__restrict result_data, idx_t count,
+	                                               ValidityMask &result_validity, ADAPTER &adapter) {
 		std::array<const sel_t *, 2> selections = {{formats[0].sel->data(), formats[1].sel->data()}};
 		uint64_t selection_mask = 0;
 		selection_mask |= selections[0] ? 1 : 0;
 		selection_mask |= selections[1] ? 2 : 0;
 		switch (selection_mask) {
 		case 0:
-			ExecuteGenericNoNullLoop<0>(input_data, selections, result_data, count, result_validity, adapter, indices);
+			ExecuteGenericBinaryNullable<0>(left_data, right_data, formats, selections, result_data, count,
+			                                result_validity, adapter);
 			return;
 		case 1:
-			ExecuteGenericNoNullLoop<1>(input_data, selections, result_data, count, result_validity, adapter, indices);
+			ExecuteGenericBinaryNullable<1>(left_data, right_data, formats, selections, result_data, count,
+			                                result_validity, adapter);
 			return;
 		case 2:
-			ExecuteGenericNoNullLoop<2>(input_data, selections, result_data, count, result_validity, adapter, indices);
+			ExecuteGenericBinaryNullable<2>(left_data, right_data, formats, selections, result_data, count,
+			                                result_validity, adapter);
 			return;
 		case 3:
-			ExecuteGenericNoNullLoop<3>(input_data, selections, result_data, count, result_validity, adapter, indices);
+			ExecuteGenericBinaryNullable<3>(left_data, right_data, formats, selections, result_data, count,
+			                                result_validity, adapter);
 			return;
 		default:
-			throw InternalException("Invalid generic scalar executor selection profile");
+			throw InternalException("Invalid nullable generic scalar executor selection profile");
 		}
 	}
 
-	template <bool SPECIALIZE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE, class ADAPTER,
-	          class... ARGS, size_t... Is>
+	template <bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY, class RESULT_TYPE,
+	          class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteGeneric(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                           ADAPTER &adapter, std::index_sequence<Is...>) {
 		constexpr idx_t N = sizeof...(ARGS);
@@ -264,23 +272,24 @@ private:
 		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &result_validity = FlatVector::ValidityMutable(result);
-		ValidityMask input_validity(count);
-		auto inputs_can_have_null = PrepareGenericResultValidity(
-		    formats.data(), N, result, count, PRESERVE_RESULT_VALIDITY, ADAPTER::ADDS_NULLS, input_validity);
+		auto inputs_can_have_null = PrepareGenericResultValidity(formats.data(), N, result, count,
+		                                                         PRESERVE_RESULT_VALIDITY, ADAPTER::ADDS_NULLS);
 
 		if (inputs_can_have_null) {
-			for (idx_t row = 0; row < count; row++) {
-				std::array<idx_t, N> input_indices = {{formats[Is].sel->get_index(row)...}};
-				if (input_validity.RowIsValid(row)) {
-					result_data[row] =
-					    adapter.Operation(result_validity, row, std::get<Is>(input_data)[input_indices[Is]]...);
-				} else {
-					result_validity.SetInvalid(row);
+			if constexpr (SPECIALIZE_NULLABLE_GENERIC_SELECTIONS && N == 2) {
+				ExecuteGenericBinaryNullableSwitch(std::get<0>(input_data), std::get<1>(input_data), formats,
+				                                   result_data, count, result_validity, adapter);
+			} else {
+				for (idx_t row = 0; row < count; row++) {
+					std::array<idx_t, N> input_indices = {{formats[Is].sel->get_index(row)...}};
+					if ((... && formats[Is].validity.RowIsValid(input_indices[Is]))) {
+						result_data[row] =
+						    adapter.Operation(result_validity, row, std::get<Is>(input_data)[input_indices[Is]]...);
+					} else {
+						result_validity.SetInvalid(row);
+					}
 				}
 			}
-		} else if constexpr (SPECIALIZE_GENERIC_SELECTIONS && N == 2) {
-			ExecuteGenericNoNullSwitch(input_data, formats, result_data, count, result_validity, adapter,
-			                           std::index_sequence_for<ARGS...> {});
 		} else {
 			for (idx_t row = 0; row < count; row++) {
 				result_data[row] = adapter.Operation(result_validity, row,
@@ -289,7 +298,7 @@ private:
 		}
 	}
 
-	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
+	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
 	          class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteInternal(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                            ADAPTER &adapter, std::index_sequence<Is...> indices) {
@@ -363,7 +372,7 @@ private:
 				}
 			}
 		}
-		ExecuteGeneric<SPECIALIZE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER, ARGS...>(
+		ExecuteGeneric<SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER, ARGS...>(
 		    inputs, result, count, adapter, indices);
 	}
 
@@ -511,21 +520,26 @@ private:
 		                                                                        adapter, indices);
 	}
 
-	template <bool RIGHT_CONSTANT, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class CONSTANT_TYPE,
-	          class GENERIC_TYPE, class ADAPTER>
+	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL,
+	          class CONSTANT_TYPE, class GENERIC_TYPE, class ADAPTER>
 	static idx_t SelectGenericConstantLoop(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
-	                                       const SelectionVector &generic_sel, const SelectionVector &sel, idx_t count,
-	                                       SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
+	                                       const SelectionVector &generic_sel, const ValidityMask &validity,
+	                                       const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+	                                       SelectionVector *false_sel, ADAPTER &adapter) {
 		idx_t true_count = 0;
 		idx_t false_count = 0;
 		for (idx_t row = 0; row < count; row++) {
 			auto result_idx = sel.get_index(row);
 			auto generic_index = generic_sel.get_index(row);
-			bool comparison_result;
-			if constexpr (RIGHT_CONSTANT) {
-				comparison_result = adapter.OperationNoNull(data[generic_index], constant);
-			} else {
-				comparison_result = adapter.OperationNoNull(constant, data[generic_index]);
+			bool comparison_result = !CAN_HAVE_NULL || validity.RowIsValid(generic_index);
+			if (comparison_result) {
+				if constexpr (RIGHT_CONSTANT) {
+					comparison_result = CAN_HAVE_NULL ? adapter.Operation(data[generic_index], constant)
+					                                  : adapter.OperationNoNull(data[generic_index], constant);
+				} else {
+					comparison_result = CAN_HAVE_NULL ? adapter.Operation(constant, data[generic_index])
+					                                  : adapter.OperationNoNull(constant, data[generic_index]);
+				}
 			}
 			StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(comparison_result, result_idx, true_sel,
 			                                                                false_sel, true_count, false_count);
@@ -536,24 +550,25 @@ private:
 		return true_sel ? true_count : count - false_count;
 	}
 
-	template <bool RIGHT_CONSTANT, bool SPECIALIZE_OUTPUTS, class CONSTANT_TYPE, class GENERIC_TYPE, class ADAPTER>
+	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, bool SPECIALIZE_OUTPUTS, class CONSTANT_TYPE, class GENERIC_TYPE,
+	          class ADAPTER>
 	static idx_t SelectGenericConstantSwitch(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
-	                                         const SelectionVector &generic_sel, const SelectionVector &sel,
-	                                         idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
-	                                         ADAPTER &adapter) {
+	                                         const SelectionVector &generic_sel, const ValidityMask &validity,
+	                                         const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+	                                         SelectionVector *false_sel, ADAPTER &adapter) {
 		if constexpr (SPECIALIZE_OUTPUTS) {
 			if (true_sel && false_sel) {
-				return SelectGenericConstantLoop<RIGHT_CONSTANT, true, true, true>(constant, data, generic_sel, sel,
-				                                                                   count, true_sel, false_sel, adapter);
+				return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, true, true>(
+				    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
 			} else if (true_sel) {
-				return SelectGenericConstantLoop<RIGHT_CONSTANT, true, true, false>(
-				    constant, data, generic_sel, sel, count, true_sel, false_sel, adapter);
+				return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, true, false>(
+				    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
 			}
-			return SelectGenericConstantLoop<RIGHT_CONSTANT, true, false, true>(constant, data, generic_sel, sel, count,
-			                                                                    true_sel, false_sel, adapter);
+			return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, false, true>(
+			    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
 		}
-		return SelectGenericConstantLoop<RIGHT_CONSTANT, false, false, false>(constant, data, generic_sel, sel, count,
-		                                                                      true_sel, false_sel, adapter);
+		return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, false, false, false>(
+		    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
 	}
 
 	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
@@ -561,27 +576,28 @@ private:
 	                                   SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
 		static_assert(CONSTANT_MASK == 1 || CONSTANT_MASK == 2, "Exactly one binary input must be constant");
 		constexpr idx_t GENERIC_INDEX = CONSTANT_MASK == 1 ? 1 : 0;
-		constexpr idx_t CONSTANT_INDEX = CONSTANT_MASK == 1 ? 0 : 1;
-		std::array<UnifiedVectorFormat, 2> formats;
-		auto &generic_format = formats[GENERIC_INDEX];
+		UnifiedVectorFormat generic_format;
 		inputs[GENERIC_INDEX].get().ToUnifiedFormat(generic_format);
-		if (generic_format.validity.CanHaveNull()) {
-			inputs[CONSTANT_INDEX].get().ToUnifiedFormat(formats[CONSTANT_INDEX]);
-			auto input_data = std::make_tuple(UnifiedVectorFormat::GetData<LEFT_TYPE>(formats[0]),
-			                                  UnifiedVectorFormat::GetData<RIGHT_TYPE>(formats[1]));
-			return SelectGenericSwitch<false, SPECIALIZE_OUTPUTS>(input_data, formats, sel, count, true_sel, false_sel,
-			                                                      adapter, std::index_sequence<0, 1> {});
-		}
+		auto can_have_null = generic_format.validity.CanHaveNull();
 		if constexpr (CONSTANT_MASK == 1) {
 			auto constant = *ConstantVector::GetData<LEFT_TYPE>(inputs[0].get());
 			auto data = UnifiedVectorFormat::GetData<RIGHT_TYPE>(generic_format);
-			return SelectGenericConstantSwitch<false, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel, sel,
-			                                                              count, true_sel, false_sel, adapter);
+			if (can_have_null) {
+				return SelectGenericConstantSwitch<false, true, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel,
+				                                                                    generic_format.validity, sel, count,
+				                                                                    true_sel, false_sel, adapter);
+			}
+			return SelectGenericConstantSwitch<false, false, SPECIALIZE_OUTPUTS>(
+			    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
 		}
 		auto constant = *ConstantVector::GetData<RIGHT_TYPE>(inputs[1].get());
 		auto data = UnifiedVectorFormat::GetData<LEFT_TYPE>(generic_format);
-		return SelectGenericConstantSwitch<true, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel, sel, count,
-		                                                             true_sel, false_sel, adapter);
+		if (can_have_null) {
+			return SelectGenericConstantSwitch<true, true, SPECIALIZE_OUTPUTS>(
+			    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
+		}
+		return SelectGenericConstantSwitch<true, false, SPECIALIZE_OUTPUTS>(
+		    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
 	}
 
 	template <bool NO_NULL, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class ADAPTER,
@@ -728,12 +744,12 @@ private:
 	}
 
 public:
-	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
+	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
 	          class RESULT_TYPE, class ADAPTER, class... ARGS>
 	static void Execute(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                    ADAPTER &adapter) {
-		ExecuteInternal<SPECIALIZE_FLAT, SPECIALIZE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER,
-		                ARGS...>(inputs, result, count, adapter, std::index_sequence_for<ARGS...> {});
+		ExecuteInternal<SPECIALIZE_FLAT, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE,
+		                ADAPTER, ARGS...>(inputs, result, count, adapter, std::index_sequence_for<ARGS...> {});
 	}
 
 	template <uint64_t SPECIALIZED_MASKS, bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS>
