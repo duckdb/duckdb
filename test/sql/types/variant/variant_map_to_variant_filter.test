@@ -12,7 +12,7 @@ CREATE TABLE t AS SELECT i, MAP{'k': i::VARIANT} AS m FROM range(2) t(i);
 query I
 SELECT m::VARIANT FROM t WHERE i = 1;
 ----
-[{'key': k, 'value': 1}]
+{'k': 1}
 
 # multi-row selection, incl. a row past the 2048 vector boundary
 statement ok
@@ -21,6 +21,6 @@ CREATE TABLE big AS SELECT i, MAP{'k': i::VARIANT} AS m FROM range(3000) t(i);
 query II
 SELECT i, m::VARIANT FROM big WHERE i IN (1, 2, 2050) ORDER BY i;
 ----
-1	[{'key': k, 'value': 1}]
-2	[{'key': k, 'value': 2}]
-2050	[{'key': k, 'value': 2050}]
+1	{'k': 1}
+2	{'k': 2}
+2050	{'k': 2050}

@@ -92,12 +92,10 @@ select variant_array_length(a, ['a', 'c']) from struct_cast_data();
 [2, NULL]
 [1, 0]
 
-# FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce `0`)
-
 query I
 select variant_array_length(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
 ----
-NULL
+0
 
 # NULL returns NULL
 
