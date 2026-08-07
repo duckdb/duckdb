@@ -123,82 +123,42 @@ struct BinarySelectAdapter {
 
 struct BinaryExecutor {
 private:
-#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
-	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static idx_t SelectTrueFlatLoop(const LEFT_TYPE *__restrict left_data, const RIGHT_TYPE *__restrict right_data,
-	                                const SelectionVector &sel, idx_t count, const ValidityMask &validity,
-	                                SelectionVector &true_sel) {
-		idx_t true_count = 0;
-		idx_t base_idx = 0;
-		auto entry_count = ValidityMask::EntryCount(count);
-		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			auto validity_entry = validity.GetValidityEntry(entry_idx);
-			auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-			if (ValidityMask::AllValid(validity_entry)) {
-				for (; base_idx < next; base_idx++) {
-					auto result_idx = sel.get_index(base_idx);
-					bool comparison_result = OP::Operation(left_data[LEFT_CONSTANT ? 0 : base_idx],
-					                                       right_data[RIGHT_CONSTANT ? 0 : base_idx]);
-					true_sel.set_index(true_count, result_idx);
-					true_count += comparison_result;
-				}
-			} else if (ValidityMask::NoneValid(validity_entry)) {
-				base_idx = next;
-			} else {
-				auto start = base_idx;
-				for (; base_idx < next; base_idx++) {
-					auto result_idx = sel.get_index(base_idx);
-					bool comparison_result = ValidityMask::RowIsValid(validity_entry, base_idx - start) &&
-					                         OP::Operation(left_data[LEFT_CONSTANT ? 0 : base_idx],
-					                                       right_data[RIGHT_CONSTANT ? 0 : base_idx]);
-					true_sel.set_index(true_count, result_idx);
-					true_count += comparison_result;
-				}
-			}
-		}
-		return true_count;
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static idx_t SelectTrueFlat(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
-	                            SelectionVector &true_sel) {
-		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
-			return 0;
-		}
-		auto left_data = FlatVector::GetData<LEFT_TYPE>(left);
-		auto right_data = FlatVector::GetData<RIGHT_TYPE>(right);
-		if constexpr (LEFT_CONSTANT) {
-			return SelectTrueFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    left_data, right_data, sel, count, FlatVector::Validity(right), true_sel);
-		} else if constexpr (RIGHT_CONSTANT) {
-			return SelectTrueFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    left_data, right_data, sel, count, FlatVector::Validity(left), true_sel);
-		} else {
-			ValidityMask combined_validity = FlatVector::Validity(left);
-			combined_validity.Combine(FlatVector::Validity(right), count);
-			return SelectTrueFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(
-			    left_data, right_data, sel, count, combined_validity, true_sel);
-		}
-	}
+	struct ExecutePolicy {
+#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
+		static constexpr bool SPECIALIZE_FLAT = true;
+#else
+		static constexpr bool SPECIALIZE_FLAT = false;
 #endif
+#if !DUCKDB_SMALLER_BINARY(binary_executor_generic_nullable)
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = true;
+#else
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
+#endif
+		static constexpr bool PRESERVE_RESULT_VALIDITY = false;
+	};
+
+	struct SelectPolicy {
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
+		static constexpr uint64_t SPECIALIZED_MASKS = 0x7;
+		static constexpr bool DIRECT_TRUE_FLAT = true;
+#else
+		static constexpr uint64_t SPECIALIZED_MASKS = 0;
+		static constexpr bool DIRECT_TRUE_FLAT = false;
+#endif
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
+		static constexpr bool SPECIALIZE_OUTPUTS = true;
+#else
+		static constexpr bool SPECIALIZE_OUTPUTS = false;
+#endif
+	};
 
 	template <bool ADDS_NULLS, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP,
 	          class FUNC>
 	static void ExecuteSwitchInternal(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC &fun) {
 		std::array<ScalarExecutor::VectorRef, 2> inputs = {{left, right}};
 		BinaryScalarAdapter<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, ADDS_NULLS> adapter(fun);
-#if !DUCKDB_SMALLER_BINARY(binary_executor_generic_nullable)
-		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = true;
-#else
-		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
-#endif
-#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
-		ScalarExecutor::Execute<true, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter),
-		                        LEFT_TYPE, RIGHT_TYPE>(inputs, result, count, adapter);
-#else
-		ScalarExecutor::Execute<false, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, false, RESULT_TYPE, decltype(adapter),
-		                        LEFT_TYPE, RIGHT_TYPE>(inputs, result, count, adapter);
-#endif
+		ScalarExecutor::Execute<ExecutePolicy, RESULT_TYPE, decltype(adapter), LEFT_TYPE, RIGHT_TYPE>(inputs, result,
+		                                                                                              count, adapter);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -225,17 +185,7 @@ private:
 	static idx_t SelectShared(const std::array<ScalarExecutor::VectorRef, 2> &inputs, const SelectionVector *sel,
 	                          idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 		BinarySelectAdapter<LEFT_TYPE, RIGHT_TYPE, OP> adapter;
-#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
-		static constexpr uint64_t SPECIALIZED_MASKS = 0x7;
-#else
-		static constexpr uint64_t SPECIALIZED_MASKS = 0;
-#endif
-#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
-		static constexpr bool SPECIALIZE_OUTPUTS = true;
-#else
-		static constexpr bool SPECIALIZE_OUTPUTS = false;
-#endif
-		return ScalarExecutor::Select<SPECIALIZED_MASKS, SPECIALIZE_OUTPUTS, decltype(adapter), LEFT_TYPE, RIGHT_TYPE>(
+		return ScalarExecutor::Select<SelectPolicy, decltype(adapter), LEFT_TYPE, RIGHT_TYPE>(
 		    inputs, sel, count, true_sel, false_sel, adapter);
 	}
 
@@ -284,22 +234,6 @@ public:
 	static idx_t Select(const Vector &left, const Vector &right, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		std::array<ScalarExecutor::VectorRef, 2> inputs = {{left, right}};
-#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
-		if (true_sel && !false_sel) {
-			if (!sel) {
-				sel = FlatVector::IncrementalSelectionVector();
-			}
-			auto left_type = left.GetVectorType();
-			auto right_type = right.GetVectorType();
-			if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
-				return SelectTrueFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, *sel, count, *true_sel);
-			} else if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::CONSTANT_VECTOR) {
-				return SelectTrueFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(left, right, *sel, count, *true_sel);
-			} else if (left_type == VectorType::CONSTANT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
-				return SelectTrueFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, *sel, count, *true_sel);
-			}
-		}
-#endif
 		return SelectShared<LEFT_TYPE, RIGHT_TYPE, OP>(inputs, sel, count, true_sel, false_sel);
 	}
 };

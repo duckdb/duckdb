@@ -64,12 +64,9 @@ template <class RESULT_TYPE, class OP, class... ARGS>
 struct VariadicStandardAdapter {
 	static constexpr bool ADDS_NULLS = false;
 
-	inline RESULT_TYPE Operation(ValidityMask &mask, idx_t idx, ARGS... args) {
-		return VariadicStandardOperatorWrapper<OP>::template Operation<bool, RESULT_TYPE, ARGS...>(dummy, mask, idx,
-		                                                                                           args...);
+	inline RESULT_TYPE Operation(ValidityMask &, idx_t, ARGS... args) {
+		return OP::template Operation<ARGS..., RESULT_TYPE>(args...);
 	}
-
-	bool dummy = false;
 };
 
 template <class OP, class... ARGS>
@@ -93,6 +90,32 @@ private:
 	static constexpr bool SpecializeFlat() {
 		return sizeof...(ARGS) <= 3 && (... && std::is_arithmetic<ARGS>::value);
 	}
+
+	template <class... ARGS>
+	struct ExecutePolicy {
+#if !DUCKDB_SMALLER_BINARY(variadic_executor_flat)
+		static constexpr bool SPECIALIZE_FLAT = SpecializeFlat<ARGS...>();
+#else
+		static constexpr bool SPECIALIZE_FLAT = false;
+#endif
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
+		static constexpr bool PRESERVE_RESULT_VALIDITY = false;
+	};
+
+	template <class... ARGS>
+	struct SelectPolicy {
+#if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flat)
+		static constexpr uint64_t SPECIALIZED_MASKS = SpecializeFlat<ARGS...>() ? 1 : 0;
+#else
+		static constexpr uint64_t SPECIALIZED_MASKS = 0;
+#endif
+#if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flags)
+		static constexpr bool SPECIALIZE_OUTPUTS = true;
+#else
+		static constexpr bool SPECIALIZE_OUTPUTS = false;
+#endif
+		static constexpr bool DIRECT_TRUE_FLAT = false;
+	};
 
 	template <size_t N, size_t... Is>
 	static std::array<VectorRef, N> MakeInputArrayImpl(DataChunk &input, std::index_sequence<Is...>) {
@@ -124,42 +147,32 @@ public:
 	static void Execute(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, FUN fun) {
 		auto count = CheckExecuteCount(inputs);
 		VariadicLambdaAdapter<RESULT_TYPE, FUN, ARGS...> adapter(fun);
-		ScalarExecutor::Execute<SpecializeFlat<ARGS...>(), false, false, RESULT_TYPE, decltype(adapter), ARGS...>(
-		    inputs, result, count, adapter);
+		ScalarExecutor::Execute<ExecutePolicy<ARGS...>, RESULT_TYPE, decltype(adapter), ARGS...>(inputs, result, count,
+		                                                                                         adapter);
 	}
 
 	template <class RESULT_TYPE, class... ARGS, class FUN>
 	static void Execute(DataChunk &input, Vector &result, FUN fun) {
 		auto inputs = MakeInputArray<sizeof...(ARGS)>(input);
 		VariadicLambdaAdapter<RESULT_TYPE, FUN, ARGS...> adapter(fun);
-		ScalarExecutor::Execute<SpecializeFlat<ARGS...>(), false, false, RESULT_TYPE, decltype(adapter), ARGS...>(
-		    inputs, result, input.size(), adapter);
+		ScalarExecutor::Execute<ExecutePolicy<ARGS...>, RESULT_TYPE, decltype(adapter), ARGS...>(inputs, result,
+		                                                                                         input.size(), adapter);
 	}
 
 	template <class RESULT_TYPE, class OP, class... ARGS>
 	static void ExecuteStandard(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result) {
 		auto count = CheckExecuteCount(inputs);
 		VariadicStandardAdapter<RESULT_TYPE, OP, ARGS...> adapter;
-		ScalarExecutor::Execute<SpecializeFlat<ARGS...>(), false, false, RESULT_TYPE, decltype(adapter), ARGS...>(
-		    inputs, result, count, adapter);
+		ScalarExecutor::Execute<ExecutePolicy<ARGS...>, RESULT_TYPE, decltype(adapter), ARGS...>(inputs, result, count,
+		                                                                                         adapter);
 	}
 
 	template <class OP, class... ARGS>
 	static idx_t Select(std::array<VectorRef, sizeof...(ARGS)> inputs, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		VariadicSelectAdapter<OP, ARGS...> adapter;
-#if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flat)
-		static constexpr uint64_t SPECIALIZED_MASKS = SpecializeFlat<ARGS...>() ? 1 : 0;
-#else
-		static constexpr uint64_t SPECIALIZED_MASKS = 0;
-#endif
-#if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flags)
-		static constexpr bool SPECIALIZE_OUTPUTS = true;
-#else
-		static constexpr bool SPECIALIZE_OUTPUTS = false;
-#endif
-		return ScalarExecutor::Select<SPECIALIZED_MASKS, SPECIALIZE_OUTPUTS, decltype(adapter), ARGS...>(
-		    inputs, sel, count, true_sel, false_sel, adapter);
+		return ScalarExecutor::Select<SelectPolicy<ARGS...>, decltype(adapter), ARGS...>(inputs, sel, count, true_sel,
+		                                                                                 false_sel, adapter);
 	}
 };
 
