@@ -1,0 +1,82 @@
+# name: test/issues/general/test_24307.test
+# description: ROWS FOLLOWING offsets that overflow produce empty frames
+# group: [general]
+
+query III
+SELECT i,
+       count(*) OVER (
+           ORDER BY i
+           ROWS BETWEEN 9223372036854775807 FOLLOWING AND 9223372036854775807 FOLLOWING
+       ),
+       list(i) OVER (
+           ORDER BY i
+           ROWS BETWEEN 9223372036854775807 FOLLOWING AND 9223372036854775807 FOLLOWING
+       )
+FROM range(3) t(i);
+----
+0	0	NULL
+1	0	NULL
+2	0	NULL
+
+query II
+SELECT i,
+       count(*) OVER (
+           ORDER BY i
+           ROWS BETWEEN 9223372036854775807 FOLLOWING AND UNBOUNDED FOLLOWING
+       )
+FROM range(3) t(i);
+----
+0	0
+1	0
+2	0
+
+query II
+SELECT i,
+       count(*) OVER (
+           ORDER BY i
+           ROWS BETWEEN 9223372036854775807 FOLLOWING AND CURRENT ROW
+       )
+FROM range(3) t(i);
+----
+0	0
+1	0
+2	0
+
+query II
+WITH data(i, off) AS (
+    SELECT i, CASE WHEN i % 2 = 0 THEN 9223372036854775807 ELSE 1 END::BIGINT
+    FROM range(10) t(i)
+)
+SELECT i,
+       count(*) OVER (ORDER BY i ROWS BETWEEN off FOLLOWING AND off FOLLOWING)
+FROM data;
+----
+0	0
+1	1
+2	0
+3	1
+4	0
+5	1
+6	0
+7	1
+8	0
+9	0
+
+query III
+WITH data(p, i) AS (
+    VALUES (0, 0), (0, 1), (1, 0), (1, 1), (1, 2)
+)
+SELECT p, i,
+       count(*) OVER (
+           PARTITION BY p
+           ORDER BY i
+           ROWS BETWEEN 9223372036854775807 FOLLOWING AND 9223372036854775807 FOLLOWING
+       )
+FROM data
+ORDER BY p, i;
+----
+0	0	0
+0	1	0
+1	0	0
+1	1	0
+1	2	0

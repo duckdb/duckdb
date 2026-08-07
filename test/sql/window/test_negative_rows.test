@@ -1,0 +1,82 @@
+# name: test/sql/window/test_negative_rows.test
+# description: ROWS frame offsets must be non-negative
+# group: [window]
+
+statement error
+SELECT count(*) OVER (
+    ORDER BY i ROWS BETWEEN -1 PRECEDING AND UNBOUNDED FOLLOWING
+) FROM range(3) t(i);
+----
+Invalid ROWS PRECEDING value
+
+statement error
+SELECT count(*) OVER (
+    ORDER BY i ROWS BETWEEN -1 FOLLOWING AND UNBOUNDED FOLLOWING
+) FROM range(3) t(i);
+----
+Invalid ROWS FOLLOWING value
+
+statement error
+SELECT count(*) OVER (
+    ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND -1 PRECEDING
+) FROM range(3) t(i);
+----
+Invalid ROWS PRECEDING value
+
+statement error
+SELECT count(*) OVER (
+    ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND -1 FOLLOWING
+) FROM range(3) t(i);
+----
+Invalid ROWS FOLLOWING value
+
+# Dynamic offsets are validated row by row, including INT64_MIN.
+statement error
+WITH data(i, off) AS (
+    VALUES (0, 0::BIGINT), (1, (-9223372036854775807 - 1)::BIGINT)
+)
+SELECT count(*) OVER (
+    ORDER BY i ROWS BETWEEN off PRECEDING AND UNBOUNDED FOLLOWING
+) FROM data;
+----
+Invalid ROWS PRECEDING value
+
+statement error
+WITH data(p, i, off) AS (
+    VALUES (0, 0, 0::BIGINT), (0, 1, -1::BIGINT), (1, 0, 0::BIGINT)
+)
+SELECT count(*) OVER (
+    PARTITION BY p ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND off FOLLOWING
+) FROM data;
+----
+Invalid ROWS FOLLOWING value
+
+# NULL and non-negative offsets retain their existing behaviour.
+query III
+WITH data(i, off) AS (
+    VALUES (0, NULL::BIGINT), (1, 0::BIGINT), (2, 1::BIGINT)
+)
+SELECT i,
+       count(*) OVER (ORDER BY i ROWS BETWEEN off PRECEDING AND CURRENT ROW),
+       count(*) OVER (ORDER BY i ROWS BETWEEN CURRENT ROW AND off FOLLOWING)
+FROM data;
+----
+0	1	1
+1	1	1
+2	2	1
+
+# Do not inspect the unspecified payload beneath a NULL validity bit. The
+# NULLIF input is negative for the first row but every result is NULL.
+query III
+SELECT i,
+       count(*) OVER (
+           ORDER BY i ROWS BETWEEN NULLIF(i - 1, i - 1) PRECEDING AND CURRENT ROW
+       ),
+       count(*) OVER (
+           ORDER BY i ROWS BETWEEN CURRENT ROW AND NULLIF(i - 1, i - 1) FOLLOWING
+       )
+FROM range(3) t(i);
+----
+0	1	1
+1	1	1
+2	1	1
