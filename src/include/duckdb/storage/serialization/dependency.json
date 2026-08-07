@@ -34,6 +34,13 @@
 				"type": "vector<Identifier>",
 				"version": "v2.0.0",
 				"default": "vector<Identifier>()"
+			},
+			{
+				"id": 104,
+				"name": "table",
+				"type": "Identifier",
+				"default": "Identifier()",
+				"version": "v2.0.0"
 			}
 		],
 		"pointer_type": "none"

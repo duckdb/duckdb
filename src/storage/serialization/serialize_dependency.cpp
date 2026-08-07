@@ -19,6 +19,9 @@ void CatalogEntryInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<Identifier>>(103, "schema_path", schema_path, vector<Identifier>());
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(104, "table", table, Identifier());
+	}
 }
 
 CatalogEntryInfo CatalogEntryInfo::Deserialize(Deserializer &deserializer) {
@@ -27,6 +30,7 @@ CatalogEntryInfo CatalogEntryInfo::Deserialize(Deserializer &deserializer) {
 	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
 	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
 	deserializer.ReadPropertyWithExplicitDefault<vector<Identifier>>(103, "schema_path", result.schema_path, vector<Identifier>());
+	deserializer.ReadPropertyWithExplicitDefault<Identifier>(104, "table", result.table, Identifier());
 	if (result.schema_path.empty() && result.type != CatalogType::SCHEMA_ENTRY && !schema.empty()) {
 		result.schema_path.push_back(std::move(schema));
 	}
