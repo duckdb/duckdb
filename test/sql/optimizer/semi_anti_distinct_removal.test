@@ -1,0 +1,113 @@
+# name: test/sql/optimizer/semi_anti_distinct_removal.test
+# description: Remove a DISTINCT on the existence-only side of a semi, anti or mark join
+# group: [optimizer]
+
+# assert on the logical plan, which is what this rule rewrites
+statement ok
+SET explain_output='optimized_only';
+
+statement ok
+CREATE TABLE probe(k INTEGER);
+
+statement ok
+INSERT INTO probe VALUES (0), (1), (2), (99), (NULL);
+
+statement ok
+CREATE TABLE build(k INTEGER);
+
+statement ok
+INSERT INTO build VALUES (1), (1), (2), (2), (2), (3);
+
+statement ok
+CREATE TABLE with_null(k INTEGER);
+
+statement ok
+INSERT INTO with_null VALUES (1), (NULL);
+
+# the DISTINCT is dropped: a semi join only asks whether a match exists
+query II
+EXPLAIN SELECT k FROM probe WHERE k IN (SELECT DISTINCT k FROM build);
+----
+logical_opt	<!REGEX>:.*Distinct.*
+
+# and it is kept when the optimizer is switched off
+statement ok
+SET disabled_optimizers='semi_anti_distinct_removal';
+
+query II
+EXPLAIN SELECT k FROM probe WHERE k IN (SELECT DISTINCT k FROM build);
+----
+logical_opt	<REGEX>:.*Distinct.*
+
+statement ok
+RESET disabled_optimizers;
+
+# results are unchanged
+query I
+SELECT k FROM probe WHERE k IN (SELECT DISTINCT k FROM build) ORDER BY 1;
+----
+1
+2
+
+query I
+SELECT k FROM probe WHERE k NOT IN (SELECT DISTINCT k FROM build) ORDER BY 1;
+----
+0
+99
+
+# NULL on the inner side: IN yields NULL rather than false when there is no match,
+# and collapsing duplicate NULLs must not change that
+query I
+SELECT k FROM probe WHERE k IN (SELECT DISTINCT k FROM with_null) ORDER BY 1;
+----
+1
+
+query I
+SELECT k FROM probe WHERE k NOT IN (SELECT DISTINCT k FROM with_null) ORDER BY 1;
+----
+
+query II
+SELECT k, k IN (SELECT DISTINCT k FROM with_null) AS m FROM probe ORDER BY 1;
+----
+0	NULL
+1	true
+2	NULL
+99	NULL
+NULL	NULL
+
+# EXISTS and NOT EXISTS take the same paths
+query I
+SELECT k FROM probe p WHERE EXISTS (SELECT DISTINCT k FROM build b WHERE b.k = p.k) ORDER BY 1;
+----
+1
+2
+
+query I
+SELECT k FROM probe p WHERE NOT EXISTS (SELECT DISTINCT k FROM build b WHERE b.k = p.k) ORDER BY 1;
+----
+0
+99
+NULL
+
+# DISTINCT ON is not a pure de-duplication: an ORDER BY decides which row survives,
+# so it must be left alone
+query II
+EXPLAIN SELECT k FROM probe WHERE k IN (SELECT DISTINCT ON (k) k FROM build ORDER BY k);
+----
+logical_opt	<REGEX>:.*Distinct.*
+
+# a DISTINCT whose consumer does care about duplicates must be kept
+query II
+EXPLAIN SELECT count(*) FROM (SELECT DISTINCT k FROM build) s;
+----
+logical_opt	<REGEX>:.*Distinct.*
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT k FROM build) s;
+----
+3
+
+query II
+EXPLAIN SELECT count(*) FROM probe JOIN (SELECT DISTINCT k FROM build) s ON probe.k = s.k;
+----
+logical_opt	<REGEX>:.*Distinct.*

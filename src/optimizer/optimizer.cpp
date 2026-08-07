@@ -35,6 +35,7 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
+#include "duckdb/optimizer/semi_anti_distinct_removal.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -317,6 +318,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
 		PartialAggregatePushdown partial_aggregate_pushdown(*this);
 		partial_aggregate_pushdown.VisitOperator(plan);
+	});
+
+	// a semi, anti or mark join only checks whether a match exists, so a DISTINCT
+	// on the side that is probed for existence cannot change the result
+	RunOptimizer(OptimizerType::SEMI_ANTI_DISTINCT_REMOVAL, [&]() {
+		SemiAntiDistinctRemoval semi_anti_distinct_removal;
+		plan = semi_anti_distinct_removal.Optimize(std::move(plan));
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
