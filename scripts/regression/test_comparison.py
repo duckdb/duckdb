@@ -69,6 +69,12 @@ if expected_cache_state:
 expected_memory_limit = os.getenv("EXPECTED_MEMORY_LIMIT")
 if expected_memory_limit and f"--memory_limit={expected_memory_limit}" not in sys.argv:
     raise SystemExit(1)
+expected_benchmark_argument = os.getenv("EXPECTED_BENCHMARK_ARGUMENT")
+if expected_benchmark_argument:
+    argument_name, argument_value = expected_benchmark_argument.split("=", 1)
+    argument_index = sys.argv.index(f"--{argument_name}")
+    if sys.argv[argument_index + 1] != argument_value:
+        raise SystemExit(1)
 timing = float(os.environ["BENCHMARK_NEW_TIMING"] if label == "new" else os.environ["BENCHMARK_OLD_TIMING"])
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
@@ -165,6 +171,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         create_cache=False,
         expected_cache_state=None,
         expected_memory_limit=None,
+        expected_benchmark_argument=None,
         step_summary=False,
     ):
         with tempfile.TemporaryDirectory() as temp_directory:
@@ -195,6 +202,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
                 env["EXPECTED_BENCHMARK_CACHE_STATE"] = expected_cache_state
             if expected_memory_limit:
                 env["EXPECTED_MEMORY_LIMIT"] = expected_memory_limit
+            if expected_benchmark_argument:
+                env["EXPECTED_BENCHMARK_ARGUMENT"] = expected_benchmark_argument
             if ci:
                 env["CI"] = "true"
             if step_summary:
@@ -369,15 +378,32 @@ print("not-a-valid-timing-row", file=sys.stderr)
                 self.assertIn("must be greater than zero", process.stderr)
                 self.assertEqual(order, [])
 
-    def test_benchmark_cache_and_memory_limit_options_are_preserved(self):
+    def test_benchmark_cache_memory_limit_and_custom_arguments_are_preserved(self):
         process, _, _ = self.run_regression_test(
             self.stable_runner_source,
-            extra_args=["--benchmark-cache=clear", "--memory-limit", "512MB"],
+            extra_args=[
+                "--benchmark-cache=clear",
+                "--memory-limit",
+                "512MB",
+                "--benchmark-argument",
+                "sf=10",
+            ],
             create_cache=True,
             expected_cache_state="absent",
             expected_memory_limit="512MB",
+            expected_benchmark_argument="sf=10",
         )
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
+    def test_invalid_benchmark_argument_is_rejected(self):
+        for argument in ("sf", "=10", "sf="):
+            with self.subTest(argument=argument):
+                process, order, _ = self.run_regression_test(
+                    self.stable_runner_source, extra_args=["--benchmark-argument", argument]
+                )
+                self.assertEqual(process.returncode, 2, process.stdout + process.stderr)
+                self.assertIn("must use NAME=VALUE", process.stderr)
+                self.assertEqual(order, [])
 
     def test_failure_details_precede_final_result(self):
         process, _, _ = self.run_regression_test(self.malformed_runner_source)

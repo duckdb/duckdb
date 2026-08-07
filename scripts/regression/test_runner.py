@@ -75,6 +75,13 @@ def positive_integer(value: str) -> int:
     return parsed
 
 
+def benchmark_argument(value: str) -> Tuple[str, str]:
+    name, separator, argument_value = value.partition("=")
+    if not separator or not name or not argument_value or name.startswith("-"):
+        raise argparse.ArgumentTypeError("must use NAME=VALUE with a non-empty name and value")
+    return name, argument_value
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Compare benchmarks from base and PR benchmark runners.")
     parser.add_argument("--old", required=True, help="Path to the base benchmark runner.")
@@ -96,6 +103,13 @@ def parse_arguments():
         choices=("keep", "clear"),
         default="keep",
         help="Keep benchmark data or clear runner caches before running (default: keep).",
+    )
+    parser.add_argument(
+        "--benchmark-argument",
+        action="append",
+        type=benchmark_argument,
+        default=[],
+        help="Benchmark runner argument in NAME=VALUE form; may be specified more than once.",
     )
     return parser.parse_args()
 
@@ -715,8 +729,24 @@ def main() -> int:
     with open(args.benchmarks, "r", encoding="utf-8") as benchmark_file:
         benchmarks = [line.strip() for line in benchmark_file if line.strip()]
     suite = Path(args.benchmarks).stem
-    old_runner = BenchmarkRunner(args.old, "base", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
-    new_runner = BenchmarkRunner(args.new, "PR", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
+    old_runner = BenchmarkRunner(
+        args.old,
+        "base",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
+    new_runner = BenchmarkRunner(
+        args.new,
+        "PR",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
     rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
     if args.samples is None:
         results = [

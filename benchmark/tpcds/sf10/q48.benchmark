@@ -1,7 +1,0 @@
-# name: benchmark/tpcds/sf10/q48.benchmark
-# description: Run query 48 from the TPC-DS benchmark (SF10)
-# group: [sf10]
-
-template benchmark/tpcds/sf10/tpcds_sf10.benchmark.in
-QUERY_NUMBER=48
-QUERY_NUMBER_PADDED=48
