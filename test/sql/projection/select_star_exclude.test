@@ -143,8 +143,18 @@ SELECT * EXCLUDE (blabla) FROM integers
 ----
 
 statement error
+SELECT * EXCLUDE (ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in FROM clause.*Candidate bindings: "i".*
+
+statement error
 SELECT integers.* EXCLUDE (blabla) FROM integers
 ----
+
+statement error
+SELECT integers.* EXCLUDE (ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in integers.*Candidate bindings: "i".*
 
 # EXCEPT is accepted interchangeably with EXCLUDE
 query II
