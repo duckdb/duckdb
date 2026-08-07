@@ -195,6 +195,17 @@ TABLE t;
 ----
 1	aabaabb
 
+# One order-dependent payload keeps the complete aggregate set on the candidate-update path.
+query III
+WITH RECURSIVE t(k, lo, latest) USING KEY (k, min(lo)) AS (
+	VALUES (1, 5, 0)
+	UNION
+	SELECT k, lo - 1, latest + 1 FROM t WHERE lo > 3
+)
+TABLE t;
+----
+1	3	2
+
 # Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
 query III rowsort
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
