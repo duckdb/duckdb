@@ -1865,7 +1865,7 @@ static scalar_function_t DatePartUnaryCallback(LogicalTypeId type) {
 	case LogicalType::TIME_NS:
 		return &DatePart::UnaryFunction<dtime_ns_t, RESULT_TYPE, OP>;
 	case LogicalType::TIME_TZ:
-		return DatePart::UnaryFunction<dtime_tz_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<dtime_tz_t, RESULT_TYPE, OP>;
 	default:
 		throw NotImplementedException("Unsupported temporal type for DATE_PART");
 	}
