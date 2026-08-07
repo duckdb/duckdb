@@ -54,6 +54,36 @@ SELECT * FROM t1 NATURAL JOIN t2 NATURAL JOIN t3
 ----
 1	2	3
 
+# natural join chain followed by a qualified join
+statement ok
+CREATE TABLE issue24045_a(x INTEGER);
+
+statement ok
+CREATE TABLE issue24045_b(x INTEGER);
+
+statement ok
+CREATE TABLE issue24045_c(x INTEGER);
+
+statement ok
+CREATE TABLE issue24045_d(y INTEGER);
+
+statement ok
+INSERT INTO issue24045_a VALUES (1);
+
+statement ok
+INSERT INTO issue24045_c VALUES (1);
+
+statement ok
+INSERT INTO issue24045_d VALUES (9);
+
+query II
+SELECT issue24045_c.x, issue24045_d.y
+FROM issue24045_a NATURAL LEFT JOIN issue24045_b
+NATURAL JOIN issue24045_c
+RIGHT JOIN issue24045_d ON true
+----
+1	9
+
 # no matching columns
 statement error
 select * from (values (1)) tbl(a) natural join (values (1), (2)) tbl2(b) order by 1, 2

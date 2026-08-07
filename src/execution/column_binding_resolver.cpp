@@ -8,7 +8,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -130,6 +129,10 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
 		}
 		VisitOperatorExpressions(op);
+
+		//	Restore bindings for the caller
+		bindings = op.GetColumnBindings();
+		types = op.types;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX: {

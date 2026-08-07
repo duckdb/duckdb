@@ -9318,8 +9318,8 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformJoinWithoutOnClauseInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto join_prefix = transformer.Transform<JoinPrefix>(list_pr.GetChild(0));
-	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
-	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(table_ref));
+	auto inner_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
+	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(inner_table_ref));
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 

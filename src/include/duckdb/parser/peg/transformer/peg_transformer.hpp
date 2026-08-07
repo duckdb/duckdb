@@ -7973,7 +7973,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformJoinWithoutOnClauseInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformJoinWithoutOnClause(PEGTransformer &transformer, const JoinPrefix &join_prefix,
-	                                                         unique_ptr<TableRef> table_ref);
+	                                                         unique_ptr<TableRef> inner_table_ref);
 	static unique_ptr<TransformResultValue> TransformJoinQualifierInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformOnClauseInternal(PEGTransformer &transformer,
