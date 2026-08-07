@@ -1,3 +1,4 @@
+import base64
 import gzip
 import json
 import os
@@ -14,13 +15,59 @@ from scripts import samply_profile
 
 def synthetic_profile():
     return {
-        "meta": {"startTime": 1000.0},
+        "meta": {"startTime": 1000.0, "categories": [{"name": "Other", "color": "grey"}]},
         "threads": [
             {"pid": 7, "processStartupTime": 0.0, "processShutdownTime": None},
             {"pid": 42, "processStartupTime": 50.0, "processShutdownTime": 300.0},
             {"pid": 42, "processStartupTime": 0.0, "processShutdownTime": None},
         ],
         "counters": [{"name": "existing"}],
+    }
+
+
+def _http_record(
+    start_unix_ns,
+    duration_ns,
+    status_code,
+    bytes_received,
+    time_to_first_byte_ns,
+    method,
+    url,
+    request_range="",
+    response_content_range="",
+):
+    encoded = [
+        base64.b64encode(value.encode("utf-8")).decode("ascii")
+        for value in (url, request_range, response_content_range)
+    ]
+    return "\t".join(
+        map(
+            str,
+            [
+                1,
+                start_unix_ns,
+                duration_ns,
+                status_code,
+                bytes_received,
+                time_to_first_byte_ns,
+                method,
+                *encoded,
+            ],
+        )
+    )
+
+
+def _add_marker_table(thread, *, main=False):
+    thread["isMainThread"] = main
+    thread["stringArray"] = ["Existing marker"]
+    thread["markers"] = {
+        "category": [0],
+        "data": [None],
+        "endTime": [60.0],
+        "length": 1,
+        "name": [0],
+        "phase": [0],
+        "startTime": [60.0],
     }
 
 
@@ -101,6 +148,87 @@ class SamplyInjectionTests(unittest.TestCase):
             with gzip.open(output, "rt", encoding="utf-8") as profile_file:
                 self.assertEqual(json.load(profile_file), profile)
             self.assertEqual(list(directory.glob(f".{output.name}.*")), [])
+
+    def test_injects_parallel_http_attempts_as_firefox_network_markers(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            first_sidecar = directory / "http-42-100.txt"
+            second_sidecar = directory / "http-42-200.txt"
+            first_sidecar.write_text(
+                _http_record(
+                    1100000000,
+                    100000000,
+                    206,
+                    4096,
+                    25000000,
+                    "GET",
+                    "https://example.com/part-1.parquet",
+                    "bytes=0-4095",
+                    "bytes 0-4095/8192",
+                )
+                + "\n"
+                + _http_record(
+                    1250000000,
+                    10000000,
+                    -1,
+                    0,
+                    -1,
+                    "GET",
+                    "https://example.com/retry.parquet",
+                    "bytes=4096-8191",
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            second_sidecar.write_text(
+                _http_record(
+                    1150000000,
+                    100000000,
+                    200,
+                    2048,
+                    50000000,
+                    "HEAD",
+                    "https://example.com/part-2.parquet",
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            profile = synthetic_profile()
+            _add_marker_table(profile["threads"][1], main=True)
+            _add_marker_table(profile["threads"][2])
+
+            self.assertEqual(samply_profile.inject_http_requests(profile, [first_sidecar, second_sidecar]), 3)
+
+        self.assertEqual(profile["meta"]["categories"][-1]["name"], "Network")
+        self.assertEqual(profile["threads"][2]["markers"]["length"], 1)
+        thread = profile["threads"][1]
+        self.assertEqual(thread["markers"]["length"], 7)
+        self.assertEqual(
+            thread["stringArray"][1:],
+            [
+                "Load 1 GET [Range=bytes=0-4095]: https://example.com/part-1.parquet",
+                "Load 2 HEAD: https://example.com/part-2.parquet",
+                "Load 3 GET [Range=bytes=4096-8191]: https://example.com/retry.parquet",
+            ],
+        )
+        start, stop = thread["markers"]["data"][1:3]
+        self.assertEqual(start["status"], "STATUS_START")
+        self.assertEqual(stop["status"], "STATUS_STOP")
+        self.assertEqual(stop["responseStatus"], 206)
+        self.assertEqual(stop["count"], 4096)
+        self.assertEqual(stop["requestRange"], "bytes=0-4095")
+        self.assertEqual(stop["responseContentRange"], "bytes 0-4095/8192")
+        self.assertEqual(stop["requestStart"], 100.0)
+        self.assertEqual(stop["responseStart"], 125.0)
+        self.assertEqual(stop["responseEnd"], 200.0)
+        self.assertEqual(thread["markers"]["data"][6]["status"], "STATUS_CANCEL")
+
+    def test_rejects_malformed_http_sidecar(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            sidecar = Path(directory_name) / "http-42-1.txt"
+            sidecar.write_text("1\t2\t3\n", encoding="utf-8")
+            with self.assertRaisesRegex(samply_profile.ProfileInjectionError, "malformed"):
+                samply_profile.read_http_sidecar(sidecar)
 
 
 FAKE_SAMPLY = r"""

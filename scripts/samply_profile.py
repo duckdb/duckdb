@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Record DuckDB with stock Samply and inject DuckDB resource counters."""
+"""Record DuckDB with stock Samply and inject DuckDB counters and HTTP requests."""
 
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import gzip
 import json
 import math
@@ -103,6 +105,58 @@ def read_sidecar(path: Path) -> tuple[int, int, dict[str, list[tuple[int, int]]]
     return calibration[0], calibration[1], samples
 
 
+def _decode_http_field(value: str) -> str:
+    try:
+        return base64.b64decode(value, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeError) as error:
+        raise ValueError("invalid base64-encoded UTF-8 field") from error
+
+
+def read_http_sidecar(path: Path) -> list[dict[str, Any]]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        raise ProfileInjectionError(f"could not read HTTP sidecar {path}: {error}") from error
+    requests = []
+    for line_number, line in enumerate(lines, 1):
+        if not line:
+            continue
+        fields = line.split("\t")
+        try:
+            if len(fields) != 10 or fields[0] != "1":
+                raise ValueError("expected a version 1 HTTP record with 10 fields")
+            start_unix_ns = int(fields[1])
+            duration_ns = int(fields[2])
+            status_code = int(fields[3])
+            bytes_received = int(fields[4])
+            time_to_first_byte_ns = int(fields[5])
+            method = fields[6]
+            if start_unix_ns < 0 or duration_ns < 0 or bytes_received < 0:
+                raise ValueError("timestamps, durations, and byte counts cannot be negative")
+            if status_code < -1 or status_code > 999:
+                raise ValueError("invalid HTTP status code")
+            if time_to_first_byte_ns < -1 or time_to_first_byte_ns > duration_ns:
+                raise ValueError("invalid time to first byte")
+            if not method or any(character.isspace() for character in method):
+                raise ValueError("invalid HTTP method")
+            requests.append(
+                {
+                    "start_unix_ns": start_unix_ns,
+                    "duration_ns": duration_ns,
+                    "status_code": status_code,
+                    "bytes_received": bytes_received,
+                    "time_to_first_byte_ns": time_to_first_byte_ns,
+                    "method": method,
+                    "url": _decode_http_field(fields[7]),
+                    "request_range": _decode_http_field(fields[8]),
+                    "response_content_range": _decode_http_field(fields[9]),
+                }
+            )
+        except ValueError as error:
+            raise ProfileInjectionError(f"malformed {path}:{line_number}: {error}") from error
+    return requests
+
+
 def _time_deltas(times: list[float]) -> list[float]:
     if not times:
         return []
@@ -177,6 +231,7 @@ def _make_counter(
 
 
 def _matching_thread(profile: dict[str, Any], pid: int) -> tuple[int, dict[str, Any]] | None:
+    first_match = None
     for index, thread in enumerate(profile["threads"]):
         if not isinstance(thread, dict) or "pid" not in thread:
             raise ProfileInjectionError(f"profile thread {index} is missing its pid")
@@ -185,8 +240,11 @@ def _matching_thread(profile: dict[str, Any], pid: int) -> tuple[int, dict[str, 
         except (TypeError, ValueError):
             matches = False
         if matches:
-            return index, thread
-    return None
+            if first_match is None:
+                first_match = (index, thread)
+            if thread.get("isMainThread") is True:
+                return index, thread
+    return first_match
 
 
 def inject_counters(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
@@ -274,11 +332,177 @@ def inject_counters(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
     return added
 
 
-def inject_profile(raw_profile: Path, sidecar_directory: Path, output: Path) -> int:
-    profile = load_profile(raw_profile)
-    added = inject_counters(profile, sorted(sidecar_directory.glob("counter-*.txt")))
-    write_profile_atomic(profile, output)
+def _network_category(profile: dict[str, Any]) -> int:
+    meta = profile.get("meta")
+    if not isinstance(meta, dict):
+        raise ProfileInjectionError("profile is missing its meta object")
+    categories = meta.get("categories")
+    if not isinstance(categories, list):
+        raise ProfileInjectionError("profile meta.categories must be an array")
+    for index, category in enumerate(categories):
+        if isinstance(category, dict) and category.get("name") == "Network":
+            return index
+    categories.append({"name": "Network", "color": "lightblue", "subcategories": ["Other"]})
+    return len(categories) - 1
+
+
+def _marker_table(thread: dict[str, Any], thread_index: int) -> dict[str, Any]:
+    markers = thread.get("markers")
+    if not isinstance(markers, dict):
+        raise ProfileInjectionError(f"profile thread {thread_index} is missing its marker table")
+    length = markers.get("length")
+    if isinstance(length, bool) or not isinstance(length, int) or length < 0:
+        raise ProfileInjectionError(f"profile thread {thread_index} has an invalid marker table length")
+    for column in ("category", "data", "endTime", "name", "phase", "startTime"):
+        values = markers.get(column)
+        if not isinstance(values, list) or len(values) != length:
+            raise ProfileInjectionError(f"profile thread {thread_index} has an invalid marker column {column}")
+    string_array = thread.get("stringArray")
+    if not isinstance(string_array, list) or not all(isinstance(value, str) for value in string_array):
+        raise ProfileInjectionError(f"profile thread {thread_index} has an invalid string array")
+    return markers
+
+
+def _next_network_marker_id(profile: dict[str, Any]) -> int:
+    used_ids = set()
+    for thread in profile["threads"]:
+        if not isinstance(thread, dict):
+            continue
+        markers = thread.get("markers")
+        if not isinstance(markers, dict) or not isinstance(markers.get("data"), list):
+            continue
+        for payload in markers["data"]:
+            if not isinstance(payload, dict) or payload.get("type") != "Network":
+                continue
+            marker_id = payload.get("id")
+            if isinstance(marker_id, int) and not isinstance(marker_id, bool) and marker_id >= 0:
+                used_ids.add(marker_id)
+    return max(used_ids, default=0) + 1
+
+
+def _append_raw_marker(
+    markers: dict[str, Any], *, category: int, data: dict[str, Any], end_time: float, name: int, start_time: float
+) -> None:
+    markers["category"].append(category)
+    markers["data"].append(data)
+    markers["endTime"].append(end_time)
+    markers["name"].append(name)
+    markers["phase"].append(1)
+    markers["startTime"].append(start_time)
+    markers["length"] += 1
+
+
+def inject_http_requests(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
+    meta = profile.get("meta")
+    threads = profile.get("threads")
+    if not isinstance(meta, dict):
+        raise ProfileInjectionError("profile is missing its meta object")
+    start_time = _finite_number(meta.get("startTime"), "meta.startTime")
+    if not isinstance(threads, list) or not threads:
+        raise ProfileInjectionError("profile threads must be a non-empty array")
+
+    requests_by_pid: dict[int, list[dict[str, Any]]] = {}
+    for sidecar in sidecars:
+        match = re.fullmatch(r"http-(\d+)-(\d+)\.txt", sidecar.name)
+        if not match:
+            continue
+        requests_by_pid.setdefault(int(match.group(1)), []).extend(read_http_sidecar(sidecar))
+    if not requests_by_pid:
+        return 0
+
+    category = _network_category(profile)
+    marker_id = _next_network_marker_id(profile)
+    added = 0
+    for pid, requests in requests_by_pid.items():
+        thread_match = _matching_thread(profile, pid)
+        if thread_match is None:
+            continue
+        thread_index, thread = thread_match
+        process_start = _finite_number(thread.get("processStartupTime"), f"threads[{thread_index}].processStartupTime")
+        process_end_value = thread.get("processShutdownTime")
+        process_end = (
+            math.inf
+            if process_end_value is None
+            else _finite_number(process_end_value, f"threads[{thread_index}].processShutdownTime")
+        )
+        markers = _marker_table(thread, thread_index)
+        string_array = thread["stringArray"]
+
+        requests.sort(key=lambda request: (request["start_unix_ns"], request["duration_ns"]))
+        for request in requests:
+            request_start = request["start_unix_ns"] / 1_000_000 - start_time
+            request_end = request_start + request["duration_ns"] / 1_000_000
+            if request_start < 0 or request_start < process_start or request_start > process_end:
+                continue
+            request_end = min(request_end, process_end)
+            request_end = max(request_start, request_end)
+
+            title = f"Load {marker_id} {request['method']}"
+            if request["request_range"]:
+                title += f" [Range={request['request_range']}]"
+            title += f": {request['url']}"
+            name_index = len(string_array)
+            string_array.append(title)
+
+            start_payload = {
+                "type": "Network",
+                "URI": request["url"],
+                "id": marker_id,
+                "pri": 0,
+                "status": "STATUS_START",
+                "startTime": request_start,
+                "endTime": request_start,
+                "method": request["method"],
+            }
+            if request["request_range"]:
+                start_payload["requestRange"] = request["request_range"]
+
+            response_start = request_end
+            if request["time_to_first_byte_ns"] >= 0:
+                response_start = min(request_end, request_start + request["time_to_first_byte_ns"] / 1_000_000)
+            stop_payload = {
+                **start_payload,
+                "status": "STATUS_STOP" if request["status_code"] > 0 else "STATUS_CANCEL",
+                "startTime": request_start,
+                "endTime": request_end,
+                "requestStart": request_start,
+                "responseStart": response_start,
+                "responseEnd": request_end,
+            }
+            if request["status_code"] > 0:
+                stop_payload["responseStatus"] = request["status_code"]
+            if request["bytes_received"] > 0:
+                stop_payload["count"] = request["bytes_received"]
+            if request["response_content_range"]:
+                stop_payload["responseContentRange"] = request["response_content_range"]
+
+            _append_raw_marker(
+                markers,
+                category=category,
+                data=start_payload,
+                end_time=request_start,
+                name=name_index,
+                start_time=request_start,
+            )
+            _append_raw_marker(
+                markers,
+                category=category,
+                data=stop_payload,
+                end_time=request_end,
+                name=name_index,
+                start_time=request_start,
+            )
+            marker_id += 1
+            added += 1
     return added
+
+
+def inject_profile(raw_profile: Path, sidecar_directory: Path, output: Path) -> tuple[int, int]:
+    profile = load_profile(raw_profile)
+    added_counters = inject_counters(profile, sorted(sidecar_directory.glob("counter-*.txt")))
+    added_http_requests = inject_http_requests(profile, sorted(sidecar_directory.glob("http-*.txt")))
+    write_profile_atomic(profile, output)
+    return added_counters, added_http_requests
 
 
 def resolve_samply(argument: str | None) -> str:
@@ -369,8 +593,12 @@ def main(arguments: list[str] | None = None) -> int:
             preserve = True
             raise ProfileInjectionError(f"Samply did not create the raw profile {raw_profile}")
 
-        added = inject_profile(raw_profile, temporary_directory, output)
-        print(f"Injected {added} DuckDB resource counter(s) into {output}", file=sys.stderr)
+        added_counters, added_http_requests = inject_profile(raw_profile, temporary_directory, output)
+        print(
+            f"Injected {added_counters} DuckDB resource counter(s) and "
+            f"{added_http_requests} HTTP request(s) into {output}",
+            file=sys.stderr,
+        )
 
         load_status = 0
         if not options.no_open:

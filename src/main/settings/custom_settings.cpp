@@ -937,9 +937,11 @@ void SamplyTracksSetting::SetLocal(ClientContext &context, const Value &input) {
 			tracks |= static_cast<uint8_t>(SamplyTrack::MEMORY);
 		} else if (value == "network") {
 			tracks |= static_cast<uint8_t>(SamplyTrack::NETWORK);
+		} else if (value == "http") {
+			tracks |= static_cast<uint8_t>(SamplyTrack::HTTP);
 		} else {
-			throw InvalidInputException("Unknown Samply track '%s'; expected query, memory, network, none, or all",
-			                            value);
+			throw InvalidInputException(
+			    "Unknown Samply track '%s'; expected query, memory, network, http, none, or all", value);
 		}
 	}
 	if ((has_none || has_all) && (values.size() != 1 || has_none == has_all)) {
@@ -947,7 +949,7 @@ void SamplyTracksSetting::SetLocal(ClientContext &context, const Value &input) {
 	}
 	if (has_all) {
 		tracks = static_cast<uint8_t>(SamplyTrack::QUERY) | static_cast<uint8_t>(SamplyTrack::MEMORY) |
-		         static_cast<uint8_t>(SamplyTrack::NETWORK);
+		         static_cast<uint8_t>(SamplyTrack::NETWORK) | static_cast<uint8_t>(SamplyTrack::HTTP);
 	}
 #if !defined(__linux__) && !defined(__APPLE__)
 	if (tracks != 0) {
@@ -956,7 +958,8 @@ void SamplyTracksSetting::SetLocal(ClientContext &context, const Value &input) {
 #endif
 	auto &config = ClientConfig::GetConfig(context);
 	auto resource_tracks =
-	    tracks & (static_cast<uint8_t>(SamplyTrack::MEMORY) | static_cast<uint8_t>(SamplyTrack::NETWORK));
+	    tracks & (static_cast<uint8_t>(SamplyTrack::MEMORY) | static_cast<uint8_t>(SamplyTrack::NETWORK) |
+	              static_cast<uint8_t>(SamplyTrack::HTTP));
 	auto subscription = StartSamplyResourceSampling(resource_tracks);
 	config.samply_tracks = tracks;
 	config.samply_resource_subscription = std::move(subscription);
@@ -974,7 +977,7 @@ Value SamplyTracksSetting::GetSetting(const ClientContext &context) {
 		return Value("none");
 	}
 	auto all = static_cast<uint8_t>(SamplyTrack::QUERY) | static_cast<uint8_t>(SamplyTrack::MEMORY) |
-	           static_cast<uint8_t>(SamplyTrack::NETWORK);
+	           static_cast<uint8_t>(SamplyTrack::NETWORK) | static_cast<uint8_t>(SamplyTrack::HTTP);
 	if (tracks == all) {
 		return Value("all");
 	}
@@ -987,6 +990,9 @@ Value SamplyTracksSetting::GetSetting(const ClientContext &context) {
 	}
 	if (SamplyTrackEnabled(tracks, SamplyTrack::NETWORK)) {
 		result.emplace_back("network");
+	}
+	if (SamplyTrackEnabled(tracks, SamplyTrack::HTTP)) {
+		result.emplace_back("http");
 	}
 	return Value(StringUtil::Join(result, ","));
 }

@@ -50,7 +50,15 @@ SELECT current_setting('samply_tracks');
 network
 
 statement ok
-SET samply_tracks = ' NETWORK , QUERY , memory ';
+SET samply_tracks = 'http';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+http
+
+statement ok
+SET samply_tracks = ' NETWORK , QUERY , memory, HTTP ';
 
 query I
 SELECT current_setting('samply_tracks');
@@ -80,6 +88,14 @@ query I
 SELECT current_setting('samply_tracks');
 ----
 memory,network
+
+statement ok
+SET samply_tracks = 'http,network';
+
+query I
+SELECT current_setting('samply_tracks');
+----
+network,http
 
 statement ok
 SET samply_tracks = 'all';

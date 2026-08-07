@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/main/profiler/samply.hpp"
 #include "test_helpers.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -56,7 +57,46 @@ TEST_CASE("Samply counters are buffered and flushed in counter-file format", "[a
 	REQUIRE(contents == "clock 100 1000\n110 rss 4096\n120 network-rx 50\n120 network-tx 25\n");
 }
 
+TEST_CASE("Samply HTTP attempts are written in HTTP sidecar format", "[api][samply]") {
+	auto directory = TestCreatePath("samply_http");
+	TestCreateDirectory(directory);
+	string path;
+	{
+		SamplyHTTPWriter writer(directory.c_str());
+		REQUIRE(writer.WriteAttempt(1000000000, 25000000, "GET", "https://example.com/file.parquet", 206, 4096, 5000000,
+		                            "bytes=100-4195", "bytes 100-4195/10000"));
+		path = writer.GetPath();
+	}
+
+	REQUIRE(StringUtil::Contains(path, "/http-"));
+	REQUIRE(StringUtil::EndsWith(path, ".txt"));
+	std::ifstream http_file(path);
+	string contents((std::istreambuf_iterator<char>(http_file)), std::istreambuf_iterator<char>());
+	StringUtil::RTrim(contents);
+	auto fields = StringUtil::Split(contents, '\t');
+	REQUIRE(fields.size() == 10);
+	REQUIRE(fields[0] == "1");
+	REQUIRE(fields[1] == "1000000000");
+	REQUIRE(fields[2] == "25000000");
+	REQUIRE(fields[3] == "206");
+	REQUIRE(fields[4] == "4096");
+	REQUIRE(fields[5] == "5000000");
+	REQUIRE(fields[6] == "GET");
+	REQUIRE(fields[7] == Blob::ToBase64("https://example.com/file.parquet"));
+	REQUIRE(fields[8] == Blob::ToBase64("bytes=100-4195"));
+	REQUIRE(fields[9] == Blob::ToBase64("bytes 100-4195/10000"));
+}
+
 #if defined(__linux__) || defined(__APPLE__)
+TEST_CASE("Samply HTTP tracking follows subscription lifetime", "[api][samply]") {
+	REQUIRE_FALSE(SamplyHTTPTrackEnabled());
+	auto subscription = StartSamplyResourceSampling(static_cast<uint8_t>(SamplyTrack::HTTP));
+	REQUIRE(subscription);
+	REQUIRE(SamplyHTTPTrackEnabled());
+	subscription.reset();
+	REQUIRE_FALSE(SamplyHTTPTrackEnabled());
+}
+
 TEST_CASE("Samply resources receive a final sample when deactivated", "[api][samply]") {
 	auto directory = TestCreatePath("samply_final_resources");
 	TestCreateDirectory(directory);
