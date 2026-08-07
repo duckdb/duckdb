@@ -72,6 +72,9 @@ public:
 	static OptionalNode GetChildNode(const BaseNode &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
+				if (!n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetChildNode", i, byte);
+				}
 				return n.children[i];
 			}
 		}
@@ -82,6 +85,10 @@ public:
 	static OptionalNode GetNextChildNode(const BaseNode &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
+				if (!n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetNextChildNode", i,
+					                        n.key[i]);
+				}
 				byte = n.key[i];
 				return n.children[i];
 			}

@@ -11,6 +11,7 @@ NodeHandle::NodeHandle(ART &art, const Node node)
 
 NodeHandle::NodeHandle(FixedSizeAllocator &allocator, const Node node, NType type)
     : handle(allocator.GetHandle(node)), type(type) {
+	D_ASSERT(node.GetType() == type);
 	handle.MarkModified();
 }
 

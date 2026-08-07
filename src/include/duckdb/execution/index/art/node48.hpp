@@ -88,6 +88,9 @@ public:
 	//! Get the child node at byte, if it exists.
 	static OptionalNode GetChildNode(const Node48 &n, const uint8_t byte) {
 		if (n.child_index[byte] != EMPTY_MARKER) {
+			if (!n.children[n.child_index[byte]].HasMetadata()) {
+				throw InternalException("empty child for byte %d in Node48::GetChildNode", byte);
+			}
 			return n.children[n.child_index[byte]];
 		}
 		return OptionalNode();
@@ -97,6 +100,10 @@ public:
 	static OptionalNode GetNextChildNode(const Node48 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
+				if (!n.children[n.child_index[i]].HasMetadata()) {
+					throw InternalException("empty child for byte %d in Node48::GetNextChildNode",
+					                        UnsafeNumericCast<uint8_t>(i));
+				}
 				byte = UnsafeNumericCast<uint8_t>(i);
 				return n.children[n.child_index[i]];
 			}
