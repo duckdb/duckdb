@@ -828,7 +828,7 @@ struct DelimJoinAsCteSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "delim_join_as_cte";
 	static constexpr const char *Description =
-	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
+	    "Rewrite duplicate-eliminated joins to CTEs before optional duplicate-eliminated domain optimization";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;

@@ -144,7 +144,7 @@ SELECT CASE WHEN c>(SELECT sum(c)/count(*) FROM t1) THEN a*2 ELSE b*10 END FROM 
 
 # correlated subqueries
 query IR
-SELECT a, (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) FROM test
+SELECT a, (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) FROM test ORDER BY a
 ----
 11	22.000000
 12	21.000000

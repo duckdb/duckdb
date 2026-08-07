@@ -1,0 +1,60 @@
+# name: test/optimizer/duplicate_eliminated_domain_quantified_table_filter.test
+# description: Preserve exact domains for throwing table filters in quantified correlated subqueries
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE quantified_filter_domain(k BIGINT);
+
+statement ok
+INSERT INTO quantified_filter_domain VALUES (2), (4);
+
+statement ok
+CREATE TABLE quantified_filter_values(k BIGINT, text_value VARCHAR);
+
+statement ok
+INSERT INTO quantified_filter_values VALUES (2, '1'), (4, 'x');
+
+# Throwing work can live in an expression-backed table filter after filter pushdown.
+query II
+SELECT d.k IN (
+           SELECT 1
+           FROM quantified_filter_values v
+           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+       ),
+       0 < ALL (
+           SELECT 1
+           FROM quantified_filter_values v
+           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_filter_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+false	true
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_filter_domain d ON o.k * 2 = d.k
+WHERE 1 = ANY (
+    SELECT 1
+    FROM quantified_filter_values v
+    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+);
+----
+2
+
+query II
+EXPLAIN
+SELECT d.k IN (
+    SELECT 1
+    FROM quantified_filter_values v
+    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_filter_domain d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*

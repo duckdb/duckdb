@@ -56,6 +56,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"type_pushdown", OptimizerType::TYPE_PUSHDOWN},
     {"scalar_fn_pushdown", OptimizerType::SCALAR_FN_PUSHDOWN},
     {"distinct_aggregate_rewrite", OptimizerType::DISTINCT_AGGREGATE_REWRITE},
+    {"duplicate_eliminated_domain", OptimizerType::DUPLICATE_ELIMINATED_DOMAIN},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

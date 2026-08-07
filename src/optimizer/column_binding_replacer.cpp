@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
@@ -85,9 +86,20 @@ void BindingReplacementGraph::Add(const ReplacementBinding &replacement) {
 }
 
 void BindingReplacementGraph::Merge(const BindingReplacementGraph &replacements) {
-	for (auto &replacement : replacements.replacement_bindings) {
-		Add(replacement);
+	if (!TryMerge(replacements)) {
+		throw InternalException("Conflicting or cyclic column binding replacement graph");
 	}
+}
+
+bool BindingReplacementGraph::TryMerge(const BindingReplacementGraph &replacements) {
+	auto result = *this;
+	for (auto &replacement : replacements.replacement_bindings) {
+		if (!result.TryAdd(replacement)) {
+			return false;
+		}
+	}
+	*this = std::move(result);
+	return true;
 }
 
 void BindingReplacementGraph::AddTo(ColumnBindingReplacer &replacer) const {
@@ -100,6 +112,38 @@ void BindingReplacementGraph::AddTo(ColumnBindingReplacer &replacer) const {
 			replacer.replacement_bindings.emplace_back(replacement.old_binding, resolved.new_binding);
 		}
 	}
+}
+
+unique_ptr<LogicalOperator> ColumnBindingRewrite::CreateIdentityProjection(TableIndex projection_index,
+                                                                           unique_ptr<LogicalOperator> child,
+                                                                           BindingReplacementGraph &replacements) {
+	child->ResolveOperatorTypes();
+	auto old_bindings = child->GetColumnBindings();
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(old_bindings.size());
+	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
+		expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(child->types[binding_idx], old_bindings[binding_idx]));
+	}
+	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(expressions));
+	projection->children.push_back(std::move(child));
+	projection->ResolveOperatorTypes();
+	replacements = CreateBindingReplacements(old_bindings, projection->GetColumnBindings());
+	return std::move(projection);
+}
+
+BindingReplacementGraph ColumnBindingRewrite::CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                        const vector<ColumnBinding> &new_bindings) {
+	if (old_bindings.size() != new_bindings.size()) {
+		throw InternalException("Column binding replacement layouts must have the same size");
+	}
+	BindingReplacementGraph result;
+	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
+		if (old_bindings[binding_idx] != new_bindings[binding_idx]) {
+			result.Add(old_bindings[binding_idx], new_bindings[binding_idx]);
+		}
+	}
+	return result;
 }
 
 ColumnBindingReplacer::ColumnBindingReplacer() {
@@ -259,8 +303,8 @@ static bool TryResolveToOutput(ColumnBinding binding, const column_binding_set_t
 	return true;
 }
 
-static vector<ReplacementBinding> ScopeToOutput(const vector<ColumnBinding> &new_output,
-                                                const BindingReplacementGraph &replacements) {
+static vector<ReplacementBinding> ResolveOutputReplacements(const vector<ColumnBinding> &new_output,
+                                                            const BindingReplacementGraph &replacements) {
 	column_binding_set_t new_bindings(new_output.begin(), new_output.end());
 	vector<ReplacementBinding> result;
 	for (auto &replacement : replacements) {
@@ -277,6 +321,37 @@ static vector<ReplacementBinding> ScopeToOutput(const vector<ColumnBinding> &new
 	return result;
 }
 
+bool ColumnBindingRewrite::TryScopeToOutput(const vector<ColumnBinding> &old_output,
+                                            const vector<ColumnBinding> &new_output,
+                                            const BindingReplacementGraph &replacements,
+                                            BindingReplacementGraph &result) {
+	column_binding_set_t new_bindings(new_output.begin(), new_output.end());
+	BindingReplacementGraph scoped;
+	for (auto &binding : old_output) {
+		ReplacementBinding resolved(binding, binding);
+		if (!TryResolveToOutput(binding, new_bindings, replacements, resolved)) {
+			return false;
+		}
+		if (!scoped.TryAdd(resolved)) {
+			return false;
+		}
+	}
+	result = std::move(scoped);
+	return true;
+}
+
+BindingReplacementGraph ColumnBindingRewrite::ScopeToOutput(const vector<ColumnBinding> &old_output,
+                                                            const vector<ColumnBinding> &new_output,
+                                                            const BindingReplacementGraph &replacements) {
+	BindingReplacementGraph result;
+	if (!TryScopeToOutput(old_output, new_output, replacements, result)) {
+		throw InternalException("Binding rewrite could not scope output %s to rewritten output %s",
+		                        LogicalOperator::ColumnBindingsToString(old_output),
+		                        LogicalOperator::ColumnBindingsToString(new_output));
+	}
+	return result;
+}
+
 void ColumnBindingRewrite::ValidateOutput(const vector<ColumnBinding> &old_output,
                                           const vector<ColumnBinding> &new_output,
                                           const BindingReplacementGraph &replacements) {
@@ -288,6 +363,52 @@ void ColumnBindingRewrite::ValidateOutput(const vector<ColumnBinding> &old_outpu
 			                        binding.ToString(), resolved.new_binding.ToString(),
 			                        LogicalOperator::ColumnBindingsToString(new_output));
 		}
+	}
+}
+
+bool ColumnBindingRewrite::TryValidateOutputLayout(const vector<ColumnBinding> &old_output,
+                                                   const vector<LogicalType> &old_types,
+                                                   const vector<ColumnBinding> &new_output,
+                                                   const vector<LogicalType> &new_types,
+                                                   const BindingReplacementGraph &replacements) {
+	if (old_output.size() != old_types.size() || new_output.size() != new_types.size()) {
+		return false;
+	}
+	if (old_output.size() != new_output.size()) {
+		return false;
+	}
+	column_binding_set_t old_bindings(old_output.begin(), old_output.end());
+	column_binding_set_t new_bindings(new_output.begin(), new_output.end());
+	if (old_bindings.size() != old_output.size() || new_bindings.size() != new_output.size()) {
+		return false;
+	}
+	for (idx_t output_idx = 0; output_idx < old_output.size(); output_idx++) {
+		ReplacementBinding resolved(old_output[output_idx], old_output[output_idx]);
+		if (!TryResolveToOutput(old_output[output_idx], new_bindings, replacements, resolved)) {
+			return false;
+		}
+		if (resolved.new_binding != new_output[output_idx]) {
+			return false;
+		}
+		if (resolved.replace_type && resolved.new_type != old_types[output_idx]) {
+			return false;
+		}
+		if (old_types[output_idx] != new_types[output_idx]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void ColumnBindingRewrite::ValidateOutputLayout(const vector<ColumnBinding> &old_output,
+                                                const vector<LogicalType> &old_types,
+                                                const vector<ColumnBinding> &new_output,
+                                                const vector<LogicalType> &new_types,
+                                                const BindingReplacementGraph &replacements) {
+	if (!TryValidateOutputLayout(old_output, old_types, new_output, new_types, replacements)) {
+		throw InternalException("Binding rewrite changed the public output layout (old output %s, new output %s)",
+		                        LogicalOperator::ColumnBindingsToString(old_output),
+		                        LogicalOperator::ColumnBindingsToString(new_output));
 	}
 }
 
@@ -308,7 +429,7 @@ void ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t c
 		throw InternalException("Binding rewrite child index %llu out of range", child_index);
 	}
 	auto new_child_bindings = op->children[child_index]->GetColumnBindings();
-	auto boundary_replacements = ScopeToOutput(new_child_bindings, replacements);
+	auto boundary_replacements = ResolveOutputReplacements(new_child_bindings, replacements);
 	column_binding_set_t new_bindings(new_child_bindings.begin(), new_child_bindings.end());
 	for (auto &binding : old_child_bindings) {
 		if (new_bindings.find(binding) == new_bindings.end() && FindReplacement(replacements, binding)) {

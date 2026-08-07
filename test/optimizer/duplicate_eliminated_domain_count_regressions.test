@@ -1,0 +1,205 @@
+# name: test/optimizer/duplicate_eliminated_domain_count_regressions.test
+# description: Preserve empty correlated COUNT groups across duplicate-eliminated domain rewrites
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET delim_join_as_cte=true;
+
+# A factored duplicate-eliminated domain retains the synthetic zero row for an
+# empty scalar COUNT group, including duplicate outer payload rows.
+statement ok
+CREATE TABLE dedup_count_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_count_outer VALUES (1), (1), (2);
+
+statement ok
+CREATE TABLE dedup_count_dim(k INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO dedup_count_dim VALUES (1, 'selected'), (2, 'selected'), (4, 'selected'), (NULL, 'selected');
+
+statement ok
+CREATE TABLE dedup_count_measure(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_count_measure VALUES (1, 2), (1, 4), (4, 8), (NULL, 3);
+
+statement ok
+CREATE VIEW dedup_count_factored AS
+SELECT o.k,
+       (SELECT count(*) FROM dedup_count_measure m WHERE m.k = d.k),
+       (SELECT count(m.v) FROM dedup_count_measure m WHERE m.k = d.k)
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+
+query III rowsort
+SELECT * FROM dedup_count_factored;
+----
+1	2	2
+1	2	2
+2	0	0
+
+# DISTINCT, FILTER, and expression COUNT variants preserve the same empty-group zero.
+query III rowsort
+SELECT o.k,
+       (SELECT count(DISTINCT m.v) FILTER (WHERE m.v > 0)
+        FROM dedup_count_measure m WHERE m.k = d.k),
+       (SELECT count(m.v) FROM dedup_count_measure m WHERE m.k = d.k)
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	2	2
+1	2	2
+2	0	0
+
+# Correlated values above the synthetic zero row remain available to expressions.
+query III rowsort
+SELECT o.k,
+       (SELECT count(*) + d.k FROM dedup_count_measure m WHERE m.k = d.k),
+       (SELECT CASE WHEN count(*) = 0 THEN d.k ELSE sum(m.v) END
+        FROM dedup_count_measure m WHERE m.k = d.k)
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	3	6
+1	3	6
+2	2	2
+
+# Ordinary and null-safe correlation retain independent NULL-key behavior.
+statement ok
+CREATE TABLE dedup_count_null_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_count_null_outer VALUES (NULL);
+
+query II
+SELECT o.k,
+       (SELECT count(*) FROM dedup_count_measure m WHERE m.k = d.k)
+FROM dedup_count_null_outer o
+JOIN dedup_count_dim d ON o.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected';
+----
+NULL	0
+
+query II
+SELECT o.k,
+       (SELECT count(*) FROM dedup_count_measure m WHERE m.k IS NOT DISTINCT FROM d.k)
+FROM dedup_count_null_outer o
+JOIN dedup_count_dim d ON o.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected';
+----
+NULL	1
+
+# Nested correlation retains the synthetic zero row through the existing
+# FlattenDependentJoins machinery.
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_count_measure m
+        WHERE m.k = d.k
+          AND EXISTS (
+              SELECT 1
+              WHERE m.v > o.k
+          ))
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	2
+1	2
+2	0
+
+# A nested EXISTS with a second outer-domain reference also retains the zero row.
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_count_measure m
+        WHERE m.k = d.k
+          AND EXISTS (SELECT 1 WHERE m.v > 0))
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	2
+1	2
+2	0
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM dedup_count_measure m WHERE m.k = d.k)
+FROM dedup_count_outer o
+JOIN dedup_count_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+CREATE TABLE dedup_count_posts(id INTEGER);
+
+statement ok
+INSERT INTO dedup_count_posts VALUES (10), (13);
+
+statement ok
+CREATE TABLE dedup_count_comments(id INTEGER, post_id INTEGER);
+
+statement ok
+INSERT INTO dedup_count_comments VALUES (1, 10), (2, 10);
+
+statement ok
+CREATE VIEW dedup_count_empty_group AS
+SELECT p.id,
+       (SELECT count(*) FROM dedup_count_comments c WHERE c.post_id = p.id) AS comment_count,
+       (SELECT sum(c.id) FROM dedup_count_comments c WHERE c.post_id = p.id) AS comment_sum
+FROM dedup_count_posts p;
+
+query III rowsort
+SELECT * FROM dedup_count_empty_group;
+----
+10	2	3
+13	0	NULL
+
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query III rowsort
+SELECT * FROM dedup_count_factored;
+----
+1	2	2
+1	2	2
+2	0	0
+
+query III rowsort
+SELECT * FROM dedup_count_empty_group;
+----
+10	2	3
+13	0	NULL
+
+statement ok
+SET disabled_optimizers='';
+
+statement ok
+SET delim_join_as_cte=false;
+
+query III rowsort
+SELECT * FROM dedup_count_factored;
+----
+1	2	2
+1	2	2
+2	0	0
+
+query III rowsort
+SELECT * FROM dedup_count_empty_group;
+----
+10	2	3
+13	0	NULL
+
+statement ok
+SET delim_join_as_cte=true;

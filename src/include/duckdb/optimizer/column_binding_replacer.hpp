@@ -37,6 +37,7 @@ public:
 	bool TryAdd(const ReplacementBinding &replacement);
 	void Add(ColumnBinding old_binding, ColumnBinding new_binding);
 	void Add(const ReplacementBinding &replacement);
+	bool TryMerge(const BindingReplacementGraph &replacements);
 	void Merge(const BindingReplacementGraph &replacements);
 	void AddTo(ColumnBindingReplacer &replacer) const;
 
@@ -96,9 +97,29 @@ public:
 	static void ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
 	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementGraph &replacements);
 	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementGraph &replacements);
+	//! Restrict a complete replacement graph to provenance visible at one operator output boundary.
+	static bool TryScopeToOutput(const vector<ColumnBinding> &old_output, const vector<ColumnBinding> &new_output,
+	                             const BindingReplacementGraph &replacements, BindingReplacementGraph &result);
+	static BindingReplacementGraph ScopeToOutput(const vector<ColumnBinding> &old_output,
+	                                             const vector<ColumnBinding> &new_output,
+	                                             const BindingReplacementGraph &replacements);
 	//! Verify that every previous public output binding is still reachable at the rewritten output boundary.
 	static void ValidateOutput(const vector<ColumnBinding> &old_output, const vector<ColumnBinding> &new_output,
 	                           const BindingReplacementGraph &replacements);
+	//! Verify that a rewrite preserves the complete public output layout, including column order and types.
+	static bool TryValidateOutputLayout(const vector<ColumnBinding> &old_output, const vector<LogicalType> &old_types,
+	                                    const vector<ColumnBinding> &new_output, const vector<LogicalType> &new_types,
+	                                    const BindingReplacementGraph &replacements);
+	static void ValidateOutputLayout(const vector<ColumnBinding> &old_output, const vector<LogicalType> &old_types,
+	                                 const vector<ColumnBinding> &new_output, const vector<LogicalType> &new_types,
+	                                 const BindingReplacementGraph &replacements);
+	//! Construct replacements between two positionally equivalent output layouts.
+	static BindingReplacementGraph CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+	                                                         const vector<ColumnBinding> &new_bindings);
+	//! Add a projection that preserves the child layout while assigning fresh output bindings.
+	static unique_ptr<LogicalOperator> CreateIdentityProjection(TableIndex projection_index,
+	                                                            unique_ptr<LogicalOperator> child,
+	                                                            BindingReplacementGraph &replacements);
 
 private:
 	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,

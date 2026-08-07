@@ -1,0 +1,174 @@
+# name: test/optimizer/duplicate_eliminated_domain_settings.test
+# description: Lower duplicate-eliminated joins correctly with optional optimization enabled or disabled
+# group: [optimizer]
+
+statement ok
+CREATE TABLE mode_outer(k INTEGER);
+
+statement ok
+INSERT INTO mode_outer VALUES (1), (2);
+
+statement ok
+CREATE TABLE mode_inner(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO mode_inner VALUES (1, 10), (1, 20);
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET VARIABLE dedup_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
+# With the optional optimizer disabled, the planner still performs the configured
+# baseline materialized-CTE lowering after FlattenDependentJoins.
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+PRAGMA disable_optimizer;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+statement ok
+PRAGMA enable_optimizer;
+
+# Disabling only the optional domain optimizer still honors the configured
+# materialized-CTE execution strategy.
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+# Disabling generated-domain elimination also retains baseline CTE lowering.
+statement ok
+SET disabled_optimizers='deliminator';
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+statement ok
+SET disabled_optimizers='';
+
+# Payload preparation honors the independent filter-pushdown setting.
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o
+WHERE k = 1;
+----
+logical_opt	<REGEX>:.*Filter.*k = 1.*Seq Scan.*mode_outer.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+query II
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o
+WHERE k = 1;
+----
+1	30
+
+statement ok
+SET disabled_optimizers='';
+
+# Enabling both constituent optimizers does not force a rewrite when no cheaper alternative is proven.
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+# The regular duplicate-eliminated physical path remains available when the
+# materialized-CTE strategy and optional optimizers are explicitly disabled.
+statement ok
+SET delim_join_as_cte=false;
+
+statement ok
+PRAGMA disable_optimizer;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*Delim Join.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+SET delim_join_as_cte=true;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
