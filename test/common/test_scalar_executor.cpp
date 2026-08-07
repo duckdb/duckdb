@@ -497,6 +497,65 @@ TEST_CASE("Binary comparison folding remains correct on dictionaries", "[scalar_
 	}
 }
 
+TEST_CASE("Binary generic-constant selection preserves comparison folding", "[scalar_executor]") {
+	static constexpr idx_t COUNT = 12;
+	auto child = MakeFlatVector(COUNT, 0);
+	SelectionVector dictionary_sel(COUNT);
+	SelectionVector input_sel(COUNT);
+	for (idx_t row = 0; row < COUNT; row++) {
+		dictionary_sel.set_index(row, COUNT - row - 1);
+		input_sel.set_index(row, row * 3 + 1);
+	}
+	Vector dictionary(LogicalType::BIGINT, COUNT);
+	dictionary.Slice(child, dictionary_sel, COUNT);
+	auto constant = MakeConstantVector(COUNT, 5);
+	auto null_constant = MakeConstantVector(COUNT, 5);
+	ConstantVector::SetNull(null_constant, true);
+
+	for (bool nullable : {false, true}) {
+		if (nullable) {
+			FlatVector::ValidityMutable(child).SetInvalid(3);
+			dictionary.Slice(child, dictionary_sel, COUNT);
+		}
+		for (bool constant_is_null : {false, true}) {
+			auto &constant_input = constant_is_null ? null_constant : constant;
+			for (bool constant_left : {false, true}) {
+				for (idx_t output_mode = 0; output_mode < 3; output_mode++) {
+					SelectionVector true_sel(COUNT);
+					SelectionVector false_sel(COUNT);
+					auto true_ptr = output_mode == 1 ? nullptr : &true_sel;
+					auto false_ptr = output_mode == 0 ? nullptr : &false_sel;
+					auto true_count = constant_left
+					                      ? BinaryExecutor::Select<int64_t, int64_t, GreaterThanEquals>(
+					                            constant_input, dictionary, &input_sel, COUNT, true_ptr, false_ptr)
+					                      : BinaryExecutor::Select<int64_t, int64_t, GreaterThanEquals>(
+					                            dictionary, constant_input, &input_sel, COUNT, true_ptr, false_ptr);
+					idx_t expected_true_count = 0;
+					idx_t expected_false_count = 0;
+					for (idx_t row = 0; row < COUNT; row++) {
+						auto child_index = dictionary_sel.get_index(row);
+						bool valid = !constant_is_null && (!nullable || child_index != 3);
+						bool selected = valid && (constant_left ? 5 >= child_index : child_index >= 5);
+						if (selected) {
+							if (true_ptr) {
+								REQUIRE(true_sel.get_index(expected_true_count) == input_sel.get_index(row));
+							}
+							expected_true_count++;
+						} else {
+							if (false_ptr) {
+								REQUIRE(false_sel.get_index(expected_false_count) == input_sel.get_index(row));
+							}
+							expected_false_count++;
+						}
+					}
+					REQUIRE(true_count == expected_true_count);
+					REQUIRE(expected_true_count + expected_false_count == COUNT);
+				}
+			}
+		}
+	}
+}
+
 TEST_CASE("Executor facade operation conventions remain compatible", "[scalar_executor]") {
 	static constexpr idx_t COUNT = 4;
 	auto a = MakeFlatVector(COUNT, 1);

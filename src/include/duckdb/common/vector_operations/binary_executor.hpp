@@ -107,6 +107,18 @@ struct BinarySelectAdapter {
 	inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
 		return OP::Operation(left, right);
 	}
+
+	inline bool OperationNoNull(LEFT_TYPE left, RIGHT_TYPE right) {
+		if constexpr (ComparisonSelectComplement<OP>::FOLD) {
+			using FOLDED = ComparisonSelectComplement<OP>;
+			using COMPLEMENT = typename FOLDED::COMPLEMENT;
+			if constexpr (FOLDED::SWAP_OPERANDS) {
+				return !COMPLEMENT::Operation(right, left);
+			}
+			return !COMPLEMENT::Operation(left, right);
+		}
+		return Operation(left, right);
+	}
 };
 
 struct BinaryExecutor {
@@ -285,24 +297,6 @@ public:
 				return SelectTrueFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(left, right, *sel, count, *true_sel);
 			} else if (left_type == VectorType::CONSTANT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
 				return SelectTrueFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, *sel, count, *true_sel);
-			}
-		}
-#endif
-#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
-		if constexpr (ComparisonSelectComplement<OP>::FOLD) {
-			auto left_type = left.GetVectorType();
-			auto right_type = right.GetVectorType();
-			bool flat_profile = (left_type == VectorType::FLAT_VECTOR || left_type == VectorType::CONSTANT_VECTOR) &&
-			                    (right_type == VectorType::FLAT_VECTOR || right_type == VectorType::CONSTANT_VECTOR);
-			if (!flat_profile && !ScalarExecutor::InputsCanHaveNull<LEFT_TYPE, RIGHT_TYPE>(inputs)) {
-				using FOLDED = ComparisonSelectComplement<OP>;
-				if constexpr (FOLDED::SWAP_OPERANDS) {
-					std::array<ScalarExecutor::VectorRef, 2> swapped = {{right, left}};
-					return count - SelectShared<RIGHT_TYPE, LEFT_TYPE, typename FOLDED::COMPLEMENT>(
-					                   swapped, sel, count, false_sel, true_sel);
-				}
-				return count - SelectShared<LEFT_TYPE, RIGHT_TYPE, typename FOLDED::COMPLEMENT>(inputs, sel, count,
-				                                                                                false_sel, true_sel);
 			}
 		}
 #endif
