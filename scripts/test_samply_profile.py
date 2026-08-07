@@ -357,13 +357,21 @@ class DuckDBLauncherTests(unittest.TestCase):
     def test_constructs_default_command(self):
         self.assertEqual(
             samply_profile.duckdb_arguments([], self.launcher),
-            ["--", str(self.resolved_duckdb)],
+            ["--", str(self.resolved_duckdb), "-cmd", "SET samply_tracks='all';"],
         )
 
     def test_forwards_all_arguments_to_duckdb_without_separator(self):
         self.assertEqual(
             samply_profile.duckdb_arguments(["database.db", "-c", "SELECT 42"], self.launcher),
-            ["--", str(self.resolved_duckdb), "database.db", "-c", "SELECT 42"],
+            [
+                "--",
+                str(self.resolved_duckdb),
+                "-cmd",
+                "SET samply_tracks='all';",
+                "database.db",
+                "-c",
+                "SELECT 42",
+            ],
         )
 
     def test_splits_wrapper_options_from_duckdb_arguments(self):
@@ -377,6 +385,8 @@ class DuckDBLauncherTests(unittest.TestCase):
                 "100",
                 "--",
                 str(self.resolved_duckdb),
+                "-cmd",
+                "SET samply_tracks='all';",
                 "database.db",
                 "-c",
                 "SELECT 42",
@@ -386,7 +396,30 @@ class DuckDBLauncherTests(unittest.TestCase):
     def test_preserves_option_like_duckdb_arguments(self):
         self.assertEqual(
             samply_profile.duckdb_arguments(["--no-open", "--output", "query.csv"], self.launcher),
-            ["--", str(self.resolved_duckdb), "--no-open", "--output", "query.csv"],
+            [
+                "--",
+                str(self.resolved_duckdb),
+                "-cmd",
+                "SET samply_tracks='all';",
+                "--no-open",
+                "--output",
+                "query.csv",
+            ],
+        )
+
+    def test_explicit_track_setting_can_override_default(self):
+        self.assertEqual(
+            samply_profile.duckdb_arguments(["-cmd", "SET samply_tracks='http';", "-f", "query.sql"], self.launcher),
+            [
+                "--",
+                str(self.resolved_duckdb),
+                "-cmd",
+                "SET samply_tracks='all';",
+                "-cmd",
+                "SET samply_tracks='http';",
+                "-f",
+                "query.sql",
+            ],
         )
 
     def test_resolves_duckdb_next_to_launcher(self):

@@ -529,7 +529,14 @@ def duckdb_arguments(arguments: list[str], launcher_path: str | Path) -> list[st
     else:
         wrapper_arguments = []
         command_arguments = arguments
-    return [*wrapper_arguments, "--", str(duckdb), *command_arguments]
+    return [
+        *wrapper_arguments,
+        "--",
+        str(duckdb),
+        "-cmd",
+        "SET samply_tracks='all';",
+        *command_arguments,
+    ]
 
 
 def duckdb_main(arguments: list[str] | None = None, *, launcher_path: str | Path) -> int:
