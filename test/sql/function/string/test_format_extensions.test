@@ -97,6 +97,30 @@ select printf('%,.3f', 123456.789::DOUBLE)
 ----
 123,456.789
 
+# preserve the sign when grouped float-family formats receive signed integers
+query IIIII
+select printf('%+,.0f', -5::TINYINT), printf('%+,.0f', -5::SMALLINT), printf('%+,.0f', -5::INTEGER), printf('%+,.0f', -5::BIGINT), printf('%+,.0f', -5::HUGEINT)
+----
+-5	-5	-5	-5	-5
+
+# grouped integer formatting remains exact above the double precision limit
+query II
+select printf('%,.0f', 9007199254740993::BIGINT), printf('%,.0f', 18446744073709551615::UBIGINT)
+----
+9,007,199,254,740,993	18,446,744,073,709,551,615
+
+# all grouped float-family specifiers preserve signed integer arguments
+query IIII
+select printf('%,.0e', -5::BIGINT), printf('%,.0f', -5::BIGINT), printf('%,.3g', -5::BIGINT), printf('%,.0a', -5::BIGINT)
+----
+-5	-5	-005	-5
+
+# conversions are applied independently in multi-argument calls
+query I
+select printf('%+,.0f / %,.0f / %,.0f', -5::BIGINT, 9007199254740993::BIGINT, 5::UBIGINT)
+----
+-5 / 9,007,199,254,740,993 / 5
+
 foreach val 1.724e12 1.7e12 1.72456e12 1.723456e11 1.724567e12 1.234e4
 
 query I
