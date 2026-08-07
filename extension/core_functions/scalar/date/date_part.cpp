@@ -1917,7 +1917,8 @@ static function_statistics_t DatePartUnaryStatistics(LogicalTypeId type) {
 	case LogicalType::DATE:
 		return OP::template PropagateStatistics<date_t>;
 	case LogicalType::INTERVAL:
-		return OP::template PropagateStatistics<interval_t>;
+		//	Interval part statistics are not supported.
+		return nullptr;
 	case LogicalType::TIME:
 		return OP::template PropagateStatistics<dtime_t>;
 	case LogicalType::TIME_NS:
