@@ -43,7 +43,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 
 	} else {
 		ExtensionLoadOptions options;
-		options.extension_name = info->filename;
+		options.extension_name_or_path = info->filename;
 		options.alias = info->alias;
 		ExtensionHelper::LoadExternalExtension(context.client, options);
 		// adds an explicitly set extension schema to the search path

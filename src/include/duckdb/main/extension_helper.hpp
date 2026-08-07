@@ -36,7 +36,7 @@ struct ExtensionAlias {
 
 struct ExtensionInitResult {
 	string filename;
-	string filebase;
+	Identifier extension_name;
 	ExtensionABIType abi_type = ExtensionABIType::UNKNOWN;
 
 	// The deserialized install from the `<ext>.duckdb_extension.info` file
@@ -71,7 +71,7 @@ enum class ExtensionUpdateResultTag : uint8_t {
 struct ExtensionUpdateResult {
 	ExtensionUpdateResultTag tag = ExtensionUpdateResultTag::UNKNOWN;
 
-	string extension_name;
+	Identifier extension_name;
 	string repository;
 
 	string extension_version;
@@ -97,33 +97,42 @@ class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
-	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const Identifier &extension);
 
-	//! Install an extension
+	//! Install an extension - the extension can be a logical name or a full path to an extension binary
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
 	                                                         ExtensionInstallOptions &options);
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
-	//! Load an extension
+	//! Install an extension by name
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const Identifier &extension,
+	                                                         ExtensionInstallOptions &options);
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
+	                                                         const Identifier &extension,
+	                                                         ExtensionInstallOptions &options);
+	//! Load an extension - the options can hold a logical name or a full path to an extension binary
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
 
+	//! Load an extension by name
+	static void LoadExternalExtension(ClientContext &context, const Identifier &extension_name);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const Identifier &extension_name);
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
-	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
-	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
+	static void AutoLoadExtension(ClientContext &context, const Identifier &extension_name);
+	static void AutoLoadExtension(DatabaseInstance &db, const Identifier &extension_name);
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
-	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
-	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const Identifier &extension_name) noexcept;
+	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const Identifier &extension_name) noexcept;
 
 	//! Autoload an extension, only if available locally
 	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
-	                                                     const string &extension_name) noexcept;
+	                                                     const Identifier &extension_name) noexcept;
 
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	//! Update a specific extension
-	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
+	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const Identifier &extension_name);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
@@ -149,7 +158,7 @@ public:
 	static string ExtensionUrlTemplate(optional_ptr<const DatabaseInstance> db, const ExtensionRepository &repository,
 	                                   const string &version);
 	//! Return the extension url template with the variables replaced
-	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
+	static string ExtensionFinalizeUrlTemplate(const string &url, const Identifier &name);
 
 	//! Default extensions are all extensions that DuckDB knows and expect to be available (both in-tree and
 	//! out-of-tree)
@@ -170,20 +179,21 @@ public:
 	static string GetRepositoryName(const string &repository_base_url);
 
 	//! Apply any known extension aliases, return the lowercase name
-	static string ApplyExtensionAlias(const string &extension_name);
+	static Identifier ApplyExtensionAlias(const Identifier &extension_name);
 
-	static string GetExtensionName(const string &extension);
+	//! Extract the extension name from a logical name or a full path to an extension binary
+	static Identifier GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
-	static vector<pair<string, CatalogType>>
+	static vector<pair<Identifier, CatalogType>>
 	FindExtensionInFunctionEntries(const Identifier &name, const ExtensionFunctionEntry (&entries)[N]) {
-		vector<pair<string, CatalogType>> result;
+		vector<pair<Identifier, CatalogType>> result;
 		for (idx_t i = 0; i < N; i++) {
 			auto &element = entries[i];
 			if (element.name == name) {
-				result.push_back(make_pair(element.extension, element.type));
+				result.push_back(make_pair(Identifier(element.extension), element.type));
 			}
 		}
 		return result;
@@ -204,14 +214,14 @@ public:
 
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
-	static string FindExtensionInEntries(const Identifier &name, const ExtensionEntry (&entries)[N]) {
+	static Identifier FindExtensionInEntries(const Identifier &name, const ExtensionEntry (&entries)[N]) {
 		auto it =
 		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == name; });
 
 		if (it != entries + N) {
-			return it->extension;
+			return Identifier(it->extension);
 		}
-		return "";
+		return Identifier();
 	}
 
 	//! Lookup a name in an extension entry and try to autoload it
@@ -230,22 +240,22 @@ public:
 
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
-	static bool CanAutoloadExtension(const string &ext_name);
+	static bool CanAutoloadExtension(const Identifier &ext_name);
 
 	//! Utility functions for creating meaningful error messages regarding missing extensions
 	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
 	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
-	                                                const string &extension_name);
+	                                                const Identifier &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
-	                                                const string &extension_name);
+	                                                const Identifier &extension_name);
 
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 
 	static bool IsRelease(const string &version_tag);
-	static bool CreateSuggestions(const string &extension_name, string &message);
-	static string ExtensionInstallDocumentationLink(const string &extension_name);
+	static bool CreateSuggestions(const Identifier &extension_name, string &message);
+	static string ExtensionInstallDocumentationLink(const Identifier &extension_name);
 
 private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
@@ -254,9 +264,9 @@ private:
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
-	static bool AllowAutoInstall(const string &extension);
+	static bool AllowAutoInstall(const Identifier &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
-	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension_name_or_path,
 	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);

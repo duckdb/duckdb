@@ -638,8 +638,8 @@ void FindMinimalQualification(CatalogEntryRetriever &retriever, const Identifier
 	qualify_schema = true;
 }
 
-bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) noexcept {
-	string extension_name = ExtensionHelper::ApplyExtensionAlias(original_name);
+bool Catalog::TryAutoLoad(ClientContext &context, const Identifier &original_name) noexcept {
+	auto extension_name = ExtensionHelper::ApplyExtensionAlias(original_name);
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
@@ -658,7 +658,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	return false;
 }
 
-String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
+Identifier Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
@@ -716,7 +716,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
-		string extension_name;
+		Identifier extension_name;
 		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
 			if (lookup_result.empty()) {
@@ -792,7 +792,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	}
 
 	// Check if the entry exists in any extension.
-	string extension_name;
+	Identifier extension_name;
 	auto type = lookup_info.GetCatalogType();
 	auto &entry_name = lookup_info.GetEntryIdentifier();
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
@@ -803,7 +803,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 				break;
 			}
 			vector<string> other_types;
-			string extension_for_error;
+			Identifier extension_for_error;
 			for (auto &function : lookup_result) {
 				auto function_type = function.second;
 				if (CompareCatalogTypes(type, function_type)) {
@@ -1512,11 +1512,11 @@ void Catalog::OnDetach(ClientContext &context) {
 }
 
 bool Catalog::HasConflictingAttachOptions(const string &path, const AttachOptions &options) {
-	auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
+	const Identifier db_type = options.db_type.empty() ? "duckdb" : options.db_type;
 	// Normalize through the extension alias table so that equivalent forms
 	auto canonical_actual = ExtensionHelper::ApplyExtensionAlias(GetCatalogType());
 	auto canonical_requested = ExtensionHelper::ApplyExtensionAlias(db_type);
-	return GetDBPath() != path || !StringUtil::CIEquals(canonical_actual, canonical_requested);
+	return GetDBPath() != path || canonical_actual != canonical_requested;
 }
 
 } // namespace duckdb

@@ -140,17 +140,17 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 // Static C API Extension Loading
 //===--------------------------------------------------------------------===//
-void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
+void DuckDB::LoadStaticCAPIExtension(const Identifier &name, ext_init_c_api_fun_t init_fun) {
 	auto &manager = ExtensionManager::Get(*instance);
-	auto load_info = manager.BeginLoad({name});
+	auto load_info = manager.BeginLoad({name.GetIdentifierName()});
 	if (!load_info) {
 		// already loaded
 		return;
 	}
 
 	ExtensionInitResult init_result;
-	init_result.filename = name;
-	init_result.filebase = name;
+	init_result.filename = name.GetIdentifierName();
+	init_result.extension_name = name;
 	// Statically compiled extensions are always tied to the exact DuckDB version
 	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
 	init_result.lib_hdl = nullptr;
@@ -397,7 +397,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t to
 	return CheckExtensionBufferSignature(buffer, signature_offset, signature, allow_community_extensions);
 }
 
-bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension_name_or_path,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
@@ -405,14 +405,14 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	auto filename = fs.ConvertSeparators(extension);
+	auto filename = fs.ConvertSeparators(extension_name_or_path);
 
 	bool direct_load;
 
 	// shorthand case
-	if (!ExtensionHelper::IsFullPath(extension)) {
+	if (!ExtensionHelper::IsFullPath(extension_name_or_path)) {
 		direct_load = false;
-		string extension_name = ApplyExtensionAlias(extension);
+		auto extension_name = ApplyExtensionAlias(Identifier(extension_name_or_path));
 #ifdef WASM_LOADABLE_EXTENSIONS
 		string url_template = ExtensionUrlTemplate(&config, "");
 		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
@@ -438,7 +438,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #else
 
 		// Local function to process local path
-		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const string &extension_name) -> string {
+		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const Identifier &extension_name) -> string {
 			// convert random separators to platform-canonic
 			string local_path = fs.ConvertSeparators(base_path);
 			// expand ~ in extension directory
@@ -498,9 +498,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
-		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
+		bool exact_match = ExtensionHelper::CreateSuggestions(Identifier(extension_name_or_path), message);
 		if (exact_match) {
-			message += "\nInstall it first using \"INSTALL " + extension + "\".";
+			message += "\nInstall it first using \"INSTALL " + extension_name_or_path + "\".";
 		}
 		error = StringUtil::Format("Extension \"%s\" not found.\n%s", filename, message);
 		return false;
@@ -514,7 +514,8 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty()) {
-		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
+		metadata_mismatch_error =
+		    StringUtil::Format("Failed to load '%s', %s", extension_name_or_path, metadata_mismatch_error);
 	}
 
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
@@ -570,10 +571,10 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
-	auto lowercase_extension_name = StringUtil::Lower(filebase);
+	auto lowercase_extension_name = Identifier(StringUtil::Lower(filebase));
 
 	// Initialize the ExtensionInitResult
-	result.filebase = lowercase_extension_name;
+	result.extension_name = lowercase_extension_name;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	result.abi_type = parsed_metadata.abi_type;
@@ -581,7 +582,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	if (!direct_load) {
 		auto info_file_name = filename + ".info";
 
-		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, lowercase_extension_name);
+		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, result.extension_name);
 
 		if (result.install_info->mode == ExtensionInstallMode::UNKNOWN) {
 			// The info file was missing, we just set the version, since we have it from the parsed footer
@@ -591,7 +592,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (result.install_info->version != parsed_metadata.extension_version) {
 			throw IOException("Metadata mismatch detected when loading extension '%s'\nPlease try reinstalling the "
 			                  "extension using `FORCE INSTALL '%s'`",
-			                  filename, extension);
+			                  filename, extension_name_or_path);
 		}
 	} else {
 		result.install_info = make_uniq<ExtensionInstallInfo>();
@@ -604,18 +605,20 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs,
+                                                 const string &extension_name_or_path) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(db, fs, extension, result, error)) {
-		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) || !ExtensionHelper::AllowAutoInstall(extension)) {
+	if (!TryInitialLoad(db, fs, extension_name_or_path, result, error)) {
+		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) ||
+		    !ExtensionHelper::AllowAutoInstall(Identifier(extension_name_or_path))) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
 		ExtensionInstallOptions options;
-		ExtensionHelper::InstallExtension(db, fs, extension, options);
+		ExtensionHelper::InstallExtension(db, fs, extension_name_or_path, options);
 		// try loading again
-		if (!TryInitialLoad(db, fs, extension, result, error)) {
+		if (!TryInitialLoad(db, fs, extension_name_or_path, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -627,21 +630,21 @@ bool ExtensionHelper::IsFullPath(const string &extension) {
 	       StringUtil::Contains(extension, "\\");
 }
 
-string ExtensionHelper::GetExtensionName(const string &original_name) {
-	auto extension = StringUtil::Lower(original_name);
-	if (!IsFullPath(extension)) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+Identifier ExtensionHelper::GetExtensionName(const string &original_name) {
+	auto extension_name_or_path = StringUtil::Lower(original_name);
+	if (!IsFullPath(extension_name_or_path)) {
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
 	}
 	// split the name if it's a full path
-	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
+	auto splits = StringUtil::Split(StringUtil::Replace(extension_name_or_path, "\\", "/"), '/');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
 	}
 	splits = StringUtil::Split(splits.back(), '.');
 	if (splits.empty()) {
-		return ExtensionHelper::ApplyExtensionAlias(extension);
+		return ExtensionHelper::ApplyExtensionAlias(Identifier(extension_name_or_path));
 	}
-	return ExtensionHelper::ApplyExtensionAlias(splits.front());
+	return ExtensionHelper::ApplyExtensionAlias(Identifier(splits.front()));
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
@@ -649,8 +652,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// statically linked implementation for built-in linked extensions only.
 	// This avoids loading a second copy from disk (ASan ODR violation) while
 	// keeping externally installed/autoloaded extensions on the normal path.
-	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
-	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
+	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name_or_path);
+	if (!ExtensionHelper::IsFullPath(options.extension_name_or_path)) {
 		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
 			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
 			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
@@ -671,7 +674,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
+		LoadExternalExtensionInternal(db, fs, options.extension_name_or_path, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -688,7 +691,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
-		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
+		auto init_fun_name = extension_init_result.extension_name + "_duckdb_cpp_init";
 		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
 		                                                                 extension_init_result.filename);
 		if (!init_fun) {
@@ -715,7 +718,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI
 	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT ||
 	    extension_init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
-		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
+		auto init_fun_name = extension_init_result.extension_name + "_init_c_api";
 		ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
 		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
 
@@ -759,6 +762,14 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options);
+}
+
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const Identifier &extension_name) {
+	LoadExternalExtension(context, ExtensionLoadOptions(extension_name.GetIdentifierName()));
+}
+
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const Identifier &extension_name) {
+	LoadExternalExtension(db, fs, ExtensionLoadOptions(extension_name.GetIdentifierName()));
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

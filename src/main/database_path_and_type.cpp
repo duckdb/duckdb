@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
+void DBPathAndType::ExtractExtensionPrefix(string &path, Identifier &db_type) {
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove the first occurrence of it
@@ -15,15 +15,15 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 		// Store the raw user prefix normalized to lowercase. The alias is
 		// applied only at lookup/comparison sites — symmetric with how the
 		// `TYPE 'xxx'` option preserves the user-supplied value.
-		db_type = StringUtil::Lower(extension);
+		db_type = Identifier(StringUtil::Lower(extension));
 	}
 }
 
-void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, string &db_type,
+void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, Identifier &db_type,
                                     optional_ptr<PrefetchedFileData> out_prefetch) {
 	// if there isn't - check the magic bytes of the file (if any)
 	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path, out_prefetch);
-	db_type = string();
+	db_type.clear();
 	switch (file_type) {
 	case DataFileType::SQLITE_FILE:
 		db_type = "sqlite";
@@ -43,7 +43,7 @@ void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type,
+void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, Identifier &db_type,
                                         optional_ptr<PrefetchedFileData> out_prefetch) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check

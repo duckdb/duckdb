@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-vector<string> LinkedExtensions();
+vector<Identifier> LinkedExtensions();
 vector<string> LoadedExtensionTestPaths();
 
 } // namespace duckdb
