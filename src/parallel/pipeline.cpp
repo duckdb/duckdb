@@ -561,7 +561,10 @@ void Pipeline::Ready() {
 	}
 	ready = true;
 	std::reverse(operators.begin(), operators.end());
+	InitializeSamplyMarkerName();
+}
 
+void Pipeline::InitializeSamplyMarkerName() {
 	if (!SamplyTrackEnabled(ClientConfig::GetConfig(GetClientContext()).samply_tracks, SamplyTrack::QUERY)) {
 		return;
 	}

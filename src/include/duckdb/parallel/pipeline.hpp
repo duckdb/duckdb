@@ -175,6 +175,8 @@ public:
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
 
 private:
+	void InitializeSamplyMarkerName();
+
 	//! Whether or not the pipeline has been readied
 	bool ready;
 	//! Whether or not the pipeline has been initialized
