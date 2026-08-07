@@ -22,7 +22,7 @@ set autoinstall_known_extensions=false
 statement maybe
 copy (select 1337 as edgy_hacker_number) TO '{TEST_DIR}/test1337.parquet'
 ----
-Catalog Error: Copy Function with name parquet is not in the catalog, but it exists in the parquet extension.
+Catalog Error: Copy Function with name "parquet" is not in the catalog, but it exists in the parquet extension.
 
 ### With autoloading, install and correct repo
 statement ok
