@@ -853,6 +853,13 @@
         "struct": "GeometryMinimumShreddingSize"
     },
     {
+        "name": "hive_directory_pruning",
+        "description": "Whether or not directories whose hive partition keys cannot match a filter are skipped without being listed. Can be overridden per scan with the hive_directory_pruning named parameter.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",

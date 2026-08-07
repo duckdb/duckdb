@@ -1,0 +1,128 @@
+# name: test/sql/copy/partitioned/hive_directory_pruning_option.test
+# description: Test the hive_directory_pruning option that gates the pruning of hive partition directories
+# group: [partitioned]
+
+require parquet
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+COPY (SELECT i AS k, i AS val FROM range(0,256) tbl(i)) TO '{TEST_DIR}/hive_pruning_option' (FORMAT PARQUET, PARTITION_BY (k));
+
+# the option is disabled by default
+query I
+SELECT current_setting('hive_directory_pruning')
+----
+false
+
+# by default the entire file list is expanded and no directory is pruned
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Scanning Files:\s*1/256.*
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<!REGEX>:.*Pruned Directories.*
+
+# the scan returns what it returned before this option existed
+query II
+SELECT k, val FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+200	200
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1);
+----
+256
+
+# the named parameter enables the pruning for a single scan
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1, HIVE_DIRECTORY_PRUNING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+query II
+SELECT k, val FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1, HIVE_DIRECTORY_PRUNING=1) WHERE k=200;
+----
+200	200
+
+# NULL is rejected like the other boolean options rather than being read as false
+statement error
+SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_DIRECTORY_PRUNING=NULL);
+----
+<REGEX>:.*Cannot use NULL as argument.*
+
+# the setting enables it for every scan, including scans over a bare path that take no named parameters
+statement ok
+SET hive_directory_pruning=true
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/hive_pruning_option/**/*.parquet' WHERE k=200;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+query II
+SELECT k, val FROM '{TEST_DIR}/hive_pruning_option/**/*.parquet' WHERE k=200;
+----
+200	200
+
+# the named parameter takes precedence over the setting
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1, HIVE_DIRECTORY_PRUNING=0) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Scanning Files:\s*1/256.*
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1, HIVE_DIRECTORY_PRUNING=0) WHERE k=200;
+----
+physical_plan	<!REGEX>:.*Pruned Directories.*
+
+# resetting brings back the default
+statement ok
+RESET hive_directory_pruning
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<!REGEX>:.*Pruned Directories.*
+
+# the setting can also be set globally
+statement ok
+SET GLOBAL hive_directory_pruning=true
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_pruning_option/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+statement ok
+RESET GLOBAL hive_directory_pruning
+
+# with the pruning disabled binding keeps inspecting every file, so a plain file that sits past the bind sample
+# still keeps hive partitioning from being auto-detected
+statement ok
+COPY (SELECT 1 AS k, 0 AS val) TO '{TEST_DIR}/hive_pruning_option_mixed' (FORMAT PARQUET, PARTITION_BY (k));
+
+# fill the partition directory past the bind sample, so the plain file below is only reached by a full expansion
+loop i 0 150
+
+statement ok
+COPY (SELECT {i} AS val) TO '{TEST_DIR}/hive_pruning_option_mixed/k=1/f{i}.parquet' (FORMAT PARQUET);
+
+endloop
+
+statement ok
+COPY (SELECT 42 AS val) TO '{TEST_DIR}/hive_pruning_option_mixed/plain.parquet' (FORMAT PARQUET);
+
+statement error
+SELECT k FROM '{TEST_DIR}/hive_pruning_option_mixed/**/*.parquet';
+----
+<REGEX>:.*not found.*

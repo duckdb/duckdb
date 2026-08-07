@@ -29,4 +29,7 @@ namespace duckdb {
 #define DUCKDB_LOG_FILE_SYSTEM_OPEN(HANDLE)              DUCKDB_LOG_FILE_SYSTEM(HANDLE, "OPEN");
 #define DUCKDB_LOG_FILE_SYSTEM_CLOSE(HANDLE)             DUCKDB_LOG_FILE_SYSTEM(HANDLE, "CLOSE");
 
+// Macro for logging operations on a path, for which there is no file handle to log to
+#define DUCKDB_LOG_FILE_SYSTEM_LIST(SOURCE, FS, PATH) DUCKDB_LOG(SOURCE, FileSystemLogType, FS, PATH, "LIST");
+
 } // namespace duckdb

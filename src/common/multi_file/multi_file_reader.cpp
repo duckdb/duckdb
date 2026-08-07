@@ -8,6 +8,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -88,6 +89,7 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::ANY;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_directory_pruning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
@@ -157,6 +159,12 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
+	} else if (key == "hive_directory_pruning") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+		}
+		options.hive_directory_pruning = BooleanValue::Get(val);
+		options.explicit_hive_directory_pruning = true;
 	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -249,8 +257,8 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 	if (options.hive_partitioning) {
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
-		// verify that all files have the same hive partitioning scheme
-		for (const auto &file : files.Files()) {
+		// verify that the sampled files have the same hive partitioning scheme
+		for (const auto &file : files.SampleFiles(options.GetBindSampleSize())) {
 			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
@@ -710,6 +718,7 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("filename", Value(filename_column));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
+	bind_info.InsertOption("hive_directory_pruning", Value::BOOLEAN(hive_directory_pruning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
 	bind_info.InsertOption("allow_empty", Value::BOOLEAN(allow_empty));
@@ -737,7 +746,23 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 	}
 }
 
-bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
+void MultiFileOptions::ResolveHiveDirectoryPruning(ClientContext &context) {
+	if (explicit_hive_directory_pruning) {
+		return;
+	}
+	hive_directory_pruning = Settings::Get<HiveDirectoryPruningSetting>(context);
+}
+
+optional_idx MultiFileOptions::GetBindSampleSize() const {
+	if (!hive_directory_pruning) {
+		// no directory is pruned afterwards - inspect every file
+		return optional_idx();
+	}
+	return HivePartitioning::BIND_SAMPLE_SIZE;
+}
+
+bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context,
+                                                          optional_idx sample_size) {
 	auto first_file = files.GetFirstFile();
 	auto partitions = HivePartitioning::Parse(first_file.path);
 	if (partitions.empty()) {
@@ -745,7 +770,7 @@ bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, 
 		return false;
 	}
 
-	for (const auto &file : files.Files()) {
+	for (const auto &file : files.SampleFiles(sample_size)) {
 		auto new_partitions = HivePartitioning::Parse(file.path);
 		if (new_partitions.size() != partitions.size()) {
 			// partition count mismatch
@@ -765,7 +790,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
 	unordered_map<string, LogicalType> detected_types;
-	for (const auto &file : files.Files()) {
+	for (const auto &file : files.SampleFiles(GetBindSampleSize())) {
 		auto partitions = HivePartitioning::Parse(file.path);
 		if (partitions.empty()) {
 			return;
@@ -821,7 +846,7 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		auto_detect_hive_partitioning = false;
 	}
 	if (auto_detect_hive_partitioning) {
-		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
+		hive_partitioning = AutoDetectHivePartitioningInternal(files, context, GetBindSampleSize());
 	}
 	if (hive_partitioning && hive_types_autocast) {
 		AutoDetectHiveTypesInternal(files, context);

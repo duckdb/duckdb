@@ -14,6 +14,7 @@
 namespace duckdb {
 
 struct FileHandle;
+class FileSystem;
 struct BaseRequest;
 struct HTTPResponse;
 class PhysicalOperator;
@@ -74,6 +75,8 @@ public:
 
 	static string ConstructLogMessage(const FileHandle &handle, const string &op, int64_t bytes, idx_t pos);
 	static string ConstructLogMessage(const FileHandle &handle, const string &op);
+	//! Log an operation on a path for which no file handle exists (e.g. listing a directory)
+	static string ConstructLogMessage(FileSystem &fs, const string &path, const string &op);
 };
 
 class HTTPLogType : public LogType {

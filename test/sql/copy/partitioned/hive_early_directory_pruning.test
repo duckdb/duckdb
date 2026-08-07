@@ -1,0 +1,170 @@
+# name: test/sql/copy/partitioned/hive_early_directory_pruning.test
+# description: Test that hive partition filters prune directories before they are listed
+# group: [partitioned]
+
+require parquet
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET hive_directory_pruning=true;
+
+# more partitions than are sampled while binding - the remaining directories are only listed if they can match
+statement ok
+COPY (SELECT i AS k, i AS val FROM range(0,256) tbl(i)) TO '{TEST_DIR}/hive_early_pruning' (FORMAT PARQUET, PARTITION_BY (k));
+
+query II
+SELECT k, val FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+200	200
+
+# the filter is reported even though it did its work while the list was expanded rather than on the file list
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*k = 200.*
+
+# the file count is below the total, so the directories that cannot match were skipped instead of being listed
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<!REGEX>:.*Scanning Files:\s*[0-9]+\/256.*
+
+# the pruned directories are reported, and they account for the files that are missing from the file count
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+# without a hive filter all files are scanned
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1);
+----
+256
+
+# a filter on a non-partition column cannot prune any directory
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE val=200;
+----
+physical_plan	<!REGEX>:.*File Filters:.*
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE val=200;
+----
+1
+
+# ranges and disjunctions prune as well - a directory survives a disjunction if either side can still match
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k>250;
+----
+5
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200 OR k=201;
+----
+2
+
+# a filter that prunes every directory leaves an empty file list, which must still scan as an empty result
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=1000;
+----
+0
+
+# nested partitions - the rows that match the outer key are spread over several inner partitions
+statement ok
+COPY (SELECT i%150 AS k1, i//150 AS k2, i AS val FROM range(0,300) tbl(i)) TO '{TEST_DIR}/hive_early_pruning_nested' (FORMAT PARQUET, PARTITION_BY (k1, k2));
+
+query III
+SELECT k1, k2, val FROM parquet_scan('{TEST_DIR}/hive_early_pruning_nested/**/*.parquet', HIVE_PARTITIONING=1) WHERE k1=149 ORDER BY val;
+----
+149	0	149
+149	1	299
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning_nested/**/*.parquet', HIVE_PARTITIONING=1) WHERE k1=149;
+----
+physical_plan	<!REGEX>:.*Scanning Files:\s*[0-9]+\/300.*
+
+# pruning an outer directory skips every inner directory below it, not just one level
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_early_pruning_nested/**/*.parquet', HIVE_PARTITIONING=1) WHERE k1=149;
+----
+physical_plan	<REGEX>:.*Pruned Directories:\s*[1-9][0-9]*.*
+
+# filtering on the inner key, where no outer directory can be pruned
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning_nested/**/*.parquet', HIVE_PARTITIONING=1) WHERE k2=1;
+----
+150
+
+# globs that match the partition directories explicitly are pruned as well
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning_nested/*/*/*.parquet', HIVE_PARTITIONING=1) WHERE k1=149;
+----
+2
+
+# a directory can hold a partition value that does not convert to the type of the hive column - pruning must not fail
+# a query over files that never carry that value
+statement ok
+COPY (SELECT k, 0 AS val FROM (VALUES ('1'), ('abc')) tbl(k)) TO '{TEST_DIR}/hive_badcast' (FORMAT PARQUET, PARTITION_BY (k));
+
+# fill "k=1" past the bind sample, so the type of "k" is detected without ever looking at "k=abc"
+loop i 0 150
+
+statement ok
+COPY (SELECT {i} AS val) TO '{TEST_DIR}/hive_badcast/k=1/f{i}.parquet' (FORMAT PARQUET);
+
+endloop
+
+# only the "f" files are read, so "k" is detected as BIGINT - the "k=abc" directory must not break the scan
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_badcast/**/f*.parquet', HIVE_PARTITIONING=1) WHERE k=1;
+----
+150
+
+# a filter that prunes directories but no remaining file must still be reported as a file filter: every file it
+# would have pruned was skipped while the list was expanded, so the file-level pass never gets to see one
+statement ok
+COPY (SELECT i+1 AS k, i AS val FROM range(0,2) tbl(i)) TO '{TEST_DIR}/hive_matched' (FORMAT PARQUET, PARTITION_BY (k));
+
+# fill the matching partition past the bind sample, so every file that is left over matches the filter
+loop i 0 150
+
+statement ok
+COPY (SELECT {i} AS val) TO '{TEST_DIR}/hive_matched/k=1/f{i}.parquet' (FORMAT PARQUET);
+
+endloop
+
+query II
+EXPLAIN SELECT * FROM parquet_scan('{TEST_DIR}/hive_matched/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=1;
+----
+physical_plan	<REGEX>:.*File Filters:.*k = 1.*
+
+# the k=2 file was never listed, so it is not part of the scan at all
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_matched/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=1;
+----
+151
+
+# binding samples files rather than expanding the whole list - the sample must still span more than the first
+# directory, otherwise a tree that mixes hive directories with plain files is wrongly auto-detected as hive
+statement ok
+COPY (SELECT 1 AS k, 0 AS val) TO '{TEST_DIR}/hive_mixed' (FORMAT PARQUET, PARTITION_BY (k));
+
+# more files in the first partition directory than are sampled, so the sample has to reach the file below
+loop i 0 150
+
+statement ok
+COPY (SELECT {i} AS val) TO '{TEST_DIR}/hive_mixed/k=1/f{i}.parquet' (FORMAT PARQUET);
+
+endloop
+
+statement ok
+COPY (SELECT 42 AS val) TO '{TEST_DIR}/hive_mixed/plain.parquet' (FORMAT PARQUET);
+
+# "k" is not a column: the plain file has no hive key, so hive partitioning must not be auto-detected
+statement error
+SELECT k FROM '{TEST_DIR}/hive_mixed/**/*.parquet';
+----
+<REGEX>:.*not found.*

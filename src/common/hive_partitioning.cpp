@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
@@ -82,6 +83,34 @@ ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &ex
 	}
 }
 
+//! The result of evaluating a single filter using only the values that are known from a path
+enum class PathFilterResult : uint8_t {
+	//! The filter cannot be evaluated using only the known values - the path might still match
+	UNKNOWN,
+	//! The filter evaluates to true for every file below the path
+	MATCH,
+	//! The filter evaluates to false for every file below the path - it can be pruned
+	PRUNE
+};
+
+//! Evaluates a filter using only the values that are known from a path
+static PathFilterResult
+EvaluateFilterOnPath(ClientContext &context, const Expression &filter,
+                     const unordered_map<ProjectionIndex, PartitioningColumnValue> &known_values,
+                     TableIndex table_index) {
+	auto filter_copy = filter.Copy();
+	ConvertKnownColRefToConstants(context, filter_copy, known_values, table_index);
+	Value result_value;
+	if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
+	    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
+		return PathFilterResult::UNKNOWN;
+	}
+	if (result_value.IsNull() || !result_value.GetValue<bool>()) {
+		return PathFilterResult::PRUNE;
+	}
+	return PathFilterResult::MATCH;
+}
+
 string HivePartitioning::Escape(const string &input) {
 	return StringUtil::URLEncode(input);
 }
@@ -129,6 +158,20 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 	return result;
 }
 
+HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFileOptions &options,
+                                                           const MultiFilePushdownInfo &info) {
+	HivePartitioningFilterInfo filter_info;
+	for (idx_t i = 0; i < info.column_ids.size(); i++) {
+		if (IsVirtualColumn(info.column_ids[i])) {
+			continue;
+		}
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
+	}
+	filter_info.hive_enabled = options.hive_partitioning;
+	filter_info.filename_enabled = options.filename;
+	return filter_info;
+}
+
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
@@ -157,12 +200,45 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 	return value;
 }
 
+HivePathFilter::HivePathFilter(ClientContext &context, const vector<unique_ptr<Expression>> &filters_p,
+                               HivePartitioningFilterInfo filter_info_p, TableIndex table_index)
+    : context(context), filter_info(std::move(filter_info_p)), table_index(table_index) {
+	for (auto &filter : filters_p) {
+		filters.push_back(filter->Copy());
+	}
+	// a partial path is not a filename - only the hive partition keys it contains are known
+	filter_info.filename_enabled = false;
+}
+
+bool HivePathFilter::PrunePath(const string &path) {
+	// partitions are only parsed from components that are followed by a separator - add the separator of the directory
+	auto known_values = GetKnownColumnValues(path + "/", filter_info);
+	for (idx_t i = 0; i < filters.size(); i++) {
+		PathFilterResult result;
+		try {
+			result = EvaluateFilterOnPath(context, *filters[i], known_values, table_index);
+		} catch (std::exception &) {
+			// a directory can hold a partition value that does not convert to the type of the column - only the files
+			// that are actually read should report that, so leave the path alone
+			continue;
+		}
+		if (result != PathFilterResult::PRUNE) {
+			continue;
+		}
+		lock_guard<mutex> guard(lock);
+		pruning_filters.insert(i);
+		pruned_path_count++;
+		return true;
+	}
+	return false;
+}
+
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
                                               vector<unique_ptr<Expression>> &filters,
                                               const HivePartitioningFilterInfo &filter_info,
-                                              MultiFilePushdownInfo &info) {
+                                              MultiFilePushdownInfo &info, optional_ptr<HivePathFilter> path_filter) {
 	vector<OpenFileInfo> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
@@ -173,6 +249,18 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 		return;
 	}
 
+	if (path_filter) {
+		// filters that already pruned paths while the file list was expanded are file filters as well
+		for (auto filter_idx : path_filter->GetPruningFilters()) {
+			info.extra_info.file_filters += filters[filter_idx]->ToString();
+			filters_applied_to_files.insert(filter_idx);
+		}
+		auto pruned_path_count = path_filter->GetPrunedPathCount();
+		if (pruned_path_count > 0) {
+			info.extra_info.pruned_directories = pruned_path_count;
+		}
+	}
+
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
@@ -180,19 +268,15 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 
 		for (idx_t j = 0; j < filters.size(); j++) {
 			auto &filter = filters[j];
-			unique_ptr<Expression> filter_copy = filter->Copy();
-			ConvertKnownColRefToConstants(context, filter_copy, known_values, table_index);
-			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
-			Value result_value;
-
-			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
-			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
+			switch (EvaluateFilterOnPath(context, *filter, known_values, table_index)) {
+			case PathFilterResult::UNKNOWN:
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
 				if (!have_preserved_filter[j]) {
 					pruned_filters.emplace_back(filter->Copy());
 					have_preserved_filter[j] = true;
 				}
-			} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
+				break;
+			case PathFilterResult::PRUNE:
 				// filter evaluates to false
 				should_prune_file = true;
 				// convert the filter to a table filter.
@@ -200,6 +284,10 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 					info.extra_info.file_filters += filter->ToString();
 					filters_applied_to_files.insert(j);
 				}
+				break;
+			case PathFilterResult::MATCH:
+				// filter evaluates to true - it does not have to be evaluated again during the scan
+				break;
 			}
 		}
 
