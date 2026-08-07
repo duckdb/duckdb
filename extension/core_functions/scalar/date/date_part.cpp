@@ -1850,25 +1850,33 @@ void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 template <typename RESULT_TYPE, typename OP>
 static scalar_function_t DatePartUnaryCallback(LogicalTypeId type) {
+	scalar_function_t result = nullptr;
 	switch (type) {
 	case LogicalType::TIMESTAMP:
 	case LogicalType::TIMESTAMP_S:
 	case LogicalType::TIMESTAMP_MS:
 	case LogicalType::TIMESTAMP_NS:
-		return &DatePart::UnaryFunction<timestamp_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<timestamp_t, RESULT_TYPE, OP>;
+		break;
 	case LogicalType::DATE:
-		return &DatePart::UnaryFunction<date_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<date_t, RESULT_TYPE, OP>;
+		break;
 	case LogicalType::INTERVAL:
-		return &DatePart::UnaryFunction<interval_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<interval_t, RESULT_TYPE, OP>;
+		break;
 	case LogicalType::TIME:
-		return &DatePart::UnaryFunction<dtime_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<dtime_t, RESULT_TYPE, OP>;
+		break;
 	case LogicalType::TIME_NS:
-		return &DatePart::UnaryFunction<dtime_ns_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<dtime_ns_t, RESULT_TYPE, OP>;
+		break;
 	case LogicalType::TIME_TZ:
-		return &DatePart::UnaryFunction<dtime_tz_t, RESULT_TYPE, OP>;
+		result = DatePart::UnaryFunction<dtime_tz_t, RESULT_TYPE, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unsupported temporal type for DATE_PART");
 	}
+	return result;
 }
 
 static scalar_function_t DatePartUnaryCallback(DatePartSpecifier part_code, LogicalTypeId type) {
