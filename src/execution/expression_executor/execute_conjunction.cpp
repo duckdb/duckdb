@@ -91,7 +91,9 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				have_accumulator = false;
 				break;
 			}
-			if (!dense && have_accumulator) {
+			const bool narrow = have_accumulator && // leave the dense path once few rows survive:
+			                    (!dense || (is_and && !DenseAutoVecPaysOff(result_count, count, sizeof(int64_t))));
+			if (narrow) {
 				current_sel = &state.intersect_acc.Flattened();
 				current_count = result_count;
 			}
@@ -100,7 +102,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			    Select(child, child_state, current_sel, current_count, nullptr, nullptr, &state.intersect_tmp);
 			state.intersect_tmp.ToBitmap(child_count, count);
 			if (have_accumulator) {
-				if (dense) {
+				if (dense && !narrow) { // a narrowed child already saw only the accumulator's survivors
 					result_count =
 					    is_and ? state.intersect_acc.Intersect(state.intersect_tmp, result_count, child_count, count)
 					           : state.intersect_acc.Union(state.intersect_tmp);
