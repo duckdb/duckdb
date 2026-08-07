@@ -101,6 +101,18 @@ TABLE t;
 ----
 1	NULL
 
+# NaN and signed zero use the same SQL observable-equality semantics.
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 'NaN'::DOUBLE), (2, -0e0::DOUBLE)
+	UNION
+	SELECT k, CASE WHEN k = 1 THEN 'NaN'::DOUBLE ELSE 0e0::DOUBLE END
+	FROM t
+)
+SELECT count(*), count_if(isnan(v)), count_if(signbit(v)) FROM t;
+----
+2	1	0
+
 # With only key columns, an existing key cannot produce an observable change.
 query I
 WITH RECURSIVE t(k) USING KEY (k) AS (
@@ -122,6 +134,18 @@ WITH RECURSIVE t(k, v) USING KEY (k, bit_xor(v)) AS (
 TABLE t;
 ----
 1	0
+
+# Hidden aggregate-state changes do not form work when the finalized value is unchanged.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, avg(v) AS v) AS (
+	VALUES (1, 0), (1, 2)
+	UNION
+	SELECT k, x
+	FROM t, (VALUES (0), (2)) values_(x)
+)
+TABLE t;
+----
+1	1.0
 
 # Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
 query III rowsort
@@ -204,6 +228,33 @@ WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
 SELECT count(*), sum(total) FROM t;
 ----
 100	300
+
+# Plain UNION retains partial-key probes and updates the index for newly finalized keys.
+query II
+EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
+	VALUES (1, 1, 1)
+	UNION
+	SELECT n.k1, n.k2 + 1, n.v
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 < 3
+)
+TABLE t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
+	VALUES (1, 1, 1)
+	UNION
+	SELECT n.k1, n.k2 + 1, n.v
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 < 3
+)
+TABLE t;
+----
+1	1	1
+1	2	1
+1	3	2
 
 # Nested invocations own independent touched-key and lookup state.
 query II rowsort
