@@ -391,6 +391,14 @@ private:
 		}
 	}
 
+	template <bool NO_NULL, class ADAPTER, class... ARGS>
+	static inline bool SelectOperation(ADAPTER &adapter, ARGS... args) {
+		if constexpr (NO_NULL) {
+			return adapter.OperationNoNull(args...);
+		}
+		return adapter.Operation(args...);
+	}
+
 	static idx_t FillConstantSelection(bool comparison_result, const SelectionVector &sel, idx_t count,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (comparison_result) {
@@ -503,6 +511,79 @@ private:
 		                                                                        adapter, indices);
 	}
 
+	template <bool RIGHT_CONSTANT, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class CONSTANT_TYPE,
+	          class GENERIC_TYPE, class ADAPTER>
+	static idx_t SelectGenericConstantLoop(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
+	                                       const SelectionVector &generic_sel, const SelectionVector &sel, idx_t count,
+	                                       SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+		for (idx_t row = 0; row < count; row++) {
+			auto result_idx = sel.get_index(row);
+			auto generic_index = generic_sel.get_index(row);
+			bool comparison_result;
+			if constexpr (RIGHT_CONSTANT) {
+				comparison_result = adapter.OperationNoNull(data[generic_index], constant);
+			} else {
+				comparison_result = adapter.OperationNoNull(constant, data[generic_index]);
+			}
+			StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(comparison_result, result_idx, true_sel,
+			                                                                false_sel, true_count, false_count);
+		}
+		if constexpr (SPECIALIZE_OUTPUTS && HAS_TRUE_SEL) {
+			return true_count;
+		}
+		return true_sel ? true_count : count - false_count;
+	}
+
+	template <bool RIGHT_CONSTANT, bool SPECIALIZE_OUTPUTS, class CONSTANT_TYPE, class GENERIC_TYPE, class ADAPTER>
+	static idx_t SelectGenericConstantSwitch(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
+	                                         const SelectionVector &generic_sel, const SelectionVector &sel,
+	                                         idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+	                                         ADAPTER &adapter) {
+		if constexpr (SPECIALIZE_OUTPUTS) {
+			if (true_sel && false_sel) {
+				return SelectGenericConstantLoop<RIGHT_CONSTANT, true, true, true>(constant, data, generic_sel, sel,
+				                                                                   count, true_sel, false_sel, adapter);
+			} else if (true_sel) {
+				return SelectGenericConstantLoop<RIGHT_CONSTANT, true, true, false>(
+				    constant, data, generic_sel, sel, count, true_sel, false_sel, adapter);
+			}
+			return SelectGenericConstantLoop<RIGHT_CONSTANT, true, false, true>(constant, data, generic_sel, sel, count,
+			                                                                    true_sel, false_sel, adapter);
+		}
+		return SelectGenericConstantLoop<RIGHT_CONSTANT, false, false, false>(constant, data, generic_sel, sel, count,
+		                                                                      true_sel, false_sel, adapter);
+	}
+
+	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	static idx_t SelectGenericConstant(const std::array<VectorRef, 2> &inputs, const SelectionVector &sel, idx_t count,
+	                                   SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
+		static_assert(CONSTANT_MASK == 1 || CONSTANT_MASK == 2, "Exactly one binary input must be constant");
+		constexpr idx_t GENERIC_INDEX = CONSTANT_MASK == 1 ? 1 : 0;
+		constexpr idx_t CONSTANT_INDEX = CONSTANT_MASK == 1 ? 0 : 1;
+		std::array<UnifiedVectorFormat, 2> formats;
+		auto &generic_format = formats[GENERIC_INDEX];
+		inputs[GENERIC_INDEX].get().ToUnifiedFormat(generic_format);
+		if (generic_format.validity.CanHaveNull()) {
+			inputs[CONSTANT_INDEX].get().ToUnifiedFormat(formats[CONSTANT_INDEX]);
+			auto input_data = std::make_tuple(UnifiedVectorFormat::GetData<LEFT_TYPE>(formats[0]),
+			                                  UnifiedVectorFormat::GetData<RIGHT_TYPE>(formats[1]));
+			return SelectGenericSwitch<false, SPECIALIZE_OUTPUTS>(input_data, formats, sel, count, true_sel, false_sel,
+			                                                      adapter, std::index_sequence<0, 1> {});
+		}
+		if constexpr (CONSTANT_MASK == 1) {
+			auto constant = *ConstantVector::GetData<LEFT_TYPE>(inputs[0].get());
+			auto data = UnifiedVectorFormat::GetData<RIGHT_TYPE>(generic_format);
+			return SelectGenericConstantSwitch<false, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel, sel,
+			                                                              count, true_sel, false_sel, adapter);
+		}
+		auto constant = *ConstantVector::GetData<RIGHT_TYPE>(inputs[1].get());
+		auto data = UnifiedVectorFormat::GetData<LEFT_TYPE>(generic_format);
+		return SelectGenericConstantSwitch<true, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel, sel, count,
+		                                                             true_sel, false_sel, adapter);
+	}
+
 	template <bool NO_NULL, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class ADAPTER,
 	          class... ARGS, size_t... Is>
 	static idx_t SelectGenericLoop(std::tuple<const ARGS *...> &input_data,
@@ -516,7 +597,7 @@ private:
 			auto result_idx = sel.get_index(row);
 			std::array<idx_t, N> input_indices = {{formats[Is].sel->get_index(row)...}};
 			bool comparison_result = (NO_NULL || (... && formats[Is].validity.RowIsValid(input_indices[Is]))) &&
-			                         adapter.Operation(std::get<Is>(input_data)[input_indices[Is]]...);
+			                         SelectOperation<NO_NULL>(adapter, std::get<Is>(input_data)[input_indices[Is]]...);
 			StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(comparison_result, result_idx, true_sel,
 			                                                                false_sel, true_count, false_count);
 		}
@@ -628,6 +709,20 @@ private:
 				}
 			}
 		}
+		if constexpr (SPECIALIZED_MASKS != 0 && N == 2) {
+			if (!profile.any_constant_null) {
+				switch (profile.constant_mask) {
+				case 1:
+					return SelectGenericConstant<1, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
+					                                                                      false_sel, adapter);
+				case 2:
+					return SelectGenericConstant<2, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
+					                                                                      false_sel, adapter);
+				default:
+					break;
+				}
+			}
+		}
 		return SelectGeneric<SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel, false_sel, adapter,
 		                                                           indices);
 	}
@@ -652,20 +747,6 @@ public:
 		}
 		return SelectInternal<SPECIALIZED_MASKS, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(
 		    inputs, *sel, count, true_sel, false_sel, adapter, std::index_sequence_for<ARGS...> {});
-	}
-
-	template <class... ARGS, size_t... Is>
-	static bool InputsCanHaveNull(const std::array<VectorRef, sizeof...(ARGS)> &inputs, std::index_sequence<Is...>) {
-		std::array<UnifiedVectorFormat, sizeof...(ARGS)> formats;
-		for (idx_t i = 0; i < sizeof...(ARGS); i++) {
-			inputs[i].get().ToUnifiedFormat(formats[i]);
-		}
-		return (... || formats[Is].validity.CanHaveNull());
-	}
-
-	template <class... ARGS>
-	static bool InputsCanHaveNull(const std::array<VectorRef, sizeof...(ARGS)> &inputs) {
-		return InputsCanHaveNull<ARGS...>(inputs, std::index_sequence_for<ARGS...> {});
 	}
 };
 

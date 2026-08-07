@@ -81,6 +81,10 @@ struct UnarySelectAdapter {
 		return fun(input);
 	}
 
+	inline bool OperationNoNull(INPUT_TYPE input) {
+		return Operation(input);
+	}
+
 	FUNC &fun;
 };
 

@@ -18,6 +18,7 @@ enum class ExecutorBenchmarkType : uint8_t {
 	TERNARY_OPTIONAL_EXECUTE,
 	VARIADIC_EXECUTE,
 	BINARY_SELECT,
+	BINARY_SELECT_GREATER_THAN_EQUALS,
 	TERNARY_SELECT
 };
 
@@ -200,6 +201,15 @@ public:
 			}
 			break;
 		}
+		case ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS: {
+			auto true_sel = selection_output == ExecutorSelectionOutput::FALSE_ONLY ? nullptr : &state.true_sel;
+			auto false_sel = selection_output == ExecutorSelectionOutput::TRUE_ONLY ? nullptr : &state.false_sel;
+			for (idx_t i = 0; i < iterations; i++) {
+				state.selected_count = BinaryExecutor::Select<int64_t, int64_t, GreaterThanEquals>(
+				    state.a, state.b, nullptr, EXECUTOR_BENCHMARK_COUNT, true_sel, false_sel);
+			}
+			break;
+		}
 		case ExecutorBenchmarkType::TERNARY_SELECT:
 			for (idx_t i = 0; i < iterations; i++) {
 				state.selected_count = TernaryExecutor::Select<int64_t, int64_t, int64_t, ExecutorBetweenOperator>(
@@ -207,7 +217,9 @@ public:
 			}
 			break;
 		}
-		if (type == ExecutorBenchmarkType::BINARY_SELECT || type == ExecutorBenchmarkType::TERNARY_SELECT) {
+		if (type == ExecutorBenchmarkType::BINARY_SELECT ||
+		    type == ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS ||
+		    type == ExecutorBenchmarkType::TERNARY_SELECT) {
 			state.checksum = NumericCast<int64_t>(state.selected_count + 1);
 		} else {
 			auto value = state.result.GetValue(EXECUTOR_BENCHMARK_COUNT - 1);
@@ -235,6 +247,7 @@ private:
 			return constant_mask == 0x1 ? EXECUTOR_CONSTANT_BENCHMARK_ITERATIONS : EXECUTOR_BENCHMARK_ITERATIONS;
 		case ExecutorBenchmarkType::BINARY_EXECUTE:
 		case ExecutorBenchmarkType::BINARY_SELECT:
+		case ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS:
 		case ExecutorBenchmarkType::TERNARY_SELECT:
 			return constant_mask == 0x3 ? EXECUTOR_CONSTANT_BENCHMARK_ITERATIONS : EXECUTOR_BENCHMARK_ITERATIONS;
 		case ExecutorBenchmarkType::TERNARY_EXECUTE:
@@ -272,6 +285,14 @@ ExecutorBenchmark binary_dictionary_dictionary("ScalarExecutorBinaryDictionaryDi
 ExecutorBenchmark binary_select_flat_flat("ScalarExecutorBinarySelectFlatFlat", ExecutorBenchmarkType::BINARY_SELECT);
 ExecutorBenchmark binary_select_flat_constant("ScalarExecutorBinarySelectFlatConstant",
                                               ExecutorBenchmarkType::BINARY_SELECT, 0x2);
+ExecutorBenchmark binary_select_dictionary_constant("ScalarExecutorBinarySelectDictionaryConstant",
+                                                    ExecutorBenchmarkType::BINARY_SELECT, 0x2, 0x1);
+ExecutorBenchmark binary_select_constant_dictionary("ScalarExecutorBinarySelectConstantDictionary",
+                                                    ExecutorBenchmarkType::BINARY_SELECT, 0x1, 0x2);
+ExecutorBenchmark
+    binary_select_greater_equals_dictionary_constant("ScalarExecutorBinarySelectGreaterEqualsDictionaryConstant",
+                                                     ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS, 0x2,
+                                                     0x1);
 ExecutorBenchmark ternary_select_flat("ScalarExecutorTernarySelectFlat", ExecutorBenchmarkType::TERNARY_SELECT);
 
 ExecutorBenchmark ternary_fff("ScalarExecutorTernaryFFF", ExecutorBenchmarkType::TERNARY_EXECUTE, 0x0);

@@ -77,6 +77,10 @@ struct VariadicSelectAdapter {
 	inline bool Operation(ARGS... args) {
 		return OP::Operation(args...);
 	}
+
+	inline bool OperationNoNull(ARGS... args) {
+		return Operation(args...);
+	}
 };
 
 //! VariadicExecutor is the generic public facade over ScalarExecutor.
