@@ -718,6 +718,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.GetTriggerName();
+	// Track every catalog entry resolved while binding the trigger body as a dependency,
+	// so DROP of a table/view/function referenced by the body is blocked.
+	validation_binder->SetCatalogLookupCallback([&create_trigger_info, &catalog](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			return;
+		}
+		create_trigger_info.dependencies.AddDependency(entry);
+	});
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {

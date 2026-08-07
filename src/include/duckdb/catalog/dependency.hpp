@@ -143,6 +143,8 @@ public:
 	//! is the path of the *containing* schemas - for a schema entry it is the parent chain (not including itself).
 	vector<Identifier> schema_path;
 	Identifier name;
+	//! The table that owns this entry, for entries that are not unique within their schema (triggers)
+	Identifier table;
 
 public:
 	bool operator==(const CatalogEntryInfo &other) const {
@@ -153,6 +155,9 @@ public:
 			return false;
 		}
 		if (other.name != name) {
+			return false;
+		}
+		if (other.table != table) {
 			return false;
 		}
 		return true;
