@@ -973,8 +973,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 	throw ConstraintException(exception_msg);
 }
 
-string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-                                          DataChunk &input) const {
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) const {
 	lock_guard<mutex> l(lock);
 	auto key_name = GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
@@ -1158,15 +1157,8 @@ bool ART::SupportsDeltaIndexes() const {
 	return true;
 }
 
-unique_ptr<BoundIndex> ART::CreateDeltaIndex(DeltaIndexType target_delta_index) const {
-	auto constraint_type = index_constraint_type;
-	if (target_delta_index == DeltaIndexType::DELETED_ROWS_IN_USE) {
-		// deleted_rows_in_use allows duplicates regardless of whether or not the main index is a unique index or not
-		constraint_type = IndexConstraintType::NONE;
-	}
-	auto result = make_uniq<ART>(name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions, db);
-	result->delta_index_type = target_delta_index;
-	return std::move(result);
+unique_ptr<BoundIndex> ART::CreateEmptyCopy(const IndexConstraintType constraint_type) const {
+	return make_uniq<ART>(name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions, db);
 }
 
 //===-------------------------------------------------------------------===//
@@ -1408,12 +1400,12 @@ ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode
 	return InsertMerge(state, source_index, append_mode);
 }
 
-ErrorData ART::MergeCheckpointDelta(BoundIndex &delta_index) {
-	switch (delta_index.delta_index_type) {
-	case DeltaIndexType::REMOVED_DURING_CHECKPOINT:
+ErrorData ART::MergeCheckpointDelta(const IndexDeltaType type, BoundIndex &delta_index) {
+	switch (type) {
+	case IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT:
 		RemovalMerge(delta_index);
 		return ErrorData();
-	case DeltaIndexType::ADDED_DURING_CHECKPOINT:
+	case IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT:
 		// Inserts happen before deletes during commit, so duplicates must be accepted while merging the added rows.
 		return InsertMerge(delta_index, IndexAppendMode::INSERT_DUPLICATES);
 	default:

@@ -55,27 +55,19 @@ struct TableIndexIterationResult<shared_ptr<IndexEntry>> {
 
 //! IndexBindState transitions index binding phases while preventing lock order inversion.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
-//! Identifies a checkpoint or transaction delta owned by an IndexEntry.
-enum class IndexEntryDelta : uint8_t {
-	DELETED_ROWS_IN_USE,
-	ADDED_DATA_DURING_CHECKPOINT,
-	REMOVED_DATA_DURING_CHECKPOINT
-};
-
 //! Owns the optional indexes used to represent transaction and checkpoint deltas for an IndexEntry.
 class IndexDeltas {
 public:
-	optional_ptr<const BoundIndex> Get(IndexEntryDelta delta) const;
-	optional_ptr<BoundIndex> Get(IndexEntryDelta delta);
+	optional_ptr<const BoundIndex> Find(IndexDeltaType type) const;
+	optional_ptr<BoundIndex> Find(IndexDeltaType type);
+	BoundIndex &GetOrCreate(BoundIndex &index, IndexDeltaType type);
 	bool ShouldUse(optional_idx active_checkpoint) const;
-	void Set(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
-	void Reset(IndexEntryDelta delta);
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
 	void MarkWritten(transaction_t checkpoint_id);
 
 private:
-	const unique_ptr<BoundIndex> &GetPointer(IndexEntryDelta delta) const;
-	unique_ptr<BoundIndex> &GetPointer(IndexEntryDelta delta);
+	const unique_ptr<BoundIndex> &GetPointer(IndexDeltaType type) const;
+	unique_ptr<BoundIndex> &GetPointer(IndexDeltaType type);
 
 	struct CheckpointDeltas {
 		optional_idx last_written_checkpoint;
@@ -104,9 +96,9 @@ public:
 	IndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER = BoundIndex>
-	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const &;
+	optional_ptr<const OTHER> FindDelta(IndexDeltaType type) const &;
 	template <class OTHER = BoundIndex>
-	optional_ptr<const OTHER> GetDelta(IndexEntryDelta delta) const && = delete;
+	optional_ptr<const OTHER> FindDelta(IndexDeltaType type) const && = delete;
 
 private:
 	friend class IndexEntry;
@@ -131,7 +123,7 @@ public:
 	MutableIndexHandle(MutableIndexHandle &&) = default;
 	MutableIndexHandle &operator=(MutableIndexHandle &&) = delete;
 
-	using IndexHandle<TARGET>::GetDelta;
+	using IndexHandle<TARGET>::FindDelta;
 	using IndexHandle<TARGET>::operator->;
 
 	TARGET *operator->() &;
@@ -143,13 +135,13 @@ public:
 	MutableIndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER = BoundIndex>
-	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) &;
+	optional_ptr<OTHER> FindDelta(IndexDeltaType type) &;
 	template <class OTHER = BoundIndex>
-	optional_ptr<OTHER> GetDelta(IndexEntryDelta delta) && = delete;
+	optional_ptr<OTHER> FindDelta(IndexDeltaType type) && = delete;
 
 	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint);
-	void SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
-	void ResetDelta(IndexEntryDelta delta);
+	BoundIndex &GetOrCreateDelta(IndexDeltaType type) &;
+	BoundIndex &GetOrCreateDelta(IndexDeltaType type) && = delete;
 	ErrorData MergeCheckpointDeltas();
 	void MarkWrittenForCheckpoint(transaction_t checkpoint_id);
 	void ReplaceIndex(unique_ptr<Index> index);
@@ -236,8 +228,8 @@ IndexHandle<OTHER> IndexHandle<TARGET>::Into() && {
 
 template <class TARGET>
 template <class OTHER>
-optional_ptr<const OTHER> IndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) const & {
-	auto index = GetEntry().deltas.Get(delta);
+optional_ptr<const OTHER> IndexHandle<TARGET>::FindDelta(IndexDeltaType type) const & {
+	auto index = GetEntry().deltas.Find(type);
 	if (!index) {
 		return nullptr;
 	}
@@ -272,8 +264,8 @@ MutableIndexHandle<OTHER> MutableIndexHandle<TARGET>::Into() && {
 
 template <class TARGET>
 template <class OTHER>
-optional_ptr<OTHER> MutableIndexHandle<TARGET>::GetDelta(IndexEntryDelta delta) & {
-	auto index = GetMutableEntry().deltas.Get(delta);
+optional_ptr<OTHER> MutableIndexHandle<TARGET>::FindDelta(IndexDeltaType type) & {
+	auto index = GetMutableEntry().deltas.Find(type);
 	if (!index) {
 		return nullptr;
 	}
@@ -286,13 +278,9 @@ bool MutableIndexHandle<TARGET>::ShouldUseDeltaIndexes(optional_idx active_check
 }
 
 template <class TARGET>
-void MutableIndexHandle<TARGET>::SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index) {
-	GetMutableEntry().deltas.Set(delta, std::move(index));
-}
-
-template <class TARGET>
-void MutableIndexHandle<TARGET>::ResetDelta(IndexEntryDelta delta) {
-	GetMutableEntry().deltas.Reset(delta);
+BoundIndex &MutableIndexHandle<TARGET>::GetOrCreateDelta(IndexDeltaType type) & {
+	auto &index = GetMutableEntry().owned_index->template Cast<BoundIndex>();
+	return GetMutableEntry().deltas.GetOrCreate(index, type);
 }
 
 template <class TARGET>
@@ -333,6 +321,8 @@ public:
 	vector<shared_ptr<IndexEntry>> GetEntries() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
+	//! Adds an empty copy of an index for transaction-local storage.
+	void AddLocalIndex(const IndexHandle<BoundIndex> &source);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.

@@ -180,11 +180,11 @@ bool BoundIndex::SupportsDeltaIndexes() const {
 	return false;
 }
 
-unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
-	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
+unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(IndexConstraintType) const {
+	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
 }
 
-ErrorData BoundIndex::MergeCheckpointDelta(BoundIndex &) {
+ErrorData BoundIndex::MergeCheckpointDelta(IndexDeltaType, BoundIndex &) {
 	throw InternalException("BoundIndex::MergeCheckpointDelta is not supported for this index type");
 }
 

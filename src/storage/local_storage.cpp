@@ -36,12 +36,9 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 			continue;
 		}
 
-		// Create a delete index and a local index.
-		auto delete_index = bound_index->CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
-		delete_indexes.AddIndex(std::move(delete_index));
-
-		auto append_index = bound_index->CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
-		append_indexes.AddIndex(std::move(append_index));
+		// Create the transaction-local delete and append indexes.
+		delete_indexes.AddLocalIndex(bound_index);
+		append_indexes.AddLocalIndex(bound_index);
 	}
 }
 

@@ -274,7 +274,7 @@ enum class IndexBindState : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
-enum class IndexEntryDelta : uint8_t;
+enum class IndexDeltaType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
@@ -973,7 +973,7 @@ template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
 
 template<>
-const char* EnumUtil::ToChars<IndexEntryDelta>(IndexEntryDelta value);
+const char* EnumUtil::ToChars<IndexDeltaType>(IndexDeltaType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -1838,7 +1838,7 @@ template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
 
 template<>
-IndexEntryDelta EnumUtil::FromString<IndexEntryDelta>(const char *value);
+IndexDeltaType EnumUtil::FromString<IndexDeltaType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);

@@ -736,8 +736,8 @@ bool TryScanIndex(IndexHandle<Index> index, const ColumnList &column_list, Table
 			row_ids.clear();
 			return false;
 		}
-		for (auto delta : {IndexEntryDelta::DELETED_ROWS_IN_USE, IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT}) {
-			auto delta_index = art.GetDelta<ART>(delta);
+		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
+			auto delta_index = art.FindDelta<ART>(delta);
 			if (!delta_index) {
 				continue;
 			}

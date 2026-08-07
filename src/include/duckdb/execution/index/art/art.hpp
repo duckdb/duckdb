@@ -142,9 +142,12 @@ public:
 	idx_t GetInMemorySize(IndexLock &index_lock) const override;
 
 	bool SupportsDeltaIndexes() const override;
-	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;
-	ErrorData MergeCheckpointDelta(BoundIndex &delta_index) override;
 
+protected:
+	unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const override;
+	ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index) override;
+
+public:
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
