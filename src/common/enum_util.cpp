@@ -4841,6 +4841,25 @@ RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
 	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetRecursiveCTEPipelineMetricTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveCTEPipelineMetricType::RECURSIVE), "RECURSIVE" },
+		{ static_cast<uint32_t>(RecursiveCTEPipelineMetricType::INVARIANT_BUILD), "INVARIANT_BUILD" },
+		{ static_cast<uint32_t>(RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION), "INVARIANT_CTE_MATERIALIZATION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value) {
+	return StringUtil::EnumToString(GetRecursiveCTEPipelineMetricTypeValues(), 3, "RecursiveCTEPipelineMetricType", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value) {
+	return static_cast<RecursiveCTEPipelineMetricType>(StringUtil::StringToEnum(GetRecursiveCTEPipelineMetricTypeValues(), 3, "RecursiveCTEPipelineMetricType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetRecursiveCTESourcePhaseValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RecursiveCTESourcePhase::INITIAL), "INITIAL" },
