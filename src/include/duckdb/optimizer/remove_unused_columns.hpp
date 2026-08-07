@@ -129,7 +129,7 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	explicit RemoveUnusedColumns(Optimizer &optimizer, bool preserve_projection_map_bindings = false);
+	explicit RemoveUnusedColumns(Optimizer &optimizer);
 	RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root);
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -141,8 +141,6 @@ private:
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
-	//! Whether a repeated pruning pass must preserve bindings selected by existing join projection maps
-	bool preserve_projection_map_bindings;
 
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<idx_t, MaterializedCTEInfo>> root_cte_map;

@@ -118,6 +118,25 @@ bool HasExternalCTEReferences(const LogicalOperator &op) {
 	return false;
 }
 
+void ClearLateMaterializationProjectionMaps(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		join.left_projection_map.clear();
+		join.right_projection_map.clear();
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+		op.Cast<LogicalFilter>().projection_map.clear();
+		break;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		ClearLateMaterializationProjectionMaps(*child);
+	}
+}
+
 ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST: {
@@ -271,11 +290,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	                           new_bindings, replacer, params);
 
 	replacer.stop_operator = op.get();
-
-	if (!HasExternalCTEReferences(*op)) {
-		RemoveUnusedColumns unused_optimizer(optimizer, true);
-		unused_optimizer.VisitOperator(*op);
-	}
 
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
@@ -1238,6 +1252,14 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	rhs_projection->ResolveOperatorTypes();
 	rhs = std::move(rhs_projection);
 
+	// Late materialization makes the original payload columns unnecessary on the TopN side. Prune them before
+	// constructing the reconstruction join. The later column lifetime pass recreates the cleared projection maps.
+	if (!HasExternalCTEReferences(*rhs)) {
+		ClearLateMaterializationProjectionMaps(*rhs);
+		RemoveUnusedColumns unused_optimizer(optimizer);
+		unused_optimizer.VisitOperator(*rhs);
+	}
+
 	auto join = make_uniq<LogicalComparisonJoin>(use_inner_reconstruction ? JoinType::INNER : JoinType::SEMI);
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
@@ -1252,7 +1274,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	}
 
 	if (params.include_row_number) {
-		// Add row_number to join result
 		join->right_projection_map.push_back(rowid_column_count);
 	}
 
