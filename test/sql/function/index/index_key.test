@@ -463,3 +463,12 @@ statement error
 SELECT index_key({'catalog': 'nonexistent_catalog', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
 Binder Error: Catalog "nonexistent_catalog" does not exist!
+
+# issue #24445: a VIEW name resolving through the table lookup must error, not crash
+statement ok
+CREATE VIEW tbl1_view AS SELECT * FROM tbl1;
+
+statement error
+SELECT index_key({'table': 'tbl1_view'}, 'PRIMARY_tbl1_0', 1);
+----
+Catalog Error: tbl1_view is not an table

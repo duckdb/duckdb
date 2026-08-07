@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
@@ -164,7 +165,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -1775,6 +1776,25 @@ DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const 
 	return static_cast<DeferredRuntimeFilterType>(StringUtil::StringToEnum(GetDeferredRuntimeFilterTypeValues(), 2, "DeferredRuntimeFilterType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetDeleteIdStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DeleteIdState::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(DeleteIdState::MASKED), "MASKED" },
+		{ static_cast<uint32_t>(DeleteIdState::ARRAY), "ARRAY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value) {
+	return StringUtil::EnumToString(GetDeleteIdStateValues(), 3, "DeleteIdState", static_cast<uint32_t>(value));
+}
+
+template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value) {
+	return static_cast<DeleteIdState>(StringUtil::StringToEnum(GetDeleteIdStateValues(), 3, "DeleteIdState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetDependencyEntryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DependencyEntryType::SUBJECT), "SUBJECT" },
@@ -2514,6 +2534,25 @@ const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
 	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileWriteModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileWriteMode::SEQUENTIAL), "SEQUENTIAL" },
+		{ static_cast<uint32_t>(FileWriteMode::CONCURRENT_SEQUENTIAL), "CONCURRENT_SEQUENTIAL" },
+		{ static_cast<uint32_t>(FileWriteMode::POSITIONAL), "POSITIONAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value) {
+	return StringUtil::EnumToString(GetFileWriteModeValues(), 3, "FileWriteMode", static_cast<uint32_t>(value));
+}
+
+template<>
+FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value) {
+	return static_cast<FileWriteMode>(StringUtil::StringToEnum(GetFileWriteModeValues(), 3, "FileWriteMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFilterPropagateResultValues() {

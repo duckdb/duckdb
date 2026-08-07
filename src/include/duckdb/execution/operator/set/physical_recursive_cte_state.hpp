@@ -143,8 +143,6 @@ public:
 	idx_t ReadyStageCount() const;
 	idx_t ReadyStage(idx_t index) const;
 	void CompleteInlineStage(const RecursiveCTEPipelineSchedulePlan &plan, idx_t stage_idx);
-	void SetEpochThreadLimit(idx_t limit);
-	idx_t EpochThreadLimit() const;
 
 private:
 	shared_ptr<RecursiveExecutorPool> executor_pool;
@@ -152,7 +150,6 @@ private:
 	PhysicalRecursiveCTE::executor_cache_t cached_executors;
 	vector<idx_t> remaining_schedule_dependencies;
 	vector<idx_t> ready_schedule_stages;
-	idx_t recursive_epoch_thread_limit = 1;
 };
 
 class RecursiveCTEState : public GlobalSinkState {

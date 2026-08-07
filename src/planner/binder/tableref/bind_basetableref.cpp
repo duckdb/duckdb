@@ -109,7 +109,7 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 	}
 	auto default_schema = catalog.GetDefaultSchema();
 	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog_name, Identifier(default_schema));
+		view_search_path.emplace_back(catalog_name, default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
 	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);

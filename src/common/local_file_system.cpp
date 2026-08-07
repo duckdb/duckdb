@@ -1848,8 +1848,8 @@ bool LocalFileSystem::CanSeek() {
 	return true;
 }
 
-bool LocalFileSystem::SupportsPositionalWrites(FileHandle &handle) {
-	return true;
+FileWriteMode LocalFileSystem::GetWriteMode(FileHandle &handle) {
+	return FileWriteMode::POSITIONAL;
 }
 
 bool LocalFileSystem::OnDiskFile(FileHandle &handle) {

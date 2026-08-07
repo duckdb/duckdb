@@ -247,14 +247,15 @@ SymbolTable *buildSymbolTable(Counters& counters, std::vector<const u8*> line, c
 
 // optimized adaptive *scalar* compression method
 static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_t lenIn[], u8* strIn[], size_t size, u8* out, size_t lenOut[], u8* strOut[], bool noSuffixOpt, bool avoidBranch) {
-	const u8 *cur = NULL, *end =  NULL, *lim = out + size;
+	const u8 *lim = out + size;
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
 
-	u8 buf[512+8] = {}; /* +8 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
+	u8 buf[8+1+8] = {}; /* stages the unconsumed tail (at most 8 bytes) of each string: terminator + sentinel keep the 8-byte unaligned-loads in bounds */
 
+	// compresses [cur,end) and returns where it stopped (at most 7 bytes past end).
 	// three variants are possible. dead code falls away since the bool arguments are constants
-	auto compressVariant = [&](bool noSuffixOpt, bool avoidBranch) {
+	auto compressVariant = [&](const u8 *cur, const u8 *end, bool noSuffixOpt, bool avoidBranch) {
 		while (cur < end) {
 			u64 word = fsst_unaligned_load(cur);
 			size_t code = symbolTable.shortCodes[word & 0xFFFF];
@@ -286,35 +287,46 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 				}
 			}
 		}
+		return cur;
+	};
+
+	// based on symboltable stats, choose a variant that is nice to the branch predictor
+	auto compress = [&](const u8 *cur, const u8 *end) {
+		if (noSuffixOpt) {
+			return compressVariant(cur, end, true, false);
+		} else if (avoidBranch) {
+			return compressVariant(cur, end, false, true);
+		} else {
+			return compressVariant(cur, end, false, false);
+		}
 	};
 
 	for(curLine=0; curLine<nlines; curLine++) {
-		size_t chunk, curOff = 0;
-		strOut[curLine] = out;
-		do {
-			cur = strIn[curLine] + curOff;
-			chunk = lenIn[curLine] - curOff;
-			if (chunk > 511) {
-				chunk = 511; // we need to compress in chunks of 511 in order to be byte-compatible with simd-compressed FSST
-			}
-			if ((2*chunk+7) > (size_t) (lim-out)) {
-				return curLine; // out of memory
-			}
-			// copy the string to the 511-byte buffer
-			memcpy(buf, cur, chunk);
-			buf[chunk] = (u8) symbolTable.terminator;
-			cur = buf;
-			end = cur + chunk;
 
-			// based on symboltable stats, choose a variant that is nice to the branch predictor
-			if (noSuffixOpt) {
-				compressVariant(true,false);
-			} else if (avoidBranch) {
-				compressVariant(false,true);
-			} else {
-				compressVariant(false, false);
-			}
-		} while((curOff += chunk) < lenIn[curLine]);
+		// write start pointer for the line we want to decompress now
+		strOut[curLine] = out;
+
+		// check for out of memory
+		const size_t curLength = lenIn[curLine];
+		if ((2 * curLength + 7) > (size_t) (lim - out)) {
+			return curLine; // out of memory
+		}
+
+		// compress always reads the next 8 bytes per position and may consume all 8, so it can run up to
+		// 7 bytes past the end it is given. Clamping that end to curLength - 8 therefore keeps
+		// every read inside the string and leaves curCompressPtr (where compression stopped)
+		// in [curLength-8, curLength-1]
+		const u8 *curStartPtr = strIn[curLine];
+		const u8 *curCompressPtr = compress(curStartPtr, curStartPtr + (curLength > 8 ? curLength - 8 : 0));
+
+		// stage the bytes the main pass did not consume (at most 8), followed by the terminator:
+		// multibyte symbols never contain the terminator byte, so no match can cross the string
+		// end into the sentinel bytes
+		const size_t tailSize = (size_t) (curStartPtr + curLength - curCompressPtr);
+		memcpy(buf, curCompressPtr, tailSize);
+		buf[tailSize] = (u8) symbolTable.terminator;
+
+		compress(buf, buf + tailSize);
 		lenOut[curLine] = (size_t) (out - strOut[curLine]);
 	}
 	return curLine;

@@ -6,8 +6,7 @@ include_directories = [
     for x in [
         'extension/icu/include',
         'extension/icu/collation/include',
-        'extension/icu/third_party/icu/common',
-        'extension/icu/third_party/icu/i18n',
+        'extension/icu/datetime/include',
     ]
 ]
 # source files
@@ -17,9 +16,8 @@ source_directories = [
         '.',
         'collation',
         'collation/generated',
-        'third_party/icu/common',
-        'third_party/icu/i18n',
-        'third_party/icu/stubdata',
+        'datetime',
+        'datetime/generated',
     ]
 ]
 source_files = []

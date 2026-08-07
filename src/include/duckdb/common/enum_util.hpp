@@ -182,6 +182,8 @@ enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
 
+enum class DeleteIdState : uint8_t;
+
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
@@ -241,6 +243,8 @@ enum class FileIOMode : uint8_t;
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
+
+enum class FileWriteMode : uint8_t;
 
 enum class FilterPropagateResult : uint8_t;
 
@@ -831,6 +835,9 @@ template<>
 const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value);
 
 template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value);
+
+template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
@@ -919,6 +926,9 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
+
+template<>
+const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value);
@@ -1690,6 +1700,9 @@ template<>
 DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value);
 
 template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value);
+
+template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
 
 template<>
@@ -1778,6 +1791,9 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
+
+template<>
+FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
 
 template<>
 FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *value);
