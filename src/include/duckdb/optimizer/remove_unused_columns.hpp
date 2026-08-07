@@ -16,12 +16,14 @@
 
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class LogicalAggregate;
 class LogicalColumnDataGet;
 class LogicalRecursiveCTE;
 class Optimizer;
@@ -145,6 +147,14 @@ private:
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
+	//! Whether the (transitive) parent of the current operator depends on duplicate rows in its input. This is NOT
+	//! the case below an aggregation whose result is unaffected by duplicate input rows (e.g. a pure GROUP BY):
+	//! there we can prune unreferenced groups from aggregates, even though that changes the number of duplicate
+	//! rows produced.
+	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	//! The operators the not-distinct-dependent property propagated through. When an aggregate is removed, these
+	//! operators suddenly process many more rows, so their cardinality estimates have to be corrected.
+	vector<reference<LogicalOperator>> not_distinct_dependent_path;
 	bool allow_missing_cte_references = false;
 	RemoveUnusedColumnsMode mode = RemoveUnusedColumnsMode::APPLY;
 
@@ -156,6 +166,11 @@ private:
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
+	void RemoveUnusedGroups(LogicalAggregate &aggr);
+	bool CanReplaceAggregateWithProjection(const LogicalAggregate &aggr);
+	//! Visit the expressions and child of an (already pruned) projection with a fresh child visitor,
+	//! propagating the not-distinct-dependent property if the projection's expressions allow it
+	void VisitProjectionChildren(LogicalOperator &proj, AggregateDistinctDependent parent_distinct_dependent);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
