@@ -1,14 +1,14 @@
-commit 3f3f3fcc8563eea14fca49a3092c142b6da10219
+commit 82427d21c7fbbe8dac740c64524515d2f43fef70
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..2505821 100644
+index a4ae59f..efd18b4 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
-@@ -7,8 +7,13 @@
+@@ -8,9 +8,14 @@
  #include "duckdb/common/file_opener.hpp"
  #include "duckdb/common/helper.hpp"
  #include "duckdb/common/http_util.hpp"
@@ -16,13 +16,14 @@ index 0fc503a..2505821 100644
 +#include "duckdb/common/operator/cast_operators.hpp"
 +#include "duckdb/common/operator/multiply.hpp"
 +#include "duckdb/common/operator/subtract.hpp"
+ #include "duckdb/common/string_util.hpp"
  #include "duckdb/common/thread.hpp"
  #include "duckdb/common/types/hash.hpp"
 +#include "duckdb/common/types/interval.hpp"
  #include "duckdb/common/types/time.hpp"
  #include "duckdb/function/scalar/strftime_format.hpp"
  #include "duckdb/logging/file_system_logger.hpp"
-@@ -473,6 +478,17 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
+@@ -512,6 +517,17 @@ string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
  	return sfh.etag;
  }
  
@@ -40,7 +41,7 @@ index 0fc503a..2505821 100644
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -574,6 +590,123 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +664,151 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -48,14 +49,43 @@ index 0fc503a..2505821 100644
 +	return TryCast::Operation<string_t, int64_t>(string_t(input), result) && result >= 0;
 +}
 +
-+static bool HasCacheControlDirective(const HTTPHeaders &headers, const string &name) {
++static vector<string> GetCacheControlDirectives(const HTTPHeaders &headers) {
++	vector<string> result;
 +	if (!headers.HasHeader("Cache-Control")) {
-+		return false;
++		return result;
 +	}
-+	for (auto &directive : StringUtil::Split(headers.GetHeaderValue("Cache-Control"), ',')) {
++	for (const auto &header_value : headers.GetHeaderValues("Cache-Control")) {
++		string directive;
++		bool quoted = false;
++		bool escaped = false;
++		for (const auto ch : header_value) {
++			if (escaped) {
++				directive.push_back(ch);
++				escaped = false;
++			} else if (quoted && ch == '\\') {
++				directive.push_back(ch);
++				escaped = true;
++			} else if (ch == '"') {
++				directive.push_back(ch);
++				quoted = !quoted;
++			} else if (ch == ',' && !quoted) {
++				result.push_back(std::move(directive));
++				directive.clear();
++			} else {
++				directive.push_back(ch);
++			}
++		}
++		result.push_back(std::move(directive));
++	}
++	return result;
++}
++
++static bool HasCacheControlDirective(const HTTPHeaders &headers, const string &name) {
++	for (auto directive : GetCacheControlDirectives(headers)) {
 +		StringUtil::Trim(directive);
 +		const auto separator = directive.find('=');
-+		const auto directive_name = separator == string::npos ? directive : directive.substr(0, separator);
++		auto directive_name = separator == string::npos ? directive : directive.substr(0, separator);
++		StringUtil::Trim(directive_name);
 +		if (StringUtil::CIEquals(directive_name, name)) {
 +			return true;
 +		}
@@ -73,8 +103,7 @@ index 0fc503a..2505821 100644
 +	bool has_freshness_lifetime = false;
 +	bool has_max_age = false;
 +	if (headers.HasHeader("Cache-Control")) {
-+		for (auto &directive_p : StringUtil::Split(headers.GetHeaderValue("Cache-Control"), ',')) {
-+			auto directive = directive_p;
++		for (auto directive : GetCacheControlDirectives(headers)) {
 +			StringUtil::Trim(directive);
 +			const auto separator = directive.find('=');
 +			if (separator == string::npos) {
@@ -162,9 +191,9 @@ index 0fc503a..2505821 100644
 +}
 +
  struct HTTPFileInfoParser {
+ public:
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
- 		if (!headers.HasHeader("Content-Range")) {
-@@ -675,6 +808,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +911,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -176,7 +205,7 @@ index 0fc503a..2505821 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -716,6 +854,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +957,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -184,7 +213,7 @@ index 0fc503a..2505821 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +865,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +968,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -192,7 +221,7 @@ index 0fc503a..2505821 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -793,7 +933,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1036,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
@@ -202,7 +231,7 @@ index 0fc503a..2505821 100644
  		}
  	}
 diff --git a/src/include/http/http_metadata_cache.hpp b/src/include/http/http_metadata_cache.hpp
-index 2908a43..a8bc5e0 100644
+index 1c6e500..ae2f221 100644
 --- a/src/include/http/http_metadata_cache.hpp
 +++ b/src/include/http/http_metadata_cache.hpp
 @@ -4,6 +4,7 @@
@@ -222,7 +251,7 @@ index 2908a43..a8bc5e0 100644
  	string version_id;
  	unordered_map<string, string> properties;
  };
-@@ -44,6 +47,11 @@ public:
+@@ -48,6 +51,11 @@ public:
  		if (lookup == map.end()) {
  			return false;
  		}
@@ -233,9 +262,9 @@ index 2908a43..a8bc5e0 100644
 +		}
  		ret_val = lookup->second;
  		return true;
- 	};
+ 	}
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
-index 1764acc..8b23ecf 100644
+index 6d19b18..985bd2b 100644
 --- a/src/include/http/httpfs.hpp
 +++ b/src/include/http/httpfs.hpp
 @@ -2,6 +2,7 @@
@@ -246,7 +275,7 @@ index 1764acc..8b23ecf 100644
  #include "http/http_state.hpp"
  #include "duckdb/common/pair.hpp"
  #include "duckdb/common/unordered_map.hpp"
-@@ -64,6 +65,12 @@ public:
+@@ -99,6 +100,12 @@ public:
  	idx_t length;
  	timestamp_t last_modified;
  	string etag;
@@ -258,8 +287,8 @@ index 1764acc..8b23ecf 100644
 +	bool cache_no_store = false;
  	bool force_full_download;
  	bool initialized = false;
- 
-@@ -133,6 +140,10 @@ private:
+ 	bool auto_fallback_to_full_file_download = true;
+@@ -128,6 +135,10 @@ private:
  class HTTPFileSystem : public FileSystem {
  public:
  	static bool TryParseLastModifiedTime(const string &timestamp, timestamp_t &result);
@@ -269,8 +298,8 @@ index 1764acc..8b23ecf 100644
 +	static optional<timestamp_t> ComputeCacheValidUntil(const HTTPHeaders &headers);
  
  	//! FileSystem overrides.
- 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
-@@ -155,6 +166,7 @@ public:
+ 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
+@@ -140,6 +151,7 @@ public:
  	int64_t GetFileSize(FileHandle &handle) override;
  	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
  	string GetVersionTag(FileHandle &handle) override;
