@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregates/test_string_agg_overflow.test_slow
-# description: Issue #24188: STRING_AGG allocation size overflow
+# description: STRING_AGG allocation size overflow
 # group: [aggregates]
 
 statement ok
