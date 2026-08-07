@@ -178,13 +178,11 @@ public:
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
 	static vector<pair<string, CatalogType>>
-	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	FindExtensionInFunctionEntries(const Identifier &name, const ExtensionFunctionEntry (&entries)[N]) {
 		vector<pair<string, CatalogType>> result;
 		for (idx_t i = 0; i < N; i++) {
 			auto &element = entries[i];
-			if (element.name == lcase) {
+			if (element.name == name) {
 				result.push_back(make_pair(element.extension, element.type));
 			}
 		}
@@ -206,13 +204,11 @@ public:
 
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
-	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
-		auto lcase = StringUtil::Lower(name);
-
+	static string FindExtensionInEntries(const Identifier &name, const ExtensionEntry (&entries)[N]) {
 		auto it =
-		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
+		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == name; });
 
-		if (it != entries + N && it->name == lcase) {
+		if (it != entries + N) {
 			return it->extension;
 		}
 		return "";
@@ -220,7 +216,8 @@ public:
 
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
-	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
+	static void TryAutoloadFromEntry(DatabaseInstance &db, const Identifier &entry,
+	                                 const ExtensionEntry (&entries)[N]) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);

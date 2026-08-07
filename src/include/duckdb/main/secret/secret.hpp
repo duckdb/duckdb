@@ -285,17 +285,18 @@ public:
 	~KeyValueSecretReader();
 
 	//! Lookup a KeyValueSecret value
-	SettingLookupResult TryGetSecretKey(const string &secret_key, Value &result);
+	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, Value &result);
 	//! Lookup a KeyValueSecret value or a setting
-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
+	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
+	                                             Value &result);
 	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
-	Value GetSecretKey(const string &secret_key);
+	Value GetSecretKey(const Identifier &secret_key);
 	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
-	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+	Value GetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name);
 
 	//! Templating around TryGetSecretKey
 	template <class TYPE>
-	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
+	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, TYPE &value_out) {
 		Value result;
 		auto lookup_result = TryGetSecretKey(secret_key, result);
 		if (lookup_result) {
@@ -306,7 +307,7 @@ public:
 
 	//! Templating around TryGetSecretOrSetting
 	template <class TYPE>
-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
 	                                             TYPE &value_out) {
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
@@ -320,7 +321,8 @@ public:
 
 	// Like a templated GetSecretOrSetting but instead of throwing on not found, return the default value
 	template <class TYPE>
-	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
+	TYPE GetSecretKeyOrSettingOrDefault(const Identifier &secret_key, const Identifier &setting_name,
+	                                    TYPE default_value) {
 		TYPE result;
 		if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
 			return result;
@@ -331,8 +333,8 @@ public:
 protected:
 	void Initialize(const char **secret_types, idx_t secret_types_len);
 
-	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
-	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
+	[[noreturn]] void ThrowNotFoundError(const Identifier &secret_key);
+	[[noreturn]] void ThrowNotFoundError(const Identifier &secret_key, const Identifier &setting_name);
 
 	//! Fetching the secret
 	optional_ptr<const KeyValueSecret> secret;

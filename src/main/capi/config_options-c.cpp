@@ -110,11 +110,12 @@ duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_
 
 	// TODO: This is not transactional... but theres no easy way to make it so currently.
 	try {
-		if (conn->context->db->config.HasExtensionOption(coption->name)) {
+		duckdb::Identifier option_name(coption->name);
+		if (conn->context->db->config.HasExtensionOption(option_name)) {
 			// Option already exists
 			return DuckDBError;
 		}
-		conn->context->db->config.AddExtensionOption(coption->name, coption->description, coption->type,
+		conn->context->db->config.AddExtensionOption(option_name, coption->description, coption->type,
 		                                             coption->default_value, nullptr, coption->default_scope);
 	} catch (...) {
 		return DuckDBError;
