@@ -743,11 +743,10 @@ private:
 
 class MergeCollectionsEvent : public BasePipelineEvent {
 public:
-	MergeCollectionsEvent(Pipeline &pipeline_p, ClientContext &context, const PhysicalInsert &op,
-	                      DataTable &data_table, vector<unique_ptr<CollectionMerger>> mergers_p)
+	MergeCollectionsEvent(Pipeline &pipeline_p, ClientContext &context, const PhysicalInsert &op, DataTable &data_table,
+	                      vector<unique_ptr<CollectionMerger>> mergers_p)
 	    : BasePipelineEvent(pipeline_p), context(context), op(op), data_table(data_table),
-	      mergers(std::move(mergers_p)),
-	      merged_collections(mergers.size(), PhysicalIndex(DConstants::INVALID_INDEX)) {
+	      mergers(std::move(mergers_p)), merged_collections(mergers.size(), PhysicalIndex(DConstants::INVALID_INDEX)) {
 	}
 
 public:
