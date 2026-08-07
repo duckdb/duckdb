@@ -1,0 +1,13 @@
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -107,7 +107,7 @@ public:
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+
+-	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+-	                                     DataChunk &input) override {
++	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
++	                                     DataChunk &input) const override {
+ 		return "Constraint violation in HNSW index";
+ 	}

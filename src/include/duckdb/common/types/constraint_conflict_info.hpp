@@ -5,8 +5,6 @@
 
 namespace duckdb {
 
-class Index;
-
 //! ConflictInfo contains information to match indexes to ON CONFLICT DO targets.
 class ConflictInfo {
 public:
@@ -18,7 +16,7 @@ public:
 	bool only_check_unique = true;
 
 public:
-	bool ConflictTargetMatches(Index &index) const;
+	bool ConflictTargetMatches(bool is_unique, const unordered_set<column_t> &index_column_ids) const;
 	//! True, if the conflict info references the column ids of a single index, else false.
 	bool SingleIndexTarget() const {
 		return !column_ids.empty();

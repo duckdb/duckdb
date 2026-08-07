@@ -21,7 +21,7 @@ class ARTOperator {
 public:
 	//! Lookup returns a pointer to the leaf matching the key,
 	//! or nullptr, if no such leaf exists.
-	static unsafe_optional_ptr<const Node> Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
+	static unsafe_optional_ptr<const Node> Lookup(const ART &art, const Node &node, const ARTKey &key, idx_t depth) {
 		reference<const Node> ref(node);
 
 		while (ref.get().HasMetadata()) {
