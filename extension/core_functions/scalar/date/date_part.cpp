@@ -1855,15 +1855,15 @@ static scalar_function_t DatePartUnaryCallback(LogicalTypeId type) {
 	case LogicalType::TIMESTAMP_S:
 	case LogicalType::TIMESTAMP_MS:
 	case LogicalType::TIMESTAMP_NS:
-		return DatePart::UnaryFunction<timestamp_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<timestamp_t, RESULT_TYPE, OP>;
 	case LogicalType::DATE:
-		return DatePart::UnaryFunction<date_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<date_t, RESULT_TYPE, OP>;
 	case LogicalType::INTERVAL:
-		return DatePart::UnaryFunction<interval_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<interval_t, RESULT_TYPE, OP>;
 	case LogicalType::TIME:
-		return DatePart::UnaryFunction<dtime_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<dtime_t, RESULT_TYPE, OP>;
 	case LogicalType::TIME_NS:
-		return DatePart::UnaryFunction<dtime_ns_t, RESULT_TYPE, OP>;
+		return &DatePart::UnaryFunction<dtime_ns_t, RESULT_TYPE, OP>;
 	case LogicalType::TIME_TZ:
 		return DatePart::UnaryFunction<dtime_tz_t, RESULT_TYPE, OP>;
 	default:
