@@ -184,6 +184,8 @@ enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
 
+enum class DeleteIdState : uint8_t;
+
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
@@ -836,6 +838,9 @@ const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType val
 
 template<>
 const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value);
 
 template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
@@ -1701,6 +1706,9 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 
 template<>
 DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value);
+
+template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value);
 
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
