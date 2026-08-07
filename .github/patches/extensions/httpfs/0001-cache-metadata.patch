@@ -1,11 +1,11 @@
-commit 2ed756997a07a99bd0061e4a545d9b66e8090c28
+commit 58cec0216987eca659dd8060183d8e41812f01fe
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..4546969 100644
+index 0fc503a..8114726 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -7,8 +7,13 @@
@@ -40,7 +40,7 @@ index 0fc503a..4546969 100644
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -574,6 +590,105 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -574,6 +590,107 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -65,7 +65,9 @@ index 0fc503a..4546969 100644
 +
 +optional<timestamp_t> HTTPFileSystem::ComputeCacheValidUntil(const HTTPHeaders &headers) {
 +	// Freshness lifetime in seconds (RFC 9111): Cache-Control max-age takes precedence over Expires
-+	// TODO: handle no-cache; unset means no freshness information, negative infinity means explicitly stale
++	if (HasCacheControlDirective(headers, "no-cache")) {
++		return timestamp_t::ninfinity();
++	}
 +	int64_t freshness_lifetime = 0;
 +	bool has_freshness_lifetime = false;
 +	bool has_max_age = false;
@@ -146,7 +148,7 @@ index 0fc503a..4546969 100644
  struct HTTPFileInfoParser {
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
  		if (!headers.HasHeader("Content-Range")) {
-@@ -675,6 +790,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -675,6 +792,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -158,7 +160,7 @@ index 0fc503a..4546969 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -716,6 +836,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -716,6 +838,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -166,7 +168,7 @@ index 0fc503a..4546969 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +847,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -726,6 +849,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -174,7 +176,7 @@ index 0fc503a..4546969 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -793,7 +915,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -793,7 +917,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}

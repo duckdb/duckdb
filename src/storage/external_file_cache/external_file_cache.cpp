@@ -207,7 +207,7 @@ ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
 }
 
-//! Whether the last modified timestamp is usable as a cache validator (some storage backends do not provide it)
+//! Whether the last modified timestamp is usable as a cache validator
 static bool HasUsableLastModified(timestamp_t last_modified) {
 	return last_modified.IsFinite() && last_modified != timestamp_t(0);
 }
@@ -224,7 +224,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false; // The file has certainly been modified
 	}
 
-	// If the modified time is not assigned (i.e., storage backend does not provide it), we can't validate it.
+	// If the modified time is not assigned, we can't validate it.
 	if (!current_last_modified.IsFinite() || !cached_last_modified.IsFinite()) {
 		return false;
 	}
