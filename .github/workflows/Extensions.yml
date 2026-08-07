@@ -179,7 +179,7 @@ jobs:
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
             extra_toolchains: rust
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: smvv/extension-ci-tools/.github/workflows/_extension_distribution.yml@ccache-prefix-key
     with:
       # We piggy-back extension-template to build the extensions in extension_config
       override_repository: duckdb/extension-template
@@ -187,11 +187,12 @@ jobs:
       upload_all_extensions: true
       extension_name: ${{ matrix.artifact_prefix }}
       # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+      # reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+      reduced_ci_mode: disabled
       set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      override_ci_tools_repository: smvv/extension-ci-tools
+      ci_tools_version: ccache-prefix-key
       exclude_archs: ${{ matrix.exclude_archs }}
       opt_in_archs: ${{ matrix.opt_in_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
