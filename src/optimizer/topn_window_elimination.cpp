@@ -25,6 +25,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/enums/order_type.hpp"
@@ -883,18 +884,11 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	params.partition_count = window_expr.Partitions().size();
 	params.order_type = window_expr.OrderBy()[0].type;
 
-	VisitExpression(&window_expr.OrderByMutable()[0].expression);
-	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
-		VisitExpression(&aggregate_payload[0]);
+	NotNullExpressionAnalyzer nullability(context);
+	params.can_be_null = !nullability.IsNotNull(*window.children[0], *window_expr.OrderBy()[0].expression);
+	if (!params.can_be_null && params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
+		params.can_be_null = !nullability.IsNotNull(*window.children[0], *aggregate_payload[0]);
 	}
-	for (const auto &column_ref : column_references) {
-		const auto &column_stats = stats->find(column_ref.first);
-		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-			params.can_be_null = true;
-			break;
-		}
-	}
-	column_references.clear();
 
 	return params;
 }
