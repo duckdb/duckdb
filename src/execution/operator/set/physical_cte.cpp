@@ -18,8 +18,11 @@ enum class CTECombineState : uint8_t { PENDING, COMBINED };
 class CTEConsumerGlobalSourceState : public GlobalSourceState {
 public:
 	CTEConsumerGlobalSourceState(shared_ptr<PipelineBroadcastExchange> exchange_p, idx_t consumer_idx_p)
-	    : exchange(std::move(exchange_p)), consumer_idx(consumer_idx_p),
-	      max_threads(exchange->PreservesOrder() ? 1 : exchange->MaxThreads()) {
+	    : exchange(std::move(exchange_p)), consumer_idx(consumer_idx_p) {
+		auto scan_mode = exchange->GetConsumerScanMode(consumer_idx);
+		max_threads = exchange->PreservesOrder() && scan_mode != PipelineBroadcastExchangeScanMode::BATCH
+		                  ? 1
+		                  : exchange->MaxThreads();
 	}
 
 	~CTEConsumerGlobalSourceState() override {
@@ -80,7 +83,7 @@ SourceResultType PhysicalCTEConsumerSource::GetDataInternal(ExecutionContext &co
 	auto &gstate = input.global_state.Cast<CTEConsumerGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<CTEConsumerLocalSourceState>();
 	return gstate.exchange->Scan(gstate.consumer_idx, chunk, *lstate.scan_state, lstate.exchange_batch_index,
-	                             input.interrupt_state);
+	                             input.batch_index_state, input.interrupt_state);
 }
 
 OperatorPartitionData PhysicalCTEConsumerSource::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
@@ -117,8 +120,12 @@ void PhysicalCTEConsumerSource::SourceFinished(ClientContext &context, GlobalSou
 InsertionOrderPreservingMap<string> PhysicalCTEConsumerSource::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
-	result["CTE Mode"] = EnumUtil::ToString(exchange->GetConsumerMode(consumer_idx));
+	auto consumer_mode = exchange->GetConsumerMode(consumer_idx);
+	result["CTE Mode"] = EnumUtil::ToString(consumer_mode);
 	result["Consumer"] = StringUtil::Format("%llu", consumer_idx);
+	if (consumer_mode == PipelineBroadcastExchangeConsumerMode::BUFFERED) {
+		result["Scan Mode"] = EnumUtil::ToString(exchange->GetConsumerScanMode(consumer_idx));
+	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
@@ -311,6 +318,17 @@ SinkNextBatchType PhysicalCTE::NextBatch(ExecutionContext &context, OperatorSink
 	return gstate.exchange->NextBatch(*lstate.exchange_state, lstate.partition_info, input.interrupt_state);
 }
 
+SinkNextBatchType PhysicalCTE::UpdateMinBatchIndex(ExecutionContext &, OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<CTEGlobalState>();
+	auto &lstate = input.local_state.Cast<CTELocalState>();
+	if (lstate.execution_mode == CTEExecutionMode::MATERIALIZED) {
+		return SinkNextBatchType::READY;
+	}
+	D_ASSERT(gstate.exchange);
+	D_ASSERT(lstate.exchange_state);
+	return gstate.exchange->UpdateMinBatchIndex(*lstate.exchange_state, lstate.partition_info, input.interrupt_state);
+}
+
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
 	if (lstate.execution_mode != CTEExecutionMode::MATERIALIZED) {
@@ -444,7 +462,16 @@ bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
 
 void PhysicalCTE::RegisterBufferedConsumer(Pipeline &pipeline, idx_t consumer_idx) {
 	D_ASSERT(exchange);
-	exchange->SelectBufferedConsumer(consumer_idx);
+	auto scan_mode = PipelineBroadcastExchangeScanMode::CHUNK;
+	auto sink = pipeline.GetSink();
+	if (sink) {
+		auto required_partition_info = sink->RequiredPartitionInfo();
+		if (exchange->SupportsBatchIndex() && required_partition_info.RequiresBatchIndex() &&
+		    !required_partition_info.RequiresPartitionColumns()) {
+			scan_mode = PipelineBroadcastExchangeScanMode::BATCH;
+		}
+	}
+	exchange->SelectBufferedConsumer(consumer_idx, scan_mode);
 	RegisterBatchPreference(pipeline);
 }
 
