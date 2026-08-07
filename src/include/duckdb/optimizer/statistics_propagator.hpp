@@ -10,7 +10,9 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/table_index.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
@@ -50,6 +52,8 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCopyToFile &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCTERef &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalMaterializedCTE &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -131,6 +135,8 @@ private:
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	//! The map of CTE index -> statistics of the columns emitted by the CTE definition
+	unordered_map<TableIndex, vector<unique_ptr<BaseStatistics>>> cte_stats_map;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };

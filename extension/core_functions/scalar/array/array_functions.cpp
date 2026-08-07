@@ -202,6 +202,16 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
+static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInput &input)
+    -> unique_ptr<BaseStatistics> {
+	// Propagate validity
+	const auto &lhs_stats = input.child_stats[0];
+	const auto &rhs_stats = input.child_stats[1];
+	auto new_stats = NumericStats::CreateUnknown(input.expr.GetReturnType());
+	new_stats.CombineValidity(lhs_stats, rhs_stats);
+	return new_stats.ToUnique();
+}
+
 //------------------------------------------------------------------------------
 // Function Registration
 //------------------------------------------------------------------------------
@@ -213,11 +223,13 @@ template <class OP>
 static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
 	const auto array = LogicalType::ARRAY(type, optional_idx());
 	if (type.id() == LogicalTypeId::FLOAT) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind);
+		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind,
+		                        ArrayGenericFoldStats);
 		function.SetFallible();
 		set.AddFunction(function);
 	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind);
+		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind,
+		                        ArrayGenericFoldStats);
 		function.SetFallible();
 		set.AddFunction(function);
 	} else {
