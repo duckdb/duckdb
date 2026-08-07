@@ -446,9 +446,16 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 	idx_t delta_work_ns = 0;
 	if (!op.union_all) {
 		D_ASSERT(key_delta);
+		const auto delta_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		op.working_table->ResetForReuse();
 		op.working_table->InitializeAppend(working_append_state);
 		key_delta->Reset();
+		if constexpr (COLLECT_METRICS) {
+			const auto delta_end = std::chrono::steady_clock::now();
+			delta_work_ns += NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(delta_end - delta_start).count());
+		}
 	}
 	ColumnDataScanState update_scan_state;
 	intermediate_table.InitializeScan(update_scan_state);
@@ -458,6 +465,7 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		}
 		const auto hash_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		idx_t snapshot_work_ns = 0;
 		distinct_rows.Reset();
 		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
 		if (!op.union_all) {
@@ -467,8 +475,9 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 			if constexpr (COLLECT_METRICS) {
 				const auto delta_end = std::chrono::steady_clock::now();
 				delta_candidate_count += update_rows.size();
-				delta_work_ns += NumericCast<idx_t>(
+				snapshot_work_ns = NumericCast<idx_t>(
 				    std::chrono::duration_cast<std::chrono::nanoseconds>(delta_end - delta_start).count());
+				delta_work_ns += snapshot_work_ns;
 			}
 		}
 		if (!executor.expressions.empty()) {
@@ -479,8 +488,10 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 			ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
 			if constexpr (COLLECT_METRICS) {
 				const auto hash_end = std::chrono::steady_clock::now();
-				GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
-				    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+				const auto hash_work_ns = NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
+				D_ASSERT(snapshot_work_ns <= hash_work_ns);
+				GetEpochMetrics().RecordKeyedHashCommit(hash_work_ns - snapshot_work_ns);
 			}
 			continue;
 		}
@@ -488,8 +499,10 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		    distinct_rows, payload_rows, AggregateType::NON_DISTINCT, new_group_addresses, new_groups);
 		if constexpr (COLLECT_METRICS) {
 			const auto hash_end = std::chrono::steady_clock::now();
-			GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+			const auto hash_work_ns =
+			    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count());
+			D_ASSERT(snapshot_work_ns <= hash_work_ns);
+			GetEpochMetrics().RecordKeyedHashCommit(hash_work_ns - snapshot_work_ns);
 		}
 		const auto index_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
@@ -509,6 +522,8 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		const auto delta_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		FinalizeUsingKeyDelta();
+		intermediate_table.ResetForReuse();
+		InitializeIntermediateAppend();
 		if constexpr (COLLECT_METRICS) {
 			const auto delta_end = std::chrono::steady_clock::now();
 			delta_work_ns += NumericCast<idx_t>(
@@ -516,8 +531,6 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 			GetEpochMetrics().RecordKeyDelta(delta_candidate_count, key_delta->touched_count, key_delta->new_count,
 			                                 key_delta->changed_count, delta_work_ns);
 		}
-		intermediate_table.ResetForReuse();
-		InitializeIntermediateAppend();
 	}
 }
 
