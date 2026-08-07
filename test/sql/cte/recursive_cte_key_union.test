@@ -1,0 +1,184 @@
+# name: test/sql/cte/recursive_cte_key_union.test
+# description: USING KEY UNION emits finalized rows only for effectively changed keys
+# group: [cte]
+
+statement ok
+SET threads=1;
+
+# Reproducing the current value produces an empty delta and terminates recursion.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+1	0
+
+# Inferior and duplicate candidates are still aggregate inputs, but do not remain recursive work.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 5)
+	UNION
+	SELECT k, v + delta
+	FROM t, (VALUES (0), (0), (1), (2)) offsets(delta)
+)
+TABLE t;
+----
+1	5
+
+# New keys and changed finalized values form the next working table.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 10)
+	UNION
+	SELECT k + 1, v + 10 FROM t WHERE k < 4
+)
+TABLE t;
+----
+1	10
+2	20
+3	30
+4	40
+
+# Aggregate output types are visible through the recursive CTE name.
+query I
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1::INTEGER)
+	UNION
+	SELECT k, 1 FROM t WHERE total < 3
+)
+SELECT total FROM t;
+----
+3
+
+query IIT
+WITH RECURSIVE t(k, total, recursive_type) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1::INTEGER, 'anchor')
+	UNION
+	SELECT k, 1, typeof(total) FROM t WHERE total < 2
+)
+SELECT k, total, recursive_type FROM t;
+----
+1	2	HUGEINT
+
+# Multiple candidates for a new key are all applied before its finalized row is emitted.
+query II
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1), (1, 2)
+	UNION
+	SELECT k, 0 FROM t WHERE false
+)
+TABLE t;
+----
+1	3
+
+# NULL payloads are compared with IS DISTINCT FROM semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, NULL::INTEGER)
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+1	NULL
+
+# With only key columns, an existing key cannot produce an observable change.
+query I
+WITH RECURSIVE t(k) USING KEY (k) AS (
+	VALUES (1)
+	UNION
+	SELECT k FROM t
+)
+TABLE t;
+----
+1
+
+# Complete-key probes over recurring state remain eligible for the specialized join.
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+query II
+EXPLAIN WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	SELECT i, 1 FROM range(100) r(i)
+	UNION
+	SELECT n.k, r.total * 0 + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.total < 3
+)
+TABLE t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+query II
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	SELECT i, 1 FROM range(100) r(i)
+	UNION
+	SELECT n.k, r.total * 0 + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.total < 3
+)
+SELECT count(*), sum(total) FROM t;
+----
+100	300
+
+# Nested invocations own independent touched-key and lookup state.
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k, v) USING KEY (k) AS (
+			SELECT a, 0 FROM outer_cte WHERE b < 4
+			UNION
+			SELECT k, v FROM inner_cte
+		)
+		SELECT k, b + 1
+		FROM inner_cte, outer_cte
+		WHERE b < 4
+	)
+)
+TABLE outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+# UNION ALL retains candidate-frontier semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 3
+)
+TABLE t;
+----
+1	3
+
+# Delta construction remains correct when candidate production is parallel.
+statement ok
+SET threads=4;
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT i, 100 FROM range(10000) r(i)
+	UNION
+	SELECT k, v - delta
+	FROM t, range(2) offsets(delta)
+	WHERE v > 98
+)
+SELECT count(*), sum(v) FROM t;
+----
+10000	980000
+
+# The temporary compatibility setting was removed with the implementation of UNION semantics.
+statement error
+SET deprecated_using_key_syntax='UNION_AS_UNION_ALL';
+----
+<REGEX>:.*unrecognized configuration parameter.*deprecated_using_key_syntax.*

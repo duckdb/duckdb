@@ -20,7 +20,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.internal_types);
+	const auto &working_types = !op.key_targets.empty() && !op.union_all ? op.types : op.internal_types;
+	auto working_table = make_shared_ptr<ColumnDataCollection>(context, working_types);
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;

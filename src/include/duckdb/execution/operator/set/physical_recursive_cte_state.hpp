@@ -13,6 +13,7 @@ namespace duckdb {
 class Logger;
 class RecursiveCTELocalState;
 struct RecursiveCTEDistinctPartition;
+struct RecursiveCTEKeyDeltaState;
 
 struct RecursiveExecutorPool {
 	mutex lock;
@@ -286,7 +287,10 @@ public:
 private:
 	template <bool COLLECT_METRICS>
 	void CommitUsingKeyUpdatesInternal();
+	void SnapshotUsingKeyDelta(DataChunk &keys);
+	void FinalizeUsingKeyDelta();
 	unique_ptr<GroupedAggregateHashTable> ht;
+	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
 	const PhysicalRecursiveCTE &op;
