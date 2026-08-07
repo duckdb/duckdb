@@ -700,6 +700,16 @@ jobs:
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
         fi
 
+    - name: Verify architecture flags
+      shell: bash
+      run: |
+        if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
+          grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        else
+          grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
+        fi
+        grep -Fq -- '-mtune=generic' build/release/compile_commands.json
+
     - name: Deploy
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
