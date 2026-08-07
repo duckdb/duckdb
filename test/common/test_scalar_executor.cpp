@@ -259,6 +259,43 @@ TEST_CASE("Scalar executor preserves pre-seeded and aliased unary validity", "[s
 	RequireValue(result, 2, 13);
 }
 
+TEST_CASE("Scalar executor generic validity stays isolated across mapped result reuse", "[scalar_executor]") {
+	static constexpr idx_t COUNT = 12;
+	auto child = MakeFlatVector(COUNT, 10);
+	FlatVector::ValidityMutable(child).SetInvalid(4);
+	SelectionVector sel(COUNT);
+	for (idx_t row = 0; row < COUNT; row++) {
+		sel.set_index(row, (row * 5 + 3) % COUNT);
+	}
+	Vector dictionary(LogicalType::BIGINT, COUNT);
+	dictionary.Slice(child, sel, COUNT);
+	auto other = MakeFlatVector(COUNT, 100);
+	Vector result(LogicalType::BIGINT, COUNT);
+	FlatVector::ValidityMutable(result).Initialize(FlatVector::Validity(child));
+
+	BinaryExecutor::Execute<int64_t, int64_t, int64_t>(dictionary, other, result,
+	                                                   [](int64_t left, int64_t right) { return left + right; });
+	RequireNull(result, 5);
+	RequireValue(result, 0, 113);
+	FlatVector::ValidityMutable(result).SetInvalid(0);
+	RequireValue(child, 0, 10);
+
+	FlatVector::ValidityMutable(child).SetValid(4);
+	BinaryExecutor::Execute<int64_t, int64_t, int64_t>(dictionary, other, result,
+	                                                   [](int64_t left, int64_t right) { return left + right; });
+	RequireValue(result, 0, 113);
+	RequireValue(result, 5, 119);
+
+	FlatVector::ValidityMutable(child).SetInvalid(4);
+	FlatVector::ValidityMutable(result).Initialize(FlatVector::Validity(child));
+	UnaryExecutor::Execute<int64_t, int64_t>(dictionary, result, [](int64_t input) -> optional<int64_t> {
+		return input == 17 ? optional<int64_t>() : input + 1;
+	});
+	RequireNull(result, 5);
+	RequireNull(result, 8);
+	RequireValue(child, 7, 17);
+}
+
 TEST_CASE("Scalar executor generic fallback preserves dictionary mappings", "[scalar_executor]") {
 	static constexpr idx_t COUNT = 12;
 	auto left_base = MakeFlatVector(COUNT, 20);
@@ -447,16 +484,31 @@ TEST_CASE("Scalar selection preserves result mappings and NULL semantics", "[sca
 	REQUIRE_THROWS(BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, right, nullptr, COUNT, nullptr, nullptr));
 #endif
 
-	auto middle = MakeFlatVector(COUNT, 10);
-	auto right_flat = MakeFlatVector(COUNT, 1);
-	for (idx_t row = 0; row < COUNT; row++) {
-		FlatVector::ValidityMutable(left).SetInvalid(row);
-	}
-	std::array<VariadicExecutor::VectorRef, 3> ternary_inputs = {{left, middle, right_flat}};
-	REQUIRE(VariadicExecutor::Select<TernaryLessThanSum, int64_t, int64_t, int64_t>(ternary_inputs, &input_sel, COUNT,
-	                                                                                &true_sel, &false_sel) == 0);
-	for (idx_t row = 0; row < COUNT; row++) {
-		REQUIRE(false_sel.get_index(row) == input_sel.get_index(row));
+	auto middle = MakeConstantVector(COUNT, 5);
+	auto right_constant = MakeConstantVector(COUNT, 0);
+	std::array<VariadicExecutor::VectorRef, 3> ternary_inputs = {{left, middle, right_constant}};
+	for (idx_t output_mode = 0; output_mode < 3; output_mode++) {
+		auto true_ptr = output_mode == 1 ? nullptr : &true_sel;
+		auto false_ptr = output_mode == 0 ? nullptr : &false_sel;
+		auto ternary_true_count = VariadicExecutor::Select<TernaryLessThanSum, int64_t, int64_t, int64_t>(
+		    ternary_inputs, &input_sel, COUNT, true_ptr, false_ptr);
+		REQUIRE(ternary_true_count == 4);
+		idx_t true_index = 0;
+		idx_t false_index = 0;
+		for (idx_t row = 0; row < COUNT; row++) {
+			bool selected = row < 5 && row != 2;
+			if (selected) {
+				if (true_ptr) {
+					REQUIRE(true_sel.get_index(true_index) == input_sel.get_index(row));
+				}
+				true_index++;
+			} else {
+				if (false_ptr) {
+					REQUIRE(false_sel.get_index(false_index) == input_sel.get_index(row));
+				}
+				false_index++;
+			}
+		}
 	}
 }
 
