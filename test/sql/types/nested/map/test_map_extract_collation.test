@@ -1,0 +1,119 @@
+# name: test/sql/types/nested/map/test_map_extract_collation.test
+# description: map_extract/map_extract_value respect collations on map keys
+# group: [map]
+
+statement ok
+SET debug_verify_serializer = true;
+
+# Collated search key against an uncollated map. element_at is an alias of map_extract.
+query III
+SELECT map_extract(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
+       element_at(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
+       map_extract(MAP {'Apple': 1}, 'pear' COLLATE NOCASE);
+----
+[1]	[1]	[]
+
+# map_extract_value and the [] subscript.
+query III
+SELECT map_extract_value(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
+       (MAP {'Apple': 1})['apple' COLLATE NOCASE],
+       map_extract_value(MAP {'Apple': 1}, 'pear' COLLATE NOCASE);
+----
+1	1	NULL
+
+# Collated map-key type against an uncollated search key.
+query II
+SELECT map_extract(map(['Apple' COLLATE NOCASE], [1]), 'apple'),
+       map_extract_value(map(['Apple' COLLATE NOCASE], [1]), 'apple');
+----
+[1]	1
+
+# Row-varying map and search-key inputs.
+query II
+WITH data(m, key) AS (
+    VALUES (MAP {'Apple': 1}, 'APPLE'),
+           (MAP {'Banana': 2}, 'banana'),
+           (MAP {'Cherry': 3}, 'pear')
+)
+SELECT map_extract(m, key COLLATE NOCASE), map_extract_value(m, key COLLATE NOCASE)
+FROM data;
+----
+[1]	1
+[2]	2
+[]	NULL
+
+# NULL propagation: a NULL map yields NULL, a NULL search key never matches.
+query IIII
+SELECT map_extract(NULL::MAP(VARCHAR, INTEGER), 'apple' COLLATE NOCASE),
+       map_extract(MAP {'Apple': 1}, NULL::VARCHAR COLLATE NOCASE),
+       map_extract_value(NULL::MAP(VARCHAR, INTEGER), 'apple' COLLATE NOCASE),
+       map_extract_value(MAP {'Apple': 1}, NULL::VARCHAR COLLATE NOCASE);
+----
+NULL	[]	NULL	NULL
+
+# Untyped NULL maps.
+query II
+SELECT map_extract(NULL, 'apple' COLLATE NOCASE),
+       map_extract_value(NULL, 'apple' COLLATE NOCASE);
+----
+NULL	NULL
+
+# A matched NULL value is [NULL]/NULL, distinct from a missing key.
+query II
+SELECT map_extract(map(['Apple' COLLATE NOCASE], [NULL::INTEGER]), 'apple'),
+       map_extract_value(map(['Apple' COLLATE NOCASE], [NULL::INTEGER]), 'apple');
+----
+[NULL]	NULL
+
+# NOACCENT and combined collations.
+query IIII
+SELECT map_extract(MAP {'hello': 1}, 'héllo' COLLATE NOACCENT),
+       map_extract_value(MAP {'hello': 1}, 'héllo' COLLATE NOACCENT),
+       map_extract(MAP {'Hello': 1}, 'HÉLLO' COLLATE NOCASE.NOACCENT),
+       map_extract_value(MAP {'Hello': 1}, 'HÉLLO' COLLATE NOCASE.NOACCENT);
+----
+[1]	1	[1]	1
+
+# Collations nested through LIST, doubly nested LIST, and ARRAY key types.
+query IIII
+SELECT map_extract(map([['Apple' COLLATE NOCASE]], [1]), ['apple']),
+       map_extract(map([[['Apple' COLLATE NOCASE]]], [1]), [['apple']]),
+       map_extract(map([array_value('Apple' COLLATE NOCASE)], [1]), array_value('apple')),
+       map_extract(map([['Apple' COLLATE NOCASE]], [1]), ['pear']);
+----
+[1]	[1]	[1]	[]
+
+# Collated VARCHAR values keep working.
+query II
+SELECT map_extract(MAP {'Apple': 'x'}, 'apple' COLLATE NOCASE),
+       map_extract_value(MAP {'Apple': 'x'}, 'apple' COLLATE NOCASE);
+----
+[x]	x
+
+# Collated map-key column.
+statement ok
+CREATE TABLE collated_extracts AS SELECT map(['Apple' COLLATE NOCASE], [1]) AS m;
+
+query II
+SELECT map_extract(m, 'apple'), map_extract_value(m, 'apple')
+FROM collated_extracts;
+----
+[1]	1
+
+# Uncollated lookups stay case-sensitive.
+query II
+SELECT map_extract(MAP {'Apple': 1}, 'apple'),
+       map_extract_value(MAP {'Apple': 1}, 'apple');
+----
+[]	NULL
+
+# Incompatible collations are rejected by the template unification, as before.
+statement error
+SELECT map_extract(map(['Résumé' COLLATE NOACCENT], [1]), 'résumé' COLLATE NOCASE);
+----
+Cannot combine types with different collation!
+
+statement error
+SELECT map_extract_value(map([['Résumé' COLLATE NOACCENT]], [1]), ['résumé' COLLATE NOCASE]);
+----
+Cannot combine types with different collation!
