@@ -404,6 +404,8 @@ enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
 enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
+enum class PipelineBroadcastExchangeScanMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PipelineScheduleMode : uint8_t;
@@ -503,6 +505,8 @@ enum class SinkNextBatchType : uint8_t;
 enum class SinkResultType : uint8_t;
 
 enum class SortKeyType : uint8_t;
+
+enum class SourceBatchIndexState : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
@@ -1170,6 +1174,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1318,6 +1325,9 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
+
+template<>
+const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
@@ -2038,6 +2048,9 @@ template<>
 PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
 
 template<>
+PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value);
+
+template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
@@ -2186,6 +2199,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
+
+template<>
+SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
