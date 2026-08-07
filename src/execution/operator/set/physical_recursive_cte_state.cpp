@@ -138,6 +138,17 @@ void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
 	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordKeyDelta(idx_t candidate_rows, idx_t touched_keys, idx_t new_keys,
+                                              idx_t changed_keys, idx_t elapsed_ns) {
+	D_ASSERT(new_keys + changed_keys <= touched_keys);
+	key_delta_work_ns.fetch_add(elapsed_ns);
+	key_delta_candidate_rows.fetch_add(candidate_rows);
+	key_delta_touched_keys.fetch_add(touched_keys);
+	key_delta_new_keys.fetch_add(new_keys);
+	key_delta_changed_keys.fetch_add(changed_keys);
+	key_delta_unchanged_keys.fetch_add(touched_keys - new_keys - changed_keys);
+}
+
 void RecursiveCTEEpochMetrics::RecordRecurringScan(idx_t elapsed_ns) {
 	recurring_scan_work_ns.fetch_add(elapsed_ns);
 }
@@ -326,6 +337,12 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	      to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())},
 	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
 	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
+	     {"key_delta_work_ns", to_string(epoch_metrics.key_delta_work_ns.load())},
+	     {"key_delta_candidate_rows", to_string(epoch_metrics.key_delta_candidate_rows.load())},
+	     {"key_delta_touched_keys", to_string(epoch_metrics.key_delta_touched_keys.load())},
+	     {"key_delta_new_keys", to_string(epoch_metrics.key_delta_new_keys.load())},
+	     {"key_delta_changed_keys", to_string(epoch_metrics.key_delta_changed_keys.load())},
+	     {"key_delta_unchanged_keys", to_string(epoch_metrics.key_delta_unchanged_keys.load())},
 	     {"recurring_scan_work_ns", to_string(epoch_metrics.recurring_scan_work_ns.load())},
 	     {"final_state_drain_work_ns", to_string(epoch_metrics.final_state_drain_work_ns.load())},
 	     {"distinct_grouping_work_ns", to_string(epoch_metrics.distinct_grouping_work_ns.load())},

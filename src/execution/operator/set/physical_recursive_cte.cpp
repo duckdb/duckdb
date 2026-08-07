@@ -52,6 +52,9 @@ struct RecursiveCTEKeyDeltaState {
 		previous_rows.InitializeAppend(previous_append_state);
 		new_keys.ResetForReuse();
 		new_keys.InitializeAppend(new_key_append_state);
+		touched_count = 0;
+		new_count = 0;
+		changed_count = 0;
 	}
 
 	GroupedAggregateHashTable touched_keys;
@@ -78,6 +81,9 @@ struct RecursiveCTEKeyDeltaState {
 	AggregateHTLookupState lookup_state;
 	ArenaAllocator arena;
 	RowOperationsState row_state;
+	idx_t touched_count = 0;
+	idx_t new_count = 0;
+	idx_t changed_count = 0;
 };
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
@@ -496,6 +502,7 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 	auto &delta = *key_delta;
 	const auto first_touch_count =
 	    delta.touched_keys.FindOrCreateGroups(keys, delta.touched_addresses, delta.first_touches);
+	delta.touched_count += first_touch_count;
 	if (first_touch_count == 0) {
 		return;
 	}
@@ -514,6 +521,7 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 		delta.missing_groups.set_index(missing_count++, key_idx);
 	}
 	D_ASSERT(found_idx == found_count);
+	delta.new_count += missing_count;
 
 	if (found_count > 0) {
 		delta.selected_keys.Reset();
@@ -587,6 +595,7 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 			equal_groups = &next_equal_groups;
 		}
 		if (changed_count > 0) {
+			delta.changed_count += changed_count;
 			delta.changed_rows.Reset();
 			delta.changed_rows.Slice(delta.result_rows, delta.changed_groups, changed_count);
 			op.working_table->Append(working_append_state, delta.changed_rows);
@@ -619,6 +628,8 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 template <bool COLLECT_METRICS>
 void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 	D_ASSERT(op.using_key);
+	idx_t delta_candidate_count = 0;
+	idx_t delta_work_ns = 0;
 	if (!op.union_all) {
 		D_ASSERT(key_delta);
 		op.working_table->ResetForReuse();
@@ -636,7 +647,15 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		distinct_rows.Reset();
 		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
 		if (!op.union_all) {
+			const auto delta_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			SnapshotUsingKeyDelta(distinct_rows);
+			if constexpr (COLLECT_METRICS) {
+				const auto delta_end = std::chrono::steady_clock::now();
+				delta_candidate_count += update_rows.size();
+				delta_work_ns += NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(delta_end - delta_start).count());
+			}
 		}
 		if (!executor.expressions.empty()) {
 			payload_rows.Reset();
@@ -673,7 +692,16 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		}
 	}
 	if (!op.union_all) {
+		const auto delta_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		FinalizeUsingKeyDelta();
+		if constexpr (COLLECT_METRICS) {
+			const auto delta_end = std::chrono::steady_clock::now();
+			delta_work_ns += NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(delta_end - delta_start).count());
+			GetEpochMetrics().RecordKeyDelta(delta_candidate_count, key_delta->touched_count, key_delta->new_count,
+			                                 key_delta->changed_count, delta_work_ns);
+		}
 		intermediate_table.ResetForReuse();
 		InitializeIntermediateAppend();
 	}

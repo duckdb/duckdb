@@ -96,6 +96,68 @@ TABLE t;
 ----
 1
 
+# A transient aggregate-state change that returns to the old value produces no work.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, bit_xor(v)) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, 1 FROM t, range(2) duplicates(_)
+)
+TABLE t;
+----
+1	0
+
+# Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
+	VALUES (1, NULL::INTEGER, 5), (1, 2, 10)
+	UNION
+	SELECT k1, k2, v FROM t
+)
+TABLE t;
+----
+1	2	10
+1	NULL	5
+
+# Nested payload equality uses SQL value semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, [1, NULL]::INTEGER[])
+	UNION
+	SELECT k, [1, NULL]::INTEGER[] FROM t
+)
+TABLE t;
+----
+1	[1, NULL]
+
+# An empty anchor terminates without executing a recursive epoch.
+query I
+WITH RECURSIVE t(k) USING KEY (k) AS (
+	SELECT i FROM range(0) r(i)
+	UNION
+	SELECT k FROM t
+)
+SELECT count(*) FROM t;
+----
+0
+
+# Correlated invocations construct and terminate their deltas independently.
+query II rowsort
+SELECT limit_value, final_value
+FROM range(4) limits(limit_value), LATERAL (
+	WITH RECURSIVE t(k, v) USING KEY (k) AS (
+		VALUES (1, 0)
+		UNION
+		SELECT k, v + 1 FROM t WHERE v < limit_value
+	)
+	SELECT v AS final_value FROM t
+);
+----
+0	0
+1	1
+2	2
+3	3
+
 # Complete-key probes over recurring state remain eligible for the specialized join.
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
@@ -176,6 +238,23 @@ WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
 SELECT count(*), sum(v) FROM t;
 ----
 10000	980000
+
+# The existing logical union flag preserves the new behavior through serializer verification.
+statement ok
+SET debug_verify_serializer=true;
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 5)
+	UNION
+	SELECT k, v + 1 FROM t
+)
+TABLE t;
+----
+1	5
+
+statement ok
+SET debug_verify_serializer=false;
 
 # The temporary compatibility setting was removed with the implementation of UNION semantics.
 statement error
