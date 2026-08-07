@@ -284,8 +284,24 @@ void Executor::CancelTasks() {
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
 	while (executor_tasks > 0) {
-		WorkOnTasks();
+		if (WorkOnTasks()) {
+			continue;
+		}
+#ifndef DUCKDB_NO_THREADS
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		annotated_unique_lock<annotated_mutex> l(producer->producer_lock);
+		producer->producer_cv.wait(l, [&]() DUCKDB_REQUIRES(producer->producer_lock) {
+			return executor_tasks == 0 || scheduler.GetTaskCountForProducerLocked(*producer) > 0;
+		});
+#endif
 	}
+#ifndef DUCKDB_NO_THREADS
+	if (producer) {
+		// Synchronize with the final UnregisterTask before destroying any executor state.
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		D_ASSERT(executor_tasks == 0);
+	}
+#endif
 	// Now safe to destroy pipelines, events and states — no tasks reference them
 	lock_guard<mutex> elock(executor_lock);
 	for (auto &rec_cte_ref : recursive_ctes) {
@@ -321,13 +337,15 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 void Executor::UnregisterTask() {
 #ifndef DUCKDB_NO_THREADS
 	{
-		// Wake any thread blocked in `WaitForTask`.
+		const annotated_lock_guard<annotated_mutex> l(producer->producer_lock);
+		executor_tasks--;
 		// A finished task may have scheduled follow-up tasks or completed the query.
-		lock_guard<mutex> l(executor_lock);
+		producer->producer_cv.notify_all();
 		task_reschedule.notify_all();
 	}
-#endif
+#else
 	executor_tasks--;
+#endif
 }
 
 void Executor::WaitForTask() {
@@ -348,10 +366,13 @@ void Executor::WaitForTask() {
 		return;
 	}
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
-		blocked_thread_time += blocked_micros;
-		return;
+	{
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		if (scheduler.GetTaskCountForProducerLocked(*producer) > 0) {
+			// A task is available for the calling thread, the next step will make progress without waiting
+			blocked_thread_time += blocked_micros;
+			return;
+		}
 	}
 	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
 	// Wait (bounded), but wake up on task completion or reschedule.

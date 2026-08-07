@@ -295,10 +295,10 @@ idx_t TaskScheduler::GetProducerCount() const {
 	return GetQueue(TaskSchedulerType::REGULAR).GetProducerCount();
 }
 
-idx_t TaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
+idx_t TaskScheduler::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	idx_t task_count = 0;
 	for (uint8_t i = 0; i < TASK_SCHEDULER_TYPE_COUNT; i++) {
-		task_count += GetQueue(static_cast<TaskSchedulerType>(i)).GetTaskCountForProducer(token);
+		task_count += GetQueue(static_cast<TaskSchedulerType>(i)).GetTaskCountForProducerLocked(token);
 	}
 	return task_count;
 }

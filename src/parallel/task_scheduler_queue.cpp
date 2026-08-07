@@ -88,8 +88,7 @@ idx_t TaskSchedulerQueue::GetProducerCount() const {
 	return queue->q.size_producers_approx();
 }
 
-idx_t TaskSchedulerQueue::GetTaskCountForProducer(ProducerToken &token) const {
-	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
+idx_t TaskSchedulerQueue::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	return queue->q.size_producer_approx(token.GetQueueProducerToken(pool_type).token);
 }
 
@@ -174,7 +173,7 @@ idx_t TaskSchedulerQueue::GetProducerCount() const {
 	return q.size();
 }
 
-idx_t TaskSchedulerQueue::GetTaskCountForProducer(ProducerToken &token) const {
+idx_t TaskSchedulerQueue::GetTaskCountForProducerLocked(ProducerToken &token) const {
 	lock_guard<mutex> lock(qlock);
 	const auto it = q.find(token.GetQueueProducerToken(pool_type));
 	if (it == q.end()) {
