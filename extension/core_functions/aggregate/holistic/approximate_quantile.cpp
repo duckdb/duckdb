@@ -355,8 +355,6 @@ float CheckApproxQuantile(const Value &quantile_val) {
 //! Binds the quantile parameter into the bind data. It stays part of the expression tree, and the aggregate is
 //! handed it along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	auto quantile_val = input.GetNonNullConstant(1);
 
 	vector<float> quantiles;

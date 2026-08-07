@@ -120,7 +120,6 @@ struct StringAggFunction {
 //! Binds the separator into the bind data. It stays part of the expression tree, and the aggregate is handed it
 //! along with the input - the update callback only consumes the leading input argument
 unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
 		// single argument: default to comma

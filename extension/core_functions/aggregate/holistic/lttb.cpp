@@ -342,7 +342,6 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 
 auto LTTBBind(BindAggregateFunctionInput &input) -> unique_ptr<FunctionData> {
 	auto &context = input.GetClientContext();
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 3);
 
