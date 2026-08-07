@@ -32,3 +32,26 @@ query I nosort casenorm3
 EXPLAIN SELECT X+2 FROM test
 ----
 
+query I nosort case_boolean_filter_identity
+EXPLAIN SELECT *
+FROM test
+WHERE CASE WHEN X > 0 THEN TRUE ELSE FALSE END
+----
+
+query I nosort case_boolean_filter_identity
+EXPLAIN SELECT *
+FROM test
+WHERE X > 0
+----
+
+statement ok
+CREATE TABLE nullable_test(x INTEGER);
+
+statement ok
+INSERT INTO nullable_test VALUES (NULL);
+
+query T
+SELECT CASE WHEN x > 0 THEN TRUE ELSE FALSE END
+FROM nullable_test
+----
+false
