@@ -1,11 +1,11 @@
-commit 58cec0216987eca659dd8060183d8e41812f01fe
+commit 7213f8e17ffd9ce52420154e217127b7059e0e3c
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 0fc503a..8114726 100644
+index 0fc503a..2505821 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -7,8 +7,13 @@
@@ -40,7 +40,7 @@ index 0fc503a..8114726 100644
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -574,6 +590,107 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -574,6 +590,123 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -68,6 +68,7 @@ index 0fc503a..8114726 100644
 +	if (HasCacheControlDirective(headers, "no-cache")) {
 +		return timestamp_t::ninfinity();
 +	}
++	const auto response_time = Timestamp::GetCurrentTimestamp();
 +	int64_t freshness_lifetime = 0;
 +	bool has_freshness_lifetime = false;
 +	bool has_max_age = false;
@@ -107,7 +108,7 @@ index 0fc503a..8114726 100644
 +			if (headers.HasHeader("Date")) {
 +				has_reference_time = TryParseLastModifiedTime(headers.GetHeaderValue("Date"), reference_time);
 +			} else {
-+				reference_time = Timestamp::GetCurrentTimestamp();
++				reference_time = response_time;
 +			}
 +			int64_t freshness_micros;
 +			if (has_reference_time && TrySubtractOperator::Operation(expires, reference_time, freshness_micros)) {
@@ -123,23 +124,38 @@ index 0fc503a..8114726 100644
 +		return nullopt;
 +	}
 +
-+	// The response may have already spent time in intermediate caches (RFC 9111 current age)
++	// Account for both Age and the apparent age derived from Date (RFC 9111).
 +	int64_t age = 0;
 +	if (headers.HasHeader("Age")) {
 +		if (!TryParseNonNegativeSeconds(headers.GetHeaderValue("Age"), age)) {
 +			age = 0;
 +		}
 +	}
++	int64_t current_age_micros;
++	if (!TryMultiplyOperator::Operation(age, Interval::MICROS_PER_SEC, current_age_micros)) {
++		return timestamp_t::ninfinity();
++	}
++	if (headers.HasHeader("Date")) {
++		timestamp_t date;
++		if (TryParseLastModifiedTime(headers.GetHeaderValue("Date"), date)) {
++			int64_t apparent_age_micros;
++			if (!TrySubtractOperator::Operation(response_time, date, apparent_age_micros)) {
++				return timestamp_t::ninfinity();
++			}
++			current_age_micros = MaxValue<int64_t>(current_age_micros, MaxValue<int64_t>(0, apparent_age_micros));
++		}
++	}
 +
-+	const int64_t remaining = freshness_lifetime - age;
-+	if (remaining <= 0) {
++	int64_t freshness_micros;
++	if (freshness_lifetime <= 0 ||
++	    !TryMultiplyOperator::Operation(freshness_lifetime, Interval::MICROS_PER_SEC, freshness_micros) ||
++	    current_age_micros >= freshness_micros) {
 +		return timestamp_t::ninfinity();
 +	}
 +	// Absurd server-provided lifetimes that would overflow the deadline grant no freshness
-+	int64_t remaining_micros;
 +	int64_t deadline_micros;
-+	if (!TryMultiplyOperator::Operation(remaining, Interval::MICROS_PER_SEC, remaining_micros) ||
-+	    !TryAddOperator::Operation(Timestamp::GetCurrentTimestamp().value, remaining_micros, deadline_micros)) {
++	const auto remaining_micros = freshness_micros - current_age_micros;
++	if (!TryAddOperator::Operation(response_time.value, remaining_micros, deadline_micros)) {
 +		return timestamp_t::ninfinity();
 +	}
 +	return timestamp_t(deadline_micros);
@@ -148,7 +164,7 @@ index 0fc503a..8114726 100644
  struct HTTPFileInfoParser {
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
  		if (!headers.HasHeader("Content-Range")) {
-@@ -675,6 +792,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -675,6 +808,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -160,7 +176,7 @@ index 0fc503a..8114726 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -716,6 +838,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -716,6 +854,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -168,7 +184,7 @@ index 0fc503a..8114726 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -726,6 +849,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -726,6 +865,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -176,7 +192,7 @@ index 0fc503a..8114726 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -793,7 +917,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -793,7 +933,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
