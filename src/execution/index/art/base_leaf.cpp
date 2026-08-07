@@ -30,10 +30,9 @@ void BaseLeaf<CAPACITY, TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byt
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-NodeHandle<BaseLeaf<CAPACITY, TYPE>> BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art, Node &node,
-                                                                                  const uint8_t byte) {
-	NodeHandle<BaseLeaf<CAPACITY, TYPE>> handle(art, node);
-	auto &n = handle.Get();
+NodeHandle BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art, NodePtr &node, const uint8_t byte) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<BaseLeaf<CAPACITY, TYPE>>();
 	uint8_t child_pos = 0;
 
 	for (; child_pos < n.count; child_pos++) {
@@ -54,10 +53,10 @@ NodeHandle<BaseLeaf<CAPACITY, TYPE>> BaseLeaf<CAPACITY, TYPE>::DeleteByteInterna
 // Node7Leaf
 //===--------------------------------------------------------------------===//
 
-void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
+void Node7Leaf::InsertByte(ART &art, NodePtr &node, const uint8_t byte) {
 	{
-		NodeHandle<Node7Leaf> handle(art, node);
-		auto &n7 = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n7 = handle.Get<Node7Leaf>();
 
 		if (n7.count != CAPACITY) {
 			InsertByteInternal(n7, byte);
@@ -70,11 +69,11 @@ void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	Node15Leaf::InsertByte(art, node, byte);
 }
 
-void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id) {
+void Node7Leaf::DeleteByte(ART &art, NodePtr &node, NodePtr &prefix, const uint8_t byte, const ARTKey &row_id) {
 	idx_t remainder;
 	{
 		auto n7_handle = DeleteByteInternal(art, node, byte);
-		auto &n7 = n7_handle.Get();
+		auto &n7 = n7_handle.Get<Node7Leaf>();
 
 		if (n7.count != 1) {
 			return;
@@ -89,22 +88,22 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 	}
 	// Free the prefix (nodes) and inline the remainder.
 	if (prefix.GetType() == NType::PREFIX) {
-		Node::FreeTree(art, prefix);
+		NodePtr::FreeTree(art, prefix);
 		Leaf::New(prefix, UnsafeNumericCast<row_t>(remainder));
 		return;
 	}
 	// Free the Node7Leaf and inline the remainder.
-	Node::FreeNode(art, node);
+	NodePtr::FreeNode(art, node);
 	Leaf::New(node, UnsafeNumericCast<row_t>(remainder));
 }
 
-void Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) {
+void Node7Leaf::ShrinkNode15Leaf(ART &art, NodePtr &node7_leaf, NodePtr &node15_leaf) {
 	{
 		auto n7_handle = New(art, node7_leaf);
-		auto &n7 = n7_handle.Get();
+		auto &n7 = n7_handle.Get<Node7Leaf>();
 
-		NodeHandle<Node15Leaf> n15_handle(art, node15_leaf);
-		auto &n15 = n15_handle.Get();
+		NodeHandle n15_handle(art, node15_leaf);
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 
 		node7_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
@@ -113,17 +112,17 @@ void Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) 
 			n7.key[i] = n15.key[i];
 		}
 	}
-	Node::FreeNode(art, node15_leaf);
+	NodePtr::FreeNode(art, node15_leaf);
 }
 
 //===--------------------------------------------------------------------===//
 // Node15Leaf
 //===--------------------------------------------------------------------===//
 
-void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
+void Node15Leaf::InsertByte(ART &art, NodePtr &node, const uint8_t byte) {
 	{
-		NodeHandle<Node15Leaf> n15_handle(art, node);
-		auto &n15 = n15_handle.Get();
+		NodeHandle n15_handle(art, node);
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 		if (n15.count != CAPACITY) {
 			InsertByteInternal(n15, byte);
 			return;
@@ -134,10 +133,10 @@ void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	Node256Leaf::InsertByte(art, node, byte);
 }
 
-void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
+void Node15Leaf::DeleteByte(ART &art, NodePtr &node, const uint8_t byte) {
 	{
 		auto n15_handle = DeleteByteInternal(art, node, byte);
-		auto &n15 = n15_handle.Get();
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 		if (n15.count >= Node7Leaf::CAPACITY) {
 			return;
 		}
@@ -146,13 +145,13 @@ void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	Node7Leaf::ShrinkNode15Leaf(art, node, node15);
 }
 
-void Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
+void Node15Leaf::GrowNode7Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node7_leaf) {
 	{
-		NodeHandle<Node7Leaf> n7_handle(art, node7_leaf);
-		auto &n7 = n7_handle.Get();
+		NodeHandle n7_handle(art, node7_leaf);
+		auto &n7 = n7_handle.Get<Node7Leaf>();
 
 		auto n15_handle = New(art, node15_leaf);
-		auto &n15 = n15_handle.Get();
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 		node15_leaf.SetGateStatus(node7_leaf.GetGateStatus());
 
 		n15.count = n7.count;
@@ -160,16 +159,16 @@ void Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
 			n15.key[i] = n7.key[i];
 		}
 	}
-	Node::FreeNode(art, node7_leaf);
+	NodePtr::FreeNode(art, node7_leaf);
 }
 
-void Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf) {
+void Node15Leaf::ShrinkNode256Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node256_leaf) {
 	{
 		auto n15_handle = New(art, node15_leaf);
-		auto &n15 = n15_handle.Get();
+		auto &n15 = n15_handle.Get<Node15Leaf>();
 
-		NodeHandle<Node256Leaf> n256_handle(art, node256_leaf);
-		auto &n256 = n256_handle.Get();
+		NodeHandle n256_handle(art, node256_leaf);
+		auto &n256 = n256_handle.Get<Node256Leaf>();
 
 		node15_leaf.SetGateStatus(node256_leaf.GetGateStatus());
 
@@ -181,7 +180,7 @@ void Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_le
 			}
 		}
 	}
-	Node::FreeNode(art, node256_leaf);
+	NodePtr::FreeNode(art, node256_leaf);
 }
 
 } // namespace duckdb

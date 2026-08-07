@@ -34,9 +34,7 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTHandlingResult : uint8_t;
-
-enum class ARTScanHandling : uint8_t;
+enum class ARTScanAction : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
@@ -466,6 +464,8 @@ enum class SampleType : uint8_t;
 
 enum class SamplingState : uint8_t;
 
+enum class ScanNodeResult : uint8_t;
+
 enum class ScanType : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
@@ -615,10 +615,7 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+const char* EnumUtil::ToChars<ARTScanAction>(ARTScanAction value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
@@ -1263,6 +1260,9 @@ template<>
 const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
 
 template<>
+const char* EnumUtil::ToChars<ScanNodeResult>(ScanNodeResult value);
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
 
 template<>
@@ -1483,10 +1483,7 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
-
-template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+ARTScanAction EnumUtil::FromString<ARTScanAction>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
@@ -2129,6 +2126,9 @@ SampleType EnumUtil::FromString<SampleType>(const char *value);
 
 template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value);
+
+template<>
+ScanNodeResult EnumUtil::FromString<ScanNodeResult>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
