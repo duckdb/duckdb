@@ -118,23 +118,16 @@ bool HasExternalCTEReferences(const LogicalOperator &op) {
 	return false;
 }
 
-void ClearLateMaterializationProjectionMaps(LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		join.left_projection_map.clear();
-		join.right_projection_map.clear();
-		break;
+bool HasProjectionMaps(const LogicalOperator &op) {
+	if (op.HasProjectionMap()) {
+		return true;
 	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-		op.Cast<LogicalFilter>().projection_map.clear();
-		break;
-	default:
-		break;
+	for (const auto &child : op.children) {
+		if (HasProjectionMaps(*child)) {
+			return true;
+		}
 	}
-	for (auto &child : op.children) {
-		ClearLateMaterializationProjectionMaps(*child);
-	}
+	return false;
 }
 
 ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
@@ -272,6 +265,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
 	}
+	const bool used_late_materialization = late_mat_lhs != nullptr;
 
 	// Optimize window children
 	window.children[0] = Optimize(std::move(window.children[0]));
@@ -282,7 +276,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_UNNEST);
 
-	if (late_mat_lhs) {
+	if (used_late_materialization) {
 		op = ConstructJoin(std::move(late_mat_lhs), std::move(op), group_projection_idxs.size(), params);
 	}
 
@@ -290,6 +284,13 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	                           new_bindings, replacer, params);
 
 	replacer.stop_operator = op.get();
+
+	// Preserve the post-rewrite pruning used before late-materialized INNER reconstruction was introduced. A plan
+	// with active positional projection maps cannot safely be pruned a second time if a selected binding disappears.
+	if (!used_late_materialization && !HasExternalCTEReferences(*op) && !HasProjectionMaps(*op)) {
+		RemoveUnusedColumns unused_optimizer(optimizer);
+		unused_optimizer.VisitOperator(*op);
+	}
 
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
@@ -1252,10 +1253,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	rhs_projection->ResolveOperatorTypes();
 	rhs = std::move(rhs_projection);
 
-	// Late materialization makes the original payload columns unnecessary on the TopN side. Prune them before
-	// constructing the reconstruction join. The later column lifetime pass recreates the cleared projection maps.
 	if (!HasExternalCTEReferences(*rhs)) {
-		ClearLateMaterializationProjectionMaps(*rhs);
 		RemoveUnusedColumns unused_optimizer(optimizer);
 		unused_optimizer.VisitOperator(*rhs);
 	}
