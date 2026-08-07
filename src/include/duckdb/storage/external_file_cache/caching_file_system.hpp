@@ -87,6 +87,8 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Whether validation metadata permits using cached blocks.
+	bool CanUseCache();
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
@@ -112,9 +114,8 @@ private:
 	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
 	shared_ptr<FileHandle> file_handle;
-	//! Last modified time and version tag (if FileHandle is opened)
-	timestamp_t last_modified;
-	string version_tag;
+	//! Metadata snapshot taken with a single Stats call when the file handle is opened.
+	CacheValidationInfo validation_info;
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
