@@ -23,6 +23,7 @@ class Node48 {
 
 public:
 	static constexpr NType NODE_48 = NType::NODE_48;
+	static constexpr NType TYPE = NType::NODE_48;
 	static constexpr uint8_t CAPACITY = 48;
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t SHRINK_THRESHOLD = 12;
@@ -39,12 +40,12 @@ private:
 
 public:
 	//! Get a new Node48 handle and initialize the Node48.
-	static NodeHandle<Node48> New(ART &art, Node &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, NODE_48).New();
 		node.SetMetadata(static_cast<uint8_t>(NODE_48));
 
-		NodeHandle<Node48> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<Node48>();
 
 		// Reset the node (count and child_index).
 		n.count = 0;
@@ -82,6 +83,32 @@ public:
 				lambda(n.children[n.child_index[i]]);
 			}
 		}
+	}
+
+	//! Get the child node at byte, if it exists.
+	static OptionalNode GetChildNode(const Node48 &n, const uint8_t byte) {
+		if (n.child_index[byte] != EMPTY_MARKER) {
+			if (!n.children[n.child_index[byte]].HasMetadata()) {
+				throw InternalException("empty child for byte %d in Node48::GetChildNode", byte);
+			}
+			return n.children[n.child_index[byte]];
+		}
+		return OptionalNode();
+	}
+
+	//! Get the first child node >= byte, if it exists, and update byte.
+	static OptionalNode GetNextChildNode(const Node48 &n, uint8_t &byte) {
+		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
+			if (n.child_index[i] != EMPTY_MARKER) {
+				if (!n.children[n.child_index[i]].HasMetadata()) {
+					throw InternalException("empty child for byte %d in Node48::GetNextChildNode",
+					                        UnsafeNumericCast<uint8_t>(i));
+				}
+				byte = UnsafeNumericCast<uint8_t>(i);
+				return n.children[n.child_index[i]];
+			}
+		}
+		return OptionalNode();
 	}
 
 	template <class NODE>

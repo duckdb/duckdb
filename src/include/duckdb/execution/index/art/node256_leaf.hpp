@@ -21,6 +21,7 @@ class Node256Leaf {
 
 public:
 	static constexpr NType NODE_256_LEAF = NType::NODE_256_LEAF;
+	static constexpr NType TYPE = NType::NODE_256_LEAF;
 	static constexpr uint16_t CAPACITY = Node256::CAPACITY;
 
 public:
@@ -34,7 +35,7 @@ private:
 
 public:
 	//! Get a new Node256Leaf handle and initialize the leaf.
-	static NodeHandle<Node256Leaf> New(ART &art, Node &node);
+	static NodeHandle New(ART &art, Node &node);
 
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
