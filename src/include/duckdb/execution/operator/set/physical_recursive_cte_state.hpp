@@ -3,6 +3,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
@@ -104,6 +105,7 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
 	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
 	void RecordKeyedHashCommit(idx_t elapsed_ns);
+	void RecordKeyPreaggregationClassification(idx_t elapsed_ns);
 	void RecordKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns);
 	void RecordKeyPreaggregationCombine(idx_t elapsed_ns);
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
@@ -125,6 +127,7 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> direct_probe_key_gather_work_ns {0};
 	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
 	atomic<idx_t> keyed_hash_commit_work_ns {0};
+	atomic<idx_t> key_preaggregation_classification_work_ns {0};
 	atomic<idx_t> key_preaggregation_work_ns {0};
 	atomic<idx_t> key_preaggregation_combine_work_ns {0};
 	atomic<idx_t> key_preaggregation_candidate_rows {0};
@@ -303,6 +306,7 @@ private:
 	template <bool COLLECT_METRICS>
 	void CommitPreaggregatedUsingKeyUpdatesInternal();
 	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
+	bool ShouldPreaggregateUsingKeyUpdates();
 	void SnapshotUsingKeyDelta(DataChunk &keys);
 	void SnapshotUsingKeyDeltaGroups(DataChunk &keys);
 	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
@@ -314,6 +318,9 @@ private:
 	ClientContext &context;
 	vector<AggregateObject> payload_aggregate_objects;
 	ExpressionExecutor executor;
+	Vector preaggregation_hashes;
+	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
+	bool has_payload_comparison_executors = false;
 	DataChunk payload_rows;
 	Vector new_group_addresses;
 	SelectionVector new_groups;
@@ -340,7 +347,7 @@ private:
 	AggregateHTScanState ht_scan_state;
 
 	bool use_local_union_all_output = true;
-	bool preaggregate_using_key = false;
+	bool can_preaggregate_using_key = false;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active

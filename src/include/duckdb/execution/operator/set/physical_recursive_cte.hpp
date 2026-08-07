@@ -85,6 +85,8 @@ public:
 	vector<idx_t> payload_idx, distinct_idx;
 	// Contains the aggregates for the payload
 	vector<unique_ptr<Expression>> payload_aggregates;
+	// Contains SQL-level distinct comparisons for the finalized payload columns
+	vector<unique_ptr<Expression>> payload_comparisons;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 	//! Physical recursive inputs inside the recursive member

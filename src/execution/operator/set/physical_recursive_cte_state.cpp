@@ -134,6 +134,10 @@ void RecursiveCTEEpochMetrics::RecordKeyedHashCommit(idx_t elapsed_ns) {
 	keyed_hash_commit_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordKeyPreaggregationClassification(idx_t elapsed_ns) {
+	key_preaggregation_classification_work_ns.fetch_add(elapsed_ns);
+}
+
 void RecursiveCTEEpochMetrics::RecordKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns) {
 	D_ASSERT(groups <= candidate_rows);
 	key_preaggregation_candidate_rows.fetch_add(candidate_rows);
@@ -347,6 +351,8 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"direct_probe_payload_finalize_work_ns",
 	      to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())},
 	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
+	     {"key_preaggregation_classification_work_ns",
+	      to_string(epoch_metrics.key_preaggregation_classification_work_ns.load())},
 	     {"key_preaggregation_work_ns", to_string(epoch_metrics.key_preaggregation_work_ns.load())},
 	     {"key_preaggregation_combine_work_ns", to_string(epoch_metrics.key_preaggregation_combine_work_ns.load())},
 	     {"key_preaggregation_candidate_rows", to_string(epoch_metrics.key_preaggregation_candidate_rows.load())},

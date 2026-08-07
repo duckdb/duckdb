@@ -23,6 +23,7 @@ struct RecursiveCTEKeyDeltaState {
 	DataChunk changed_rows;
 	DataChunk previous_scan_rows;
 	DataChunk key_scan_rows;
+	DataChunk comparison_rows;
 	Vector touched_addresses;
 	Vector matched_addresses;
 	SelectionVector first_touches;

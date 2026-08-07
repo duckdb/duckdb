@@ -23,6 +23,16 @@ RecursiveCTEKeyDeltaState::RecursiveCTEKeyDeltaState(ClientContext &context, con
 	changed_rows.Initialize(Allocator::Get(context), op.GetTypes());
 	previous_scan_rows.Initialize(Allocator::Get(context), op.GetTypes());
 	key_scan_rows.Initialize(Allocator::Get(context), op.distinct_types);
+	vector<LogicalType> comparison_types;
+	comparison_types.reserve(op.payload_types.size() * 2);
+	comparison_types.insert(comparison_types.end(), op.payload_types.begin(), op.payload_types.end());
+	comparison_types.insert(comparison_types.end(), op.payload_types.begin(), op.payload_types.end());
+	for (auto &comparison : op.payload_comparisons) {
+		if (comparison) {
+			comparison_rows.InitializeEmpty(comparison_types);
+			break;
+		}
+	}
 	if (track_touched_keys) {
 		touched_keys = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
 	}
@@ -56,14 +66,14 @@ static void ScatterDeltaChunk(DataChunk &output_chunk, DataChunk &input_chunk, c
 }
 
 static idx_t SelectDistinctPayloadRows(const Vector &previous, const Vector &current,
-                                       optional_ptr<const SelectionVector> candidates, idx_t candidate_count,
+                                       optional_ptr<SelectionVector> candidates, idx_t candidate_count,
                                        SelectionVector &changed, SelectionVector &unchanged) {
 	if (!candidates) {
 		return VectorOperations::DistinctFrom(previous, current, nullptr, candidate_count, &changed, &unchanged);
 	}
 	Vector previous_candidates(previous, *candidates, candidate_count);
 	Vector current_candidates(current, *candidates, candidate_count);
-	return VectorOperations::DistinctFrom(previous_candidates, current_candidates, candidates, candidate_count,
+	return VectorOperations::DistinctFrom(previous_candidates, current_candidates, candidates.get(), candidate_count,
 	                                      &changed, &unchanged);
 }
 
@@ -159,15 +169,31 @@ idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool
 		ScatterDeltaChunk(delta.result_rows, delta.key_scan_rows, op.distinct_idx);
 		ScatterDeltaChunk(delta.result_rows, delta.payload_rows, op.payload_idx);
 		delta.result_rows.CheckCardinality(row_count);
+		if (has_payload_comparison_executors) {
+			delta.comparison_rows.Reset();
+			for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size(); payload_idx++) {
+				delta.comparison_rows.data[payload_idx].Reference(
+				    delta.previous_scan_rows.data[op.payload_idx[payload_idx]]);
+				delta.comparison_rows.data[op.payload_idx.size() + payload_idx].Reference(
+				    delta.payload_rows.data[payload_idx]);
+			}
+			delta.comparison_rows.CheckCardinality(row_count);
+		}
 
 		idx_t changed_count = 0;
 		idx_t equal_count = row_count;
-		optional_ptr<const SelectionVector> equal_groups;
+		optional_ptr<SelectionVector> equal_groups;
 		for (idx_t payload_idx = 0; payload_idx < op.payload_idx.size() && equal_count > 0; payload_idx++) {
 			auto &next_equal_groups = payload_idx % 2 == 0 ? delta.equal_groups_a : delta.equal_groups_b;
-			const auto changed_column_count = SelectDistinctPayloadRows(
-			    delta.previous_scan_rows.data[op.payload_idx[payload_idx]], delta.payload_rows.data[payload_idx],
-			    equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
+			idx_t changed_column_count;
+			if (payload_comparison_executors[payload_idx]) {
+				changed_column_count = payload_comparison_executors[payload_idx]->SelectExpression(
+				    delta.comparison_rows, delta.changed_column_groups, next_equal_groups, equal_groups, equal_count);
+			} else {
+				changed_column_count = SelectDistinctPayloadRows(
+				    delta.previous_scan_rows.data[op.payload_idx[payload_idx]], delta.payload_rows.data[payload_idx],
+				    equal_groups, equal_count, delta.changed_column_groups, next_equal_groups);
+			}
 			for (idx_t changed_idx = 0; changed_idx < changed_column_count; changed_idx++) {
 				delta.changed_groups.set_index(changed_count++,
 				                               delta.changed_column_groups.get_index_unsafe(changed_idx));

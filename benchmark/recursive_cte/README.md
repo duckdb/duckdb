@@ -31,7 +31,9 @@ fan-out over large recurring states. The tiny-frontier `UNION ALL` workload
 guards fixed per-epoch runtime overhead across many one-row iterations.
 The keyed fan-in pair uses identical duplicated binary-tree edges to compare raw
 candidate frontiers under `UNION ALL` with finalized changed-key frontiers under
-plain `UNION`.
+plain `UNION`. Four additional plain-`UNION` workloads protect the runtime
+preaggregation decision for tiny, duplicate-free, wide one-to-one, and stable
+duplicate-heavy frontiers.
 
 None of the eight published algorithms naturally joins recurring state on only
 a proper subset of a composite `USING KEY`. The partial-probe workloads are

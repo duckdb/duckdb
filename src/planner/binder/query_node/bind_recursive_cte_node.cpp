@@ -8,8 +8,11 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -258,10 +261,60 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename));
 	bool ref_cte = cte_binding && cte_binding->IsReferenced();
 	if (!ref_cte && !ref_recurring) {
-		auto root =
-		    make_uniq<LogicalSetOperation>(setop_index, result.types.size(), std::move(left_node),
-		                                   std::move(right_node), LogicalOperatorType::LOGICAL_UNION, union_all);
-		result.plan = std::move(root);
+		auto root = make_uniq<LogicalSetOperation>(setop_index, internal_types.size(), std::move(left_node),
+		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION,
+		                                           is_using_key || union_all);
+		if (!is_using_key) {
+			result.plan = std::move(root);
+			return result;
+		}
+
+		auto group_index = GenerateTableIndex();
+		auto aggregate_index = GenerateTableIndex();
+		unordered_map<ProjectionIndex, ProjectionIndex> group_bindings;
+		unordered_map<ProjectionIndex, ProjectionIndex> collated_group_bindings;
+		for (idx_t group_idx = 0; group_idx < key_targets.size(); group_idx++) {
+			auto &group = key_targets[group_idx]->Cast<BoundColumnRefExpression>();
+			const auto column_index = group.Binding().column_index;
+			const auto group_type = group.GetReturnType();
+			auto uncollated_group = key_targets[group_idx]->Copy();
+			if (ExpressionBinder::PushCollation(context, key_targets[group_idx], group_type)) {
+				vector<unique_ptr<Expression>> first_children;
+				first_children.push_back(std::move(uncollated_group));
+				FunctionBinder function_binder(*this);
+				auto first = function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(group_type),
+				                                                   std::move(first_children));
+				first->SetAlias("__collated_group");
+				collated_group_bindings[column_index] = ProjectionIndex(payload_aggregates.size());
+				payload_aggregates.push_back(std::move(first));
+			} else {
+				group_bindings[column_index] = ProjectionIndex(group_idx);
+			}
+		}
+		auto aggregate = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(payload_aggregates));
+		aggregate->groups = std::move(key_targets);
+		aggregate->AddChild(std::move(root));
+
+		vector<unique_ptr<Expression>> projections;
+		projections.reserve(result.types.size());
+		idx_t payload_idx = 0;
+		for (idx_t column_idx = 0; column_idx < result.types.size(); column_idx++) {
+			auto group_entry = group_bindings.find(ProjectionIndex(column_idx));
+			auto collated_group_entry = collated_group_bindings.find(ProjectionIndex(column_idx));
+			if (group_entry != group_bindings.end()) {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(group_index, group_entry->second)));
+			} else if (collated_group_entry != collated_group_bindings.end()) {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(aggregate_index, collated_group_entry->second)));
+			} else {
+				projections.push_back(make_uniq<BoundColumnRefExpression>(
+				    result.types[column_idx], ColumnBinding(aggregate_index, ProjectionIndex(payload_idx++))));
+			}
+		}
+		auto projection = make_uniq<LogicalProjection>(setop_index, std::move(projections));
+		projection->AddChild(std::move(aggregate));
+		result.plan = std::move(projection);
 	} else {
 		auto root = make_uniq<LogicalRecursiveCTE>(ctename, setop_index, result.types.size(), union_all,
 		                                           std::move(key_targets), std::move(left_node), std::move(right_node));
