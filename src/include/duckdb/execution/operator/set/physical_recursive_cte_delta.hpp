@@ -7,11 +7,11 @@
 namespace duckdb {
 
 struct RecursiveCTEKeyDeltaState {
-	RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op);
+	RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op, bool track_touched_keys);
 
 	void Reset();
 
-	GroupedAggregateHashTable touched_keys;
+	unique_ptr<GroupedAggregateHashTable> touched_keys;
 	ColumnDataCollection previous_rows;
 	ColumnDataCollection new_keys;
 	ColumnDataAppendState previous_append_state;

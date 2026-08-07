@@ -294,13 +294,19 @@ public:
 private:
 	template <bool COLLECT_METRICS>
 	void CommitUsingKeyUpdatesInternal();
+	template <bool COLLECT_METRICS>
+	void CommitPreaggregatedUsingKeyUpdatesInternal();
+	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
 	void SnapshotUsingKeyDelta(DataChunk &keys);
-	void FinalizeUsingKeyDelta();
+	void SnapshotUsingKeyDeltaGroups(DataChunk &keys);
+	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
 	unique_ptr<GroupedAggregateHashTable> ht;
 	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
 	const PhysicalRecursiveCTE &op;
+	ClientContext &context;
+	vector<AggregateObject> payload_aggregate_objects;
 	ExpressionExecutor executor;
 	DataChunk payload_rows;
 	Vector new_group_addresses;
@@ -328,6 +334,7 @@ private:
 	AggregateHTScanState ht_scan_state;
 
 	bool use_local_union_all_output = true;
+	bool preaggregate_using_key = false;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active

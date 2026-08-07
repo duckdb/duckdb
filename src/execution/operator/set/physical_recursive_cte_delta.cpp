@@ -8,13 +8,14 @@
 
 namespace duckdb {
 
-RecursiveCTEKeyDeltaState::RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op)
-    : touched_keys(context, BufferAllocator::Get(context), op.distinct_types), previous_rows(context, op.GetTypes()),
-      new_keys(context, op.distinct_types), touched_addresses(LogicalType::POINTER),
-      matched_addresses(LogicalType::POINTER), first_touches(STANDARD_VECTOR_SIZE), found_groups(STANDARD_VECTOR_SIZE),
-      missing_groups(STANDARD_VECTOR_SIZE), changed_groups(STANDARD_VECTOR_SIZE),
-      changed_column_groups(STANDARD_VECTOR_SIZE), equal_groups_a(STANDARD_VECTOR_SIZE),
-      equal_groups_b(STANDARD_VECTOR_SIZE), arena(Allocator::Get(context)), row_state(arena) {
+RecursiveCTEKeyDeltaState::RecursiveCTEKeyDeltaState(ClientContext &context, const PhysicalRecursiveCTE &op,
+                                                     bool track_touched_keys)
+    : previous_rows(context, op.GetTypes()), new_keys(context, op.distinct_types),
+      touched_addresses(LogicalType::POINTER), matched_addresses(LogicalType::POINTER),
+      first_touches(STANDARD_VECTOR_SIZE), found_groups(STANDARD_VECTOR_SIZE), missing_groups(STANDARD_VECTOR_SIZE),
+      changed_groups(STANDARD_VECTOR_SIZE), changed_column_groups(STANDARD_VECTOR_SIZE),
+      equal_groups_a(STANDARD_VECTOR_SIZE), equal_groups_b(STANDARD_VECTOR_SIZE), arena(Allocator::Get(context)),
+      row_state(arena) {
 	first_touch_keys.Initialize(Allocator::Get(context), op.distinct_types);
 	selected_keys.Initialize(Allocator::Get(context), op.distinct_types);
 	payload_rows.Initialize(Allocator::Get(context), op.payload_types);
@@ -22,10 +23,15 @@ RecursiveCTEKeyDeltaState::RecursiveCTEKeyDeltaState(ClientContext &context, con
 	changed_rows.Initialize(Allocator::Get(context), op.GetTypes());
 	previous_scan_rows.Initialize(Allocator::Get(context), op.GetTypes());
 	key_scan_rows.Initialize(Allocator::Get(context), op.distinct_types);
+	if (track_touched_keys) {
+		touched_keys = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
+	}
 }
 
 void RecursiveCTEKeyDeltaState::Reset() {
-	touched_keys.ResetForNewIteration(0);
+	if (touched_keys) {
+		touched_keys->ResetForNewIteration(0);
+	}
 	previous_rows.ResetForReuse();
 	previous_rows.InitializeAppend(previous_append_state);
 	new_keys.ResetForReuse();
@@ -64,16 +70,27 @@ static idx_t SelectDistinctPayloadRows(const Vector &previous, const Vector &cur
 void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
+	D_ASSERT(delta.touched_keys);
 	const auto first_touch_count =
-	    delta.touched_keys.FindOrCreateGroups(keys, delta.touched_addresses, delta.first_touches);
-	delta.touched_count += first_touch_count;
+	    delta.touched_keys->FindOrCreateGroups(keys, delta.touched_addresses, delta.first_touches);
 	if (first_touch_count == 0) {
 		return;
 	}
 
 	delta.first_touch_keys.Reset();
 	delta.first_touch_keys.Slice(keys, delta.first_touches, first_touch_count);
-	const auto found_count = ht->LookupGroups(delta.first_touch_keys, delta.lookup_state, delta.found_groups);
+	SnapshotUsingKeyDeltaGroups(delta.first_touch_keys);
+}
+
+void RecursiveCTEState::SnapshotUsingKeyDeltaGroups(DataChunk &keys) {
+	D_ASSERT(key_delta);
+	auto &delta = *key_delta;
+	const auto first_touch_count = keys.size();
+	delta.touched_count += first_touch_count;
+	if (first_touch_count == 0) {
+		return;
+	}
+	const auto found_count = ht->LookupGroups(keys, delta.lookup_state, delta.found_groups);
 
 	idx_t found_idx = 0;
 	idx_t missing_count = 0;
@@ -89,7 +106,7 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 
 	if (found_count > 0) {
 		delta.selected_keys.Reset();
-		delta.selected_keys.Slice(delta.first_touch_keys, delta.found_groups, found_count);
+		delta.selected_keys.Slice(keys, delta.found_groups, found_count);
 
 		delta.matched_addresses.SetVectorType(VectorType::FLAT_VECTOR);
 		auto source_addresses = FlatVector::GetData<data_ptr_t>(delta.lookup_state.addresses);
@@ -113,12 +130,12 @@ void RecursiveCTEState::SnapshotUsingKeyDelta(DataChunk &keys) {
 
 	if (missing_count > 0) {
 		delta.selected_keys.Reset();
-		delta.selected_keys.Slice(delta.first_touch_keys, delta.missing_groups, missing_count);
+		delta.selected_keys.Slice(keys, delta.missing_groups, missing_count);
 		delta.new_keys.Append(delta.new_key_append_state, delta.selected_keys);
 	}
 }
 
-void RecursiveCTEState::FinalizeUsingKeyDelta() {
+idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics) {
 	D_ASSERT(key_delta);
 	auto &delta = *key_delta;
 	ColumnDataScanState previous_scan_state;
@@ -167,6 +184,7 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 	}
 
 	ColumnDataScanState new_key_scan_state;
+	idx_t index_work_ns = 0;
 	delta.new_keys.InitializeScan(new_key_scan_state);
 	while (delta.new_keys.Scan(new_key_scan_state, delta.key_scan_rows)) {
 		const auto row_count = delta.key_scan_rows.size();
@@ -174,6 +192,22 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 		if (found_count != row_count) {
 			throw InternalException("USING KEY delta finalization could not find %d of %d new groups",
 			                        row_count - found_count, row_count);
+		}
+		if (update_partial_indexes) {
+			const auto index_start =
+			    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			for (auto &index : partial_key_indexes) {
+				index->AddGroups(delta.key_scan_rows, *FlatVector::IncrementalSelectionVector(),
+				                 delta.lookup_state.addresses, row_count);
+			}
+			if (collect_metrics) {
+				const auto index_end = std::chrono::steady_clock::now();
+				const auto elapsed_ns = NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(index_end - index_start).count());
+				index_work_ns += elapsed_ns;
+				GetEpochMetrics().RecordPartialIndexMaintenance(elapsed_ns);
+				metrics.RecordPartialIndexBuild(NumericCast<idx_t>(elapsed_ns / 1000));
+			}
 		}
 
 		delta.payload_rows.Reset();
@@ -187,6 +221,7 @@ void RecursiveCTEState::FinalizeUsingKeyDelta() {
 		delta.result_rows.CheckCardinality(row_count);
 		op.working_table->Append(working_append_state, delta.result_rows);
 	}
+	return index_work_ns;
 }
 
 } // namespace duckdb
