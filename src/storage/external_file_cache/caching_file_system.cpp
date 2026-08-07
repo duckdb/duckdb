@@ -211,11 +211,11 @@ bool CachingFileHandle::CanUseCache() {
 	}
 
 	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-	const auto &cached_validation_info = current_cached_file->validation_info;
-	if (!cached_validation_info.cache_valid_until) {
+	const auto cache_valid_until = current_cached_file->validation_info.cache_valid_until;
+	if (!cache_valid_until) {
 		return has_validation_metadata;
 	}
-	return Timestamp::GetCurrentTimestamp() <= *cached_validation_info.cache_valid_until;
+	return Timestamp::GetCurrentTimestamp() <= *cache_valid_until;
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
