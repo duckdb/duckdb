@@ -239,7 +239,6 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 }
 
 unique_ptr<FunctionData> BindBitstringAgg(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 3) {
 		auto min = input.GetConstant(1);

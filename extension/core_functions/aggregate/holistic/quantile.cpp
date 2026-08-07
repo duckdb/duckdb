@@ -608,7 +608,6 @@ static Value CheckQuantile(const Value &quantile_val) {
 //! Binds the quantile parameter into the bind data. It stays part of the expression tree, and the aggregate is
 //! handed it along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() < 2) {
 		throw BinderException("QUANTILE requires a range argument between [0, 1]");
