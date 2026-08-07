@@ -1,4 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
+#include "duckdb/execution/operator/persistent/collection_merger.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -703,14 +706,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
 	if (append_count < row_group_size) {
-		// we have few rows - append to the local storage directly
-		LocalAppendState append_state;
-		storage.InitializeLocalAppend(append_state, table, context.client, bound_constraints);
-		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		for (auto &insert_chunk : collection.Chunks(transaction)) {
-			storage.LocalAppend(append_state, context.client, insert_chunk, false);
-		}
-		storage.FinalizeLocalAppend(append_state);
+		// we have few rows - defer merging to Finalize, where the leftovers of all threads are compacted together
+		gstate.unmerged_collections.push_back(lstate.collection_index);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
 		gstate.table.GetStorage().LocalMerge(context.client, optimistic_collection);
@@ -721,8 +718,119 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	return SinkCombineResultType::FINISHED;
 }
 
+class MergeCollectionsTask : public ExecutorTask {
+public:
+	MergeCollectionsTask(ClientContext &context, shared_ptr<Event> event_p, CollectionMerger &merger,
+	                     OptimisticDataWriter &writer, PhysicalIndex &result, const PhysicalOperator &op)
+	    : ExecutorTask(context, std::move(event_p), op), merger(merger), writer(writer), result(result) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		result = merger.Flush(writer);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "MergeCollectionsTask";
+	}
+
+private:
+	CollectionMerger &merger;
+	OptimisticDataWriter &writer;
+	PhysicalIndex &result;
+};
+
+class MergeCollectionsEvent : public BasePipelineEvent {
+public:
+	MergeCollectionsEvent(Pipeline &pipeline_p, ClientContext &context, const PhysicalInsert &op, DataTable &data_table,
+	                      vector<unique_ptr<CollectionMerger>> mergers_p)
+	    : BasePipelineEvent(pipeline_p), context(context), op(op), data_table(data_table),
+	      mergers(std::move(mergers_p)), merged_collections(mergers.size(), PhysicalIndex(DConstants::INVALID_INDEX)) {
+	}
+
+public:
+	void Schedule() override {
+		vector<shared_ptr<Task>> tasks;
+		for (idx_t i = 0; i < mergers.size(); i++) {
+			writers.push_back(make_uniq<OptimisticDataWriter>(context, data_table));
+			tasks.push_back(make_uniq<MergeCollectionsTask>(context, shared_from_this(), *mergers[i], *writers[i],
+			                                                merged_collections[i], op));
+		}
+		SetTasks(std::move(tasks));
+	}
+
+	void FinishEvent() override {
+		// merge the compacted collections into the transaction-local storage
+		auto &optimistic_writer = data_table.GetOptimisticWriter(context);
+		for (idx_t i = 0; i < mergers.size(); i++) {
+			auto &collection = data_table.GetOptimisticCollection(context, merged_collections[i]);
+			data_table.LocalMerge(context, collection);
+			data_table.ResetOptimisticCollection(context, merged_collections[i]);
+			optimistic_writer.Merge(*writers[i]);
+		}
+		optimistic_writer.FinalFlush();
+	}
+
+private:
+	ClientContext &context;
+	const PhysicalInsert &op;
+	DataTable &data_table;
+	vector<unique_ptr<CollectionMerger>> mergers;
+	vector<unique_ptr<OptimisticDataWriter>> writers;
+	vector<PhysicalIndex> merged_collections;
+};
+
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	if (gstate.unmerged_collections.empty()) {
+		return SinkFinalizeType::READY;
+	}
+	auto &table = gstate.table;
+	auto &data_table = table.GetStorage();
+	const idx_t row_group_size = data_table.GetRowGroupSize();
+
+	if (gstate.insert_count < row_group_size) {
+		// we are inserting a small amount of data - append directly to the transaction-local storage
+		LocalAppendState append_state;
+		data_table.InitializeLocalAppend(append_state, table, context, bound_constraints);
+		auto &transaction = DuckTransaction::Get(context, table.catalog);
+		for (auto &collection_index : gstate.unmerged_collections) {
+			auto &optimistic_collection = data_table.GetOptimisticCollection(context, collection_index);
+			for (auto &insert_chunk : optimistic_collection.collection->Chunks(transaction)) {
+				data_table.LocalAppend(append_state, context, insert_chunk, false);
+			}
+			data_table.ResetOptimisticCollection(context, collection_index);
+		}
+		data_table.FinalizeLocalAppend(append_state);
+		gstate.unmerged_collections.clear();
+		return SinkFinalizeType::READY;
+	}
+
+	// group the leftover thread-local collections into row-group-sized merge sets
+	vector<unique_ptr<CollectionMerger>> mergers;
+	unique_ptr<CollectionMerger> current_merger;
+	idx_t current_rows = 0;
+	for (auto &collection_index : gstate.unmerged_collections) {
+		if (!current_merger) {
+			current_merger = make_uniq<CollectionMerger>(context, data_table);
+		}
+		current_merger->AddCollection(collection_index, RowGroupBatchType::NOT_FLUSHED);
+		current_rows += data_table.GetOptimisticCollection(context, collection_index).collection->GetTotalRows();
+		if (current_rows >= row_group_size) {
+			mergers.push_back(std::move(current_merger));
+			current_rows = 0;
+		}
+	}
+	if (current_merger) {
+		mergers.push_back(std::move(current_merger));
+	}
+	gstate.unmerged_collections.clear();
+
+	// compact the merge sets in parallel through a new pipeline event
+	auto merge_event = make_shared_ptr<MergeCollectionsEvent>(pipeline, context, *this, data_table, std::move(mergers));
+	event.InsertEvent(std::move(merge_event));
 	return SinkFinalizeType::READY;
 }
 
