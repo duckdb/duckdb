@@ -187,7 +187,8 @@ jobs:
       upload_all_extensions: true
       extension_name: ${{ matrix.artifact_prefix }}
       # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+      # reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+      reduced_ci_mode: disabled
       set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.git_ref }}
       override_ci_tools_repository: smvv/extension-ci-tools
