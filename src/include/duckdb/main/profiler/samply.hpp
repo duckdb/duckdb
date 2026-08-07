@@ -17,6 +17,7 @@ enum class SamplyTrack : uint8_t {
 	QUERY = 1,
 	MEMORY = 2,
 	NETWORK = 4,
+	HTTP = 8,
 };
 
 static inline bool SamplyTrackEnabled(uint8_t tracks, SamplyTrack track) {
@@ -31,6 +32,14 @@ shared_ptr<SamplyResourceSubscription> StartSamplyResourceSampling(uint8_t track
 //! Starts an isolated resource sampler without periodic sampling. Public only for unit testing.
 shared_ptr<SamplyResourceSubscription> StartSamplyResourceSamplingForTesting(uint8_t tracks,
                                                                              const char *directory) noexcept;
+
+//! Returns whether process-wide HTTP request tracking is currently active.
+bool SamplyHTTPTrackEnabled() noexcept;
+
+//! Writes one HTTP request attempt to the sidecar consumed by scripts/samply_profile.py.
+void WriteSamplyHTTPAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const char *method, const string &url,
+                            int32_t status_code, uint64_t bytes_received, int64_t time_to_first_byte_ns,
+                            const string &request_range, const string &response_content_range) noexcept;
 
 //! Creates a single-line query label that fits in a Samply marker record.
 string SamplyQueryMarkerName(const string &query);
@@ -82,6 +91,31 @@ private:
 	bool failed;
 	bool wrote_clock;
 	string buffer;
+	char path[4096];
+};
+
+//! Writes the HTTP sidecar format used by scripts/samply_profile.py. Public only for unit testing.
+class SamplyHTTPWriter {
+public:
+	explicit SamplyHTTPWriter(const char *directory = nullptr) noexcept;
+	~SamplyHTTPWriter();
+
+	SamplyHTTPWriter(const SamplyHTTPWriter &) = delete;
+	SamplyHTTPWriter &operator=(const SamplyHTTPWriter &) = delete;
+
+	bool WriteAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const char *method, const string &url,
+	                  int32_t status_code, uint64_t bytes_received, int64_t time_to_first_byte_ns,
+	                  const string &request_range, const string &response_content_range) noexcept;
+	const char *GetPath() const noexcept;
+
+private:
+	bool Initialize() noexcept;
+	bool Write(const char *data, idx_t size) noexcept;
+
+private:
+	const char *directory;
+	int file_descriptor;
+	bool failed;
 	char path[4096];
 };
 

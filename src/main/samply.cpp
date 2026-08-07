@@ -1,6 +1,7 @@
 #include "duckdb/main/profiler/samply.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <cerrno>
@@ -333,9 +334,10 @@ public:
 	}
 
 	SamplyResourceSampler(const char *directory_p, bool periodic_sampling_p)
-	    : memory_references(0), network_references(0), pending_final_tracks(0), completed_final_tracks(0),
-	      stopping(false), periodic_sampling(periodic_sampling_p), directory(directory_p ? directory_p : ""),
-	      writer(directory_p ? directory.c_str() : nullptr), network_buffer() {
+	    : memory_references(0), network_references(0), http_references(0), pending_final_tracks(0),
+	      completed_final_tracks(0), stopping(false), periodic_sampling(periodic_sampling_p),
+	      directory(directory_p ? directory_p : ""), writer(directory_p ? directory.c_str() : nullptr),
+	      network_buffer() {
 		try {
 			network_interfaces.reserve(32);
 			network_buffer.reserve(16 * 1024);
@@ -364,7 +366,10 @@ public:
 		if (SamplyTrackEnabled(tracks, SamplyTrack::NETWORK)) {
 			network_references++;
 		}
-		if (!worker.joinable()) {
+		if (SamplyTrackEnabled(tracks, SamplyTrack::HTTP)) {
+			http_references++;
+		}
+		if ((memory_references > 0 || network_references > 0) && !worker.joinable()) {
 			stopping = false;
 			try {
 				worker = std::thread(&SamplyResourceSampler::Run, this);
@@ -392,6 +397,9 @@ public:
 					final_tracks |= static_cast<uint8_t>(SamplyTrack::NETWORK);
 				}
 			}
+			if (SamplyTrackEnabled(tracks, SamplyTrack::HTTP) && http_references > 0) {
+				http_references--;
+			}
 			pending_final_tracks |= final_tracks;
 			completed_final_tracks &= ~final_tracks;
 			stopping = memory_references == 0 && network_references == 0;
@@ -406,6 +414,11 @@ public:
 			               [this, final_tracks] { return (completed_final_tracks & final_tracks) == final_tracks; });
 			completed_final_tracks &= ~final_tracks;
 		}
+	}
+
+	bool HTTPEnabled() noexcept {
+		std::lock_guard<std::mutex> guard(lock);
+		return http_references > 0;
 	}
 
 private:
@@ -593,6 +606,7 @@ private:
 	std::condition_variable condition;
 	idx_t memory_references;
 	idx_t network_references;
+	idx_t http_references;
 	uint8_t pending_final_tracks;
 	uint8_t completed_final_tracks;
 	bool stopping;
@@ -662,6 +676,119 @@ shared_ptr<SamplyResourceSubscription> StartSamplyResourceSamplingForTesting(uin
 #else
 	return nullptr;
 #endif
+}
+
+bool SamplyHTTPTrackEnabled() noexcept {
+#if defined(__linux__) || defined(__APPLE__)
+	return SamplyResourceSampler::Get()->HTTPEnabled();
+#else
+	return false;
+#endif
+}
+
+SamplyHTTPWriter::SamplyHTTPWriter(const char *directory_p) noexcept
+    : directory(directory_p), file_descriptor(-1), failed(false), path {0} {
+}
+
+SamplyHTTPWriter::~SamplyHTTPWriter() {
+#if defined(__linux__) || defined(__APPLE__)
+	if (file_descriptor >= 0) {
+		close(file_descriptor);
+	}
+#endif
+}
+
+bool SamplyHTTPWriter::Initialize() noexcept {
+#if defined(__linux__) || defined(__APPLE__)
+	if (failed) {
+		return false;
+	}
+	if (file_descriptor >= 0) {
+		return true;
+	}
+	if (!directory) {
+		directory = SamplyDirectory();
+	}
+	if (!directory) {
+		failed = true;
+		return false;
+	}
+	auto length =
+	    snprintf(path, sizeof(path), "%s/http-%llu-%llu.txt", directory, static_cast<unsigned long long>(getpid()),
+	             static_cast<unsigned long long>(SamplyThreadId()));
+	if (length <= 0 || static_cast<idx_t>(length) >= sizeof(path)) {
+		failed = true;
+		return false;
+	}
+	file_descriptor = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, S_IRUSR | S_IWUSR);
+	if (file_descriptor < 0) {
+		failed = true;
+		return false;
+	}
+	return true;
+#else
+	failed = true;
+	return false;
+#endif
+}
+
+bool SamplyHTTPWriter::Write(const char *data, idx_t size) noexcept {
+#if defined(__linux__) || defined(__APPLE__)
+	if (!Initialize()) {
+		return false;
+	}
+	idx_t offset = 0;
+	while (offset < size) {
+		auto written = write(file_descriptor, data + offset, size - offset);
+		if (written < 0 && errno == EINTR) {
+			continue;
+		}
+		if (written <= 0) {
+			failed = true;
+			return false;
+		}
+		offset += static_cast<idx_t>(written);
+	}
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool SamplyHTTPWriter::WriteAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const char *method, const string &url,
+                                    int32_t status_code, uint64_t bytes_received, int64_t time_to_first_byte_ns,
+                                    const string &request_range, const string &response_content_range) noexcept {
+#if defined(__linux__) || defined(__APPLE__)
+	try {
+		auto record = StringUtil::Format(
+		    "1\t%llu\t%llu\t%d\t%llu\t%lld\t%s\t%s\t%s\t%s\n", static_cast<unsigned long long>(start_unix_ns),
+		    static_cast<unsigned long long>(duration_ns), status_code, static_cast<unsigned long long>(bytes_received),
+		    static_cast<long long>(time_to_first_byte_ns), method, Blob::ToBase64(url), Blob::ToBase64(request_range),
+		    Blob::ToBase64(response_content_range));
+		return Write(record.data(), record.size());
+	} catch (...) {
+		failed = true;
+		return false;
+	}
+#else
+	return false;
+#endif
+}
+
+const char *SamplyHTTPWriter::GetPath() const noexcept {
+	return path;
+}
+
+static SamplyHTTPWriter &ThreadHTTPWriter() noexcept {
+	thread_local SamplyHTTPWriter writer;
+	return writer;
+}
+
+void WriteSamplyHTTPAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const char *method, const string &url,
+                            int32_t status_code, uint64_t bytes_received, int64_t time_to_first_byte_ns,
+                            const string &request_range, const string &response_content_range) noexcept {
+	ThreadHTTPWriter().WriteAttempt(start_unix_ns, duration_ns, method, url, status_code, bytes_received,
+	                                time_to_first_byte_ns, request_range, response_content_range);
 }
 
 SamplyMarkerWriter::SamplyMarkerWriter(const char *directory_p) noexcept
