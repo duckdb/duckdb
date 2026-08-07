@@ -59,7 +59,8 @@ inline bool CpuBenefitsFromAutoVec() {
 }
 
 inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width) {
-	return selected * (32 / type_width) >= span; // lane-adjusted dense-vs-gather guard
+	// lane-adjusted dense-vs-gather guard; zero-width (nested) payloads have no dense kernels
+	return type_width && (selected * (32 / type_width) >= span);
 }
 
 #if DUCKDB_AUTOVEC
