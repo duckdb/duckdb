@@ -90,6 +90,30 @@ struct UnarySelectAdapter {
 
 struct UnaryExecutor {
 private:
+	struct ExecutePolicy {
+#if !DUCKDB_SMALLER_BINARY(unary_executor_flat)
+		static constexpr bool SPECIALIZE_FLAT = true;
+#else
+		static constexpr bool SPECIALIZE_FLAT = false;
+#endif
+		static constexpr bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS = false;
+		static constexpr bool PRESERVE_RESULT_VALIDITY = true;
+	};
+
+	struct SelectPolicy {
+#if !DUCKDB_SMALLER_BINARY(unary_executor_select_flat)
+		static constexpr uint64_t SPECIALIZED_MASKS = 1;
+#else
+		static constexpr uint64_t SPECIALIZED_MASKS = 0;
+#endif
+#if !DUCKDB_SMALLER_BINARY(unary_executor_select_flags)
+		static constexpr bool SPECIALIZE_OUTPUTS = true;
+#else
+		static constexpr bool SPECIALIZE_OUTPUTS = false;
+#endif
+		static constexpr bool DIRECT_TRUE_FLAT = false;
+	};
+
 	template <bool ADDS_NULLS, class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteInternal(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
 	                                   FunctionErrors errors) {
@@ -103,7 +127,7 @@ private:
 				auto &dictionary_values = DictionaryVector::Child(input);
 				if (dictionary_values.GetVectorType() == VectorType::FLAT_VECTOR) {
 					std::array<ScalarExecutor::VectorRef, 1> dictionary_input = {{dictionary_values}};
-					ScalarExecutor::Execute<true, false, true, RESULT_TYPE, decltype(adapter), INPUT_TYPE>(
+					ScalarExecutor::Execute<ExecutePolicy, RESULT_TYPE, decltype(adapter), INPUT_TYPE>(
 					    dictionary_input, result, dictionary_size.GetIndex(), adapter);
 					auto &offsets = DictionaryVector::SelVector(input);
 					FlatVector::SetSize(result, dictionary_size.GetIndex());
@@ -115,24 +139,8 @@ private:
 #endif
 
 		std::array<ScalarExecutor::VectorRef, 1> inputs = {{input}};
-#if !DUCKDB_SMALLER_BINARY(unary_executor_flat)
-		ScalarExecutor::Execute<true, false, true, RESULT_TYPE, decltype(adapter), INPUT_TYPE>(inputs, result, count,
-		                                                                                       adapter);
-#else
-		ScalarExecutor::Execute<false, false, true, RESULT_TYPE, decltype(adapter), INPUT_TYPE>(inputs, result, count,
-		                                                                                        adapter);
-#endif
-	}
-
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
-	static inline void ExecuteStandard(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
-	                                   bool adds_nulls,
-	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		if (adds_nulls) {
-			ExecuteInternal<true, INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(input, result, count, data, errors);
-		} else {
-			ExecuteInternal<false, INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(input, result, count, data, errors);
-		}
+		ScalarExecutor::Execute<ExecutePolicy, RESULT_TYPE, decltype(adapter), INPUT_TYPE>(inputs, result, count,
+		                                                                                   adapter);
 	}
 
 public:
@@ -191,8 +199,8 @@ public:
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		std::array<ScalarExecutor::VectorRef, 1> inputs = {{input}};
 		UnarySelectAdapter<INPUT_TYPE, FUNC> adapter(fun);
-		return ScalarExecutor::Select<1, true, decltype(adapter), INPUT_TYPE>(inputs, sel, count, true_sel, false_sel,
-		                                                                      adapter);
+		return ScalarExecutor::Select<SelectPolicy, decltype(adapter), INPUT_TYPE>(inputs, sel, count, true_sel,
+		                                                                           false_sel, adapter);
 	}
 };
 

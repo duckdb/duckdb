@@ -298,8 +298,7 @@ private:
 		}
 	}
 
-	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
-	          class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
+	template <class POLICY, class RESULT_TYPE, class ADAPTER, class... ARGS, size_t... Is>
 	static void ExecuteInternal(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                            ADAPTER &adapter, std::index_sequence<Is...> indices) {
 		constexpr idx_t N = sizeof...(ARGS);
@@ -310,7 +309,7 @@ private:
 			                                               indices);
 			return;
 		}
-		if constexpr (SPECIALIZE_FLAT && N <= 3) {
+		if constexpr (POLICY::SPECIALIZE_FLAT && N <= 3) {
 			if (profile.all_flat_or_constant) {
 				if (profile.any_constant_null) {
 					result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -322,48 +321,48 @@ private:
 				}
 				switch (profile.constant_mask) {
 				case 0:
-					ExecuteFlat<PRESERVE_RESULT_VALIDITY, 0, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-					                                                                        adapter, indices);
+					ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 0, RESULT_TYPE, ADAPTER, ARGS...>(
+					    inputs, result, count, adapter, indices);
 					return;
 				case 1:
 					if constexpr (N >= 2) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 1, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 1, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
 				case 2:
 					if constexpr (N >= 2) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 2, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 2, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
 				case 3:
 					if constexpr (N >= 3) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 3, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 3, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
 				case 4:
 					if constexpr (N >= 3) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 4, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 4, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
 				case 5:
 					if constexpr (N >= 3) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 5, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 5, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
 				case 6:
 					if constexpr (N >= 3) {
-						ExecuteFlat<PRESERVE_RESULT_VALIDITY, 6, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count,
-						                                                                        adapter, indices);
+						ExecuteFlat<POLICY::PRESERVE_RESULT_VALIDITY, 6, RESULT_TYPE, ADAPTER, ARGS...>(
+						    inputs, result, count, adapter, indices);
 						return;
 					}
 					break;
@@ -372,33 +371,120 @@ private:
 				}
 			}
 		}
-		ExecuteGeneric<SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE, ADAPTER, ARGS...>(
-		    inputs, result, count, adapter, indices);
+		ExecuteGeneric<POLICY::SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, POLICY::PRESERVE_RESULT_VALIDITY, RESULT_TYPE,
+		               ADAPTER, ARGS...>(inputs, result, count, adapter, indices);
 	}
 
-	template <bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-	static inline void StoreSelection(bool comparison_result, idx_t result_idx, SelectionVector *true_sel,
-	                                  SelectionVector *false_sel, idx_t &true_count, idx_t &false_count) {
-		if constexpr (SPECIALIZE_OUTPUTS) {
-			if constexpr (HAS_TRUE_SEL) {
-				true_sel->set_index(true_count, result_idx);
+	template <bool HAS_TRUE_SELECTION, bool HAS_FALSE_SELECTION>
+	struct StaticSelectionSink {
+		static_assert(HAS_TRUE_SELECTION || HAS_FALSE_SELECTION, "A selection sink requires an output");
+
+		StaticSelectionSink(SelectionVector *true_selection_p, SelectionVector *false_selection_p)
+		    : true_selection(true_selection_p ? true_selection_p->data() : nullptr),
+		      false_selection(false_selection_p ? false_selection_p->data() : nullptr) {
+			D_ASSERT(!HAS_TRUE_SELECTION || true_selection);
+			D_ASSERT(!HAS_FALSE_SELECTION || false_selection);
+		}
+
+		inline void Append(bool comparison_result, idx_t result_idx) {
+			if constexpr (HAS_TRUE_SELECTION) {
+				true_selection[true_count] = UnsafeNumericCast<sel_t>(result_idx);
 				true_count += comparison_result;
 			}
-			if constexpr (HAS_FALSE_SEL) {
-				false_sel->set_index(false_count, result_idx);
-				false_count += !comparison_result;
-			}
-		} else {
-			if (true_sel) {
-				true_sel->set_index(true_count, result_idx);
-				true_count += comparison_result;
-			}
-			if (false_sel) {
-				false_sel->set_index(false_count, result_idx);
+			if constexpr (HAS_FALSE_SELECTION) {
+				false_selection[false_count] = UnsafeNumericCast<sel_t>(result_idx);
 				false_count += !comparison_result;
 			}
 		}
-	}
+
+		inline void AppendInvalidRange(const SelectionVector &sel, idx_t start, idx_t end) {
+			if constexpr (HAS_FALSE_SELECTION) {
+				for (idx_t row = start; row < end; row++) {
+					false_selection[false_count++] = UnsafeNumericCast<sel_t>(sel.get_index(row));
+				}
+			}
+		}
+
+		idx_t FillConstant(bool comparison_result, const SelectionVector &sel, idx_t count) {
+			if (comparison_result) {
+				if constexpr (HAS_TRUE_SELECTION) {
+					for (idx_t row = 0; row < count; row++) {
+						true_selection[row] = UnsafeNumericCast<sel_t>(sel.get_index(row));
+					}
+					true_count = count;
+				}
+			} else if constexpr (HAS_FALSE_SELECTION) {
+				for (idx_t row = 0; row < count; row++) {
+					false_selection[row] = UnsafeNumericCast<sel_t>(sel.get_index(row));
+				}
+				false_count = count;
+			}
+			return Result(count);
+		}
+
+		inline idx_t Result(idx_t count) const {
+			if constexpr (HAS_TRUE_SELECTION) {
+				return true_count;
+			}
+			return count - false_count;
+		}
+
+		sel_t *true_selection;
+		sel_t *false_selection;
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+	};
+
+	struct RuntimeSelectionSink {
+		RuntimeSelectionSink(SelectionVector *true_selection_p, SelectionVector *false_selection_p)
+		    : true_selection(true_selection_p), false_selection(false_selection_p) {
+		}
+
+		inline void Append(bool comparison_result, idx_t result_idx) {
+			if (true_selection) {
+				true_selection->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (false_selection) {
+				false_selection->set_index(false_count, result_idx);
+				false_count += !comparison_result;
+			}
+		}
+
+		inline void AppendInvalidRange(const SelectionVector &sel, idx_t start, idx_t end) {
+			if (false_selection) {
+				for (idx_t row = start; row < end; row++) {
+					false_selection->set_index(false_count++, sel.get_index(row));
+				}
+			}
+		}
+
+		idx_t FillConstant(bool comparison_result, const SelectionVector &sel, idx_t count) {
+			if (comparison_result) {
+				if (true_selection) {
+					for (idx_t row = 0; row < count; row++) {
+						true_selection->set_index(row, sel.get_index(row));
+					}
+					true_count = count;
+				}
+			} else if (false_selection) {
+				for (idx_t row = 0; row < count; row++) {
+					false_selection->set_index(row, sel.get_index(row));
+				}
+				false_count = count;
+			}
+			return Result(count);
+		}
+
+		inline idx_t Result(idx_t count) const {
+			return true_selection ? true_count : count - false_count;
+		}
+
+		SelectionVector *true_selection;
+		SelectionVector *false_selection;
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+	};
 
 	template <bool NO_NULL, class ADAPTER, class... ARGS>
 	static inline bool SelectOperation(ADAPTER &adapter, ARGS... args) {
@@ -408,39 +494,19 @@ private:
 		return adapter.Operation(args...);
 	}
 
-	static idx_t FillConstantSelection(bool comparison_result, const SelectionVector &sel, idx_t count,
-	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-		if (comparison_result) {
-			if (true_sel) {
-				for (idx_t i = 0; i < count; i++) {
-					true_sel->set_index(i, sel.get_index(i));
-				}
-			}
-			return count;
-		}
-		if (false_sel) {
-			for (idx_t i = 0; i < count; i++) {
-				false_sel->set_index(i, sel.get_index(i));
-			}
-		}
-		return 0;
-	}
-
-	template <class ADAPTER, class... ARGS, size_t... Is>
+	template <class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectConstant(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
-	                            idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter,
-	                            std::index_sequence<Is...>) {
+	                            idx_t count, const SINK &sink, ADAPTER &adapter, std::index_sequence<Is...>) {
+		auto local_sink = sink;
 		bool comparison_result = adapter.Operation(*ConstantVector::GetData<ARGS>(inputs[Is].get())...);
-		return FillConstantSelection(comparison_result, sel, count, true_sel, false_sel);
+		return local_sink.FillConstant(comparison_result, sel, count);
 	}
 
-	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class ADAPTER,
-	          class... ARGS, size_t... Is>
+	template <uint64_t CONSTANT_MASK, class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectFlatLoop(const std::tuple<const ARGS *...> &input_data, const ValidityMask &input_validity,
-	                            const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                            SelectionVector *false_sel, ADAPTER &adapter, std::index_sequence<Is...>) {
-		idx_t true_count = 0;
-		idx_t false_count = 0;
+	                            const SelectionVector &sel, idx_t count, const SINK &sink, ADAPTER &adapter,
+	                            std::index_sequence<Is...>) {
+		auto local_sink = sink;
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
@@ -451,27 +517,11 @@ private:
 					auto result_idx = sel.get_index(base_idx);
 					bool comparison_result =
 					    adapter.Operation(std::get<Is>(input_data)[InputIndex<Is, CONSTANT_MASK>(base_idx)]...);
-					StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(
-					    comparison_result, result_idx, true_sel, false_sel, true_count, false_count);
+					local_sink.Append(comparison_result, result_idx);
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
-				if constexpr (SPECIALIZE_OUTPUTS) {
-					if constexpr (HAS_FALSE_SEL) {
-						for (; base_idx < next; base_idx++) {
-							false_sel->set_index(false_count++, sel.get_index(base_idx));
-						}
-					} else {
-						base_idx = next;
-					}
-				} else {
-					if (false_sel) {
-						for (; base_idx < next; base_idx++) {
-							false_sel->set_index(false_count++, sel.get_index(base_idx));
-						}
-					} else {
-						base_idx = next;
-					}
-				}
+				local_sink.AppendInvalidRange(sel, base_idx, next);
+				base_idx = next;
 			} else {
 				auto start = base_idx;
 				for (; base_idx < next; base_idx++) {
@@ -479,55 +529,29 @@ private:
 					bool comparison_result =
 					    ValidityMask::RowIsValid(validity_entry, base_idx - start) &&
 					    adapter.Operation(std::get<Is>(input_data)[InputIndex<Is, CONSTANT_MASK>(base_idx)]...);
-					StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(
-					    comparison_result, result_idx, true_sel, false_sel, true_count, false_count);
+					local_sink.Append(comparison_result, result_idx);
 				}
 			}
 		}
-		if constexpr (SPECIALIZE_OUTPUTS && HAS_TRUE_SEL) {
-			return true_count;
-		}
-		return true_sel ? true_count : count - false_count;
+		return local_sink.Result(count);
 	}
 
-	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class ADAPTER,
-	          class... ARGS, size_t... Is>
+	template <uint64_t CONSTANT_MASK, class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectFlat(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
-	                        idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter,
-	                        std::index_sequence<Is...> indices) {
+	                        idx_t count, const SINK &sink, ADAPTER &adapter, std::index_sequence<Is...> indices) {
 		auto input_data = std::make_tuple(FlatVector::GetData<ARGS>(inputs[Is].get())...);
 		auto input_validity = PrepareFlatInputValidity<CONSTANT_MASK>(inputs, count, indices);
-		return SelectFlatLoop<CONSTANT_MASK, SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(
-		    input_data, input_validity, sel, count, true_sel, false_sel, adapter, indices);
+		return SelectFlatLoop<CONSTANT_MASK, SINK, ADAPTER, ARGS...>(input_data, input_validity, sel, count, sink,
+		                                                             adapter, indices);
 	}
 
-	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS, size_t... Is>
-	static idx_t SelectFlatSwitch(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
-	                              idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter,
-	                              std::index_sequence<Is...> indices) {
-		if constexpr (SPECIALIZE_OUTPUTS) {
-			if (true_sel && false_sel) {
-				return SelectFlat<CONSTANT_MASK, true, true, true, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-				                                                                     false_sel, adapter, indices);
-			} else if (true_sel) {
-				return SelectFlat<CONSTANT_MASK, true, true, false, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-				                                                                      false_sel, adapter, indices);
-			}
-			return SelectFlat<CONSTANT_MASK, true, false, true, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-			                                                                      false_sel, adapter, indices);
-		}
-		return SelectFlat<CONSTANT_MASK, false, false, false, ADAPTER, ARGS...>(inputs, sel, count, true_sel, false_sel,
-		                                                                        adapter, indices);
-	}
-
-	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL,
-	          class CONSTANT_TYPE, class GENERIC_TYPE, class ADAPTER>
+	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, class SINK, class CONSTANT_TYPE, class GENERIC_TYPE,
+	          class ADAPTER>
 	static idx_t SelectGenericConstantLoop(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
 	                                       const SelectionVector &generic_sel, const ValidityMask &validity,
-	                                       const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                                       SelectionVector *false_sel, ADAPTER &adapter) {
-		idx_t true_count = 0;
-		idx_t false_count = 0;
+	                                       const SelectionVector &sel, idx_t count, const SINK &sink,
+	                                       ADAPTER &adapter) {
+		auto local_sink = sink;
 		for (idx_t row = 0; row < count; row++) {
 			auto result_idx = sel.get_index(row);
 			auto generic_index = generic_sel.get_index(row);
@@ -541,39 +565,14 @@ private:
 					                                  : adapter.OperationNoNull(constant, data[generic_index]);
 				}
 			}
-			StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(comparison_result, result_idx, true_sel,
-			                                                                false_sel, true_count, false_count);
+			local_sink.Append(comparison_result, result_idx);
 		}
-		if constexpr (SPECIALIZE_OUTPUTS && HAS_TRUE_SEL) {
-			return true_count;
-		}
-		return true_sel ? true_count : count - false_count;
+		return local_sink.Result(count);
 	}
 
-	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, bool SPECIALIZE_OUTPUTS, class CONSTANT_TYPE, class GENERIC_TYPE,
-	          class ADAPTER>
-	static idx_t SelectGenericConstantSwitch(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
-	                                         const SelectionVector &generic_sel, const ValidityMask &validity,
-	                                         const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                                         SelectionVector *false_sel, ADAPTER &adapter) {
-		if constexpr (SPECIALIZE_OUTPUTS) {
-			if (true_sel && false_sel) {
-				return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, true, true>(
-				    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
-			} else if (true_sel) {
-				return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, true, false>(
-				    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
-			}
-			return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, true, false, true>(
-			    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
-		}
-		return SelectGenericConstantLoop<RIGHT_CONSTANT, CAN_HAVE_NULL, false, false, false>(
-		    constant, data, generic_sel, validity, sel, count, true_sel, false_sel, adapter);
-	}
-
-	template <uint64_t CONSTANT_MASK, bool SPECIALIZE_OUTPUTS, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
+	template <uint64_t CONSTANT_MASK, class SINK, class ADAPTER, class LEFT_TYPE, class RIGHT_TYPE>
 	static idx_t SelectGenericConstant(const std::array<VectorRef, 2> &inputs, const SelectionVector &sel, idx_t count,
-	                                   SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
+	                                   const SINK &sink, ADAPTER &adapter) {
 		static_assert(CONSTANT_MASK == 1 || CONSTANT_MASK == 2, "Exactly one binary input must be constant");
 		constexpr idx_t GENERIC_INDEX = CONSTANT_MASK == 1 ? 1 : 0;
 		UnifiedVectorFormat generic_format;
@@ -583,141 +582,106 @@ private:
 			auto constant = *ConstantVector::GetData<LEFT_TYPE>(inputs[0].get());
 			auto data = UnifiedVectorFormat::GetData<RIGHT_TYPE>(generic_format);
 			if (can_have_null) {
-				return SelectGenericConstantSwitch<false, true, SPECIALIZE_OUTPUTS>(constant, data, *generic_format.sel,
-				                                                                    generic_format.validity, sel, count,
-				                                                                    true_sel, false_sel, adapter);
+				return SelectGenericConstantLoop<false, true>(constant, data, *generic_format.sel,
+				                                              generic_format.validity, sel, count, sink, adapter);
 			}
-			return SelectGenericConstantSwitch<false, false, SPECIALIZE_OUTPUTS>(
-			    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
+			return SelectGenericConstantLoop<false, false>(constant, data, *generic_format.sel, generic_format.validity,
+			                                               sel, count, sink, adapter);
 		}
 		auto constant = *ConstantVector::GetData<RIGHT_TYPE>(inputs[1].get());
 		auto data = UnifiedVectorFormat::GetData<LEFT_TYPE>(generic_format);
 		if (can_have_null) {
-			return SelectGenericConstantSwitch<true, true, SPECIALIZE_OUTPUTS>(
-			    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
+			return SelectGenericConstantLoop<true, true>(constant, data, *generic_format.sel, generic_format.validity,
+			                                             sel, count, sink, adapter);
 		}
-		return SelectGenericConstantSwitch<true, false, SPECIALIZE_OUTPUTS>(
-		    constant, data, *generic_format.sel, generic_format.validity, sel, count, true_sel, false_sel, adapter);
+		return SelectGenericConstantLoop<true, false>(constant, data, *generic_format.sel, generic_format.validity, sel,
+		                                              count, sink, adapter);
 	}
 
-	template <bool NO_NULL, bool SPECIALIZE_OUTPUTS, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL, class ADAPTER,
-	          class... ARGS, size_t... Is>
+	template <bool NO_NULL, class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectGenericLoop(std::tuple<const ARGS *...> &input_data,
 	                               std::array<UnifiedVectorFormat, sizeof...(ARGS)> &formats,
-	                               const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                               SelectionVector *false_sel, ADAPTER &adapter, std::index_sequence<Is...>) {
+	                               const SelectionVector &sel, idx_t count, const SINK &sink, ADAPTER &adapter,
+	                               std::index_sequence<Is...>) {
+		auto local_sink = sink;
 		constexpr idx_t N = sizeof...(ARGS);
-		idx_t true_count = 0;
-		idx_t false_count = 0;
 		for (idx_t row = 0; row < count; row++) {
 			auto result_idx = sel.get_index(row);
 			std::array<idx_t, N> input_indices = {{formats[Is].sel->get_index(row)...}};
 			bool comparison_result = (NO_NULL || (... && formats[Is].validity.RowIsValid(input_indices[Is]))) &&
 			                         SelectOperation<NO_NULL>(adapter, std::get<Is>(input_data)[input_indices[Is]]...);
-			StoreSelection<SPECIALIZE_OUTPUTS, HAS_TRUE_SEL, HAS_FALSE_SEL>(comparison_result, result_idx, true_sel,
-			                                                                false_sel, true_count, false_count);
+			local_sink.Append(comparison_result, result_idx);
 		}
-		if constexpr (SPECIALIZE_OUTPUTS && HAS_TRUE_SEL) {
-			return true_count;
-		}
-		return true_sel ? true_count : count - false_count;
+		return local_sink.Result(count);
 	}
 
-	template <bool NO_NULL, bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS, size_t... Is>
-	static idx_t SelectGenericSwitch(std::tuple<const ARGS *...> &input_data,
-	                                 std::array<UnifiedVectorFormat, sizeof...(ARGS)> &formats,
-	                                 const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                                 SelectionVector *false_sel, ADAPTER &adapter, std::index_sequence<Is...> indices) {
-		if constexpr (SPECIALIZE_OUTPUTS) {
-			if (true_sel && false_sel) {
-				return SelectGenericLoop<NO_NULL, true, true, true>(input_data, formats, sel, count, true_sel,
-				                                                    false_sel, adapter, indices);
-			} else if (true_sel) {
-				return SelectGenericLoop<NO_NULL, true, true, false>(input_data, formats, sel, count, true_sel,
-				                                                     false_sel, adapter, indices);
-			}
-			return SelectGenericLoop<NO_NULL, true, false, true>(input_data, formats, sel, count, true_sel, false_sel,
-			                                                     adapter, indices);
-		}
-		return SelectGenericLoop<NO_NULL, false, false, false>(input_data, formats, sel, count, true_sel, false_sel,
-		                                                       adapter, indices);
-	}
-
-	template <bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS, size_t... Is>
+	template <class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectGeneric(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
-	                           idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter,
-	                           std::index_sequence<Is...> indices) {
+	                           idx_t count, const SINK &sink, ADAPTER &adapter, std::index_sequence<Is...> indices) {
 		std::array<UnifiedVectorFormat, sizeof...(ARGS)> formats;
 		for (idx_t i = 0; i < sizeof...(ARGS); i++) {
 			inputs[i].get().ToUnifiedFormat(formats[i]);
 		}
 		auto input_data = std::make_tuple(UnifiedVectorFormat::GetData<ARGS>(formats[Is])...);
 		if ((... || formats[Is].validity.CanHaveNull())) {
-			return SelectGenericSwitch<false, SPECIALIZE_OUTPUTS>(input_data, formats, sel, count, true_sel, false_sel,
-			                                                      adapter, indices);
+			return SelectGenericLoop<false, SINK, ADAPTER, ARGS...>(input_data, formats, sel, count, sink, adapter,
+			                                                        indices);
 		}
-		return SelectGenericSwitch<true, SPECIALIZE_OUTPUTS>(input_data, formats, sel, count, true_sel, false_sel,
-		                                                     adapter, indices);
+		return SelectGenericLoop<true, SINK, ADAPTER, ARGS...>(input_data, formats, sel, count, sink, adapter, indices);
 	}
 
-	template <uint64_t SPECIALIZED_MASKS, bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS, size_t... Is>
+	template <class POLICY, class SINK, class ADAPTER, class... ARGS, size_t... Is>
 	static idx_t SelectInternal(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
-	                            idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter,
+	                            idx_t count, const InputProfile &profile, const SINK &sink, ADAPTER &adapter,
 	                            std::index_sequence<Is...> indices) {
 		constexpr idx_t N = sizeof...(ARGS);
-		auto profile = GetInputProfile(inputs, indices);
 		if (profile.all_constant) {
 			if (profile.any_constant_null) {
-				return FillConstantSelection(false, sel, count, true_sel, false_sel);
+				auto local_sink = sink;
+				return local_sink.FillConstant(false, sel, count);
 			}
-			return SelectConstant<ADAPTER, ARGS...>(inputs, sel, count, true_sel, false_sel, adapter, indices);
+			return SelectConstant<SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 		}
-		if constexpr (SPECIALIZED_MASKS != 0 && N <= 3) {
+		if constexpr (POLICY::SPECIALIZED_MASKS != 0 && N <= 3) {
 			if (profile.all_flat_or_constant) {
 				if (profile.any_constant_null) {
-					return FillConstantSelection(false, sel, count, true_sel, false_sel);
+					auto local_sink = sink;
+					return local_sink.FillConstant(false, sel, count);
 				}
 				switch (profile.constant_mask) {
 				case 0:
-					if constexpr (SPECIALIZED_MASKS & (uint64_t(1) << 0)) {
-						return SelectFlatSwitch<0, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 0)) {
+						return SelectFlat<0, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 1:
-					if constexpr (N >= 2 && (SPECIALIZED_MASKS & (uint64_t(1) << 1))) {
-						return SelectFlatSwitch<1, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 2 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 1))) {
+						return SelectFlat<1, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 2:
-					if constexpr (N >= 2 && (SPECIALIZED_MASKS & (uint64_t(1) << 2))) {
-						return SelectFlatSwitch<2, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 2 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 2))) {
+						return SelectFlat<2, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 3:
-					if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 3))) {
-						return SelectFlatSwitch<3, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 3))) {
+						return SelectFlat<3, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 4:
-					if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 4))) {
-						return SelectFlatSwitch<4, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 4))) {
+						return SelectFlat<4, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 5:
-					if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 5))) {
-						return SelectFlatSwitch<5, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 5))) {
+						return SelectFlat<5, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				case 6:
-					if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 6))) {
-						return SelectFlatSwitch<6, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-						                                                                 false_sel, adapter, indices);
+					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 6))) {
+						return SelectFlat<6, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 					}
 					break;
 				default:
@@ -725,34 +689,30 @@ private:
 				}
 			}
 		}
-		if constexpr (SPECIALIZED_MASKS != 0 && N == 2) {
+		if constexpr (POLICY::SPECIALIZED_MASKS != 0 && N == 2) {
 			if (!profile.any_constant_null) {
 				switch (profile.constant_mask) {
 				case 1:
-					return SelectGenericConstant<1, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-					                                                                      false_sel, adapter);
+					return SelectGenericConstant<1, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter);
 				case 2:
-					return SelectGenericConstant<2, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel,
-					                                                                      false_sel, adapter);
+					return SelectGenericConstant<2, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter);
 				default:
 					break;
 				}
 			}
 		}
-		return SelectGeneric<SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(inputs, sel, count, true_sel, false_sel, adapter,
-		                                                           indices);
+		return SelectGeneric<SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 	}
 
 public:
-	template <bool SPECIALIZE_FLAT, bool SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, bool PRESERVE_RESULT_VALIDITY,
-	          class RESULT_TYPE, class ADAPTER, class... ARGS>
+	template <class POLICY, class RESULT_TYPE, class ADAPTER, class... ARGS>
 	static void Execute(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
 	                    ADAPTER &adapter) {
-		ExecuteInternal<SPECIALIZE_FLAT, SPECIALIZE_NULLABLE_GENERIC_SELECTIONS, PRESERVE_RESULT_VALIDITY, RESULT_TYPE,
-		                ADAPTER, ARGS...>(inputs, result, count, adapter, std::index_sequence_for<ARGS...> {});
+		ExecuteInternal<POLICY, RESULT_TYPE, ADAPTER, ARGS...>(inputs, result, count, adapter,
+		                                                       std::index_sequence_for<ARGS...> {});
 	}
 
-	template <uint64_t SPECIALIZED_MASKS, bool SPECIALIZE_OUTPUTS, class ADAPTER, class... ARGS>
+	template <class POLICY, class ADAPTER, class... ARGS>
 	static idx_t Select(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel, ADAPTER &adapter) {
 		if (!true_sel && !false_sel) {
@@ -761,8 +721,40 @@ public:
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
 		}
-		return SelectInternal<SPECIALIZED_MASKS, SPECIALIZE_OUTPUTS, ADAPTER, ARGS...>(
-		    inputs, *sel, count, true_sel, false_sel, adapter, std::index_sequence_for<ARGS...> {});
+		auto indices = std::index_sequence_for<ARGS...> {};
+		if constexpr (POLICY::DIRECT_TRUE_FLAT) {
+			static_assert(sizeof...(ARGS) == 2, "Direct true-only selection requires two inputs");
+			if (true_sel && !false_sel) {
+				StaticSelectionSink<true, false> sink(true_sel, false_sel);
+				auto left_type = inputs[0].get().GetVectorType();
+				auto right_type = inputs[1].get().GetVectorType();
+				if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
+					return SelectFlat<0, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
+				} else if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::CONSTANT_VECTOR) {
+					return SelectFlat<2, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
+				} else if (left_type == VectorType::CONSTANT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
+					return SelectFlat<1, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
+				}
+			}
+		}
+		auto profile = GetInputProfile(inputs, indices);
+		if constexpr (POLICY::SPECIALIZE_OUTPUTS) {
+			if (true_sel && false_sel) {
+				StaticSelectionSink<true, true> sink(true_sel, false_sel);
+				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink,
+				                                                                adapter, indices);
+			} else if (true_sel) {
+				StaticSelectionSink<true, false> sink(true_sel, false_sel);
+				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink,
+				                                                                adapter, indices);
+			}
+			StaticSelectionSink<false, true> sink(true_sel, false_sel);
+			return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink, adapter,
+			                                                                indices);
+		}
+		RuntimeSelectionSink sink(true_sel, false_sel);
+		return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink, adapter,
+		                                                                indices);
 	}
 };
 

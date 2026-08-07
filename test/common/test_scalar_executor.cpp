@@ -449,6 +449,29 @@ TEST_CASE("Scalar selection preserves result mappings and NULL semantics", "[sca
 	}
 	SelectionVector true_sel(COUNT);
 	SelectionVector false_sel(COUNT);
+	for (idx_t output_mode = 0; output_mode < 3; output_mode++) {
+		auto true_ptr = output_mode == 1 ? nullptr : &true_sel;
+		auto false_ptr = output_mode == 0 ? nullptr : &false_sel;
+		auto unary_true_count = UnaryExecutor::Select<int64_t>(
+		    left, &input_sel, COUNT, [](int64_t value) { return value < 5; }, true_ptr, false_ptr);
+		REQUIRE(unary_true_count == 4);
+		idx_t true_index = 0;
+		idx_t false_index = 0;
+		for (idx_t row = 0; row < COUNT; row++) {
+			bool selected = row < 5 && row != 2;
+			if (selected) {
+				if (true_ptr) {
+					REQUIRE(true_sel.get_index(true_index) == input_sel.get_index(row));
+				}
+				true_index++;
+			} else {
+				if (false_ptr) {
+					REQUIRE(false_sel.get_index(false_index) == input_sel.get_index(row));
+				}
+				false_index++;
+			}
+		}
+	}
 
 	auto true_count =
 	    BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, right, &input_sel, COUNT, &true_sel, &false_sel);
