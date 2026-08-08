@@ -154,13 +154,15 @@ struct AggregateFinalizeData {
 
 struct AggregateStatisticsInput {
 	AggregateStatisticsInput(optional_ptr<FunctionData> bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         optional_ptr<NodeStatistics> node_stats_p)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
+	                         optional_ptr<NodeStatistics> node_stats_p, bool groups_are_non_empty_p = false)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p),
+	      groups_are_non_empty(groups_are_non_empty_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
 	optional_ptr<NodeStatistics> node_stats;
+	bool groups_are_non_empty;
 };
 
 } // namespace duckdb
