@@ -122,13 +122,13 @@ public:
 	      matched_input_sel(STANDARD_VECTOR_SIZE), candidate_input_sel(STANDARD_VECTOR_SIZE),
 	      candidate_match_sel(STANDARD_VECTOR_SIZE), candidate_addresses(LogicalType::POINTER),
 	      matched_addresses(LogicalType::POINTER), probe_hashes(LogicalType::HASH),
-	      key_formats(op.Layout().ProbeKeyTypes().size()), probe_key_executor(context), arena(Allocator::Get(context)),
-	      row_state(arena) {
+	      key_formats(op.Layout().ProbeKeyTypes().size()), arena(Allocator::Get(context)), row_state(arena) {
 		probe_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
 		if (!op.Layout().ProbeKeyNormalizers().empty()) {
+			probe_key_executor = make_uniq<ExpressionExecutor>(context);
 			raw_probe_keys.Initialize(Allocator::Get(context), op.Layout().RawProbeKeyTypes());
 			for (auto &normalizer : op.Layout().ProbeKeyNormalizers()) {
-				probe_key_executor.AddExpression(*normalizer);
+				probe_key_executor->AddExpression(*normalizer);
 			}
 		}
 		lookup_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
@@ -181,7 +181,7 @@ private:
 	Vector matched_addresses;
 	Vector probe_hashes;
 	vector<UnifiedVectorFormat> key_formats;
-	ExpressionExecutor probe_key_executor;
+	unique_ptr<ExpressionExecutor> probe_key_executor;
 	unique_ptr<RecursiveCTEKeyJoinHashTableState> hash_table_state;
 	ArenaAllocator arena;
 	RowOperationsState row_state;
@@ -400,7 +400,8 @@ void RecursiveCTEKeyJoinState::ExtractProbeKeys(DataChunk &input, const Recursiv
 		raw_probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
 	}
 	raw_probe_keys.CheckCardinality(input.size());
-	probe_key_executor.Execute(raw_probe_keys, probe_keys);
+	D_ASSERT(probe_key_executor);
+	probe_key_executor->Execute(raw_probe_keys, probe_keys);
 }
 
 void RecursiveCTEKeyJoinState::FinalizeStateRows(RecursiveCTEState &recursive_state, idx_t match_count) {
