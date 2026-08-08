@@ -130,6 +130,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	// wrapping the full narrow child in a dictionary, which would force FOR interpretation over a mostly-unused child.
 	if (vector_type == VectorType::FOR_VECTOR &&
 	    !DenseAutoVecPaysOff(count, Size(), GetTypeIdSize(type.InternalType()))) {
+		for_active = true; // the sparse gather-widen exploited the narrow payload; keep producing FOR
 		return FlattenSliceInternal(type, sel, count);
 	}
 	Vector child_vector(type, shared_from_this());
