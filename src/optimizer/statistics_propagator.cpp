@@ -14,6 +14,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -81,6 +82,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = PropagateStatistics(node.Cast<LogicalLimit>(), node_ptr);
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
