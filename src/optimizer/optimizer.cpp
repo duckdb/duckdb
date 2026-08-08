@@ -145,6 +145,17 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(context, op);
 }
 
+// RemoveUnusedColumns renumbers bindings, so RemapProjectionMap can match a stale binding to a
+// different column rather than dropping it
+static void ClearProjectionMaps(LogicalOperator &op) {
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		if (auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index)) {
+			projection_map->clear();
+		}
+		ClearProjectionMaps(*op.children[child_index]);
+	}
+}
+
 static bool ContainsDML(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -406,11 +417,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
 	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	bool removed_aggregate_children = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
+			removed_aggregate_children = propagator.HasRemovedAggregateChildren();
 		});
 	}
 
@@ -425,6 +438,15 @@ void Optimizer::RunBuiltInOptimizers() {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.VisitOperator(*plan);
 	});
+
+	// COUNT(x) becomes COUNT(*) during statistics propagation, leaving unreferenced columns in the scan
+	if (removed_aggregate_children) {
+		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+			ClearProjectionMaps(*plan);
+			RemoveUnusedColumns unused(*this);
+			unused.VisitOperator(plan);
+		});
+	}
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
