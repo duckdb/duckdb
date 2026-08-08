@@ -117,6 +117,11 @@ void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, e
 		ReplaceInOperator(expr, star_list, star, regex);
 		break;
 	}
+	case ExpressionClass::LAMBDA: {
+		// *COLUMNS(*) expansion applies to the arguments of the outer function, not to
+		// lambda body expressions. Lambda parameters are bound per-element at runtime.
+		return;
+	}
 	default: {
 		break;
 	}
