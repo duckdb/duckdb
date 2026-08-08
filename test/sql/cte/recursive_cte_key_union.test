@@ -622,6 +622,18 @@ TABLE t;
 ----
 physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
 
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(n.k), r.v - 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v > 0
+)
+TABLE t;
+----
+a	0
+
 query II
 EXPLAIN WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
 	SELECT 'a' COLLATE nocase, 1, 2
