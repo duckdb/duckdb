@@ -1,5 +1,6 @@
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -260,7 +261,7 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 	}
 	using OP = typename LEAST_GREATER_OP::OP;
 	switch (child_type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(least_greatest_types)
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		bound_function.SetFunctionCallback(LeastGreatestFunction<int8_t, OP>);

@@ -8,7 +8,7 @@ namespace duckdb {
 
 static void UnpackSingle(const uint32_t *__restrict &in, uhugeint_t *__restrict out, uint16_t delta, uint16_t shr) {
 	if (delta + shr < 32) {
-		*out = ((static_cast<uhugeint_t>(in[0])) >> shr) % (uhugeint_t(1) << delta);
+		*out = ((static_cast<uhugeint_t>(in[0])) >> shr) & ((uhugeint_t(1) << delta) - 1);
 	}
 
 	else if (delta + shr >= 32 && delta + shr < 64) {

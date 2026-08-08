@@ -58,7 +58,7 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 
 	// can deduce type of prepared parameter here
 	auto prepared = con.Prepare("select 1 + $1");
-	REQUIRE(!prepared->error.HasError());
+	REQUIRE(!prepared->HasError());
 
 	result = prepared->Execute(1);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
@@ -169,9 +169,9 @@ TEST_CASE("Test that prepared statements live in the client context", "[api]") {
 	REQUIRE(!prepared->HasError());
 	// the statement is prepared under a generated name in the client context
 	REQUIRE(prepared_statement_count() == 1);
-	REQUIRE(StringUtil::StartsWith(prepared->name, "duckdb_prepare_internal_"));
+	REQUIRE(StringUtil::StartsWith(prepared->GetName(), "duckdb_prepare_internal_"));
 	auto names = con.Query("SELECT name FROM duckdb_prepared_statements()");
-	REQUIRE(CHECK_COLUMN(names, 0, {Value(prepared->name)}));
+	REQUIRE(CHECK_COLUMN(names, 0, {Value(prepared->GetName())}));
 
 	auto result = prepared->Execute(42);
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -525,7 +525,7 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 
 	// create a prepared statement and use it to query
 	auto prepare = con.Prepare("SET default_null_order=$1");
-	REQUIRE(prepare->success);
+	REQUIRE(!prepare->HasError());
 
 	// too many parameters
 	REQUIRE_FAIL(prepare->Execute("xxx", "yyy"));

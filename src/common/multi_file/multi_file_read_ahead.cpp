@@ -52,12 +52,26 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	return parked_scan.BlockTask(interrupt_state);
 }
 
+void ReadAheadJobCompletion::WaitForIO() {
+	shared_ptr<Task> task;
+	while (pending_io_tasks.load() > 0) {
+		// run scheduled I/O inline, the tasks may belong to any job but always make progress
+		if (executor->GetTask(task)) {
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
+			task.reset();
+			continue;
+		}
+		// the remaining I/O is running on other threads, wait for it to finish
+		TaskScheduler::YieldThread();
+	}
+}
+
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                                        unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
     : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
-	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
+	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
 unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context) {
@@ -146,7 +160,7 @@ bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_sched
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
 	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
-	auto completion = make_shared_ptr<ReadAheadJobCompletion>(io_tasks.size());
+	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor, io_tasks.size());
 	job->io_completion = completion;
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
@@ -202,9 +216,7 @@ unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
 
 void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	if (job.io_completion) {
-		while (job.io_completion->PendingIOTasks() > 0) {
-			TaskScheduler::YieldThread();
-		}
+		job.io_completion->WaitForIO();
 	}
 	// the job's I/O has completed, release its budget charge
 	pending_io_bytes -= job.io_bytes;
@@ -239,9 +251,7 @@ MultiFileGlobalState::~MultiFileGlobalState() = default;
 MultiFileLocalState::~MultiFileLocalState() {
 	// job reads might still be going, wait for them before destroying ze job
 	if (job_state == MultiFileJobState::WAIT_IO && job.io_completion) {
-		while (job.io_completion->PendingIOTasks() > 0) {
-			TaskScheduler::YieldThread();
-		}
+		job.io_completion->WaitForIO();
 	}
 }
 

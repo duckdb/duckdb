@@ -72,8 +72,9 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, const unordered_set<Ta
 	}
 }
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
-    : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
+FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins, ProjectionMode projection_mode)
+    : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins),
+      projection_mode(projection_mode) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -104,7 +105,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return op;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		// we can't push filters into the materialized CTE (LHS), but we do want to recurse into it
-		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		FilterPushdown pushdown(optimizer, convert_mark_joins, projection_mode);
 		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 		// we can push filters into the rest of the query plan (RHS)
 		op->children[1] = Rewrite(std::move(op->children[1]));
@@ -268,7 +269,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFiltersIntoDelimJoin(unique_ptr<
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		for (auto &child : op->children) {
-			FilterPushdown pushdown(optimizer, convert_mark_joins);
+			FilterPushdown pushdown(optimizer, convert_mark_joins, projection_mode);
 
 			// check if filter bindings can be applied to the child bindings.
 			auto child_bindings = child->GetColumnBindings();
@@ -312,7 +313,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFiltersIntoDelimJoin(unique_ptr<
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		FilterPushdown pushdown(optimizer, convert_mark_joins, projection_mode);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters

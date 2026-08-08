@@ -784,7 +784,12 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
-		return true;
+		// We can stream first values if the frame start is fixed at the partition start
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       (wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_RANGE ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_GROUPS ||
+		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state);
@@ -1249,12 +1254,17 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
 	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto den = (x1 - x0);
+	auto den = (x1 - x0);
 	if (den == 0) {
 		// Duplicate X values, so pick the first.
 		return 0;
 	}
-	const auto num = (x - x0);
+	auto num = x - x0;
+	if (!std::isfinite(den)) {
+		const auto scale = MaxValue(std::abs(x0), std::abs(x1));
+		num = x / scale - x0 / scale;
+		den = x1 / scale - x0 / scale;
+	}
 	return num / den;
 }
 

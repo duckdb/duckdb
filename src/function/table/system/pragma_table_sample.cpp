@@ -31,7 +31,7 @@ struct DuckDBTableSampleOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// look up the table name in the catalog
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 	CatalogEntryRetriever retriever(context);
@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, Ta
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto logical_index = LogicalIndex(i);
 		auto &col = table_entry.GetColumn(logical_index);
-		names.emplace_back(col.GetName().GetIdentifierName());
+		names.push_back(col.GetName());
 	}
 
 	return make_uniq<DuckDBTableSampleFunctionData>(entry);

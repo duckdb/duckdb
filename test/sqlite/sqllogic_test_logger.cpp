@@ -220,7 +220,7 @@ void SQLLogicTestLogger::OutputResult(MaterializedQueryResult &result, const vec
 		if (c != 0) {
 			LogFailure("\t");
 		}
-		LogFailure(result.names[c]);
+		LogFailure(result.ColumnName(c).GetIdentifierName());
 	}
 	LogFailure("\n");
 	// types
@@ -228,7 +228,7 @@ void SQLLogicTestLogger::OutputResult(MaterializedQueryResult &result, const vec
 		if (c != 0) {
 			LogFailure("\t");
 		}
-		LogFailure(result.types[c].ToString());
+		LogFailure(result.GetTypes()[c].ToString());
 	}
 	LogFailure("\n");
 	PrintLineSep();

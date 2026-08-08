@@ -28,7 +28,7 @@ IMPORT DATABASE '{TEST_DIR}/broken_empty_string';
 statement error
 EXPORT DATABASE '{TEST_DIR}/broken_empty_string_2' (FORCE_NOT_NULL ['A']);
 ----
-"FORCE_NOT_NULL" is not supported for writing - only for reading
+force_not_null is not supported for writing - only for reading
 
 statement ok
 abort;

@@ -55,8 +55,8 @@ void ExportAndValidateBuffers(Connection &con, const string &query) {
 
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
-	auto types = result->types;
-	auto names = result->names;
+	auto types = result->GetTypes();
+	auto names = IdentifiersToStrings(result->GetNames());
 
 	ArrowSchema schema;
 	ArrowConverter::ToArrowSchema(&schema, types, names, props);
@@ -193,7 +193,7 @@ TEST_CASE("UUID string_view arrow_output_version export is regular string", "[ar
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, props);
+	ArrowConverter::ToArrowSchema(&schema, result->GetTypes(), IdentifiersToStrings(result->GetNames()), props);
 	REQUIRE(string(schema.children[0]->format) == "u");
 	if (schema.release) {
 		schema.release(&schema);

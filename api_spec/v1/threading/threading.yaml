@@ -1,8 +1,9 @@
 module: threading
 functions:
   execute_tasks:
+    offset: 298
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       database:
         type: database
@@ -16,8 +17,9 @@ functions:
 
       Will return after `max_tasks` have been executed, or if there are no more tasks present.
   create_task_state:
+    offset: 299
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     role: constructor
     belongs_to: task_state
     parameters:
@@ -32,8 +34,9 @@ functions:
       `duckdb_destroy_state` must be called on the result.
     return_description: The task state that can be used with duckdb_execute_tasks_state.
   execute_tasks_state:
+    offset: 300
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -45,8 +48,9 @@ functions:
       The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
       Multiple threads can share the same duckdb_task_state.
   execute_n_tasks_state:
+    offset: 301
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -64,8 +68,9 @@ functions:
       Multiple threads can share the same duckdb_task_state.
     return_description: The amount of tasks that have actually been executed
   finish_execution:
+    offset: 302
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -74,8 +79,9 @@ functions:
     description: |
       Finish execution on a specific task.
   task_state_is_finished:
+    offset: 303
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -85,8 +91,9 @@ functions:
       Check if the provided duckdb_task_state has finished execution
     return_description: Whether or not duckdb_finish_execution has been called on the task state
   destroy_task_state:
+    offset: 304
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     role: destructor
     belongs_to: task_state
     parameters:
@@ -100,8 +107,9 @@ functions:
       Note that this should not be called while there is an active duckdb_execute_tasks_state running
       on the task state.
   execution_is_finished:
+    offset: 305
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       con:
         type: connection

@@ -584,7 +584,8 @@ DictFSSTCompressResult DictFSSTCompressionState::CompressInternal(UnifiedVectorF
 		vector<unsigned char> decompress_buffer;
 		if (verify_compression) {
 			temp_decoder = &temp_decoder_storage;
-			duckdb_fsst_import(&temp_decoder_storage, fsst_serialized_symbol_table.get());
+			duckdb_fsst_import(&temp_decoder_storage, fsst_serialized_symbol_table.get(),
+			                   sizeof(duckdb_fsst_decoder_t));
 		}
 
 		if (encoded_input.data.empty()) {
@@ -784,7 +785,8 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 
 #ifdef DEBUG
 	auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t));
-	duckdb_fsst_import((duckdb_fsst_decoder_t *)temp_decoder, fsst_serialized_symbol_table.get());
+	duckdb_fsst_import((duckdb_fsst_decoder_t *)temp_decoder, fsst_serialized_symbol_table.get(),
+	                   sizeof(duckdb_fsst_decoder_t));
 
 	vector<unsigned char> decompress_buffer;
 #endif
