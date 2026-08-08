@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -86,12 +87,29 @@ private:
 	                              vector<ExpressionValueInformation> &info_list);
 
 private:
+	//! Non-scalar expressions in the same equivalence set that are connected via
+	//! IS NOT DISTINCT FROM rather than equality. GenerateFilters uses this to regenerate
+	//! the comparison with the correct type: for a NOT DISTINCT FROM connection,
+	//! regenerating an equality comparison would change semantics for rows with NULLs.
+	struct NotDistinctFromPair {
+		const Expression *left;
+		const Expression *right;
+		//! whether an equality comparison also connects the pair (a stronger condition)
+		bool also_equality = false;
+	};
+	//! Finds the NotDistinctFromPair connecting the given expressions, or nullptr if they are not
+	//! connected via IS NOT DISTINCT FROM
+	static optional_ptr<NotDistinctFromPair> FindNotDistinctFromPair(vector<NotDistinctFromPair> &pairs,
+	                                                                 const Expression &left, const Expression &right);
+
 	vector<unique_ptr<Expression>> remaining_filters;
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
 	expression_map_t<idx_t> equivalence_set_map;
 	map<idx_t, vector<ExpressionValueInformation>> constant_values;
 	map<idx_t, vector<reference<Expression>>> equivalence_map;
+	//! Pairs of expressions in the same equivalence set that are connected via IS NOT DISTINCT FROM
+	vector<NotDistinctFromPair> not_distinct_from_pairs;
 	idx_t set_index = 0;
 };
 
