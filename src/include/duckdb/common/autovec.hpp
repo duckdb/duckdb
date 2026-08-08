@@ -25,8 +25,10 @@
 
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 #define DUCKDB_AUTOVEC_TARGET __attribute__((target("avx2"))) // widened x86 kernels
+#define DUCKDB_AUTOVEC_MUL16 1 // AVX2 has no per-lane 8/16-bit shifts: high-align 16-bit lanes via multiply
 #else
 #define DUCKDB_AUTOVEC_TARGET
+#define DUCKDB_AUTOVEC_MUL16 0 // NEON shifts every lane width: keep the cheaper shift/combine kernel
 #endif
 
 #if defined(_MSC_VER)
@@ -143,7 +145,7 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE, uint32_t WBYTE>
 DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleDecode(duckdb_av_u8x16 w, VEC frame) {
 	constexpr uint32_t LANEBITS = 8 * sizeof(VEC {}[0]);
 	VEC v = LoGather<VEC, WIDTH, BASE, WBYTE>(w);
-	if constexpr (sizeof(VEC {}[0]) == 2 && WIDTH % 8 != 0) {
+	if constexpr (DUCKDB_AUTOVEC_MUL16 && sizeof(VEC {}[0]) == 2 && WIDTH % 8 != 0) {
 		static_assert(!ShuffleLaneCrosses<VEC, WIDTH, BASE>(), "high-align needs the field inside its lane");
 		return ((v * HiAlignMul<VEC, WIDTH, BASE>()) >> (LANEBITS - WIDTH)) + frame;
 	} else {
@@ -182,6 +184,27 @@ DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u64x2 ShuffleDecode64x2(const uint
 	return (v & mask) + frame;
 }
 
+//! Whole-byte fields narrower than the output lane are just a zero-extending load: no table, no mask.
+template <uint32_t BYTES>
+struct WidenSource;
+template <>
+struct WidenSource<1> {
+	typedef uint8_t type;
+};
+template <>
+struct WidenSource<2> {
+	typedef uint16_t type;
+};
+template <>
+struct WidenSource<4> {
+	typedef uint32_t type;
+};
+template <uint32_t WIDTH, class OUT_T>
+static constexpr bool UseWidenUnpack() {
+	constexpr uint32_t bytes = WIDTH / 8;
+	return WIDTH % 8 == 0 && bytes > 0 && bytes < sizeof(OUT_T) && (bytes & (bytes - 1)) == 0;
+}
+
 template <uint32_t WIDTH, class OUT_T>
 static constexpr bool UseShuffleUnpack() { // u32 at width 31 would need a second window register;
 	                                       // past u64 width 60 the two-register gather loses to the scalar loop
@@ -195,9 +218,35 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
                                                               OUT_T frame = 0) {
 	constexpr std::size_t width = WIDTH;
 	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
+	if constexpr (UseWidenUnpack<WIDTH, OUT_T>()) { // reads exactly its own bytes: no overread reserve
+		typedef typename WidenSource<WIDTH / 8>::type SRC;
+		typedef SRC src_vec __attribute__((vector_size(8 * sizeof(SRC))));
+		typedef OUT_T out_vec __attribute__((vector_size(8 * sizeof(OUT_T))));
+		const out_vec fr = out_vec {} + frame;
+		DUCKDB_UNROLL_LOOP
+		for (std::size_t s = 0; s < groups * 4; s++) { // 8 values per step
+			src_vec v;
+			std::memcpy(&v, base + s * sizeof(src_vec), sizeof(src_vec));
+			out_vec o = __builtin_convertvector(v, out_vec) + fr;
+			std::memcpy(out + s * 8, &o, sizeof(out_vec));
+		}
+		return groups;
+	}
 	// a u16 width whose field spills past its lane cannot be high-aligned: decode it in 32-bit lanes
-	constexpr bool wide16 = sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
-	if constexpr (sizeof(OUT_T) == 1) { // 8-bit lanes have no multiply: decode in 16-bit, narrow at the end
+	constexpr bool wide16 = DUCKDB_AUTOVEC_MUL16 && sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
+	if constexpr (sizeof(OUT_T) == 1 && !DUCKDB_AUTOVEC_MUL16 && !ShuffleLaneCrosses<duckdb_av_u8x16, WIDTH, 0>()) {
+		const duckdb_av_u8x16 fr = duckdb_av_u8x16 {} + static_cast<uint8_t>(frame);
+		constexpr std::size_t reserve = (16 + 4 * width - 1) / (4 * width); // safe overread margin
+		const std::size_t shuffle_groups = groups > reserve ? groups - reserve : 0;
+		DUCKDB_UNROLL_LOOP
+		for (std::size_t s = 0; s < shuffle_groups * 2; s++) { // 16 values per step
+			duckdb_av_u8x16 w;
+			std::memcpy(&w, base + s * 2 * WIDTH, 16);
+			duckdb_av_u8x16 v = ShuffleDecode<duckdb_av_u8x16, WIDTH, 0, 0>(w, fr);
+			std::memcpy(out + s * 16, &v, 16);
+		}
+		return shuffle_groups;
+	} else if constexpr (sizeof(OUT_T) == 1) { // 8-bit lanes have no multiply: decode in 16-bit, narrow at the end
 		const duckdb_av_u16x8 fr = duckdb_av_u16x8 {} + static_cast<uint16_t>(frame);
 		constexpr std::size_t reserve = (width + 16 + 4 * width - 1) / (4 * width); // safe overread margin
 		const std::size_t shuffle_groups = groups > reserve ? groups - reserve : 0;
