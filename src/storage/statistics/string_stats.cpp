@@ -179,6 +179,10 @@ void StringStats::ResetMaxStringLength(BaseStatistics &stats) {
 	GetDataUnsafe(stats).has_max_string_length = false;
 }
 
+void StringStats::ResetTotalStringLength(BaseStatistics &stats) {
+	GetDataUnsafe(stats).has_total_string_length = false;
+}
+
 void StringStats::SetMaxStringLength(BaseStatistics &stats, uint32_t length) {
 	auto &data = GetDataUnsafe(stats);
 	data.has_max_string_length = true;

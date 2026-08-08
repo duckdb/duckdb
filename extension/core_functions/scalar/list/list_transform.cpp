@@ -32,7 +32,7 @@ static LogicalType ListTransformBindLambda(ClientContext &context, const vector<
 
 ScalarFunction ListTransformFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
-	                   LambdaFunctions::ListTransformFunction, ListTransformBind, nullptr, nullptr);
+	                   LambdaFunctions::ListTransformFunction, ListTransformBind, LambdaFunctions::ListLambdaStats);
 
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);

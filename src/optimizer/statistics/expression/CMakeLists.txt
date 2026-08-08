@@ -10,7 +10,8 @@ add_library_unity(
   propagate_constant.cpp
   propagate_columnref.cpp
   propagate_function.cpp
-  propagate_operator.cpp)
+  propagate_operator.cpp
+  propagate_reference.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_statistics_expr>
     PARENT_SCOPE)
