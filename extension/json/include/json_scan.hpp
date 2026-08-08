@@ -37,6 +37,8 @@ public:
 
 	//! The date format map
 	unique_ptr<DateFormatMap> date_format_map;
+	//! True only when the user passed timestampformat=/timestamp_format= (not auto-detect templates)
+	bool user_specified_timestamp_format = false;
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 

@@ -25,7 +25,9 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	if (!options.date_format.empty()) {
 		DateFormatMap::AddFormat(candidate_formats, LogicalTypeId::DATE, options.date_format);
 	}
-	if (!options.timestamp_format.empty()) {
+	// Explicit flag: do not infer user intent from the format map (auto-detect may also leave a single format)
+	user_specified_timestamp_format = !options.timestamp_format.empty();
+	if (user_specified_timestamp_format) {
 		DateFormatMap::AddFormat(candidate_formats, LogicalTypeId::TIMESTAMP, options.timestamp_format);
 	}
 
