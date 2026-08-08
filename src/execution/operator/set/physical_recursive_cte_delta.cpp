@@ -182,10 +182,10 @@ idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool
 				changed_column_count = payload_comparison_executors[payload_idx]->SelectExpression(
 				    delta.comparison_rows, delta.changed_column_groups, next_equal_groups, equal_groups, equal_count);
 			} else {
-				changed_column_count = SelectDistinctPayloadRows(
-				    delta.previous_scan_rows.data[previous_payload_offset + payload_idx],
-				    delta.result_rows.data[op.payload_idx[payload_idx]], equal_groups, equal_count,
-				    delta.changed_column_groups, next_equal_groups);
+				changed_column_count =
+				    SelectDistinctPayloadRows(delta.previous_scan_rows.data[previous_payload_offset + payload_idx],
+				                              delta.result_rows.data[op.payload_idx[payload_idx]], equal_groups,
+				                              equal_count, delta.changed_column_groups, next_equal_groups);
 			}
 			for (idx_t changed_idx = 0; changed_idx < changed_column_count; changed_idx++) {
 				delta.changed_groups.set_index(changed_count++,
