@@ -1,6 +1,6 @@
 # name: test/issues/general/test_24310.test
 # description: Hive partition column colliding with the generated filename column
-# group: [parquet]
+# group: [general]
 
 require parquet
 
