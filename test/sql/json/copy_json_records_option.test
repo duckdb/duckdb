@@ -1,0 +1,115 @@
+# name: test/sql/json/copy_json_records_option.test
+# description: Test RECORDS option in COPY (FORMAT JSON)
+# group: [json]
+
+require json
+
+# Setup: write a newline-delimited JSON objects file
+statement ok
+COPY (SELECT 1 AS a, 'hello' AS b UNION ALL SELECT 2, 'world') TO '{TEST_DIR}/records.json' (FORMAT JSON);
+
+# Setup: write a JSON array of bare scalars using the CSV trick ([0,1,2])
+statement ok
+COPY (SELECT '[0,1,2]') TO '{TEST_DIR}/values.json' (FORMAT CSV, QUOTE '', HEADER 0);
+
+# RECORDS 'true' — read newline-delimited JSON objects into a multi-column table
+statement ok
+CREATE TABLE tbl_records (a INTEGER, b VARCHAR);
+
+statement ok
+COPY tbl_records FROM '{TEST_DIR}/records.json' (FORMAT JSON, RECORDS 'true');
+
+query IT
+SELECT * FROM tbl_records ORDER BY a;
+----
+1	hello
+2	world
+
+# RECORDS TRUE (unquoted boolean) must also work
+statement ok
+CREATE TABLE tbl_records2 (a INTEGER, b VARCHAR);
+
+statement ok
+COPY tbl_records2 FROM '{TEST_DIR}/records.json' (FORMAT JSON, RECORDS TRUE);
+
+query IT
+SELECT * FROM tbl_records2 ORDER BY a;
+----
+1	hello
+2	world
+
+# RECORDS 'true' with mixed types (INTEGER, VARCHAR, BOOLEAN, DOUBLE)
+statement ok
+COPY (
+    SELECT 10 AS id, 'alice' AS name, true AS active, 1.5 AS score
+    UNION ALL
+    SELECT 20, 'bob', false, 2.7
+) TO '{TEST_DIR}/mixed.json' (FORMAT JSON);
+
+statement ok
+CREATE TABLE tbl_mixed (id INTEGER, name VARCHAR, active BOOLEAN, score DOUBLE);
+
+statement ok
+COPY tbl_mixed FROM '{TEST_DIR}/mixed.json' (FORMAT JSON, RECORDS 'true');
+
+query ITTR
+SELECT * FROM tbl_mixed ORDER BY id;
+----
+10	alice	true	1.5
+20	bob	false	2.7
+
+# RECORDS 'true' with array format (array of objects)
+statement ok
+COPY (
+    SELECT 1 AS x, 'a' AS y
+    UNION ALL
+    SELECT 2, 'b'
+) TO '{TEST_DIR}/array_of_objects.json' (FORMAT JSON, ARRAY TRUE);
+
+statement ok
+CREATE TABLE tbl_array_records (x INTEGER, y VARCHAR);
+
+statement ok
+COPY tbl_array_records FROM '{TEST_DIR}/array_of_objects.json' (FORMAT JSON, ARRAY TRUE, RECORDS 'true');
+
+query IT
+SELECT * FROM tbl_array_records ORDER BY x;
+----
+1	a
+2	b
+
+# RECORDS 'false' (quoted string) — each element maps to a single column
+statement ok
+CREATE TABLE tbl_values (v INTEGER);
+
+statement ok
+COPY tbl_values FROM '{TEST_DIR}/values.json' (FORMAT JSON, ARRAY TRUE, RECORDS 'false');
+
+# RECORDS FALSE (unquoted boolean) must also work
+statement ok
+CREATE TABLE tbl_values2 (v INTEGER);
+
+statement ok
+COPY tbl_values2 FROM '{TEST_DIR}/values.json' (FORMAT JSON, ARRAY TRUE, RECORDS FALSE);
+
+query I
+SELECT * FROM tbl_values ORDER BY v;
+----
+0
+1
+2
+
+# RECORDS 'false' with a multi-column target table must produce a clear error
+statement ok
+CREATE TABLE tbl_multi (a INTEGER, b VARCHAR);
+
+statement error
+COPY tbl_multi FROM '{TEST_DIR}/values.json' (FORMAT JSON, RECORDS 'false');
+----
+<REGEX>:Binder Error.*records.*false.*single column.*
+
+# Invalid RECORDS value must produce a clear error
+statement error
+COPY tbl_values FROM '{TEST_DIR}/values.json' (FORMAT JSON, RECORDS 'maybe');
+----
+<REGEX>:Binder Error.*records.*auto.*true.*false.*
