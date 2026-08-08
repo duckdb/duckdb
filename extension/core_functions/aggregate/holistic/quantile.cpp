@@ -15,7 +15,15 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <cmath>
+
 namespace duckdb {
+
+// Descending order is encoded as a negative quantile parameter. A zero fraction
+// is stored as negative zero, so use the sign bit to detect that case as well.
+static bool QuantileDescending(const Value &q) {
+	return std::signbit(q.GetValue<double>());
+}
 
 template <class INPUT_TYPE>
 struct IndirectLess {
@@ -67,7 +75,7 @@ QuantileBindData::QuantileBindData() {
 }
 
 QuantileBindData::QuantileBindData(const Value &quantile_p)
-    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
+    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(QuantileDescending(quantile_p)) {
 }
 
 QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
@@ -77,7 +85,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	for (idx_t i = 0; i < quantiles_p.size(); ++i) {
 		const auto &q = quantiles_p[i];
 		pos += (q > 0);
-		neg += (q < 0);
+		neg += QuantileDescending(q);
 		normalised.push_back(QuantileAbs(q));
 		order.push_back(i);
 	}
