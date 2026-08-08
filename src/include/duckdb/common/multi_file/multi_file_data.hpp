@@ -65,11 +65,25 @@ public:
 public:
 	static MultiFileColumnDefinition CreateFromNameAndType(const Identifier &name, const LogicalType &type) {
 		MultiFileColumnDefinition result(name, type);
-		if (type.id() == LogicalTypeId::STRUCT) {
+		// Only expand named-struct layouts here. LIST/MAP child names differ by reader
+		// (e.g. parquet "list"/"key_value" vs JSON map objects), so synthesizing them
+		// in this shared helper breaks multi-file readers whose local defs differ.
+		// UNION is physically a named struct (tag + members), same as STRUCT.
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
 			// recursively create for children
 			for (auto &child_entry : StructType::GetChildTypes(type)) {
 				result.children.push_back(CreateFromNameAndType(child_entry.first, child_entry.second));
 			}
+			break;
+		case LogicalTypeId::UNION:
+			// UNION has a hidden empty-named tag; NamedChildren matches the parquet writer layout
+			for (auto &child_entry : TupleType::NamedChildren(type)) {
+				result.children.push_back(CreateFromNameAndType(child_entry.first, child_entry.second));
+			}
+			break;
+		default:
+			break;
 		}
 		return result;
 	}
