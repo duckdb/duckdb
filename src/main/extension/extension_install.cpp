@@ -337,12 +337,10 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 }
 
 // Install an extension using a filesystem
-static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path,
-                                                               const string &temp_path,
-                                                               const Identifier &extension_name,
-                                                               const string &local_extension_path,
-                                                               ExtensionInstallOptions &options,
-                                                               optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo>
+DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path, const string &temp_path,
+                       const Identifier &extension_name, const string &local_extension_path,
+                       ExtensionInstallOptions &options, optional_ptr<ClientContext> context) {
 	Identifier extension;
 	string file;
 	if (fs.IsRemoteFile(path, extension)) {
@@ -519,8 +517,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 // Install an extension using a hand-rolled http request
 static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url,
-                                                              const Identifier &extension_name,
-                                                              const string &temp_path,
+                                                              const Identifier &extension_name, const string &temp_path,
                                                               const string &local_extension_path,
                                                               ExtensionInstallOptions &options,
                                                               optional_ptr<ClientContext> context) {
@@ -532,8 +529,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 		if (db.ExtensionIsLoaded("httpfs")) {
 			HTTPUtil::BumpToSecureProtocol(generated_url);
 		}
-		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options,
-		                          context);
+		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context);
 	}
 
 	// Default case, let the FileSystem figure it out
