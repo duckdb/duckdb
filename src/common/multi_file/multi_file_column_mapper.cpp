@@ -444,11 +444,8 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
                                        const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                        const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
                                        unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
-	// UNION uses NamedChildren (synthesized tag name); STRUCT uses GetChildTypes directly
-	const idx_t expected_children = global_column.type.id() == LogicalTypeId::UNION
-	                                    ? TupleType::NamedChildren(global_column.type).size()
-	                                    : StructType::GetChildTypes(global_column.type).size();
-	if (expected_children != global_column.children.size()) {
+	auto &struct_children = StructType::GetChildTypes(global_column.type);
+	if (struct_children.size() != global_column.children.size()) {
 		throw InvalidInputException(
 		    "Mismatch between field id children in global_column.children and struct children in type");
 	}
@@ -577,8 +574,6 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	D_ASSERT(global_column.type.IsNested());
 	switch (global_column.type.id()) {
 	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::UNION:
-		// UNION is physically a named struct (tag + members); map like STRUCT
 		return MapColumnStruct(context, global_column, global_index, local_column, local_idx, mapper,
 		                       std::move(mapping), is_root);
 	case LogicalTypeId::LIST:
@@ -600,10 +595,8 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
                                                      const LogicalType &local_column_type, bool is_trivially_mappable) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
-	// remap_struct only supports same-kind nested types (e.g. STRUCT→STRUCT). Parquet stores
-	// UNION as STRUCT, so UNION globals must cast rather than remap when the local kind differs.
 	const bool can_use_remap_struct =
-	    global_column_type.IsNested() && global_column_type.id() == local_column_type.id() &&
+	    global_column_type.IsNested() &&
 	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
 	    !is_trivially_mappable && local_column_type.IsNested();
 	if (!can_use_remap_struct) {
