@@ -126,6 +126,21 @@ COPY hugeints TO '{TEST_DIR}/bad.parquet' (FORMAT parquet, HUGEINT_ENCODING 'flo
 ----
 hugeint_encoding
 
+# Option value is case-insensitive
+statement ok
+COPY hugeints TO '{TEST_DIR}/hugeints_dec_ci.parquet' (FORMAT parquet, HUGEINT_ENCODING 'Decimal');
+
+query I
+SELECT typeof(h) FROM '{TEST_DIR}/hugeints_dec_ci.parquet' LIMIT 1
+----
+DECIMAL(38,0)
+
+# More than one argument is rejected
+statement error
+COPY hugeints TO '{TEST_DIR}/bad_arity.parquet' (FORMAT parquet, HUGEINT_ENCODING ('double', 'varchar'));
+----
+did not expect a list as argument
+
 # ---------------------------------------------------------------------------
 # E12: PARTITION_BY on HUGEINT (default DOUBLE path — must not break)
 # ---------------------------------------------------------------------------
