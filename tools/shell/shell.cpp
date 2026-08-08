@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -175,12 +176,6 @@ static void setTextMode(FILE *file, int isOutput) {
 /* True if the timer is enabled */
 static bool enableTimer = false;
 
-/* Return the current wall-clock time */
-static int64_t timeOfDay(void) {
-	auto current_time = std::chrono::system_clock::now().time_since_epoch();
-	return (int64_t)std::chrono::duration_cast<std::chrono::milliseconds>(current_time).count();
-}
-
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -196,7 +191,7 @@ struct rusage {
 
 /* Saved resource information for the beginning of an operation */
 static struct rusage sBegin; /* CPU time at start */
-static int64_t iBegin;       /* Wall-clock time at start */
+static int64_t iBegin;       /* Monotonic time at start */
 
 /*
 ** Begin timing an operation
@@ -204,7 +199,7 @@ static int64_t iBegin;       /* Wall-clock time at start */
 static void beginTimer(void) {
 	if (enableTimer) {
 		getrusage(RUSAGE_SELF, &sBegin);
-		iBegin = timeOfDay();
+		iBegin = duckdb::TimePoint::GetTickMs();
 	}
 }
 
@@ -218,7 +213,7 @@ static double timeDiff(struct timeval *pStart, struct timeval *pEnd) {
 */
 static void endTimer(void) {
 	if (enableTimer) {
-		int64_t iEnd = timeOfDay();
+		int64_t iEnd = duckdb::TimePoint::GetTickMs();
 		struct rusage sEnd;
 		getrusage(RUSAGE_SELF, &sEnd);
 		printf("Run Time (s): real %.3f user %f sys %f\n", (iEnd - iBegin) * 0.001,
@@ -236,7 +231,7 @@ static void endTimer(void) {
 static HANDLE hProcess;
 static FILETIME ftKernelBegin;
 static FILETIME ftUserBegin;
-static int64_t ftWallBegin;
+static int64_t ftMonotonicBegin;
 typedef BOOL(WINAPI *GETPROCTIMES)(HANDLE, LPFILETIME, LPFILETIME, LPFILETIME, LPFILETIME);
 static GETPROCTIMES getProcessTimesAddr = NULL;
 
@@ -276,7 +271,7 @@ static void beginTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit;
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelBegin, &ftUserBegin);
-		ftWallBegin = timeOfDay();
+		ftMonotonicBegin = duckdb::TimePoint::GetTickMs();
 	}
 }
 
@@ -293,9 +288,9 @@ static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
 static void endTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
-		int64_t ftWallEnd = timeOfDay();
+		int64_t ftMonotonicEnd = duckdb::TimePoint::GetTickMs();
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelEnd, &ftUserEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (ftWallEnd - ftWallBegin) * 0.001,
+		printf("Run Time (s): real %.3f user %f sys %f\n", (ftMonotonicEnd - ftMonotonicBegin) * 0.001,
 		       timeDiff(&ftUserBegin, &ftUserEnd), timeDiff(&ftKernelBegin, &ftKernelEnd));
 	}
 }
@@ -965,7 +960,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res.properties;
+	auto &properties = res.GetStatementProperties();
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
@@ -981,7 +976,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
-	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
+	if (res.GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
@@ -1858,7 +1853,7 @@ ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection
 		result_value = result->GetError();
 		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
 	}
-	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
+	auto is_query = result->GetStatementProperties().return_type == duckdb::StatementReturnType::QUERY_RESULT;
 	if (!is_query) {
 		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}

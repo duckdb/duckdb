@@ -2878,11 +2878,16 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 		dict_arrays.emplace_back(std::move(dict_entry));
 	}
 
-	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
+	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back.
+	// One extra slot is reserved at the end and left null so that `dead_end` has an index
+	// that terminates a chain. Without it, `dead_end` is zeroed and therefore resolves to
+	// index 0, which belongs to a real row, and following it walks an unrelated chain.
 	const auto has_chains = chains_longer_than_one.load(std::memory_order_relaxed);
 	if (has_chains) {
-		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
+		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate((build_count + 1) * sizeof(data_ptr_t));
 		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
+		aux_next_ptrs_data[build_count] = nullptr;
+		Store<uint32_t>(static_cast<uint32_t>(build_count), dead_end.get() + pointer_offset);
 	}
 
 	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index

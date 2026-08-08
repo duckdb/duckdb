@@ -1128,7 +1128,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	if (!has_current) {
 		// no statements, return empty successful result
 		StatementProperties properties;
-		vector<string> names;
+		vector<Identifier> names;
 		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
 		                                          std::move(collection), GetClientProperties());
@@ -1163,7 +1163,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 				parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 			}
 			auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
-			auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
+			auto has_result = pending_query->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT;
 			unique_ptr<QueryResult> current_result;
 			if (pending_query->HasError()) {
 				current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
@@ -1525,7 +1525,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	auto lock = LockContext();
 	auto &expected_columns = relation->Columns();
 	auto pending = PendingQueryInternal(*lock, relation, false);
-	if (!pending->success) {
+	if (pending->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 
@@ -1535,10 +1535,11 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		return result;
 	}
 	// verify that the result types and result names of the query match the expected result types/names
-	if (result->types.size() == expected_columns.size()) {
+	if (result->GetTypes().size() == expected_columns.size()) {
 		bool mismatch = false;
-		for (idx_t i = 0; i < result->types.size(); i++) {
-			if (result->types[i] != expected_columns[i].Type() || result->names[i] != expected_columns[i].Name()) {
+		for (idx_t i = 0; i < result->GetTypes().size(); i++) {
+			if (result->GetTypes()[i] != expected_columns[i].Type() ||
+			    result->ColumnName(i) != expected_columns[i].Name()) {
 				mismatch = true;
 				break;
 			}
@@ -1557,9 +1558,9 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		err_str += expected_columns[i].Name() + " " + expected_columns[i].Type().ToString();
 	}
 	err_str += "]\nBut result contained the following: ";
-	for (idx_t i = 0; i < result->types.size(); i++) {
+	for (idx_t i = 0; i < result->GetTypes().size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += result->names[i] + " " + result->types[i].ToString();
+		err_str += result->ColumnName(i) + " " + result->GetTypes()[i].ToString();
 	}
 	err_str += "]";
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));

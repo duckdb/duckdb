@@ -35,6 +35,10 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
+static bool IsSQLLogicTestFile(const string &path) {
+	return endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage");
+}
+
 static void register_sqllogic_test_case(void (*test_fun)(), const string &path, const string &tags) {
 	auto normalized_path = StringUtil::Replace(path, "\\", "/");
 	if (TestConfiguration::Get().ShouldSkipTest(normalized_path)) {
@@ -46,17 +50,13 @@ static void register_sqllogic_test_case(void (*test_fun)(), const string &path, 
 template <bool AUTO_SWITCH_TEST_DIR>
 static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input) {
 	const auto test_dir_path = TestDirectoryPath(); // can vary between tests, and does IO
+	// Tracks TEMP_DIR test-for-test, on the same materialization schedule.
+	const auto local_test_dir_path = LocalTestDirectoryPath();
 	// Absolute (main-cwd-anchored) form of the per-test temp dir we just materialized. Captured HERE,
 	// before the AUTO_SWITCH_TEST_DIR block below may chdir into an extension source dir: it names the
 	// physical dir regardless of the cwd in effect when {TEST_DIR}/TEMP_DIR are later substituted.
 	// (After the extension chdir the relative test_dir_path would resolve to a non-existent sibling.)
-	string test_dir_absolute = test_dir_path;
-	{
-		auto local_fs = FileSystem::CreateLocal();
-		if (!FileSystem::IsRemoteFile(test_dir_absolute) && !local_fs->IsPathAbsolute(test_dir_absolute)) {
-			test_dir_absolute = local_fs->JoinPath(TestGetCurrentDirectory(), test_dir_absolute);
-		}
-	}
+	string test_dir_absolute = TestMakeAbsolute(test_dir_path, TestGetCurrentDirectory());
 	// HOME is NOT touched per-test: main sets it once to the run-wide sandbox (GetTempDirHome(), a
 	// sibling of the run root). Pointing HOME at {TEST_DIR} here would put ~/.duckdb inside a dir tests
 	// whitelist via allowed_directories, breaking permission tests (e.g. INSTALL-is-denied).
@@ -110,7 +110,8 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	for (auto &kv : test_config.GetTestEnvMap()) {
 		runner.environment_variables[kv.first] = kv.second;
 	}
-	// Per runner vars
+	// Per runner vars. Every name set here is reserved against --env-passthrough
+	// (IsReservedEnvName, test_helpers.cpp).
 	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
@@ -118,6 +119,9 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// TEMP_DIR -> assigned per-test to $BASE[/$RUN_ID][/$TEST_ID] -- RUN_ID and TEST_ID when enabled
 	// (absolute in the extension case; see temp_dir_for_test above).
 	runner.environment_variables["TEMP_DIR"] = temp_dir_for_test;
+	// A separate local tree is already absolute, so only the base-is-local case needs chdir pinning.
+	runner.environment_variables["LOCAL_TEMP_DIR"] =
+	    (local_test_dir_path == test_dir_path) ? temp_dir_for_test : local_test_dir_path;
 	// TEMP_DIR_ABSOLUTE is always the main-cwd-anchored absolute path captured before any extension
 	// chdir -- computing it from the post-chdir cwd here would point at the wrong (extension) tree.
 	runner.environment_variables["TEMP_DIR_ABSOLUTE"] = test_dir_absolute;
@@ -233,8 +237,8 @@ static string ParseGroupFromPath(string file) {
 
 namespace duckdb {
 
-void RegisterSqllogictests() {
-	vector<string> excludes = {
+static const vector<string> &SQLiteLogicTestExcludes() {
+	static vector<string> excludes = {
 	    // tested separately
 	    "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
 	    // feature not supported
@@ -273,19 +277,70 @@ void RegisterSqllogictests() {
 	    "test/index/view/10/slt_good_2.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
+	return excludes;
+}
+
+static bool IsExcludedSQLiteLogicTest(const string &path) {
+	for (auto &excl : SQLiteLogicTestExcludes()) {
+		if (path.find(excl) != string::npos) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool PathStartsWith(const string &path, const string &prefix) {
+	if (prefix.empty() || path.find(prefix) != 0) {
+		return false;
+	}
+	return path.size() == prefix.size() || path[prefix.size()] == '/';
+}
+
+static bool IsSQLiteLogicTestPath(FileSystem &fs, const string &path) {
+	auto sqlite_test_root = fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test");
+	auto normalized_path = StringUtil::Replace(path, "\\", "/");
+	auto normalized_root = StringUtil::Replace(sqlite_test_root, "\\", "/");
+	return PathStartsWith(normalized_path, normalized_root);
+}
+
+static bool IsExtensionTestPath(const string &path) {
+	auto normalized_path = StringUtil::Replace(path, "\\", "/");
+	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
+		auto normalized_root = StringUtil::Replace(extension_test_path, "\\", "/");
+		if (PathStartsWith(normalized_path, normalized_root)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void RegisterSqllogictests(const vector<string> &test_paths) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	for (const auto &path : test_paths) {
+		if (IsSQLiteLogicTestPath(*fs, path)) {
+			if (!IsExcludedSQLiteLogicTest(path)) {
+				register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
+			}
+		} else if (IsExtensionTestPath(path)) {
+			register_sqllogic_test_case(testRunner<true>, path, ParseGroupFromPath(path));
+		} else {
+			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
+		}
+	}
+}
+
+void RegisterSqllogictests() {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
-			for (auto &excl : excludes) {
-				if (path.find(excl) != string::npos) {
-					return;
-				}
+			if (IsExcludedSQLiteLogicTest(path)) {
+				return;
 			}
 			register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
-		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+		if (IsSQLLogicTestFile(path)) {
 			// parse the name / group from the test
 			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
 		}
@@ -293,7 +348,7 @@ void RegisterSqllogictests() {
 
 	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
-			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+			if (IsSQLLogicTestFile(path)) {
 				auto fun = testRunner<true>;
 				register_sqllogic_test_case(fun, path, ParseGroupFromPath(path));
 			}

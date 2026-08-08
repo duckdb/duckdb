@@ -423,7 +423,7 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 	}
 
 	local_sink_capacity = MaxValue(gstate.config.sink_capacity, ht->Capacity());
-	ht->ResetForNewIteration(local_sink_capacity, gstate.config.GetRadixBits());
+	ht->ResetForNewIteration(gstate.config.GetRadixBits());
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD) {
 		ht->EnableHLL(true);
 		adapted = false;

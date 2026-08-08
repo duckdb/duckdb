@@ -263,7 +263,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in binding
 	result = con.SendQuery("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::MATERIALIZED_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching
@@ -282,7 +282,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
@@ -296,7 +296,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 		}
 	}
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
@@ -385,7 +385,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 
 	// test materialize
 	result1 = conn->SendQuery("SELECT 42");
-	REQUIRE(result1->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(result1->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto materialized = ((StreamQueryResult &)*result1).Materialize();
 	result2 = conn->SendQuery("SELECT 84");
 
@@ -395,7 +395,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 }
 
 static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {
-	REQUIRE(result->types[0] == LogicalType::INTEGER);
+	REQUIRE(result->GetTypes()[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
 	int current_expected_value = 0;
 	size_t expected_rows = 500 * 5;

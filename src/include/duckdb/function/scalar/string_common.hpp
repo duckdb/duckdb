@@ -14,6 +14,8 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length);
 string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length);
 string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
+//! Whether the offset and length are within the range supported by substring - it throws for values outside of it
+bool SubstringInSupportedRange(int64_t offset, int64_t length);
 unique_ptr<BaseStatistics> PropagateStringSliceStats(FunctionStatisticsInput &input, idx_t start_character_index,
                                                      optional_idx character_count);
 

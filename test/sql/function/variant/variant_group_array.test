@@ -1,0 +1,90 @@
+# name: test/sql/function/variant/variant_group_array.test
+# description: Test variant_group_array
+# group: [variant]
+
+# Primitive values
+
+query TT
+select variant_group_array(i), typeof(variant_group_array(i)) from range(4) t(i);
+----
+[0, 1, 2, 3]	VARIANT
+
+query T
+select variant_group_array(s) from (values ('duck'), ('goose')) t(s);
+----
+[duck, goose]
+
+# Nested values
+
+query T
+select variant_group_array(x)
+from (values ({a: 1, b: ['duck', 'goose']}), ({a: 2, b: NULL})) t(x);
+----
+[{'a': 1, 'b': [duck, goose]}, {'a': 2, 'b': NULL}]
+
+# Existing heterogeneous VARIANT values retain their logical types
+
+query T
+select variant_group_array(v)
+from (values (1::VARIANT), ('duck'::VARIANT), ({a: true}::VARIANT), (NULL::VARIANT)) t(v);
+----
+[1, duck, {'a': true}, NULL]
+
+# NULL values become VARIANT null values
+
+query T
+select variant_group_array(i) from (values (1), (NULL), (2)) t(i);
+----
+[1, NULL, 2]
+
+query T
+select variant_group_array(i) from (values (NULL::INTEGER), (NULL::INTEGER)) t(i);
+----
+[NULL, NULL]
+
+# An empty group returns SQL NULL
+
+query T
+select variant_group_array(i) from (select NULL::INTEGER i where false);
+----
+NULL
+
+# Groups produce independent arrays
+
+query IT
+select i % 2 as g, variant_group_array(i) from range(4) t(i) group by g order by g;
+----
+0	[0, 2]
+1	[1, 3]
+
+# Windowed usage
+
+query T
+select distinct variant_group_array(v) over (partition by g)
+from (values (1, 10), (1, 20), (2, 30)) t(g, v)
+order by 1;
+----
+[10, 20]
+[30]
+
+# Incorrect parameters
+
+statement error
+select variant_group_array();
+----
+<REGEX>:.*Macro variant_group_array\(\) does not support the supplied arguments.*
+
+statement error
+select variant_group_array(1, 2);
+----
+<REGEX>:.*Macro variant_group_array\(.*\) does not support the supplied arguments.*
+
+# Table larger than one vector
+
+statement ok
+create table integers as select i from range(4096) t(i);
+
+query I
+select variant_array_length(variant_group_array(i)) from integers;
+----
+4096

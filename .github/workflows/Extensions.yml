@@ -53,7 +53,10 @@ jobs:
     outputs:
       # NOTE: on PRs we exclude some archs to speed things up
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
-      main_extensions_config: ${{ steps.set-main-extensions.outputs.extension_config }}
+      main_extensions_core_config: ${{ steps.set-main-extensions.outputs.core_config }}
+      main_extensions_cloud_config: ${{ steps.set-main-extensions.outputs.cloud_config }}
+      main_extensions_search_config: ${{ steps.set-main-extensions.outputs.search_config }}
+      main_extensions_scanner_config: ${{ steps.set-main-extensions.outputs.scanner_config }}
       main_extensions_exclude_archs: ${{ steps.set-main-extensions.outputs.exclude_archs }}
       main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
@@ -72,20 +75,31 @@ jobs:
       - id: set-main-extensions
         name: Configure main extensions
         env:
-          IN_TREE_CONFIG_FILE: .github/config/in_tree_extensions.cmake
-          OUT_OF_TREE_CONFIG_FILE: .github/config/out_of_tree_extensions.cmake
+          CORE_CONFIG_FILE: .github/config/main_core.cmake
+          CLOUD_CONFIG_FILE: .github/config/main_cloud.cmake
+          SEARCH_CONFIG_FILE: .github/config/main_search.cmake
+          SCANNER_CONFIG_FILE: .github/config/main_scanner.cmake
           DEFAULT_EXCLUDE_ARCHS: ''
         run: |
           # Set config
           echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
           echo "opt_in_archs=$OPT_IN_ARCHS" >> "$GITHUB_OUTPUT"
-          in_tree_extensions="$(<"$IN_TREE_CONFIG_FILE")"
-          out_of_tree_extensions="$(<"$OUT_OF_TREE_CONFIG_FILE")"
+          core_extensions="$(<"$CORE_CONFIG_FILE")"
+          cloud_extensions="$(<"$CLOUD_CONFIG_FILE")"
+          search_extensions="$(<"$SEARCH_CONFIG_FILE")"
+          scanner_extensions="$(<"$SCANNER_CONFIG_FILE")"
           {
-            echo "extension_config<<EOF"
-            echo "$in_tree_extensions"
-            echo
-            echo "$out_of_tree_extensions"
+            echo "core_config<<EOF"
+            echo "$core_extensions"
+            echo "EOF"
+            echo "cloud_config<<EOF"
+            echo "$cloud_extensions"
+            echo "EOF"
+            echo "search_config<<EOF"
+            echo "$search_extensions"
+            echo "EOF"
+            echo "scanner_config<<EOF"
+            echo "$scanner_extensions"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
@@ -120,7 +134,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-  # Build the extensions from .github/config/{in_tree,rust_based,external}_extensions.cmake
+  # Build the extensions from the main extension shards and the rust-based/external configs
   extensions-build:
     name: ${{ matrix.name }}
     needs:
@@ -129,11 +143,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Main Extensions
-            artifact_prefix: main-extensions
+          - name: Main (core)
+            artifact_prefix: main-extensions-core
             exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
             opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
+            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_core_config }}
+            extra_toolchains: unixodbc;parser_tools
+          - name: Main (cloud)
+            artifact_prefix: main-extensions-cloud
+            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
+            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_cloud_config }}
+            extra_toolchains: unixodbc;parser_tools
+          - name: Main (search)
+            artifact_prefix: main-extensions-search
+            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
+            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_search_config }}
+            extra_toolchains: unixodbc;parser_tools
+          - name: Main (scanner)
+            artifact_prefix: main-extensions-scanner
+            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
+            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_scanner_config }}
             extra_toolchains: unixodbc;parser_tools
           - name: Rust-based Extensions
             artifact_prefix: rust-based-extensions
