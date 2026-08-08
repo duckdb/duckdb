@@ -216,6 +216,9 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		if (!cond.IsComparison()) {
 			return false;
 		}
+		if (IsNestedComparison(cond.GetLHS().GetReturnType())) {
+			return false;
+		}
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 		auto &delim_side = delim_idx == 0 ? cond.GetLHS() : cond.GetRHS();
 		auto &other_side = delim_idx == 0 ? cond.GetRHS() : cond.GetLHS();

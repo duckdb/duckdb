@@ -18,6 +18,10 @@ class ClientContext;
 class Expression;
 class LogicalCTE;
 class LogicalOperator;
+class LogicalType;
+
+//! Eliminating a join on a nested comparison changes child-NULL semantics; top-level nullability is not sufficient.
+bool IsNestedComparison(const LogicalType &type);
 
 //! Conservatively proves that an expression cannot be NULL at a logical operator's output.
 class NotNullExpressionAnalyzer {
