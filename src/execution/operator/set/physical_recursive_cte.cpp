@@ -49,10 +49,10 @@ idx_t PhysicalRecursiveCTE::NextMetricsInvocation() const {
 // Sink State
 //===--------------------------------------------------------------------===//
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-    : op(op), context(context), executor(context), key_executor(context),
-      preaggregation_hashes(LogicalType::HASH, nullptr, 0), new_group_addresses(LogicalType::POINTER),
-      new_groups(STANDARD_VECTOR_SIZE), allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)),
-      metrics(context, op), scheduler(op.shared_executor_pool, allow_executor_reuse),
+    : op(op), context(context), executor(context), preaggregation_hashes(LogicalType::HASH, nullptr, 0),
+      new_group_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE),
+      allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)), metrics(context, op),
+      scheduler(op.shared_executor_pool, allow_executor_reuse),
       intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
 	if (metrics.Enabled()) {
 		epoch_metrics = make_uniq<RecursiveCTEEpochMetrics>();
@@ -67,8 +67,11 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 		}
 		payload_aggregate_objects.emplace_back(bound_aggr_expr);
 	}
-	for (auto &normalizer : op.key_normalizers) {
-		key_executor.AddExpression(*normalizer);
+	if (!op.key_normalizers.empty()) {
+		key_executor = make_uniq<ExpressionExecutor>(context);
+		for (auto &normalizer : op.key_normalizers) {
+			key_executor->AddExpression(*normalizer);
+		}
 	}
 
 	payload_rows.Initialize(Allocator::Get(context), aggr_input_types);
@@ -224,7 +227,8 @@ void RecursiveCTEState::ExtractUsingKeyKeys(DataChunk &input) {
 		raw_distinct_rows.data[key_idx].Reference(input.data[op.distinct_idx[key_idx]]);
 	}
 	raw_distinct_rows.CheckCardinality(input.size());
-	key_executor.Execute(raw_distinct_rows, distinct_rows);
+	D_ASSERT(key_executor);
+	key_executor->Execute(raw_distinct_rows, distinct_rows);
 }
 
 void RecursiveCTEState::InitializeIntermediateAppend() {

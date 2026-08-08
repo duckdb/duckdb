@@ -321,7 +321,7 @@ private:
 	ClientContext &context;
 	vector<AggregateObject> payload_aggregate_objects;
 	ExpressionExecutor executor;
-	ExpressionExecutor key_executor;
+	unique_ptr<ExpressionExecutor> key_executor;
 	Vector preaggregation_hashes;
 	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
 	bool has_payload_comparison_executors = false;
