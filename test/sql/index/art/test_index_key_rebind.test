@@ -24,5 +24,3 @@ statement error
 EXECUTE stmt
 ----
 index 'idx' was not found
-
-
