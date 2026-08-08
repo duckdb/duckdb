@@ -98,6 +98,47 @@ StarExpressionType Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr
 	return has_star;
 }
 
+void Binder::ExpandStructStarArguments(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func = expr->Cast<FunctionExpression>();
+		auto &name = func.FunctionName();
+		if (name == "struct_pack" || name == "row") {
+			auto &args = func.GetArgumentsMutable();
+			bool has_star = false;
+			for (auto &arg : args) {
+				if (StarExpression::IsStar(arg.GetExpression())) {
+					has_star = true;
+					break;
+				}
+			}
+			if (has_star) {
+				vector<FunctionArgument> new_args;
+				for (auto &arg : args) {
+					auto &arg_expr = arg.GetExpressionMutable();
+					if (!StarExpression::IsStar(*arg_expr)) {
+						new_args.push_back(std::move(arg));
+						continue;
+					}
+					vector<unique_ptr<ParsedExpression>> expanded;
+					bind_context.GenerateAllColumnExpressions(arg_expr->Cast<StarExpression>(), expanded);
+					for (auto &expanded_expr : expanded) {
+						// name the struct field after the expanded column's name
+						if (expanded_expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+							expanded_expr->SetAlias(expanded_expr->Cast<ColumnRefExpression>().GetColumnName());
+						}
+						new_args.emplace_back(std::move(expanded_expr));
+					}
+				}
+				args = std::move(new_args);
+				// the expanded fields are named, so build a named struct
+				func.SetFunctionName("struct_pack");
+			}
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ExpandStructStarArguments(child); });
+}
+
 void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement) {
 	D_ASSERT(expr);
 	if (StarExpression::IsColumns(*expr) || StarExpression::IsStar(*expr)) {
@@ -256,6 +297,7 @@ optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpress
 
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	ExpandStructStarArguments(expr);
 	TryTransformStarLike(expr);
 
 	StarExpression *star = nullptr;

@@ -1,0 +1,10 @@
+# name: test/sql/types/nested/struct/struct_row_star.test
+# group: [struct]
+
+statement ok
+create table t2 as (SELECT {'a': 10, 'b': 20} s);
+
+query I
+SELECT row(s.*) FROM t2;
+----
+{'a': 10, 'b': 20}
