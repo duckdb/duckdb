@@ -286,8 +286,8 @@ TIMESTAMP WITH TIME ZONE	2048
 
 # -----------------------------------------------------------------------------
 # Named timestamp_format produces a single-format list: only matching values
-# are typed as TIMESTAMP; others remain VARCHAR. user_specified_timestamp_format
-# is set only when the user passed timestamp_format= (not when auto-detect
+# are typed as TIMESTAMP; others remain VARCHAR. options.timestamp_format is
+# non-empty only when the user passed timestamp_format= (not when auto-detect
 # converges on one format), so TIMESTAMPTZ auto-detect is skipped.
 #
 

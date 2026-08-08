@@ -131,8 +131,9 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 				description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
 				                               LogicalTypeId::DATE, LogicalTypeId::TIME};
 			} else {
-				description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
-				                               LogicalTypeId::TIMESTAMP_TZ, LogicalTypeId::DATE, LogicalTypeId::TIME};
+				description.candidate_types = {LogicalTypeId::UUID,      LogicalTypeId::BIGINT,
+				                               LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_TZ,
+				                               LogicalTypeId::DATE,      LogicalTypeId::TIME};
 			}
 		} else if (user_specified_timestamp_format) {
 			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
@@ -279,16 +280,31 @@ void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], const idx
 	EliminateCandidateTypes(val_count, string_vector, date_format_map, user_specified_timestamp_format);
 }
 
-// Update sticky offset/plain-timestamp flags from this vector's non-null strings.
-// Mixed (both flags) → VARCHAR: neither TIMESTAMPTZ (would invent session TZ for naive values)
+// Single commutative transition table, shared by per-vector refinement and parallel merges,
+// so thread scheduling cannot change the detected type. UNKNOWN is the identity, MIXED is sticky.
+static TimestampOffsetState MergeTimestampOffsetState(const TimestampOffsetState a, const TimestampOffsetState b) {
+	if (a == TimestampOffsetState::UNKNOWN) {
+		return b;
+	}
+	if (b == TimestampOffsetState::UNKNOWN) {
+		return a;
+	}
+	if (a != b) {
+		return TimestampOffsetState::MIXED;
+	}
+	return a;
+}
+
+// Update the sticky offset state from this vector's non-null strings.
+// MIXED → VARCHAR: neither TIMESTAMPTZ (would invent session TZ for naive values)
 // nor TIMESTAMP (would drop offsets) is safe.
-static void UpdateTimestampOffsetFlags(JSONStructureDescription &description, const Vector &string_vector,
+static void UpdateTimestampOffsetState(JSONStructureDescription &description, const Vector &string_vector,
                                        const idx_t count) {
 	const auto strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &validity = FlatVector::Validity(string_vector);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			continue;
+			continue; // nulls leave the state unchanged
 		}
 		timestamp_t ts;
 		bool has_offset = false;
@@ -298,12 +314,10 @@ static void UpdateTimestampOffsetFlags(JSONStructureDescription &description, co
 		if (res != TimestampCastResult::SUCCESS && res != TimestampCastResult::STRICT_UTC) {
 			continue; // not a timestamp string — other candidates handle it
 		}
-		if (has_offset) {
-			description.has_timestamp_with_offset = true;
-		} else {
-			description.has_timestamp_without_offset = true;
-		}
-		if (description.has_timestamp_with_offset && description.has_timestamp_without_offset) {
+		description.timestamp_offset_state = MergeTimestampOffsetState(
+		    description.timestamp_offset_state,
+		    has_offset ? TimestampOffsetState::WITH_OFFSET : TimestampOffsetState::WITHOUT_OFFSET);
+		if (description.timestamp_offset_state == TimestampOffsetState::MIXED) {
 			return;
 		}
 	}
@@ -316,10 +330,10 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 	auto &description = descriptions[0];
 	auto &candidate_types = description.candidate_types;
 
-	// Monotonic across vectors: once we have seen both offset and plain timestamps, refuse to guess.
+	// Monotonic across vectors: once MIXED, refuse to guess.
 	if (!user_specified_timestamp_format) {
-		UpdateTimestampOffsetFlags(description, string_vector, vec_count);
-		if (description.has_timestamp_with_offset && description.has_timestamp_without_offset) {
+		UpdateTimestampOffsetState(description, string_vector, vec_count);
+		if (description.timestamp_offset_state == TimestampOffsetState::MIXED) {
 			candidate_types.clear();
 			return;
 		}
@@ -337,12 +351,9 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 				candidate_types.pop_back();
 				continue;
 			}
-			// Only accept TIMESTAMPTZ when every non-null value seen so far carries an offset/Z
-			// (has_timestamp_without_offset is false) and this vector does not refute that.
-			if (description.has_timestamp_without_offset || !description.has_timestamp_with_offset) {
-				// Plain timestamps present, or no offset evidence yet in this/prior vectors.
-				// If no offset evidence: drop TZ and try TIMESTAMP (etc.). Null-only vectors leave both
-				// flags false so TZ is skipped without locking it in.
+			// Only accept TIMESTAMPTZ when every non-null value seen so far carries an offset/Z.
+			// UNKNOWN (e.g., null-only vectors) and WITHOUT_OFFSET drop TZ and try TIMESTAMP (etc.).
+			if (description.timestamp_offset_state != TimestampOffsetState::WITH_OFFSET) {
 				candidate_types.pop_back();
 				continue;
 			}
@@ -435,8 +446,7 @@ static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStruct
 	std::swap(a.children, b.children);
 	std::swap(a.candidate_types, b.candidate_types);
 	std::swap(a.has_large_ubigint, b.has_large_ubigint);
-	std::swap(a.has_timestamp_with_offset, b.has_timestamp_with_offset);
-	std::swap(a.has_timestamp_without_offset, b.has_timestamp_without_offset);
+	std::swap(a.timestamp_offset_state, b.timestamp_offset_state);
 }
 
 JSONStructureDescription::JSONStructureDescription(JSONStructureDescription &&other) noexcept {
@@ -666,12 +676,10 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
 	if (merged_desc.type != LogicalTypeId::VARCHAR || !node_initialized || merged.descriptions.size() != 1) {
 		return;
 	}
-	// Sticky offset flags across parallel auto-detect tasks
-	merged_desc.has_timestamp_with_offset =
-	    merged_desc.has_timestamp_with_offset || child_desc.has_timestamp_with_offset;
-	merged_desc.has_timestamp_without_offset =
-	    merged_desc.has_timestamp_without_offset || child_desc.has_timestamp_without_offset;
-	if (merged_desc.has_timestamp_with_offset && merged_desc.has_timestamp_without_offset) {
+	// Sticky offset state across parallel auto-detect tasks
+	merged_desc.timestamp_offset_state =
+	    MergeTimestampOffsetState(merged_desc.timestamp_offset_state, child_desc.timestamp_offset_state);
+	if (merged_desc.timestamp_offset_state == TimestampOffsetState::MIXED) {
 		merged_desc.candidate_types.clear(); // mixed offset/plain → VARCHAR
 		merged.initialized = true;
 		return;

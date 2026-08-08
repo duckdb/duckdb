@@ -17,6 +17,9 @@ struct DateFormatMap;
 struct StrpTimeFormat;
 class MutableDateFormatMap;
 
+//! Sticky ISO-8601 offset observation across refinement vectors and parallel merges (issue #14919)
+enum class TimestampOffsetState : uint8_t { UNKNOWN, WITH_OFFSET, WITHOUT_OFFSET, MIXED };
+
 struct JSONStructureNode {
 public:
 	JSONStructureNode();
@@ -88,10 +91,8 @@ public:
 	//! Whether any UBIGINT value exceeds the BIGINT range (i.e., >= 2^63)
 	bool has_large_ubigint = false;
 
-	//! Sticky ISO-8601 offset observation across refinement vectors (issue #14919).
-	//! If both are true the field is mixed → candidates cleared (VARCHAR).
-	bool has_timestamp_with_offset = false;
-	bool has_timestamp_without_offset = false;
+	//! MIXED clears the timestamp candidates (VARCHAR): neither TIMESTAMPTZ nor TIMESTAMP is safe
+	TimestampOffsetState timestamp_offset_state = TimestampOffsetState::UNKNOWN;
 };
 
 struct JSONStructure {
