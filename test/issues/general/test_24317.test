@@ -1,0 +1,53 @@
+# name: test/issues/general/test_24317.test
+# description: Encrypted Parquet metadata must not be reused without authenticating the footer key
+# group: [parquet]
+
+require parquet
+
+require noforcestorage
+
+statement ok
+SET force_mbedtls_unsafe = true;
+
+statement ok
+SET parquet_metadata_cache = true;
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345');
+
+statement ok
+PRAGMA add_parquet_key('key192', '012345678911234501234567');
+
+statement ok
+COPY (SELECT i::INTEGER AS i FROM range(10) t(i))
+TO '{TEST_DIR}/encrypted_metadata_cache_auth.parquet' (
+	FORMAT PARQUET,
+	ENCRYPTION_CONFIG {footer_key: 'key256'}
+);
+
+query III
+SELECT count(*), min(i), max(i)
+FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache_auth.parquet',
+	encryption_config = {footer_key: 'key256'});
+----
+10	0	9
+
+statement error
+SELECT count(*), min(i), max(i)
+FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache_auth.parquet');
+----
+Invalid Input Error: File '{TEST_DIR}/encrypted_metadata_cache_auth.parquet' is encrypted, but 'encryption_config' was not set
+
+statement error
+SELECT count(*), min(i), max(i)
+FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache_auth.parquet',
+	encryption_config = {footer_key: 'key192'});
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+query I
+SELECT sum(i)
+FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache_auth.parquet',
+	encryption_config = {footer_key: 'key256'});
+----
+45

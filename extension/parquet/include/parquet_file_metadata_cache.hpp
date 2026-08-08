@@ -55,6 +55,7 @@ public:
 	bool IsValid(CachingFileHandle &new_handle) const;
 	//! Return if a cache entry is valid.
 	ParquetCacheValidity IsValid(const OpenFileInfo &info, ClientContext &context) const;
+	bool IsEncrypted() const;
 
 private:
 	timestamp_t last_modified;

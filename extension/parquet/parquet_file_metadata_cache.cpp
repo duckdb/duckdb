@@ -93,4 +93,9 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	return ParquetCacheValidity::INVALID;
 }
 
+bool ParquetFileMetadataCache::IsEncrypted() const {
+	return crypto_metadata && (crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1 ||
+	                           crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1);
+}
+
 } // namespace duckdb
