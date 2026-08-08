@@ -1,7 +1,7 @@
 # name: test/sql/copy/parquet/writer/parquet_union_list.test
 # description: Round-trip UNION columns containing LIST via parquet (issue #20037)
 # group: [writer]
-#
+
 # Regression tests for issue #20037 ("Struct remap can only remap named structs"),
 # which no longer reproduces. Also pins related cases from PR #24172 review:
 # - JSON MAP read with explicit columns=
