@@ -1,5 +1,14 @@
 {
   "description": "Run with debug_verify_stats=true - checking that stats are propagated correctly through the plan",
   "on_init": "SET debug_verify_stats=true;",
-  "skip_compiled": "true"
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Vector type changes under verification",
+      "paths": [
+        "test/sql/storage/compression/bitpacking/bitpacking_for_vector_type.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_for_compare_vector_type.test"
+      ]
+    }
+  ]
 }

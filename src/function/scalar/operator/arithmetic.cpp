@@ -14,6 +14,8 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
+#include "duckdb/common/vector/for_vector_arithmetic.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -86,6 +88,80 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 		break;
 	}
 	return function;
+}
+
+template <class OP>
+static scalar_function_t GetMixedIntegerFunction(PhysicalType left, PhysicalType right) {
+#define DUCKDB_MIXED_ARITH_PAIR(LP, RP, TL, TR_, TRES)                                                                 \
+	if (left == PhysicalType::LP && right == PhysicalType::RP) {                                                       \
+		scalar_function_t fn = &ScalarFunction::BinaryFunction<TL, TR_, TRES, OP>;                                     \
+		return fn;                                                                                                     \
+	}
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT8, int16_t, int8_t, int16_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT16, int8_t, int16_t, int16_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT8, int32_t, int8_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT32, int8_t, int32_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT16, int32_t, int16_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT32, int16_t, int32_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT8, int64_t, int8_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT64, int8_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT16, int64_t, int16_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT64, int16_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT32, int64_t, int32_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT64, int32_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT8, uint32_t, uint8_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT32, uint8_t, uint32_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT16, uint32_t, uint16_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT32, uint16_t, uint32_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT8, uint64_t, uint8_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT64, uint8_t, uint64_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT16, uint64_t, uint16_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT64, uint16_t, uint64_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT32, uint64_t, uint32_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT64, uint32_t, uint64_t, uint64_t)
+#undef DUCKDB_MIXED_ARITH_PAIR
+	throw InternalException("Unsupported type pair for GetMixedIntegerFunction");
+}
+
+template <class DOMAIN_T, class OP>
+static void FORArithmeticDomainFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto &fstate = state.Cast<ExecuteFunctionState>();
+	if (TryFORConstant<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size(), fstate.for_dictionary)) {
+		return;
+	}
+	if (TryFORColCol<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size(), fstate.for_dictionary)) {
+		return;
+	}
+	GetScalarIntegerFunction<OP>(input.data[0].GetType().InternalType())(input, state, result);
+}
+
+template <class OP>
+static scalar_function_t GetFORArithmeticFunction(PhysicalType type) {
+	if (!TypeIsIntegral(type) || GetTypeIdSize(type) <= 1) {
+		return GetScalarBinaryFunction<OP>(type);
+	}
+	switch (type) {
+	case PhysicalType::INT16:
+		return &FORArithmeticDomainFunction<int16_t, OP>;
+	case PhysicalType::INT32:
+		return &FORArithmeticDomainFunction<int32_t, OP>;
+	case PhysicalType::INT64:
+		return &FORArithmeticDomainFunction<int64_t, OP>;
+	case PhysicalType::INT128:
+		return &FORArithmeticDomainFunction<hugeint_t, OP>;
+	case PhysicalType::UINT16:
+		return &FORArithmeticDomainFunction<uint16_t, OP>;
+	case PhysicalType::UINT32:
+		return &FORArithmeticDomainFunction<uint32_t, OP>;
+	case PhysicalType::UINT64:
+		return &FORArithmeticDomainFunction<uint64_t, OP>;
+	case PhysicalType::UINT128:
+		return &FORArithmeticDomainFunction<uhugeint_t, OP>;
+	default:
+		return GetScalarBinaryFunction<OP>(type);
+	}
 }
 
 template <class T>
@@ -241,8 +317,13 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		auto &func = expr.FunctionMutable();
+		const auto left_param = lstats.GetType().InternalType();
+		const auto right_param = rstats.GetType().InternalType();
+		func.SetFunctionCallback(left_param == right_param
+		                             ? GetFORArithmeticFunction<BASEOP>(expr.GetReturnType().InternalType())
+		                             : GetMixedIntegerFunction<BASEOP>(left_param, right_param));
+		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -356,9 +437,10 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
 	if (bind_data->check_overflow) {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
+		bound_function.SetFunctionCallback(GetFORArithmeticFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
+		bound_function.SetFunctionCallback(GetFORArithmeticFunction<OP>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	if (IS_SUBTRACT) {
 		bound_function.SetStatisticsCallback(
@@ -385,9 +467,10 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
+		bound_function.SetFunctionCallback(GetFORArithmeticFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(return_type.InternalType()));
+		bound_function.SetFunctionCallback(GetFORArithmeticFunction<OP>(return_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
@@ -463,7 +546,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
-			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
+			                        GetFORArithmeticFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
 			                        nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
@@ -478,7 +561,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
-			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
+			                        GetFORArithmeticFunction<AddOperator>(left_type.InternalType()));
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
 			return function;
@@ -517,7 +600,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
 			// DATE + TIME_TZ -> TIMESTAMP_TZ orders in UTC, but TIME_TZ ordering does not agree
-			// with UTC instant ordering — corner-evaluation picks the wrong extremum.
+			// with UTC instant ordering, so corner-evaluation picks the wrong extremum.
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
 			                        ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
 			function.SetFallible();
@@ -801,7 +884,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			return function;
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
-			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
+			                        GetFORArithmeticFunction<SubtractOperator>(left_type.InternalType()));
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
@@ -1026,9 +1109,10 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
 		bound_function.SetFunctionCallback(
-		    GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
+		    GetFORArithmeticFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
 	} else {
-		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
+		bound_function.SetFunctionCallback(GetFORArithmeticFunction<MultiplyOperator>(result_type.InternalType()));
+		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	bound_function.SetStatisticsCallback(
 	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
@@ -1048,7 +1132,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
 			multiply.AddFunction(ScalarFunction(
-			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
+			    {type, type}, type, GetFORArithmeticFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else if (type.IsFloating()) {
 			multiply.AddFunction(ScalarFunction({type, type}, type,
@@ -1056,7 +1140,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			                                    PropagateFloatingStats<MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			multiply.AddFunction(
-			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetFORArithmeticFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
 	multiply.AddFunction(

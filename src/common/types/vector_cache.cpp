@@ -55,6 +55,7 @@ public:
 		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
 		result.BufferMutable().ResetCapacity(capacity);
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		result.BufferMutable().cache_owned = true;
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer

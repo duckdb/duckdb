@@ -12,6 +12,7 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/size.hpp"
@@ -129,6 +130,36 @@ public:
 
 	virtual optional_ptr<Allocator> GetAllocator() const {
 		return nullptr;
+	}
+
+	//! Inline FOR vector metadata avoids per-chunk heap allocation.
+	//! Only meaningful when the vector has VectorType::FOR_VECTOR.
+	PhysicalType for_stored_type = PhysicalType::INVALID;
+	uhugeint_t for_max_value = 0;
+	//! True when this buffer is managed by a VectorCache and allows in-place widening on Flatten.
+	bool cache_owned = false;
+	//! FOR-decode token: bitpacking produces FOR only when set, spends it on produce; exploits refill it.
+	bool for_active = true;
+	//! Chunks left to skip before re-probing a token no exploit site refilled, and the doubling skip length:
+	//! a consumer that never exploits FOR converges to no overhead, one that misses a single chunk recovers.
+	uint16_t for_skip = 0;
+	uint16_t for_backoff = 1;
+
+	//! True when bitpacking may produce a FOR vector into this buffer (spends the token on produce)
+	bool TryForToken() {
+		if (for_active) {
+			for_backoff = 1;
+			return true;
+		}
+		if (for_skip > 0) {
+			for_skip--;
+			return false;
+		}
+		for_skip = for_backoff; // probe once now, wait twice as long before the next probe
+		if (for_backoff < 4096) {
+			for_backoff = static_cast<uint16_t>(for_backoff * 2);
+		}
+		return true;
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,

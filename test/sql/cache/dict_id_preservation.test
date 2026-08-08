@@ -1,0 +1,72 @@
+# name: test/sql/cache/dict_id_preservation.test
+# description: Validate correctness of DICT-id-preserving caching across CachingPhysicalOperator paths
+# group: [cache]
+
+statement ok
+PRAGMA enable_verification
+
+# Low-cardinality VARCHAR column gets stored as a dictionary; selective filters then drive small
+# chunks through the caching layer (Filter / Join / CrossProduct).
+
+statement ok
+CREATE TABLE big (id INTEGER, k VARCHAR);
+
+statement ok
+INSERT INTO big SELECT i, 'K' || ((i % 8) + 1)::VARCHAR FROM range(20000) t(i);
+
+statement ok
+CREATE TABLE probe AS SELECT 'K' || (g + 1)::VARCHAR AS k FROM range(8) t(g);
+
+# (1) A run of DICT-same-id chunks driven through a hash-join probe: the cache should preserve
+#     DICT encoding for the k column; correctness must match.
+query II
+SELECT k, COUNT(*) AS c FROM big JOIN probe USING (k) GROUP BY k ORDER BY k;
+----
+K1	2500
+K2	2500
+K3	2500
+K4	2500
+K5	2500
+K6	2500
+K7	2500
+K8	2500
+
+# (2) Mismatched-DICT-id scenario via UNION ALL of two filtered slices (each slice's k column
+#     ends up as DICT with potentially different shared children once the two scans concatenate).
+query II
+SELECT k, COUNT(*) AS c FROM (
+    SELECT k FROM big WHERE id < 8000
+    UNION ALL
+    SELECT k FROM big WHERE id >= 12000
+)
+GROUP BY k
+ORDER BY k;
+----
+K1	2000
+K2	2000
+K3	2000
+K4	2000
+K5	2000
+K6	2000
+K7	2000
+K8	2000
+
+# (3) Mixed column shapes: a selective filter producing one DICT column and one FLAT column.
+query III
+SELECT k, MIN(id), MAX(id) FROM big WHERE id % 7 = 0 AND id >= 0 GROUP BY k ORDER BY k;
+----
+K1	0	19992
+K2	49	19985
+K3	42	19978
+K4	35	19971
+K5	28	19964
+K6	21	19957
+K7	14	19950
+K8	7	19999
+
+# (4) Across multiple emissions (multi-output via cross product); cache must reset cleanly
+#     between emissions.
+query I
+SELECT COUNT(*) FROM (SELECT k FROM big WHERE id < 100) a, (SELECT g FROM range(3) t(g)) b;
+----
+300

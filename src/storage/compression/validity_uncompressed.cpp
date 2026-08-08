@@ -1,4 +1,6 @@
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -203,6 +205,16 @@ struct ValidityScanState : public SegmentScanState {
 	BufferHandle handle;
 	block_id_t block_id;
 };
+
+static ValidityMask &MutableResultValidity(Vector &result) {
+	if (result.GetVectorType() == VectorType::FOR_VECTOR) {
+		return FORVector::Validity(result);
+	}
+	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		result.Flatten();
+	}
+	return FlatVector::ValidityMutable(result);
+}
 
 unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
@@ -467,19 +479,15 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten();
-
 	auto start = state.GetPositionInSegment();
+	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
+	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
+	D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
+	auto &result_mask = MutableResultValidity(result);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
-		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-
-		auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-		D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
-		auto &result_mask = FlatVector::ValidityMutable(result);
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result_mask, scan_count);
 	} else {
-		// unaligned scan: fall back to scan_partial which does bitshift tricks
-		ValidityScanPartial(segment, state, scan_count, result, 0);
+		ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result_mask, 0, scan_count);
 	}
 }
 
@@ -488,11 +496,9 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
                     idx_t sel_count) {
-	result.Flatten();
-
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto &result_mask = FlatVector::ValidityMutable(result);
+	auto &result_mask = MutableResultValidity(result);
 	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
 	auto start = state.GetPositionInSegment();

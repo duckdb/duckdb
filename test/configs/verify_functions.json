@@ -1,5 +1,14 @@
 {
   "description": "Run with debug_verification_mode set to verify_functions - verifying NULL handling of scalar and aggregate functions",
   "on_init": "SET debug_verification_mode='verify_functions';",
-  "skip_compiled": "true"
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Vector type changes under verification",
+      "paths": [
+        "test/sql/storage/compression/bitpacking/bitpacking_for_vector_type.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_for_compare_vector_type.test"
+      ]
+    }
+  ]
 }
