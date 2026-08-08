@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "duckdb/common/optional_ptr.hpp"
@@ -2058,10 +2059,16 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 	state.group_offset = GetRowGroupOffset(*this, state.group_index);
 
 	uint64_t to_scan_compressed_bytes = 0;
+	unordered_set<idx_t> counted_column_ids;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
 		PrepareRowGroupBuffer(context, state, col_idx);
-		to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
+		// column_ids can reference the same physical column more than once (e.g. the target scan of a MERGE
+		// whose source materializes a CTE over the target) - count each column chunk only once so the sum
+		// stays comparable to the physical byte span of the row group below
+		if (counted_column_ids.insert(column_ids[col_idx].GetId()).second) {
+			to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
+		}
 	}
 
 	auto &group = GetGroup(state);
