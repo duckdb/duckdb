@@ -338,6 +338,13 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (!use_dictionary) {
 		return type;
 	}
+	if (HasExtension()) {
+		// A registered extension type's type info describes the extension's STORAGE tree, which need not
+		// mirror the logical type's children — reconstructing through it would produce a hybrid type.
+		// The logical type is authoritative here; any dictionaries inside the storage are handled by the
+		// storage-side conversion, not by the output type.
+		return type;
+	}
 	// Dictionaries can exist in arbitrarily nested schemas
 	// have to reconstruct the type
 	auto id = type.id();
