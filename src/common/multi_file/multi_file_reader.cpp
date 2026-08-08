@@ -381,7 +381,8 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.Add(global_idx, Value(type));
+				auto &constant_type = col_id.HasType() ? col_id.GetScanType() : type;
+				reader_data.constant_map.Add(global_idx, Value(constant_type));
 				continue;
 			}
 		}

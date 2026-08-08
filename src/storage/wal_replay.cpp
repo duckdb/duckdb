@@ -217,7 +217,13 @@ public:
 			deserializer.End();
 			return true;
 		}
-		ReplayEntry(wal_type);
+		if (CanSkipPayload(wal_type)) {
+			// Framed entries have already been read and integrity-checked, so jump directly to the root terminator.
+			D_ASSERT(stream.GetCapacity() >= sizeof(field_id_t));
+			stream.SetPosition(stream.GetCapacity() - sizeof(field_id_t));
+		} else {
+			ReplayEntry(wal_type);
+		}
 		deserializer.End();
 		return false;
 	}
@@ -230,6 +236,42 @@ public:
 
 protected:
 	void ReplayEntry(WALType wal_type);
+	bool CanSkipPayload(WALType wal_type) const {
+		// Unframed WAL v1 entries must still be deserialized; Replay* guards suppress their side effects.
+		if (!deserialize_only || !data) {
+			return false;
+		}
+		D_ASSERT(state.wal_version == 2 || state.wal_version == 3);
+		switch (wal_type) {
+		case WALType::CREATE_TABLE:
+		case WALType::DROP_TABLE:
+		case WALType::CREATE_SCHEMA:
+		case WALType::DROP_SCHEMA:
+		case WALType::CREATE_VIEW:
+		case WALType::DROP_VIEW:
+		case WALType::CREATE_SEQUENCE:
+		case WALType::DROP_SEQUENCE:
+		case WALType::SEQUENCE_VALUE:
+		case WALType::CREATE_MACRO:
+		case WALType::DROP_MACRO:
+		case WALType::CREATE_TYPE:
+		case WALType::DROP_TYPE:
+		case WALType::ALTER_INFO:
+		case WALType::CREATE_TABLE_MACRO:
+		case WALType::DROP_TABLE_MACRO:
+		case WALType::CREATE_INDEX:
+		case WALType::DROP_INDEX:
+		case WALType::USE_TABLE:
+		case WALType::INSERT_TUPLE:
+		case WALType::DELETE_TUPLE:
+		case WALType::UPDATE_TUPLE:
+		case WALType::CREATE_TRIGGER:
+		case WALType::DROP_TRIGGER:
+			return true;
+		default:
+			return false;
+		}
+	}
 
 	void ReplayVersion();
 

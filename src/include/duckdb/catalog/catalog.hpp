@@ -410,14 +410,14 @@ public:
 	}
 
 	//! Returns the default schema of the catalog
-	virtual string GetDefaultSchema() const;
+	virtual Identifier GetDefaultSchema() const;
 
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const Identifier &schema, const Identifier &name);
-	DUCKDB_API string GetDefaultTable() const;
-	DUCKDB_API string GetDefaultTableSchema() const;
+	DUCKDB_API Identifier GetDefaultTable() const;
+	DUCKDB_API Identifier GetDefaultTableSchema() const;
 
 	//! Returns the dependency manager of this catalog - if the catalog has any
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
@@ -487,8 +487,8 @@ protected:
 	AttachedDatabase &db;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
-	string default_table;
-	string default_table_schema;
+	Identifier default_table;
+	Identifier default_table_schema;
 
 public:
 	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION

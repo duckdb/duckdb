@@ -243,11 +243,11 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAli
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	}
-	auto &column_names = binding->GetColumnNames();
-	if (column_index < column_names.size() && column_names[column_index] != column_name) {
+	auto &registered_name = binding->GetRegisteredColumnName(column_name);
+	if (registered_name != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->SetAlias(column_names[column_index]);
+		result->SetAlias(registered_name);
 	}
 	return std::move(result);
 }
@@ -285,11 +285,11 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	}
-	auto &column_names = binding->GetColumnNames();
-	if (column_index < column_names.size() && column_names[column_index] != column_name) {
+	auto &registered_name = binding->GetRegisteredColumnName(column_name);
+	if (registered_name != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->SetAlias(column_names[column_index]);
+		result->SetAlias(registered_name);
 	}
 	return std::move(result);
 }
@@ -783,6 +783,16 @@ void BindContext::AddSubquery(TableIndex index, const Identifier &alias, TableFu
 void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                     const vector<LogicalType> &types) {
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
+}
+
+void BindContext::AddColumnAlias(TableIndex index, const Identifier &column_alias, column_t column_index) {
+	for (auto &binding : bindings_list) {
+		if (binding->GetIndex() == index) {
+			binding->AddColumnAlias(column_alias, column_index);
+			return;
+		}
+	}
+	throw InternalException("AddColumnAlias - no binding found with the given table index");
 }
 
 void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {

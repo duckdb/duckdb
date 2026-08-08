@@ -467,8 +467,9 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 			VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
 			variant_vec.SetValue(0, unshredded.GetValue(0));
 		} else {
-			sub_columns[0]->FetchRows(transaction, state, storage_index, &offset,
-			                          *FlatVector::IncrementalSelectionVector(), /*count=*/1, variant_vec, 0);
+			StorageIndex full_read(0);
+			sub_columns[0]->FetchRows(transaction, state, full_read, &offset, *FlatVector::IncrementalSelectionVector(),
+			                          /*count=*/1, variant_vec, 0);
 		}
 
 		if (!storage_index.IsPushdownExtract()) {

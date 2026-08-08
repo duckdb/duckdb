@@ -212,11 +212,12 @@ void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBind
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.Depth() == 0);
 		    D_ASSERT(colref.Binding().table_index.IsValid());
-		    // map the base table index to the relation index used by the JoinOrderOptimizer
-		    D_ASSERT(relation_manager.relation_mapping.find(colref.Binding().table_index) !=
-		             relation_manager.relation_mapping.end());
-		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.Binding().table_index].index),
-		                            colref.Binding().column_index);
+		    // Map the logical output binding to the relation-local statistics column.
+		    auto normalized = relation_manager.TryNormalizeBinding(colref.Binding(), binding);
+		    D_ASSERT(normalized);
+		    if (!normalized) {
+			    return;
+		    }
 	    });
 }
 
@@ -228,9 +229,11 @@ void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, Colu
 		if (!colref.Binding().table_index.IsValid()) {
 			return;
 		}
-		auto entry = relation_manager.relation_mapping.find(colref.Binding().table_index);
-		D_ASSERT(entry != relation_manager.relation_mapping.end());
-		binding = ColumnBinding(TableIndex(entry->second.index), colref.Binding().column_index);
+		auto normalized = relation_manager.TryNormalizeBinding(colref.Binding(), binding);
+		D_ASSERT(normalized);
+		if (!normalized) {
+			return;
+		}
 		return;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {

@@ -1036,6 +1036,8 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
 	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws for values that are out of range for the parquet variant encoding
+	transform.SetFallible();
 	return transform;
 }
 
