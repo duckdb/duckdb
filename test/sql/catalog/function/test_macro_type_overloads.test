@@ -292,8 +292,13 @@ from table_integral_default()
 1
 
 # Narrowed defaults survive catalog serialization for scalar and table macros
+# Switch to a scratch in-memory catalog rather than assuming the default
+# catalog is named "memory": under persistent test configurations it is not.
 statement ok
-use memory
+attach ':memory:' as switch_db
+
+statement ok
+use switch_db
 
 statement ok
 detach newerdb
@@ -303,6 +308,9 @@ attach '{TEST_DIR}/test_macro_type_overloads_newerdb.db' AS newerdb
 
 statement ok
 use newerdb
+
+statement ok
+detach switch_db
 
 query I
 select integral_defaults().i
