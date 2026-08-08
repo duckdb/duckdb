@@ -1,16 +1,17 @@
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
@@ -124,7 +125,7 @@ static idx_t StringHeapSize(const string_t &val) {
 	return !val.IsInlined() * val.GetSize();
 }
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(tuple_data_heap_sizes)
 template <bool ALL_VALID, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL>
 #endif
 void ComputeStringHeapSizesInternal(idx_t *const heap_sizes, const UnifiedVectorFormat &source_vector_data,
@@ -133,7 +134,7 @@ void ComputeStringHeapSizesInternal(idx_t *const heap_sizes, const UnifiedVector
 	const auto &source_sel = *source_vector_data.sel;
 	const auto &source_validity = source_vector_data.validity;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_heap_sizes)
 	const auto ALL_VALID = source_validity.CannotHaveNull();
 	const auto HAS_APPEND_SEL = append_sel.IsSet();
 	const auto HAS_SOURCE_SEL = source_sel.IsSet();
@@ -168,7 +169,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	switch (type) {
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_heap_sizes)
 		ComputeStringHeapSizesInternal(heap_sizes, source_vector_data, append_sel, append_count);
 #else
 		if (source_validity.CannotHaveNull()) {
@@ -715,7 +716,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const Vector
 	                          chunk_state.vector_data[column_id].unified, scatter_function.child_functions);
 }
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_scatter)
 template <class T>
 #else
 template <class T, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL, bool ALL_VALID>
@@ -731,7 +732,7 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	const auto &validity = source_data.validity;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_scatter)
 	const auto HAS_APPEND_SEL = append_sel.IsSet();
 	const auto HAS_SOURCE_SEL = source_sel.IsSet();
 	const auto ALL_VALID = validity.CannotHaveNull();
@@ -770,7 +771,7 @@ static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVecto
                                       const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                       const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
                                       const vector<TupleDataScatterFunction> &child_functions) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_scatter)
 	TupleDataTemplatedScatterInternal<T>(source, source_format, append_sel, append_count, layout, row_locations,
 	                                     heap_locations, col_idx, dummy_arg, child_functions);
 #else
@@ -1290,33 +1291,12 @@ template <class T>
 TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_type) {
 	TupleDataScatterFunction result;
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::SORT_KEY_TYPE>;                                      \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_VARIABLE_32>;
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("GetSortKeyScatterFunction for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -1385,7 +1365,7 @@ void TupleDataGatherFunction::Gather(const TupleDataLayout &layout, Vector &row_
 	function(layout, row_locations, col_idx, scan_sel, scan_count, target, target_sel, list_vector, child_functions);
 }
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_gather)
 template <class T>
 #else
 template <class T, bool HAS_SCAN_SEL, bool HAS_TARGET_SEL, bool ALL_VALID>
@@ -1394,7 +1374,7 @@ static void TupleDataTemplatedGatherInternal(const TupleDataLayout &layout, Vect
                                              const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                              const SelectionVector &target_sel, optional_ptr<Vector>,
                                              const vector<TupleDataGatherFunction> &) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_gather)
 	const bool HAS_SCAN_SEL = scan_sel.IsSet();
 	const bool HAS_TARGET_SEL = target_sel.IsSet();
 	const bool ALL_VALID = layout.CannotHaveNull();
@@ -1433,7 +1413,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
                                      const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                      const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                      const vector<TupleDataGatherFunction> &child_functions) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(tuple_data_gather)
 	TupleDataTemplatedGatherInternal<T>(layout, row_locations, col_idx, scan_sel, scan_count, target, target_sel,
 	                                    list_vector, child_functions);
 #else
@@ -1939,33 +1919,12 @@ template <class T>
 TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_type) {
 	tuple_data_gather_function_t function = nullptr;
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		function = TupleDataSortKeyGather<T, SortKeyType::SORT_KEY_TYPE>;                                              \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_16>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_24>;
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_32>;
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_VARIABLE_32>;
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("GetSortKeyGatherFunction for %s", EnumUtil::ToString(sort_key_type));
 	}

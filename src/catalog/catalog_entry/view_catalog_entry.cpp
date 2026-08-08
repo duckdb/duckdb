@@ -48,7 +48,7 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
-	result->SetQualifiedName(QualifiedName({schema.name}, name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
@@ -197,6 +197,7 @@ string ViewCatalogEntry::ToSQL() const {
 		return sql;
 	}
 	auto info = GetInfo();
+	info->StripCatalogQualification();
 	auto result = info->ToString();
 	return result;
 }

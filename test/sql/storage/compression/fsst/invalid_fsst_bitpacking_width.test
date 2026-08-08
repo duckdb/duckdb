@@ -15,4 +15,4 @@ USE invalid_fsst_db
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to read FSST string segment - bitpacking width did not match the stored layout. Database file appears to be corrupted.
+Data Corruption Error: Failed to read FSST string segment - bitpacking width did not match the stored layout. Database file appears to be corrupted.

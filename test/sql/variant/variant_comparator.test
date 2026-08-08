@@ -221,3 +221,53 @@ query I
 SELECT variant_comparator(NULL::VARIANT) IS NULL
 ----
 true
+
+# min/max use the logical VARIANT ordering
+query TT
+WITH variants(v) AS (VALUES
+    (1::INTEGER::VARIANT),
+    (255::INTEGER::VARIANT),
+    (256::INTEGER::VARIANT),
+    (NULL::VARIANT)
+)
+SELECT min(v)::VARCHAR, max(v)::VARCHAR FROM variants
+----
+1	256
+
+# min/max with N use the logical VARIANT ordering
+query TT
+WITH variants(v) AS (VALUES
+    (1::INTEGER::VARIANT),
+    (255::INTEGER::VARIANT),
+    (256::INTEGER::VARIANT),
+    (NULL::VARIANT)
+)
+SELECT min(v, 3)::VARCHAR, max(v, 3)::VARCHAR FROM variants
+----
+[1, 255, 256]	[256, 255, 1]
+
+# min/max compare numeric VARIANT values across physical types
+query TT
+WITH variants(v) AS (VALUES
+    (5::TINYINT::VARIANT),
+    (5.00::DECIMAL(5,2)::VARIANT),
+    ((-1)::BIGINT::VARIANT),
+    (10::BIGNUM::VARIANT)
+)
+SELECT min(v)::VARCHAR, max(v)::VARCHAR FROM variants
+----
+-1	10
+
+# exported min/max states retain the logical VARIANT ordering
+query TT
+WITH variants(v) AS (VALUES
+    (1::INTEGER::VARIANT),
+    (255::INTEGER::VARIANT),
+    (256::INTEGER::VARIANT)
+)
+SELECT
+    finalize(min(v) EXPORT_STATE)::VARCHAR,
+    finalize(max(v) EXPORT_STATE)::VARCHAR
+FROM variants
+----
+1	256

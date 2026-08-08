@@ -92,6 +92,27 @@ bool Binding::HasMatchingBinding(const Identifier &column_name) {
 	return TryGetBindingIndex(column_name, result);
 }
 
+void Binding::AddColumnAlias(const Identifier &column_alias, column_t column_index) {
+	D_ASSERT(column_index < names.size());
+	if (name_map.find(column_alias) != name_map.end()) {
+		// a column with this name already exists - the alias is not required
+		return;
+	}
+	name_map[column_alias] = column_index;
+}
+
+const Identifier &Binding::GetRegisteredColumnName(const Identifier &column_name) {
+	auto entry = name_map.find(column_name);
+	return entry == name_map.end() ? column_name : entry->first;
+}
+
+void Binding::SetBoundColumnAlias(ColumnRefExpression &colref) {
+	if (!colref.GetAlias().empty()) {
+		return;
+	}
+	colref.SetAlias(GetRegisteredColumnName(colref.GetColumnName()));
+}
+
 ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"",
 	                                                           GetAlias(), column_name));
@@ -108,9 +129,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
-	if (colref.GetAlias().empty()) {
-		colref.SetAlias(names[column_index]);
-	}
+	SetBoundColumnAlias(colref);
 	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
 }
 
@@ -288,9 +307,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
-		if (colref.GetAlias().empty()) {
-			colref.SetAlias(names[column_index]);
-		}
+		SetBoundColumnAlias(colref);
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
 	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));

@@ -143,6 +143,15 @@ private:
 	static void AddSkipReason(const string &reason);
 
 private:
+	//! The TEMP_DIR the harness assigned this test, snapshotted by EmitBegin. Both events report it, so
+	//! a body that rewrites TEMP_DIR via test-env cannot make them name different invocations.
+	string emit_temp_dir;
+
+	//! This test's temp dir, snapshotted at construction for the destructor's loaded-database
+	//! ownership check. Resolving it there instead would call a MATERIALIZING accessor after
+	//! DestroyTestTempDir has already reclaimed the leaf, recreating the directory just removed.
+	string test_dir_prefix;
+
 	static mutex skip_reason_lock;
 	static map<string, idx_t> skip_reason_counts;
 };

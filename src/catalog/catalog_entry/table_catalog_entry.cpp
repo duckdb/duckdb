@@ -207,6 +207,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 
 string TableCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
+	create_info->StripCatalogQualification();
 	return create_info->ToString();
 }
 

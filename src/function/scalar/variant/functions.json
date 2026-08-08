@@ -53,6 +53,29 @@
 		"type": "scalar_function_set"
 	},
 	{
+		"name": "variant_contains",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "variant_haystack",
+						"type": "VARIANT"
+					},
+					{
+						"name": "variant_needle",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.",
+				"example": "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_exists",
 		"variants": [
 			{

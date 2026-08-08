@@ -91,6 +91,8 @@ static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input)
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
 	function.SetStatisticsCallback(FromWKBStats);
+	// throws when the input is not valid WKB
+	function.SetFallible();
 	return function;
 }
 

@@ -41,6 +41,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		cast_cte.recurring_table = recurring_table;
 		cast_cte.distinct_types = op.types;
 		cast_cte.working_table = working_table;
+		cast_cte.non_repeatable_operators = non_repeatable_operators;
 		return cte;
 	}
 
@@ -81,6 +82,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	// If the key variant has been used, a recurring table will be created.
 	auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 	recurring_cte_tables[op.table_index] = recurring_table;
+	{
+		auto &planning_info = recursive_cte_planning[op.table_index];
+		planning_info.using_key = true;
+		planning_info.distinct_indices = distinct_idx;
+		planning_info.payload_indices = payload_idx;
+	}
 
 	planning_recursive_cte_depth++;
 	auto &right = CreatePlan(*op.children[1]);
@@ -98,6 +105,26 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;
+	cast_cte.non_repeatable_operators = non_repeatable_operators;
+	auto planning_entry = recursive_cte_planning.find(op.table_index);
+	D_ASSERT(planning_entry != recursive_cte_planning.end());
+	if (!planning_entry->second.state_scans.empty()) {
+		for (auto &scan_ref : planning_entry->second.state_scans) {
+			auto &scan = scan_ref.get();
+			scan.recursive_cte = cast_cte;
+			scan.distinct_idx = distinct_idx;
+			scan.payload_idx = payload_idx;
+			for (auto &spec : scan.partial_key_index_specs) {
+				bool found = false;
+				for (auto &existing : cast_cte.partial_key_index_specs) {
+					found = found || existing == spec;
+				}
+				if (!found) {
+					cast_cte.partial_key_index_specs.push_back(spec);
+				}
+			}
+		}
+	}
 	return cte;
 }
 
@@ -113,25 +140,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 		auto &chunk_scan = Make<PhysicalColumnDataScan>(op.chunk_types, PhysicalOperatorType::CTE_SCAN,
 		                                                op.estimated_cardinality, op.cte_index);
 
+		auto cte = recursive_cte_tables.find(op.cte_index);
+		if (cte == recursive_cte_tables.end()) {
+			throw InvalidInputException("Referenced materialized CTE does not exist.");
+		}
+
 		auto &cast_chunk_scan = chunk_scan.Cast<PhysicalColumnDataScan>();
+		cast_chunk_scan.collection = cte->second.get();
+		auto cte_order = materialized_cte_orders.find(op.cte_index);
+		if (cte_order != materialized_cte_orders.end()) {
+			cast_chunk_scan.source_order = cte_order->second;
+		}
+
 		auto exchange = materialized_cte_exchanges.find(op.cte_index);
 		if (exchange != materialized_cte_exchanges.end()) {
-			auto cte = recursive_cte_tables.find(op.cte_index);
-			if (cte == recursive_cte_tables.end()) {
-				throw InvalidInputException("Referenced materialized CTE does not exist.");
-			}
 			// Exchange consumers can still be converted to materialized scans during pipeline construction.
-			cast_chunk_scan.collection = cte->second.get();
 			auto consumer_idx = exchange->second->RegisterConsumer();
 			auto &source = Make<PhysicalCTEConsumerSource>(op.chunk_types, op.estimated_cardinality, op.cte_index,
 			                                               exchange->second, consumer_idx);
 			cast_chunk_scan.cte_source = source;
-		} else {
-			auto cte = recursive_cte_tables.find(op.cte_index);
-			if (cte == recursive_cte_tables.end()) {
-				throw InvalidInputException("Referenced materialized CTE does not exist.");
-			}
-			cast_chunk_scan.collection = cte->second.get();
 		}
 		materialized_cte->second.push_back(cast_chunk_scan);
 		return chunk_scan;
@@ -141,6 +168,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	auto cte = recursive_cte_tables.find(op.cte_index);
 	if (cte == recursive_cte_tables.end()) {
 		throw InvalidInputException("Referenced recursive CTE does not exist.");
+	}
+	auto planning_entry = recursive_cte_planning.find(op.cte_index);
+	if (op.is_recurring && planning_entry != recursive_cte_planning.end() && planning_entry->second.using_key) {
+		auto &state_scan = Make<PhysicalRecursiveCTEStateScan>(op.chunk_types, op.estimated_cardinality, op.cte_index)
+		                       .Cast<PhysicalRecursiveCTEStateScan>();
+		state_scan.distinct_idx = planning_entry->second.distinct_indices;
+		state_scan.payload_idx = planning_entry->second.payload_indices;
+		planning_entry->second.state_scans.push_back(state_scan);
+		return state_scan;
 	}
 
 	// If we found a recursive CTE and we want to scan the recurring table, we search for it,

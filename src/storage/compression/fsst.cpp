@@ -559,8 +559,9 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
-		                  "corrupted.");
+		throw DataCorruptionException(
+		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
+		    "corrupted.");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
@@ -731,8 +732,9 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
-		                  "corrupted.");
+		throw DataCorruptionException(
+		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
+		    "corrupted.");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto base_ptr = handle.GetDataMutable() + block_offset;
@@ -818,7 +820,8 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 }
 
 static void ThrowInvalidFSSTSegment(const char *reason) {
-	throw IOException("Failed to read FSST string segment - %s. Database file appears to be corrupted.", reason);
+	throw DataCorruptionException("Failed to read FSST string segment - %s. Database file appears to be corrupted.",
+	                              reason);
 }
 
 // Returns false if no symbol table was found. This means all strings are either empty or null
@@ -843,10 +846,6 @@ bool FSSTStorage::ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decode
 	if (fsst_symbol_table_offset != expected_symbol_table_offset) {
 		ThrowInvalidFSSTSegment("bitpacking width did not match the stored layout");
 	}
-	if (sizeof(duckdb_fsst_decoder_t) > segment_capacity - fsst_symbol_table_offset) {
-		ThrowInvalidFSSTSegment("symbol table was out of range");
-	}
-
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
 	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));
@@ -855,8 +854,23 @@ bool FSSTStorage::ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decode
 		ThrowInvalidFSSTSegment("dictionary was out of range");
 	}
 
+	// the symbol table occupies [symbol_table_offset, string_container_start), so its bytes end where the string
+	// dictionary container begins. Bound duckdb_fsst_import to that size so it can never read out of bounds.
+	const auto container_start = (container.end - container.size);
+	const auto expected_symbol_table_size = container_start - fsst_symbol_table_offset;
+	const auto consumed =
+	    duckdb_fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset, expected_symbol_table_size);
+	// an inconsistent header is corruption; a version mismatch just means there is no symbol table (all strings are
+	// empty/null), in which case we report "no table" and the scan continues without a decoder
+	if (consumed == DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS) {
+		ThrowInvalidFSSTSegment("symbol table was out of range");
+	}
+
 	*width_out = width;
-	return duckdb_fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);
+	// Currently, we allow an empty symbol table for a row group all strings are of length 0.
+	// This case is detected by reading a symbol table of size 0, which will fail on VERSION_MISMATCH
+	// as the data we are reading is not really a fsst symbol table.
+	return consumed != DUCKDB_FSST_IMPORT_VERSION_MISMATCH;
 }
 
 // The calculation of offsets and counts while scanning or fetching is a bit tricky, for two reasons:

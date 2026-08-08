@@ -228,6 +228,9 @@ public:
 	//! Case insensitive starts-with
 	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
 
+	//! Case insensitive ends-with
+	DUCKDB_API static bool CIEndsWith(const string &str, const string &suffix);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 

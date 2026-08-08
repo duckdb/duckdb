@@ -5,6 +5,16 @@
 
 namespace duckdb {
 
+void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
+	ErrorData error(ex);
+	if (!Exception::IsExecutionError(error.Type())) {
+		throw;
+	}
+	throw InternalException("Scalar function \"%s\" threw an execution error, but the function is not marked as "
+	                        "fallible - the function must call SetFallible(). Error: %s",
+	                        name, error.RawMessage());
+}
+
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&
 	       bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
