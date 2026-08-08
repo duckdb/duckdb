@@ -135,8 +135,15 @@ private:
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	//! The map of CTE index -> statistics of the columns emitted by the CTE definition
-	unordered_map<TableIndex, vector<unique_ptr<BaseStatistics>>> cte_stats_map;
+	//! The statistics of a materialized CTE definition, which hold for every reference to it
+	struct CTEStatistics {
+		//! Statistics of the columns emitted by the definition, by position
+		vector<unique_ptr<BaseStatistics>> column_stats;
+		//! Cardinality of the definition
+		unique_ptr<NodeStatistics> node_stats;
+	};
+	//! The map of CTE index -> statistics of its definition
+	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };

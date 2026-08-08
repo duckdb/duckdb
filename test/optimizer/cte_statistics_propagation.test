@@ -40,6 +40,41 @@ WITH c AS MATERIALIZED (SELECT * FROM t) SELECT count(*) FROM t l JOIN c ON l.i 
 ----
 0
 
+# the cardinality of the definition reaches the reference, which is what lets sum() prove it cannot
+# overflow an int64 and switch to sum_no_overflow
+statement ok
+CREATE TABLE small_vals(v BIGINT);
+
+statement ok
+INSERT INTO small_vals SELECT (i * 1000000000)::BIGINT FROM range(1000) s(i);
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(v\).*
+
+query I
+WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
+----
+499500000000000
+
+# ... and declines to when the sum could exceed an int64
+statement ok
+CREATE TABLE big_vals(v BIGINT);
+
+statement ok
+INSERT INTO big_vals SELECT 4000000000000000000::BIGINT FROM range(5) s(i);
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
+----
+logical_opt	<!REGEX>:.*sum_no_overflow.*
+
+query I
+WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
+----
+20000000000000000000
+
 # the same holds for the duplicate-eliminated CTE that decorrelation generates for a lateral join
 query II
 EXPLAIN SELECT * FROM t l, LATERAL (SELECT * FROM t r WHERE r.i + l.i IS NOT NULL ORDER BY r.i + l.i LIMIT 2)

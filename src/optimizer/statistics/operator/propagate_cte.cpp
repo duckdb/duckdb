@@ -7,20 +7,25 @@ namespace duckdb {
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalMaterializedCTE &op,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// the CTE is evaluated once, so the statistics of its definition hold for every reference to it
-	PropagateStatistics(op.children[0]);
+	auto definition_node_stats = PropagateStatistics(op.children[0]);
 
 	auto definition_bindings = op.children[0]->GetColumnBindings();
-	vector<unique_ptr<BaseStatistics>> definition_stats;
-	definition_stats.reserve(definition_bindings.size());
-	for (auto &binding : definition_bindings) {
-		auto entry = statistics_map.find(binding);
+	auto column_count = MinValue<idx_t>(op.column_count, definition_bindings.size());
+
+	CTEStatistics cte_stats;
+	cte_stats.column_stats.reserve(column_count);
+	for (idx_t i = 0; i < column_count; i++) {
+		auto entry = statistics_map.find(definition_bindings[i]);
 		if (entry == statistics_map.end() || !entry->second) {
-			definition_stats.push_back(nullptr);
+			cte_stats.column_stats.push_back(nullptr);
 			continue;
 		}
-		definition_stats.push_back(entry->second->ToUnique());
+		cte_stats.column_stats.push_back(entry->second->ToUnique());
 	}
-	cte_stats_map[op.table_index] = std::move(definition_stats);
+	if (definition_node_stats) {
+		cte_stats.node_stats = make_uniq<NodeStatistics>(*definition_node_stats);
+	}
+	cte_stats_map[op.table_index] = std::move(cte_stats);
 
 	// the operator emits whatever the query referencing the CTE emits
 	return PropagateStatistics(op.children[1]);
@@ -39,14 +44,20 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCTER
 	auto &cte_stats = entry->second;
 
 	auto bindings = op.GetColumnBindings();
-	auto column_count = MinValue<idx_t>(bindings.size(), cte_stats.size());
+	auto column_count = MinValue<idx_t>(bindings.size(), cte_stats.column_stats.size());
 	for (idx_t i = 0; i < column_count; i++) {
-		if (!cte_stats[i] || cte_stats[i]->GetType() != op.chunk_types[i]) {
+		auto &column_stats = cte_stats.column_stats[i];
+		if (!column_stats || column_stats->GetType() != op.chunk_types[i]) {
 			continue;
 		}
-		statistics_map[bindings[i]] = cte_stats[i]->ToUnique();
+		statistics_map[bindings[i]] = column_stats->ToUnique();
 	}
-	return nullptr;
+
+	// a reference scans the whole CTE, so it emits exactly as many rows as the definition
+	if (!cte_stats.node_stats) {
+		return nullptr;
+	}
+	return make_uniq<NodeStatistics>(*cte_stats.node_stats);
 }
 
 } // namespace duckdb
