@@ -493,9 +493,12 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	const bool nested = vector.GetType().IsNested(); // nested evaluation needs explicit indices
 	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
 
+	// FOR payloads stay dense regardless: the sparse path would widen the whole payload anyway
+	const bool for_payload = vector.GetVectorType() == VectorType::FOR_VECTOR;
 	const bool dense_pays = // the dense path rescans the whole vector, so it only pays while enough rows still survive;
-	    identity_all || (sel.IsSet() && DenseAutoVecPaysOff(approved_tuple_count, scan_count,
-	                                                        GetTypeIdSize(vector.GetType().InternalType())));
+	    identity_all ||
+	    (sel.IsSet() && (for_payload || DenseAutoVecPaysOff(approved_tuple_count, scan_count,
+	                                                        GetTypeIdSize(vector.GetType().InternalType()))));
 	if (!nested && state.bitmap_capable && dense_pays) { // bitmap scan-filter path
 		auto &new_sel = state.scratch;
 		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
