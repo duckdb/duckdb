@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_uhugeint.test
-# description: Parquet uhugeint round trip
+# description: Parquet uhugeint round trip (default DOUBLE + opt-in HUGEINT_ENCODING)
 # group: [writer]
 
 require parquet
@@ -10,11 +10,12 @@ CREATE TABLE hugeints(h UHUGEINT)
 statement ok
 INSERT INTO hugeints VALUES (0), (1), (NULL), (1180591620717411303424)
 
+# Default encoding is DOUBLE (lossy, historical behavior)
 statement ok
-COPY hugeints TO '{TEST_DIR}/hugeints.parquet' (FORMAT 'parquet');
+COPY hugeints TO '{TEST_DIR}/uhugeints.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '{TEST_DIR}/hugeints.parquet'
+SELECT * FROM '{TEST_DIR}/uhugeints.parquet'
 ----
 0
 1
@@ -22,7 +23,71 @@ NULL
 1180591620717411303424
 
 query I
-SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
+SELECT typeof(h) FROM '{TEST_DIR}/uhugeints.parquet' LIMIT 1
 ----
 DOUBLE
 
+# ---------------------------------------------------------------------------
+# HUGEINT_ENCODING 'decimal'
+# ---------------------------------------------------------------------------
+statement ok
+COPY hugeints TO '{TEST_DIR}/uhugeints_dec.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT * FROM '{TEST_DIR}/uhugeints_dec.parquet'
+----
+0
+1
+NULL
+1180591620717411303424
+
+query I
+SELECT typeof(h) FROM '{TEST_DIR}/uhugeints_dec.parquet' LIMIT 1
+----
+DECIMAL(38,0)
+
+# Max signed DECIMAL(38,0) value must round-trip from UHUGEINT
+statement ok
+COPY (SELECT (repeat('9', 38))::UHUGEINT AS h) TO '{TEST_DIR}/u_dec38_max.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT h FROM '{TEST_DIR}/u_dec38_max.parquet'
+----
+99999999999999999999999999999999999999
+
+# Values outside signed DECIMAL(38,0) must error
+statement error
+COPY (SELECT 100000000000000000000000000000000000000::UHUGEINT AS h) TO '{TEST_DIR}/u_overflow.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+# E3: UHUGEINT >= 2^127 must error under decimal (not silent signed reinterpretation)
+statement error
+COPY (SELECT 200000000000000000000000000000000000000::UHUGEINT AS h) TO '{TEST_DIR}/u_overflow2.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+statement error
+COPY (SELECT '340282366920938463463374607431768211455'::UHUGEINT AS h) TO '{TEST_DIR}/u_max.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+# E5: NULLs
+statement ok
+COPY (SELECT NULL::UHUGEINT AS h) TO '{TEST_DIR}/uhugeint_null.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT h FROM '{TEST_DIR}/uhugeint_null.parquet'
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# HUGEINT_ENCODING 'varchar'
+# ---------------------------------------------------------------------------
+statement ok
+COPY (SELECT '340282366920938463463374607431768211455'::UHUGEINT AS h) TO '{TEST_DIR}/uhugeint_vc.parquet' (FORMAT parquet, HUGEINT_ENCODING 'varchar');
+
+query II
+SELECT h, typeof(h) FROM '{TEST_DIR}/uhugeint_vc.parquet'
+----
+340282366920938463463374607431768211455	VARCHAR

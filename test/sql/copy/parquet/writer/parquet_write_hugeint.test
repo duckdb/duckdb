@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_hugeint.test
-# description: Parquet hugeint round trip
+# description: Parquet hugeint round trip (default DOUBLE + opt-in HUGEINT_ENCODING)
 # group: [writer]
 
 require parquet
@@ -10,6 +10,7 @@ CREATE TABLE hugeints(h HUGEINT)
 statement ok
 INSERT INTO hugeints VALUES (-1180591620717411303424), (0), (NULL), (1180591620717411303424)
 
+# Default encoding is DOUBLE (lossy, historical behavior)
 statement ok
 COPY hugeints TO '{TEST_DIR}/hugeints.parquet' (FORMAT 'parquet');
 
@@ -26,3 +27,144 @@ SELECT typeof(h) FROM '{TEST_DIR}/hugeints.parquet' LIMIT 1
 ----
 DOUBLE
 
+# Explicit double encoding matches the default
+statement ok
+COPY hugeints TO '{TEST_DIR}/hugeints_double.parquet' (FORMAT parquet, HUGEINT_ENCODING 'double');
+
+query I
+SELECT typeof(h) FROM '{TEST_DIR}/hugeints_double.parquet' LIMIT 1
+----
+DOUBLE
+
+# ---------------------------------------------------------------------------
+# HUGEINT_ENCODING 'decimal' — DECIMAL(38,0) FLBA, errors outside range
+# ---------------------------------------------------------------------------
+statement ok
+COPY hugeints TO '{TEST_DIR}/hugeints_dec.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT * FROM '{TEST_DIR}/hugeints_dec.parquet'
+----
+-1180591620717411303424
+0
+NULL
+1180591620717411303424
+
+# Read-back type is DECIMAL(38,0), not HUGEINT (E9)
+query I
+SELECT typeof(h) FROM '{TEST_DIR}/hugeints_dec.parquet' LIMIT 1
+----
+DECIMAL(38,0)
+
+# 30 nines must round-trip losslessly under decimal encoding (not 1e+30)
+statement ok
+COPY (SELECT '999999999999999999999999999999'::HUGEINT AS h) TO '{TEST_DIR}/thirty_nines.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query II
+SELECT h, typeof(h) FROM '{TEST_DIR}/thirty_nines.parquet'
+----
+999999999999999999999999999999	DECIMAL(38,0)
+
+# Max DECIMAL(38,0) value: +(10^38 - 1)
+statement ok
+COPY (SELECT (repeat('9', 38))::HUGEINT AS h) TO '{TEST_DIR}/dec38_max.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT h FROM '{TEST_DIR}/dec38_max.parquet'
+----
+99999999999999999999999999999999999999
+
+# Min DECIMAL(38,0) value: -(10^38 - 1)
+statement ok
+COPY (SELECT -((repeat('9', 38))::HUGEINT) AS h) TO '{TEST_DIR}/dec38_min.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT h FROM '{TEST_DIR}/dec38_min.parquet'
+----
+-99999999999999999999999999999999999999
+
+# E2: value in (10^38, 2^127-1] must error under decimal encoding
+statement error
+COPY (SELECT 100000000000000000000000000000000000000::HUGEINT AS h) TO '{TEST_DIR}/overflow.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+# E1: HUGEINT min is outside DECIMAL(38,0) — explicit conversion error
+statement error
+COPY (SELECT (-170141183460469231731687303715884105728)::HUGEINT AS h) TO '{TEST_DIR}/hugeint_min.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+statement error
+COPY (SELECT -100000000000000000000000000000000000000::HUGEINT AS h) TO '{TEST_DIR}/overflow_neg.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+----
+Conversion Error
+
+# E5: NULLs are fine under decimal encoding
+statement ok
+COPY (SELECT NULL::HUGEINT AS h) TO '{TEST_DIR}/hugeint_null.parquet' (FORMAT parquet, HUGEINT_ENCODING 'decimal');
+
+query I
+SELECT h FROM '{TEST_DIR}/hugeint_null.parquet'
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# HUGEINT_ENCODING 'varchar' — exact, always safe
+# ---------------------------------------------------------------------------
+statement ok
+COPY (SELECT 170141183460469231731687303715884105727::HUGEINT AS h) TO '{TEST_DIR}/hugeint_vc.parquet' (FORMAT parquet, HUGEINT_ENCODING 'varchar');
+
+query II
+SELECT h, typeof(h) FROM '{TEST_DIR}/hugeint_vc.parquet'
+----
+170141183460469231731687303715884105727	VARCHAR
+
+# Invalid option value
+statement error
+COPY hugeints TO '{TEST_DIR}/bad.parquet' (FORMAT parquet, HUGEINT_ENCODING 'float');
+----
+hugeint_encoding
+
+# ---------------------------------------------------------------------------
+# E12: PARTITION_BY on HUGEINT (default DOUBLE path — must not break)
+# ---------------------------------------------------------------------------
+statement ok
+COPY (
+	SELECT 170141183460469231731687303715884105727::HUGEINT AS p, 42 AS x
+) TO '{TEST_DIR}/partitioned' (
+	FORMAT PARQUET,
+	PARTITION_BY (p)
+);
+
+query I
+SELECT x FROM read_parquet('{TEST_DIR}/partitioned/**/*.parquet')
+----
+42
+
+# PARTITION_BY with decimal encoding and in-range partition key
+statement ok
+COPY (
+	SELECT 1180591620717411303424::HUGEINT AS p, 7 AS x
+) TO '{TEST_DIR}/partitioned_dec' (
+	FORMAT PARQUET,
+	PARTITION_BY (p),
+	HUGEINT_ENCODING 'decimal'
+);
+
+query I
+SELECT x FROM read_parquet('{TEST_DIR}/partitioned_dec/**/*.parquet')
+----
+7
+
+# PARTITION_BY with decimal encoding and out-of-range partition key must error
+statement error
+COPY (
+	SELECT 170141183460469231731687303715884105727::HUGEINT AS p, 42 AS x
+) TO '{TEST_DIR}/partitioned_dec_overflow' (
+	FORMAT PARQUET,
+	PARTITION_BY (p),
+	HUGEINT_ENCODING 'decimal'
+);
+----
+Conversion Error
