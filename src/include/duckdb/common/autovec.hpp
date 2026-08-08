@@ -25,7 +25,7 @@
 
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 #define DUCKDB_AUTOVEC_TARGET __attribute__((target("avx2"))) // widened x86 kernels
-#define DUCKDB_AUTOVEC_MUL16 1 // AVX2 has no per-lane 8/16-bit shifts: high-align 16-bit lanes via multiply
+#define DUCKDB_AUTOVEC_MUL16  1 // AVX2 has no per-lane 8/16-bit shifts: high-align 16-bit lanes via multiply
 #else
 #define DUCKDB_AUTOVEC_TARGET
 #define DUCKDB_AUTOVEC_MUL16 0 // NEON shifts every lane width: keep the cheaper shift/combine kernel
@@ -198,7 +198,8 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 	constexpr std::size_t width = WIDTH;
 	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
 	// a u16 width whose field spills past its lane cannot be high-aligned: decode it in 32-bit lanes
-	constexpr bool wide16 = DUCKDB_AUTOVEC_MUL16 && sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
+	constexpr bool wide16 =
+	    DUCKDB_AUTOVEC_MUL16 && sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
 	if constexpr (sizeof(OUT_T) == 1 && !DUCKDB_AUTOVEC_MUL16 && !ShuffleLaneCrosses<duckdb_av_u8x16, WIDTH, 0>()) {
 		const duckdb_av_u8x16 fr = duckdb_av_u8x16 {} + static_cast<uint8_t>(frame);
 		constexpr std::size_t reserve = (16 + 4 * width - 1) / (4 * width); // safe overread margin
