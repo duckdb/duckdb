@@ -44,6 +44,17 @@ EXPLAIN SELECT * FROM integers LIMIT 20;
 ----
 physical_plan	<!REGEX>:.*LIMIT.*
 
+# A limit equal to the maximum cardinality with an explicit zero offset is redundant
+query II
+EXPLAIN SELECT * FROM integers LIMIT 10 OFFSET 0;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM integers LIMIT 10 OFFSET 0);
+----
+10
+
 # Maximum cardinality propagates through filters
 query II
 EXPLAIN SELECT * FROM integers WHERE i % 2 = 0 LIMIT 20;
