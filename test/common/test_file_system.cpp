@@ -479,6 +479,53 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname));
 }
 
+TEST_CASE("exclusive create fails when the file exists", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+
+	auto fname = TestCreatePath("exclusive_create_test_file");
+	fs->TryRemoveFile(fname);
+
+	const string payload = "EXCLUSIVE_CREATE_ORIGINAL_CONTENT";
+	auto exclusive_flags =
+	    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+
+	// On a path that does not exist yet the exclusive create succeeds, and hands back an ordinary
+	// writable handle.
+	auto handle = fs->OpenFile(fname, exclusive_flags);
+	REQUIRE(handle != nullptr);
+	handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+	              /*location=*/0);
+	handle->Sync();
+	handle.reset();
+	REQUIRE(fs->FileExists(fname));
+
+	// The file exists now, so the identical open must FAIL rather than hand out a handle to it. That is the
+	// whole point of the flag: it lets a caller create a file only if nobody else got there first.
+	REQUIRE_THROWS(fs->OpenFile(fname, exclusive_flags));
+
+	// ... and with NULL_IF_EXISTS the same collision is reported as a null handle instead of a throw.
+	auto null_handle = fs->OpenFile(fname, exclusive_flags | FileFlags::FILE_FLAGS_NULL_IF_EXISTS);
+	REQUIRE(null_handle == nullptr);
+
+	// A rejected exclusive create must leave the existing file completely alone; in particular it must not
+	// have truncated it on the way to failing.
+	string read_back(payload.size(), '\0');
+	auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+	read_handle->Read(QueryContext(), static_cast<void *>(const_cast<char *>(read_back.data())), payload.size(),
+	                  /*location=*/0);
+	REQUIRE(read_back == payload);
+	read_handle.reset();
+
+	// Control: without the exclusive flag the very same path opens fine. Without this the two failures above
+	// would pass equally if the file had simply become unopenable.
+	auto reopen = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	REQUIRE(reopen != nullptr);
+	reopen.reset();
+
+	fs->RemoveFile(fname);
+	REQUIRE(!fs->FileExists(fname));
+}
+
 // ------------------------------------------------------------------------------------------------
 // Path struct tests
 // ------------------------------------------------------------------------------------------------
