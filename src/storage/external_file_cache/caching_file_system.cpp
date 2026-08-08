@@ -352,7 +352,16 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
-	if (!external_file_cache.IsEnabled() || !CanSeek()) {
+	// Only cache when file metadata is available.
+	bool no_validation_metadata = false;
+	if (Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		no_validation_metadata = version_tag.empty() && (!last_modified.IsFinite() || last_modified == timestamp_t(0));
+	}
+
+	// If we can't seek, we can't use the cache for these calls,
+	// because we won't be able to seek over any parts we skipped by reading from the cache
+	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		auto file_handle = GetFileHandle();
 		nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));

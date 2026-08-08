@@ -1,18 +1,19 @@
+#include "core_functions/aggregate/holistic_functions.hpp"
+#include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/enums/quantile_enum.hpp"
+#include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/common/enums/quantile_enum.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/abs.hpp"
-#include "core_functions/aggregate/quantile_state.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -394,7 +395,7 @@ struct QuantileListFallback : QuantileOperation {
 template <class OP>
 AggregateFunction GetDiscreteQuantileTemplated(const LogicalType &type) {
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(quantile_types)
 	case PhysicalType::INT8:
 		return OP::template GetFunction<int8_t>(type);
 	case PhysicalType::INT16:
@@ -426,7 +427,7 @@ struct ScalarDiscreteQuantile {
 		using OP = QuantileScalarOperation<true>;
 		auto fun = QuantileBufferingAggregate<STATE, INPUT_TYPE, OP>(type, type);
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 		fun.SetWindowInitCallback(OP::WindowInit<STATE, INPUT_TYPE>);
 #endif
@@ -456,7 +457,7 @@ struct ListDiscreteQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(type, LogicalType::LIST(type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
@@ -552,7 +553,7 @@ struct ScalarContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
@@ -568,7 +569,7 @@ struct ListContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(input_type, LogicalType::LIST(target_type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif

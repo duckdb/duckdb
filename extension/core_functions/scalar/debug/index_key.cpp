@@ -128,10 +128,11 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(input.GetConstant(0));
 	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
-	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
-	                                                    path.qualified_name.Name()))
-	                        .Cast<TableCatalogEntry>();
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
+	if (!table_entry.IsDuckTable()) {
+		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
+	}
 
 	// Register a catalog dependency so that prepared statements are invalidated when the table/index is dropped.
 	// The binder may not be available when this function is called through expression
@@ -140,7 +141,6 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		auto &binder = input.GetBinder();
 		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
 	}
-
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();

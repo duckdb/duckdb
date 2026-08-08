@@ -4,12 +4,59 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
+
+ResourceDeleter::ResourceDeleter(DatabaseInstance &db, string deleter_function_p, Value deleter_payload_p,
+                                 string resource_type_p, string resource_name_p)
+    : db(db), deleter_function(std::move(deleter_function_p)), deleter_payload(std::move(deleter_payload_p)),
+      resource_type(std::move(resource_type_p)), resource_name(std::move(resource_name_p)) {
+}
+
+string ResourceDeleter::DeleteSQL() const {
+	if (deleter_function.empty()) {
+		return string();
+	}
+	// Render the (possibly schema-qualified) function name with each component properly quoted, so a
+	// name needing quoting is valid SQL and a registry-supplied string cannot inject SQL.
+	auto function_name = QualifiedName::Parse(deleter_function).ToString();
+	return "SELECT * FROM " + function_name + "(" + deleter_payload.ToSQLString() + ")";
+}
+
+void ResourceDeleter::Delete() {
+	auto sql = DeleteSQL();
+	if (sql.empty()) {
+		return;
+	}
+	// On a separate internal connection, since the current connection's context lock is held.
+	Connection con(db);
+	auto result = con.Query(sql);
+	DUCKDB_LOG(db, ExternalResourceLogType, resource_type, resource_name, string("destroy"),
+	           result->HasError() ? result->GetError() : string(),
+	           Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>()));
+	if (result->HasError()) {
+		// A failed teardown is a leak, so fail loudly and say how to retry it manually.
+		throw IOException("external resource teardown failed: %s. The resource was NOT torn down; run `%s;` "
+		                  "to retry the teardown",
+		                  result->GetError(), sql);
+	}
+}
+
+void ResourceDeleter::TryDelete() {
+	try {
+		Delete();
+	} catch (std::exception &ex) {
+		DUCKDB_LOG_WARNING(db, ErrorData(ex).Message());
+	}
+}
 
 string QualifyTableCallback(ClientContext &context, const string &name) {
 	EntryLookupInfo table_fn(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName::Parse(name));

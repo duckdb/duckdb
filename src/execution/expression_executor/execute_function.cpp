@@ -83,8 +83,9 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		}
 
 		// We can do dictionary optimization! Re-initialize
-		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
-		current_input_dictionary_id = input_dictionary_id;
+		// We only store the new dictionary in the state after it has been fully computed,
+		// so that a function that throws halfway through does not leave a partially initialized dictionary behind
+		auto new_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 
 		// Set up the input chunk
 		DataChunk input_chunk;
@@ -106,9 +107,12 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
 			Vector output_intermediate(result.GetType());
-			expr.Function().GetFunctionCallback()(input_chunk, state, output_intermediate);
-			VectorOperations::Copy(output_intermediate, output_dictionary->data, count, 0, offset);
+			expr.Function().Execute(input_chunk, state, output_intermediate);
+			VectorOperations::Copy(output_intermediate, new_dictionary->data, count, 0, offset);
 		}
+
+		output_dictionary = std::move(new_dictionary);
+		current_input_dictionary_id = input_dictionary_id;
 	}
 
 	// Result references the dictionary
@@ -190,7 +194,7 @@ static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, D
 
 	SelectionVector true_sel(1);
 	SelectionVector false_sel(1);
-	auto true_count = expr.Function().GetSelectCallback()(args, state, nullptr, &true_sel, &false_sel);
+	auto true_count = expr.Function().Select(args, state, nullptr, &true_sel, &false_sel);
 	*ConstantVector::GetData<bool>(result) = true_count == 1;
 }
 
@@ -231,7 +235,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
-			expr.Function().GetFunctionCallback()(arguments, *state, result);
+			expr.Function().Execute(arguments, *state, result);
 		} else if (all_constant && expr.Function().HasSelectCallback()) {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		} else {
@@ -287,7 +291,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (all_constant) {
 		Vector result(LogicalType::BOOLEAN);
 		if (expr.Function().HasFunctionCallback()) {
-			expr.Function().GetFunctionCallback()(arguments, *state, result);
+			expr.Function().Execute(arguments, *state, result);
 			result.FlattenAndSetConstant();
 		} else {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
@@ -308,7 +312,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 		}
 	}
-	return expr.Function().GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
+	return expr.Function().Select(arguments, *state, sel, true_sel, false_sel);
 }
 
 } // namespace duckdb

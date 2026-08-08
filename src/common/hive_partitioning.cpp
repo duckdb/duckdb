@@ -131,13 +131,17 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
-	// Handle nulls
-	if (IsNull(str_val)) {
+	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
+	if (str_val == "__HIVE_DEFAULT_PARTITION__") {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// for string values we can directly return the type
 		return Value(Unescape(str_val));
+	}
+	// Handle Hive NULL markers for non-string partition types
+	if (StringUtil::CIEquals(str_val, "NULL")) {
+		return Value(type);
 	}
 	if (str_val.empty()) {
 		// empty strings are NULL for non-string types

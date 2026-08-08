@@ -6,13 +6,14 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 template <bool NO_MATCH_SEL, class T, class OP>
 #else
 template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID, bool RHS_ALL_VALID>
@@ -27,7 +28,7 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.unified);
 	const auto &lhs_validity = lhs_format.unified.validity;
 
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	const auto LHS_ALL_VALID = lhs_validity.CannotHaveNull();
 	const auto RHS_ALL_VALID = rhs_layout.CannotHaveNull();
 #endif
@@ -66,7 +67,7 @@ template <bool NO_MATCH_SEL, class T, class OP>
 static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                             const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                             const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(row_matcher_validity)
 	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
 	                                               no_match_sel, no_match_count);
 #else

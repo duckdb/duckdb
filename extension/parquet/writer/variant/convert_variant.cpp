@@ -71,8 +71,7 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 	uint8_t header_byte = 0;
 	//! Set 'version' to 1
 	header_byte |= static_cast<uint8_t>(1);
-	//! Set 'sorted_strings' to 1
-	header_byte |= static_cast<uint8_t>(1) << 4;
+	//! NOTE: keep 'sorted_strings' at 0, we don't always sort the key strings
 	//! Set 'offset_size_minus_one' to byte_length-1
 	header_byte |= (static_cast<uint8_t>(byte_length) - 1) << 6;
 
@@ -1037,6 +1036,8 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
 	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws for values that are out of range for the parquet variant encoding
+	transform.SetFallible();
 	return transform;
 }
 

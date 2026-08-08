@@ -1,11 +1,12 @@
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
-#include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 
 namespace duckdb {
 
@@ -56,7 +57,7 @@ void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	VectorOperations::And(intermediate1, intermediate2, result);
 }
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(between_select)
 struct BothInclusiveBetweenOperator {
 	template <class T>
 	static inline bool Operation(T input, T lower, T upper) {
@@ -218,7 +219,7 @@ ScalarFunction BetweenFun::GetFunction() {
 	between_fun.SetLegacySerializeCallback(BetweenLegacySerializeCallback);
 	between_fun.SetSerializeCallback(BetweenFunctionSerialize);
 	between_fun.SetDeserializeCallback(BetweenFunctionDeserialize);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(between_select)
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
 	return between_fun;

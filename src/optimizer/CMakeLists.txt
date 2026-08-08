@@ -3,6 +3,7 @@ add_subdirectory(join_order)
 add_subdirectory(matcher)
 add_subdirectory(pullup)
 add_subdirectory(pushdown)
+add_subdirectory(relation_statistics)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 

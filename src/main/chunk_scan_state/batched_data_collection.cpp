@@ -39,7 +39,7 @@ const vector<LogicalType> &BatchCollectionChunkScanState::Types() const {
 	return collection.Types();
 }
 
-const vector<string> &BatchCollectionChunkScanState::Names() const {
+const vector<Identifier> &BatchCollectionChunkScanState::Names() const {
 	throw NotImplementedException("BatchDataCollections don't have names");
 }
 

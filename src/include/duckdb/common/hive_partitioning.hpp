@@ -41,7 +41,7 @@ public:
 	DUCKDB_API static string Escape(const string &input);
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
-	//! Whether the column is "NULL"/"__HIVE_DEFAULT_PARTITION"
+	//! Whether the value is a null marker when detecting Hive partition types
 	DUCKDB_API static bool IsNull(const string &input);
 };
 

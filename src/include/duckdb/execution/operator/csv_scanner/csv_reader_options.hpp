@@ -130,7 +130,7 @@ struct CSVReaderOptions {
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
 	//! User defined parameters
-	map<string, string> user_defined_parameters;
+	identifier_tree_t<string> user_defined_parameters;
 
 	//! Returns a list of user-defined parameters in string format
 	string GetUserDefinedParameters() const;
@@ -184,17 +184,17 @@ struct CSVReaderOptions {
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
-	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);
+	bool SetBaseOption(const Identifier &loption, const Value &value, bool write_option = false);
 
 	//! loption - lowercase string
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
-	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
-	void SetWriteOption(const string &loption, const Value &value);
+	void SetReadOption(const Identifier &loption, const Value &value, vector<string> &expected_names);
+	void SetWriteOption(const Identifier &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
 	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileOptions &file_options);
-	void ParseOption(ClientContext &context, const string &key, const Value &val);
+	void ParseOption(ClientContext &context, const Identifier &key, const Value &val);
 	//! Verify options are not conflicting
 	void Verify(MultiFileOptions &file_options);
 

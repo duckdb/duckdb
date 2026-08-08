@@ -80,7 +80,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 		const auto sub_days = SubtractFactory(DatePartSpecifier::DAY);
 
-		int64_t ts_days = sub_days(calendar.GetICUCalendar(), origin, ts);
+		int64_t ts_days = sub_days(calendar.GetCalendar(), origin, ts);
 		int64_t result_days = (ts_days / bucket_width_days) * bucket_width_days;
 		if (result_days < NumericLimits<int32_t>::Minimum() || result_days > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
@@ -103,7 +103,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		const auto trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
 		const auto sub_months = SubtractFactory(DatePartSpecifier::MONTH);
 
-		auto calendar = calendar_p.GetICUCalendar();
+		auto calendar = calendar_p.GetCalendar();
 		uint64_t tmp_micros = SetTime(calendar, ts);
 		trunc_months(calendar, tmp_micros);
 		auto truncated_ts = GetTimeUnsafe(calendar, tmp_micros);
@@ -132,7 +132,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		CalendarPtr calendar(info.calendar->Copy());
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, [&](TA left, TB right) {
 			return OP::template Operation<TA, TB, TR>(left, right, calendar);
@@ -145,7 +145,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		CalendarPtr calendar(info.calendar->Copy());
 
 		TernaryExecutor::Execute<TA, TB, TC, TR>(
 		    args.data[0], args.data[1], args.data[2], result, [&](TA ta, TB tb, TC tc) {
@@ -338,9 +338,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	struct TimeZoneTernaryOperator {
 		static inline timestamp_tz_t Operation(interval_t bucket_width, timestamp_tz_t ts, string_t tz,
-		                                       TZCalendar &calendar_p) {
-			auto calendar = calendar_p.GetICUCalendar();
-			SetTimeZone(calendar, tz);
+		                                       TZCalendar &calendar_p, CalendarCacheState &cache) {
+			auto calendar = calendar_p.GetCalendar();
+			cache.SetTimeZone(calendar, tz);
 
 			timestamp_tz_t origin;
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
@@ -365,8 +365,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
-		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
+		cache.SetTimeZone(calendar.GetCalendar(), string_t("UTC"));
 
 		const auto &bucket_width_arg = args.data[0];
 		const auto &ts_arg = args.data[1];
@@ -418,8 +419,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
-		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
+		cache.SetTimeZone(calendar.GetCalendar(), string_t("UTC"));
 
 		const auto &bucket_width_arg = args.data[0];
 		const auto &ts_arg = args.data[1];
@@ -480,8 +482,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
-		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
+		cache.SetTimeZone(calendar.GetCalendar(), string_t("UTC"));
 
 		const auto &bucket_width_arg = args.data[0];
 		const auto &ts_arg = args.data[1];
@@ -546,6 +549,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
+		auto &cache = ExecuteFunctionState::GetFunctionState(state)->Cast<CalendarCacheState>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		const auto &bucket_width_arg = args.data[0];
@@ -558,12 +562,12 @@ struct ICUTimeBucket : public ICUDateFunc {
 				throw InternalException("ICUTimeBucketTimeZone called with constant NULL bucket width or tz");
 			}
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			SetTimeZone(calendar.GetICUCalendar(), *ConstantVector::GetData<string_t>(tz_arg));
+			cache.SetTimeZone(calendar.GetCalendar(), *ConstantVector::GetData<string_t>(tz_arg));
 			timestamp_tz_t origin;
 			BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
-				origin = ICUDateFunc::FromNaive(calendar.GetICUCalendar(),
+				origin = ICUDateFunc::FromNaive(calendar.GetCalendar(),
 				                                Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
 				BinaryExecutor::Execute<interval_t, timestamp_tz_t, timestamp_tz_t>(
 				    bucket_width_arg, ts_arg, result, [&](interval_t bucket_width, timestamp_tz_t ts) {
@@ -572,7 +576,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				    });
 				break;
 			case BucketWidthType::CONVERTIBLE_TO_DAYS:
-				origin = ICUDateFunc::FromNaive(calendar.GetICUCalendar(),
+				origin = ICUDateFunc::FromNaive(calendar.GetCalendar(),
 				                                Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
 				BinaryExecutor::Execute<interval_t, timestamp_tz_t, timestamp_tz_t>(
 				    bucket_width_arg, ts_arg, result, [&](interval_t bucket_width, timestamp_tz_t ts) {
@@ -581,7 +585,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				    });
 				break;
 			case BucketWidthType::CONVERTIBLE_TO_MONTHS:
-				origin = ICUDateFunc::FromNaive(calendar.GetICUCalendar(),
+				origin = ICUDateFunc::FromNaive(calendar.GetCalendar(),
 				                                Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2));
 				BinaryExecutor::Execute<interval_t, timestamp_tz_t, timestamp_tz_t>(
 				    bucket_width_arg, ts_arg, result, [&](interval_t bucket_width, timestamp_tz_t ts) {
@@ -593,7 +597,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				TernaryExecutor::Execute<interval_t, timestamp_tz_t, string_t, timestamp_tz_t>(
 				    bucket_width_arg, ts_arg, tz_arg, result,
 				    [&](interval_t bucket_width, timestamp_tz_t ts, string_t tz) {
-					    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar);
+					    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar, cache);
 				    });
 				break;
 			default:
@@ -602,7 +606,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		} else {
 			TernaryExecutor::Execute<interval_t, timestamp_tz_t, string_t, timestamp_tz_t>(
 			    bucket_width_arg, ts_arg, tz_arg, result, [&](interval_t bucket_width, timestamp_tz_t ts, string_t tz) {
-				    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar);
+				    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar, cache);
 			    });
 		}
 	}
@@ -619,6 +623,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 		for (auto &func : set.functions) {
 			func.SetFallible();
+			func.SetInitStateCallback(InitCalendarCache);
 			func.SetArgProperties(1, ArgProperties().NonDecreasing());
 		}
 		loader.RegisterFunction(set);

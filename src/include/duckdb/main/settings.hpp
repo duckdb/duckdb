@@ -1029,6 +1029,18 @@ struct EnableObjectCacheSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct EnableOptimisticWriteSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_optimistic_write";
+	static constexpr const char *Description =
+	    "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk "
+	    "appends in memory (e.g. for in-memory benchmarks).";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct EnableOptimizerSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_optimizer";

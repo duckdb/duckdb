@@ -169,10 +169,11 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 	// Get the table from the catalog, so we can add it to the binder.
 	auto &catalog = table_info.GetDB().GetCatalog();
-	auto schema = table_info.GetSchemaName();
-	auto table_name = table_info.GetTableName();
+	// the table can live in a nested schema - qualify it with the full schema path
+	auto schema_path = table_info.GetSchemaPath();
+	schema_path.insert(schema_path.begin(), catalog.GetName());
 	auto &table_entry =
-	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema, table_name));
+	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(std::move(schema_path), table_info.GetTableName()));
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;
