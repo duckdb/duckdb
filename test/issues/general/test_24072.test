@@ -19,6 +19,22 @@ SELECT count(*) FROM (SELECT * FROM (SELECT * FROM range(10) LIMIT 20) q LIMIT 3
 ----
 10
 
+# The inner limit remains and propagates its maximum cardinality to the outer limit
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30;
+----
+physical_plan	<REGEX>:.*LIMIT.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30;
+----
+physical_plan	<!REGEX>:.*LIMIT.*LIMIT.*
+
+query I
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM range(100) LIMIT 20) q LIMIT 30);
+----
+20
+
 statement ok
 CREATE TABLE integers AS SELECT i FROM range(10) t(i);
 

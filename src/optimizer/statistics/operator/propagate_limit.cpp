@@ -25,14 +25,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalLimi
 	}
 
 	// A constant limit provides an upper bound for the parent operators.
-	auto result = make_uniq<NodeStatistics>(constant_limit, constant_limit);
-	if (child_stats) {
-		if (child_stats->has_estimated_cardinality) {
-			result->estimated_cardinality = MinValue(constant_limit, child_stats->estimated_cardinality);
-		}
-		if (child_stats->has_max_cardinality) {
-			result->max_cardinality = MinValue(constant_limit, child_stats->max_cardinality);
-		}
+	auto result = make_uniq<NodeStatistics>();
+	result->has_max_cardinality = true;
+	result->max_cardinality = constant_limit;
+	if (child_stats && child_stats->has_max_cardinality) {
+		result->max_cardinality = MinValue(constant_limit, child_stats->max_cardinality);
 	}
 	return result;
 }
