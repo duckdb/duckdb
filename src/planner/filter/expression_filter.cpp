@@ -201,12 +201,18 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
-                                                            const Expression &expr, const BaseStatistics &stats,
-                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<ClientContext> context_p,
+                                                                const Expression &expr,
+                                                                array_ptr<const BaseStatistics> input_stats,
+                                                                vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_REF:
-		return &stats;
+	case ExpressionClass::BOUND_REF: {
+		auto index = expr.Cast<BoundReferenceExpression>().Index();
+		if (index >= input_stats.size()) {
+			return nullptr;
+		}
+		return &input_stats[index];
+	}
 	case ExpressionClass::BOUND_CONSTANT: {
 		auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
 		owned_stats.push_back(BaseStatistics::FromConstant(constant).ToUnique());
@@ -217,7 +223,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 
 		if (BoundCastExpression::IsCast(func)) {
 			auto &cast_child = BoundCastExpression::Child(func);
-			auto child_stats = TryGetFilterStats(context_p, cast_child, stats, owned_stats);
+			auto child_stats = TryGetExpressionStats(context_p, cast_child, input_stats, owned_stats);
 			if (!child_stats) {
 				return nullptr;
 			}
@@ -237,7 +243,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			// Since statistics callback need context, so this path is the fallback
 			idx_t child_idx;
 			if (TryGetStructExtractChildIndex(func, child_idx) && !func.GetChildren().empty()) {
-				auto child_stats = TryGetFilterStats(context_p, *func.GetChildren()[0], stats, owned_stats);
+				auto child_stats = TryGetExpressionStats(context_p, *func.GetChildren()[0], input_stats, owned_stats);
 				if (!child_stats || child_stats->GetType().id() != LogicalTypeId::STRUCT) {
 					return nullptr;
 				}
@@ -251,7 +257,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				if (!child_stat) {
 					return nullptr;
 				}
@@ -273,7 +279,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				child_stats.push_back(child_stat ? child_stat->Copy()
 				                                 : BaseStatistics::CreateUnknown(child_expr->GetReturnType()));
 			}
@@ -289,6 +295,19 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	default:
 		return nullptr;
 	}
+}
+
+static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
+                                                            const Expression &expr, const BaseStatistics &stats,
+                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+	return TryGetExpressionStats(context_p, expr, array_ptr<const BaseStatistics>(stats), owned_stats);
+}
+
+unique_ptr<BaseStatistics> ExpressionFilter::TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
+                                                                        array_ptr<const BaseStatistics> input_stats) {
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto result = TryGetExpressionStats(&context, expr, input_stats, owned_stats);
+	return result ? result->ToUnique() : nullptr;
 }
 
 static bool TryGetVariantComparisonStatsType(const LogicalType &typed_type, const LogicalType &constant_type,

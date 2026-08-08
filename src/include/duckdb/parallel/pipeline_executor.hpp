@@ -72,6 +72,8 @@ public:
 	                                        optional_idx source_min_batch_index);
 	//! Completes the current batch of an externally-fed pipeline
 	PipelineExecuteResult FinishBatchExternal(optional_idx source_min_batch_index);
+	//! Propagates a minimum batch index change through an externally-fed pipeline
+	PipelineExecuteResult UpdateMinBatchIndexExternal(optional_idx source_min_batch_index);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
 	PipelineExecuteResult FinishExternal(optional_idx source_min_batch_index);
 
@@ -103,6 +105,11 @@ public:
 private:
 	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
 	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
+	enum class PendingBatchAdvanceState : uint8_t { NONE, NEXT_BATCH, MINIMUM_UPDATE };
+	struct SourceFetchResult {
+		SourceResultType result = SourceResultType::BLOCKED;
+		SourceBatchIndexState batch_index_state = SourceBatchIndexState::UNCHANGED;
+	};
 
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -158,6 +165,7 @@ private:
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline
 	bool next_batch_blocked = false;
+	PendingBatchAdvanceState pending_batch_advance_state = PendingBatchAdvanceState::NONE;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
@@ -174,7 +182,7 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	SourceResultType FetchFromSource(DataChunk &result);
+	SourceFetchResult FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	void NotifySourceFinished();
@@ -183,6 +191,7 @@ private:
 	//! Wrappers for sink/source calls to respective operators
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
+	SinkNextBatchType UpdateMinBatchIndex();
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
 	PipelineExecuteResult PushInputChunk(DataChunk &input, ExecutionBudget &chunk_budget, PipelineInputChunkMode mode);
@@ -192,10 +201,11 @@ private:
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	//! Notifies the sink that a new batch has started
-	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
+	SinkNextBatchType NextBatch(DataChunk &source_chunk, const SourceFetchResult &source_result);
 	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false,
 	                            optional_idx external_min_batch_index = optional_idx());
 	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
+	idx_t MapExternalMinBatchIndex(optional_idx source_min_batch_index) const;
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
@@ -213,6 +223,7 @@ private:
 	int debug_blocked_source_count = 0;
 	int debug_blocked_combine_count = 0;
 	int debug_blocked_next_batch_count = 0;
+	int debug_blocked_min_batch_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif
