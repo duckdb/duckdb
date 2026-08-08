@@ -9,16 +9,27 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
 
 class Expression;
 class BoundFunctionExpression;
+class BoundReferenceExpression;
+class BoundConstantExpression;
 class ExpressionExecutor;
 struct ExpressionExecutorState;
 struct FunctionLocalState;
+
+struct BitmapComparisonInfo {
+	optional_ptr<const BoundReferenceExpression> ref;
+	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundReferenceExpression> ref2;
+	ExpressionType op;
+};
 
 struct ExpressionState {
 	ExpressionState(const Expression &expr, ExpressionExecutorState &root);
@@ -74,12 +85,14 @@ public:
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
+	bool select_bitmap_capable = false;
+	BitmapComparisonInfo cmp_info;
+	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 
 private:
-	//! The column index of the "unary" input column that may be a dictionary vector
-	//! Only valid when the expression is eligible for the dictionary expression optimization
-	//! This is the case when the input is "practically unary", i.e., only one non-const input column
-	optional_idx input_col_idx;
+	bool safe_autovec_arith = false;
+	vector<idx_t> dictionary_input_indices;
+	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;
 	//! ID of the input dictionary Vector

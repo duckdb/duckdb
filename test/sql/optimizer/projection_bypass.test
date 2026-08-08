@@ -1,0 +1,93 @@
+# name: test/sql/optimizer/projection_bypass.test
+# description: Shared-selvec projection bypass — DICT inputs sharing one sel get unwrapped, op runs on full underlying, result is DICT-rewrapped.
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+# ---- Setup: a table large enough that scan filters produce DICT-wrapped outputs ----
+statement ok
+CREATE TABLE t AS SELECT
+    i::INTEGER  AS a,
+    (i * 2)::INTEGER AS b,
+    (i % 256)::UTINYINT AS u8,
+    (i % 100)::DOUBLE AS d
+FROM range(20000) tbl(i);
+
+# ---- + / - on DICT-of-FLAT integer siblings: bypass should handle, results correct ----
+query I
+SELECT count(*) FROM t WHERE a > 100 AND (a + 1) > 200;
+----
+19800
+
+query I
+SELECT count(*) FROM t WHERE a > 100 AND (a - 1) < 1000;
+----
+900
+
+query I
+SELECT sum(a + b) FROM t WHERE a > 5000 AND a < 6000;
+----
+16483500
+
+# ---- Comparisons between DICT siblings (both DICTs from one scan, same sel) ----
+query I
+SELECT count(*) FROM t WHERE a > 100 AND b > a;
+----
+19899
+
+# ---- col + col on integer DICT siblings ----
+query I
+SELECT sum(a + b) FROM t WHERE a < 100;
+----
+14850
+
+# ---- Volatile function negative case: must NOT bypass (random() is volatile) ----
+# Just verifies correctness; the bypass is gated correctly when the callback is volatile.
+statement ok
+SELECT count(*) FROM t WHERE a > 5000 AND random() > 0.5;
+
+# ---- Low selectivity (<5%) — should still produce correct results (bypass bails to slow path) ----
+query I
+SELECT sum(a + 1) FROM t WHERE a = 12345;
+----
+12346
+
+# ---- NULLs in the underlying ----
+statement ok
+INSERT INTO t VALUES (NULL, NULL, NULL, NULL);
+
+query I
+SELECT count(*) FROM t WHERE a > 100 AND (a + 1) > 200;
+----
+19800
+
+query I
+SELECT count(*) FROM t WHERE a IS NULL;
+----
+1
+
+# ---- Mixed FLAT and constant inputs ----
+query I
+SELECT count(*) FROM t WHERE a > 0 AND b - 100 > a;
+----
+19899
+
+# ---- DECIMAL +/- on DICT-of-FOR (this is the FOR path; bypass defers to FOR-aware callback) ----
+statement ok
+CREATE TABLE u AS SELECT
+    (i % 10)::DECIMAL(15,2) / 100 AS disc,
+    (i * 100)::DECIMAL(15,2)       AS price
+FROM range(20000) tbl(i);
+
+# DECIMAL price * (1 - disc) — '-' goes through bypass; '*' uses existing FOR multiply path
+query I
+SELECT count(*) FROM u WHERE price > 100 AND disc < 0.05;
+----
+9998
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE u;

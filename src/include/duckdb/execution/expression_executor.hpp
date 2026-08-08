@@ -18,6 +18,7 @@ namespace duckdb {
 class Allocator;
 class ClientContext;
 class ExecutionContext;
+struct SelectionResult;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
@@ -68,6 +69,8 @@ public:
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
 
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &result_sel,
+	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
+	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionResult &result_sel,
 	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
 
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
@@ -132,14 +135,14 @@ protected:
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in
 	//! the result
 	idx_t Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
+	             SelectionVector *true_sel, SelectionVector *false_sel, SelectionResult *bitmap_sel = nullptr);
 	idx_t DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
 	idx_t Select(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel, SelectionResult *bitmap_sel);
 	idx_t Select(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
+	             SelectionVector *true_sel, SelectionVector *false_sel, SelectionResult *bitmap_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);

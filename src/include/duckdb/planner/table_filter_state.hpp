@@ -8,12 +8,14 @@
 
 #pragma once
 
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
 struct SelectionVector;
+struct SelectivityOptionalFilterState;
 class Vector;
 
 struct ExpressionFilterExecutor {
@@ -56,6 +58,14 @@ public:
 
 	unique_ptr<ExpressionExecutor> executor;
 	unique_ptr<ExpressionFilterExecutor> fast_executor;
+	bool bitmap_capable;    // cleared if runtime vectors leave the bitmap path
+	DataChunk filter_chunk; // reused filter input chunk
+	SelectionResult scratch;
+	unique_ptr<SelectivityOptionalFilterState> skip_gate; // pulled-up selectivity_optional state
+	bool always_skip = false;                             // top-level optional_filter
+
+	bool ShouldSkip();
+	void RecordSelectivity(idx_t accepted, idx_t processed);
 };
 
 } // namespace duckdb

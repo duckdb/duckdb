@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
@@ -96,8 +97,9 @@ struct BinaryExecutor {
 #if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
+	DUCKDB_AUTOVEC_TARGET static void
+	ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
@@ -113,6 +115,7 @@ struct BinaryExecutor {
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
+					DUCKDB_UNROLL_LOOP
 					for (; base_idx < next; base_idx++) {
 						auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 						auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
@@ -139,6 +142,7 @@ struct BinaryExecutor {
 				}
 			}
 		} else {
+			DUCKDB_UNROLL_LOOP
 			for (idx_t i = 0; i < count; i++) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
@@ -213,6 +217,21 @@ struct BinaryExecutor {
 				result_validity.Combine(FlatVector::Validity(right), count);
 			}
 		}
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+		// the flat loop carries the widened-ISA target: pre-AVX2 CPUs and small counts take the generic loop
+		if (!CpuBenefitsFromAutoVec() || !AutoVecCountPaysOff(count)) {
+			SelectionVector owned_lzero, owned_rzero;
+			auto lsel = LEFT_CONSTANT ? ConstantVector::ZeroSelectionVector(count, owned_lzero)
+			                          : FlatVector::IncrementalSelectionVector();
+			auto rsel = RIGHT_CONSTANT ? ConstantVector::ZeroSelectionVector(count, owned_rzero)
+			                           : FlatVector::IncrementalSelectionVector();
+			const ValidityMask all_valid;
+			ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
+			    ldata, rdata, result_data, lsel, rsel, count, LEFT_CONSTANT ? all_valid : FlatVector::Validity(left),
+			    RIGHT_CONSTANT ? all_valid : FlatVector::Validity(right), result_validity, fun);
+			return;
+		}
+#endif
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
 		    ldata, rdata, result_data, count, result_validity, fun);
 	}

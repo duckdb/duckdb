@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -12,6 +13,19 @@
 
 namespace duckdb {
 
+namespace {
+using SelectivityStats = SelectivityOptionalFilterState::SelectivityStats;
+
+// adaptive gate over the stats: false while active, otherwise records one skipped pause vector
+bool GateSkipsVector(SelectivityStats &stats) {
+	if (stats.IsActive()) {
+		return false;
+	}
+	stats.Update(0, 0);
+	return true;
+}
+} // namespace
+
 static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
                                                                   bool inside_selectivity_optional);
 
@@ -21,11 +35,40 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 }
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
-	fast_executor = TryCreateFastExecutor(expression, false);
-	InitializeExecutor(context, expression, *this);
+	optional_ptr<const Expression> inner = &expression;
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expression.Cast<BoundFunctionExpression>();
+		const auto &func_name = func.Function().GetName();
+		if (func_name == OptionalFilterScalarFun::NAME) {
+			always_skip = true;
+		} else if (func_name == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+			if (data.child_filter_expr) {
+				inner = data.child_filter_expr.get();
+				skip_gate = make_uniq<SelectivityOptionalFilterState>(nullptr, data.n_vectors_to_check,
+				                                                      data.selectivity_threshold);
+			}
+		}
+	}
+	bitmap_capable = CpuBenefitsFromAutoVec() && IsBitmapSelectCandidate(*inner);
+	fast_executor = TryCreateFastExecutor(*inner, /*inside_selectivity_optional=*/skip_gate != nullptr);
+	InitializeExecutor(context, *inner, *this);
 }
 
 ExpressionFilterState::~ExpressionFilterState() {
+}
+
+bool ExpressionFilterState::ShouldSkip() {
+	if (always_skip) {
+		return true;
+	}
+	return skip_gate && GateSkipsVector(skip_gate->stats);
+}
+
+void ExpressionFilterState::RecordSelectivity(idx_t accepted, idx_t processed) {
+	if (skip_gate) {
+		skip_gate->stats.Update(accepted, processed);
+	}
 }
 
 class ConjunctionAndFilterExecutor final : public ExpressionFilterExecutor {
@@ -198,8 +241,7 @@ public:
 		if (!child) {
 			return approved_tuple_count;
 		}
-		if (!stats.IsActive()) {
-			stats.Update(0, 0);
+		if (GateSkipsVector(stats)) {
 			return approved_tuple_count;
 		}
 		const auto before_count = approved_tuple_count;
@@ -210,7 +252,7 @@ public:
 
 private:
 	unique_ptr<ExpressionFilterExecutor> child;
-	SelectivityOptionalFilterState::SelectivityStats stats;
+	SelectivityStats stats;
 };
 
 class BloomFilterExecutor final : public ExpressionFilterExecutor {
@@ -218,8 +260,7 @@ public:
 	BloomFilterExecutor(const BloomFilterFunctionData &data, bool inside_selectivity_optional)
 	    : filter(data.filter), filters_null_values(data.filters_null_values), hashes(LogicalType::HASH) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
-			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
-			                                                                    data.selectivity_threshold);
+			stats = make_uniq<SelectivityStats>(data.n_vectors_to_check, data.selectivity_threshold);
 		}
 	}
 
@@ -231,8 +272,7 @@ public:
 		if (!filter || !filter->IsInitialized()) {
 			return approved_tuple_count;
 		}
-		if (stats && !stats->IsActive()) {
-			stats->Update(0, 0);
+		if (stats && GateSkipsVector(*stats)) {
 			return approved_tuple_count;
 		}
 
@@ -354,7 +394,7 @@ private:
 	SelectionVector result_sel;
 	idx_t current_capacity = 0;
 	idx_t result_capacity = 0;
-	unique_ptr<SelectivityOptionalFilterState::SelectivityStats> stats;
+	unique_ptr<SelectivityStats> stats;
 };
 
 class PrefixRangeFilterExecutor final : public ExpressionFilterExecutor {
@@ -362,8 +402,7 @@ public:
 	PrefixRangeFilterExecutor(const PrefixRangeFunctionData &data, bool inside_selectivity_optional)
 	    : filter(data.filter), filters_null_values(data.filters_null_values) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
-			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
-			                                                                    data.selectivity_threshold);
+			stats = make_uniq<SelectivityStats>(data.n_vectors_to_check, data.selectivity_threshold);
 		}
 	}
 
@@ -375,8 +414,7 @@ public:
 		if (!filter || !filter->IsInitialized()) {
 			return approved_tuple_count;
 		}
-		if (stats && !stats->IsActive()) {
-			stats->Update(0, 0);
+		if (stats && GateSkipsVector(*stats)) {
 			return approved_tuple_count;
 		}
 
@@ -451,7 +489,7 @@ private:
 	SelectionVector local_sel;
 	SelectionVector result_sel;
 	idx_t current_capacity = 0;
-	unique_ptr<SelectivityOptionalFilterState::SelectivityStats> stats;
+	unique_ptr<SelectivityStats> stats;
 };
 
 static bool IsColumnReferenceFunction(const BoundFunctionExpression &func) {

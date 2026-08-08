@@ -10,15 +10,18 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class VectorBuffer;
+struct SelectionResult;
 
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
+	SelectionData() = default;
 	// Out-of-line destructor: prevents GCC IPA-ICF from folding
 	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
 	// corresponding instantiation for TemplatedValidityData, which produces
@@ -26,9 +29,15 @@ struct SelectionData {
 	DUCKDB_API ~SelectionData();
 
 	AllocatedData owned_data;
+	AllocatedData bitmap_data;
+	idx_t row_span = 0;
+	bool indices_cached = false;
+	bool is_bitmap = false;
 };
 
 struct SelectionVector {
+	friend struct SelectionResult;
+
 	SelectionVector() : sel_vector(nullptr), capacity(0) {
 	}
 	explicit SelectionVector(sel_t *sel, idx_t capacity) {
@@ -49,6 +58,7 @@ struct SelectionVector {
 	SelectionVector(SelectionVector &&other) noexcept
 	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)), capacity(other.capacity) {
 		other.sel_vector = nullptr;
+		other.capacity = 0;
 	}
 	explicit SelectionVector(buffer_ptr<SelectionData> &&data) {
 		Initialize(std::move(data));
@@ -58,6 +68,7 @@ struct SelectionVector {
 		other.sel_vector = nullptr;
 		selection_data = std::move(other.selection_data);
 		capacity = other.capacity;
+		other.capacity = 0;
 		return *this;
 	}
 
@@ -122,7 +133,7 @@ public:
 	}
 
 	inline void set_index(idx_t idx, idx_t loc) { // NOLINT: allow casing for legacy reasons
-		D_ASSERT(idx < capacity);
+		D_ASSERT(sel_vector && idx < capacity);
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
 	//! Shift entries left by `offset`, i.e. sel[i] = sel[i + offset] for i in [0, count). No-op if offset == 0.
@@ -134,6 +145,7 @@ public:
 		sel_vector[j] = tmp;
 	}
 	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
+		D_ASSERT(sel_vector || !IsBitmap());
 		return sel_vector ? get_index_unsafe(idx) : idx;
 	}
 	inline idx_t get_index_unsafe(idx_t idx) const { // NOLINT: allow casing for legacy reasons
@@ -141,9 +153,15 @@ public:
 		return sel_vector[idx];
 	}
 	sel_t *data() { // NOLINT: allow casing for legacy reasons
+		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
+			Flatten();
+		}
 		return sel_vector;
 	}
 	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
+		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
+			Flatten();
+		}
 		return sel_vector;
 	}
 	const buffer_ptr<SelectionData> &sel_data() { // NOLINT: allow casing for legacy reasons
@@ -152,6 +170,25 @@ public:
 	idx_t Capacity() const {
 		return capacity;
 	}
+
+	inline bool IsBitmap() const {
+		return selection_data && selection_data->is_bitmap && !sel_vector;
+	}
+	idx_t RowSpan() const {
+		return selection_data ? selection_data->row_span : 0;
+	}
+	void Flatten() const;
+
+	const void *RepresentationHandle() const {
+		if (sel_vector) {
+			return sel_vector;
+		}
+		return selection_data && selection_data->is_bitmap ? selection_data->bitmap_data.get() : nullptr;
+	}
+	static bool SameSelection(const SelectionVector &a, const SelectionVector &b) {
+		return a.RepresentationHandle() == b.RepresentationHandle() && a.RowSpan() == b.RowSpan() &&
+		       a.capacity == b.capacity;
+	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
@@ -159,24 +196,39 @@ public:
 	void Print(idx_t count = 0) const;
 
 	inline const sel_t &operator[](idx_t index) const {
+		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
+			Flatten();
+		}
 		D_ASSERT(index < capacity);
 		return sel_vector[index];
 	}
 	inline sel_t &operator[](idx_t index) {
+		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
+			Flatten();
+		}
+		if (DUCKDB_UNLIKELY(selection_data && selection_data->is_bitmap)) {
+			auto keep = selection_data;
+			auto old_sel = sel_vector;
+			auto old_capacity = capacity;
+			Initialize(old_capacity);
+			for (idx_t i = 0; i < old_capacity; i++) {
+				sel_vector[i] = old_sel[i];
+			}
+		}
 		D_ASSERT(index < capacity);
 		return sel_vector[index];
 	}
 	inline bool IsSet() const {
-		return sel_vector;
+		return sel_vector || IsBitmap();
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
 	void Sort(idx_t count);
 	idx_t GetAllocationSize() const;
 
-private:
-	sel_t *sel_vector;
-	buffer_ptr<SelectionData> selection_data;
-	idx_t capacity;
+protected:
+	mutable sel_t *sel_vector;
+	mutable buffer_ptr<SelectionData> selection_data;
+	mutable idx_t capacity;
 };
 
 } // namespace duckdb

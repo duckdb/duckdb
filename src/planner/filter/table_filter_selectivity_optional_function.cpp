@@ -117,6 +117,8 @@ struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
 
 	SelectivityOptionalFilterState::SelectivityStats stats;
 	ExpressionExecutor executor;
+	//! Scratch selection reused across chunks (never allocated per vector)
+	SelectionVector temp_true = SelectionVector(STANDARD_VECTOR_SIZE);
 };
 
 static unique_ptr<FunctionLocalState> SelectivityOptionalFilterInitLocalState(ExpressionState &state,
@@ -145,8 +147,8 @@ static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &s
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
-	SelectionVector temp_true(count);
-	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
+	auto result_true_sel =
+	    (!true_sel || (sel && true_sel.get() == sel.get())) ? &local_state.temp_true : true_sel.get();
 	auto approved_count = local_state.executor.SelectExpression(args, *result_true_sel);
 	approved_count = TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
 	local_state.Update(approved_count, count);

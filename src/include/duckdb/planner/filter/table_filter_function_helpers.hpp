@@ -45,7 +45,7 @@ inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<SelectionVector> true
                                  optional_ptr<SelectionVector> false_sel) {
 	if (true_sel) {
 		for (idx_t i = 0; i < count; i++) {
-			true_sel->set_index(i, i);
+			true_sel.get()->set_index(i, i);
 		}
 	}
 	return count;
@@ -58,7 +58,7 @@ inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<const SelectionVector
 	}
 	if (true_sel) {
 		for (idx_t i = 0; i < count; i++) {
-			true_sel->set_index(i, sel->get_index(i));
+			true_sel.get()->set_index(i, sel.get()->get_index(i));
 		}
 	}
 	return count;
@@ -81,7 +81,7 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 	if (!input_sel) {
 		if (true_sel && true_sel.get() != &local_true_sel) {
 			for (idx_t i = 0; i < local_true_count; i++) {
-				true_sel->set_index(i, local_true_sel.get_index(i));
+				true_sel.get()->set_index(i, local_true_sel.get_index(i));
 			}
 		}
 		if (false_sel) {
@@ -91,7 +91,7 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 	}
 	if (true_sel) {
 		for (idx_t i = 0; i < local_true_count; i++) {
-			true_sel->set_index(i, input_sel->get_index(local_true_sel.get_index(i)));
+			true_sel.get()->set_index(i, input_sel.get()->get_index(local_true_sel.get_index(i)));
 		}
 	}
 	if (false_sel) {
@@ -102,7 +102,7 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 				true_offset++;
 				continue;
 			}
-			false_sel->set_index(false_count++, input_sel->get_index(i));
+			false_sel.get()->set_index(false_count++, input_sel.get()->get_index(i));
 		}
 	}
 	return local_true_count;
