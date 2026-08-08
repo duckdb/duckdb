@@ -398,14 +398,14 @@ SortStyle TestConfiguration::GetDefaultSortStyle() {
 	return default_sort_style_enum;
 }
 
-vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
-	vector<string> res;
+vector<Identifier> TestConfiguration::ExtensionToBeLoadedOnLoad() {
+	vector<Identifier> res;
 	auto entry = options.find("statically_loaded_extensions");
 	if (entry != options.end()) {
 		vector<Value> ext_list = ListValue::GetChildren(entry->second);
 
 		for (auto ext : ext_list) {
-			res.push_back(ext.GetValue<string>());
+			res.push_back(ext.GetValue<Identifier>());
 		}
 	} else {
 		res.push_back("core_functions");
@@ -769,7 +769,7 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 		for (const auto &value : list_children) {
 			auto &struct_children = StructValue::GetChildren(value);
 			ConfigSetting config_setting;
-			config_setting.name = StringValue::Get(struct_children[0]);
+			config_setting.name = struct_children[0].GetValue<Identifier>();
 			config_setting.value = StringValue::Get(struct_children[1]);
 			result.push_back(std::move(config_setting));
 		}

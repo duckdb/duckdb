@@ -16,10 +16,12 @@ namespace duckdb {
 struct ExtensionLoadOptions {
 	ExtensionLoadOptions() = default;
 	// NOLINTNEXTLINE: allow implicit conversion from the extension name
-	ExtensionLoadOptions(string extension_name) : extension_name(std::move(extension_name)) {
+	ExtensionLoadOptions(string extension_name_or_path) : extension_name_or_path(std::move(extension_name_or_path)) {
 	}
 
-	string extension_name;
+	//! Either a logical extension name or a full path to an extension binary - use ExtensionHelper::IsFullPath to
+	//! tell them apart
+	string extension_name_or_path;
 	Identifier alias;
 };
 

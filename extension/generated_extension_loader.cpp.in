@@ -5,13 +5,13 @@ ${EXT_CAPI_DECLARATIONS}
 namespace duckdb {
 
 //! Looks through the CMake-generated list of extensions that are linked into DuckDB currently to try load <extension>
-ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
+ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const Identifier &extension) {
 ${EXT_LOADER_BODY}
     return ExtensionLoadResult::NOT_LOADED;
 }
 
-vector<string> LinkedExtensions(){
-    vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+vector<Identifier> LinkedExtensions(){
+    vector<Identifier> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
     };
     return VEC;
 }

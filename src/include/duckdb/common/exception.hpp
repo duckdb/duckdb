@@ -288,7 +288,7 @@ public:
 
 class AutoloadException : public Exception {
 public:
-	DUCKDB_API explicit AutoloadException(const string &extension_name, const string &message);
+	DUCKDB_API explicit AutoloadException(const Identifier &extension_name, const string &message);
 };
 
 class SerializationException : public Exception {

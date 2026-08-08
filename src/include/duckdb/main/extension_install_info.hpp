@@ -48,7 +48,7 @@ public:
 
 	//! Try to read install info. returns ExtensionInstallMode::UNKNOWN on missing file, and throws on corrupt file
 	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path,
-	                                                        const string &extension_name);
+	                                                        const Identifier &extension_name);
 
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
 };

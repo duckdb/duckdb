@@ -78,9 +78,9 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
-	DUCKDB_API bool ExtensionIsLoaded(const string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const Identifier &name);
 
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 
 	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil(bool read_only = false);
 	shared_ptr<EncryptionUtil> GetMbedTLSUtil(bool force_mbedtls) const;
@@ -159,7 +159,7 @@ public:
 	// Function pointer type for the C API extension init function
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)
-	DUCKDB_API void LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun);
+	DUCKDB_API void LoadStaticCAPIExtension(const Identifier &name, ext_init_c_api_fun_t init_fun);
 
 	DUCKDB_API FileSystem &GetFileSystem();
 
@@ -169,7 +169,7 @@ public:
 	DUCKDB_API static const char *ReleaseCodename();
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
-	DUCKDB_API bool ExtensionIsLoaded(const string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const Identifier &name);
 };
 
 } // namespace duckdb

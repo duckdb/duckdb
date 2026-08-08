@@ -1,0 +1,41 @@
+diff --git a/src/storage/ducklake_autoload_helper.cpp b/src/storage/ducklake_autoload_helper.cpp
+--- a/src/storage/ducklake_autoload_helper.cpp
++++ b/src/storage/ducklake_autoload_helper.cpp
+@@ -8,13 +8,13 @@
+ 
+ namespace duckdb {
+ 
+-static string LookupExtensionForPattern(const string &pattern) {
++static Identifier LookupExtensionForPattern(const string &pattern) {
+ 	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+ 		if (StringUtil::StartsWith(pattern, entry.name)) {
+-			return entry.extension;
++			return Identifier(entry.extension);
+ 		}
+ 	}
+-	return "";
++	return Identifier();
+ }
+ 
+ void DuckLakeInitializer::CheckAndAutoloadedRequiredExtension(const string &pattern) {
+@@ -26,7 +26,7 @@
+ 	// repository Proper solution would be offer this functionality as part of DuckDB C++ API, so this file can be
+ 	// simplified reducing the risk of misalignment between the two codebases
+ 
+-	string required_extension = LookupExtensionForPattern(pattern);
++	auto required_extension = LookupExtensionForPattern(pattern);
+ 	if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
+ 		if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+ 		    !Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -288,7 +288,7 @@
+ 	// Logic is partially duplicated from Catalog::AutoLoadExtensionByCatalogEntry(db, CatalogType::COPY_FUNCTION_ENTRY,
+ 	// name), but that do not offer enough control
+ 	auto &db = *context.db;
+-	string extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_COPY_FUNCTIONS);
++	auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_COPY_FUNCTIONS);
+ 	if (!extension_name.empty() && Settings::Get<AutoloadKnownExtensionsSetting>(context) &&
+ 	    ExtensionHelper::CanAutoloadExtension(extension_name)) {
+ 		// This will either succeed or throw

@@ -47,7 +47,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
+string ExtensionHelper::ExtensionInstallDocumentationLink(const Identifier &extension_name) {
 	auto components = PathComponents();
 
 	string link = "https://duckdb.org/docs/current/extensions/troubleshooting";
@@ -168,8 +168,7 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	return ExtensionDirectory(db, fs);
 }
 
-bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
-	auto lowercase_extension_name = StringUtil::Lower(extension_name);
+bool ExtensionHelper::CreateSuggestions(const Identifier &extension_name, string &message) {
 	vector<string> candidates;
 	for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
 		candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
@@ -177,10 +176,10 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
 		candidates.emplace_back(ExtensionHelper::GetInternalExtensionAlias(i).alias);
 	}
-	auto closest_extensions = StringUtil::TopNJaroWinkler(candidates, lowercase_extension_name);
+	auto closest_extensions = StringUtil::TopNJaroWinkler(candidates, extension_name);
 	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
 	for (auto &closest : closest_extensions) {
-		if (closest == lowercase_extension_name) {
+		if (extension_name == closest) {
 			message = "Extension \"" + extension_name + "\" is an existing extension.\n";
 			return true;
 		}
@@ -209,6 +208,17 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
 	return InstallExtensionInternal(db, fs, local_path, extension, options, context);
+}
+
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DatabaseInstance &db, FileSystem &fs,
+                                                                   const Identifier &extension,
+                                                                   ExtensionInstallOptions &options) {
+	return InstallExtension(db, fs, extension.GetIdentifierName(), options);
+}
+
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const Identifier &extension,
+                                                                   ExtensionInstallOptions &options) {
+	return InstallExtension(context, extension.GetIdentifierName(), options);
 }
 
 static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -267,15 +277,15 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	return url_template;
 }
 
-string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const string &extension_name) {
+string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const Identifier &extension_name) {
 	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
 	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
-	url = StringUtil::Replace(url, "${NAME}", extension_name);
+	url = StringUtil::Replace(url, "${NAME}", extension_name.GetIdentifierName());
 	return url;
 }
 
 static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffer, idx_t file_size,
-                                            ExtensionInstallInfo &info, const string &extension_name) {
+                                            ExtensionInstallInfo &info, const Identifier &extension_name) {
 	if (file_size < ParsedExtensionMetaData::FOOTER_SIZE) {
 		throw IOException("Failed to install '%s', file too small to be a valid DuckDB extension!", extension_name);
 	}
@@ -327,12 +337,11 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 }
 
 // Install an extension using a filesystem
-static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path,
-                                                               const string &temp_path, const string &extension_name,
-                                                               const string &local_extension_path,
-                                                               ExtensionInstallOptions &options,
-                                                               optional_ptr<ClientContext> context) {
-	string extension;
+static unique_ptr<ExtensionInstallInfo>
+DirectInstallExtension(DatabaseInstance &db, FileSystem &fs, const string &path, const string &temp_path,
+                       const Identifier &extension_name, const string &local_extension_path,
+                       ExtensionInstallOptions &options, optional_ptr<ClientContext> context) {
+	Identifier extension;
 	string file;
 	if (fs.IsRemoteFile(path, extension)) {
 		file = path;
@@ -406,7 +415,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db, const string &url,
-                                                           const string &extension_name, const string &temp_path,
+                                                           const Identifier &extension_name, const string &temp_path,
                                                            const string &local_extension_path,
                                                            ExtensionInstallOptions &options,
                                                            optional_ptr<ClientContext> context) {
@@ -508,7 +517,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 // Install an extension using a hand-rolled http request
 static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url,
-                                                              const string &extension_name, const string &temp_path,
+                                                              const Identifier &extension_name, const string &temp_path,
                                                               const string &local_extension_path,
                                                               ExtensionInstallOptions &options,
                                                               optional_ptr<ClientContext> context) {
@@ -529,7 +538,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 }
 
 static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
-                                                   const string &extension_name, const string &extension,
+                                                   const Identifier &extension_name, const string &extension,
                                                    optional_ptr<ExtensionRepository> repository) {
 	auto install_info = ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
 
@@ -564,7 +573,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
 
-	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
+	auto extension_name = ApplyExtensionAlias(Identifier(fs.ExtractBaseName(extension)));
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 	string temp_path =
 	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + ".duckdb_extension";
@@ -597,7 +606,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
 		auto &local_fs = FileSystem::GetLocal(db);
-		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
+		return DirectInstallExtension(db, local_fs, extension, temp_path, extension_name, local_extension_path, options,
 		                              context);
 	}
 
@@ -620,7 +629,8 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 		}
 
 		// Direct installation from local or remote path
-		return DirectInstallExtension(db, fs, extension, temp_path, extension, local_extension_path, options, context);
+		return DirectInstallExtension(db, fs, extension, temp_path, extension_name, local_extension_path, options,
+		                              context);
 	}
 
 	// Repository installation

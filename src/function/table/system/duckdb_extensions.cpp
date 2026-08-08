@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct ExtensionInformation {
-	string name;
+	Identifier name;
 	bool loaded = false;
 	bool installed = false;
 	string file_path;
@@ -73,7 +73,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 	auto &db = DatabaseInstance::GetDatabase(context);
 
 	// Firstly, we go over all Default Extensions: duckdb_extensions always prints those, installed/loaded or not
-	map<string, ExtensionInformation> installed_extensions;
+	map<Identifier, ExtensionInformation> installed_extensions;
 	auto extension_count = ExtensionHelper::DefaultExtensionCount();
 	auto alias_count = ExtensionHelper::ExtensionAliasCount();
 	for (idx_t i = 0; i < extension_count; i++) {
@@ -104,7 +104,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 				return;
 			}
 			ExtensionInformation info;
-			info.name = fs.ExtractBaseName(path);
+			info.name = Identifier(fs.ExtractBaseName(path));
 			info.installed = true;
 			info.loaded = false;
 			info.file_path = fs.JoinPath(ext_directory, path);

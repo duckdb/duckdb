@@ -88,9 +88,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 	return entry->second;
 }
 
-bool RequiresTrackingAttaches(const string &path, const string &db_type) {
+bool RequiresTrackingAttaches(const string &path, const Identifier &db_type) {
 	// we need to track attaches for file-based duckdb databases
-	if (!db_type.empty() && !StringUtil::CIEquals(db_type, "duckdb")) {
+	if (!db_type.empty() && db_type != "duckdb") {
 		// not duckdb - don't track
 		return false;
 	}
@@ -104,7 +104,7 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
-	string extension = "";
+	Identifier extension = "";
 	if (FileSystem::IsRemoteFile(info.path, extension)) {
 		if (options.access_mode == AccessMode::AUTOMATIC) {
 			// Attaching of remote files gets bumped to READ_ONLY
@@ -381,8 +381,8 @@ vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
 	// Test if the database is a DuckDB database file.
-	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
-		options.db_type = "";
+	if (options.db_type == "duckdb") {
+		options.db_type.clear();
 		return;
 	}
 
@@ -408,7 +408,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, {options.db_type});
+		ExtensionHelper::LoadExternalExtension(context, options.db_type);
 	}
 }
 
