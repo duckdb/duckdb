@@ -18,8 +18,9 @@ struct RecursiveCTEKeyDeltaState {
 	ColumnDataAppendState new_key_append_state;
 	DataChunk first_touch_keys;
 	DataChunk selected_keys;
-	DataChunk payload_rows;
+	DataChunk aggregate_rows;
 	DataChunk result_rows;
+	DataChunk previous_state_rows;
 	DataChunk changed_rows;
 	DataChunk previous_scan_rows;
 	DataChunk key_scan_rows;

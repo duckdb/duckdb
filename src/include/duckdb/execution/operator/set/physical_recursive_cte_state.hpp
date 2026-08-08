@@ -252,7 +252,9 @@ public:
 	void SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state);
 	void SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state, bool emit_rows = true,
 	                  bool record_sink_metrics = true);
-	void FinalizePayload(RowOperationsState &row_state, Vector &addresses, DataChunk &payload, idx_t payload_idx);
+	void FinalizeStateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &keys, DataChunk &aggregates,
+	                       DataChunk &result);
+	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 
 	const PhysicalRecursiveCTE &GetOperator() const {
 		return op;
@@ -306,6 +308,7 @@ private:
 	template <bool COLLECT_METRICS>
 	void CommitPreaggregatedUsingKeyUpdatesInternal();
 	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
+	void ExtractUsingKeyKeys(DataChunk &input);
 	bool ShouldPreaggregateUsingKeyUpdates();
 	void SnapshotUsingKeyDelta(DataChunk &keys);
 	void SnapshotUsingKeyDeltaGroups(DataChunk &keys);
@@ -318,10 +321,12 @@ private:
 	ClientContext &context;
 	vector<AggregateObject> payload_aggregate_objects;
 	ExpressionExecutor executor;
+	ExpressionExecutor key_executor;
 	Vector preaggregation_hashes;
 	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
 	bool has_payload_comparison_executors = false;
 	DataChunk payload_rows;
+	DataChunk raw_distinct_rows;
 	Vector new_group_addresses;
 	SelectionVector new_groups;
 	const bool allow_executor_reuse;
@@ -342,7 +347,7 @@ private:
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
 	DataChunk source_result;
 	DataChunk update_rows;
-	DataChunk source_payload_rows;
+	DataChunk source_aggregate_rows;
 	DataChunk source_distinct_rows;
 	AggregateHTScanState ht_scan_state;
 

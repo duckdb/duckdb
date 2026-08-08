@@ -509,6 +509,143 @@ SELECT count(*), sum(v) FROM t;
 ----
 1	3
 
+# Recurring keyed state uses the same normalized identity while retaining an original key representative.
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION ALL
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT (NULL::VARCHAR) COLLATE nocase, 1
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+NULL	1
+
+# Default collations are bound into prepared recursive key normalizers.
+statement ok
+SET default_collation='nocase';
+
+statement ok
+PREPARE collated_recurring_key AS
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES ('a', 2)
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+
+statement ok
+SET default_collation='';
+
+query TI
+EXECUTE collated_recurring_key;
+----
+a	0
+
+statement ok
+DEALLOCATE collated_recurring_key;
+
+# First-column LIST and ARRAY hashes publish their cardinality for recurring-state lookups.
+query IIT
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT ['a' COLLATE nocase], 2
+	UNION
+	SELECT ['A' COLLATE nocase], v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), min(v), min(k[1]) FROM t;
+----
+1	0	a
+
+query IIT
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT array_value('a' COLLATE nocase), 2
+	UNION
+	SELECT array_value('A' COLLATE nocase), v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), min(v), min(k[1]) FROM t;
+----
+1	0	a
+
+# Normalized identity composes with uncollated and NULL key columns.
+query IIIT
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
+	SELECT * FROM (VALUES ('a' COLLATE nocase, NULL::INTEGER, 2), ('A' COLLATE nocase, 1, 3))
+	UNION
+	SELECT upper(k1), k2, v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), sum(v), count(*) FILTER (WHERE k2 IS NULL), min(lower(k1)) FROM t;
+----
+2	0	1	a
+
+# Epoch preaggregation groups differently represented copies of one recurring key together.
+query ITI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT CASE WHEN i % 2 = 0 THEN upper(k) ELSE k END, v - 1
+	FROM t, range(current_setting('standard_vector_size')::BIGINT * 4) r(i)
+	WHERE v > 0
+)
+SELECT count(*), min(lower(k)), min(v) FROM t;
+----
+1	a	0
+
+# Complete and partial direct probes normalize collated probe keys before using the recurring hash table.
+query II
+EXPLAIN WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT n.k, r.v - 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v > 0
+)
+TABLE t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+query II
+EXPLAIN WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 1, 2
+	UNION
+	SELECT upper(n.label), n.id, r.v - 1
+	FROM t n JOIN recurring.t r ON r.label = n.label
+	WHERE n.v > 0
+)
+TABLE t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+query ITI
+WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 1, 2
+	UNION
+	SELECT upper(n.label), n.id, r.v - 1
+	FROM t n JOIN recurring.t r ON r.label = n.label
+	WHERE n.v > 0
+)
+SELECT count(*), min(lower(label)), min(v) FROM t;
+----
+1	a	0
+
 # Preaggregation and partial-key probes share stable recurring group addresses.
 query II
 EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
@@ -565,6 +702,17 @@ SELECT count(*), sum(v) FROM t;
 ----
 10000	980000
 
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT CASE WHEN i % 2 = 0 THEN 'a' ELSE 'A' END COLLATE nocase, 2
+	FROM range(10000) r(i)
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), sum(v) FROM t;
+----
+1	0
+
 # The existing logical union flag preserves the new behavior through serializer verification.
 statement ok
 SET debug_verify_serializer=true;
@@ -578,6 +726,16 @@ WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
 TABLE t;
 ----
 1	5
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
 
 statement ok
 SET debug_verify_serializer=false;

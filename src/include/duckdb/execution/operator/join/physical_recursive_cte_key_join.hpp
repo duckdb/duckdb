@@ -19,7 +19,8 @@ class RecursiveCTEKeyJoinLayout {
 public:
 	RecursiveCTEKeyJoinLayout(PhysicalRecursiveCTEStateScan &state_scan, PhysicalOperator &probe, bool state_on_left,
 	                          vector<idx_t> state_key_indices, vector<idx_t> probe_key_indices,
-	                          vector<idx_t> left_projection_map, vector<idx_t> right_projection_map);
+	                          vector<unique_ptr<Expression>> probe_key_normalizers, vector<idx_t> left_projection_map,
+	                          vector<idx_t> right_projection_map);
 
 	PhysicalRecursiveCTEStateScan &StateScan() const {
 		return state_scan;
@@ -52,6 +53,12 @@ public:
 	const vector<LogicalType> &ProbeKeyTypes() const {
 		return probe_key_types;
 	}
+	const vector<LogicalType> &RawProbeKeyTypes() const {
+		return raw_probe_key_types;
+	}
+	const vector<unique_ptr<Expression>> &ProbeKeyNormalizers() const {
+		return probe_key_normalizers;
+	}
 	const vector<LogicalType> &PayloadTypes() const {
 		return payload_types;
 	}
@@ -63,10 +70,12 @@ private:
 	vector<idx_t> probe_key_indices;
 	vector<idx_t> left_projection_map;
 	vector<idx_t> right_projection_map;
+	vector<unique_ptr<Expression>> probe_key_normalizers;
 	vector<idx_t> state_key_map;
 	vector<idx_t> state_payload_map;
 	vector<LogicalType> key_types;
 	vector<LogicalType> probe_key_types;
+	vector<LogicalType> raw_probe_key_types;
 	vector<LogicalType> payload_types;
 };
 
@@ -78,8 +87,8 @@ public:
 	PhysicalRecursiveCTEKeyJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                            PhysicalRecursiveCTEStateScan &state_scan, bool state_on_left,
 	                            vector<idx_t> state_key_indices, vector<idx_t> probe_key_indices,
-	                            vector<idx_t> left_projection_map, vector<idx_t> right_projection_map,
-	                            idx_t estimated_cardinality);
+	                            vector<unique_ptr<Expression>> probe_key_normalizers, vector<idx_t> left_projection_map,
+	                            vector<idx_t> right_projection_map, idx_t estimated_cardinality);
 
 	PhysicalRecursiveCTEStateScan &StateScan() const {
 		return layout.StateScan();
