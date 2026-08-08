@@ -48,3 +48,51 @@ restart
 
 statement ok
 checkpoint;
+
+statement ok
+set variant_minimum_shredding_size = 0;
+
+statement ok
+set force_variant_shredding = 'STRUCT(a INTEGER)';
+
+statement ok
+create or replace table forced_shredding(v VARIANT);
+
+statement ok
+insert into forced_shredding values
+	({'A': 2}),
+	({'a': 1}),
+	({'b': 3})
+;
+
+# the keys are intact before the checkpoint shreds the column
+query IIII
+select v::VARCHAR, variant_keys(v), v.a, v.A from forced_shredding order by v::VARCHAR;
+----
+{'A': 2}	[A]	NULL	2
+{'a': 1}	[a]	1	NULL
+{'b': 3}	[b]	NULL	NULL
+
+statement ok
+checkpoint;
+
+restart
+
+query III
+select v::VARCHAR, vector_type(v), variant_keys(v) from forced_shredding order by v::VARCHAR;
+----
+{'A': 2}	SHREDDED_VECTOR	[A]
+{'a': 1}	SHREDDED_VECTOR	[a]
+{'b': 3}	SHREDDED_VECTOR	[b]
+
+# verify only the exact-case 'a' landed in the shredded typed_value column
+query III
+SELECT segment_type, stats.min::INTEGER, stats.max::INTEGER FROM pragma_storage_info('forced_shredding') WHERE column_path = '[0, 2, 1, 1, 1]'
+----
+INTEGER	1	1
+
+# verify 'A' and 'b' are both kept in the unshredded remainder
+query III
+SELECT count, stats.min::VARCHAR, stats.max::VARCHAR FROM pragma_storage_info('forced_shredding') WHERE column_path = '[0, 1, 1, 1]'
+----
+2	A	b

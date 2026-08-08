@@ -3,6 +3,8 @@
 
 require parquet
 
+require json
+
 statement ok
 CREATE OR REPLACE VIEW vw AS SELECT
 	{'Foo': i::INTEGER}::VARIANT AS v
@@ -80,3 +82,15 @@ SELECT count(*) FROM (VALUES
 WHERE v.Foo = 3;
 ----
 1
+
+statement ok
+CREATE OR REPLACE TABLE src AS SELECT '{"foo": 2}'::JSON::VARIANT AS v;
+
+statement ok
+COPY src TO '{TEST_DIR}/variant_case_sensitivity_json.parquet' (SHREDDING {'v': 'STRUCT("Foo" INTEGER)'});
+
+query II
+SELECT v::VARCHAR, variant_extract(v, 'foo')::VARCHAR
+FROM '{TEST_DIR}/variant_case_sensitivity_json.parquet';
+----
+{'foo': 2}	2

@@ -356,9 +356,9 @@ void VariantShreddingState::SetShredded(uint32_t row, uint32_t values_index, uin
 	count++;
 }
 
-case_insensitive_string_set_t VariantShreddingState::ObjectFields() {
+string_set_t VariantShreddingState::ObjectFields() {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-	case_insensitive_string_set_t res;
+	string_set_t res;
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &entry : child_types) {
 		auto &type = entry.first;
