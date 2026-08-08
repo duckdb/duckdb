@@ -4,6 +4,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+#include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/parsed_data/bound_pragma_info.hpp"
 #include "duckdb/function/function.hpp"
@@ -19,7 +20,6 @@
 #include "duckdb/common/enums/current_transaction_state.hpp"
 
 namespace duckdb {
-
 enum class PreprocessingTransactionHandling : uint8_t {
 	// Not in a transaction and should wrap in an implicit BEGIN/COMMIT
 	WRAP_IN_TRANSACTION,
@@ -104,6 +104,26 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransact
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
+static void VerifyPreprocessedStatements(const vector<unique_ptr<SQLStatement>> &statements, const string &source) {
+	for (auto &statement : statements) {
+		if (!statement) {
+			throw InvalidInputException("%s cannot contain NULL statements", source);
+		}
+		if (statement->type == StatementType::TRANSACTION_STATEMENT) {
+			throw InvalidInputException("%s cannot generate transaction statements", source);
+		}
+		if (statement->type == StatementType::PRAGMA_STATEMENT) {
+			throw InvalidInputException("%s cannot generate pragma statements", source);
+		}
+		if (statement->type == StatementType::MULTI_STATEMENT) {
+			throw InvalidInputException("%s cannot generate multi statements", source);
+		}
+		if (statement->type == StatementType::EXTENSION_STATEMENT) {
+			throw InvalidInputException("%s cannot generate extension statements", source);
+		}
+	}
+}
+
 vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
 	// Try reparsing
 	const auto info = statement->Cast<PragmaStatement>().info->Copy();
@@ -123,12 +143,37 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_
 	return res;
 }
 
+vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryPreprocessExtension(unique_ptr<SQLStatement> statement) const {
+	auto &extension_statement = statement->Cast<ExtensionStatement>();
+	if (!extension_statement.extension.preprocess_function) {
+		vector<unique_ptr<SQLStatement>> result;
+		result.push_back(std::move(statement));
+		return result;
+	}
+
+	auto query = extension_statement.query;
+	auto result = extension_statement.extension.preprocess_function(extension_statement.extension.parser_info.get(),
+	                                                                context, std::move(extension_statement.parse_data));
+	if (result.empty()) {
+		throw InvalidInputException("Parser extension preprocess functions must generate at least one statement");
+	}
+	VerifyPreprocessedStatements(result, "Parser extension preprocess functions");
+	for (auto &replacement_statement : result) {
+		if (replacement_statement->query.empty()) {
+			replacement_statement->query = query;
+		}
+	}
+	return result;
+}
+
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                        CurrentTransactionState transaction_context_state) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
 	for (auto &stmt : statements) {
-		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT) {
+		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT ||
+		    (stmt->type == StatementType::EXTENSION_STATEMENT &&
+		     stmt->Cast<ExtensionStatement>().extension.preprocess_function)) {
 			needs_preprocessing = true;
 			break;
 		}
@@ -162,6 +207,17 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 		case StatementType::MULTI_STATEMENT: {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
 			UnpackMultiStatement(multi_statement, full_transaction_state, new_statements);
+			break;
+		}
+		case StatementType::EXTENSION_STATEMENT: {
+			auto &extension_statement = statements[i]->Cast<ExtensionStatement>();
+			if (!extension_statement.extension.preprocess_function) {
+				new_statements.push_back(std::move(statements[i]));
+				break;
+			}
+			auto replacement_statements = TryPreprocessExtension(std::move(statements[i]));
+			const auto handling = GetTransactionHandling(replacement_statements, full_transaction_state);
+			AddStatements(replacement_statements, handling, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
