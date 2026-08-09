@@ -1,0 +1,42 @@
+# name: test/sql/function/list/list_reduce_fallible.test
+# description: Test that list_reduce returns clean errors (not INTERNAL errors) when lambda throws
+# group: [list]
+
+# integer overflow in subtraction should give a clean Out of Range Error
+statement error
+SELECT list_reduce([10, -2147483648]::INTEGER[], lambda x, y: x - y);
+----
+Out of Range Error
+
+# bigint overflow in multiplication should give a clean Out of Range Error
+statement error
+SELECT list_reduce([9223372036854775807, 2]::BIGINT[], lambda x, y: x * y);
+----
+Out of Range Error
+
+# list_reduce with initial value should also return clean errors
+statement error
+SELECT list_reduce([2147483647]::INTEGER[], lambda x, y: x + y, 2147483647);
+----
+Out of Range Error
+
+# verify that valid list_reduce calls still work correctly
+query I
+SELECT list_reduce([1, 2, 3, 4], lambda x, y: x + y);
+----
+10
+
+query I
+SELECT list_reduce([1, 2, 3], lambda x, y: x * y);
+----
+6
+
+query I
+SELECT list_reduce([10, 3, 2], lambda x, y: x - y);
+----
+5
+
+query I
+SELECT list_reduce([1, 2, 3], lambda x, y: x + y, 100);
+----
+106
