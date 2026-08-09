@@ -213,6 +213,19 @@ COPY (SELECT "odder col" AS "a b" FROM "weird name") TO '{TEST_DIR}/roundtrip2.c
 statement ok
 COPY "weird name" TO '{TEST_DIR}/rtdir' (FORMAT csv, PARTITION_BY ("select"), OVERWRITE_OR_IGNORE)
 
+# the FORMAT value is a copy function name that is stored as a plain string - it was printed raw, so
+# a name needing quotes came back as two tokens and the re-parse failed with a syntax error instead
+# of reaching the catalog lookup. Both the identifier and the string literal spelling reach here.
+statement error
+COPY (SELECT 1) TO '{TEST_DIR}/rt_fmt.csv' (FORMAT "odd format")
+----
+Catalog Error: Copy Function with name odd format does not exist!
+
+statement error
+COPY (SELECT 1) TO '{TEST_DIR}/rt_fmt.csv' (FORMAT 'odd format')
+----
+Catalog Error: Copy Function with name odd format does not exist!
+
 # --- attach / catalog ----------------------------------------------------------------------------------------
 
 statement ok
