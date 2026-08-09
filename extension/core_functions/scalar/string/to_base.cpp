@@ -61,6 +61,8 @@ ScalarFunctionSet ToBaseFun::GetFunctions() {
 	set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER, LogicalType::INTEGER},
 	                               LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
 
+	// throws if the number, radix or min_length are out of range
+	set.SetFallible();
 	return set;
 }
 

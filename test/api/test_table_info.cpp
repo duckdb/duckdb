@@ -35,3 +35,22 @@ TEST_CASE("Test table info api", "[api]") {
 	info = con.TableInfo("test");
 	REQUIRE(info.get() != nullptr);
 }
+
+TEST_CASE("Test table info reports the resolved table location", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// An unqualified lookup fills in the resolved catalog and schema.
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
+	auto info = con.TableInfo("t");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "memory");
+	REQUIRE(info->qualified_name.Schema() == "main");
+	REQUIRE(info->qualified_name.Name() == "t");
+
+	// The name is reported with its DDL time casing, not the lookup casing.
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"FooBar\"(i INTEGER)"));
+	info = con.TableInfo("foobar");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Name() == "FooBar");
+}

@@ -21,46 +21,46 @@
 
 namespace duckdb {
 
-static void ThrowJSONCopyParameterException(const string &loption) {
-	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", loption);
+static void ThrowJSONCopyParameterException(const Identifier &option_name) {
+	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", option_name);
 }
 
-static void ThrowJSONCopyNullException(const string &loption) {
-	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" cannot be NULL.", loption);
+static void ThrowJSONCopyNullException(const Identifier &option_name) {
+	throw BinderException("COPY (FORMAT JSON) parameter %s cannot be NULL.", option_name);
 }
 
-static void ThrowJSONCopyTypeException(const string &loption, const Value &value, const string &expected_type) {
-	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" expects a %s argument, but got %s.", loption,
+static void ThrowJSONCopyTypeException(const Identifier &option_name, const Value &value, const string &expected_type) {
+	throw BinderException("COPY (FORMAT JSON) parameter %s expects a %s argument, but got %s.", option_name,
 	                      expected_type, value.type());
 }
 
-static const Value &GetSingleJSONCopyValue(const string &loption, const vector<Value> &values) {
+static const Value &GetSingleJSONCopyValue(const Identifier &option_name, const vector<Value> &values) {
 	if (values.size() != 1) {
-		ThrowJSONCopyParameterException(loption);
+		ThrowJSONCopyParameterException(option_name);
 	}
 	if (values.back().IsNull()) {
-		ThrowJSONCopyNullException(loption);
+		ThrowJSONCopyNullException(option_name);
 	}
 	return values.back();
 }
 
-static string GetSingleJSONCopyString(const string &loption, const vector<Value> &values) {
-	auto &value = GetSingleJSONCopyValue(loption, values);
+static string GetSingleJSONCopyString(const Identifier &option_name, const vector<Value> &values) {
+	auto &value = GetSingleJSONCopyValue(option_name, values);
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		ThrowJSONCopyTypeException(loption, value, "VARCHAR");
+		ThrowJSONCopyTypeException(option_name, value, "VARCHAR");
 	}
 	return StringValue::Get(value);
 }
 
-static bool GetJSONCopyBoolean(Binder &binder, const string &loption, const vector<Value> &values) {
+static bool GetJSONCopyBoolean(Binder &binder, const Identifier &option_name, const vector<Value> &values) {
 	if (values.size() > 1) {
-		throw InvalidInputException("Copy option \"%s\" did not expect a list as argument", loption);
+		throw InvalidInputException("Copy option %s did not expect a list as argument", option_name);
 	}
 	if (values.empty()) {
 		return true;
 	}
 	if (values.back().IsNull()) {
-		ThrowJSONCopyNullException(loption);
+		ThrowJSONCopyNullException(option_name);
 	}
 	return values.back().CastAs(binder.context, LogicalType::BOOLEAN).GetValue<bool>();
 }
@@ -131,7 +131,7 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 }
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
-	static const unordered_set<string> SUPPORTED_BASE_OPTIONS {
+	static const identifier_set_t SUPPORTED_BASE_OPTIONS {
 	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
 	    "append",           "filename_pattern", "file_extension", "per_thread_output",   "file_size_bytes",
 	    "partition_by",     "return_files",     "preserve_order", "return_stats",        "write_partition_columns",
@@ -149,32 +149,34 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	bool write_partition_columns = false;
 	vector<Identifier> original_column_names;
 	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
-	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
+	identifier_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
 	for (const auto &kv : copy_info.options) {
-		const auto &loption = StringUtil::Lower(kv.first);
-		if (loption == "dateformat" || loption == "date_format") {
-			date_format = GetSingleJSONCopyString(loption, kv.second);
-		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			timestamp_format = GetSingleJSONCopyString(loption, kv.second);
-		} else if (loption == "array") {
-			if (kv.second.size() > 1) {
-				ThrowJSONCopyParameterException(loption);
+		auto &option_name = kv.first;
+		auto &option_values = kv.second;
+		if (option_name == "dateformat" || option_name == "date_format") {
+			date_format = GetSingleJSONCopyString(option_name, option_values);
+		} else if (option_name == "timestampformat" || option_name == "timestamp_format") {
+			timestamp_format = GetSingleJSONCopyString(option_name, option_values);
+		} else if (option_name == "array") {
+			if (option_values.size() > 1) {
+				ThrowJSONCopyParameterException(option_name);
 			}
-			if (!kv.second.empty() && kv.second.back().IsNull()) {
-				ThrowJSONCopyNullException(loption);
+			if (!option_values.empty() && option_values.back().IsNull()) {
+				ThrowJSONCopyNullException(option_name);
 			}
-			if (kv.second.empty() || BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
+			if (option_values.empty() ||
+			    BooleanValue::Get(option_values.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				csv_copy_options["prefix"] = {"[\n\t"};
 				csv_copy_options["suffix"] = {"\n]\n"};
 				csv_copy_options["new_line"] = {",\n\t"};
 			}
-		} else if (loption == "file_extension") {
+		} else if (option_name == "file_extension") {
 			// Since we set the file extension to "json" above, we need to override it
-			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(loption, kv.second)};
-		} else if (loption == "partition_by") {
-			for (const auto &val : kv.second) {
+			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(option_name, option_values)};
+		} else if (option_name == "partition_by") {
+			for (const auto &val : option_values) {
 				if (val.IsNull()) {
-					ThrowJSONCopyNullException(loption);
+					ThrowJSONCopyNullException(option_name);
 				}
 			}
 			if (original_column_names.empty()) {
@@ -183,8 +185,8 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				auto bound = child_binder->Bind(*node_copy);
 				original_column_names = bound.names;
 			}
-			auto converted = ConvertVectorToValue(vector<Value>(kv.second));
-			auto partition_indices = ParseColumnsOrdered(converted, original_column_names, loption);
+			auto converted = ConvertVectorToValue(vector<Value>(option_values));
+			auto partition_indices = ParseColumnsOrdered(converted, original_column_names, option_name);
 			for (auto &partition_index : partition_indices) {
 				partition_columns.emplace_back(original_column_names[partition_index]);
 			}
@@ -193,18 +195,18 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				csv_partition_columns.push_back(partition_column);
 			}
 			csv_copy_options["partition_by"] = std::move(csv_partition_columns);
-		} else if (loption == "write_partition_columns") {
+		} else if (option_name == "write_partition_columns") {
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
-			write_partition_columns = GetJSONCopyBoolean(binder, loption, kv.second);
-		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
-			if (!kv.second.empty() && kv.second.back().IsNull()) {
-				ThrowJSONCopyNullException(loption);
+			write_partition_columns = GetJSONCopyBoolean(binder, option_name, option_values);
+		} else if (SUPPORTED_BASE_OPTIONS.find(option_name) != SUPPORTED_BASE_OPTIONS.end()) {
+			if (!option_values.empty() && option_values.back().IsNull()) {
+				ThrowJSONCopyNullException(option_name);
 			}
 			// We support these base options
 			csv_copy_options.insert(kv);
 		} else {
-			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): \"%s\".", loption);
+			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): %s.", option_name);
 		}
 	}
 	if (!write_partition_columns && !partition_columns.empty() &&

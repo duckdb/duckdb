@@ -189,6 +189,7 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		return NumericStats::CheckZonemap(stats, comparison_type, values);
 	case PhysicalType::VARCHAR:
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
@@ -200,42 +201,49 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
-                                                            const Expression &expr, const BaseStatistics &stats,
-                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<ClientContext> context_p,
+                                                                const Expression &expr,
+                                                                array_ptr<const BaseStatistics> input_stats,
+                                                                vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_REF:
-		return &stats;
+	case ExpressionClass::BOUND_REF: {
+		auto index = expr.Cast<BoundReferenceExpression>().Index();
+		if (index >= input_stats.size()) {
+			return nullptr;
+		}
+		return &input_stats[index];
+	}
 	case ExpressionClass::BOUND_CONSTANT: {
 		auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
 		owned_stats.push_back(BaseStatistics::FromConstant(constant).ToUnique());
 		return owned_stats.back().get();
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		auto child_stats = TryGetFilterStats(context_p, cast_expr.Child(), stats, owned_stats);
-		if (!child_stats) {
-			return nullptr;
-		}
-		auto cast_stats = StatisticsPropagator::TryPropagateCast(*child_stats, cast_expr.Child().GetReturnType(),
-		                                                         cast_expr.GetReturnType());
-		if (!cast_stats) {
-			return nullptr;
-		}
-		if (cast_expr.IsTryCast()) {
-			cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-		}
-		owned_stats.push_back(std::move(cast_stats));
-		return owned_stats.back().get();
-	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
+
+		if (BoundCastExpression::IsCast(func)) {
+			auto &cast_child = BoundCastExpression::Child(func);
+			auto child_stats = TryGetExpressionStats(context_p, cast_child, input_stats, owned_stats);
+			if (!child_stats) {
+				return nullptr;
+			}
+			auto cast_stats =
+			    StatisticsPropagator::TryPropagateCast(*child_stats, cast_child.GetReturnType(), func.GetReturnType());
+			if (!cast_stats) {
+				return nullptr;
+			}
+			if (BoundCastExpression::IsTryCast(func)) {
+				cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
+			owned_stats.push_back(std::move(cast_stats));
+			return owned_stats.back().get();
+		}
 
 		if (!context_p) {
 			// Since statistics callback need context, so this path is the fallback
 			idx_t child_idx;
 			if (TryGetStructExtractChildIndex(func, child_idx) && !func.GetChildren().empty()) {
-				auto child_stats = TryGetFilterStats(context_p, *func.GetChildren()[0], stats, owned_stats);
+				auto child_stats = TryGetExpressionStats(context_p, *func.GetChildren()[0], input_stats, owned_stats);
 				if (!child_stats || child_stats->GetType().id() != LogicalTypeId::STRUCT) {
 					return nullptr;
 				}
@@ -249,7 +257,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				if (!child_stat) {
 					return nullptr;
 				}
@@ -271,7 +279,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			vector<BaseStatistics> child_stats;
 			child_stats.reserve(func.GetChildren().size());
 			for (auto &child_expr : func.GetChildren()) {
-				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				auto child_stat = TryGetExpressionStats(context_p, *child_expr, input_stats, owned_stats);
 				child_stats.push_back(child_stat ? child_stat->Copy()
 				                                 : BaseStatistics::CreateUnknown(child_expr->GetReturnType()));
 			}
@@ -287,6 +295,19 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	default:
 		return nullptr;
 	}
+}
+
+static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientContext> context_p,
+                                                            const Expression &expr, const BaseStatistics &stats,
+                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+	return TryGetExpressionStats(context_p, expr, array_ptr<const BaseStatistics>(stats), owned_stats);
+}
+
+unique_ptr<BaseStatistics> ExpressionFilter::TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
+                                                                        array_ptr<const BaseStatistics> input_stats) {
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto result = TryGetExpressionStats(&context, expr, input_stats, owned_stats);
+	return result ? result->ToUnique() : nullptr;
 }
 
 static bool TryGetVariantComparisonStatsType(const LogicalType &typed_type, const LogicalType &constant_type,
@@ -394,6 +415,10 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	auto result =
 	    CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&comparison_constant, 1));
 	if (filter_stats->CanHaveNull()) {
+		if (result == FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    comparison_type != ExpressionType::COMPARE_DISTINCT_FROM) {
+			return result;
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
@@ -429,6 +454,10 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 	auto upper_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::UpperComparisonType(between),
 	                                              array_ptr<const Value>(&upper_val, 1));
 	if (input_stats->CanHaveNull()) {
+		if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    upper_res == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||

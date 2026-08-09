@@ -363,6 +363,11 @@ public:
 	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
 	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
 
+	//! Parse a JSON path ($.field[index]... syntax, no wildcards) into path elements
+	static vector<JSONPathElement> ParsePathElements(const char *ptr, idx_t len, bool binder);
+	//! Get JSON value by walking pre-parsed path elements
+	static yyjson_val *GetPathElements(yyjson_val *val, const vector<JSONPathElement> &elements);
+
 public:
 	//! Same as BigQuery json_value
 	static inline optional<string_t> JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &) {

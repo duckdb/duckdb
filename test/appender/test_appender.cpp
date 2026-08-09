@@ -880,3 +880,73 @@ TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
 	}
 	appender_2.Close();
 }
+
+TEST_CASE("Test appender on a temp table in a read only database", "[appender]") {
+	auto dbdir = TestCreatePath("appender_temp_readonly");
+	DeleteDatabase(dbdir);
+
+	// Create the persistent database file, then reopen it read only.
+	{
+		DuckDB db(dbdir);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE persistent(i INTEGER)"));
+	}
+
+	DBConfig readonly_config;
+	readonly_config.options.access_mode = AccessMode::READ_ONLY;
+	DuckDB db(dbdir, &readonly_config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMP TABLE t(i INTEGER)"));
+
+	// The name resolves through the (writable) temp catalog, not the read only default database.
+	auto info = con.TableInfo("t");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "temp");
+	REQUIRE(info->qualified_name.Schema() == "main");
+	REQUIRE(info->qualified_name.Name() == "t");
+	REQUIRE(info->readonly == false);
+
+	Appender appender(con, "t");
+	appender.BeginRow();
+	appender.Append<int32_t>(42);
+	appender.EndRow();
+	appender.Close();
+
+	auto result = con.Query("SELECT i FROM t");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Test appender when the search path resolves into a read only database", "[appender]") {
+	auto dbdir = TestCreatePath("appender_readonly_attach.db");
+	DeleteDatabase(dbdir);
+
+	// Create a persistent database file holding the target table.
+	{
+		DuckDB db(dbdir);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER)"));
+	}
+
+	// Default (in-memory) database is writable; the table only exists in the read only attachment.
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + dbdir + "' AS ro_attached (READ_ONLY)"));
+	// Keep memory.main as the default catalog so the name resolves into ro_attached via the search path.
+	REQUIRE_NO_FAIL(con.Query("SET search_path='memory.main,ro_attached.main'"));
+
+	auto info = con.TableInfo("tbl");
+	REQUIRE(info);
+	REQUIRE(info->qualified_name.Catalog() == "ro_attached");
+	REQUIRE(info->readonly == true);
+
+	bool failed = false;
+	try {
+		Appender appender(con, "tbl");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("Cannot append to a readonly database") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+}

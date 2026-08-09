@@ -75,6 +75,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(222, "batch_size_bytes", batch_size_bytes, optional_idx());
 	serializer.WritePropertyWithDefault(223, "batches_per_file", batches_per_file, optional_idx());
 	serializer.WritePropertyWithDefault(224, "order_columns", order_columns);
+	serializer.WritePropertyWithDefault(225, "table_index", table_index, TableIndex(0));
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -128,6 +129,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto batch_size_bytes = deserializer.ReadPropertyWithExplicitDefault(222, "batch_size_bytes", optional_idx());
 	auto batches_per_file = deserializer.ReadPropertyWithExplicitDefault(223, "batches_per_file", optional_idx());
 	auto order_columns = deserializer.ReadPropertyWithExplicitDefault(224, "order_columns", vector<BoundOrderByNode>());
+	auto table_index = deserializer.ReadPropertyWithExplicitDefault(225, "table_index", TableIndex(0));
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -141,7 +143,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);
 	}
 
-	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
+	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info), table_index);
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->filename_pattern = filename_pattern;
@@ -171,9 +173,13 @@ vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
 	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
 	vector<ColumnBinding> result;
 	for (auto return_col_idx : ProjectionIndex::GetIndexes(return_column_count)) {
-		result.emplace_back(TableIndex(0), return_col_idx);
+		result.emplace_back(table_index, return_col_idx);
 	}
 	return result;
+}
+
+vector<TableIndex> LogicalCopyToFile::GetTableIndex() const {
+	return {table_index};
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

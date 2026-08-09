@@ -3,6 +3,7 @@ add_subdirectory(join_order)
 add_subdirectory(matcher)
 add_subdirectory(pullup)
 add_subdirectory(pushdown)
+add_subdirectory(relation_statistics)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
@@ -10,6 +11,7 @@ add_library_unity(
   duckdb_optimizer
   OBJECT
   aggregate_function_rewriter.cpp
+  aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
@@ -21,6 +23,7 @@ add_library_unity(
   cte_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
+  distinct_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
   filter_combiner.cpp

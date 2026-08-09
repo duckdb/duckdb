@@ -38,6 +38,7 @@ public:
 	virtual ~SecretStorage() = default;
 
 	//! Default storage backend offsets
+	static const int64_t TRANSACTION_STORAGE_OFFSET = 0;
 	static const int64_t TEMPORARY_STORAGE_OFFSET = 10;
 	static const int64_t LOCAL_FILE_STORAGE_OFFSET = 20;
 
@@ -85,6 +86,28 @@ protected:
 	const int64_t tie_break_offset;
 	//! Whether entries in this storage will survive duckdb reboots
 	bool persistent;
+};
+
+//! In-memory secret storage owned by a single transaction
+class TransactionSecretStorage : public SecretStorage {
+public:
+	explicit TransactionSecretStorage(const string &name_p);
+	~TransactionSecretStorage() override;
+
+public:
+	unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                    optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
+	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	SecretMatch LookupSecret(const string &path, const string &type,
+	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	unique_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                        optional_ptr<CatalogTransaction> transaction = nullptr) override;
+
+private:
+	mutex lock;
+	identifier_map_t<unique_ptr<SecretEntry>> secrets;
 };
 
 //! Wrapper struct around a SecretEntry to allow storing it

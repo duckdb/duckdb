@@ -1,0 +1,83 @@
+# name: test/sql/catalog/dependencies/drop_recreate_schema_dependency.test
+# description: A schema and its dependent objects can be dropped and re-created within a single transaction
+# group: [dependencies]
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR);
+
+statement ok
+INSERT INTO documents VALUES ('d1', 'hello world');
+
+# initial build: a schema containing a macro, and a table that depends on that macro - all in one transaction
+statement ok
+BEGIN
+
+statement ok
+DROP SCHEMA IF EXISTS idx CASCADE
+
+statement ok
+CREATE SCHEMA idx
+
+statement ok
+CREATE MACRO idx.tokenize(s) AS string_split(s, ' ')
+
+statement ok
+CREATE TABLE idx.terms AS SELECT unnest(idx.tokenize(body)) AS term FROM documents
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM idx.terms
+----
+2
+
+# overwrite: drop and re-create the same schema + dependent objects in a single transaction.
+# Before the fix the COMMIT below failed with:
+#   Could not commit creation of dependency, subject "idx" was dropped and re-created by another transaction
+statement ok
+BEGIN
+
+statement ok
+DROP SCHEMA IF EXISTS idx CASCADE
+
+statement ok
+CREATE SCHEMA idx
+
+statement ok
+CREATE MACRO idx.tokenize(s) AS string_split(s, ' ')
+
+statement ok
+CREATE TABLE idx.terms AS SELECT unnest(idx.tokenize(body)) AS term FROM documents
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM idx.terms
+----
+2
+
+# re-running the overwrite a second time must keep working
+statement ok
+BEGIN
+
+statement ok
+DROP SCHEMA IF EXISTS idx CASCADE
+
+statement ok
+CREATE SCHEMA idx
+
+statement ok
+CREATE MACRO idx.tokenize(s) AS string_split(s, ' ')
+
+statement ok
+CREATE TABLE idx.terms AS SELECT unnest(idx.tokenize(body)) AS term FROM documents
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM idx.terms
+----
+2

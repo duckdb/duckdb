@@ -41,7 +41,7 @@ unique_ptr<CatalogEntry> TableMacroCatalogEntry::Copy(ClientContext &context) co
 
 unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	auto info = make_uniq<CreateMacroInfo>(type);
-	info->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
+	info->SetQualifiedName(schema.GetQualifiedName(name));
 	for (auto &function : macros) {
 		info->macros.push_back(function->Copy());
 	}
@@ -54,6 +54,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 
 string MacroCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
+	create_info->StripCatalogQualification();
 	return create_info->ToString();
 }
 

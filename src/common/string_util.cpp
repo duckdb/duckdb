@@ -120,15 +120,14 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
-	          str.end());
+	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return !CharacterIsSpace(ch); }).base(), str.end());
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
-	str.erase(find_if(str.rbegin(), str.rend(),
-	                  [&chars_to_trim](char ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
-	              .base(),
-	          str.end());
+	str.erase(
+	    find_if(str.rbegin(), str.rend(), [&chars_to_trim](char ch) { return chars_to_trim.find(ch) == string::npos; })
+	        .base(),
+	    str.end());
 }
 
 void StringUtil::Trim(string &str) {
@@ -148,6 +147,15 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 		return false;
 	}
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+}
+
+idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
+	auto common_size = MinValue<idx_t>(left.size(), right.size());
+	idx_t prefix_size = 0;
+	while (prefix_size < common_size && left[prefix_size] == right[prefix_size]) {
+		prefix_size++;
+	}
+	return prefix_size;
 }
 
 string StringUtil::Repeat(const string &str, idx_t n) {

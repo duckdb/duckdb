@@ -25,6 +25,7 @@ class QueryErrorContext;
 class TableRef;
 struct hugeint_t;
 class optional_idx; // NOLINT: matching std style
+struct QueryLocation;
 
 inline void AssertRestrictFunction(const void *left_start, const void *left_end, const void *right_start,
                                    const void *right_end, const char *fname, int linenr) {
@@ -88,7 +89,8 @@ enum class ExceptionType : uint8_t {
 	AUTOLOAD = 40,          // Thrown when an extension fails to autoload
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
-	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	DATA_CORRUPTION = 43 // Data corruption was detected in persistent storage
 };
 
 class Exception : public std::runtime_error {
@@ -116,9 +118,9 @@ public:
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const ParsedExpression &expr);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const QueryErrorContext &error_context);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const TableRef &ref);
-	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(optional_idx error_location);
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(QueryLocation error_location);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const string &subtype,
-	                                                                    optional_idx error_location);
+	                                                                    QueryLocation error_location);
 
 	//! Whether this exception type can occur during execution of a query
 	DUCKDB_API static bool IsExecutionError(ExceptionType type);
@@ -146,7 +148,7 @@ public:
 		return (message + "\n" + GetStackTrace());
 	}
 
-	DUCKDB_API static void SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info);
+	DUCKDB_API static void SetQueryLocation(QueryLocation error_location, unordered_map<string, string> &extra_info);
 };
 
 //===--------------------------------------------------------------------===//
@@ -245,6 +247,16 @@ public:
 	template <typename... ARGS>
 	explicit IOException(const unordered_map<string, string> &extra_info, const string &msg, ARGS &&...params)
 	    : IOException(extra_info, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
+
+class DataCorruptionException : public Exception {
+public:
+	DUCKDB_API explicit DataCorruptionException(const string &msg);
+
+	template <typename... ARGS>
+	explicit DataCorruptionException(const string &msg, ARGS &&...params)
+	    : DataCorruptionException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
 
@@ -395,7 +407,7 @@ class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
-	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
+	DUCKDB_API TypeMismatchException(QueryLocation error_location, const LogicalType &type_1, const LogicalType &type_2,
 	                                 const string &msg);
 	DUCKDB_API explicit TypeMismatchException(const string &msg);
 };

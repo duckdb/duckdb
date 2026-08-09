@@ -726,8 +726,8 @@ struct PartitionedCopyFlushAction {
 struct PartitionedCopyBatchState {
 private:
 	void SetValues(vector<Value> values_p) {
-		D_ASSERT(values.empty() || values == values_p);
-		if (values.empty()) {
+		D_ASSERT(!values || *values == values_p);
+		if (!values) {
 			values = std::move(values_p);
 		}
 	}
@@ -798,7 +798,8 @@ public:
 	}
 
 	const vector<Value> &Values() const {
-		return values;
+		D_ASSERT(values);
+		return *values;
 	}
 
 	idx_t AddCollectionSlot(PartitionedCopyCollectionSchema schema, idx_t row_count) {
@@ -814,7 +815,7 @@ public:
 	PartitionedCopyBatchAction RegisterBatch(vector<Value> values_p, idx_t flush_threshold,
 	                                         bool has_delayed_partition) {
 		SetValues(std::move(values_p));
-		auto result = PartitionedCopyBatchAction {PartitionedCopyBatchActionType::STORE_COLLECTION, values, nullptr};
+		auto result = PartitionedCopyBatchAction {PartitionedCopyBatchActionType::STORE_COLLECTION, Values(), nullptr};
 		if (mode == PartitionedCopyBatchMode::BUFFERING && count >= flush_threshold && !has_delayed_partition) {
 			StartPreparing();
 			if (TryReserveWriteInfo()) {
@@ -842,7 +843,7 @@ public:
 	}
 
 	idx_t FinalizeBatching(idx_t flush_threshold, bool has_delayed_partition) {
-		D_ASSERT(!values.empty());
+		D_ASSERT(values);
 		D_ASSERT(count > 0);
 		if (mode == PartitionedCopyBatchMode::PREPARING) {
 			D_ASSERT(HasWriteInfo());
@@ -881,7 +882,7 @@ public:
 	PartitionedCopyPrepareAction BeginPrepareTask(idx_t batch_idx) {
 		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING);
 		PartitionedCopyPrepareAction result;
-		result.values = values;
+		result.values = Values();
 		if (batch_idx == DConstants::INVALID_INDEX) {
 			D_ASSERT(NeedsWriteInfo());
 			D_ASSERT(write_info_requested);
@@ -936,7 +937,7 @@ public:
 
 	PartitionedCopyFlushAction TakeFlushAction() {
 		PartitionedCopyFlushAction result;
-		result.values = values;
+		result.values = Values();
 		if (mode == PartitionedCopyBatchMode::DELAYED) {
 			result.type = PartitionedCopyFlushActionType::DELAYED_COLLECTIONS;
 			result.collections = TakeDelayedCollections();
@@ -961,7 +962,7 @@ private:
 	}
 
 private:
-	vector<Value> values;
+	optional<vector<Value>> values;
 	PartitionWriteLease write_lease;
 	vector<PartitionedCopyCollection> collections;
 	vector<unique_ptr<PartitionedCopyBatch>> batches;
@@ -2118,6 +2119,10 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 
 	// Only compare partition columns (not order columns)
 	const auto key_count = partitioned_copy.op.partition_columns.size();
+	if (key_count == 0) {
+		masked += (task.end_idx - task.begin_idx);
+		return;
+	}
 	auto &scan_cols = partitioned_copy.sort_strategy->sort_ids;
 
 	WindowDeltaScanner(*collection, task.begin_idx, task.end_idx, scan_cols, key_count,
@@ -2280,7 +2285,7 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 		auto &batch_state = *batch_states[task.thread_idx];
 		flush_action = batch_state.TakeFlushAction();
 	}
-	D_ASSERT(!flush_action.values.empty());
+	D_ASSERT(flush_action.values.size() == partitioned_copy.op.partition_columns.size());
 
 	if (flush_action.type == PartitionedCopyFlushActionType::DELAYED_COLLECTIONS) {
 		const auto collection_schema = partitioned_copy.GetPartitionCollectionSchema();
@@ -2335,6 +2340,9 @@ bool PartitionedCopyState::ShouldInitiateFlush(const idx_t &local_append_count) 
 	                                                                std::memory_order_relaxed);
 	if (!exchanged) {
 		return false; // Another thread beat us to it
+	}
+	if (partitioned_copy.op.partition_columns.empty()) {
+		return true; // The implicit partition is always dense enough to flush
 	}
 
 	// Get counts from the HLL states

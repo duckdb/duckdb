@@ -53,6 +53,29 @@
 		"type": "scalar_function_set"
 	},
 	{
+		"name": "variant_contains",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "variant_haystack",
+						"type": "VARIANT"
+					},
+					{
+						"name": "variant_needle",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.",
+				"example": "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_exists",
 		"variants": [
 			{
@@ -151,6 +174,59 @@
 			"variant"
 		],
 		"type": "scalar_function"
+	},
+	{
+		"name": "variant_type",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns the type of the root `input_variant`.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns the type of the value at the specified path.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a list of types for the values at each specified path.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
 	},
 	{
 		"name": "variant_typeof",

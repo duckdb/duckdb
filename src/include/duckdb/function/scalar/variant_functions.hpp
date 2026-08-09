@@ -25,6 +25,16 @@ struct VariantArrayLengthFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct VariantContainsFun {
+	static constexpr const char *Name = "variant_contains";
+	static constexpr const char *Parameters = "variant_haystack::VARIANT,variant_needle::VARIANT";
+	static constexpr const char *Description = "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.";
+	static constexpr const char *Example = "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantExistsFun {
 	static constexpr const char *Name = "variant_exists";
 	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
@@ -63,6 +73,16 @@ struct VariantComparatorFun {
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();
+};
+
+struct VariantTypeFun {
+	static constexpr const char *Name = "variant_type";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the type of the root `input_variant`.\001Returns the type of the value at the specified path.\001Returns a list of types for the values at each specified path.";
+	static constexpr const char *Example = "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT)\001variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')\001variant_type({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct VariantTypeofFun {

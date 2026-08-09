@@ -66,6 +66,24 @@ ORDER BY ALL
 ----
 1	NULL	NULL
 
+# Test that literal VARCHAR partition value 'NULL' is not read as SQL NULL
+statement ok
+CREATE TABLE test_literal_null_partition AS
+SELECT *
+FROM (VALUES ('NULL', 1), ('ok', 2)) v(p, id);
+
+statement ok
+COPY test_literal_null_partition TO '{TEST_DIR}/hive-literal-null-partition'
+(FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query III
+SELECT (p IS NULL)::INTEGER AS is_null, COALESCE((p='NULL')::INTEGER, -1) AS equals_literal, id
+FROM parquet_scan('{TEST_DIR}/hive-literal-null-partition/**/*.parquet', hive_partitioning=1)
+ORDER BY id
+----
+0	1	1
+0	0	2
+
 # Test that NULL values are written as __HIVE_DEFAULT_PARTITION__
 statement ok
 create table test_null_write as select 1 as c, NULL::INT as a, NULL::INT as b;

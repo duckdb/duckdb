@@ -5,6 +5,9 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 
 namespace duckdb {
 
@@ -17,15 +20,15 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 	return make_uniq<CSVFileReaderOptions>();
 }
 
-bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
                                        vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
-	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
+	options.options.SetReadOption(key, ConvertVectorToValue(values), expected_names);
 	return true;
 }
 
-bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool CSVMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                    MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.ParseOption(context, key, val);
@@ -142,6 +145,10 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 		names = StringsToIdentifiers(best_schema.GetNames());
 		return_types = best_schema.GetTypes();
 	}
+	if (names.empty() && return_types.empty()) {
+		throw InvalidInputException("No columns found in CSV files. Provide the columns option or ensure at least one "
+		                            "file contains a header or data row.");
+	}
 	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			if (!options.sql_types_per_column.empty()) {
@@ -224,7 +231,7 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 		}
 		for (auto &force_name : options.force_not_null_names) {
 			if (column_names.find(Identifier(force_name)) == column_names.end()) {
-				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
+				throw BinderException("force_not_null expected to find %s, but it was not found in the table",
 				                      force_name);
 			}
 		}
@@ -260,6 +267,12 @@ optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, co
 	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(csv_data.options);
 	const idx_t file_size = csv_data.buffer_manager->file_handle->FileSize();
 	return file_size / bytes_per_thread + 1;
+}
+
+bool CSVMultiFileInfo::SupportsReadAhead(const MultiFileBindData &bind_data) const {
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	return csv_data.buffer_manager && csv_data.buffer_manager->file_handle &&
+	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
 }
 
 unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(ClientContext &context,
@@ -357,19 +370,75 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	return gstate.Next(csv_reader_ptr, lstate);
 }
 
+// A task that loads the buffer on the async pool, sized for the read-ahead I/O budget
+static unique_ptr<AsyncTask> BufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx) {
+	const idx_t io_size =
+	    manager->HasKnownBufferRanges() ? manager->KnownBufferSize(buffer_idx) : manager->GetBufferSize();
+	return make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }, io_size);
+}
+
+// Adds a load task when the buffer is not in memory
+static void TryPushBufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx,
+                                  vector<unique_ptr<AsyncTask>> &io_tasks) {
+	shared_ptr<CSVBufferHandle> buffer_handle;
+	if (manager->GetBufferResidency(buffer_idx, buffer_handle) == CSVBufferResidency::NEEDS_LOAD) {
+		io_tasks.push_back(BufferLoadTask(manager, buffer_idx));
+	}
+}
+
+// I/O tasks for the buffers of the claim's decode start that are not in memory
+static vector<unique_ptr<AsyncTask>> CollectClaimIOTasks(CSVLocalState &lstate) {
+	auto &manager = lstate.file_scan->buffer_manager;
+	const idx_t start_buffer_idx = lstate.iterator.GetBufferIdx();
+	vector<unique_ptr<AsyncTask>> io_tasks;
+	if (manager->HasKnownBufferRanges() && start_buffer_idx >= manager->KnownBufferCount()) {
+		// the claim starts past the last buffer (e.g. skipping the header consumed the whole file)
+		return io_tasks;
+	}
+	TryPushBufferLoadTask(manager, start_buffer_idx, io_tasks);
+	if (lstate.iterator.IsBoundarySet() &&
+	    (!manager->HasKnownBufferRanges() ||
+	     lstate.iterator.GetEndPos() >= manager->KnownBufferSize(start_buffer_idx))) {
+		// a boundary reaching the end of its buffer also touches the next one, for straddling values
+		// and first-line detection
+		TryPushBufferLoadTask(manager, start_buffer_idx + 1, io_tasks);
+	}
+	return io_tasks;
+}
+
+AsyncResult CSVFileScan::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+                                    LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<CSVLocalState>();
+	D_ASSERT(lstate.claim_state == CSVLocalState::ClaimState::PENDING);
+	return AsyncResult::FromTasks(CollectClaimIOTasks(lstate), TaskSchedulerType::ASYNC);
+}
+
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
+		}
+	}
+#endif
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.claim_state == CSVLocalState::ClaimState::PENDING) {
-		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
 		lstate.Materialize();
 	}
-	if (lstate.csv_reader->FinishedIterator()) {
+	auto &csv_reader = *lstate.csv_reader;
+	if (!csv_reader.IsSuspended() && csv_reader.FinishedIterator()) {
 		return AsyncResult(SourceResultType::FINISHED);
 	}
-	lstate.csv_reader->Flush(chunk);
-	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
-	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	csv_reader.Flush(chunk);
+	if (csv_reader.IsSuspended()) {
+		// buffer is not in memory, we need to load it to the async pool
+		vector<unique_ptr<AsyncTask>> io_tasks;
+		io_tasks.push_back(BufferLoadTask(csv_reader.buffer_manager, csv_reader.PendingBufferIdx()));
+		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
+	}
+	return AsyncResult::FromChunk(chunk);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

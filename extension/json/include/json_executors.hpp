@@ -52,7 +52,9 @@ public:
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
 				UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
+					// Use the path elements parsed at bind time when available
+					auto val = info.use_elements ? JSONCommon::GetPathElements(doc->root, info.elements)
+					                             : JSONCommon::GetUnsafe(doc->root, ptr, len);
 					if (SET_NULL_IF_NOT_FOUND && !val) {
 						return nullopt;
 					} else {
@@ -154,7 +156,9 @@ public:
 			auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
-				val = JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
+				val = info.use_elements[path_i]
+				          ? JSONCommon::GetPathElements(doc->root, info.elements[path_i])
+				          : JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
 				if (SET_NULL_IF_NOT_FOUND && !val) {
 					child_validity.SetInvalid(child_idx);
 				} else {
