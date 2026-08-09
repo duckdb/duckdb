@@ -44,15 +44,8 @@ DUCKDB_AUTOVEC_TARGET static inline sel_t BitmapSelectionEmitByte(sel_t *__restr
 	}
 	return BITMAP_SELVEC.len[pattern];
 }
-//! Pack 64 selection bytes into a bitmap word: the multiply lands byte j on bit 56+j, so the top byte is the mask.
-static inline validity_t BitmapSelectionLoadWord(const uint8_t *bm, idx_t word_idx, idx_t word_count, idx_t count) {
-	validity_t word = 0;
-	DUCKDB_UNROLL_LOOP
-	for (idx_t k = 0; k < 8; k++) {
-		uint64_t chunk;
-		std::memcpy(&chunk, bm + word_idx * 64 + k * 8, 8);
-		word |= validity_t(uint8_t((chunk * 0x0102040810204080ULL) >> 56)) << (k * 8);
-	}
+static inline validity_t BitmapSelectionLoadWord(const validity_t *bm, idx_t word_idx, idx_t word_count, idx_t count) {
+	auto word = bm[word_idx];
 	if (word_idx + 1 == word_count && (count & 63)) {
 		word &= (validity_t(1) << (count & 63)) - 1;
 	}
@@ -60,7 +53,7 @@ static inline validity_t BitmapSelectionLoadWord(const uint8_t *bm, idx_t word_i
 }
 //! Append set-bit positions of words [from, to) at dst; SPARSE uses ctz, else the table emits 8 at a time.
 template <bool SPARSE>
-DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const uint8_t *bm, idx_t from, idx_t to, idx_t word_count,
+DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const validity_t *bm, idx_t from, idx_t to, idx_t word_count,
                                                            idx_t count, sel_t *dst) {
 	for (idx_t w = from; w < to; w++) {
 		auto base = UnsafeNumericCast<sel_t>(w * 64);
@@ -79,7 +72,7 @@ DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const uint8_t *bm, id
 	}
 	return dst;
 }
-DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const uint8_t *bm, idx_t count,
+DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count,
                                                                   SelectionVector &sel) {
 	const auto word_count = ValidityMask::EntryCount(count);
 	if (word_count == 0) {

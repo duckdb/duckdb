@@ -9,22 +9,14 @@ namespace duckdb {
 
 namespace {
 bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
-	if (!DUCKDB_AUTOVEC || !CpuBenefitsFromAutoVec()) { // fallback when widened kernels are unavailable
-		return false;
-	}
+	auto autovec_arith = DUCKDB_AUTOVEC && CpuBenefitsFromAutoVec();
 	auto name = expr.Function().GetName();
-	if (name != "+" && name != "-" && name != "*") {
-		return false;
-	}
-	if (!BitmapCmpTypeSupported(expr.GetReturnType().InternalType())) {
-		return false;
-	}
+	autovec_arith &= (name == "+" || name == "-" || name == "*");
+	autovec_arith &= BitmapCmpTypeSupported(expr.GetReturnType().InternalType());
 	for (auto &child : expr.GetChildren()) {
-		if (!BitmapCmpTypeSupported(child->GetReturnType().InternalType())) {
-			return false;
-		}
+		autovec_arith &= BitmapCmpTypeSupported(child->GetReturnType().InternalType());
 	}
-	return true;
+	return autovec_arith;
 }
 
 } // namespace

@@ -220,6 +220,7 @@ public:
 	idx_t GetAllocationSize() const;
 
 protected:
+	// mutable: Flatten() materializes the bitmap lazily through the const accessors
 	mutable sel_t *sel_vector;
 	mutable buffer_ptr<SelectionData> selection_data;
 	mutable idx_t capacity;

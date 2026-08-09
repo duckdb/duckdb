@@ -314,7 +314,11 @@ public:
 	template <class T>
 	inline static T RoundUpToAlgorithmGroupSize(T num_to_round) {
 		int remainder = num_to_round % BITPACKING_ALGORITHM_GROUP_SIZE;
-		return num_to_round + (remainder ? (BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder)) : 0);
+		if (remainder == 0) {
+			return num_to_round;
+		}
+
+		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
 	}
 
 private:
@@ -327,10 +331,14 @@ private:
 			if (values[i] > max_value) {
 				max_value = values[i];
 			}
-			if (values[i] < min_value && is_signed) {
-				min_value = values[i];
+
+			if (is_signed) {
+				if (values[i] < min_value) {
+					min_value = values[i];
+				}
 			}
 		}
+
 		return FindMinimumBitWidth<T, is_signed, round_to_next_byte>(min_value, max_value);
 	}
 
@@ -338,32 +346,50 @@ private:
 	static bitpacking_width_t FindMinimumBitWidth(T min_value, T max_value) {
 		bitpacking_width_t bitwidth;
 		T value;
+
 		if (is_signed) {
 			if (min_value == NumericLimits<T>::Minimum()) {
-				return sizeof(T) * 8; // special case: it cannot be negated like all other values.
+				// handle special case of the minimal value, as it cannot be negated like all other values.
+				return sizeof(T) * 8;
 			} else {
 				value = MaxValue((T)-min_value, max_value);
 			}
 		} else {
 			value = max_value;
 		}
+
 		if (value == 0) {
 			return 0;
 		}
-		for (bitwidth = (bitpacking_width_t)is_signed; value; bitwidth++) {
+
+		if (is_signed) {
+			bitwidth = 1;
+		} else {
+			bitwidth = 0;
+		}
+
+		while (value) {
+			bitwidth++;
 			value >>= 1;
 		}
+
 		bitwidth = GetEffectiveWidth<T>(bitwidth);
+
+		// Assert results are correct
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (is_signed) {
 				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
+				// D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
 				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
 		}
 #endif
-		return round_to_next_byte ? ((bitwidth / 8 + (bitwidth % 8 != 0)) * 8) : bitwidth;
+		if (round_to_next_byte) {
+			return (bitwidth / 8 + (bitwidth % 8 != 0)) * 8;
+		}
+		return bitwidth;
 	}
 
 	// Sign bit extension

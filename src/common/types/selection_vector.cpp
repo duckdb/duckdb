@@ -16,7 +16,7 @@ void SelectionVector::Flatten() const {
 	throw InternalException("bitmap selection vector in a build without autovec support");
 #else
 	auto keep = selection_data;
-	auto bm = reinterpret_cast<const uint8_t *>(keep->bitmap_data.get());
+	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
 	if (!keep->indices_cached) {
 		auto shared = keep;
 		SelectionVector target(std::move(shared));

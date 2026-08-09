@@ -18,7 +18,7 @@
 #include <utility>
 
 #if (defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)) && (defined(__x86_64__) || defined(__aarch64__)) &&  \
-    !DUCKDB_SMALLER_BINARY(autovec) // clang/gcc on x86/aarch64
+    __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && !DUCKDB_SMALLER_BINARY(autovec) // clang/gcc, little-endian x86/arm
 #define DUCKDB_AUTOVEC 1
 #else
 #define DUCKDB_AUTOVEC 0
@@ -51,7 +51,7 @@ inline bool CpuBenefitsFromAutoVec() {
 #if !DUCKDB_AUTOVEC
 	return false; // not compiled in
 #elif defined(__aarch64__)
-	return true; // NEON is always available
+	return true;       // NEON is always available
 #else
 	static const bool enabled = __builtin_cpu_supports("avx2") && !getenv("DUCKDB_DISABLE_AVX2"); // cached
 	return enabled;
@@ -62,6 +62,25 @@ inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width)
 }
 inline bool AutoVecCountPaysOff(size_t count) {
 	return count >= STANDARD_VECTOR_SIZE / 4; // widened-kernel entry overhead needs a reasonably full vector
+}
+//! Pack 64 selection bytes, each 0 or 1, into a bitmap word. Little-endian: byte j becomes bit j.
+DUCKDB_AUTOVEC_TARGET static inline uint64_t BoolsToBits(const uint8_t *bytes) {
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+	typedef char duckdb_av_c8x32 __attribute__((vector_size(32))); // vpmovmskb takes 32 bytes to 32 bits
+	duckdb_av_c8x32 lo, hi;
+	std::memcpy(&lo, bytes, 32);
+	std::memcpy(&hi, bytes + 32, 32);
+	return uint32_t(__builtin_ia32_pmovmskb256((duckdb_av_c8x32)(lo == 1))) |
+	       uint64_t(uint32_t(__builtin_ia32_pmovmskb256((duckdb_av_c8x32)(hi == 1)))) << 32;
+#else
+	uint64_t word = 0; // the multiply lands byte j on bit 56+j, so the product's top byte is that group's mask
+	for (uint32_t g = 0; g < 8; g++) {
+		uint64_t chunk;
+		std::memcpy(&chunk, bytes + g * 8, 8);
+		word |= uint64_t(uint8_t((chunk * 0x0102040810204080ULL) >> 56)) << (g * 8);
+	}
+	return word;
+#endif
 }
 #if DUCKDB_AUTOVEC
 typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));
