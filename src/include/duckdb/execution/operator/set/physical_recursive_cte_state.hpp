@@ -312,9 +312,11 @@ private:
 	void ExtractUsingKeyKeys(DataChunk &input);
 	bool ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count);
 	void SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count,
-	                           idx_t row_count, bool single_candidate, bool skip_new_group_addresses);
+	                           idx_t row_count);
 	void SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys);
-	void SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count);
+	void SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count, bool defer_append = false);
+	void AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t count);
+	void ValidateDeferredUsingKeyCandidateReuse(DataChunk &candidates);
 	bool TryReuseChangedGroupCandidates(idx_t candidate_count);
 	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
 	unique_ptr<GroupedAggregateHashTable> ht;

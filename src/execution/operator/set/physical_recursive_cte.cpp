@@ -588,12 +588,7 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		D_ASSERT(key_delta);
 		const auto delta_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		op.working_table->ResetForReuse();
-		op.working_table->InitializeAppend(working_append_state);
 		key_delta->Reset();
-		if (can_reuse_new_group_candidates) {
-			key_delta->new_group_addresses.reserve(delta_candidate_count);
-		}
 		if constexpr (COLLECT_METRICS) {
 			const auto delta_end = std::chrono::steady_clock::now();
 			delta_work_ns += NumericCast<idx_t>(
@@ -620,11 +615,7 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 			    [&](const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count) {
 				    const auto delta_start =
 				        COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-				    const auto skip_new_group_addresses =
-				        can_reuse_new_group_candidates && partial_key_indexes.empty() &&
-				        new_group_count == delta_candidate_count && update_rows.size() == delta_candidate_count;
-				    SnapshotUsingKeyDelta(group_addresses, new_groups, new_group_count, update_rows.size(),
-				                          delta_candidate_count == 1, skip_new_group_addresses);
+				    SnapshotUsingKeyDelta(group_addresses, new_groups, new_group_count, update_rows.size());
 				    if constexpr (COLLECT_METRICS) {
 					    const auto delta_end = std::chrono::steady_clock::now();
 					    snapshot_work_ns = NumericCast<idx_t>(
@@ -632,6 +623,18 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 					    delta_work_ns += snapshot_work_ns;
 				    }
 			    });
+			if (key_delta->deferred_previous_rows) {
+				const auto delta_start =
+				    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+				ValidateDeferredUsingKeyCandidateReuse(update_rows);
+				if constexpr (COLLECT_METRICS) {
+					const auto delta_end = std::chrono::steady_clock::now();
+					const auto elapsed_ns = NumericCast<idx_t>(
+					    std::chrono::duration_cast<std::chrono::nanoseconds>(delta_end - delta_start).count());
+					snapshot_work_ns += elapsed_ns;
+					delta_work_ns += elapsed_ns;
+				}
+			}
 			if constexpr (COLLECT_METRICS) {
 				const auto hash_end = std::chrono::steady_clock::now();
 				const auto hash_work_ns = NumericCast<idx_t>(
@@ -691,12 +694,16 @@ void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 		const auto delta_start =
 		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		if (can_reuse_new_group_candidates && key_delta->new_count == delta_candidate_count) {
+			op.working_table->Reset();
 			op.working_table->Combine(intermediate_table);
 			InitializeIntermediateAppend();
 		} else if (TryReuseChangedGroupCandidates(delta_candidate_count)) {
+			op.working_table->Reset();
 			op.working_table->Combine(intermediate_table);
 			InitializeIntermediateAppend();
 		} else {
+			op.working_table->ResetForReuse();
+			op.working_table->InitializeAppend(working_append_state);
 			FinalizeUsingKeyDelta(false, COLLECT_METRICS);
 			intermediate_table.ResetForReuse();
 			InitializeIntermediateAppend();
@@ -719,8 +726,6 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 	idx_t delta_work_ns = 0;
 	const auto delta_start =
 	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-	op.working_table->ResetForReuse();
-	op.working_table->InitializeAppend(working_append_state);
 	delta.Reset();
 	if constexpr (COLLECT_METRICS) {
 		const auto delta_end = std::chrono::steady_clock::now();
@@ -780,6 +785,8 @@ void RecursiveCTEState::CommitPreaggregatedUsingKeyUpdatesInternal() {
 
 	const auto finalize_start =
 	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	op.working_table->ResetForReuse();
+	op.working_table->InitializeAppend(working_append_state);
 	const auto index_work_ns = FinalizeUsingKeyDelta(!partial_key_indexes.empty(), COLLECT_METRICS);
 	intermediate_table.ResetForReuse();
 	InitializeIntermediateAppend();

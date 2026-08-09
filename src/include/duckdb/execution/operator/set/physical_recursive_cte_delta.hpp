@@ -31,6 +31,7 @@ struct RecursiveCTEKeyDeltaState {
 	ColumnDataAppendState new_key_append_state;
 	DataChunk selected_keys;
 	DataChunk aggregate_rows;
+	DataChunk updated_aggregate_rows;
 	DataChunk result_rows;
 	DataChunk previous_state_rows;
 	DataChunk changed_rows;
@@ -53,6 +54,9 @@ struct RecursiveCTEKeyDeltaState {
 	RecursiveCTEGroupAddressSet new_group_address_set;
 	bool new_group_address_set_built = false;
 	bool collections_initialized = false;
+	bool deferred_previous_rows = false;
+	bool deferred_candidate_reuse = false;
+	idx_t deferred_count = 0;
 	idx_t touched_count = 0;
 	idx_t new_count = 0;
 	idx_t changed_count = 0;
