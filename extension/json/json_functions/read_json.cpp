@@ -170,35 +170,67 @@ static bool IsGeoJSONFeatureType(const LogicalType &type) {
 	return has_type && has_geometry && has_properties;
 }
 
-//! Flatten a Feature into columns: "geometry" (and "id", if present) come from the Feature itself, and every
-//! member of "properties" becomes a column of its own
+//! Flatten a Feature into columns: the geometry and the "id"/"bbox" members come from the Feature itself, and
+//! every member of "properties" becomes a column of its own.
+//! The Feature's own members are emitted first, and its metadata members are prefixed, so that a property of the
+//! same name is the one that gets deduplicated by the usual column name collision handling.
 static void UnnestGeoJSONFeature(const LogicalType &type, const bool ignore_errors, vector<LogicalType> &return_types,
-                                 vector<Identifier> &names, case_insensitive_set_t &top_level_names) {
-	const auto add_column = [&](const Identifier &name, const LogicalType &column_type, const bool top_level) {
+                                 vector<Identifier> &names, vector<JSONFeatureColumn> &feature_columns) {
+	const auto add_column = [&](const Identifier &name, const LogicalType &column_type, const bool from_properties,
+	                            string key) {
 		names.emplace_back(name);
 		return_types.emplace_back(RemoveDuplicateStructKeys(column_type, ignore_errors));
-		if (top_level) {
-			top_level_names.insert(name.GetIdentifierName());
-		}
+		feature_columns.push_back(JSONFeatureColumn {from_properties, std::move(key)});
 	};
 
+	optional_ptr<const LogicalType> geometry_type;
+	optional_ptr<const LogicalType> id_type;
+	optional_ptr<const LogicalType> bbox_type;
 	optional_ptr<const LogicalType> properties_type;
 	for (const auto &child : StructType::GetChildTypes(type)) {
-		if (child.first == "geometry" || child.first == "id") {
-			add_column(child.first, child.second, true);
+		if (child.first == "geometry") {
+			geometry_type = child.second;
+		} else if (child.first == "id") {
+			id_type = child.second;
+		} else if (child.first == "bbox") {
+			bbox_type = child.second;
 		} else if (child.first == "properties") {
 			properties_type = child.second;
 		}
 	}
-	D_ASSERT(properties_type);
+	D_ASSERT(geometry_type && properties_type);
+
+	add_column("geometry", *geometry_type, false, "geometry");
+	if (id_type) {
+		add_column("feature_id", *id_type, false, "id");
+	}
+	if (bbox_type) {
+		add_column("feature_bbox", *bbox_type, false, "bbox");
+	}
 	if (properties_type->id() == LogicalTypeId::STRUCT) {
 		for (const auto &property : StructType::GetChildTypes(*properties_type)) {
-			add_column(property.first, property.second, false);
+			add_column(property.first, property.second, true, property.first.GetIdentifierName());
 		}
 	} else {
 		// Properties were not inferred as a struct (e.g. they were too heterogeneous and became a MAP), so we
 		// cannot give each one its own column - keep them together instead
-		add_column("properties", *properties_type, true);
+		add_column("properties", *properties_type, false, "properties");
+	}
+}
+
+//! COPY ... FROM takes its columns from the target table, so the Feature member names decide what is read from
+//! the Feature itself and everything else is looked up in its properties
+static void BindGeoJSONFeatureColumns(const vector<Identifier> &names, vector<JSONFeatureColumn> &feature_columns) {
+	for (const auto &name : names) {
+		if (name == "geometry") {
+			feature_columns.push_back(JSONFeatureColumn {false, "geometry"});
+		} else if (name == "feature_id") {
+			feature_columns.push_back(JSONFeatureColumn {false, "id"});
+		} else if (name == "feature_bbox") {
+			feature_columns.push_back(JSONFeatureColumn {false, "bbox"});
+		} else {
+			feature_columns.push_back(JSONFeatureColumn {true, name.GetIdentifierName()});
+		}
 	}
 }
 
@@ -264,15 +296,11 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	}
 
 	if (json_data.options.record_type == JSONRecordType::FEATURES) {
-		// The top-level names are needed even when the caller supplied the columns (COPY ... FROM), so that we know
-		// which of them to read from the Feature's "properties"
-		vector<LogicalType> feature_types;
-		vector<Identifier> feature_names;
-		UnnestGeoJSONFeature(type, options.ignore_errors, feature_types, feature_names,
-		                     json_data.feature_top_level_names);
 		if (names.empty()) {
-			return_types = std::move(feature_types);
-			names = std::move(feature_names);
+			UnnestGeoJSONFeature(type, options.ignore_errors, return_types, names, json_data.feature_columns);
+		} else {
+			// COPY - we already have names/types, but we still need to know where each of them is read from
+			BindGeoJSONFeatureColumns(names, json_data.feature_columns);
 		}
 		return;
 	}

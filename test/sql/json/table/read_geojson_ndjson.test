@@ -4,20 +4,21 @@
 
 require json
 
-# Newline-delimited Features: "geometry" and "id" stay top-level, properties become columns
+# Newline-delimited Features: the geometry and the Feature's "id" stay top-level, properties become columns
 query III
-SELECT id, ST_AsText(geometry), name FROM read_json('data/json/geojson/features.geojsonl') ORDER BY id;
+SELECT feature_id, ST_AsText(geometry), name FROM read_json('data/json/geojson/features.geojsonl') ORDER BY feature_id;
 ----
 1	POINT (1 2)	alpha
 2	MULTIPOINT (3 4, 5 6)	beta
 3	NULL	gamma
 
+# The Feature's own members come first, and its metadata members are prefixed
 query II
 SELECT column_name, column_type
 FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/features.geojsonl'));
 ----
-id	BIGINT
 geometry	GEOMETRY
+feature_id	BIGINT
 name	VARCHAR
 
 # Newline-delimited bare geometries produce a single GEOMETRY column

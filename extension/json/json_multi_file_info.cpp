@@ -429,6 +429,9 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 		gstate.names.push_back(json_data.key_names[col_id]);
 		gstate.column_ids.push_back(col_idx);
 		gstate.column_indices.push_back(column_index);
+		if (!json_data.feature_columns.empty()) {
+			gstate.feature_columns.push_back(json_data.feature_columns[col_id]);
+		}
 	}
 	if (gstate.names.size() < json_data.key_names.size() || bind_data.file_options.union_by_name) {
 		// If we are auto-detecting, but don't need all columns present in the file,
@@ -494,17 +497,20 @@ bool JSONReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionSt
 static bool TransformGeoJSONFeatures(yyjson_val *values[], yyjson_alc *alc, const idx_t count,
                                      JSONScanGlobalState &gstate, const vector<Vector *> &result_vectors,
                                      JSONTransformOptions &transform_options) {
-	const auto &top_level_names = gstate.json_data.feature_top_level_names;
+	D_ASSERT(gstate.feature_columns.size() == gstate.names.size());
 
+	// Group the columns by where they read from, using the JSON key rather than the (deduplicated) column name.
+	// A Feature member and a property of the same name are separate columns, so this cannot be done by name.
 	vector<string> feature_names, property_names;
 	vector<Vector *> feature_vectors, property_vectors;
 	vector<ColumnIndex> feature_indices, property_indices;
-	for (idx_t i = 0; i < gstate.names.size(); i++) {
-		const auto top_level = top_level_names.find(gstate.names[i]) != top_level_names.end();
-		(top_level ? feature_names : property_names).push_back(gstate.names[i]);
-		(top_level ? feature_vectors : property_vectors).push_back(result_vectors[i]);
+	for (idx_t i = 0; i < gstate.feature_columns.size(); i++) {
+		const auto &feature_column = gstate.feature_columns[i];
+		const auto from_properties = feature_column.from_properties;
+		(from_properties ? property_names : feature_names).push_back(feature_column.key);
+		(from_properties ? property_vectors : feature_vectors).push_back(result_vectors[i]);
 		if (!gstate.column_indices.empty()) {
-			(top_level ? feature_indices : property_indices).push_back(gstate.column_indices[i]);
+			(from_properties ? property_indices : feature_indices).push_back(gstate.column_indices[i]);
 		}
 	}
 
