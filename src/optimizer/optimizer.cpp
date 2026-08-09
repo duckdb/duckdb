@@ -276,6 +276,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		distinct_aggregate_rewriter.VisitOperator(plan);
 	});
 
+	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
+		DisjunctiveJoinRewriter disjunctive_join_rewriter(context, binder);
+		plan = disjunctive_join_rewriter.Optimize(std::move(plan));
+	});
+
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
@@ -306,16 +311,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		outer_join_simplification.VisitOperator(*plan);
 	});
 
-	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
-		DisjunctiveJoinRewriter disjunctive_join_rewriter(context, binder);
-		plan = disjunctive_join_rewriter.Optimize(std::move(plan));
-	});
 
-	// try to inline CTEs instead of materialization
-	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
-		CTEInlining cte_inlining(*this);
-		plan = cte_inlining.Optimize(std::move(plan));
-	});
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns

@@ -71,7 +71,7 @@ private:
 
 	//! Build ANTI join: chained anti joins
 	unique_ptr<LogicalOperator> BuildAntiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                             const vector<Branch> &branches;
+                                             const vector<Branch> &branches);
 
     //! Builds a single hash join branch for a specific equality predicate
 	unique_ptr<LogicalOperator> BuildHashJoinBranch(

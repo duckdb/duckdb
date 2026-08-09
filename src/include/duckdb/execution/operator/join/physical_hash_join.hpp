@@ -131,6 +131,10 @@ public:
 		return true;
 	}
 
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
+
 private:
 	static void ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
 	                                            vector<idx_t> &probe_column_ids, vector<idx_t> &build_column_ids);
