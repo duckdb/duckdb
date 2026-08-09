@@ -143,24 +143,18 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState
 		                        return col2 ? T(0) : info.constant->GetValue().GetValueUnsafe<T>();
 	                        });
 
-	validity_t *f_bm = nullptr;
-	if (false_sel && !bitmap_sel) { // complement before input-selection intersection
-		f_bm = fstate.tmp_sel3.Complement(t, span);
-	}
-
+	const validity_t *sel_bm = nullptr;
 	if (have_sel) { // AND input selection into the comparison bitmap
 		fstate.tmp_sel2.Initialize(*sel);
 		fstate.tmp_sel2.ToBitmap(count, span);
+		sel_bm = fstate.tmp_sel2.Bitmap();
 		result = t.Intersect(fstate.tmp_sel2, span, count, span);
-		if (f_bm) {
-			fstate.tmp_sel3.Intersect(fstate.tmp_sel2, span, count, span);
-		}
 	} else {
 		result = BitmapPopcount(t_bm, span);
 	}
 
-	if (f_bm) {
-		BitmapToSelectionVector(f_bm, span, *false_sel);
+	if (false_sel && !bitmap_sel) { // false side is the complement, restricted to the input selection
+		BitmapToSelectionVector<true>(t_bm, span, *false_sel, sel_bm);
 	}
 	if (!bitmap_sel && true_sel) { // materialize only for plain selvec callers
 		BitmapToSelectionVector(t_bm, span, *true_sel);

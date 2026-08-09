@@ -47,8 +47,14 @@ DUCKDB_AUTOVEC_TARGET static inline sel_t BitmapSelectionEmitByte(sel_t *__restr
 	return BITMAP_SELVEC.len[pattern];
 }
 
-static inline validity_t BitmapSelectionLoadWord(const validity_t *bm, idx_t word_idx, idx_t word_count, idx_t count) {
+//! INVERT emits the complement (optionally masked by and_bm); the tail re-mask below clears its bits past count.
+template <bool INVERT>
+static inline validity_t BitmapSelectionLoadWord(const validity_t *bm, const validity_t *and_bm, idx_t word_idx,
+                                                 idx_t word_count, idx_t count) {
 	auto word = bm[word_idx];
+	if constexpr (INVERT) {
+		word = and_bm ? (~word & and_bm[word_idx]) : ~word;
+	}
 	if (word_idx + 1 == word_count && (count & 63)) {
 		word &= (validity_t(1) << (count & 63)) - 1;
 	}
@@ -57,12 +63,12 @@ static inline validity_t BitmapSelectionLoadWord(const validity_t *bm, idx_t wor
 
 //! Append the set-bit positions of words [from, to) at dst and return the new cursor.
 //! SPARSE skips runs of zero bits with CountZeros; otherwise the lookup table emits (up to) 8 positions per iteration.
-template <bool SPARSE>
-DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const validity_t *bm, idx_t from, idx_t to, idx_t word_count,
-                                                           idx_t count, sel_t *dst) {
+template <bool SPARSE, bool INVERT>
+DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const validity_t *bm, const validity_t *and_bm, idx_t from,
+                                                           idx_t to, idx_t word_count, idx_t count, sel_t *dst) {
 	for (idx_t w = from; w < to; w++) {
 		auto base = UnsafeNumericCast<sel_t>(w * 64);
-		auto word = BitmapSelectionLoadWord(bm, w, word_count, count);
+		auto word = BitmapSelectionLoadWord<INVERT>(bm, and_bm, w, word_count, count);
 		DUCKDB_UNROLL_LOOP
 		while (word) {
 			if constexpr (SPARSE) {
@@ -78,9 +84,10 @@ DUCKDB_AUTOVEC_TARGET static inline sel_t *BitmapEmitWords(const validity_t *bm,
 	return dst;
 }
 
-DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count,
-                                                                  SelectionVector &sel) {
-	const auto word_count = (count + 63) / 64;
+template <bool INVERT = false>
+DUCKDB_AUTOVEC_TARGET static inline idx_t
+BitmapToSelectionVector(const validity_t *bm, idx_t count, SelectionVector &sel, const validity_t *and_bm = nullptr) {
+	const auto word_count = ValidityMask::EntryCount(count);
 	if (word_count == 0) {
 		return 0;
 	}
@@ -99,10 +106,10 @@ DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const validity
 
 	// sample the first word(s) to choose between sparse(ctz, few set bits) and table-based extraction (dense)
 	const auto sample = MinValue<idx_t>(word_count, 2);
-	auto *dst = BitmapEmitWords<false>(bm, 0, sample, word_count, count, result_sel);
+	auto *dst = BitmapEmitWords<false, INVERT>(bm, and_bm, 0, sample, word_count, count, result_sel);
 	const bool sparse = UnsafeNumericCast<idx_t>(dst - result_sel) <= 14 * sample;
-	dst = sparse ? BitmapEmitWords<true>(bm, sample, word_count, word_count, count, dst)
-	             : BitmapEmitWords<false>(bm, sample, word_count, word_count, count, dst);
+	dst = sparse ? BitmapEmitWords<true, INVERT>(bm, and_bm, sample, word_count, word_count, count, dst)
+	             : BitmapEmitWords<false, INVERT>(bm, and_bm, sample, word_count, word_count, count, dst);
 	const auto result_count = UnsafeNumericCast<idx_t>(dst - result_sel);
 	sel.Initialize(sel_data);
 	return result_count;

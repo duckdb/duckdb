@@ -75,30 +75,19 @@ struct SelectionResult : private SelectionVector {
 		return CombineBitmap<true>(other.Bitmap());
 	}
 
-	DUCKDB_AUTOVEC_TARGET validity_t *Complement(const SelectionResult &other, idx_t row_span) { // false-side bitmap
-		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
-		auto dst = reinterpret_cast<validity_t *>(PrepareBitmap(row_span));
-		auto src = other.Bitmap();
-		DUCKDB_UNROLL_LOOP
-		for (idx_t w = 0; w < (row_span + 63) / 64; w++) {
-			dst[w] = ~src[w];
-		}
-		return dst;
-	}
-
 	validity_t *Bitmap() const {
 		return reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 	}
 
 	uint64_t *PrepareBitmap(idx_t row_span) {
-		static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
 		D_ASSERT(CpuBenefitsFromAutoVec());         // bitmap existence gates the avx2-targeted kernels
 		D_ASSERT(row_span <= STANDARD_VECTOR_SIZE); // fixed vector-sized bitmap buffer
 		if (!selection_data || selection_data.use_count() > 1) {
 			selection_data = make_shared_ptr<SelectionData>();
 		}
 		if (!selection_data->bitmap_data.get()) {
-			selection_data->bitmap_data = Allocator::DefaultAllocator().Allocate(NWORDS * sizeof(uint64_t));
+			selection_data->bitmap_data = Allocator::DefaultAllocator().Allocate(
+			    ValidityMask::EntryCount(STANDARD_VECTOR_SIZE) * sizeof(uint64_t));
 		}
 		selection_data->indices_cached = false;
 		selection_data->is_bitmap = true;
@@ -114,7 +103,7 @@ private:
 		auto keep = selection_data;
 		auto indices = sel_vector;
 		auto words = PrepareBitmap(row_span);
-		memset(words, 0, ((STANDARD_VECTOR_SIZE + 63) / 64) * sizeof(uint64_t));
+		memset(words, 0, ValidityMask::EntryCount(STANDARD_VECTOR_SIZE) * sizeof(uint64_t));
 		if (!indices) {
 			D_ASSERT(count <= row_span);
 			DUCKDB_UNROLL_LOOP
@@ -136,7 +125,7 @@ private:
 		D_ASSERT(IsBitmap());
 		selection_data->indices_cached = false;
 		auto a = Bitmap();
-		const idx_t nwords = (selection_data->row_span + 63) / 64;
+		const idx_t nwords = ValidityMask::EntryCount(selection_data->row_span);
 		idx_t total = 0;
 		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < nwords; w++) {

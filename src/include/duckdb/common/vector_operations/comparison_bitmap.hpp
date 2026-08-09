@@ -44,7 +44,7 @@ DUCKDB_AUTOVEC_TARGET inline void AndValidityIntoBitmap(const validity_t *validi
 	if (!validity) {
 		return;
 	}
-	const idx_t nwords = (count + 63) / 64;
+	const idx_t nwords = ValidityMask::EntryCount(count);
 	DUCKDB_UNROLL_LOOP
 	for (idx_t w = 0; w < nwords; w++) {
 		bitmap[w] &= validity[w];
@@ -234,7 +234,7 @@ DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, Expre
 }
 
 DUCKDB_AUTOVEC_TARGET inline idx_t BitmapPopcount(const validity_t *bitmap, idx_t count) { // count selected rows
-	const idx_t nwords = (count + 63) / 64;
+	const idx_t nwords = ValidityMask::EntryCount(count);
 	idx_t total = 0;
 	DUCKDB_UNROLL_LOOP
 	for (idx_t w = 0; w < nwords; w++) {

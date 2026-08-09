@@ -87,7 +87,7 @@ public:
 	unique_ptr<FunctionLocalState> local_state;
 	bool select_bitmap_capable = false;
 	BitmapComparisonInfo cmp_info;
-	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
+	SelectionResult tmp_sel1, tmp_sel2;
 
 private:
 	bool safe_autovec_arith = false;
