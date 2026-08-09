@@ -41,34 +41,25 @@ WITH c AS MATERIALIZED (SELECT * FROM t) SELECT count(*) FROM t l JOIN c ON l.i 
 0
 
 # the cardinality of the definition reaches the reference, which is what lets sum() prove it cannot
-# overflow an int64 and switch to sum_no_overflow
+# overflow an int64 and switch to sum_no_overflow. The plan assertions for that rewrite live in
+# test/optimizer/test_aggregate_function_rewrite.test; here we only check that the results stay correct
+# on either side of the overflow boundary.
 statement ok
 CREATE TABLE small_vals(v BIGINT);
 
 statement ok
 INSERT INTO small_vals SELECT (i * 1000000000)::BIGINT FROM range(1000) s(i);
 
-query II
-EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
-----
-logical_opt	<REGEX>:.*sum_no_overflow\(v\).*
-
 query I
 WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
 ----
 499500000000000
 
-# ... and declines to when the sum could exceed an int64
 statement ok
 CREATE TABLE big_vals(v BIGINT);
 
 statement ok
 INSERT INTO big_vals SELECT 4000000000000000000::BIGINT FROM range(5) s(i);
-
-query II
-EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
-----
-logical_opt	<!REGEX>:.*sum_no_overflow.*
 
 query I
 WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
