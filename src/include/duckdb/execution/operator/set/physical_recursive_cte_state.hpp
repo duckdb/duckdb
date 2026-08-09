@@ -254,6 +254,7 @@ public:
 	                  bool record_sink_metrics = true);
 	void FinalizeStateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &keys, DataChunk &aggregates,
 	                       DataChunk &result);
+	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
 	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 
 	const PhysicalRecursiveCTE &GetOperator() const {
@@ -309,9 +310,12 @@ private:
 	void CommitPreaggregatedUsingKeyUpdatesInternal();
 	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
 	void ExtractUsingKeyKeys(DataChunk &input);
-	bool ShouldPreaggregateUsingKeyUpdates();
-	void SnapshotUsingKeyDelta(DataChunk &keys);
-	void SnapshotUsingKeyDeltaGroups(DataChunk &keys);
+	bool ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count);
+	void SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count,
+	                           idx_t row_count, bool single_candidate, bool skip_new_group_addresses);
+	void SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys);
+	void SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count);
+	bool TryReuseChangedGroupCandidates(idx_t candidate_count);
 	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
 	unique_ptr<GroupedAggregateHashTable> ht;
 	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
@@ -353,6 +357,8 @@ private:
 
 	bool use_local_union_all_output = true;
 	bool can_preaggregate_using_key = false;
+	bool can_reuse_new_group_candidates = false;
+	bool can_reuse_changed_group_candidates = false;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active

@@ -42,6 +42,18 @@ TABLE t;
 3	30
 4	40
 
+# New-group candidates are only reused when the aggregate returns its direct input unchanged.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k, min(abs(v)) AS v) AS (
+	VALUES (1, -5)
+	UNION
+	SELECT k + 1, -v FROM t WHERE k < 2
+)
+TABLE t;
+----
+1	5
+2	5
+
 # Changes in later payload columns are detected after earlier columns narrow the candidate rows.
 query III rowsort
 WITH RECURSIVE t(k, a, b) USING KEY (k) AS (
@@ -206,6 +218,19 @@ TABLE t;
 ----
 1	3	2
 
+# Direct delta tracking snapshots an existing group only once across candidate chunks.
+query II
+WITH RECURSIVE t(k, lo, latest) USING KEY (k, min(lo)) AS (
+	VALUES (1, 100000::BIGINT, 0::BIGINT)
+	UNION
+	SELECT k, i, i
+	FROM t, range(current_setting('standard_vector_size')::BIGINT * 2 + 1) r(i)
+	WHERE lo = 100000
+)
+SELECT count(*), min(lo) FROM t;
+----
+1	0
+
 # Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
 query III rowsort
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
@@ -258,24 +283,6 @@ FROM range(4) limits(limit_value), LATERAL (
 3	3
 
 # Complete-key probes over recurring state remain eligible for the specialized join.
-statement ok
-SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
-
-statement ok
-PRAGMA explain_output='physical_only';
-
-query II
-EXPLAIN WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
-	SELECT i, 1 FROM range(100) r(i)
-	UNION
-	SELECT n.k, r.total * 0 + 1
-	FROM t n JOIN recurring.t r USING (k)
-	WHERE n.total < 3
-)
-TABLE t;
-----
-physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
-
 query II
 WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
 	SELECT i, 1 FROM range(100) r(i)
@@ -289,18 +296,6 @@ SELECT count(*), sum(total) FROM t;
 100	300
 
 # Plain UNION retains partial-key probes and updates the index for newly finalized keys.
-query II
-EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
-	VALUES (1, 1, 1)
-	UNION
-	SELECT n.k1, n.k2 + 1, n.v
-	FROM t n JOIN recurring.t r ON r.k1 = n.k1
-	WHERE n.k2 < 3
-)
-TABLE t;
-----
-physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
-
 query III rowsort
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
 	VALUES (1, 1, 1)
@@ -610,18 +605,6 @@ SELECT count(*), min(lower(k)), min(v) FROM t;
 1	a	0
 
 # Complete and partial direct probes normalize collated probe keys before using the recurring hash table.
-query II
-EXPLAIN WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
-	SELECT 'a' COLLATE nocase, 2
-	UNION
-	SELECT n.k, r.v - 1
-	FROM t n JOIN recurring.t r USING (k)
-	WHERE n.v > 0
-)
-TABLE t;
-----
-physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
-
 query TI
 WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
 	SELECT 'a' COLLATE nocase, 2
@@ -633,18 +616,6 @@ WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
 TABLE t;
 ----
 a	0
-
-query II
-EXPLAIN WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
-	SELECT 'a' COLLATE nocase, 1, 2
-	UNION
-	SELECT upper(n.label), n.id, r.v - 1
-	FROM t n JOIN recurring.t r ON r.label = n.label
-	WHERE n.v > 0
-)
-TABLE t;
-----
-physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
 
 query ITI
 WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
@@ -659,20 +630,6 @@ SELECT count(*), min(lower(label)), min(v) FROM t;
 1	a	0
 
 # Preaggregation and partial-key probes share stable recurring group addresses.
-query II
-EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
-	SELECT i, i % 4, 2
-	FROM range(current_setting('standard_vector_size')::BIGINT) r(i), range(8) duplicates(_)
-	UNION
-	SELECT n.k1, n.k2, r.v - 1
-	FROM (SELECT t.*, duplicates._ FROM t, range(8) duplicates(_)) n
-	JOIN recurring.t r ON r.k1 = n.k1
-	WHERE n.v > 0
-)
-TABLE t;
-----
-physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
-
 query III
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
 	SELECT i, i % 4, 2

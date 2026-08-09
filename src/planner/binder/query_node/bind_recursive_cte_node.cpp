@@ -312,7 +312,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				    result.types[column_idx], ColumnBinding(aggregate_index, ProjectionIndex(payload_idx++))));
 			}
 		}
-		auto projection = make_uniq<LogicalProjection>(setop_index, std::move(projections));
+		auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projections));
 		projection->AddChild(std::move(aggregate));
 		result.plan = std::move(projection);
 	} else {

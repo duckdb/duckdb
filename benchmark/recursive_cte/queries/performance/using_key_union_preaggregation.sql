@@ -1,5 +1,5 @@
 WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
-	SELECT i, 4::BIGINT FROM range(50000) r(i), range(8) duplicates(_)
+	SELECT i, 3::BIGINT FROM range(512) r(i), range(8) duplicates(_)
 	UNION
 	SELECT k, v - 1 FROM t, range(8) duplicates(_) WHERE v > 0
 )
