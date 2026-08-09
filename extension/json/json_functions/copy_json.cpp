@@ -167,10 +167,13 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	bool write_partition_columns = false;
 	vector<Identifier> original_column_names;
 	const auto is_geojson = format == JSONCopyToFormat::GEOJSON;
-	// GeoJSON is wrapped in a FeatureCollection by default, plain JSON is not wrapped unless ARRAY is requested
-	bool array_output = is_geojson;
+	const auto is_geojsonl = is_geojson && StringUtil::CIEquals(stmt.info->format, "geojsonl");
+	// GeoJSON is wrapped in a FeatureCollection by default, but newline-delimited GeoJSON (geojsonl) and plain
+	// JSON are not wrapped unless ARRAY is requested
+	bool array_output = is_geojson && !is_geojsonl;
 	// We insert the file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
-	identifier_map_t<vector<Value>> csv_copy_options {{"file_extension", {is_geojson ? "geojson" : "json"}}};
+	identifier_map_t<vector<Value>> csv_copy_options {
+	    {"file_extension", {is_geojsonl ? "geojsonl" : (is_geojson ? "geojson" : "json")}}};
 	for (const auto &kv : copy_info.options) {
 		auto &option_name = kv.first;
 		auto &option_values = kv.second;

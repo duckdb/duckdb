@@ -150,6 +150,17 @@ SELECT ST_GeomFromGeoJSON('[1,2]');
 ----
 <REGEX>:.*geometry must be an object.*
 
+# Deeply nested coordinates must error rather than exhaust the stack
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"Point","coordinates":' || repeat('[', 100000) || repeat(']', 100000) || '}');
+----
+<REGEX>:.*at least 2 numbers.*
+
+statement error
+SELECT ST_GeomFromGeoJSON('{"type":"GeometryCollection","geometries":[' || repeat('{"type":"GeometryCollection","geometries":[', 100000) || '{"type":"Point","coordinates":[1,2]}' || repeat(']}', 100000) || ']}');
+----
+<REGEX>:.*maximum recursion depth.*
+
 statement error
 SELECT ST_GeomFromGeoJSON('not json at all');
 ----

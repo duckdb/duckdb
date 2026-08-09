@@ -28,6 +28,33 @@ SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM r
 ----
 {"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":1,"name":"alpha"}} {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"id":2,"name":"beta"}} {"type":"Feature","geometry":null,"properties":{"id":3,"name":null}}
 
+# FORMAT GEOJSONL writes one Feature per line by default
+statement ok
+COPY places TO '{TEST_DIR}/places_l.tmp' (FORMAT GEOJSONL);
+
+query I
+SELECT content = (SELECT content FROM read_text('{TEST_DIR}/places.geojsonl')) FROM read_text('{TEST_DIR}/places_l.tmp');
+----
+true
+
+# As does a file with an inferred .geojsonl extension
+statement ok
+COPY places TO '{TEST_DIR}/places_inferred.geojsonl';
+
+query I
+SELECT content = (SELECT content FROM read_text('{TEST_DIR}/places.geojsonl')) FROM read_text('{TEST_DIR}/places_inferred.geojsonl');
+----
+true
+
+# ARRAY true opts back in to a FeatureCollection
+statement ok
+COPY places TO '{TEST_DIR}/places_l_array.tmp' (FORMAT GEOJSONL, ARRAY true);
+
+query I
+SELECT content = (SELECT content FROM read_text('{TEST_DIR}/places.geojson')) FROM read_text('{TEST_DIR}/places_l_array.tmp');
+----
+true
+
 # The format is inferred from the file extension
 statement ok
 COPY places TO '{TEST_DIR}/inferred.geojson';

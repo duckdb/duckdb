@@ -665,6 +665,7 @@ void JSONReader::SkipOverArrayStart(JSONReaderScanState &scan_state) {
 		}
 		// The rest of the FeatureCollection is not ours to read
 		buffer_offset = buffer_size;
+		scan_state.skip_remainder_of_file = skip_feature_collection_prefix;
 	}
 }
 
@@ -955,6 +956,7 @@ bool JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 				// Anything after the "features" array (the closing brace, "bbox", ...) is not ours to read.
 				// Count the value we just parsed, since breaking here skips the loop's increment.
 				buffer_offset = buffer_size;
+				scan_state.skip_remainder_of_file = true;
 				scan_count++;
 				break;
 			}
@@ -996,6 +998,7 @@ bool JSONReader::InitializeScan(JSONReaderScanState &scan_state, JSONFileReadTyp
 	}
 	scan_state.current_reader = this;
 	scan_state.is_first_scan = true;
+	scan_state.skip_remainder_of_file = false;
 	scan_state.file_read_type = file_read_type;
 	if (file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 		// when initializing a single-file scan we don't need to read anything yet
@@ -1021,7 +1024,7 @@ idx_t JSONReader::Scan(JSONReaderScanState &scan_state) {
 				return 0;
 			}
 			// read the next buffer
-			if (!ReadNextBuffer(scan_state)) {
+			if (scan_state.skip_remainder_of_file || !ReadNextBuffer(scan_state)) {
 				// we have exhausted the file
 				return 0;
 			}

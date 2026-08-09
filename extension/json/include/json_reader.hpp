@@ -157,6 +157,9 @@ struct JSONReaderScanState {
 	bool is_first_scan = false;
 	//! Whether this is the last batch of the file
 	bool is_last = false;
+	//! Whether the remainder of the file is deliberately not read (everything after a FeatureCollection's
+	//! "features" array), i.e. no further buffers should be read even if the file has more data
+	bool skip_remainder_of_file = false;
 	//! Buffer to reconstruct split values
 	optional_idx batch_index;
 

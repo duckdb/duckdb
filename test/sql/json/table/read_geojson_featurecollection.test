@@ -113,3 +113,21 @@ query I
 SELECT count(*) FROM read_json('{TEST_DIR}/fc_empty.geojson');
 ----
 0
+
+# Members after the "features" array are ignored
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"k":1}}],"bbox":[1.0,2.0,1.0,2.0],"name":"tail"}' AS c) TO '{TEST_DIR}/fc_trailing.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT ST_AsText(geometry), k FROM read_json('{TEST_DIR}/fc_trailing.geojson');
+----
+POINT (1 2)	1
+
+# Members after an empty "features" array are ignored too
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[],"bbox":[0.0,0.0,0.0,0.0],"name":"tail"}' AS c) TO '{TEST_DIR}/fc_empty_trailing.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/fc_empty_trailing.geojson');
+----
+0

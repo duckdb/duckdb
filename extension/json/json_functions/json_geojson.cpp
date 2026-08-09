@@ -254,8 +254,8 @@ void ToGeoJSONRecursive(WKBReader &reader, yyjson_mut_doc *doc, yyjson_mut_val *
 // GeoJSON -> WKB
 //===--------------------------------------------------------------------===//
 //! Whether any position in this coordinate tree carries a third ordinate
-bool CoordinatesHaveZ(yyjson_val *coords) {
-	if (!yyjson_is_arr(coords)) {
+bool CoordinatesHaveZ(yyjson_val *coords, const idx_t depth) {
+	if (depth == Geometry::MAX_RECURSION_DEPTH || !yyjson_is_arr(coords)) {
 		return false;
 	}
 	size_t idx, max;
@@ -265,7 +265,7 @@ bool CoordinatesHaveZ(yyjson_val *coords) {
 			// This array is a position rather than a nesting level
 			return yyjson_arr_size(coords) >= 3;
 		}
-		if (CoordinatesHaveZ(child)) {
+		if (CoordinatesHaveZ(child, depth + 1)) {
 			return true;
 		}
 	}
@@ -289,7 +289,7 @@ bool GeometryHasZ(yyjson_val *val, const idx_t depth) {
 		}
 		return false;
 	}
-	return CoordinatesHaveZ(yyjson_obj_get(val, "coordinates"));
+	return CoordinatesHaveZ(yyjson_obj_get(val, "coordinates"), depth);
 }
 
 void WritePosition(WKBWriter &writer, yyjson_val *pos, const bool has_z, const char *context) {
