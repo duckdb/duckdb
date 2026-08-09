@@ -14,6 +14,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
+#include "duckdb/parallel/pipeline_dependency_set.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,11 @@ public:
 	bool convert_mark_to_semi = true;
 	//! Scans where we should push generated filters into (if any)
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
+
+	//! Shared dependency set for disjunctive OR join rewrite
+	shared_ptr<PipelineDependencySet> dep_set;
+	//! Is this join a branch in a disjunctive rewrite
+	bool is_disjunctive_branch = false;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

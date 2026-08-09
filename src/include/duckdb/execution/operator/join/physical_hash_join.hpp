@@ -71,8 +71,14 @@ public:
 	//! Mapping from lhs_output_columns positions to lhs_probe_columns positions
 	vector<idx_t> lhs_output_in_probe;
 
+	//! Shared dependency set for disjunctive OR join rewrite
+	shared_ptr<PipelineDependencySet> dep_set;
+	//! Is this join a branch in a disjunctive rewrite
+	bool is_disjunctive_branch = false;
+
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
 public:
 	// Operator Interface
@@ -137,6 +143,8 @@ private:
 	                             const vector<idx_t> &build_cols,
 	                             const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
 	                             unordered_map<idx_t, idx_t> &build_input_to_layout);
+
+	void BuildDisjunctiveJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op);
 };
 
 } // namespace duckdb

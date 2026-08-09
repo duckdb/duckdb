@@ -38,6 +38,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 
 namespace duckdb {
 
@@ -258,6 +259,59 @@ void PhysicalHashJoin::MapResidualBuildColumns(const vector<LogicalType> &lhs_in
 			payload_columns.col_idxs.push_back(rhs_idx);
 			payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
 		}
+	}
+}
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalHashJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+	if (dep_set && is_disjunctive_branch) {
+		BuildDisjunctiveJoinPipelines(current, meta_pipeline, *this);
+		return;
+	}
+
+	// Standard hash join pipeline construction
+	PhysicalJoin::BuildPipelines(current, meta_pipeline);
+}
+
+void PhysicalHashJoin::BuildDisjunctiveJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                                     PhysicalOperator &op) {
+	D_ASSERT(dep_set && is_disjunctive_branch);
+
+	op.op_state.reset();
+	op.sink_state.reset();
+
+	auto &state = meta_pipeline.GetState();
+	state.AddPipelineOperator(current, op);
+
+	// Save reference to probe pipeline
+	vector<shared_ptr<Pipeline>> pipelines_so_far;
+	meta_pipeline.GetPipelines(pipelines_so_far, false);
+	auto &probe_pipeline = *pipelines_so_far.back();
+	auto &last_pipeline = *pipelines_so_far.back();
+
+	// Create BUILD-side child pipeline (RHS)
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
+
+	child_meta_pipeline.Build(op.children[1]);
+
+	// Register build pipeline into shared dependency set
+	vector<shared_ptr<Pipeline>> build_pipes;
+	child_meta_pipeline.GetPipelines(build_pipes, false);
+
+	if (!build_pipes.empty()) {
+		dep_set->AddProducer(build_pipes[0]);
+	}
+
+	// Create PROBE-side pipeline (LHS)
+	op.children[0].get().BuildPipelines(current, meta_pipeline);
+
+	// Wire cross-branch dependencies
+	dep_set->MakeDependenciesOf(probe_pipeline);
+
+	// Handle RIGHT/FULL outer joins
+	if (op.Cast<PhysicalJoin>().IsSource()) {
+		meta_pipeline.CreateChildPipeline(current, op, last_pipeline);
 	}
 }
 
