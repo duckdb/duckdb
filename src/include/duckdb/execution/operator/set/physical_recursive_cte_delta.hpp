@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
 namespace duckdb {
