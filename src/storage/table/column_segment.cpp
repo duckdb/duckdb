@@ -482,7 +482,6 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}
-
 	auto &chunk = state.filter_chunk; // reused per call
 	if (chunk.data.empty()) {
 		chunk.data.emplace_back(Vector::Ref(vector));
@@ -492,7 +491,6 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	chunk.SetChildCardinality(scan_count);
 	const bool nested = vector.GetType().IsNested(); // nested evaluation needs explicit indices
 	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
-
 	const bool dense_pays = // the dense path rescans the whole vector, so it only pays while enough rows still survive;
 	    identity_all || (sel.IsSet() && DenseAutoVecPaysOff(approved_tuple_count, scan_count,
 	                                                        GetTypeIdSize(vector.GetType().InternalType())));
@@ -553,7 +551,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Table
 	sel.Initialize(result_sel.Flattened());
 	return result;
 }
-
 const CompressionFunction &ColumnSegment::GetCompressionFunction() {
 	return function.get();
 }

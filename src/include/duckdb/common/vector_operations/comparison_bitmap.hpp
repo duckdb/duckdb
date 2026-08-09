@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/autovec.hpp"
@@ -18,16 +17,13 @@
 #include <type_traits>
 
 namespace duckdb {
-
-// The fixed-width types the flat comparison-to-bitmap kernels handle: the predicate below and the
-// dispatch further down are both generated from this list, so they cannot drift apart.
+// Fixed-width types the flat compare kernels handle; the predicate and dispatch below are generated from this list.
 #define DUCKDB_BITMAP_CMP_TYPES(X)                                                                                     \
 	X(INT8, int8_t)                                                                                                    \
 	X(INT16, int16_t)                                                                                                  \
 	X(INT32, int32_t)                                                                                                  \
 	X(INT64, int64_t)                                                                                                  \
 	X(UINT8, uint8_t) X(UINT16, uint16_t) X(UINT32, uint32_t) X(UINT64, uint64_t) X(FLOAT, float) X(DOUBLE, double)
-
 inline bool BitmapCmpTypeSupported(PhysicalType pt) {
 	switch (pt) {
 #define DUCKDB_BITMAP_CMP_CASE(ENUM, TYPE) case PhysicalType::ENUM:
@@ -38,94 +34,34 @@ inline bool BitmapCmpTypeSupported(PhysicalType pt) {
 		return false;
 	}
 }
-
-DUCKDB_AUTOVEC_TARGET inline void AndValidityIntoBitmap(const validity_t *validity, idx_t count,
-                                                        validity_t *__restrict bitmap) {
+inline uint64_t ValidityBitsToBytes(uint8_t bits) { // 8 validity bits -> 8 bytes, byte i = bit i (little-endian)
+	const uint64_t lanes = (uint64_t(bits) * 0x0101010101010101ULL) & 0x8040201008040201ULL;
+	return ((lanes + 0x7F7F7F7F7F7F7F7FULL) >> 7) & 0x0101010101010101ULL;
+}
+DUCKDB_AUTOVEC_TARGET inline void AndValidityIntoBytemap(const validity_t *validity, idx_t count,
+                                                         uint8_t *__restrict bytemap) { // validity is bit-per-row
 	if (!validity) {
 		return;
 	}
-	const idx_t nwords = ValidityMask::EntryCount(count);
-	DUCKDB_UNROLL_LOOP
-	for (idx_t w = 0; w < nwords; w++) {
-		bitmap[w] &= validity[w];
+	for (idx_t i = 0; i < count; i += 8) {
+		uint64_t chunk;
+		std::memcpy(&chunk, bytemap + i, 8);
+		chunk &= ValidityBitsToBytes(uint8_t(validity[i / 64] >> (i & 63)));
+		std::memcpy(bytemap + i, &chunk, 8);
 	}
 }
-
-#if DUCKDB_AUTOVEC
+//! Compare into one 0/1 byte per row; the compiler narrows the compare lanes to bytes by itself.
 template <class T, class OP, bool COL>
-DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T constant) {
-	typedef T V __attribute__((vector_size(32))); // compare lanes become 0/-1 mask lanes
-	constexpr std::size_t LANES = 32 / sizeof(T);
-	V y {};
-	if constexpr (!COL) {
-		y = V {} + constant;
+DUCKDB_AUTOVEC_TARGET static inline void CmpToBytemap(const T *__restrict a, const T *__restrict b, T constant,
+                                                      idx_t count, uint8_t *__restrict bytemap) {
+	for (idx_t i = 0; i < count; i++) {
+		bytemap[i] = uint8_t(OP::Operation(a[i], COL ? b[i] : constant));
 	}
-	if constexpr (sizeof(T) == 1) {
-		V x;
-		std::memcpy(&x, a, 32);
-		if constexpr (COL) {
-			std::memcpy(&y, b, 32);
-		}
-		return MoveMask((duckdb_av_u8x32)OP::Apply(x, y));
-	} else if constexpr (sizeof(T) == 2) {
-		V x0, x1, y0 = y, y1 = y;
-		std::memcpy(&x0, a, 32);
-		std::memcpy(&x1, a + 16, 32);
-		if constexpr (COL) {
-			std::memcpy(&y0, b, 32);
-			std::memcpy(&y1, b + 16, 32);
-		}
-		return MoveMask((duckdb_av_u16x16)OP::Apply(x0, y0), (duckdb_av_u16x16)OP::Apply(x1, y1));
-	} else { // 4/8-byte lanes: one movemask per 32-byte vector, contributing LANES bits each
-		using M = typename std::conditional<sizeof(T) == 4, duckdb_av_u32x8, duckdb_av_u64x4>::type;
-		uint32_t mask = 0;
-		DUCKDB_UNROLL_LOOP
-		for (std::size_t k = 0; k < 32 / LANES; k++) {
-			V x, yk = y;
-			std::memcpy(&x, a + k * LANES, 32);
-			if constexpr (COL) {
-				std::memcpy(&yk, b + k * LANES, 32);
-			}
-			mask |= MoveMask((M)OP::Apply(x, yk)) << (k * LANES);
-		}
-		return mask;
-	}
+	std::memset(bytemap + count, 0, ((count + 63) & ~idx_t(63)) - count); // zero the tail: consumers read whole groups
 }
-
-#endif
-
-template <class T, class OP, bool COL>
-DUCKDB_AUTOVEC_TARGET static inline void CmpMaskToBitmap(const T *__restrict a, const T *__restrict b, T constant,
-                                                         idx_t count, validity_t *__restrict bitmap) {
-	idx_t i = 0;
-#if DUCKDB_AUTOVEC
-	for (; i + 64 <= count; i += 64) { // whole words via movemask
-		bitmap[i / 64] = validity_t(CmpMask32<T, OP, COL>(a + i, b + i, constant)) |
-		                 validity_t(CmpMask32<T, OP, COL>(a + i + 32, b + i + 32, constant)) << 32;
-	}
-#endif
-	for (; i < count; i += 64) { // remaining words scalar (all words when no autovec)
-		validity_t word = 0;
-		const idx_t n = count - i < 64 ? count - i : 64;
-		DUCKDB_UNROLL_LOOP
-		for (idx_t j = 0; j < n; j++) {
-			word |= validity_t(OP::Operation(a[i + j], COL ? b[i + j] : constant)) << j;
-		}
-		bitmap[i / 64] = word;
-	}
-}
-
 template <class T>
 struct CmpEq {
-	static inline bool Operation(T a, T b) {
-		if constexpr (std::is_floating_point<T>::value) {
-			return ((a != a) && (b != b)) || (a == b);
-		} else {
-			return a == b;
-		}
-	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
+	static inline bool Operation(T a, T b) { // bitwise, not short-circuit: the loop has to stay vectorizable
 		if constexpr (std::is_floating_point<T>::value) {
 			return ((a != a) & (b != b)) | (a == b); // total order: NaN == NaN
 		} else {
@@ -136,14 +72,6 @@ struct CmpEq {
 template <class T>
 struct CmpGt {
 	static inline bool Operation(T a, T b) {
-		if constexpr (std::is_floating_point<T>::value) {
-			return (b == b) && ((a != a) || (a > b));
-		} else {
-			return a > b;
-		}
-	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
 		if constexpr (std::is_floating_point<T>::value) {
 			return (b == b) & ((a != a) | (a > b)); // total order: NaN is largest
 		} else {
@@ -158,14 +86,6 @@ struct CmpAdapt {
 	static inline bool Operation(A a, A b) {
 		return NEGATE ^ (SWAP ? BASE::Operation(b, a) : BASE::Operation(a, b));
 	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
-		if constexpr (NEGATE) {
-			return ~(SWAP ? BASE::Apply(b, a) : BASE::Apply(a, b));
-		} else {
-			return SWAP ? BASE::Apply(b, a) : BASE::Apply(a, b);
-		}
-	}
 };
 template <class T>
 using CmpNe = CmpAdapt<CmpEq<T>, false, true>;
@@ -175,7 +95,6 @@ template <class T>
 using CmpGe = CmpAdapt<CmpGt<T>, true, true>;
 template <class T>
 using CmpLe = CmpAdapt<CmpGt<T>, false, true>;
-
 template <class T, class FN>
 inline void DispatchBitmapCmpOp(ExpressionType op, FN &&fn) { // one switch shared by const/col paths
 	switch (op) {
@@ -195,7 +114,6 @@ inline void DispatchBitmapCmpOp(ExpressionType op, FN &&fn) { // one switch shar
 		throw InternalException("Unsupported comparison for bitmap filter");
 	}
 }
-
 template <class FN>
 inline void DispatchBitmapType(PhysicalType pt, FN &&fn) {
 	switch (pt) {
@@ -208,14 +126,12 @@ inline void DispatchBitmapType(PhysicalType pt, FN &&fn) {
 		throw InternalException("Unsupported type for bitmap select");
 	}
 }
-
-//! Typed flat comparison into a bitmap. A null rdata_p selects the constant path, where get_const supplies the
-//! typed constant without a runtime cast; a null validity pointer means the side cannot be NULL.
+//! Typed flat comparison into the bytemap; a null rdata_p means the constant path, a null validity means no NULLs.
 template <class ConstGetter>
 DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t ldata_p,
                                                           const_data_ptr_t rdata_p, idx_t count,
                                                           const validity_t *lvalidity, const validity_t *rvalidity,
-                                                          validity_t *__restrict bitmap, ConstGetter get_const) {
+                                                          uint8_t *__restrict bytemap, ConstGetter get_const) {
 	DispatchBitmapType(pt, [&](auto tag) {
 		using T = decltype(tag);
 		const auto *ldata = reinterpret_cast<const T *>(ldata_p);
@@ -223,22 +139,19 @@ DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, Expre
 		const auto constant = get_const(tag);
 		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
 			if (rdata_p) { // one branch per dispatch, not per value
-				CmpMaskToBitmap<T, decltype(cmp), true>(ldata, rdata, constant, count, bitmap);
+				CmpToBytemap<T, decltype(cmp), true>(ldata, rdata, constant, count, bytemap);
 			} else {
-				CmpMaskToBitmap<T, decltype(cmp), false>(ldata, rdata, constant, count, bitmap);
+				CmpToBytemap<T, decltype(cmp), false>(ldata, rdata, constant, count, bytemap);
 			}
-			AndValidityIntoBitmap(lvalidity, count, bitmap);
-			AndValidityIntoBitmap(rvalidity, count, bitmap);
+			AndValidityIntoBytemap(lvalidity, count, bytemap);
+			AndValidityIntoBytemap(rvalidity, count, bytemap);
 		});
 	});
 }
-
-DUCKDB_AUTOVEC_TARGET inline idx_t BitmapPopcount(const validity_t *bitmap, idx_t count) { // count selected rows
-	const idx_t nwords = ValidityMask::EntryCount(count);
+DUCKDB_AUTOVEC_TARGET inline idx_t BitmapPopcount(const uint8_t *bytemap, idx_t count) { // count selected rows
 	idx_t total = 0;
-	DUCKDB_UNROLL_LOOP
-	for (idx_t w = 0; w < nwords; w++) {
-		total += CountOnes<validity_t>::Count(bitmap[w]);
+	for (idx_t i = 0; i < count; i++) {
+		total += bytemap[i];
 	}
 	return total;
 }

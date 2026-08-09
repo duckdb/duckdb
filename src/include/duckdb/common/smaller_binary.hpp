@@ -47,11 +47,9 @@
 // references it share a feature name, otherwise trimming produces an unused or undefined symbol.
 
 // --- autovec: auto-vectorization kernels (bit-unpacking, bitmap selections, widened-ISA loops) --
-
 #ifndef DUCKDB_SB_FEATURE_autovec
 #define DUCKDB_SB_FEATURE_autovec DUCKDB_SB_DEFAULT // group: autovec
 #endif
-
 // --- vector_specialization: bool-template specializations in the vectorized executors ----------
 
 #ifndef DUCKDB_SB_FEATURE_unary_executor_flat

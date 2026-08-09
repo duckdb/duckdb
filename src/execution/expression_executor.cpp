@@ -127,7 +127,6 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionResult &re
 	return Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, nullptr, nullptr,
 	              &result_sel);
 }
-
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
                                            optional_ptr<SelectionVector> false_sel,
                                            optional_ptr<SelectionVector> current_sel, idx_t current_count) {

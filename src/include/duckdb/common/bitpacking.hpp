@@ -24,9 +24,7 @@
 
 namespace duckdb_bitpacking {
 namespace internal {
-
 static constexpr const uint32_t BITPACKING_GROUP_SIZE = 32;
-
 template <class T>
 static inline T LoadWord(const T *DUCKDB_BITPACKING_RESTRICT p) {
 	T v;
@@ -37,7 +35,6 @@ template <class T>
 static inline void StoreWord(T *DUCKDB_BITPACKING_RESTRICT p, T v) {
 	std::memcpy(static_cast<void *>(p), &v, sizeof(T));
 }
-
 template <uint32_t WIDTH>
 static constexpr uint64_t Mask() {
 	if constexpr (WIDTH == 64) {
@@ -48,7 +45,6 @@ static constexpr uint64_t Mask() {
 		return (uint64_t(1) << WIDTH) - 1;
 	}
 }
-
 template <uint32_t WIDTH, class OUT_T, std::size_t INDEX>
 static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
                                OUT_T frame) {
@@ -83,15 +79,12 @@ static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 		out[INDEX] = OUT_T(OUT_T(value & mask) + frame);
 	}
 }
-
 template <uint32_t WIDTH, class OUT_T, std::size_t... I>
 static inline void UnpackBlockUnrolled(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
                                        OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame, std::index_sequence<I...>) {
-	// expand with in/out as restrict parameters: a [&] closure would lose the restrict
-	// qualification and force per-value reloads of the input words and frame
+	// in/out stay restrict parameters: a [&] closure would lose that and reload the words per value
 	(UnpackValue<WIDTH, OUT_T, I>(in, out, frame), ...);
 }
-
 template <uint32_t WIDTH, class OUT_T>
 static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
                                OUT_T frame = 0) {
@@ -111,7 +104,6 @@ static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 		UnpackBlockUnrolled<WIDTH, OUT_T>(in, out, frame, std::make_index_sequence<BITPACKING_GROUP_SIZE> {});
 	}
 }
-
 template <uint32_t WIDTH, class OUT_T>
 static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
                                 std::size_t groups, OUT_T frame = 0) {
@@ -127,7 +119,6 @@ static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, O
 		UnpackBlock<WIDTH, OUT_T>(in + group * WIDTH, out + group * BITPACKING_GROUP_SIZE, frame);
 	}
 }
-
 template <uint32_t WIDTH, class IN_T, std::size_t INDEX>
 static inline void PackValue(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
 	static_assert(WIDTH <= sizeof(IN_T) * 8, "Bitpacking width exceeds input type width");
@@ -145,14 +136,12 @@ static inline void PackValue(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t
 		}
 	}
 }
-
 template <uint32_t WIDTH, class IN_T, std::size_t... I>
 static inline void PackBlockUnrolled(const IN_T *DUCKDB_BITPACKING_RESTRICT in,
                                      uint32_t *DUCKDB_BITPACKING_RESTRICT out, std::index_sequence<I...>) {
 	// expanded like UnpackBlockUnrolled, for the same reason: a [&] closure would drop the restrict
 	(PackValue<WIDTH, IN_T, I>(in, out), ...);
 }
-
 template <uint32_t WIDTH, class IN_T>
 static inline void PackBlock(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
 	if constexpr (WIDTH == 0) {
@@ -165,7 +154,6 @@ static inline void PackBlock(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t
 		PackBlockUnrolled<WIDTH, IN_T>(in, out, std::make_index_sequence<BITPACKING_GROUP_SIZE> {});
 	}
 }
-
 template <uint32_t WIDTH, class IN_T>
 static inline void PackBuffer(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out,
                               std::size_t groups) {
@@ -173,7 +161,6 @@ static inline void PackBuffer(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_
 		PackBlock<WIDTH, IN_T>(in + group * BITPACKING_GROUP_SIZE, out + group * WIDTH);
 	}
 }
-
 template <class FUNC, std::size_t... W>
 static inline bool DispatchWidthImpl(uint32_t width, FUNC &&func, std::index_sequence<W...>) { // width -> template
 	return ((width == W && (func(std::integral_constant<uint32_t, uint32_t(W)> {}), true)) || ...);
@@ -187,10 +174,7 @@ static inline void DispatchWidth(uint32_t width, FUNC &&func) {
 }
 
 } // namespace internal
-
-//! Routes a runtime width to the compile-time kernel for T, invoking func with the width constant and
-//! a value of T's unsigned counterpart. Returns false for types without a fast path (hugeint), leaving
-//! the caller to fall back - make_unsigned is never formed for those, as the branch is discarded.
+//! Route a runtime width to T's compile-time kernel; false for types with no fast path (hugeint).
 template <class T, class FUNC>
 static inline bool DispatchIntegral(const uint32_t bit, FUNC &&func) {
 	if constexpr (std::is_integral<T>::value && !std::is_same<T, bool>::value) {
@@ -201,7 +185,6 @@ static inline bool DispatchIntegral(const uint32_t bit, FUNC &&func) {
 		return false;
 	}
 }
-
 template <class T>
 inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BITPACKING_RESTRICT out,
                         const uint32_t bit, const std::size_t groups) {
@@ -210,7 +193,6 @@ inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BIT
 		                                             reinterpret_cast<uint32_t *>(out), groups);
 	});
 }
-
 template <class T>
 inline bool TryFastUnpack(const void *DUCKDB_BITPACKING_RESTRICT in, T *DUCKDB_BITPACKING_RESTRICT out,
                           const uint32_t bit, const std::size_t groups, const T frame = 0) {
@@ -248,13 +230,11 @@ public:
 			reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
 		}
 	}
-
 	// To ensure enough data is available, use GetRequiredSize() to determine the correct size for dst buffer
-	// Note: input should be aligned to BITPACKING_ALGORITHM_GROUP_SIZE for good performance.
 	template <class T, bool ASSUME_INPUT_ALIGNED = false>
 	inline static void PackBuffer(data_ptr_t dst, T *src, idx_t count, bitpacking_width_t width) {
 		idx_t misaligned_count = 0;
-		if (!ASSUME_INPUT_ALIGNED) {
+		if (!ASSUME_INPUT_ALIGNED) { // input should be aligned to BITPACKING_ALGORITHM_GROUP_SIZE for good performance.
 			misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
 			count -= misaligned_count;
 		}
@@ -268,7 +248,6 @@ public:
 				                    reinterpret_cast<uint32_t *>(dst) + group * width, width);
 			}
 		}
-
 		// If the input was not aligned, pack the leftover values via a zero-padded group.
 		if (misaligned_count) {
 			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE] = {0};
@@ -335,11 +314,7 @@ public:
 	template <class T>
 	inline static T RoundUpToAlgorithmGroupSize(T num_to_round) {
 		int remainder = num_to_round % BITPACKING_ALGORITHM_GROUP_SIZE;
-		if (remainder == 0) {
-			return num_to_round;
-		}
-
-		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
+		return num_to_round + (remainder ? (BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder)) : 0);
 	}
 
 private:
@@ -352,14 +327,10 @@ private:
 			if (values[i] > max_value) {
 				max_value = values[i];
 			}
-
-			if (is_signed) {
-				if (values[i] < min_value) {
-					min_value = values[i];
-				}
+			if (values[i] < min_value && is_signed) {
+				min_value = values[i];
 			}
 		}
-
 		return FindMinimumBitWidth<T, is_signed, round_to_next_byte>(min_value, max_value);
 	}
 
@@ -367,50 +338,32 @@ private:
 	static bitpacking_width_t FindMinimumBitWidth(T min_value, T max_value) {
 		bitpacking_width_t bitwidth;
 		T value;
-
 		if (is_signed) {
 			if (min_value == NumericLimits<T>::Minimum()) {
-				// handle special case of the minimal value, as it cannot be negated like all other values.
-				return sizeof(T) * 8;
+				return sizeof(T) * 8; // special case: it cannot be negated like all other values.
 			} else {
 				value = MaxValue((T)-min_value, max_value);
 			}
 		} else {
 			value = max_value;
 		}
-
 		if (value == 0) {
 			return 0;
 		}
-
-		if (is_signed) {
-			bitwidth = 1;
-		} else {
-			bitwidth = 0;
-		}
-
-		while (value) {
-			bitwidth++;
+		for (bitwidth = (bitpacking_width_t)is_signed; value; bitwidth++) {
 			value >>= 1;
 		}
-
 		bitwidth = GetEffectiveWidth<T>(bitwidth);
-
-		// Assert results are correct
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (is_signed) {
 				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
-				// D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
 				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
 		}
 #endif
-		if (round_to_next_byte) {
-			return (bitwidth / 8 + (bitwidth % 8 != 0)) * 8;
-		}
-		return bitwidth;
+		return round_to_next_byte ? ((bitwidth / 8 + (bitwidth % 8 != 0)) * 8) : bitwidth;
 	}
 
 	// Sign bit extension

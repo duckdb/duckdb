@@ -24,10 +24,9 @@ struct ConjunctionState : public ExpressionState {
 		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	SelectionResult intersect_acc; // bitmap accumulator
-	SelectionResult intersect_tmp; // per-child scratch
-	bool bitmap_capable = false;   // at least one child can produce a bitmap
-	vector<bool> dense_child;      // cached per-child bitmap eligibility
+	SelectionResult intersect_acc, intersect_tmp; // bitmap accumulator & per-child scratch
+	bool bitmap_capable = false;                  // at least one child can produce a bitmap
+	vector<bool> dense_child;                     // cached per-child bitmap eligibility
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
@@ -100,26 +99,20 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			idx_t child_count =
 			    Select(child, child_state, current_sel, current_count, nullptr, nullptr, &state.intersect_tmp);
 			state.intersect_tmp.ToBitmap(child_count, count);
-			if (have_accumulator) {
-				if (dense && !narrow) { // a narrowed child already saw only the accumulator's survivors
-					result_count =
-					    is_and ? state.intersect_acc.Intersect(state.intersect_tmp, result_count, child_count, count)
-					           : state.intersect_acc.Union(state.intersect_tmp);
-				} else {
-					std::swap(state.intersect_acc, state.intersect_tmp);
-					result_count = child_count;
-				}
+			if (have_accumulator && dense && !narrow) { // a narrowed child already saw the accumulator's survivors
+				result_count =
+				    is_and ? state.intersect_acc.Intersect(state.intersect_tmp, result_count, child_count, count)
+				           : state.intersect_acc.Union(state.intersect_tmp);
 			} else {
 				std::swap(state.intersect_acc, state.intersect_tmp);
-				have_accumulator = true;
 				result_count = child_count;
 			}
+			have_accumulator = true;
 			if ((is_and && result_count == 0) || (!is_and && result_count == count)) {
 				break;
 			}
 		}
-		// bitmap_capable implies at least one dense child, and every early exit either clears the
-		// accumulator or leaves an empty (AND) / full (OR) result, so the accumulator is always usable here
+		// every early exit either clears the accumulator or leaves an empty (AND) / full (OR) result
 		if (have_accumulator) {
 			if (bitmap_sel) {
 				std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse

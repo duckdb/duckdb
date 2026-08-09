@@ -15,7 +15,6 @@ namespace duckdb {
 
 namespace {
 using SelectivityStats = SelectivityOptionalFilterState::SelectivityStats;
-
 // adaptive gate over the stats: false while active, otherwise records one skipped pause vector
 bool GateSkipsVector(SelectivityStats &stats) {
 	if (stats.IsActive()) {
@@ -25,7 +24,6 @@ bool GateSkipsVector(SelectivityStats &stats) {
 	return true;
 }
 } // namespace
-
 static unique_ptr<ExpressionFilterExecutor> TryCreateFastExecutor(const Expression &expression,
                                                                   bool inside_selectivity_optional);
 
@@ -58,13 +56,11 @@ ExpressionFilterState::~ExpressionFilterState() {
 bool ExpressionFilterState::ShouldSkip() {
 	return skip_gate && GateSkipsVector(skip_gate->stats);
 }
-
 void ExpressionFilterState::RecordSelectivity(idx_t accepted, idx_t processed) {
 	if (skip_gate) {
 		skip_gate->stats.Update(accepted, processed);
 	}
 }
-
 class ConjunctionAndFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	explicit ConjunctionAndFilterExecutor(vector<unique_ptr<ExpressionFilterExecutor>> children_p)

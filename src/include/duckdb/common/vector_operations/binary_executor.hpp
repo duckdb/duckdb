@@ -151,7 +151,6 @@ struct BinaryExecutor {
 			}
 		}
 	}
-
 	//! Widened clone of the flat loop; only called when CpuBenefitsFromAutoVec()
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>

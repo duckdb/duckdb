@@ -8,7 +8,6 @@
 namespace duckdb {
 
 namespace {
-
 bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 	if (!DUCKDB_AUTOVEC || !CpuBenefitsFromAutoVec()) { // fallback when widened kernels are unavailable
 		return false;
@@ -29,7 +28,6 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 }
 
 } // namespace
-
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// cached bitmap select shape
@@ -94,7 +92,6 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	auto &input_sel = DictionaryVector::SelVector(unary_input);
-
 	if (safe_autovec_arith && AutoVecCountPaysOff(args.size()) && // dense dictionary arithmetic
 	    input_dictionary_size <= STANDARD_VECTOR_SIZE &&
 	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {

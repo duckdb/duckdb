@@ -16,7 +16,7 @@ void SelectionVector::Flatten() const {
 	throw InternalException("bitmap selection vector in a build without autovec support");
 #else
 	auto keep = selection_data;
-	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
+	auto bm = reinterpret_cast<const uint8_t *>(keep->bitmap_data.get());
 	if (!keep->indices_cached) {
 		auto shared = keep;
 		SelectionVector target(std::move(shared));
@@ -33,7 +33,6 @@ void SelectionVector::Flatten() const {
 	capacity = keep->owned_data.GetSize() / sizeof(sel_t);
 #endif
 }
-
 SelectionData::SelectionData(idx_t count) {
 	owned_data = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
 #ifdef DEBUG

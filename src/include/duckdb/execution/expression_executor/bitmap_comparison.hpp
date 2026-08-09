@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/types/bitmap_selection_vector.hpp"
@@ -21,7 +20,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
-
 //! Extract the ref/constant (or ref/ref) shape of a comparison the bitmap kernels can evaluate
 inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonInfo &info) {
 	if (expr.IsVolatile() || expr.CanThrow() || !BoundComparisonExpression::IsComparison(expr)) {
@@ -35,7 +33,6 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 	auto &comparison = expr.Cast<BoundFunctionExpression>();
 	auto &left = BoundComparisonExpression::Left(comparison);
 	auto &right = BoundComparisonExpression::Right(comparison);
-
 	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
 	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		info.ref = &left.Cast<BoundReferenceExpression>();
@@ -69,7 +66,6 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 	const auto &value = info.constant->GetValue();
 	return !value.IsNull() && value.type().InternalType() == pt;
 }
-
 inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or conjunction of comparisons
 #if !DUCKDB_AUTOVEC
 	return false; // bitmap kernels are not compiled in
@@ -87,7 +83,6 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or c
 	return TryGetBitmapComparisonInfo(expr, info);
 #endif
 }
-
 #if DUCKDB_AUTOVEC
 // target attr: only reachable behind CpuBenefitsFromAutoVec(); lets the bitmap kernels inline here
 DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState &fstate, DataChunk &chunk,
@@ -95,6 +90,9 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState
                                                             SelectionResult *bitmap_sel, SelectionVector *true_sel,
                                                             SelectionVector *false_sel, idx_t &result) {
 	if (!AutoVecCountPaysOff(count)) { // sparse/small inputs stay on the classic select path
+		return false;
+	}
+	if (false_sel && !bitmap_sel) { // a false side needs the complement: leave it to the classic select
 		return false;
 	}
 	const auto &info = fstate.cmp_info;
@@ -116,7 +114,6 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState
 			return false;
 		}
 	}
-
 	const bool have_sel = sel && sel->IsSet();
 	const idx_t span = have_sel ? chunk.size() : count; // selected indices still span the chunk domain
 	if (span > STANDARD_VECTOR_SIZE) {                  // bitmap scratch is vector-sized
@@ -125,9 +122,8 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState
 	if (have_sel && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))) {
 		return false;
 	}
-
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : fstate.tmp_sel1; // true-side bitmap
-	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
+	auto t_bm = t.PrepareBitmap(span);
 	auto &lvalidity = FlatVector::Validity(col);
 	const validity_t *lvalidity_data = lvalidity.CanHaveNull() ? lvalidity.GetData() : nullptr;
 	const validity_t *rvalidity_data = nullptr;
@@ -142,19 +138,12 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState
 		                        using T = decltype(tag);
 		                        return col2 ? T(0) : info.constant->GetValue().GetValueUnsafe<T>();
 	                        });
-
-	const validity_t *sel_bm = nullptr;
 	if (have_sel) { // AND input selection into the comparison bitmap
 		fstate.tmp_sel2.Initialize(*sel);
 		fstate.tmp_sel2.ToBitmap(count, span);
-		sel_bm = fstate.tmp_sel2.Bitmap();
 		result = t.Intersect(fstate.tmp_sel2, span, count, span);
 	} else {
 		result = BitmapPopcount(t_bm, span);
-	}
-
-	if (false_sel && !bitmap_sel) { // false side is the complement, restricted to the input selection
-		BitmapToSelectionVector<true>(t_bm, span, *false_sel, sel_bm);
 	}
 	if (!bitmap_sel && true_sel) { // materialize only for plain selvec callers
 		BitmapToSelectionVector(t_bm, span, *true_sel);

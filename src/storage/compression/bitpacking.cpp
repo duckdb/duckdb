@@ -789,7 +789,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		auto remaining =
 		    MinValue<idx_t>(scan_count - scanned, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
 		idx_t to_scan = remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
-
 		if (offset_in_compression_group == 0 && to_scan > 0) {
 			// Decompress whole algorithm groups straight into the result, adding the frame inline
 			BitpackingPrimitives::UnPackBuffer<T>(

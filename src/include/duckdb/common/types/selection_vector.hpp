@@ -37,7 +37,6 @@ struct SelectionData {
 
 struct SelectionVector {
 	friend struct SelectionResult;
-
 	SelectionVector() : sel_vector(nullptr), capacity(0) {
 	}
 	explicit SelectionVector(sel_t *sel, idx_t capacity) {
@@ -182,7 +181,6 @@ public:
 	idx_t Capacity() const {
 		return capacity;
 	}
-
 	inline bool IsBitmap() const {
 		return selection_data && selection_data->is_bitmap && !sel_vector;
 	}
@@ -190,7 +188,6 @@ public:
 		return selection_data ? selection_data->row_span : 0;
 	}
 	void Flatten() const;
-
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 

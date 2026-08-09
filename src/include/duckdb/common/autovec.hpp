@@ -5,7 +5,6 @@
 //
 // Auto-vectorization helpers for bit-unpacking and bitmap materialization.
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/smaller_binary.hpp"
@@ -24,26 +23,21 @@
 #else
 #define DUCKDB_AUTOVEC 0
 #endif
-
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 #define DUCKDB_AUTOVEC_TARGET __attribute__((target("avx2"))) // widened x86 kernels
 #define DUCKDB_AUTOVEC_MUL16  1 // AVX2 has no per-lane 8/16-bit shifts: high-align 16-bit lanes via multiply
-// A loop body that a DUCKDB_AUTOVEC_TARGET wrapper must absorb to be compiled at the wrapper's ISA.
-#define DUCKDB_AUTOVEC_INLINE __attribute__((always_inline)) inline
+#define DUCKDB_AUTOVEC_INLINE __attribute__((always_inline)) inline // absorbed by a TARGET wrapper: same ISA
 #else
 #define DUCKDB_AUTOVEC_TARGET
 #define DUCKDB_AUTOVEC_MUL16  0 // NEON shifts every lane width: keep the cheaper shift/combine kernel
 #define DUCKDB_AUTOVEC_INLINE inline
 #endif
-
 #if defined(_MSC_VER)
 #define DUCKDB_BITPACKING_RESTRICT
 #else
 #define DUCKDB_BITPACKING_RESTRICT __restrict // MSVC cannot parse dependent __restrict pointers
 #endif
-
-// Pin the unroll factor of hot dense loops: ops without a vector instruction (e.g. 64-bit multiply
-// on NEON) otherwise compile to a minimal scalar loop whose throughput varies with code placement.
+// Pin the unroll of hot dense loops: ops with no vector instruction compile to a placement-sensitive scalar loop.
 #if defined(__clang__)
 #define DUCKDB_UNROLL_LOOP _Pragma("clang loop unroll_count(4)")
 #elif defined(__GNUC__)
@@ -53,7 +47,6 @@
 #endif
 
 namespace duckdb {
-
 inline bool CpuBenefitsFromAutoVec() {
 #if !DUCKDB_AUTOVEC
 	return false; // not compiled in
@@ -64,29 +57,20 @@ inline bool CpuBenefitsFromAutoVec() {
 	return enabled;
 #endif
 }
-
 inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width) {
 	return type_width && (selected * (32 / type_width) >= span); // 0-width (nested) payloads => no autovec
 }
-
 inline bool AutoVecCountPaysOff(size_t count) {
 	return count >= STANDARD_VECTOR_SIZE / 4; // widened-kernel entry overhead needs a reasonably full vector
 }
-
 #if DUCKDB_AUTOVEC
-
 typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));
-typedef uint8_t duckdb_av_u8x32 __attribute__((vector_size(32)));
 typedef uint16_t duckdb_av_u16x8 __attribute__((vector_size(16)));
-typedef uint16_t duckdb_av_u16x16 __attribute__((vector_size(32)));
 typedef uint32_t duckdb_av_u32x4 __attribute__((vector_size(16)));
 typedef uint32_t duckdb_av_u32x8 __attribute__((vector_size(32)));
 typedef uint64_t duckdb_av_u64x2 __attribute__((vector_size(16)));
 typedef uint64_t duckdb_av_u64x4 __attribute__((vector_size(32)));
-
-//! Gather the window byte of every lane, starting at the byte holding lane BASE. HI instead gathers
-//! the byte after each window: it carries the bits a lane whose field crosses its window is missing.
-//! w1 continues the window past 16 bytes (u64 widths >= 57); single-window callers pass w0 twice.
+//! Gather each lane's window byte from BASE on; HI takes the next byte; w1 continues the window past 16 bytes.
 template <class VEC, uint32_t WIDTH, uint32_t BASE, bool HI, std::size_t... I>
 DUCKDB_AUTOVEC_TARGET static inline VEC GatherImpl(duckdb_av_u8x16 w0, duckdb_av_u8x16 w1, std::index_sequence<I...>) {
 	constexpr std::size_t LB = sizeof(VEC {}[0]);
@@ -98,10 +82,7 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE, bool HI = false>
 DUCKDB_AUTOVEC_TARGET static inline VEC Gather(duckdb_av_u8x16 w0, duckdb_av_u8x16 w1) {
 	return GatherImpl<VEC, WIDTH, BASE, HI>(w0, w1, std::make_index_sequence<sizeof(VEC)> {});
 }
-
-//! Per-lane constants, all derived from that lane's in-byte offset r = ((BASE + K) * WIDTH) % 8.
-//! HI_MUL is 2^(LANEBITS-WIDTH-r): a multiply is the only per-lane left shift that 16-bit lanes have
-//! (no vpsllvw/vpsrlvw on x86), and it lands each field on its lane's high edge.
+//! Per-lane constants from offset r = ((BASE+K)*WIDTH)%8; HI_MUL = 2^(LANEBITS-WIDTH-r), 16-bit lanes' only shift.
 enum class LaneOp : uint8_t { LO_SHIFT, HI_SHIFT, HI_MUL };
 template <LaneOp OP, uint32_t LANEBITS, uint32_t WIDTH>
 static constexpr uint64_t LaneVal(uint32_t r) { // r stays a parameter: HI_MUL's shift is negative when unused
@@ -122,7 +103,6 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE, LaneOp OP>
 DUCKDB_AUTOVEC_TARGET static inline VEC LaneConsts() {
 	return LaneConstsImpl<VEC, WIDTH, BASE, OP>(std::make_index_sequence<sizeof(VEC) / sizeof(VEC {}[0])> {});
 }
-
 //! Does any lane's value spill past its lane after the in-byte shift?
 template <class VEC, uint32_t WIDTH, uint32_t BASE>
 static constexpr bool ShuffleLaneCrosses() {
@@ -134,11 +114,7 @@ static constexpr bool ShuffleLaneCrosses() {
 	}
 	return false;
 }
-
-//! One decode kernel for every width: gather at the value byte, shift unless byte-aligned,
-//! OR in the crossing byte where a lane spills (overlapping bits are identical), mask, add frame.
-//! 16-bit lanes instead multiply to the lane's high edge and shift back down by a uniform amount,
-//! which zero-fills and so needs no mask; lanes whose field outgrows them decode a lane size up.
+//! One kernel per width: gather at the value byte, shift unless byte-aligned, OR the crossing byte, mask, add frame.
 template <class VEC, uint32_t WIDTH, uint32_t BASE>
 DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleDecode(duckdb_av_u8x16 w0, duckdb_av_u8x16 w1, VEC frame) {
 	constexpr uint32_t LANEBITS = 8 * sizeof(VEC {}[0]);
@@ -160,7 +136,6 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE>
 DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleDecode(duckdb_av_u8x16 w, VEC frame) { // window fits one register
 	return ShuffleDecode<VEC, WIDTH, BASE>(w, w, frame);
 }
-
 //! Two-register window for u64 widths 57..63: the pair window exceeds 16 bytes.
 template <uint32_t WIDTH, uint32_t BASE>
 DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u64x2 ShuffleDecode64x2(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
@@ -171,14 +146,12 @@ DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u64x2 ShuffleDecode64x2(const uint
 	std::memcpy(&w1, base + WBYTE + 16, 16);
 	return ShuffleDecode<duckdb_av_u64x2, WIDTH, BASE>(w0, w1, frame);
 }
-
 template <uint32_t WIDTH, class OUT_T>
 static constexpr bool UseShuffleUnpack() { // u32 at width 31 would need a second window register;
 	                                       // past u64 width 60 the two-register gather loses to the scalar loop
 	return WIDTH > 0 && WIDTH < 8 * sizeof(OUT_T) && !(sizeof(OUT_T) == 4 && WIDTH == 31) &&
 	       (sizeof(OUT_T) != 8 || WIDTH <= 60);
 }
-
 template <uint32_t WIDTH, class OUT_T>
 DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
                                                               OUT_T *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups,
@@ -306,73 +279,6 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 		return shuffle_groups;
 	}
 }
-
-#if !defined(__x86_64__)
-// Portable MoveMask: weight each lane by its bit position, then fold the lanes together.
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMaskReduce(duckdb_av_u32x8 v) {
-	uint32_t buf[8];
-	std::memcpy(buf, &v, 32);
-	return (buf[0] | buf[1]) | (buf[2] | buf[3]) | ((buf[4] | buf[5]) | (buf[6] | buf[7]));
-}
-template <class V, std::size_t... K>
-DUCKDB_AUTOVEC_TARGET inline V MoveMaskWeights(std::index_sequence<K...>) { // byte lanes wrap per 32-bit group
-	return V {static_cast<decltype(V {}[0])>(1ull << (K % (sizeof(V {}[0]) == 1 ? 4 : 64)))...};
-}
-#endif
-
-// MoveMask packs lane comparison bits into a bitmap word.
-template <class V>
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(V v) {
-	constexpr std::size_t LANE = sizeof(V {}[0]);
-	static_assert(LANE == 1 || LANE == 4 || LANE == 8, "16-bit lanes use the two-vector MoveMask");
-#if defined(__x86_64__)
-	if constexpr (LANE == 1) {
-		typedef char duckdb_av_c8x32 __attribute__((vector_size(32)));
-		return static_cast<uint32_t>(__builtin_ia32_pmovmskb256((duckdb_av_c8x32)v));
-	} else if constexpr (LANE == 4) {
-		typedef float duckdb_av_f32x8 __attribute__((vector_size(32)));
-		return static_cast<uint32_t>(__builtin_ia32_movmskps256((duckdb_av_f32x8)v));
-	} else {
-		typedef double duckdb_av_f64x4 __attribute__((vector_size(32)));
-		return static_cast<uint32_t>(__builtin_ia32_movmskpd256((duckdb_av_f64x4)v));
-	}
-#else
-	const V w = MoveMaskWeights<V>(std::make_index_sequence<sizeof(V) / LANE> {}); // portable lane weights
-	if constexpr (LANE == 1) {
-		duckdb_av_u32x8 m = (duckdb_av_u32x8)(v & w);
-		m = m | (m >> 16);
-		m = (m | (m >> 8)) & 0xF;
-		m <<= duckdb_av_u32x8 {0, 4, 8, 12, 16, 20, 24, 28};
-		return MoveMaskReduce(m);
-	} else if constexpr (LANE == 4) {
-		return MoveMaskReduce(v & w);
-	} else {
-		auto m = v & w;
-		m |= __builtin_shufflevector(m, m, 2, 3, 2, 3);
-		m |= __builtin_shufflevector(m, m, 1, 1, 1, 1);
-		return static_cast<uint32_t>(m[0]);
-	}
-#endif
-}
-
-DUCKDB_AUTOVEC_TARGET inline uint32_t MoveMask(duckdb_av_u16x16 lo, duckdb_av_u16x16 hi) {
-#if defined(__x86_64__)
-	typedef short duckdb_av_s16x16 __attribute__((vector_size(32)));
-	typedef char duckdb_av_c8x32 __attribute__((vector_size(32)));
-	// 16-bit lanes to bytes
-	auto packed = (duckdb_av_u64x4)__builtin_ia32_packsswb256((duckdb_av_s16x16)lo, (duckdb_av_s16x16)hi);
-	auto fixed = (duckdb_av_c8x32)__builtin_shufflevector(packed, packed, 0, 2, 1, 3);
-	return static_cast<uint32_t>(__builtin_ia32_pmovmskb256(fixed));
-#else
-	const duckdb_av_u16x16 w = MoveMaskWeights<duckdb_av_u16x16>(std::make_index_sequence<16> {});
-	duckdb_av_u32x8 a0 = (duckdb_av_u32x8)(lo & w);
-	duckdb_av_u32x8 a1 = (duckdb_av_u32x8)(hi & w);
-	a0 |= a0 >> 16;
-	a1 |= a1 >> 16;
-	return MoveMaskReduce((a0 & 0xFFFF) | (a1 << 16));
-#endif
-}
-
 #endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb

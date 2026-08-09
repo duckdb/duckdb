@@ -144,7 +144,6 @@ private:
 			}
 		}
 	}
-
 	//! Widened clone of the flat loop; only called when CpuBenefitsFromAutoVec()
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	DUCKDB_AUTOVEC_TARGET static void
@@ -153,7 +152,6 @@ private:
 		ExecuteFlatBody<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, mask, result_mask, data,
 		                                                        adds_nulls);
 	}
-
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,

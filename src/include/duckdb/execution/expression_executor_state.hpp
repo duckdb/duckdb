@@ -30,7 +30,6 @@ struct BitmapComparisonInfo {
 	optional_ptr<const BoundReferenceExpression> ref2;
 	ExpressionType op;
 };
-
 struct ExpressionState {
 	ExpressionState(const Expression &expr, ExpressionExecutorState &root);
 	virtual ~ExpressionState() {

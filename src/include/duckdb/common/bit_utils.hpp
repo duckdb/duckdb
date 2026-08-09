@@ -23,7 +23,6 @@ struct CountZeros {};
 
 template <class T>
 struct CountOnes {};
-
 template <>
 struct CountZeros<uint64_t> {
 	// see here: https://en.wikipedia.org/wiki/De_Bruijn_sequence
@@ -95,7 +94,6 @@ struct CountOnes<uint64_t> {
 #endif
 	}
 };
-
 template <>
 struct CountZeros<hugeint_t> {
 	inline static idx_t Leading(hugeint_t value) {
