@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_recursive_cte_key_join.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
@@ -126,6 +127,9 @@ public:
 	}
 
 private:
+	template <bool COLLECT_METRICS>
+	OperatorResultType ExecuteInternal(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
+	                                   RecursiveCTEState &recursive_state);
 	void BindHashTable(GroupedAggregateHashTable &hash_table);
 	RecursiveCTEKeyJoinResult ProbeCompleteKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
 	                                           RecursiveCTEState &recursive_state);
@@ -235,7 +239,6 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &
 		matched_address_data[match_idx] = lookup_addresses[lookup_idx];
 	}
 	FlatVector::SetSize(matched_addresses, match_count);
-	hash_table.GatherGroups(lookup_state, found_key_sel, match_count, state_keys);
 	return {match_count, OperatorResultType::NEED_MORE_INPUT};
 }
 
@@ -247,6 +250,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 	auto &index = recursive_state.GetPartialKeyIndex(state_key_indices);
 	auto &match_chunk_state = hash_table_state->match_chunk_state;
 	auto &partial_matcher = hash_table_state->partial_matcher;
+	const auto collect_metrics = recursive_state.GetMetrics().Enabled();
 	if (!partial_input_initialized) {
 		probe_keys.Reset();
 		for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
@@ -261,7 +265,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		non_null_position = 0;
 		active_probe = false;
 		partial_input_initialized = true;
-		if (recursive_state.GetMetrics().Enabled()) {
+		if (collect_metrics) {
 			recursive_state.GetMetrics().RecordDirectProbeRows(non_null_count);
 		}
 	}
@@ -276,6 +280,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		hash_table_state->partial_matcher_initialized = true;
 	}
 
+	idx_t chain_visits = 0;
 	while (true) {
 		idx_t candidate_count = 0;
 		candidate_addresses.SetVectorType(VectorType::FLAT_VECTOR);
@@ -296,8 +301,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			}
 			const auto &entry = index.GetEntry(current_entry);
 			current_entry = entry.next;
-			if (recursive_state.GetMetrics().Enabled()) {
-				recursive_state.GetMetrics().RecordPartialProbeChainVisit();
+			if (collect_metrics) {
+				chain_visits++;
 			}
 			if (entry.hash != hash_data[current_probe_input].GetValue()) {
 				continue;
@@ -310,6 +315,9 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		}
 		const bool has_more = active_probe || non_null_position < non_null_count;
 		if (candidate_count == 0) {
+			if (collect_metrics) {
+				recursive_state.GetMetrics().RecordPartialProbeChainVisits(chain_visits);
+			}
 			partial_input_initialized = false;
 			return {0, OperatorResultType::NEED_MORE_INPUT};
 		}
@@ -333,6 +341,9 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			continue;
 		}
 		if (match_count == 0) {
+			if (collect_metrics) {
+				recursive_state.GetMetrics().RecordPartialProbeChainVisits(chain_visits);
+			}
 			partial_input_initialized = false;
 			return {0, OperatorResultType::NEED_MORE_INPUT};
 		}
@@ -345,9 +356,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			matched_address_data[match_idx] = candidate_address_data[candidate_idx];
 		}
 		FlatVector::SetSize(matched_addresses, match_count);
-		recursive_state.GetHashTable().GatherGroups(hash_table_state->lookup_state, matched_addresses,
-		                                            *FlatVector::IncrementalSelectionVector(), match_count, state_keys);
-		if (recursive_state.GetMetrics().Enabled()) {
+		if (collect_metrics) {
+			recursive_state.GetMetrics().RecordPartialProbeChainVisits(chain_visits);
 			recursive_state.GetMetrics().RecordDirectProbeMatches(match_count);
 		}
 		if (!has_more) {
@@ -401,18 +411,62 @@ void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, c
 	output.CheckCardinality(match_count);
 }
 
-OperatorResultType RecursiveCTEKeyJoinState::Execute(DataChunk &input, DataChunk &output,
-                                                     const RecursiveCTEKeyJoinLayout &layout,
-                                                     RecursiveCTEState &recursive_state) {
+template <bool COLLECT_METRICS>
+OperatorResultType RecursiveCTEKeyJoinState::ExecuteInternal(DataChunk &input, DataChunk &output,
+                                                             const RecursiveCTEKeyJoinLayout &layout,
+                                                             RecursiveCTEState &recursive_state) {
+	const auto lookup_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	BindHashTable(recursive_state.GetHashTable());
 	auto result = layout.IsPartial() ? ProbePartialKey(input, layout, recursive_state)
 	                                 : ProbeCompleteKey(input, layout, recursive_state);
+	if constexpr (COLLECT_METRICS) {
+		const auto lookup_end = std::chrono::steady_clock::now();
+		recursive_state.GetEpochMetrics().RecordDirectProbeLookup(NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(lookup_end - lookup_start).count()));
+	}
 	if (result.match_count == 0) {
 		return result.result_type;
 	}
-	FinalizePayload(layout, recursive_state, result.match_count);
+	const auto gather_start =
+	    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	if (layout.IsPartial()) {
+		recursive_state.GetHashTable().GatherGroups(hash_table_state->lookup_state, matched_addresses,
+		                                            *FlatVector::IncrementalSelectionVector(), result.match_count,
+		                                            state_keys);
+	} else {
+		recursive_state.GetHashTable().GatherGroups(hash_table_state->lookup_state, found_key_sel, result.match_count,
+		                                            state_keys);
+	}
+	if constexpr (COLLECT_METRICS) {
+		const auto gather_end = std::chrono::steady_clock::now();
+		recursive_state.GetEpochMetrics().RecordDirectProbeKeyGather(NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(gather_end - gather_start).count()));
+	}
+	if constexpr (COLLECT_METRICS) {
+		if (!layout.PayloadTypes().empty()) {
+			const auto finalize_start = std::chrono::steady_clock::now();
+			FinalizePayload(layout, recursive_state, result.match_count);
+			const auto finalize_end = std::chrono::steady_clock::now();
+			recursive_state.GetEpochMetrics().RecordDirectProbePayloadFinalize(NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(finalize_end - finalize_start).count()));
+		} else {
+			FinalizePayload(layout, recursive_state, result.match_count);
+		}
+	} else {
+		FinalizePayload(layout, recursive_state, result.match_count);
+	}
 	EmitResult(input, output, layout, result.match_count);
 	return result.result_type;
+}
+
+OperatorResultType RecursiveCTEKeyJoinState::Execute(DataChunk &input, DataChunk &output,
+                                                     const RecursiveCTEKeyJoinLayout &layout,
+                                                     RecursiveCTEState &recursive_state) {
+	if (recursive_state.GetMetrics().Enabled()) {
+		return ExecuteInternal<true>(input, output, layout, recursive_state);
+	}
+	return ExecuteInternal<false>(input, output, layout, recursive_state);
 }
 
 OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,

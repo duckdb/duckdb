@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
@@ -25,6 +26,8 @@ enum class RecursiveCTESourcePhase : uint8_t {
 	DRAINING_FINAL_KEY_STATE,
 	FINISHED
 };
+
+enum class RecursiveCTEPipelineMetricType : uint8_t { RECURSIVE, INVARIANT_BUILD, INVARIANT_CTE_MATERIALIZATION };
 
 //! Epoch-stable secondary index over a proper subset of USING KEY columns.
 class RecursiveCTEPartialKeyIndex {
@@ -58,13 +61,16 @@ private:
 };
 
 struct RecursiveCTEScheduleStage {
-	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p)
-	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), dependency_count(0) {
+	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p,
+	                          RecursiveCTEPipelineMetricType metric_type_p)
+	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), metric_type(metric_type_p),
+	      dependency_count(0) {
 	}
 
 	PipelineScheduleStageType type;
 	reference<Pipeline> pipeline;
 	bool has_source_tasks;
+	RecursiveCTEPipelineMetricType metric_type;
 	vector<idx_t> dependents;
 	idx_t dependency_count;
 };
@@ -78,6 +84,64 @@ struct RecursiveCTEPipelineSchedulePlan {
 	bool source_tasks_write_recursive_output = false;
 };
 
+struct RecursiveCTEMetricDistribution {
+	static constexpr idx_t BIT_COUNT = sizeof(idx_t) * 8;
+	static constexpr idx_t BUCKET_COUNT = BIT_COUNT + 1;
+
+	void Add(idx_t value);
+	idx_t MedianUpperBound() const;
+
+	array<idx_t, BUCKET_COUNT> buckets {};
+	idx_t count = 0;
+	idx_t maximum = 0;
+};
+
+struct RecursiveCTEEpochMetrics {
+	void Record(idx_t frontier_rows, idx_t workers, idx_t tasks, idx_t elapsed_us, idx_t frontier_storage_bytes,
+	            idx_t frontier_allocation_bytes);
+	void RecordDirectProbeLookup(idx_t elapsed_ns);
+	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
+	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
+	void RecordKeyedHashCommit(idx_t elapsed_ns);
+	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
+	void RecordRecurringScan(idx_t elapsed_ns);
+	void RecordFinalStateDrain(idx_t elapsed_ns);
+	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
+	void RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns);
+
+	RecursiveCTEMetricDistribution frontier_rows;
+	RecursiveCTEMetricDistribution workers;
+	RecursiveCTEMetricDistribution tasks;
+	RecursiveCTEMetricDistribution elapsed_us;
+	idx_t frontier_storage_byte_epochs = 0;
+	idx_t peak_frontier_storage_bytes = 0;
+	idx_t frontier_allocation_byte_epochs = 0;
+	idx_t peak_frontier_allocation_bytes = 0;
+	atomic<idx_t> direct_probe_lookup_work_ns {0};
+	atomic<idx_t> direct_probe_key_gather_work_ns {0};
+	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
+	atomic<idx_t> keyed_hash_commit_work_ns {0};
+	atomic<idx_t> partial_index_maintenance_work_ns {0};
+	atomic<idx_t> recurring_scan_work_ns {0};
+	atomic<idx_t> final_state_drain_work_ns {0};
+	atomic<idx_t> distinct_grouping_work_ns {0};
+	atomic<idx_t> distinct_candidate_rows {0};
+	atomic<idx_t> distinct_inserted_rows {0};
+	atomic<idx_t> recursive_pipeline_execute_work_ns {0};
+	atomic<idx_t> invariant_build_execute_work_ns {0};
+	atomic<idx_t> invariant_cte_materialization_execute_work_ns {0};
+};
+
+struct RecursiveCTELogIdentity {
+	RecursiveCTELogIdentity(PhysicalOperatorType operator_type_p, idx_t invocation_id_p)
+	    : operator_type(operator_type_p), invocation_id(invocation_id_p) {
+	}
+
+	PhysicalOperatorType operator_type;
+	vector<pair<string, string>> operator_parameters;
+	idx_t invocation_id;
+};
+
 class RecursiveCTEMetrics {
 public:
 	RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op);
@@ -86,14 +150,15 @@ public:
 		return enabled;
 	}
 	void RecordTasks(idx_t count);
+	idx_t TaskCount() const;
 	void RecordEpoch(idx_t workers, idx_t elapsed_us, idx_t frontier_rows, idx_t frontier_chunks,
-	                 idx_t frontier_storage_bytes);
+	                 idx_t scheduler_input_rows);
 	void RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows);
 	void RecordHashRows(idx_t rows);
 	void RecordRecurringScanRows(idx_t rows);
 	void RecordDirectProbeRows(idx_t rows);
 	void RecordDirectProbeMatches(idx_t rows);
-	void RecordPartialProbeChainVisit();
+	void RecordPartialProbeChainVisits(idx_t count);
 	void RecordPartialIndexBuild(idx_t elapsed_us);
 	void RecordFinalStateRows(idx_t rows);
 	void RecordRetainedBuild();
@@ -101,9 +166,10 @@ public:
 	void RecordRetainedCTEReuse();
 	void LogDistinctPromotion(idx_t partitions, idx_t migrated_rows, idx_t elapsed_us) const;
 	void Log(const vector<unique_ptr<RecursiveCTEPartialKeyIndex>> &partial_key_indexes) const;
+	void LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const;
 
 private:
-	const PhysicalRecursiveCTE &op;
+	unique_ptr<RecursiveCTELogIdentity> identity;
 	shared_ptr<Logger> logger;
 	bool enabled;
 	idx_t epochs = 0;
@@ -112,7 +178,7 @@ private:
 	idx_t elapsed_us = 0;
 	idx_t frontier_rows = 0;
 	idx_t frontier_chunks = 0;
-	idx_t frontier_storage_bytes = 0;
+	idx_t scheduler_input_rows = 0;
 	atomic<idx_t> sink_wait_ns {0};
 	atomic<idx_t> sink_work_ns {0};
 	atomic<idx_t> sink_rows {0};
@@ -188,6 +254,10 @@ public:
 	const RecursiveCTEMetrics &GetMetrics() const {
 		return metrics;
 	}
+	RecursiveCTEEpochMetrics &GetEpochMetrics() {
+		D_ASSERT(epoch_metrics);
+		return *epoch_metrics;
+	}
 	RecursiveCTESchedulerState &GetScheduler() {
 		return scheduler;
 	}
@@ -214,6 +284,8 @@ public:
 	}
 
 private:
+	template <bool COLLECT_METRICS>
+	void CommitUsingKeyUpdatesInternal();
 	unique_ptr<GroupedAggregateHashTable> ht;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
@@ -247,8 +319,12 @@ private:
 	bool use_local_union_all_output = true;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
+	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active
+	unique_ptr<RecursiveCTEEpochMetrics> epoch_metrics;
 
 	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
+	template <bool COLLECT_METRICS>
+	SourceResultType GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk);
 	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk);
 	void InitializeIntermediateAppend();
 	ColumnDataCollection &CurrentOutputTable();
