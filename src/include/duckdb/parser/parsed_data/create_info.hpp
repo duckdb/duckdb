@@ -81,6 +81,9 @@ public:
 	//! Renders the qualified name for ToString - the catalog is omitted for temporary entries and the default schema is
 	//! hidden
 	DUCKDB_API string QualifiedNameToString() const;
+	//! Drop the catalog component from the qualified name, keeping the (possibly nested) schema path. Use this before
+	//! rendering an entry that lives in a catalog: its catalog is implied by where the statement is run.
+	DUCKDB_API void StripCatalogQualification();
 
 public:
 	void Serialize(Serializer &serializer) const override;

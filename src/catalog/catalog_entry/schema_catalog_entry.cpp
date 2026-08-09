@@ -70,6 +70,12 @@ vector<Identifier> SchemaCatalogEntry::GetSchemaPath() const {
 	return path;
 }
 
+QualifiedName SchemaCatalogEntry::GetQualifiedName(const Identifier &entry_name) const {
+	auto path = GetSchemaPath();
+	path.insert(path.begin(), catalog.GetName());
+	return QualifiedName(std::move(path), entry_name);
+}
+
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	result->SetQualifiedName(QualifiedName({name}, Identifier()));
@@ -80,6 +86,7 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 
 string SchemaCatalogEntry::ToSQL() const {
 	auto create_schema_info = GetInfo();
+	create_schema_info->StripCatalogQualification();
 	return create_schema_info->ToString();
 }
 

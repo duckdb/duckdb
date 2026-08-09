@@ -160,7 +160,6 @@ struct VariantUtils {
 
 struct VariantBindUtils {
 	DUCKDB_API static unique_ptr<FunctionData> VariantPathBind(BindScalarFunctionInput &input);
-	DUCKDB_API static bool GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg);
 };
 
 } // namespace duckdb

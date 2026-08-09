@@ -752,3 +752,10 @@ TEST_CASE("Test creating DUCKDB_ERROR_INTERNAL error data", "[capi]") {
 	REQUIRE(error_data);
 	duckdb_destroy_error_data(&error_data);
 }
+
+TEST_CASE("Test creating DUCKDB_ERROR_DATA_CORRUPTION error data", "[capi]") {
+	auto error_data = duckdb_create_error_data(DUCKDB_ERROR_DATA_CORRUPTION, "corrupt");
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_error_type(error_data) == DUCKDB_ERROR_DATA_CORRUPTION);
+	duckdb_destroy_error_data(&error_data);
+}

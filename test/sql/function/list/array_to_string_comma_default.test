@@ -49,4 +49,4 @@ SELECT array_to_string_comma_default([i, i + 1], sep:='-') FROM range(6) t(i) WH
 statement error
 SELECT array_to_string_comma_default([1, 2, 3], sep:=k) FROM repeat(',', 5) t(k)
 ----
-Separator argument to StringAgg must be a constant
+must be a constant expression

@@ -283,13 +283,19 @@
         "id": 202,
         "name": "collection",
         "type": "optionally_owned_ptr<ColumnDataCollection>"
+      },
+      {
+        "id": 203,
+        "name": "column_ids",
+        "type": "vector<column_t>"
       }
     ],
     "constructor": [
       "table_index",
       "chunk_types",
       "collection"
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LogicalDelimGet",
@@ -855,6 +861,12 @@
         "id": 208,
         "name": "old_row_columns",
         "type": "vector<idx_t>"
+      },
+      {
+        "id": 209,
+        "name": "row_id_handling",
+        "type": "RowIdHandling",
+        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [
@@ -1177,6 +1189,24 @@
     ],
     "constructor": [
       "info"
+    ]
+  },
+  {
+    "class": "LogicalExternalResource",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTERNAL_RESOURCE",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "BoundExternalResource"
+      }
+    ],
+    "constructor": [
+      "data"
     ]
   },
   {

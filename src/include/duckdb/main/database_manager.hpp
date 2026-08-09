@@ -64,7 +64,7 @@ public:
 	Catalog &GetSystemCatalog();
 
 	static Identifier GetDefaultDatabase(ClientContext &context);
-	void SetDefaultDatabase(ClientContext &context, const string &new_value);
+	void SetDefaultDatabase(ClientContext &context, const Identifier &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);

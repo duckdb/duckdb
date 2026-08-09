@@ -35,9 +35,8 @@ static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entrie
 		}
 		auto create_info = entry.get().GetInfo();
 		try {
-			// Strip the catalog from the info
-			create_info->SetQualifiedName(QualifiedName(Identifier(), create_info->GetQualifiedName().Schema(),
-			                                            create_info->GetQualifiedName().Name()));
+			// the catalog is implied by the database the export is imported into - keep only the schema path
+			create_info->StripCatalogQualification();
 			auto to_string = create_info->ToString();
 			ss << to_string;
 		} catch (const NotImplementedException &) {
@@ -60,12 +59,11 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 	ss << "COPY ";
 
 	//! NOTE: The catalog is explicitly not set here
-	if (exported_table.qualified_name.Schema() != DEFAULT_SCHEMA && !exported_table.qualified_name.Schema().empty()) {
-		ss << SQLIdentifier(exported_table.qualified_name.Schema()) << ".";
-	}
-
+	auto table_name = exported_table.qualified_name;
+	table_name.StripCatalog();
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
-	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.qualified_name.Name()), SQLString(file_path));
+	ss << StringUtil::Format("%s FROM %s (", table_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA),
+	                         SQLString(file_path));
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {

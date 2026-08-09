@@ -59,7 +59,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->SetQualifiedName(QualifiedName(table.catalog.GetName(), table.schema.name, table.name));
+	alias_table_ref->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -167,7 +167,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 		schema_path.push_back(default_entry.GetSchema());
 	} else if (schema_path.empty()) {
 		// a catalog was given but no schema: use the catalog's default schema
-		schema_path.push_back(Identifier(search_path->GetDefaultSchema(context, catalog)));
+		schema_path.push_back(search_path->GetDefaultSchema(context, catalog));
 	} else if (IsInvalidCatalog(catalog)) {
 		// a schema was given but no catalog: resolve the catalog that holds it
 		catalog = Identifier(search_path->GetDefaultCatalog(schema_path[0]));
@@ -192,6 +192,13 @@ void Binder::SearchSchema(CreateInfo &info) {
 }
 
 QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog) {
+	CatalogEntryRetriever retriever(context);
+	return ResolveCatalog(retriever, name, default_catalog);
+}
+
+QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const QualifiedName &name,
+                                     bool default_catalog) {
+	auto &context = retriever.GetContext();
 	auto path = name.Path();
 	if (path.empty()) {
 		return name;
@@ -204,7 +211,7 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 		// a single qualifier ("x.name"): x may be a schema, or a catalog - and if it names both it is ambiguous
 		Identifier candidate;
 		Identifier first = path[0];
-		BindSchemaOrCatalog(context, candidate, first);
+		BindSchemaOrCatalog(retriever, candidate, first);
 		if (!candidate.empty()) {
 			catalog = std::move(candidate);
 			path.erase(path.begin());
@@ -221,15 +228,42 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 	}
 	if (default_catalog && IsInvalidCatalog(catalog)) {
 		// the leading component (if any) is a schema - resolve the catalog that holds it, else the default database
-		auto &search_path = ClientData::Get(context).catalog_search_path;
+		auto &search_path = retriever.GetSearchPath();
 		catalog =
-		    path.empty() ? search_path->GetDefault().GetCatalog() : Identifier(search_path->GetDefaultCatalog(path[0]));
+		    path.empty() ? search_path.GetDefault().GetCatalog() : Identifier(search_path.GetDefaultCatalog(path[0]));
 		if (IsInvalidCatalog(catalog)) {
 			catalog = DatabaseManager::GetDefaultDatabase(context);
 		}
 	}
 	path.insert(path.begin(), std::move(catalog));
 	return QualifiedName(std::move(path), std::move(trailing));
+}
+
+QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name) {
+	auto resolved = ResolveCatalog(retriever, name, false);
+	auto &path = resolved.Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	if (schema_path.size() <= 1) {
+		// unqualified, or qualified with a single schema level: keep the (catalog, schema, name) shape so that the
+		// regular search-path based lookup applies
+		return QualifiedName(path.front(), schema_path.empty() ? Identifier() : schema_path[0], resolved.Name());
+	}
+	// a nested schema path was given - resolve the catalog holding the outermost schema so that the resulting
+	// [catalog, schema path..., name] is fully qualified
+	auto catalog = path.front();
+	if (IsInvalidCatalog(catalog)) {
+		catalog = Identifier(retriever.GetSearchPath().GetDefaultCatalog(schema_path[0]));
+		if (IsInvalidCatalog(catalog)) {
+			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
+		}
+	}
+	schema_path.insert(schema_path.begin(), std::move(catalog));
+	return QualifiedName(std::move(schema_path), resolved.Name());
+}
+
+QualifiedName Binder::BindTableName(const QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	return BindTableName(retriever, name);
 }
 
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
@@ -296,7 +330,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->SetCanContainNulls(true);
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();
@@ -323,6 +357,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
 		    t == QueryNodeType::DELETE_QUERY_NODE) {
 			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
+		if (t == QueryNodeType::COPY_QUERY_NODE) {
+			throw BinderException("COPY statements are not allowed as CTE bodies inside a VIEW");
 		}
 	}
 	optional_ptr<LogicalDependencyList> dependencies;
@@ -597,9 +634,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	auto &table = *table_ptr;
 
-	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.SetQualifiedName(
-	    QualifiedName(table.catalog.GetName(), table.schema.name, create_trigger_info.GetQualifiedName().Name()));
+	// Trigger inherits the catalog and the (possibly nested) schema from the base table
+	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -615,6 +651,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
 			throw BinderException(msg);
 		}
+	}
+
+	if (create_trigger_info.timing == TriggerTiming::INSTEAD_OF) {
+		throw NotImplementedException("INSTEAD OF triggers are not yet supported");
 	}
 
 	// Validate UPDATE OF columns exist
@@ -795,10 +835,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
-		// Plan the table scan.
-		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(),
-		                                                 create_index_info.GetQualifiedName().Schema(),
-		                                                 create_index_info.table));
+		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
+		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);

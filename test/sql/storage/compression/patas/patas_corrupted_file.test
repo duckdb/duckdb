@@ -16,4 +16,4 @@ Patas
 statement error
 SELECT * FROM temperatures_double LIMIT 1;
 ----
-IO Error: Corrupted Patas segment: invalid backward reference
+Data Corruption Error: Corrupted Patas segment: invalid backward reference

@@ -88,21 +88,21 @@ TEST_CASE("Test move children", "[arrow]") {
 	Connection conn(db);
 	auto initial_result = conn.Query(query);
 	auto client_properties = conn.context->GetClientProperties();
-	auto types = initial_result->types;
-	auto names = initial_result->names;
+	auto types = initial_result->GetTypes();
+	auto names = IdentifiersToStrings(initial_result->GetNames());
 
 	// Scan every column
 	ArrowStreamParameters parameters;
-	for (idx_t idx = 0; idx < initial_result->names.size(); idx++) {
+	for (idx_t idx = 0; idx < names.size(); idx++) {
 		auto col_idx = idx;
-		auto &name = initial_result->names[idx];
+		auto &name = names[idx];
 		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
 			parameters.projected_columns.projection_map[idx] = name;
 			parameters.projected_columns.columns.emplace_back(name);
 		}
 	}
-	auto res_names = initial_result->names;
-	auto res_types = initial_result->types;
+	auto res_names = names;
+	auto res_types = types;
 	auto res_properties = initial_result->client_properties;
 
 	// Create a test factory and produce a stream from it

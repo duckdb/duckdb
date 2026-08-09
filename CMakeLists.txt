@@ -107,8 +107,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(DUCKDB_LINKER "mold")
+if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_program(DUCKDB_MOLD_LINKER mold)
+  if(DUCKDB_MOLD_LINKER)
+    set(DUCKDB_LINKER "mold")
+  endif()
 endif()
 
 if (DUCKDB_LINKER)
@@ -118,11 +121,25 @@ if (DUCKDB_LINKER)
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   if(CMAKE_BUILD_TYPE STREQUAL "Release" AND DUCKDB_LINKER STREQUAL "mold")
-    set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+    # --icf=safe was introduced in mold 1.1; older mold (e.g. the 1.0.3 shipped in Ubuntu 22.04)
+    # aborts the link with "mold: unknown --icf argument: safe". Probe the version and only enable
+    # identical code folding when the linker actually supports it.
+    execute_process(COMMAND ${DUCKDB_LINKER} --version OUTPUT_VARIABLE DUCKDB_MOLD_VERSION_OUTPUT ERROR_QUIET)
+    if(DUCKDB_MOLD_VERSION_OUTPUT MATCHES "mold ([0-9]+\\.[0-9]+(\\.[0-9]+)?)")
+      set(DUCKDB_MOLD_VERSION "${CMAKE_MATCH_1}")
+      if(DUCKDB_MOLD_VERSION VERSION_GREATER_EQUAL "1.1")
+        set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+      else()
+        set(DUCKDB_LINKER_MESSAGE
+            "${DUCKDB_LINKER_MESSAGE} (mold ${DUCKDB_MOLD_VERSION} too old for --icf=safe, skipping ICF)")
+      endif()
+    else()
+      set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} (could not determine mold version, skipping ICF)")
+    endif()
   endif()
   message(STATUS "${DUCKDB_LINKER_MESSAGE}")
 endif()
@@ -380,7 +397,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
-  set(VERSIONING_TAG_MATCH "v*.*.0")
+  set(VERSIONING_TAG_MATCH "v*.*.0*")
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
@@ -418,7 +435,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
+set(DUCKDB_BASE_VERSION_REGEX "^v[0-9]+[.][0-9]+[.][0-9]+")
+set(DUCKDB_PRERELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}-(alpha|rc)[0-9]+$")
+set(DUCKDB_RELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}$")
+set(DUCKDB_FULL_DESCRIBE_REGEX "${DUCKDB_BASE_VERSION_REGEX}(-(alpha|rc)[0-9]+)?-[0-9]+-g[a-f0-9]+$")
+
+if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
   if (DUCKDB_EXPLICIT_VERSION)
     if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
       message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' and DUCKDB_EXPLICIT_PLATFORM '${DUCKDB_EXPLICIT_PLATFORM}' are both set and different")
@@ -428,60 +450,49 @@ if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
 endif()
 
 if (OVERRIDE_GIT_DESCRIBE)
-  if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
-    string(REGEX REPLACE "^(v[0-9]+\.[0-9]+\.[0-9]+)\-.*" "\\1" OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
-    find_package(Git)
-    if(Git_FOUND)
-      execute_process(
-            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
-            OUTPUT_VARIABLE GIT_COMMIT_HASH
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g${GIT_COMMIT_HASH}")
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
-          set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g0123456789")
+  find_package(Git)
+  if (Git_FOUND AND NOT DEFINED GIT_COMMIT_HASH)
+    execute_process(
+          COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_HASH_RESULT
+          OUTPUT_VARIABLE GIT_COMMIT_HASH
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_HASH_RESULT)
+      unset(GIT_COMMIT_HASH)
+      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
     endif()
-    else()
-      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g0123456789")
-    endif()
-  elseif (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+  endif()
+
+  if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_FULL_DESCRIBE_REGEX}")
     set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
-  elseif(OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
-    find_package(Git)
-    if(Git_FOUND)
-      execute_process(
-            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
-            OUTPUT_VARIABLE GIT_COMMIT_HASH
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
-          set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
-    endif()
-    else()
-      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
-    endif()
   else()
-    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z' or prerelease like 'vX.Y.Z-alphaW' or 'vX.Y.Z-rcW")
+    if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
+      string(REGEX REPLACE "^(${DUCKDB_BASE_VERSION_REGEX}).*" "\\1" OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
+    elseif(OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_RELEASE_VERSION_REGEX}")
+      set(OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
+    else()
+      message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or 'vX.Y.Z-alphaW-N-gGITHASH123', version only 'vX.Y.Z' or prerelease like 'vX.Y.Z-alphaW' or 'vX.Y.Z-rcW")
+    endif()
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      set(GIT_COMMIT_HASH "0123456789")
+    endif()
+    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g${GIT_COMMIT_HASH}")
   endif()
 else()
   find_package(Git)
   if(Git_FOUND)
-     if (NOT DEFINED GIT_COMMIT_HASH)
-     execute_process(
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
+            RESULT_VARIABLE GIT_HASH_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
-          set(GIT_COMMIT_HASH "0123456789")
-    endif()
+      if (GIT_HASH_RESULT)
+        unset(GIT_COMMIT_HASH)
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
+      endif()
     endif()
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}"
@@ -495,24 +506,31 @@ else()
       else()
         message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
       endif()
+      if (NOT DEFINED GIT_COMMIT_HASH)
+        set(GIT_COMMIT_HASH "0123456789")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
     message(WARNING "Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
-    set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      set(GIT_COMMIT_HASH "0123456789")
+    endif()
+    set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
   endif()
 endif()
 
-if (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+if (NOT GIT_DESCRIBE MATCHES "^v([0-9]+)\.([0-9]+)\.([0-9]+)(\-(alpha|rc)[0-9]+)?\-([0-9]+)\-g([a-f0-9]+)$")
   message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
 endif()
 
-string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+set(DUCKDB_MAJOR_VERSION "${CMAKE_MATCH_1}")
+set(DUCKDB_MINOR_VERSION "${CMAKE_MATCH_2}")
+set(DUCKDB_PATCH_VERSION "${CMAKE_MATCH_3}")
+set(DUCKDB_SUFFIX_VERSION "${CMAKE_MATCH_4}")
+set(DUCKDB_DEV_ITERATION "${CMAKE_MATCH_6}")
 if (NOT DEFINED GIT_COMMIT_HASH)
-  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+  set(GIT_COMMIT_HASH "${CMAKE_MATCH_7}")
 endif()
 
 set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
@@ -529,10 +547,12 @@ if(DUCKDB_EXPLICIT_VERSION)
   set(DUCKDB_VERSION "${DUCKDB_EXPLICIT_VERSION}")
 elseif(DUCKDB_DEV_ITERATION EQUAL 0)
   # on a tag; directly use the version
-  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+  set(DUCKDB_VERSION
+      "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}${DUCKDB_SUFFIX_VERSION}")
 else()
-  # not on a tag, increment the patch version by one and add a -devX suffix
-  if(${MAIN_BRANCH_VERSIONING})
+  # not on a tag, add a -devX suffix and bump non-prerelease tags
+  if(DUCKDB_SUFFIX_VERSION)
+  elseif(${MAIN_BRANCH_VERSIONING})
     math(EXPR DUCKDB_MINOR_VERSION "${DUCKDB_MINOR_VERSION}+1")
   else()
     math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
@@ -594,7 +614,8 @@ option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
-option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
+set(SMALLER_BINARY "" CACHE STRING "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance. Set to ON/1 to trim everything, or to a comma-separated list of feature or group names. Use 'list' to print the available names.")
+set(SMALLER_BINARY_EXCEPT "" CACHE STRING "Feature or group names to keep, subtracted from SMALLER_BINARY.")
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(ENABLE_JEMALLOC "Enable jemalloc as the memory allocator (only on supported platforms)" TRUE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
@@ -712,8 +733,85 @@ if (CLANG_TIDY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
 endif()
 
-if (SMALLER_BINARY)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SMALLER_BINARY")
+# Parse the feature registry in smaller_binary.hpp, which is the single source of truth for both
+# the feature names and their group membership.
+set(SB_REGISTRY_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/include/duckdb/common/smaller_binary.hpp")
+file(STRINGS "${SB_REGISTRY_HEADER}" SB_REGISTRY_LINES REGEX "^#define DUCKDB_SB_FEATURE_")
+set(SB_ALL_FEATURES "")
+set(SB_ALL_GROUPS "")
+foreach(SB_LINE ${SB_REGISTRY_LINES})
+  if(NOT SB_LINE MATCHES "^#define DUCKDB_SB_FEATURE_([A-Za-z0-9_]+) +DUCKDB_SB_DEFAULT.*// *group: *([A-Za-z0-9_]+)")
+    message(FATAL_ERROR "Malformed entry in ${SB_REGISTRY_HEADER}: ${SB_LINE}")
+  endif()
+  list(APPEND SB_ALL_FEATURES "${CMAKE_MATCH_1}")
+  list(APPEND SB_ALL_GROUPS "${CMAKE_MATCH_2}")
+  list(APPEND SB_GROUP_${CMAKE_MATCH_2} "${CMAKE_MATCH_1}")
+endforeach()
+list(REMOVE_DUPLICATES SB_ALL_GROUPS)
+
+# Expands feature names, group names and the 'all' alias into a flat list of feature names.
+function(sb_resolve_names OUT_VAR OPTION_NAME)
+  set(SB_RESULT "")
+  string(REPLACE "," ";" SB_NAMES "${ARGN}")
+  foreach(SB_NAME ${SB_NAMES})
+    string(STRIP "${SB_NAME}" SB_NAME)
+    if(SB_NAME STREQUAL "")
+      continue()
+    elseif(SB_NAME STREQUAL "all")
+      list(APPEND SB_RESULT ${SB_ALL_FEATURES})
+    elseif(SB_NAME IN_LIST SB_ALL_FEATURES)
+      list(APPEND SB_RESULT "${SB_NAME}")
+    elseif(SB_NAME IN_LIST SB_ALL_GROUPS)
+      list(APPEND SB_RESULT ${SB_GROUP_${SB_NAME}})
+    else()
+      string(REPLACE ";" ", " SB_FEATURE_HELP "${SB_ALL_FEATURES}")
+      string(REPLACE ";" ", " SB_GROUP_HELP "${SB_ALL_GROUPS}")
+      message(FATAL_ERROR "Unknown ${OPTION_NAME} name '${SB_NAME}'.\n"
+                          "  groups:   all, ${SB_GROUP_HELP}\n"
+                          "  features: ${SB_FEATURE_HELP}")
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES SB_RESULT)
+  set(${OUT_VAR} "${SB_RESULT}" PARENT_SCOPE)
+endfunction()
+
+if(SMALLER_BINARY STREQUAL "list")
+  string(REPLACE ";" "\n    " SB_FEATURE_HELP "${SB_ALL_FEATURES}")
+  string(REPLACE ";" "\n    " SB_GROUP_HELP "${SB_ALL_GROUPS}")
+  message(FATAL_ERROR "SMALLER_BINARY groups:\n    all\n    ${SB_GROUP_HELP}\n"
+                      "SMALLER_BINARY features:\n    ${SB_FEATURE_HELP}")
+endif()
+
+if(SMALLER_BINARY)
+  if(SMALLER_BINARY MATCHES "^(1|ON|On|on|TRUE|True|true|YES|Yes|yes|Y|y)$")
+    set(SB_ENABLED ${SB_ALL_FEATURES})
+  else()
+    sb_resolve_names(SB_ENABLED "SMALLER_BINARY" "${SMALLER_BINARY}")
+  endif()
+  if(SMALLER_BINARY_EXCEPT)
+    sb_resolve_names(SB_EXCEPT "SMALLER_BINARY_EXCEPT" "${SMALLER_BINARY_EXCEPT}")
+    list(REMOVE_ITEM SB_ENABLED ${SB_EXCEPT})
+  endif()
+elseif(SMALLER_BINARY_EXCEPT)
+  message(FATAL_ERROR "SMALLER_BINARY_EXCEPT is set but SMALLER_BINARY is not")
+else()
+  set(SB_ENABLED "")
+endif()
+
+if(SB_ENABLED)
+  # Emit the umbrella when everything is trimmed, otherwise flip on the requested features one by
+  # one. The registry entries are #ifndef-guarded, so these -D flags win over the defaults.
+  list(LENGTH SB_ENABLED SB_ENABLED_COUNT)
+  list(LENGTH SB_ALL_FEATURES SB_TOTAL_COUNT)
+  if(SB_ENABLED_COUNT EQUAL SB_TOTAL_COUNT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SMALLER_BINARY_ALL")
+  else()
+    foreach(SB_FEATURE ${SB_ENABLED})
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SB_FEATURE_${SB_FEATURE}=DUCKDB_SB_ON")
+    endforeach()
+  endif()
+  string(REPLACE ";" ", " SB_ENABLED_MSG "${SB_ENABLED}")
+  message(STATUS "Smaller binary: trimming ${SB_ENABLED_COUNT}/${SB_TOTAL_COUNT} features (${SB_ENABLED_MSG})")
 endif()
 
 if(FORCE_ASSERT)
@@ -880,9 +978,16 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   # write a temporary file
   file(WRITE ${temp_unit_build_file} "// Unity Build generated by CMake\n")
   foreach(source_file ${files})
+    # Include relative to the ub file's own directory (not an absolute source
+    # path), so the generated unity source is byte-identical regardless of the
+    # checkout location. This lets ccache/sccache share objects between
+    # different working copies (e.g. git worktrees) instead of missing on the
+    # embedded absolute path.
+    file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
+         ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
     file(
       APPEND ${temp_unit_build_file}
-      "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+      "#include \"${rel_source_file}\"\n"
     )
   endforeach(source_file)
 
@@ -905,9 +1010,11 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   if(${rebuild})
     file(WRITE ${unit_build_file} "// Unity Build generated by CMake\n")
     foreach(source_file ${files})
+      file(RELATIVE_PATH rel_source_file ${CMAKE_CURRENT_BINARY_DIR}
+           ${CMAKE_CURRENT_SOURCE_DIR}/${source_file})
       file(
         APPEND ${unit_build_file}
-        "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+        "#include \"${rel_source_file}\"\n"
       )
     endforeach(source_file)
   endif()

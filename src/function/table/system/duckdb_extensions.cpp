@@ -35,7 +35,7 @@ struct DuckDBExtensionsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("extension_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
