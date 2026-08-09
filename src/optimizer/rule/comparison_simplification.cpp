@@ -172,6 +172,14 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
+		// Narrowing between integer types loses information even when CastIsInvertible allows it
+		// (e.g. INTEGER -> TINYINT: not every INTEGER value fits in a TINYINT).
+		if (target_type.IsIntegral() && cast_expression.GetReturnType().IsIntegral()) {
+			if (Value::MinimumValue(target_type) < Value::MinimumValue(cast_expression.GetReturnType()) ||
+				Value::MaximumValue(target_type) > Value::MaximumValue(cast_expression.GetReturnType())) {
+        		return nullptr;
+			}
+		}
 
 		// Can we cast the constant at all?
 		string error_message;
