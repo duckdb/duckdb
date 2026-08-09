@@ -349,6 +349,24 @@ NULL	P	3	1	0
 NULL	NULL	6	1	1
 
 statement ok
+CREATE TABLE distinct_rewrite_last(id INTEGER, x INTEGER);
+
+statement ok
+INSERT INTO distinct_rewrite_last VALUES (1, 1), (2, 2), (3, 1);
+
+# the last distinct value differs from the last row's value, so the DISTINCT modifier is kept
+query I
+SELECT last(DISTINCT x) FROM distinct_rewrite_last;
+----
+2
+
+# first()/any_value() return the same value with or without DISTINCT, so the rewrite still applies
+query II
+SELECT first(DISTINCT x), any_value(DISTINCT x) FROM distinct_rewrite_last;
+----
+1	1
+
+statement ok
 PRAGMA disable_verification
 
 statement ok
