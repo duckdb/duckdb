@@ -97,7 +97,7 @@ struct BinaryExecutor {
 #if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	DUCKDB_AUTOVEC_TARGET static void
+	DUCKDB_AUTOVEC_INLINE static void
 	ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
@@ -150,6 +150,16 @@ struct BinaryExecutor {
 				    fun, lentry, rentry, mask, i);
 			}
 		}
+	}
+
+	//! Widened clone of the flat loop; only called when CpuBenefitsFromAutoVec()
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
+	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	DUCKDB_AUTOVEC_TARGET static void
+	ExecuteFlatLoopWide(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                    RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
+		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
+		    ldata, rdata, result_data, count, mask, fun);
 	}
 #endif
 
@@ -218,17 +228,10 @@ struct BinaryExecutor {
 			}
 		}
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-		// the flat loop carries the widened-ISA target: pre-AVX2 CPUs and small counts take the generic loop
-		if (!CpuBenefitsFromAutoVec() || !AutoVecCountPaysOff(count)) {
-			SelectionVector owned_lzero, owned_rzero;
-			auto lsel = LEFT_CONSTANT ? ConstantVector::ZeroSelectionVector(count, owned_lzero)
-			                          : FlatVector::IncrementalSelectionVector();
-			auto rsel = RIGHT_CONSTANT ? ConstantVector::ZeroSelectionVector(count, owned_rzero)
-			                           : FlatVector::IncrementalSelectionVector();
-			const ValidityMask all_valid;
-			ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
-			    ldata, rdata, result_data, lsel, rsel, count, LEFT_CONSTANT ? all_valid : FlatVector::Validity(left),
-			    RIGHT_CONSTANT ? all_valid : FlatVector::Validity(right), result_validity, fun);
+		// pre-AVX2 CPUs and small counts run the same loop at the baseline ISA
+		if (CpuBenefitsFromAutoVec() && AutoVecCountPaysOff(count)) {
+			ExecuteFlatLoopWide<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
+			    ldata, rdata, result_data, count, result_validity, fun);
 			return;
 		}
 #endif

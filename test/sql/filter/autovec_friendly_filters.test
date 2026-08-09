@@ -2,288 +2,115 @@
 # description: Test bitmap-backed scan filters on thin integer columns
 # group: [filter]
 
-statement ok
-CREATE TABLE autovec_filter_t(
-	i8 TINYINT,
-	i16 SMALLINT,
-	i32 INTEGER,
-	i64 BIGINT,
-	u8 UTINYINT,
-	u16 USMALLINT,
-	u32 UINTEGER,
-	u64 UBIGINT
-);
+# Every bitmap/autovec path is gated on AutoVecCountPaysOff(count) - i.e. count >= STANDARD_VECTOR_SIZE / 4 -
+# so all tables here are >= 512 rows. The row counts are deliberately not multiples of 64 (and cross a vector
+# boundary) so the scalar tail word in CmpMaskToBitmap and the (row_span + 63) / 64 word loops are exercised.
+
+# ---- Every supported width x every comparison operator ----
+# <numeric> also covers HUGEINT/UHUGEINT, which the bitmap kernels do not support: those must decline and
+# fall back, and must still produce identical results.
+foreach type <numeric>
 
 statement ok
-INSERT INTO autovec_filter_t
-SELECT
-	i::TINYINT,
-	(i * 10)::SMALLINT,
-	(i * 100)::INTEGER,
-	(i * 1000)::BIGINT,
-	(i + 3)::UTINYINT,
-	(i + 30)::USMALLINT,
-	(i + 300)::UINTEGER,
-	(i + 3000)::UBIGINT
-FROM range(-3, 6) tbl(i);
+CREATE OR REPLACE TABLE av AS SELECT (i % 101)::{type} v, (i % 7)::{type} w FROM range(3000) tbl(i);
 
 statement ok
-INSERT INTO autovec_filter_t VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO av VALUES (NULL, NULL);
 
-query I
-SELECT i8 FROM autovec_filter_t WHERE i8 = 0
+# =, <>, >, >=, constant on the left, <=, empty selection, full selection, col-col >, col-col =,
+# IS [NOT] DISTINCT FROM a non-null constant (takes the bitmap path as plain equality),
+# IS [NOT] DISTINCT FROM NULL and col-col IS NOT DISTINCT FROM (both must decline and fall back)
+query IIIIIIIIIIIIIII
+SELECT (SELECT count(*) FROM av WHERE v = 50),   (SELECT count(*) FROM av WHERE v <> 50),
+       (SELECT count(*) FROM av WHERE v > 50),   (SELECT count(*) FROM av WHERE v >= 50),
+       (SELECT count(*) FROM av WHERE 50 > v),   (SELECT count(*) FROM av WHERE v <= 50),
+       (SELECT count(*) FROM av WHERE v > 100),  (SELECT count(*) FROM av WHERE v >= 0),
+       (SELECT count(*) FROM av WHERE v > w),    (SELECT count(*) FROM av WHERE v = w),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM 50),
+       (SELECT count(*) FROM av WHERE v IS DISTINCT FROM 50),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM NULL),
+       (SELECT count(*) FROM av WHERE v IS DISTINCT FROM NULL),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM w)
 ----
-0
+30	2970	1470	1500	1500	1530	0	3000	2877	35	30	2971	1	3000	36
 
-query I
-SELECT i16 FROM autovec_filter_t WHERE i16 != 0 ORDER BY i16
-----
--30
--20
--10
-10
-20
-30
-40
-50
+endloop
 
-query I
-SELECT i32 FROM autovec_filter_t WHERE i32 > 200 ORDER BY i32
-----
-300
-400
-500
-
-query I
-SELECT i64 FROM autovec_filter_t WHERE i64 >= 3000 ORDER BY i64
-----
-3000
-4000
-5000
-
-query I
-SELECT i8 FROM autovec_filter_t WHERE 0 < i8 ORDER BY i8
-----
-1
-2
-3
-4
-5
-
-query I
-SELECT i8 FROM autovec_filter_t WHERE i8 <= -1 ORDER BY i8
-----
--3
--2
--1
-
-query I
-SELECT u8 FROM autovec_filter_t WHERE u8 < 3 ORDER BY u8
-----
-0
-1
-2
-
-query I
-SELECT i32 FROM autovec_filter_t WHERE i32 > -200 AND i32 < 300 ORDER BY i32
-----
--100
-0
-100
-200
-
-query I
-SELECT i32 FROM autovec_filter_t WHERE i32 > -200 AND i64 < 3000 ORDER BY i32
-----
--100
-0
-100
-200
-
-query I
-SELECT i32 FROM autovec_filter_t WHERE i32 < -100 OR i64 >= 4000 ORDER BY i32
-----
--300
--200
-400
-500
-
-query I
-SELECT i32 FROM autovec_filter_t WHERE 0 > i32 OR i32 > 300 ORDER BY i32
-----
--300
--200
--100
-400
-500
-
-# nested conjunctions in the bitmap path: AND-of-OR and OR-of-AND
-query I
-SELECT i32 FROM autovec_filter_t WHERE (i32 < -100 OR i32 > 300) AND i64 >= 0 ORDER BY i32
-----
-400
-500
-
-query I
-SELECT i32 FROM autovec_filter_t WHERE (i32 > 0 AND i32 < 300) OR i64 <= -2000 ORDER BY i32
-----
--300
--200
-100
-200
+# ---- Negative values: the compare lanes must stay signed (an unsigned compare would order these wrongly) ----
+foreach type <signed> FLOAT DOUBLE
 
 statement ok
-CREATE TABLE autovec_arith_t(a INTEGER, b INTEGER, k INTEGER);
+CREATE OR REPLACE TABLE sv AS SELECT ((i % 101) - 50)::{type} v FROM range(3000) tbl(i);
+
+query IIIIII
+SELECT (SELECT count(*) FROM sv WHERE v < 0),   (SELECT count(*) FROM sv WHERE v > 0),
+       (SELECT count(*) FROM sv WHERE v = -50), (SELECT count(*) FROM sv WHERE v >= -50),
+       (SELECT count(*) FROM sv WHERE v <= -1), (SELECT count(*) FROM sv WHERE -50 < v)
+----
+1500	1470	30	3000	1500	2970
+
+endloop
+
+# ---- float/double bitmap comparisons, incl. DuckDB's NaN total order (NaN == NaN, NaN > everything) ----
+# These branches live only in CmpEq::Apply / CmpGt::Apply, so they need a table big enough to reach the kernel.
+foreach type FLOAT DOUBLE
 
 statement ok
-INSERT INTO autovec_arith_t SELECT i::INTEGER, (i * 2)::INTEGER, i::INTEGER FROM range(10) tbl(i);
+CREATE OR REPLACE TABLE fl AS SELECT CASE i % 8
+	WHEN 0 THEN '-inf' WHEN 1 THEN '-1' WHEN 2 THEN '-0.0' WHEN 3 THEN '0'
+	WHEN 4 THEN '1' WHEN 5 THEN 'inf' WHEN 6 THEN 'nan' END::{type} f
+FROM range(3000) tbl(i);
 
-query III
-SELECT sum(a + b), sum(a - b), sum(a * b) FROM autovec_arith_t WHERE k >= 3 AND k < 7
+# f = 0 also pins -0.0 == 0.0; only NaN matches = / >= against a NaN literal, and nothing is > NaN
+query IIIIIIIIIII
+SELECT (SELECT count(*) FROM fl WHERE f > 1),  (SELECT count(*) FROM fl WHERE f >= 1),
+       (SELECT count(*) FROM fl WHERE f < 1),  (SELECT count(*) FROM fl WHERE f = 0),
+       (SELECT count(*) FROM fl WHERE f <> 0),
+       (SELECT count(*) FROM fl WHERE f > 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f = 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f < 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f >= 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f IS NOT DISTINCT FROM 1),
+       (SELECT count(*) FROM fl WHERE f IS DISTINCT FROM 1)
 ----
-54	-18	172
+750	1125	1500	750	1875	0	375	2250	375	375	2625
 
-# float/double bitmap-path comparisons, incl. DuckDB's NaN total order (NaN == NaN, NaN > everything)
-statement ok
-CREATE TABLE autovec_float_t(f FLOAT, d DOUBLE);
+endloop
 
-statement ok
-INSERT INTO autovec_float_t VALUES
-	('-inf','-inf'),(-1,-1),('-0.0','-0.0'),(0,0),(1,1),('inf','inf'),('nan','nan'),(NULL,NULL);
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE f > 1
+# ---- Conjunctions in the executor bitmap path ----
+# A range() source keeps a real Filter-operator conjunction (nothing to push into a scan). Covers both
+# early-exit branches: an AND that empties out, and an OR that saturates at the full vector.
+query IIII
+SELECT (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE a < 100 AND b > 19000),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE a < 5000 OR b >= 0),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE (a < 100 OR a >= 9990) AND b > 100),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE (a > 0 AND a < 300) OR b >= 19000)
 ----
-2
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE d >= 1
-----
-3
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE f < 1
-----
-4
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE d <= 1
-----
-5
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE f = 0
-----
-2
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE d <> 0
-----
-5
-
-# NaN is the largest value: only NaN matches > / >= against a NaN literal
-query I
-SELECT count(*) FROM autovec_float_t WHERE f > 'nan'::FLOAT
-----
-0
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE d = 'nan'::DOUBLE
-----
-1
-
-query I
-SELECT count(*) FROM autovec_float_t WHERE f < 'nan'::FLOAT
-----
-6
-
-# float/double arithmetic dictionary optimization (+, -, *), with nan/inf propagation
-statement ok
-CREATE TABLE autovec_farith_t(a DOUBLE, b DOUBLE, k INTEGER);
-
-statement ok
-INSERT INTO autovec_farith_t SELECT i::DOUBLE, (i * 2)::DOUBLE, i::INTEGER FROM range(10) tbl(i);
-
-query III
-SELECT sum(a + b), sum(a - b), sum(a * b) FROM autovec_farith_t WHERE k >= 3 AND k < 7
-----
-54	-18	172
-
-query III
-SELECT (a + b), (a - b), (a * b) FROM autovec_farith_t WHERE a = 3
-----
-9	-3	18
-
-# IS [NOT] DISTINCT FROM over a flat numeric column. IS NOT DISTINCT FROM <non-null const> takes the bitmap
-# fast path (== equality); IS DISTINCT FROM and NULL constants must decline and fall back - all must be correct.
-statement ok
-CREATE TABLE autovec_distinct_t(a INTEGER);
-
-statement ok
-INSERT INTO autovec_distinct_t SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END FROM range(20) tbl(i);
-
-query I
-SELECT count(*) FROM autovec_distinct_t WHERE a IS NOT DISTINCT FROM 5
-----
-1
-
-query I
-SELECT count(*) FROM autovec_distinct_t WHERE a IS DISTINCT FROM 5
-----
-19
-
-query I
-SELECT count(*) FROM autovec_distinct_t WHERE a IS NOT DISTINCT FROM NULL
-----
-7
-
-query I
-SELECT count(*) FROM autovec_distinct_t WHERE a IS DISTINCT FROM NULL
-----
-13
+0	10000	59	799
 
 # Mixed filter chain: a non-bitmap-capable predicate (VARCHAR LIKE) combined with a bitmap-capable comparison.
 # The scan's adaptive reordering can run either first, so the comparison may receive a sel_t input (promoted to
-# a bitmap when dense) or an identity input - the result must be identical either way.
+# a bitmap when dense) or an identity input - the result must be identical either way. The a >= 9990 case is the
+# low-selectivity DenseAutoVecPaysOff bail-out, and the nested OR AND-ed with a LIKE exercises the scalar
+# fallback of a nested conjunction.
 statement ok
 CREATE TABLE autovec_mixed_t AS SELECT i a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i);
 
-query I
-SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a < 5000
+query IIII
+SELECT (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a < 5000),
+       (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%y%' AND a < 5000),
+       (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a >= 9990),
+       (SELECT count(*) FROM autovec_mixed_t WHERE (a < 100 OR a >= 9990) AND b LIKE '%b%')
 ----
-4000
+4000	1000	8	88
 
-query I
-SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%y%' AND a < 5000
+# Mixed executor conjunction: one child produces an index selection, the other can produce a bitmap. Both
+# orders pick a different initial adaptive-filter permutation and must evaluate each child exactly once.
+query II
+SELECT (SELECT count(*) FROM (SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)) t WHERE b LIKE '%b%' AND a < 5000),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)) t WHERE a < 5000 AND b LIKE '%b%')
 ----
-1000
-
-query I
-SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a >= 9990
-----
-8
-
-# Mixed executor conjunction: one child produces an index selection, the other can produce a bitmap.
-# Both orders should evaluate each child once and keep the bitmap-capable predicate useful.
-query I
-SELECT count(*) FROM (
-	SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)
-) t WHERE b LIKE '%b%' AND a < 5000
-----
-4000
-
-query I
-SELECT count(*) FROM (
-	SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)
-) t WHERE a < 5000 AND b LIKE '%b%'
-----
-4000
-
-# nested OR (bitmap-capable) AND-ed with a non-bitmap LIKE: exercises the scalar-fallback of a nested conjunction
-query I
-SELECT count(*) FROM autovec_mixed_t WHERE (a < 100 OR a >= 9990) AND b LIKE '%b%'
-----
-88
+4000	4000
 
 # Mixed scan filters should also slice nullable payload columns with the same selected rows.
 load {TEST_DIR}/autovec_payload_null.db

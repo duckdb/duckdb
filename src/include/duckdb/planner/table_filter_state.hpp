@@ -62,7 +62,6 @@ public:
 	DataChunk filter_chunk; // reused filter input chunk
 	SelectionResult scratch;
 	unique_ptr<SelectivityOptionalFilterState> skip_gate; // pulled-up selectivity_optional state
-	bool always_skip = false;                             // top-level optional_filter
 
 	bool ShouldSkip();
 	void RecordSelectivity(idx_t accepted, idx_t processed);

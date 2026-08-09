@@ -22,8 +22,9 @@
 
 namespace duckdb {
 
+//! Extract the ref/constant (or ref/ref) shape of a comparison the bitmap kernels can evaluate
 inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonInfo &info) {
-	if (!BoundComparisonExpression::IsComparison(expr)) {
+	if (expr.IsVolatile() || expr.CanThrow() || !BoundComparisonExpression::IsComparison(expr)) {
 		return false;
 	}
 	const auto raw_op = expr.GetExpressionType();
@@ -56,22 +57,13 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 	} else {
 		return false;
 	}
-	return true;
-}
-
-inline bool IsBitmapComparisonCandidate(const Expression &expr) {
-	if (expr.IsVolatile() || expr.CanThrow()) {
-		return false;
-	}
-	BitmapComparisonInfo info;
-	if (!TryGetBitmapComparisonInfo(expr, info)) {
-		return false;
-	}
 	const auto pt = info.ref->GetReturnType().InternalType();
 	if (!BitmapCmpTypeSupported(pt)) {
 		return false;
 	}
 	if (info.ref2) {
+		// binding casts mismatched operands, so a bare ref/ref pair always shares its physical type
+		D_ASSERT(info.ref2->GetReturnType().InternalType() == pt);
 		return true;
 	}
 	const auto &value = info.constant->GetValue();
@@ -91,42 +83,21 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or c
 		}
 		return true;
 	}
-	return IsBitmapComparisonCandidate(expr);
+	BitmapComparisonInfo info;
+	return TryGetBitmapComparisonInfo(expr, info);
 #endif
-}
-
-//! Memoize an idempotent expression analysis in Expression::exec_analysis_cache (benign races);
-//! known_bit marks the entry as computed, known_bit << 1 stores the result
-inline bool CachedExprAnalysis(const Expression &expr, uint8_t known_bit, bool (*compute)(const Expression &)) {
-	const auto flags = expr.exec_analysis_cache.load(std::memory_order_relaxed);
-	if (flags & known_bit) {
-		return flags & uint8_t(known_bit << 1);
-	}
-	const bool result = compute(expr);
-	expr.exec_analysis_cache.fetch_or(uint8_t(known_bit | (result ? known_bit << 1 : 0)), std::memory_order_relaxed);
-	return result;
-}
-
-inline bool IsBitmapSelectCandidateCached(const Expression &expr) {
-	return CachedExprAnalysis(expr, 1, IsBitmapSelectCandidate);
-}
-
-inline bool IsStableExpressionCached(const Expression &expr) { // consistent, non-volatile, non-throwing
-	return CachedExprAnalysis(expr, 4,
-	                          [](const Expression &e) { return e.IsConsistent() && !e.IsVolatile() && !e.CanThrow(); });
 }
 
 #if DUCKDB_AUTOVEC
 // target attr: only reachable behind CpuBenefitsFromAutoVec(); lets the bitmap kernels inline here
-DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk,
+DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(ExecuteFunctionState &fstate, DataChunk &chunk,
                                                             const SelectionVector *sel, idx_t count,
                                                             SelectionResult *bitmap_sel, SelectionVector *true_sel,
-                                                            SelectionVector *false_sel, SelectionResult &tmp_sel1,
-                                                            SelectionResult &tmp_sel2, SelectionResult &tmp_sel3,
-                                                            idx_t &result) {
+                                                            SelectionVector *false_sel, idx_t &result) {
 	if (!AutoVecCountPaysOff(count)) { // sparse/small inputs stay on the classic select path
 		return false;
 	}
+	const auto &info = fstate.cmp_info;
 	auto &col = chunk.data[info.ref->Index()]; // dense compare reads the flat input directly
 	const auto pt = col.GetType().InternalType();
 	if (col.GetVectorType() != VectorType::FLAT_VECTOR || !BitmapCmpTypeSupported(pt)) { // sliced inputs fall back
@@ -155,32 +126,34 @@ DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(const BitmapComparis
 		return false;
 	}
 
-	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1; // true-side bitmap
+	SelectionResult &t = bitmap_sel ? *bitmap_sel : fstate.tmp_sel1; // true-side bitmap
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
 	auto &lvalidity = FlatVector::Validity(col);
 	const validity_t *lvalidity_data = lvalidity.CanHaveNull() ? lvalidity.GetData() : nullptr;
+	const validity_t *rvalidity_data = nullptr;
+	const_data_ptr_t rdata = nullptr;
 	if (col2) {
 		auto &rvalidity = FlatVector::Validity(*col2);
-		const validity_t *rvalidity_data = rvalidity.CanHaveNull() ? rvalidity.GetData() : nullptr;
-		DispatchFlatColCmpToBitmap(pt, info.op, FlatVector::GetData(col), FlatVector::GetData(*col2), span,
-		                           lvalidity_data, rvalidity_data, t_bm);
-	} else {
-		const auto &constant = info.constant->GetValue();
-		DispatchFlatCmpToBitmap(pt, info.op, FlatVector::GetData(col), span, lvalidity_data, t_bm,
-		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
+		rvalidity_data = rvalidity.CanHaveNull() ? rvalidity.GetData() : nullptr;
+		rdata = FlatVector::GetData(*col2);
 	}
+	DispatchFlatCmpToBitmap(pt, info.op, FlatVector::GetData(col), rdata, span, lvalidity_data, rvalidity_data, t_bm,
+	                        [&](auto tag) {
+		                        using T = decltype(tag);
+		                        return col2 ? T(0) : info.constant->GetValue().GetValueUnsafe<T>();
+	                        });
 
 	validity_t *f_bm = nullptr;
 	if (false_sel && !bitmap_sel) { // complement before input-selection intersection
-		f_bm = tmp_sel3.Complement(t, span);
+		f_bm = fstate.tmp_sel3.Complement(t, span);
 	}
 
 	if (have_sel) { // AND input selection into the comparison bitmap
-		tmp_sel2.Initialize(*sel);
-		tmp_sel2.ToBitmap(count, span);
-		result = t.Intersect(tmp_sel2, span, count, span);
+		fstate.tmp_sel2.Initialize(*sel);
+		fstate.tmp_sel2.ToBitmap(count, span);
+		result = t.Intersect(fstate.tmp_sel2, span, count, span);
 		if (f_bm) {
-			tmp_sel3.Intersect(tmp_sel2, span, count, span);
+			fstate.tmp_sel3.Intersect(fstate.tmp_sel2, span, count, span);
 		}
 	} else {
 		result = BitmapPopcount(t_bm, span);

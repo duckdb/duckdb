@@ -38,22 +38,12 @@ struct SelectionResult : private SelectionVector {
 	}
 
 	void EnsureIndexWritable(idx_t count) {
-		if (sel_vector && capacity >= count) {
-			if (selection_data) {
-				selection_data->is_bitmap = false;
-				selection_data->indices_cached = false;
-			}
-			return;
-		}
-		if (selection_data && selection_data.use_count() == 1 &&
-		    selection_data->owned_data.GetSize() >= count * sizeof(sel_t)) {
+		const auto *before = selection_data.get();
+		EnsureCapacity(count);
+		if (selection_data && selection_data.get() == before) { // recycled: it is no longer a bitmap
 			selection_data->is_bitmap = false;
 			selection_data->indices_cached = false;
-			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
-			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
-			return;
 		}
-		Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 	}
 
 	void ToBitmap(idx_t count, idx_t row_span) { // promote index selection to bitmap
@@ -71,30 +61,33 @@ struct SelectionResult : private SelectionVector {
 		}
 		if (other.IsBitmap()) {
 			D_ASSERT(other.RowSpan() == row_span);
-			auto other_bitmap = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
-			return IntersectBitmap(other_bitmap);
+			return CombineBitmap<false>(other.Bitmap());
 		}
 		SelectionResult other_result;
 		other_result.Initialize(other);
 		other_result.ToBitmap(other_count, row_span);
-		return IntersectBitmap(other_result);
+		D_ASSERT(RowSpan() == other_result.RowSpan());
+		return CombineBitmap<false>(other_result.Bitmap());
 	}
 	DUCKDB_AUTOVEC_TARGET idx_t Union(SelectionResult &other) { // OR + popcount
 		D_ASSERT(IsBitmap() && other.IsBitmap());
 		D_ASSERT(RowSpan() == other.RowSpan());
-		auto other_bitmap = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
-		return UnionBitmap(other_bitmap);
+		return CombineBitmap<true>(other.Bitmap());
 	}
 
 	DUCKDB_AUTOVEC_TARGET validity_t *Complement(const SelectionResult &other, idx_t row_span) { // false-side bitmap
 		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
 		auto dst = reinterpret_cast<validity_t *>(PrepareBitmap(row_span));
-		auto src = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+		auto src = other.Bitmap();
 		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < (row_span + 63) / 64; w++) {
 			dst[w] = ~src[w];
 		}
 		return dst;
+	}
+
+	validity_t *Bitmap() const {
+		return reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 	}
 
 	uint64_t *PrepareBitmap(idx_t row_span) {
@@ -137,34 +130,17 @@ private:
 		}
 	}
 
-	idx_t IntersectBitmap(const SelectionResult &other) {
-		D_ASSERT(IsBitmap() && other.IsBitmap());
-		D_ASSERT(RowSpan() == other.RowSpan());
-		auto b = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
-		return IntersectBitmap(b);
-	}
-	DUCKDB_AUTOVEC_TARGET idx_t IntersectBitmap(const validity_t *other_bitmap) {
+	//! AND (or OR) another bitmap into this one, returning the surviving count
+	template <bool IS_UNION>
+	DUCKDB_AUTOVEC_TARGET idx_t CombineBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
 		selection_data->indices_cached = false;
-		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
+		auto a = Bitmap();
 		const idx_t nwords = (selection_data->row_span + 63) / 64;
 		idx_t total = 0;
 		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < nwords; w++) {
-			a[w] &= other_bitmap[w];
-			total += CountOnes<validity_t>::Count(a[w]);
-		}
-		return total;
-	}
-	DUCKDB_AUTOVEC_TARGET idx_t UnionBitmap(const validity_t *other_bitmap) {
-		D_ASSERT(IsBitmap());
-		selection_data->indices_cached = false;
-		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
-		const idx_t nwords = (selection_data->row_span + 63) / 64;
-		idx_t total = 0;
-		DUCKDB_UNROLL_LOOP
-		for (idx_t w = 0; w < nwords; w++) {
-			a[w] |= other_bitmap[w];
+			a[w] = IS_UNION ? (a[w] | other_bitmap[w]) : (a[w] & other_bitmap[w]);
 			total += CountOnes<validity_t>::Count(a[w]);
 		}
 		return total;

@@ -14,7 +14,7 @@ struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
-			dense_child.push_back(IsBitmapSelectCandidateCached(*child));
+			dense_child.push_back(IsBitmapSelectCandidate(*child));
 			bitmap_capable = bitmap_capable || dense_child.back();
 		}
 		bitmap_capable = bitmap_capable && CpuBenefitsFromAutoVec();
@@ -79,7 +79,6 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		auto &children = expr.GetChildren();
 		idx_t result_count = is_and ? count : 0;
 		bool have_accumulator = false;
-		bool used_dense_bitmap_child = false;
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
 			auto child_state = state.child_states[child_idx].get();
@@ -115,12 +114,13 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				have_accumulator = true;
 				result_count = child_count;
 			}
-			used_dense_bitmap_child |= dense;
 			if ((is_and && result_count == 0) || (!is_and && result_count == count)) {
 				break;
 			}
 		}
-		if (have_accumulator && (used_dense_bitmap_child || result_count == (is_and ? 0 : count))) {
+		// bitmap_capable implies at least one dense child, and every early exit either clears the
+		// accumulator or leaves an empty (AND) / full (OR) result, so the accumulator is always usable here
+		if (have_accumulator) {
 			if (bitmap_sel) {
 				std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse
 			} else {
@@ -129,7 +129,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			}
 			return result_count;
 		}
-		state.bitmap_capable = false;
+		// no accumulator: the loop bailed on a non-dense OR child, which already cleared bitmap_capable
 	}
 
 	if (is_and) {

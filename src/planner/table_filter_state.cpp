@@ -38,10 +38,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	optional_ptr<const Expression> inner = &expression;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expression.Cast<BoundFunctionExpression>();
-		const auto &func_name = func.Function().GetName();
-		if (func_name == OptionalFilterScalarFun::NAME) {
-			always_skip = true;
-		} else if (func_name == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
 			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 			if (data.child_filter_expr) {
 				inner = data.child_filter_expr.get();
@@ -59,9 +56,6 @@ ExpressionFilterState::~ExpressionFilterState() {
 }
 
 bool ExpressionFilterState::ShouldSkip() {
-	if (always_skip) {
-		return true;
-	}
 	return skip_gate && GateSkipsVector(skip_gate->stats);
 }
 

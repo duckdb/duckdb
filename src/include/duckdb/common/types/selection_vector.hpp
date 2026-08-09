@@ -126,6 +126,18 @@ public:
 			capacity = 0ULL;
 		}
 	}
+	//! Make room for count indices, recycling the current buffer when we are its only owner
+	void EnsureCapacity(idx_t count) {
+		if (sel_vector && capacity >= count) {
+			return;
+		}
+		if (selection_data && selection_data.use_count() == 1 &&
+		    selection_data->owned_data.GetSize() >= count * sizeof(sel_t)) {
+			Initialize(selection_data);
+			return;
+		}
+		Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
 		sel_vector = other.sel_vector;
@@ -179,16 +191,6 @@ public:
 	}
 	void Flatten() const;
 
-	const void *RepresentationHandle() const {
-		if (sel_vector) {
-			return sel_vector;
-		}
-		return selection_data && selection_data->is_bitmap ? selection_data->bitmap_data.get() : nullptr;
-	}
-	static bool SameSelection(const SelectionVector &a, const SelectionVector &b) {
-		return a.RepresentationHandle() == b.RepresentationHandle() && a.RowSpan() == b.RowSpan() &&
-		       a.capacity == b.capacity;
-	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
@@ -203,17 +205,12 @@ public:
 		return sel_vector[index];
 	}
 	inline sel_t &operator[](idx_t index) {
-		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
-			Flatten();
-		}
 		if (DUCKDB_UNLIKELY(selection_data && selection_data->is_bitmap)) {
-			auto keep = selection_data;
+			Flatten(); // materialize, then copy out so the shared bitmap buffer stays read-only
+			auto keep = std::move(selection_data);
 			auto old_sel = sel_vector;
-			auto old_capacity = capacity;
-			Initialize(old_capacity);
-			for (idx_t i = 0; i < old_capacity; i++) {
-				sel_vector[i] = old_sel[i];
-			}
+			Initialize(capacity);
+			memcpy(sel_vector, old_sel, capacity * sizeof(sel_t));
 		}
 		D_ASSERT(index < capacity);
 		return sel_vector[index];

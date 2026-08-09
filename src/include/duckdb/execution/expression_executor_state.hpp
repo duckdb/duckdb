@@ -91,7 +91,10 @@ public:
 
 private:
 	bool safe_autovec_arith = false;
-	vector<idx_t> dictionary_input_indices;
+	//! The column index of the "unary" input column that may be a dictionary vector
+	//! Only valid when the expression is eligible for the dictionary expression optimization
+	//! This is the case when the input is "practically unary", i.e., only one non-const input column
+	optional_idx input_col_idx;
 	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;

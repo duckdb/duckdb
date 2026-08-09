@@ -14,7 +14,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 
 #include <type_traits>
 
@@ -25,8 +24,9 @@ namespace duckdb {
 #define DUCKDB_BITMAP_CMP_TYPES(X)                                                                                     \
 	X(INT8, int8_t)                                                                                                    \
 	X(INT16, int16_t)                                                                                                  \
-	X(INT32, int32_t) X(INT64, int64_t) X(UINT8, uint8_t) X(UINT16, uint16_t) X(UINT32, uint32_t) X(UINT64, uint64_t)  \
-	    X(FLOAT, float) X(DOUBLE, double)
+	X(INT32, int32_t)                                                                                                  \
+	X(INT64, int64_t)                                                                                                  \
+	X(UINT8, uint8_t) X(UINT16, uint16_t) X(UINT32, uint32_t) X(UINT64, uint64_t) X(FLOAT, float) X(DOUBLE, double)
 
 inline bool BitmapCmpTypeSupported(PhysicalType pt) {
 	switch (pt) {
@@ -76,28 +76,17 @@ DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T
 			std::memcpy(&y1, b + 16, 32);
 		}
 		return MoveMask((duckdb_av_u16x16)OP::Apply(x0, y0), (duckdb_av_u16x16)OP::Apply(x1, y1));
-	} else if constexpr (sizeof(T) == 4) {
+	} else { // 4/8-byte lanes: one movemask per 32-byte vector, contributing LANES bits each
+		using M = typename std::conditional<sizeof(T) == 4, duckdb_av_u32x8, duckdb_av_u64x4>::type;
 		uint32_t mask = 0;
 		DUCKDB_UNROLL_LOOP
-		for (std::size_t k = 0; k < 4; k++) {
+		for (std::size_t k = 0; k < 32 / LANES; k++) {
 			V x, yk = y;
 			std::memcpy(&x, a + k * LANES, 32);
 			if constexpr (COL) {
 				std::memcpy(&yk, b + k * LANES, 32);
 			}
-			mask |= MoveMask((duckdb_av_u32x8)OP::Apply(x, yk)) << (k * 8);
-		}
-		return mask;
-	} else {
-		uint32_t mask = 0;
-		DUCKDB_UNROLL_LOOP
-		for (std::size_t k = 0; k < 8; k++) {
-			V x, yk = y;
-			std::memcpy(&x, a + k * LANES, 32);
-			if constexpr (COL) {
-				std::memcpy(&yk, b + k * LANES, 32);
-			}
-			mask |= MoveMask((duckdb_av_u64x4)OP::Apply(x, yk)) << (k * 4);
+			mask |= MoveMask((M)OP::Apply(x, yk)) << (k * LANES);
 		}
 		return mask;
 	}
@@ -208,10 +197,7 @@ inline void DispatchBitmapCmpOp(ExpressionType op, FN &&fn) { // one switch shar
 }
 
 template <class FN>
-inline void DispatchBitmapType(PhysicalType pt, idx_t count, FN &&fn) {
-	if (count > STANDARD_VECTOR_SIZE) { // result bitmap is one vector-sized scratch buffer
-		throw InternalException("bitmap comparison called with count > STANDARD_VECTOR_SIZE");
-	}
+inline void DispatchBitmapType(PhysicalType pt, FN &&fn) {
 	switch (pt) {
 #define DUCKDB_BITMAP_CMP_CASE(ENUM, TYPE)                                                                             \
 	case PhysicalType::ENUM:                                                                                           \
@@ -223,32 +209,24 @@ inline void DispatchBitmapType(PhysicalType pt, idx_t count, FN &&fn) {
 	}
 }
 
+//! Typed flat comparison into a bitmap. A null rdata_p selects the constant path, where get_const supplies the
+//! typed constant without a runtime cast; a null validity pointer means the side cannot be NULL.
 template <class ConstGetter>
-DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t data_p,
-                                                          idx_t count, const validity_t *validity,
+DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t ldata_p,
+                                                          const_data_ptr_t rdata_p, idx_t count,
+                                                          const validity_t *lvalidity, const validity_t *rvalidity,
                                                           validity_t *__restrict bitmap, ConstGetter get_const) {
-	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
-		using T = decltype(tag);
-		const auto *data = reinterpret_cast<const T *>(data_p);
-		const auto constant = get_const(tag); // caller supplies typed constant without runtime cast
-		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
-			CmpMaskToBitmap<T, decltype(cmp), false>(data, data, constant, count, bitmap);
-			AndValidityIntoBitmap(validity, count, bitmap);
-		});
-	});
-}
-
-DUCKDB_AUTOVEC_TARGET inline void DispatchFlatColCmpToBitmap(PhysicalType pt, ExpressionType op,
-                                                             const_data_ptr_t ldata_p, const_data_ptr_t rdata_p,
-                                                             idx_t count, const validity_t *lvalidity,
-                                                             const validity_t *rvalidity,
-                                                             validity_t *__restrict bitmap) {
-	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
+	DispatchBitmapType(pt, [&](auto tag) {
 		using T = decltype(tag);
 		const auto *ldata = reinterpret_cast<const T *>(ldata_p);
-		const auto *rdata = reinterpret_cast<const T *>(rdata_p);
+		const auto *rdata = rdata_p ? reinterpret_cast<const T *>(rdata_p) : ldata;
+		const auto constant = get_const(tag);
 		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
-			CmpMaskToBitmap<T, decltype(cmp), true>(ldata, rdata, T(0), count, bitmap);
+			if (rdata_p) { // one branch per dispatch, not per value
+				CmpMaskToBitmap<T, decltype(cmp), true>(ldata, rdata, constant, count, bitmap);
+			} else {
+				CmpMaskToBitmap<T, decltype(cmp), false>(ldata, rdata, constant, count, bitmap);
+			}
 			AndValidityIntoBitmap(lvalidity, count, bitmap);
 			AndValidityIntoBitmap(rvalidity, count, bitmap);
 		});

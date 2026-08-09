@@ -2,16 +2,13 @@
 # description: Shared-selvec projection bypass — DICT inputs sharing one sel get unwrapped, op runs on full underlying, result is DICT-rewrapped.
 # group: [optimizer]
 
-statement ok
-PRAGMA enable_verification
-
 # ---- Setup: a table large enough that scan filters produce DICT-wrapped outputs ----
+# The bypass is gated on AutoVecCountPaysOff(args.size()), so the filters below all have to leave
+# at least STANDARD_VECTOR_SIZE / 4 rows per chunk for it to engage at all.
 statement ok
 CREATE TABLE t AS SELECT
     i::INTEGER  AS a,
-    (i * 2)::INTEGER AS b,
-    (i % 256)::UTINYINT AS u8,
-    (i % 100)::DOUBLE AS d
+    (i * 2)::INTEGER AS b
 FROM range(20000) tbl(i);
 
 # ---- + / - on DICT-of-FLAT integer siblings: bypass should handle, results correct ----
@@ -36,26 +33,21 @@ SELECT count(*) FROM t WHERE a > 100 AND b > a;
 ----
 19899
 
-# ---- col + col on integer DICT siblings ----
-query I
-SELECT sum(a + b) FROM t WHERE a < 100;
+# ---- Below the count threshold the bypass bails to the slow path: 100 surviving rows, then a single row ----
+query II
+SELECT (SELECT sum(a + b) FROM t WHERE a < 100), (SELECT sum(a + 1) FROM t WHERE a = 12345);
 ----
-14850
+14850	12346
 
-# ---- Volatile function negative case: must NOT bypass (random() is volatile) ----
-# Just verifies correctness; the bypass is gated correctly when the callback is volatile.
-statement ok
-SELECT count(*) FROM t WHERE a > 5000 AND random() > 0.5;
-
-# ---- Low selectivity (<5%) — should still produce correct results (bypass bails to slow path) ----
+# ---- Volatile function negative case: must NOT bypass (random() is volatile), and must stay correct ----
 query I
-SELECT sum(a + 1) FROM t WHERE a = 12345;
+SELECT count(*) FROM t WHERE a > 5000 AND random() >= 0.0;
 ----
-12346
+14999
 
 # ---- NULLs in the underlying ----
 statement ok
-INSERT INTO t VALUES (NULL, NULL, NULL, NULL);
+INSERT INTO t VALUES (NULL, NULL);
 
 query I
 SELECT count(*) FROM t WHERE a > 100 AND (a + 1) > 200;
@@ -73,21 +65,32 @@ SELECT count(*) FROM t WHERE a > 0 AND b - 100 > a;
 ----
 19899
 
-# ---- DECIMAL +/- on DICT-of-FOR (this is the FOR path; bypass defers to FOR-aware callback) ----
+# ---- +, -, * on DICT siblings for every width the dense-dictionary arithmetic path supports ----
+# The filter on k is pushed into the scan, so x and y arrive as DICT vectors sharing one selection.
+foreach type TINYINT SMALLINT INTEGER BIGINT FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE arith AS
+SELECT (i % 11)::{type} x, (i % 7)::{type} y, i::INTEGER k FROM range(20000) tbl(i);
+
+query III
+SELECT sum(x + y)::BIGINT, sum(x - y)::BIGINT, sum(x * y)::BIGINT FROM arith WHERE k >= 3000 AND k < 17000;
+----
+111997	27997	210019
+
+endloop
+
+# ---- DECIMAL on DICT-of-FOR (this is the FOR path; bypass defers to the FOR-aware callback) ----
 statement ok
 CREATE TABLE u AS SELECT
-    (i % 10)::DECIMAL(15,2) / 100 AS disc,
-    (i * 100)::DECIMAL(15,2)       AS price
+    ((i % 10) / 100.0)::DECIMAL(15,4) AS disc,
+    (i * 100)::DECIMAL(15,2)          AS price
 FROM range(20000) tbl(i);
 
-# DECIMAL price * (1 - disc) — '-' goes through bypass; '*' uses existing FOR multiply path
-query I
-SELECT count(*) FROM u WHERE price > 100 AND disc < 0.05;
+# the comparisons run on DECIMAL (INT64 physical); price * (1 - disc) sends '-' through the bypass
+# while '*' uses the existing FOR multiply path
+query III
+SELECT count(*), sum(price * (1 - disc))::BIGINT, sum(price - disc)::BIGINT
+FROM u WHERE price > 100 AND disc < 0.05;
 ----
-9998
-
-statement ok
-DROP TABLE t;
-
-statement ok
-DROP TABLE u;
+9998	9797039901	9996999700

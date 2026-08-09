@@ -99,9 +99,9 @@ private:
 
 #if !DUCKDB_SMALLER_BINARY(unary_executor_flat)
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
-	DUCKDB_AUTOVEC_TARGET static inline void
-	ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	            const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
+	DUCKDB_AUTOVEC_INLINE static void
+	ExecuteFlatBody(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (mask.CanHaveNull()) {
@@ -144,21 +144,38 @@ private:
 			}
 		}
 	}
+
+	//! Widened clone of the flat loop; only called when CpuBenefitsFromAutoVec()
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
+	DUCKDB_AUTOVEC_TARGET static void
+	ExecuteFlatWide(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
+		ExecuteFlatBody<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, mask, result_mask, data,
+		                                                        adds_nulls);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
+	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,
+	                               bool adds_nulls) {
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+		// pre-AVX2 CPUs and small counts run the same loop at the baseline ISA
+		if (CpuBenefitsFromAutoVec() && AutoVecCountPaysOff(count)) {
+			ExecuteFlatWide<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, mask, result_mask, data,
+			                                                        adds_nulls);
+			return;
+		}
+#endif
+		ExecuteFlatBody<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, mask, result_mask, data,
+		                                                        adds_nulls);
+	}
 #endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteStandard(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
 	                                   bool adds_nulls,
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		auto dispatch_type = input.GetVectorType();
-#if DUCKDB_AUTOVEC && defined(__x86_64__)
-		// the flat loop carries the widened-ISA target: pre-AVX2 CPUs and small counts gather instead
-		if ((!CpuBenefitsFromAutoVec() || !AutoVecCountPaysOff(count)) &&
-		    dispatch_type != VectorType::CONSTANT_VECTOR) {
-			dispatch_type = VectorType::SEQUENCE_VECTOR;
-		}
-#endif
-		switch (dispatch_type) {
+		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (result.size() != count) {
