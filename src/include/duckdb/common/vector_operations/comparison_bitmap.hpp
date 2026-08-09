@@ -20,19 +20,19 @@
 
 namespace duckdb {
 
-// Flat comparison-to-bitmap kernels support fixed-width autovec types.
+// The fixed-width types the flat comparison-to-bitmap kernels handle: the predicate below and the
+// dispatch further down are both generated from this list, so they cannot drift apart.
+#define DUCKDB_BITMAP_CMP_TYPES(X)                                                                                     \
+	X(INT8, int8_t)                                                                                                    \
+	X(INT16, int16_t)                                                                                                  \
+	X(INT32, int32_t) X(INT64, int64_t) X(UINT8, uint8_t) X(UINT16, uint16_t) X(UINT32, uint32_t) X(UINT64, uint64_t)  \
+	    X(FLOAT, float) X(DOUBLE, double)
+
 inline bool BitmapCmpTypeSupported(PhysicalType pt) {
 	switch (pt) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
+#define DUCKDB_BITMAP_CMP_CASE(ENUM, TYPE) case PhysicalType::ENUM:
+		DUCKDB_BITMAP_CMP_TYPES(DUCKDB_BITMAP_CMP_CASE)
+#undef DUCKDB_BITMAP_CMP_CASE
 		return true;
 	default:
 		return false;
@@ -162,46 +162,30 @@ struct CmpGt {
 		}
 	}
 };
-template <class T>
-struct CmpNe {
-	static inline bool Operation(T a, T b) {
-		return !CmpEq<T>::Operation(a, b);
+//! The remaining comparisons are CmpEq/CmpGt with the operands swapped and/or the result negated.
+template <class BASE, bool SWAP, bool NEGATE>
+struct CmpAdapt {
+	template <class A>
+	static inline bool Operation(A a, A b) {
+		return NEGATE ^ (SWAP ? BASE::Operation(b, a) : BASE::Operation(a, b));
 	}
 	template <class V>
 	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
-		return ~CmpEq<T>::Apply(a, b);
+		if constexpr (NEGATE) {
+			return ~(SWAP ? BASE::Apply(b, a) : BASE::Apply(a, b));
+		} else {
+			return SWAP ? BASE::Apply(b, a) : BASE::Apply(a, b);
+		}
 	}
 };
 template <class T>
-struct CmpLt {
-	static inline bool Operation(T a, T b) {
-		return CmpGt<T>::Operation(b, a);
-	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
-		return CmpGt<T>::Apply(b, a);
-	}
-};
+using CmpNe = CmpAdapt<CmpEq<T>, false, true>;
 template <class T>
-struct CmpGe {
-	static inline bool Operation(T a, T b) {
-		return !CmpGt<T>::Operation(b, a);
-	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
-		return ~CmpGt<T>::Apply(b, a);
-	}
-};
+using CmpLt = CmpAdapt<CmpGt<T>, true, false>;
 template <class T>
-struct CmpLe {
-	static inline bool Operation(T a, T b) {
-		return !CmpGt<T>::Operation(a, b);
-	}
-	template <class V>
-	DUCKDB_AUTOVEC_TARGET static inline auto Apply(V a, V b) {
-		return ~CmpGt<T>::Apply(a, b);
-	}
-};
+using CmpGe = CmpAdapt<CmpGt<T>, true, true>;
+template <class T>
+using CmpLe = CmpAdapt<CmpGt<T>, false, true>;
 
 template <class T, class FN>
 inline void DispatchBitmapCmpOp(ExpressionType op, FN &&fn) { // one switch shared by const/col paths
@@ -229,26 +213,11 @@ inline void DispatchBitmapType(PhysicalType pt, idx_t count, FN &&fn) {
 		throw InternalException("bitmap comparison called with count > STANDARD_VECTOR_SIZE");
 	}
 	switch (pt) {
-	case PhysicalType::INT8:
-		return fn(int8_t {});
-	case PhysicalType::INT16:
-		return fn(int16_t {});
-	case PhysicalType::INT32:
-		return fn(int32_t {});
-	case PhysicalType::INT64:
-		return fn(int64_t {});
-	case PhysicalType::UINT8:
-		return fn(uint8_t {});
-	case PhysicalType::UINT16:
-		return fn(uint16_t {});
-	case PhysicalType::UINT32:
-		return fn(uint32_t {});
-	case PhysicalType::UINT64:
-		return fn(uint64_t {});
-	case PhysicalType::FLOAT:
-		return fn(float {});
-	case PhysicalType::DOUBLE:
-		return fn(double {});
+#define DUCKDB_BITMAP_CMP_CASE(ENUM, TYPE)                                                                             \
+	case PhysicalType::ENUM:                                                                                           \
+		return fn(TYPE {});
+		DUCKDB_BITMAP_CMP_TYPES(DUCKDB_BITMAP_CMP_CASE)
+#undef DUCKDB_BITMAP_CMP_CASE
 	default:
 		throw InternalException("Unsupported type for bitmap select");
 	}

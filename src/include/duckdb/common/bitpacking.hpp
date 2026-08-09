@@ -200,14 +200,16 @@ static inline void DispatchWidth(uint32_t width, FUNC &&func) {
 		});                                                                                                            \
 	}
 
-DUCKDB_BITPACKING_FASTUNPACK(uint8_t, uint8_t, 8)
-DUCKDB_BITPACKING_FASTUNPACK(uint16_t, uint16_t, 16)
-DUCKDB_BITPACKING_FASTUNPACK(uint32_t, uint32_t, 32)
-DUCKDB_BITPACKING_FASTUNPACK(uint32_t, uint64_t, 64)
-DUCKDB_BITPACKING_FASTPACK(uint8_t, uint8_t, 8)
-DUCKDB_BITPACKING_FASTPACK(uint16_t, uint16_t, 16)
-DUCKDB_BITPACKING_FASTPACK(uint32_t, uint32_t, 32)
-DUCKDB_BITPACKING_FASTPACK(uint64_t, uint32_t, 64)
+// The supported widths as (value type, packed word type, max width). Everything below - the
+// fastpack/fastunpack overloads and the TryFast* dispatch - is generated from this one list.
+#define DUCKDB_BITPACKING_WIDTHS(X)                                                                                    \
+	X(uint8_t, uint8_t, 8) X(uint16_t, uint16_t, 16) X(uint32_t, uint32_t, 32) X(uint64_t, uint32_t, 64)
+
+#define DUCKDB_BITPACKING_DECLARE(VALUE_T, WORD_T, MAX_WIDTH)                                                          \
+	DUCKDB_BITPACKING_FASTUNPACK(WORD_T, VALUE_T, MAX_WIDTH)                                                           \
+	DUCKDB_BITPACKING_FASTPACK(VALUE_T, WORD_T, MAX_WIDTH)
+DUCKDB_BITPACKING_WIDTHS(DUCKDB_BITPACKING_DECLARE)
+#undef DUCKDB_BITPACKING_DECLARE
 
 #undef DUCKDB_BITPACKING_FASTUNPACK
 #undef DUCKDB_BITPACKING_FASTPACK
@@ -215,15 +217,16 @@ DUCKDB_BITPACKING_FASTPACK(uint64_t, uint32_t, 64)
 template <class T>
 inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BITPACKING_RESTRICT out,
                         const uint32_t bit, const std::size_t groups) {
-	if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-		fastpack(reinterpret_cast<const uint8_t *>(in), reinterpret_cast<uint8_t *>(out), bit, groups);
-	} else if constexpr (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-		fastpack(reinterpret_cast<const uint16_t *>(in), reinterpret_cast<uint16_t *>(out), bit, groups);
-	} else if constexpr (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-		fastpack(reinterpret_cast<const uint32_t *>(in), reinterpret_cast<uint32_t *>(out), bit, groups);
-	} else if constexpr (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-		fastpack(reinterpret_cast<const uint64_t *>(in), reinterpret_cast<uint32_t *>(out), bit, groups);
-	} else {
+	if constexpr (false) { // NOLINT: anchors the width chain below
+	}
+#define DUCKDB_BITPACKING_TRY(VALUE_T, WORD_T, MAX_WIDTH)                                                              \
+	else if constexpr (std::is_same<T, VALUE_T>::value ||                                                              \
+	                   std::is_same<T, typename std::make_signed<VALUE_T>::type>::value) {                             \
+		fastpack(reinterpret_cast<const VALUE_T *>(in), reinterpret_cast<WORD_T *>(out), bit, groups);                 \
+	}
+	DUCKDB_BITPACKING_WIDTHS(DUCKDB_BITPACKING_TRY)
+#undef DUCKDB_BITPACKING_TRY
+	else {
 		return false;
 	}
 	return true;
@@ -232,19 +235,17 @@ inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BIT
 template <class T>
 inline bool TryFastUnpack(const void *DUCKDB_BITPACKING_RESTRICT in, T *DUCKDB_BITPACKING_RESTRICT out,
                           const uint32_t bit, const std::size_t groups, const T frame = 0) {
-	if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-		fastunpack(reinterpret_cast<const uint8_t *>(in), reinterpret_cast<uint8_t *>(out), bit, groups,
-		           static_cast<uint8_t>(frame));
-	} else if constexpr (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-		fastunpack(reinterpret_cast<const uint16_t *>(in), reinterpret_cast<uint16_t *>(out), bit, groups,
-		           static_cast<uint16_t>(frame));
-	} else if constexpr (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-		fastunpack(reinterpret_cast<const uint32_t *>(in), reinterpret_cast<uint32_t *>(out), bit, groups,
-		           static_cast<uint32_t>(frame));
-	} else if constexpr (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-		fastunpack(reinterpret_cast<const uint32_t *>(in), reinterpret_cast<uint64_t *>(out), bit, groups,
-		           static_cast<uint64_t>(frame));
-	} else {
+	if constexpr (false) { // NOLINT: anchors the width chain below
+	}
+#define DUCKDB_BITPACKING_TRY(VALUE_T, WORD_T, MAX_WIDTH)                                                              \
+	else if constexpr (std::is_same<T, VALUE_T>::value ||                                                              \
+	                   std::is_same<T, typename std::make_signed<VALUE_T>::type>::value) {                             \
+		fastunpack(reinterpret_cast<const WORD_T *>(in), reinterpret_cast<VALUE_T *>(out), bit, groups,                \
+		           static_cast<VALUE_T>(frame));                                                                       \
+	}
+	DUCKDB_BITPACKING_WIDTHS(DUCKDB_BITPACKING_TRY)
+#undef DUCKDB_BITPACKING_TRY
+	else {
 		return false;
 	}
 	return true;

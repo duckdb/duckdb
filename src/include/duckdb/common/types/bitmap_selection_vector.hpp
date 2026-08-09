@@ -88,7 +88,6 @@ DUCKDB_AUTOVEC_TARGET static inline idx_t BitmapToSelectionVector(const validity
 	if (word_count == 0) {
 		return 0;
 	}
-
 	// EmitByte writes 8 slots (padded) at each step, so reserve a byte of head room past the last match
 	const auto needed_capacity = word_count * 64 + 8;
 	auto sel_data = sel.sel_data();
