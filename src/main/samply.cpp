@@ -5,6 +5,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include <cerrno>
+#include <cinttypes>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -159,7 +160,7 @@ static const char *SamplyDirectory() noexcept {
 SamplyCounterWriter::SamplyCounterWriter(const char *directory_p) noexcept
     : directory(directory_p), file_descriptor(-1), failed(false), wrote_clock(false), path {0} {
 	try {
-		buffer.reserve(64 * 1024);
+		buffer.reserve(idx_t(64) * 1024);
 	} catch (...) {
 		failed = true;
 	}
@@ -302,8 +303,9 @@ static bool SamplyReadRSS(uint64_t &rss) noexcept {
 	if (!file) {
 		return false;
 	}
-	unsigned long long resident_pages = 0;
-	auto result = fscanf(file, "%*llu %llu", &resident_pages);
+	uint64_t total_pages = 0;
+	uint64_t resident_pages = 0;
+	auto result = fscanf(file, "%" SCNu64 " %" SCNu64, &total_pages, &resident_pages);
 	fclose(file);
 	if (result != 1) {
 		return false;
@@ -340,7 +342,7 @@ public:
 	      network_buffer() {
 		try {
 			network_interfaces.reserve(32);
-			network_buffer.reserve(16 * 1024);
+			network_buffer.reserve(idx_t(16) * 1024);
 		} catch (...) {
 		}
 	}
@@ -440,15 +442,17 @@ private:
 		char line[1024];
 		while (fgets(line, sizeof(line), file)) {
 			char name[64];
-			unsigned long long received;
-			unsigned long long transmitted;
-			if (sscanf(line, " %63[^:]: %llu %*llu %*llu %*llu %*llu %*llu %*llu %*llu %llu", name, &received,
-			           &transmitted) != 3 ||
+			uint64_t counters[9];
+			if (sscanf(line,
+			           " %63[^:]: %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64
+			           " %" SCNu64 " %" SCNu64,
+			           name, &counters[0], &counters[1], &counters[2], &counters[3], &counters[4], &counters[5],
+			           &counters[6], &counters[7], &counters[8]) != 10 ||
 			    strcmp(name, "lo") == 0) {
 				continue;
 			}
 			try {
-				network_interfaces.push_back({name, received, transmitted});
+				network_interfaces.push_back({name, counters[0], counters[8]});
 			} catch (...) {
 				fclose(file);
 				return false;
@@ -760,11 +764,10 @@ bool SamplyHTTPWriter::WriteAttempt(uint64_t start_unix_ns, uint64_t duration_ns
                                     const string &request_range, const string &response_content_range) noexcept {
 #if defined(__linux__) || defined(__APPLE__)
 	try {
-		auto record = StringUtil::Format(
-		    "1\t%llu\t%llu\t%d\t%llu\t%lld\t%s\t%s\t%s\t%s\n", static_cast<unsigned long long>(start_unix_ns),
-		    static_cast<unsigned long long>(duration_ns), status_code, static_cast<unsigned long long>(bytes_received),
-		    static_cast<long long>(time_to_first_byte_ns), method, Blob::ToBase64(url), Blob::ToBase64(request_range),
-		    Blob::ToBase64(response_content_range));
+		auto record = StringUtil::Format("1\t%llu\t%llu\t%d\t%llu\t%lld\t%s\t%s\t%s\t%s\n", start_unix_ns, duration_ns,
+		                                 status_code, bytes_received, time_to_first_byte_ns, method,
+		                                 Blob::ToBase64(string_t(url)), Blob::ToBase64(string_t(request_range)),
+		                                 Blob::ToBase64(string_t(response_content_range)));
 		return Write(record.data(), record.size());
 	} catch (...) {
 		failed = true;
