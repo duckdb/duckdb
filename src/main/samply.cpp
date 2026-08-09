@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/string_type.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <cerrno>
@@ -307,7 +308,7 @@ static bool SamplyReadRSS(uint64_t &rss) noexcept {
 	uint64_t resident_pages = 0;
 	auto result = fscanf(file, "%" SCNu64 " %" SCNu64, &total_pages, &resident_pages);
 	fclose(file);
-	if (result != 1) {
+	if (result != 2) {
 		return false;
 	}
 	auto page_size = sysconf(_SC_PAGESIZE);
