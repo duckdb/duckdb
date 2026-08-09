@@ -34,6 +34,9 @@ public:
 
 	//! The set of keys to extract (case sensitive)
 	vector<string> key_names;
+	//! For JSONRecordType::FEATURES: the columns read from the Feature itself. Everything else is read from the
+	//! Feature's "properties" object
+	case_insensitive_set_t feature_top_level_names;
 
 	//! The date format map
 	unique_ptr<DateFormatMap> date_format_map;

@@ -293,6 +293,10 @@ private:
 	AllocatedData auto_detect_data;
 	idx_t auto_detect_data_size = 0;
 
+	//! Whether this file is a GeoJSON FeatureCollection, i.e. the rows live in its "features" array rather than at
+	//! the top level. The array itself is then read using the regular JSONFormat::ARRAY handling
+	bool skip_feature_collection_prefix = false;
+
 	//! The first error we found in the file (if any)
 	unique_ptr<JSONError> error;
 

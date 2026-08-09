@@ -68,6 +68,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	copy_fun.SetName("jsonl");
 	loader.RegisterFunction(copy_fun);
 
+	// GeoJSON copy function
+	auto geojson_copy_fun = JSONFunctions::GetGeoJSONCopyFunction();
+	loader.RegisterFunction(geojson_copy_fun);
+	geojson_copy_fun.extension = "geojsonl";
+	geojson_copy_fun.SetName("geojsonl");
+	loader.RegisterFunction(geojson_copy_fun);
+
 	// Pass the database's ParserCache so the parser matcher is reused, not rebuilt per macro.
 	ParserOptions parser_options;
 	parser_options.parser_cache = &loader.GetDatabaseInstance().GetParserCache();

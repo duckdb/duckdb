@@ -106,7 +106,7 @@ public:
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = scan_state.values[i];
 				if (val) {
-					JSONStructure::ExtractStructure(val, node, true);
+					JSONStructure::ExtractStructure(val, node, true, options.geojson.value_or(false));
 				}
 			}
 			remaining -= next;
@@ -146,6 +146,61 @@ private:
 	ArenaAllocator allocator;
 	Vector string_vector;
 };
+
+//! A GeoJSON Feature: {"type": "Feature", "geometry": ..., "properties": {...}}, optionally with "id" and "bbox".
+//! Only these members are allowed, so that ordinary objects that happen to have a "geometry" are not unnested.
+static bool IsGeoJSONFeatureType(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	bool has_type = false;
+	bool has_geometry = false;
+	bool has_properties = false;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		if (child.first == "type") {
+			has_type = true;
+		} else if (child.first == "geometry") {
+			has_geometry = true;
+		} else if (child.first == "properties") {
+			has_properties = true;
+		} else if (child.first != "id" && child.first != "bbox") {
+			return false;
+		}
+	}
+	return has_type && has_geometry && has_properties;
+}
+
+//! Flatten a Feature into columns: "geometry" (and "id", if present) come from the Feature itself, and every
+//! member of "properties" becomes a column of its own
+static void UnnestGeoJSONFeature(const LogicalType &type, const bool ignore_errors, vector<LogicalType> &return_types,
+                                 vector<Identifier> &names, case_insensitive_set_t &top_level_names) {
+	const auto add_column = [&](const Identifier &name, const LogicalType &column_type, const bool top_level) {
+		names.emplace_back(name);
+		return_types.emplace_back(RemoveDuplicateStructKeys(column_type, ignore_errors));
+		if (top_level) {
+			top_level_names.insert(name.GetIdentifierName());
+		}
+	};
+
+	optional_ptr<const LogicalType> properties_type;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		if (child.first == "geometry" || child.first == "id") {
+			add_column(child.first, child.second, true);
+		} else if (child.first == "properties") {
+			properties_type = child.second;
+		}
+	}
+	D_ASSERT(properties_type);
+	if (properties_type->id() == LogicalTypeId::STRUCT) {
+		for (const auto &property : StructType::GetChildTypes(*properties_type)) {
+			add_column(property.first, property.second, false);
+		}
+	} else {
+		// Properties were not inferred as a struct (e.g. they were too heterogeneous and became a MAP), so we
+		// cannot give each one its own column - keep them together instead
+		add_column("properties", *properties_type, true);
+	}
+}
 
 void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
                           vector<Identifier> &names) {
@@ -199,11 +254,27 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 
 	// Auto-detect record type
 	if (json_data.options.record_type == JSONRecordType::AUTO_DETECT) {
-		if (type.id() == LogicalTypeId::STRUCT) {
+		if (options.geojson.value_or(false) && IsGeoJSONFeatureType(type)) {
+			json_data.options.record_type = JSONRecordType::FEATURES;
+		} else if (type.id() == LogicalTypeId::STRUCT) {
 			json_data.options.record_type = JSONRecordType::RECORDS;
 		} else {
 			json_data.options.record_type = JSONRecordType::VALUES;
 		}
+	}
+
+	if (json_data.options.record_type == JSONRecordType::FEATURES) {
+		// The top-level names are needed even when the caller supplied the columns (COPY ... FROM), so that we know
+		// which of them to read from the Feature's "properties"
+		vector<LogicalType> feature_types;
+		vector<Identifier> feature_names;
+		UnnestGeoJSONFeature(type, options.ignore_errors, feature_types, feature_names,
+		                     json_data.feature_top_level_names);
+		if (names.empty()) {
+			return_types = std::move(feature_types);
+			names = std::move(feature_names);
+		}
+		return;
 	}
 
 	if (!names.empty()) {
@@ -228,7 +299,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	} else {
 		D_ASSERT(json_data.options.record_type == JSONRecordType::VALUES);
 		return_types.emplace_back(RemoveDuplicateStructKeys(type, options.ignore_errors));
-		names.emplace_back("json");
+		// Newline-delimited bare geometries produce a single GEOMETRY column, which "json" would be a poor name for
+		names.emplace_back(type.id() == LogicalTypeId::GEOMETRY ? "geometry" : "json");
 	}
 }
 
@@ -238,6 +310,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["geojson"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;

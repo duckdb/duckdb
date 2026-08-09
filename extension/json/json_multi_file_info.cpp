@@ -102,6 +102,10 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const Identifier &ke
 		options.auto_detect = BooleanValue::Get(value);
 		return true;
 	}
+	if (key == "geojson") {
+		options.geojson = BooleanValue::Get(value);
+		return true;
+	}
 	if (key == "sample_size") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
@@ -237,6 +241,15 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier
 		}
 		return true;
 	}
+	if (key == "geojson") {
+		if (values.empty()) {
+			options.geojson = true;
+		} else {
+			JSONCheckSingleParameter(key, values);
+			options.geojson = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+		}
+		return true;
+	}
 	if (key == "compression") {
 		JSONCheckSingleParameter(key, values);
 		options.compression =
@@ -296,6 +309,19 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
 			                      "parameter when \"records\" is set to 'false'.");
 		}
+	}
+
+	// Reading GeoJSON is opt-in, but a .geojson / .geojsonl file name is opt-in enough
+	if (!options.geojson.has_value()) {
+		const auto first_file = bind_data.file_list->GetFirstFile().path;
+		options.geojson =
+		    StringUtil::CIEndsWith(first_file, ".geojson") || StringUtil::CIEndsWith(first_file, ".geojsonl");
+	}
+	// COPY ... FROM hardcodes RECORDS because it takes its columns from the target table. For GeoJSON we still
+	// need to know whether those columns live in a Feature's "properties", so let the structure decide.
+	if (options.geojson.value() && !options.auto_detect && !options.name_list.empty() &&
+	    options.record_type == JSONRecordType::RECORDS) {
+		options.record_type = JSONRecordType::AUTO_DETECT;
 	}
 
 	json_data.InitializeFormats();
@@ -463,6 +489,43 @@ bool JSONReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionSt
 	return lstate.TryInitializeScan(gstate, *this);
 }
 
+//! GeoJSON Features are read as two groups of columns: those taken from the Feature itself, and those taken from
+//! its "properties" object
+static bool TransformGeoJSONFeatures(yyjson_val *values[], yyjson_alc *alc, const idx_t count,
+                                     JSONScanGlobalState &gstate, const vector<Vector *> &result_vectors,
+                                     JSONTransformOptions &transform_options) {
+	const auto &top_level_names = gstate.json_data.feature_top_level_names;
+
+	vector<string> feature_names, property_names;
+	vector<Vector *> feature_vectors, property_vectors;
+	vector<ColumnIndex> feature_indices, property_indices;
+	for (idx_t i = 0; i < gstate.names.size(); i++) {
+		const auto top_level = top_level_names.find(gstate.names[i]) != top_level_names.end();
+		(top_level ? feature_names : property_names).push_back(gstate.names[i]);
+		(top_level ? feature_vectors : property_vectors).push_back(result_vectors[i]);
+		if (!gstate.column_indices.empty()) {
+			(top_level ? feature_indices : property_indices).push_back(gstate.column_indices[i]);
+		}
+	}
+
+	// "type", "properties" and "bbox" are consumed by the unnesting, so unknown keys are expected in both groups
+	bool success = true;
+	if (!feature_names.empty()) {
+		success = JSONTransform::TransformObject(values, alc, count, feature_names, feature_vectors, transform_options,
+		                                         feature_indices, false);
+	}
+	if (success && !property_names.empty()) {
+		vector<yyjson_val *> property_values(count);
+		for (idx_t i = 0; i < count; i++) {
+			auto &val = values[i];
+			property_values[i] = val && unsafe_yyjson_is_obj(val) ? yyjson_obj_get(val, "properties") : nullptr;
+		}
+		success = JSONTransform::TransformObject(property_values.data(), alc, count, property_names, property_vectors,
+		                                         transform_options, property_indices, false);
+	}
+	return success;
+}
+
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
                       JSONScanLocalState &lstate, DataChunk &output) {
 	auto &scan_state = lstate.GetScanState();
@@ -485,6 +548,9 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
 			                                         result_vectors, lstate.transform_options, gstate.column_indices,
 			                                         lstate.transform_options.error_unknown_key);
+		} else if (gstate.json_data.options.record_type == JSONRecordType::FEATURES) {
+			success = TransformGeoJSONFeatures(values, scan_state.allocator.GetYYAlc(), count, gstate, result_vectors,
+			                                   lstate.transform_options);
 		} else {
 			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
 			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,

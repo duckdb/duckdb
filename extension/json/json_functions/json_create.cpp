@@ -18,10 +18,12 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "json_geojson.hpp"
 
 namespace duckdb {
 
 static constexpr const char *JSON_COPY_TO_JSON_INTERNAL_NAME = "__internal_json_copy_to_json";
+static constexpr const char *JSON_COPY_TO_GEOJSON_INTERNAL_NAME = "__internal_json_copy_to_geojson";
 
 struct StructNames {
 	void Insert(const string &name) {
@@ -77,7 +79,12 @@ public:
 	StructNames const_struct_names;
 };
 
+//! How a GEOMETRY value is represented in JSON. WKT is the default so that plain JSON output is unchanged;
+//! COPY ... TO ... (FORMAT GEOJSON) selects GEOJSON. A global setting could flip the default later.
+enum class JSONGeometryFormat : uint8_t { WKT, GEOJSON };
+
 struct JSONCopyFormatOptions {
+	JSONGeometryFormat geometry_format = JSONGeometryFormat::WKT;
 	optional_ptr<StrfTimeFormat> date_format;
 	optional_ptr<StrfTimeFormat> timestamp_format;
 	optional_ptr<ClientContext> context;
@@ -148,6 +155,33 @@ public:
 	unique_ptr<Expression> timestamptz_ns_format_expression;
 };
 
+//! Bind data for the GeoJSON Feature writer: which payload child is the geometry, which are properties, plus the
+//! regular date/timestamp formatting options used for the property values
+struct JSONCopyToGeoJSONFunctionData : public FunctionData {
+public:
+	JSONCopyToGeoJSONFunctionData(unique_ptr<JSONCopyToJSONFunctionData> formats_p, idx_t geometry_index_p,
+	                              vector<idx_t> property_indices_p)
+	    : formats(std::move(formats_p)), geometry_index(geometry_index_p),
+	      property_indices(std::move(property_indices_p)) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto formats_copy = unique_ptr_cast<FunctionData, JSONCopyToJSONFunctionData>(formats->Copy());
+		return make_uniq<JSONCopyToGeoJSONFunctionData>(std::move(formats_copy), geometry_index, property_indices);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<JSONCopyToGeoJSONFunctionData>();
+		return geometry_index == other.geometry_index && property_indices == other.property_indices &&
+		       formats->Equals(*other.formats);
+	}
+
+public:
+	unique_ptr<JSONCopyToJSONFunctionData> formats;
+	idx_t geometry_index;
+	vector<idx_t> property_indices;
+};
+
 static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalType &type) {
 	if (type.IsJSONType()) {
 		return type;
@@ -186,6 +220,8 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
+	// GEOMETRY is emitted as either WKT or GeoJSON, so it must reach CreateValues untouched
+	case LogicalTypeId::GEOMETRY:
 		return type;
 	case LogicalTypeId::VARIANT:
 		return LogicalType::JSON();
@@ -757,6 +793,20 @@ static void CreateValuesFromDefaultCast(yyjson_mut_doc *doc, yyjson_mut_val *val
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
+static void CreateValuesGeometry(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+	UnifiedVectorFormat value_data;
+	value_v.ToUnifiedFormat(value_data);
+	auto values = UnifiedVectorFormat::GetData<string_t>(value_data);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = value_data.sel->get_index(i);
+		if (!value_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		} else {
+			vals[i] = JSONGeometry::ToGeoJSON(values[idx], doc);
+		}
+	}
+}
+
 template <class FILL>
 static void CreateValuesFormatted(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                   bool has_format, FILL &&fill_strings) {
@@ -939,9 +989,16 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::GEOMETRY: {
+	case LogicalTypeId::UUID: {
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
+		break;
+	}
+	case LogicalTypeId::GEOMETRY: {
+		if (options.geometry_format == JSONGeometryFormat::GEOJSON) {
+			CreateValuesGeometry(doc, vals, value_v, count);
+		} else {
+			CreateValuesFromDefaultCast(doc, vals, value_v, count);
+		}
 		break;
 	}
 	case LogicalTypeId::BIGNUM: {
@@ -1094,6 +1151,108 @@ static void JSONCopyToJSONFunction(DataChunk &args, ExpressionState &state, Vect
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc, options);
 }
 
+//===--------------------------------------------------------------------===//
+// COPY ... TO ... (FORMAT GEOJSON)
+//===--------------------------------------------------------------------===//
+//! Turns one row into a GeoJSON Feature: the GEOMETRY column becomes "geometry", every other column becomes a
+//! member of "properties".
+static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.BindInfo()->Cast<JSONCopyToGeoJSONFunctionData>();
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator->GetYYAlc();
+	auto options = info.formats->GetFormatOptions(state.GetContext());
+	options.geometry_format = JSONGeometryFormat::GEOJSON;
+
+	const auto count = args.size();
+	auto &payload = args.data[0];
+	auto &payload_type = payload.GetType();
+	auto &entries = StructVector::GetEntries(payload);
+	auto &names = info.formats->const_struct_names;
+
+	auto doc = JSONCommon::CreateDocument(alc);
+	auto features = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	auto properties = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	for (idx_t i = 0; i < count; i++) {
+		features[i] = yyjson_mut_obj(doc);
+		yyjson_mut_obj_add_str(doc, features[i], "type", "Feature");
+		properties[i] = yyjson_mut_obj(doc);
+	}
+
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	CreateValues(names, doc, nested_vals, entries[info.geometry_index], count, options);
+	for (idx_t i = 0; i < count; i++) {
+		yyjson_mut_obj_add_val(doc, features[i], "geometry", nested_vals[i]);
+	}
+
+	for (const auto property_index : info.property_indices) {
+		auto &key_v = names.Get(StructType::GetChildName(payload_type, property_index).GetIdentifierName(), count);
+		CreateKeyValuePairs(names, doc, properties, nested_vals, key_v, entries[property_index], count, options);
+	}
+	for (idx_t i = 0; i < count; i++) {
+		yyjson_mut_obj_add_val(doc, features[i], "properties", properties[i]);
+	}
+
+	auto objects = FlatVector::GetDataMutable<string_t>(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	UnifiedVectorFormat payload_data;
+	payload.ToUnifiedFormat(payload_data);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = payload_data.sel->get_index(i);
+		if (payload_data.validity.RowIsValid(idx)) {
+			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(features[i], alc);
+		} else {
+			result_validity.SetInvalid(i);
+		}
+	}
+	if (payload.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+
+	JSONAllocator::AddBuffer(result, alc);
+}
+
+static unique_ptr<FunctionData> JSONCopyToGeoJSONBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	if (arguments.size() != 3) {
+		throw BinderException("%s is for internal use only", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
+	}
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	auto &payload_type = arguments[0]->GetReturnType();
+	if (payload_type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException("%s is for internal use only", JSON_COPY_TO_GEOJSON_INTERNAL_NAME);
+	}
+
+	// The first GEOMETRY column is the feature geometry, everything else becomes a property
+	auto &child_types = StructType::GetChildTypes(payload_type);
+	optional_idx geometry_index;
+	vector<idx_t> property_indices;
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		if (!geometry_index.IsValid() && child_types[i].second.id() == LogicalTypeId::GEOMETRY) {
+			geometry_index = i;
+		} else {
+			property_indices.push_back(i);
+		}
+	}
+	if (!geometry_index.IsValid()) {
+		throw BinderException("COPY ... TO ... (FORMAT GEOJSON) requires a GEOMETRY column, but none of the columns "
+		                      "being written has type GEOMETRY");
+	}
+
+	StructNames const_struct_names;
+	auto &bound_arguments = bound_function.GetArguments();
+	bound_arguments[0] = GetJSONType(const_struct_names, payload_type);
+	bound_function.SetReturnType(LogicalType::JSON());
+
+	auto formats = CreateJSONCopyToJSONFunctionData(input.GetClientContext(), std::move(const_struct_names),
+	                                                *arguments[1], *arguments[2]);
+	return make_uniq<JSONCopyToGeoJSONFunctionData>(std::move(formats), geometry_index.GetIndex(),
+	                                                std::move(property_indices));
+}
+
 static void JSONCopyToJSONSerialize(Serializer &serializer, optional_ptr<FunctionData> bind_data,
                                     const BoundScalarFunction &) {
 	if (!bind_data) {
@@ -1187,6 +1346,14 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
+	return fun;
+}
+
+ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
+	ScalarFunction fun(JSON_COPY_TO_GEOJSON_INTERNAL_NAME,
+	                   {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::JSON(),
+	                   JSONCopyToGeoJSONFunction, JSONCopyToGeoJSONBind, nullptr, JSONFunctionLocalState::Init);
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

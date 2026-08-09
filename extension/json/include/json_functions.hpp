@@ -83,6 +83,8 @@ public:
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
+	static ScalarFunction GetJSONCopyToGeoJSONFunction();
+	static CopyFunction GetGeoJSONCopyFunction();
 	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
 	                                                             unique_ptr<Expression> date_format,
 	                                                             unique_ptr<Expression> timestamp_format);
@@ -107,6 +109,9 @@ private:
 	static ScalarFunctionSet GetStructureFunction();
 	static ScalarFunctionSet GetTransformFunction();
 	static ScalarFunctionSet GetTransformStrictFunction();
+
+	static ScalarFunctionSet GetAsGeoJSONFunction();
+	static ScalarFunctionSet GetGeomFromGeoJSONFunction();
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
