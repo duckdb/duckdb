@@ -320,19 +320,11 @@ private:
 	bool TryReuseChangedGroupCandidates(idx_t candidate_count);
 	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
 	unique_ptr<GroupedAggregateHashTable> ht;
-	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
 	const PhysicalRecursiveCTE &op;
-	ClientContext &context;
-	vector<AggregateObject> payload_aggregate_objects;
 	ExpressionExecutor executor;
-	unique_ptr<ExpressionExecutor> key_executor;
-	Vector preaggregation_hashes;
-	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
-	bool has_payload_comparison_executors = false;
 	DataChunk payload_rows;
-	DataChunk raw_distinct_rows;
 	Vector new_group_addresses;
 	SelectionVector new_groups;
 	const bool allow_executor_reuse;
@@ -358,13 +350,23 @@ private:
 	AggregateHTScanState ht_scan_state;
 
 	bool use_local_union_all_output = true;
-	bool can_preaggregate_using_key = false;
-	bool can_reuse_new_group_candidates = false;
-	bool can_reuse_changed_group_candidates = false;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active
 	unique_ptr<RecursiveCTEEpochMetrics> epoch_metrics;
+
+	//! State used only by USING KEY recursive CTEs. Keep this after the regular-recursion hot state.
+	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
+	ClientContext &context;
+	vector<AggregateObject> payload_aggregate_objects;
+	unique_ptr<ExpressionExecutor> key_executor;
+	Vector preaggregation_hashes;
+	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
+	DataChunk raw_distinct_rows;
+	bool has_payload_comparison_executors = false;
+	bool can_preaggregate_using_key = false;
+	bool can_reuse_new_group_candidates = false;
+	bool can_reuse_changed_group_candidates = false;
 
 	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
 	template <bool COLLECT_METRICS>

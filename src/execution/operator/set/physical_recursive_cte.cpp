@@ -50,11 +50,11 @@ idx_t PhysicalRecursiveCTE::NextMetricsInvocation() const {
 // Sink State
 //===--------------------------------------------------------------------===//
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-    : op(op), context(context), executor(context), preaggregation_hashes(LogicalType::HASH, nullptr, 0),
-      new_group_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE),
+    : op(op), executor(context), new_group_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE),
       allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)), metrics(context, op),
       scheduler(op.shared_executor_pool, allow_executor_reuse),
-      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
+      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()), context(context),
+      preaggregation_hashes(LogicalType::HASH, nullptr, 0) {
 	if (metrics.Enabled()) {
 		epoch_metrics = make_uniq<RecursiveCTEEpochMetrics>();
 	}
