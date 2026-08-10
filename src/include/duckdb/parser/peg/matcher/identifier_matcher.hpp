@@ -69,12 +69,12 @@ public:
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else {
-			state.FoldIdentifier(result_text);
-		}
-		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+		} else if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+			// a single-quoted token in a table or file-name position is a path, so it is unwrapped but never folded
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "''", "'");
+		} else {
+			state.FoldIdentifier(result_text);
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
 	}
@@ -220,10 +220,12 @@ public:
 			return nullptr;
 		}
 		string result_text = token_text;
+		// unlike IdentifierMatcher this rule does not unwrap path literals, it only has to avoid folding them
+		const bool is_path_literal = IsSingleQuoted(result_text) && SupportsStringLiteral();
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else {
+		} else if (!is_path_literal) {
 			state.FoldIdentifier(result_text);
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));

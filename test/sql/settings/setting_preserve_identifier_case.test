@@ -81,6 +81,25 @@ SELECT 'MyString';
 ----
 MyString
 
+# a single-quoted path in a table position is a path, not an identifier, so it keeps its case.
+# the error message is checked rather than a successful read, so that this also fails on a
+# case-insensitive filesystem, where a folded path would still resolve.
+statement error
+SELECT * FROM '{TEST_DIR}/NoSuch/Mixed/File.csv';
+----
+<REGEX>:.*NoSuch/Mixed/File\.csv.*
+
+statement ok
+SET preserve_identifier_case TO 'lowercase';
+
+statement error
+SELECT * FROM '{TEST_DIR}/NoSuch/Mixed/File.csv';
+----
+<REGEX>:.*NoSuch/Mixed/File\.csv.*
+
+statement ok
+SET preserve_identifier_case TO 'uppercase';
+
 # the boolean spellings are still accepted for backwards compatibility
 statement ok
 SET preserve_identifier_case TO true;
