@@ -1,0 +1,22 @@
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index a8145b3..7fbc617 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -9481,7 +9481,7 @@ bool ST_DWithinHelper::TryGetConstDistance(const unique_ptr<FunctionData> &bind_
+ void RegisterSpatialScalarFunctions(ExtensionLoader &loader) {
+ 	ST_Affine::Register(loader);
+ 	ST_Area::Register(loader);
+-	ST_AsGeoJSON::Register(loader);
++	// ST_AsGeoJSON::Register(loader);
+ 	ST_AsText::Register(loader);
+ 	// ST_AsWKB::Register(loader);
+ 	ST_AsHEXWKB::Register(loader);
+@@ -9508,7 +9508,7 @@ void RegisterSpatialScalarFunctions(ExtensionLoader &loader) {
+ 	ST_Force4D::Register(loader);
+ 	ST_GeometryType::Register(loader);
+ 	ST_GeomFromHEXWKB::Register(loader);
+-	ST_GeomFromGeoJSON::Register(loader);
++	// ST_GeomFromGeoJSON::Register(loader);
+ 	ST_GeomFromText::Register(loader);
+ 	ST_GeomFromWKB::Register(loader);
+ 	ST_HasZ::Register(loader);
