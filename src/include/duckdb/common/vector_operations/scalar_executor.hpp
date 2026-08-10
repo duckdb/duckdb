@@ -17,6 +17,14 @@
 #include <tuple>
 #include <type_traits>
 
+#if defined(_MSC_VER)
+#define DUCKDB_SCALAR_EXECUTOR_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__)
+#define DUCKDB_SCALAR_EXECUTOR_NOINLINE __attribute__((noinline))
+#else
+#define DUCKDB_SCALAR_EXECUTOR_NOINLINE
+#endif
+
 namespace duckdb {
 
 //! Internal execution engine shared by the named scalar executor facades.
@@ -724,6 +732,39 @@ private:
 		return SelectGeneric<SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
 	}
 
+	template <class POLICY, class ADAPTER, class... ARGS, size_t... Is>
+	static idx_t SelectOutputDispatch(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
+	                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+	                                  const InputProfile &profile, ADAPTER &adapter,
+	                                  std::index_sequence<Is...> indices) {
+		if constexpr (POLICY::SPECIALIZE_OUTPUTS) {
+			if (true_sel && false_sel) {
+				StaticSelectionSink<true, true> sink(true_sel, false_sel);
+				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, sel, count, profile, sink,
+				                                                                adapter, indices);
+			} else if (true_sel) {
+				StaticSelectionSink<true, false> sink(true_sel, false_sel);
+				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, sel, count, profile, sink,
+				                                                                adapter, indices);
+			}
+			StaticSelectionSink<false, true> sink(true_sel, false_sel);
+			return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, sel, count, profile, sink, adapter,
+			                                                                indices);
+		}
+		RuntimeSelectionSink sink(true_sel, false_sel);
+		return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, sel, count, profile, sink, adapter,
+		                                                                indices);
+	}
+
+	template <class POLICY, class ADAPTER, class... ARGS, size_t... Is>
+	DUCKDB_SCALAR_EXECUTOR_NOINLINE static idx_t
+	SelectFallback(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel, idx_t count,
+	               SelectionVector *true_sel, SelectionVector *false_sel, const InputProfile &profile, ADAPTER &adapter,
+	               std::index_sequence<Is...> indices) {
+		return SelectOutputDispatch<POLICY, ADAPTER, ARGS...>(inputs, sel, count, true_sel, false_sel, profile, adapter,
+		                                                      indices);
+	}
+
 public:
 	template <class POLICY, class RESULT_TYPE, class ADAPTER, class... ARGS>
 	static void Execute(const std::array<VectorRef, sizeof...(ARGS)> &inputs, Vector &result, idx_t count,
@@ -745,37 +786,28 @@ public:
 		auto profile = GetInputProfile(inputs, indices);
 		if constexpr (POLICY::DIRECT_TRUE_FLAT_MASKS != 0) {
 			static_assert(sizeof...(ARGS) <= 3, "Direct true-only selection supports up to three inputs");
-			if (true_sel && !false_sel && profile.all_flat_or_constant &&
-			    (POLICY::DIRECT_TRUE_FLAT_MASKS & (uint64_t(1) << profile.constant_mask))) {
-				StaticSelectionSink<true, false> sink(true_sel, false_sel);
-				if (profile.any_constant_null) {
-					return sink.FillConstant(false, *sel, count);
+			if (true_sel && !false_sel) {
+				if (profile.all_flat_or_constant &&
+				    (POLICY::DIRECT_TRUE_FLAT_MASKS & (uint64_t(1) << profile.constant_mask))) {
+					StaticSelectionSink<true, false> sink(true_sel, false_sel);
+					if (profile.any_constant_null) {
+						return sink.FillConstant(false, *sel, count);
+					}
+					idx_t result;
+					if (TrySelectFlat<POLICY::DIRECT_TRUE_FLAT_MASKS, decltype(sink), ADAPTER, ARGS...>(
+					        inputs, *sel, count, profile.constant_mask, sink, adapter, indices, result)) {
+						return result;
+					}
 				}
-				idx_t result;
-				if (TrySelectFlat<POLICY::DIRECT_TRUE_FLAT_MASKS, decltype(sink), ADAPTER, ARGS...>(
-				        inputs, *sel, count, profile.constant_mask, sink, adapter, indices, result)) {
-					return result;
-				}
+				return SelectFallback<POLICY, ADAPTER, ARGS...>(inputs, *sel, count, true_sel, false_sel, profile,
+				                                                adapter, indices);
 			}
 		}
-		if constexpr (POLICY::SPECIALIZE_OUTPUTS) {
-			if (true_sel && false_sel) {
-				StaticSelectionSink<true, true> sink(true_sel, false_sel);
-				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink,
-				                                                                adapter, indices);
-			} else if (true_sel) {
-				StaticSelectionSink<true, false> sink(true_sel, false_sel);
-				return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink,
-				                                                                adapter, indices);
-			}
-			StaticSelectionSink<false, true> sink(true_sel, false_sel);
-			return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink, adapter,
-			                                                                indices);
-		}
-		RuntimeSelectionSink sink(true_sel, false_sel);
-		return SelectInternal<POLICY, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, profile, sink, adapter,
-		                                                                indices);
+		return SelectOutputDispatch<POLICY, ADAPTER, ARGS...>(inputs, *sel, count, true_sel, false_sel, profile,
+		                                                      adapter, indices);
 	}
 };
 
 } // namespace duckdb
+
+#undef DUCKDB_SCALAR_EXECUTOR_NOINLINE
