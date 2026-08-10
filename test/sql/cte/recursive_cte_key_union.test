@@ -231,6 +231,23 @@ SELECT count(*), min(lo) FROM t;
 ----
 1	0
 
+# Address tracking is cleared between wide and narrow epochs without retaining stale groups.
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0::BIGINT FROM range(1, 101) r(i)
+	UNION
+	(
+		SELECT k, 1 FROM t WHERE v = 0
+		UNION ALL
+		SELECT k, v + 1 FROM t WHERE k = 1 AND v IN (1, 3)
+		UNION ALL
+		SELECT i, 3 FROM t, range(1, 101) r(i) WHERE t.k = 1 AND t.v = 2
+	)
+)
+SELECT count(*), sum(v)::BIGINT, max(v) FROM t;
+----
+100	301	4
+
 # Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
 query III rowsort
 WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (

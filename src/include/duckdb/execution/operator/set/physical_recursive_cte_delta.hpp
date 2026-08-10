@@ -17,7 +17,7 @@ private:
 	void Resize(idx_t capacity);
 
 	vector<data_ptr_t> entries;
-	idx_t count = 0;
+	vector<idx_t> occupied_slots;
 };
 
 struct RecursiveCTEKeyDeltaState {

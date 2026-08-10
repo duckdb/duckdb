@@ -15,8 +15,10 @@ static vector<LogicalType> GetPreviousStateTypes(const PhysicalRecursiveCTE &op)
 }
 
 void RecursiveCTEGroupAddressSet::Reset() {
-	std::fill(entries.begin(), entries.end(), nullptr);
-	count = 0;
+	for (const auto slot : occupied_slots) {
+		entries[slot] = nullptr;
+	}
+	occupied_slots.clear();
 }
 
 void RecursiveCTEGroupAddressSet::Reserve(idx_t count_p) {
@@ -35,18 +37,19 @@ void RecursiveCTEGroupAddressSet::Reserve(idx_t count_p) {
 void RecursiveCTEGroupAddressSet::Resize(idx_t capacity) {
 	D_ASSERT(capacity >= 8 && (capacity & (capacity - 1)) == 0);
 	auto old_entries = std::move(entries);
+	auto old_occupied_slots = std::move(occupied_slots);
 	entries.assign(capacity, nullptr);
-	count = 0;
-	for (auto address : old_entries) {
-		if (address) {
-			Insert(address);
-		}
+	occupied_slots.clear();
+	occupied_slots.reserve(old_occupied_slots.size());
+	for (const auto slot : old_occupied_slots) {
+		D_ASSERT(old_entries[slot]);
+		Insert(old_entries[slot]);
 	}
 }
 
 bool RecursiveCTEGroupAddressSet::Insert(data_ptr_t address) {
 	D_ASSERT(address);
-	if (entries.empty() || count + 1 > entries.size() / 2) {
+	if (entries.empty() || occupied_slots.size() + 1 > entries.size() / 2) {
 		Resize(entries.empty() ? 8 : entries.size() * 2);
 	}
 	auto entry = Hash(CastPointerToValue(address)) & (entries.size() - 1);
@@ -57,12 +60,12 @@ bool RecursiveCTEGroupAddressSet::Insert(data_ptr_t address) {
 		entry = (entry + 1) & (entries.size() - 1);
 	}
 	entries[entry] = address;
-	count++;
+	occupied_slots.push_back(entry);
 	return true;
 }
 
 bool RecursiveCTEGroupAddressSet::Contains(data_ptr_t address) const {
-	if (count == 0) {
+	if (occupied_slots.empty()) {
 		return false;
 	}
 	auto entry = Hash(CastPointerToValue(address)) & (entries.size() - 1);
