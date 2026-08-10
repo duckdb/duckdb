@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -801,7 +802,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) {
+bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state) const {
 	if (!GetBlockManager().Prefetch()) {
 		return false;
 	}
@@ -812,12 +813,20 @@ bool RowGroup::RegisterScanIO(CollectionScanState &state, idx_t row_count, Prefe
 	return true;
 }
 
-void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) {
+void RowGroup::PrefetchScanIO(CollectionScanState &state, idx_t row_count) const {
 	PrefetchState prefetch_state;
 	if (!RegisterScanIO(state, row_count, prefetch_state)) {
 		return;
 	}
 	GetBlockManager().buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+}
+
+vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const {
+	PrefetchState prefetch_state;
+	if (!RegisterScanIO(state, row_count, prefetch_state)) {
+		return vector<unique_ptr<AsyncTask>>();
+	}
+	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
