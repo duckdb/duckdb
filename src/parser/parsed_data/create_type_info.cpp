@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
