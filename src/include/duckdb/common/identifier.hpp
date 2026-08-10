@@ -80,6 +80,9 @@ public:
 	//! Whether the identifier starts with the given prefix (case-insensitive)
 	DUCKDB_API bool StartsWith(const string &prefix) const;
 
+	//! Whether the identifier ends with the given suffix (case-insensitive)
+	DUCKDB_API bool EndsWith(const string &suffix) const;
+
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;
 

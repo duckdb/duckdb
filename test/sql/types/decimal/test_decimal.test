@@ -141,7 +141,7 @@ SELECT '0.1'::DECIMAL(3, 4);
 statement error
 SELECT '0.1'::DECIMAL('hello');
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
+<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
 
 # ...or negative numbers
 statement error
@@ -164,3 +164,34 @@ statement error
 SELECT '1'::INTEGER(1000);
 ----
 <REGEX>:Parser Error.*syntax error.*
+
+# non-integral type parameters
+statement error
+SELECT 1::DECIMAL(3.2);
+----
+<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+
+statement error
+SELECT 1::DECIMAL(3.0);
+----
+<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+
+statement error
+SELECT 1::DECIMAL('32');
+----
+<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+
+statement error
+SELECT 1::DECIMAL(18, 2.5);
+----
+<REGEX>:Binder Error.*DECIMAL type scale must be an integral type.*
+
+statement error
+SELECT 1::DECIMAL(18, '2');
+----
+<REGEX>:Binder Error.*DECIMAL type scale must be an integral type.*
+
+statement error
+SELECT 1::DECIMAL(TRUE);
+----
+<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*

@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -41,6 +42,13 @@ enum class VersionCompressionResult : uint8_t {
 	//! (some rows are not deleted)
 	SETTLED
 };
+
+//! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
+//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID for none-deleted, or a single delete id)
+//! MASKED   - partially deleted, all deleted rows share one committed id (mask_delete_id): which rows are
+//!            deleted is stored in deleted_mask, deleted_data freed
+//! ARRAY    - per-row delete ids materialized in deleted_data
+enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
 class ChunkVectorInfo {
 public:
@@ -106,6 +114,11 @@ private:
 	IndexPointer GetInitializedDeletedPointer();
 	//! Frees the per-row delete ids (if any)
 	void FreeDeleteData();
+	//! ARRAY -> MASKED: record alive rows as invalid bits, free the per-row delete array. mask_id is the
+	//! shared committed id of the deleted rows (0 when they are already visible to all transactions)
+	void CompressDeleteToMask(transaction_t mask_id);
+	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
+	void DecompressDeleteMask();
 
 private:
 	FixedSizeAllocator &allocator;
@@ -118,6 +131,16 @@ private:
 	IndexPointer deleted_data;
 	//! The constant delete id (if there is only one, e.g. because the entire vector was deleted in one transaction)
 	transaction_t constant_delete_id;
+	//! Bitmask used in the MASKED state: valid bit == the row is deleted, invalid bit == the row is alive.
+	//! Matches the on-disk VECTOR_INFO orientation. Only meaningful when delete_state == DeleteIdState::MASKED.
+	ValidityMask deleted_mask;
+	//! The single committed id shared by every deleted row in the MASKED state. 0 means the deletes are
+	//! visible to all transactions (the value used when read from disk); a non-zero committed id means the
+	//! mask was folded from one committed transaction whose delete is not yet visible to every snapshot.
+	//! Only meaningful when delete_state == DeleteIdState::MASKED.
+	transaction_t mask_delete_id = 0;
+	//! The current delete-side storage state - the single source of truth for the delete side
+	DeleteIdState delete_state = DeleteIdState::CONSTANT;
 	//! Whether a compression pass could achieve anything for this vector: armed by any id modification,
 	//! disarmed when a pass compresses the vector fully or finds it settled (live rows block the collapse
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without

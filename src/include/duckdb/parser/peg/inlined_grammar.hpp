@@ -1610,7 +1610,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier\n"
 	"JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier\n"
 	"Asof <- 'ASOF'\n"
-	"JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef\n"
+	"JoinWithoutOnClause <- JoinPrefix 'JOIN' InnerTableRef\n"
 	"JoinQualifier <- OnClause / UsingClause\n"
 	"OnClause <- 'ON' Expression\n"
 	"UsingClause <- 'USING' Parens(List(ColumnName))\n"
