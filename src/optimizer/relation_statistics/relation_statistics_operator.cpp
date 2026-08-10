@@ -186,6 +186,11 @@ RelationStatisticsHelper::ExtractOperatorStats(LogicalOperator &op, ClientContex
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		return ExtractUnnestStats(op, child_stats[0].get());
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		if (child_stats.size() != 1) {
+			return {};
+		}
+		return ProjectChildStats(op, child_stats, child_stats[0].get().cardinality);
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		if (child_stats.size() != 1) {
 			return {};
