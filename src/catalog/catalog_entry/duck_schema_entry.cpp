@@ -69,6 +69,30 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 	}
 }
 
+//! Collects the alters that rewrite the name that referenced tables hold for a table that is being renamed. Every
+//! referenced table stores the name of the referencing table in a FK_TYPE_PRIMARY_KEY_TABLE constraint, and that is
+//! the name the foreign key verification looks up when the referenced table is modified.
+static void FindForeignKeyRenameInformation(TableCatalogEntry &table, const Identifier &new_name,
+                                            vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
+	for (auto &cond : table.GetConstraints()) {
+		if (cond->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = cond->Cast<ForeignKeyConstraint>();
+		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			continue;
+		}
+		// the referenced table lives in the same (possibly nested) schema as this table
+		AlterEntryData alter_data(table.schema.GetQualifiedName(fk.info.table), OnEntryNotFound::THROW_EXCEPTION);
+		fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(alter_data, table.name, fk.pk_columns, fk.fk_columns,
+		                                                   fk.info.pk_keys, fk.info.fk_keys,
+		                                                   AlterForeignKeyType::AFT_DELETE));
+		fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), new_name, fk.pk_columns,
+		                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
+		                                                   AlterForeignKeyType::AFT_ADD));
+	}
+}
+
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
                                  optional_ptr<SchemaCatalogEntry> parent_schema_p)
     : SchemaCatalogEntry(catalog, info), parent_schema(parent_schema_p), schemas(catalog),
@@ -345,8 +369,28 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		}
 	} else {
 		auto &name = info.GetQualifiedName().Name();
+
+		// a table rename has to rewrite the name that referenced tables hold for this table. The nested alters below
+		// are FOREIGN_KEY_CONSTRAINT alters, so they do not collect anything themselves.
+		vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
+		if (info.type == AlterType::ALTER_TABLE &&
+		    info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::RENAME_TABLE) {
+			auto &rename_info = info.Cast<RenameTableInfo>();
+			auto existing_entry = set.GetEntry(transaction, name);
+			if (existing_entry && existing_entry->type == CatalogType::TABLE_ENTRY &&
+			    rename_info.new_table_name != name) {
+				FindForeignKeyRenameInformation(existing_entry->Cast<TableCatalogEntry>(), rename_info.new_table_name,
+				                                fk_arrays);
+			}
+		}
+
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
+		}
+
+		// the rename succeeded - point the referenced tables at the new name
+		for (auto &fk_info : fk_arrays) {
+			Alter(transaction, *fk_info);
 		}
 	}
 }
