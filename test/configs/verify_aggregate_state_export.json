@@ -64,6 +64,7 @@
         "test/sql/cte/cte_describe.test",
         "test/sql/function/generic/hash_func.test",
         "test/sql/json/issues/internal_issue391.test",
+        "test/sql/parser/statement_tostring_roundtrip.test",
         "test/sql/prepared/prepare_summarize.test",
         "test/sql/show_select/summarize_subquery.test",
         "test/sql/show_select/test_summarize.test",
