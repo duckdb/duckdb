@@ -1,0 +1,104 @@
+# name: test/sql/index/art/scan/test_not_distinct_index_scan.test
+# description: Test using an index scan for IS NOT DISTINCT FROM filter pushdown.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(500000);
+
+statement ok
+CREATE INDEX idx_i ON tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+1
+
+query I
+SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+499995
+
+# IS NOT DISTINCT FROM NULL matches NULL values, which are not indexed by the ART.
+
+statement ok
+INSERT INTO tbl VALUES (NULL);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
+----
+analyzed_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
+----
+1
+
+# A column containing NULL values. IS NOT DISTINCT FROM is only interchangeable with
+# equality where NULL and false are equivalent, i.e., at the root of the filter.
+
+statement ok
+CREATE TABLE nulls AS SELECT CASE WHEN range % 5 = 0 THEN NULL ELSE range END AS i FROM range(500000);
+
+statement ok
+CREATE INDEX idx_nulls ON nulls(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nulls WHERE i IS NOT DISTINCT FROM 499997;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM nulls WHERE i IS NOT DISTINCT FROM 499997;
+----
+1
+
+# The row for 499995 is NULL, so it is distinct from the constant.
+
+query I
+SELECT count(*) FROM nulls WHERE i IS NOT DISTINCT FROM 499995;
+----
+0
+
+# Negating the predicate must retain the NULL rows, so no index scan is used.
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nulls WHERE NOT (i IS NOT DISTINCT FROM 499997);
+----
+analyzed_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM nulls WHERE NOT (i IS NOT DISTINCT FROM 499997);
+----
+499999
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nulls WHERE (i IS NOT DISTINCT FROM 499997) = false;
+----
+analyzed_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM nulls WHERE (i IS NOT DISTINCT FROM 499997) = false;
+----
+499999
+
+# The predicate itself never evaluates to NULL.
+
+query I
+SELECT count(*) FROM nulls WHERE (i IS NOT DISTINCT FROM 499997) IS NULL;
+----
+0
+
+# IS NOT DISTINCT FROM returns false for NULL input, whereas equality returns NULL.
+
+query III
+SELECT i, i IS NOT DISTINCT FROM 7 AS not_distinct_from, i = 7 AS equals
+FROM nulls WHERE i IS NULL OR i = 7 ORDER BY i NULLS LAST LIMIT 3;
+----
+7	true	true
+NULL	false	NULL
+NULL	false	NULL
