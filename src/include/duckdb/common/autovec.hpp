@@ -87,7 +87,6 @@ typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));
 typedef uint16_t duckdb_av_u16x8 __attribute__((vector_size(16)));
 typedef uint32_t duckdb_av_u32x4 __attribute__((vector_size(16)));
 typedef uint32_t duckdb_av_u32x8 __attribute__((vector_size(32)));
-typedef uint64_t duckdb_av_u64x2 __attribute__((vector_size(16)));
 typedef uint64_t duckdb_av_u64x4 __attribute__((vector_size(32)));
 //! Gather each lane's window byte from BASE on; HI takes the next byte; w1 continues the window past 16 bytes.
 template <class VEC, uint32_t WIDTH, uint32_t BASE, bool HI, std::size_t... I>
@@ -155,21 +154,10 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE>
 DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleDecode(duckdb_av_u8x16 w, VEC frame) { // window fits one register
 	return ShuffleDecode<VEC, WIDTH, BASE>(w, w, frame);
 }
-//! Two-register window for u64 widths 57..63: the pair window exceeds 16 bytes.
-template <uint32_t WIDTH, uint32_t BASE>
-DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u64x2 ShuffleDecode64x2(const uint8_t *DUCKDB_BITPACKING_RESTRICT base,
-                                                                      duckdb_av_u64x2 frame) {
-	constexpr uint32_t WBYTE = (BASE * WIDTH) / 8;
-	duckdb_av_u8x16 w0, w1;
-	std::memcpy(&w0, base + WBYTE, 16);
-	std::memcpy(&w1, base + WBYTE + 16, 16);
-	return ShuffleDecode<duckdb_av_u64x2, WIDTH, BASE>(w0, w1, frame);
-}
 template <uint32_t WIDTH, class OUT_T>
-static constexpr bool UseShuffleUnpack() { // u32 at width 31 would need a second window register;
-	                                       // past u64 width 60 the two-register gather loses to the scalar loop
-	return WIDTH > 0 && WIDTH < 8 * sizeof(OUT_T) && !(sizeof(OUT_T) == 4 && WIDTH == 31) &&
-	       (sizeof(OUT_T) != 8 || WIDTH <= 60);
+static constexpr bool UseShuffleUnpack() { // u32 at width 31 would need a second window register; widths past
+	                                       // 32 are rare enough that the scalar loop is not worth the code
+	return WIDTH > 0 && WIDTH <= 32 && WIDTH < 8 * sizeof(OUT_T) && !(sizeof(OUT_T) == 4 && WIDTH == 31);
 }
 template <uint32_t WIDTH, class OUT_T>
 DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
@@ -231,7 +219,7 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 			std::memcpy(out + s * 8 + 4, &whi, 32);
 		}
 		return shuffle_groups;
-	} else if constexpr (sizeof(OUT_T) == 4 || wide16 || WIDTH <= 30) { // two windows feed two 32-bit lane groups
+	} else { // two windows feed two 32-bit lane groups; widths past 32 never reach here
 		constexpr bool widen = sizeof(OUT_T) == 8;
 		constexpr uint32_t wb1 = (4 * WIDTH) / 8;
 		const duckdb_av_u32x4 fr = duckdb_av_u32x4 {} + static_cast<uint32_t>(widen ? 0 : frame);
@@ -258,41 +246,6 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 			} else {
 				std::memcpy(out + s * 8 + 0, &lo, 16);
 				std::memcpy(out + s * 8 + 4, &hi, 16);
-			}
-		}
-		return shuffle_groups;
-	} else {
-		const duckdb_av_u64x2 fr = duckdb_av_u64x2 {} + frame;
-		constexpr std::size_t window = (6 * width) / 8 + (WIDTH >= 57 ? 16 : 0);
-		constexpr std::size_t reserve = (window + 16 + 4 * width - 1) / (4 * width); // safe overread margin
-		const std::size_t shuffle_groups = groups > reserve ? groups - reserve : 0;
-		uint64_t *DUCKDB_BITPACKING_RESTRICT out64 = reinterpret_cast<uint64_t *>(out);
-		DUCKDB_UNROLL_LOOP
-		for (std::size_t s = 0; s < shuffle_groups * 4; s++) { // 8 values per step, four lane pairs
-			const uint8_t *DUCKDB_BITPACKING_RESTRICT p = base + s * WIDTH;
-			if constexpr (WIDTH >= 57) {
-				duckdb_av_u64x2 v0 = ShuffleDecode64x2<WIDTH, 0>(p, fr);
-				duckdb_av_u64x2 v1 = ShuffleDecode64x2<WIDTH, 2>(p, fr);
-				duckdb_av_u64x2 v2 = ShuffleDecode64x2<WIDTH, 4>(p, fr);
-				duckdb_av_u64x2 v3 = ShuffleDecode64x2<WIDTH, 6>(p, fr);
-				std::memcpy(out64 + s * 8 + 0, &v0, 16);
-				std::memcpy(out64 + s * 8 + 2, &v1, 16);
-				std::memcpy(out64 + s * 8 + 4, &v2, 16);
-				std::memcpy(out64 + s * 8 + 6, &v3, 16);
-			} else {
-				duckdb_av_u8x16 w0, w1, w2, w3;
-				std::memcpy(&w0, p + (0 * WIDTH) / 8, 16);
-				std::memcpy(&w1, p + (2 * WIDTH) / 8, 16);
-				std::memcpy(&w2, p + (4 * WIDTH) / 8, 16);
-				std::memcpy(&w3, p + (6 * WIDTH) / 8, 16);
-				duckdb_av_u64x2 v0 = ShuffleDecode<duckdb_av_u64x2, WIDTH, 0>(w0, fr);
-				duckdb_av_u64x2 v1 = ShuffleDecode<duckdb_av_u64x2, WIDTH, 2>(w1, fr);
-				duckdb_av_u64x2 v2 = ShuffleDecode<duckdb_av_u64x2, WIDTH, 4>(w2, fr);
-				duckdb_av_u64x2 v3 = ShuffleDecode<duckdb_av_u64x2, WIDTH, 6>(w3, fr);
-				std::memcpy(out64 + s * 8 + 0, &v0, 16);
-				std::memcpy(out64 + s * 8 + 2, &v1, 16);
-				std::memcpy(out64 + s * 8 + 4, &v2, 16);
-				std::memcpy(out64 + s * 8 + 6, &v3, 16);
 			}
 		}
 		return shuffle_groups;
