@@ -134,10 +134,9 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 			list.WriteElement().WriteStringRef(input_entry.GetValue());
 			continue;
 		}
-		OP::Split(input_entry.GetValue(), delim_entry.GetValue(), data,
-		          [&](const char *split_data, idx_t split_size) {
-			    list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
-		    });
+		OP::Split(input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
+			list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
+		});
 	}
 
 	StringVector::AddHeapReference(ListVector::GetChildMutable(result), args.data[0]);
@@ -180,6 +179,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	// regexp options
 	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
+	regexp_split.SetFallible();
 	return regexp_split;
 }
 
