@@ -118,6 +118,9 @@ jobs:
             ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
           fi
 
+      - name: Verify architecture flags
+        run: grep -Fq -- '-Xarch_arm64 -mcpu=apple-m1' build/release/compile_commands.json
+
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
         shell: bash

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
