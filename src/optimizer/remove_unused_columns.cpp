@@ -683,7 +683,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			throw InternalException("CTE pruning did not traverse the entire plan. This is a bug in the optimizer.");
 		}
 
-		if (cte_map_entry.everything_referenced) {
+		// Distinct column indexes here, unlike the per-reader map, so comparing sizes is a valid width check.
+		if (cte_map_entry.everything_referenced ||
+		    referenced_columns_in_rhs.size() == cte.children[0]->GetColumnBindings().size()) {
 			if (!analyze) {
 				everything_referenced = true;
 			}
@@ -772,10 +774,8 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		// The flag is shared by all readers, so only ever turn it on: an unaccounted reader needs every column
-		if (everything_referenced || cte_ref.chunk_types.size() == referenced_columns.size()) {
-			cte_entry.everything_referenced = true;
-		}
+		// Keyed per reader, so its size counts reader-column pairs, not columns. Coverage is decided at the CTE.
+		cte_entry.everything_referenced |= everything_referenced;
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
