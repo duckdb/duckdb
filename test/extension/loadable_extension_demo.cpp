@@ -395,7 +395,7 @@ public:
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
 	                                                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
-		auto &quack_data = dynamic_cast<QuackExtensionData &>(*parse_data);
+		auto &quack_data = parse_data->Cast<QuackExtensionData>();
 
 		ParserExtensionPlanResult result;
 		result.function = QuackFunction();
