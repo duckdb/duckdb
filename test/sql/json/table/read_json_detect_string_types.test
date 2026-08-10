@@ -1,0 +1,115 @@
+# name: test/sql/json/table/read_json_detect_string_types.test
+# description: Test read_json detect_string_types parameter
+# group: [table]
+
+require json
+
+statement ok
+copy (select * from (values ('{"d": "25-11-2025", "t": "12:34:56", "ts": "2023-02-07T19:12:28.123Z", "u": "BBD05AE7-76E5-4F1A-A31F-247408251FC9"}'))) to '{TEMP_DIR}/detect_string_types.json' (format csv, quote '', header 0)
+
+# by default, we detect DATE/TIME/TIMESTAMP/UUID types from strings
+query IIII
+select typeof(d), typeof(t), typeof(ts), typeof(u) from read_json_auto('{TEMP_DIR}/detect_string_types.json')
+----
+DATE	TIME	TIMESTAMP	UUID
+
+# with detect_string_types=false everything stays VARCHAR
+query IIII
+select typeof(d), typeof(t), typeof(ts), typeof(u) from read_json_auto('{TEMP_DIR}/detect_string_types.json', detect_string_types=false)
+----
+VARCHAR	VARCHAR	VARCHAR	VARCHAR
+
+# and the original strings are preserved exactly (formatting/case is not lost)
+query IIII
+select d, t, ts, u from read_json_auto('{TEMP_DIR}/detect_string_types.json', detect_string_types=false)
+----
+25-11-2025	12:34:56	2023-02-07T19:12:28.123Z	BBD05AE7-76E5-4F1A-A31F-247408251FC9
+
+# also works for read_ndjson
+query IIII
+select typeof(d), typeof(t), typeof(ts), typeof(u) from read_ndjson('{TEMP_DIR}/detect_string_types.json', detect_string_types=false)
+----
+VARCHAR	VARCHAR	VARCHAR	VARCHAR
+
+# detection is also disabled in nested structs and lists
+statement ok
+copy (select * from (values ('{"nested": {"d": "25-11-2025"}, "list": ["2023-02-07T19:12:28.123Z"]}'))) to '{TEMP_DIR}/detect_string_types_nested.json' (format csv, quote '', header 0)
+
+query II
+select typeof(nested), typeof(list) from read_json_auto('{TEMP_DIR}/detect_string_types_nested.json')
+----
+STRUCT(d DATE)	TIMESTAMP[]
+
+query II
+select typeof(nested), typeof(list) from read_json_auto('{TEMP_DIR}/detect_string_types_nested.json', detect_string_types=false)
+----
+STRUCT(d VARCHAR)	VARCHAR[]
+
+# convert_strings_to_integers is independent of detect_string_types
+statement ok
+copy (select * from (values ('{"i": "42", "d": "25-11-2025"}'))) to '{TEMP_DIR}/detect_string_types_int.json' (format csv, quote '', header 0)
+
+query II
+select typeof(i), typeof(d) from read_json_auto('{TEMP_DIR}/detect_string_types_int.json', detect_string_types=false, convert_strings_to_integers=true)
+----
+BIGINT	VARCHAR
+
+# with both options enabled, integers and temporals are both detected
+query II
+select typeof(i), typeof(d) from read_json_auto('{TEMP_DIR}/detect_string_types_int.json', convert_strings_to_integers=true)
+----
+BIGINT	DATE
+
+# records=false: bare string values are also kept as VARCHAR
+statement ok
+copy (select * from (values ('"25-11-2025"'))) to '{TEMP_DIR}/detect_string_types_bare.json' (format csv, quote '', header 0)
+
+query II
+select typeof(json), json from read_json('{TEMP_DIR}/detect_string_types_bare.json', records=false)
+----
+DATE	2025-11-25
+
+query II
+select typeof(json), json from read_json('{TEMP_DIR}/detect_string_types_bare.json', records=false, detect_string_types=false)
+----
+VARCHAR	25-11-2025
+
+# multi-file schema merging with union_by_name also respects the setting
+statement ok
+copy (select * from (values ('{"a": "25-11-2025"}'))) to '{TEMP_DIR}/detect_string_types_f1.json' (format csv, quote '', header 0)
+
+statement ok
+copy (select * from (values ('{"b": "bbd05ae7-76e5-4f1a-a31f-247408251fc9"}'))) to '{TEMP_DIR}/detect_string_types_f2.json' (format csv, quote '', header 0)
+
+query II
+select typeof(a), typeof(b) from read_json_auto(['{TEMP_DIR}/detect_string_types_f1.json', '{TEMP_DIR}/detect_string_types_f2.json'], union_by_name=true, detect_string_types=false) limit 1
+----
+VARCHAR	VARCHAR
+
+# inferred MAP value types also respect the setting
+query I
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_dates.jsonl', map_inference_threshold=25)
+----
+MAP(VARCHAR, DATE)
+
+query I
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_dates.jsonl', map_inference_threshold=25, detect_string_types=false)
+----
+MAP(VARCHAR, VARCHAR)
+
+# explicitly requested types still work with detect_string_types=false
+query II
+select typeof(d), d from read_json('{TEMP_DIR}/detect_string_types.json', columns={d: 'DATE'}, dateformat='%d-%m-%Y', detect_string_types=false)
+----
+DATE	2025-11-25
+
+# dateformat/timestampformat only apply to detection when it is enabled
+query II
+select typeof(d), d from read_json_auto('{TEMP_DIR}/detect_string_types.json', dateformat='%d-%m-%Y', detect_string_types=false)
+----
+VARCHAR	25-11-2025
+
+statement error
+select * from read_json_auto('{TEMP_DIR}/detect_string_types.json', detect_string_types=NULL)
+----
+Binder Error
