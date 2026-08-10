@@ -33,7 +33,9 @@ public:
 public:
 	static BlockAllocator &Get(DatabaseInstance &db);
 	static BlockAllocator &Get(AttachedDatabase &db);
-
+	Allocator &GetAllocator() const {
+		return allocator;
+	}
 	//! Resize physical memory (can only be increased)
 	void Resize(idx_t new_physical_memory_size);
 

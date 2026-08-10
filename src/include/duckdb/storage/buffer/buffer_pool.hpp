@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/database_memory_config.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
@@ -45,8 +47,8 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
-	           idx_t allocator_bulk_deallocation_flush_threshold);
+	BufferPool(BlockAllocator &block_allocator, TemporaryMemoryManager &temporary_memory_manager,
+	           DatabaseMemoryConfig &config);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -65,18 +67,17 @@ public:
 
 	virtual idx_t GetOperatorMemoryLimit() const;
 
+	BlockAllocator &GetBlockAllocator() const {
+		return block_allocator;
+	}
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 	vector<EvictionQueueInformation> GetEvictionQueueInfo() const;
 
-	//! Take per-database ObjectCache under buffer pool's memory management.
-	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.
-	void SetObjectCache(ObjectCache *object_cache_p) {
-		if (object_cache != nullptr) {
-			throw InvalidInputException("Object cache has already been registered in buffer pool, cannot re-register!");
-		}
-		object_cache = object_cache_p;
-	}
+	//! Register the memory domain's ObjectCache for eviction.
+	void RegisterObjectCache(ObjectCache &object_cache);
+	//! Stop eviction through this cache and wait for an in-progress eviction to finish.
+	void UnregisterObjectCache(ObjectCache &object_cache);
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -167,24 +168,21 @@ protected:
 
 	//! The lock for changing the memory limit
 	mutex limit_lock;
-	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	atomic<idx_t> maximum_memory;
-	//! If bulk deallocation larger than this occurs, flush outstanding allocations
-	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
-	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
-	bool track_eviction_timestamps;
+	//! Configuration shared by every database using this buffer pool.
+	DatabaseMemoryConfig &config;
 	//! Eviction queues
 	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
-	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
+	TemporaryMemoryManager &temporary_memory_manager;
 	//! To improve performance, MemoryUsage maintains counter caches based on current cpu or thread id,
 	//! and only updates the global counter when the cache value exceeds a threshold.
 	//! Therefore, the statistics may have slight differences from the actual memory usage.
 	mutable MemoryUsage memory_usage;
 	//! The block allocator
 	BlockAllocator &block_allocator;
-	//! Per-database singleton object cache managed by buffer pool.
-	optional_ptr<ObjectCache> object_cache = nullptr;
+	//! The object cache participating in this pool's eviction domain.
+	annotated_mutex object_cache_lock;
+	optional_ptr<ObjectCache> object_cache DUCKDB_GUARDED_BY(object_cache_lock);
 };
 
 } // namespace duckdb

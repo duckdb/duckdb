@@ -36,7 +36,7 @@ using duckdb_parquet::ColumnChunk;
 namespace duckdb {
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
-	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 	return *cache.GetOrCreate<ParquetKeys>(ParquetKeys::ObjectType());
 }
 

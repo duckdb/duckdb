@@ -286,7 +286,8 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 		}
 	}
 
-	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	auto &database = buffer_manager.GetDatabase();
+	auto &object_cache = ObjectCache::Get(database);
 	vector<CachedFileInformation> result;
 	for (const auto &key : keys) {
 		auto entry = object_cache.GetWithTypePrefix<ExternalFileCacheObjectCacheEntry>(key);
@@ -331,14 +332,16 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
-	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	auto &database = buffer_manager.GetDatabase();
+	auto &object_cache = ObjectCache::Get(database);
 	for (auto &path : paths) {
 		object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);
 	}
 }
 
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
-	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	auto &database = buffer_manager.GetDatabase();
+	auto &object_cache = ObjectCache::Get(database);
 	while (true) {
 		const auto current_generation = generation.load();
 		if (!enable) {

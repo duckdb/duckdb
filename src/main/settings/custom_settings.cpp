@@ -89,25 +89,18 @@ void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
                                                                const Value &input) {
-	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
-	if (db) {
-		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
-		    config.options.allocator_bulk_deallocation_flush_threshold);
-	}
+	config.SetAllocatorBulkDeallocationFlushThreshold(DBConfig::ParseMemoryLimit(input.ToString()));
 }
 
 void AllocatorBulkDeallocationFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.allocator_bulk_deallocation_flush_threshold =
-	    DBConfigOptions().allocator_bulk_deallocation_flush_threshold;
-	if (db) {
-		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
-		    config.options.allocator_bulk_deallocation_flush_threshold);
-	}
+	config.SetAllocatorBulkDeallocationFlushThreshold(
+	    DatabaseMemoryConfig().allocator_bulk_deallocation_flush_threshold.load());
 }
 
 Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_bulk_deallocation_flush_threshold));
+	return Value(StringUtil::BytesToHumanReadableString(
+	    config.GetMemoryConfig().allocator_bulk_deallocation_flush_threshold.load()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -289,27 +282,20 @@ void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &conf
 		    percentage > 100) {
 			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
 		}
-		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
+		size = LossyNumericCast<idx_t>(percentage) * config.GetMaximumMemory() / 100;
 	} else {
 		size = DBConfig::ParseMemoryLimit(input_string);
 	}
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
+	config.SetBlockAllocatorSize(size);
 }
 
 void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	const auto size = DBConfigOptions().block_allocator_size;
-	if (db) {
-		BlockAllocator::Get(*db).Resize(size);
-	}
-	config.options.block_allocator_size = size;
+	config.SetBlockAllocatorSize(DatabaseMemoryConfig().block_allocator_size.load());
 }
 
 Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
+	return StringUtil::BytesToHumanReadableString(config.GetMemoryConfig().block_allocator_size.load());
 }
 
 //===----------------------------------------------------------------------===//
@@ -1083,22 +1069,16 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Max Memory
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
-	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
-	}
+	config.SetMaximumMemory(DBConfig::ParseMemoryLimit(input.ToString()), db);
 }
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.SetDefaultMaxMemory();
-	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
-	}
+	config.SetDefaultMaxMemory(db);
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_memory));
+	return Value(StringUtil::BytesToHumanReadableString(config.GetMaximumMemory()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1635,7 +1615,7 @@ Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &con
 	if (config.options.write_buffer_row_group_memory_limit.IsValid()) {
 		bytes = config.options.write_buffer_row_group_memory_limit.GetIndex();
 	} else {
-		bytes = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
+		bytes = config.GetMaximumMemory() / 5 / (config.options.maximum_threads + 1);
 	}
 	return Value(StringUtil::BytesToHumanReadableString(bytes));
 }

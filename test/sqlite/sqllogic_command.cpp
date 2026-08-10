@@ -780,6 +780,12 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	runner.config->user_settings = runner.con->context->db->config.user_settings;
+	auto &memory_config = runner.con->context->db->config.GetMemoryConfig();
+	runner.config->SetMaximumMemory(memory_config.maximum_memory);
+	runner.config->SetBlockAllocatorSize(memory_config.block_allocator_size);
+	runner.config->SetBufferManagerTrackEvictionTimestamps(memory_config.buffer_manager_track_eviction_timestamps);
+	runner.config->SetAllocatorBulkDeallocationFlushThreshold(
+	    memory_config.allocator_bulk_deallocation_flush_threshold);
 	auto client_config = runner.con->context->config;
 	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
 	string low_query_writer_path;

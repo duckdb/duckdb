@@ -581,14 +581,14 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 	return *index_types;
 }
 
-void DBConfig::SetDefaultMaxMemory() {
+void DBConfig::SetDefaultMaxMemory(optional_ptr<DatabaseInstance> db) {
 	auto memory = GetSystemAvailableMemory(*file_system);
-	if (memory == DBConfigOptions().maximum_memory) {
+	if (memory == DConstants::INVALID_INDEX) {
 		// If GetSystemAvailableMemory returned the default, use it as is
-		options.maximum_memory = memory;
+		SetMaximumMemory(memory, db);
 	} else {
 		// Otherwise, use 80% of the available memory
-		options.maximum_memory = memory * 8 / 10;
+		SetMaximumMemory(memory * 8 / 10, db);
 	}
 }
 
@@ -654,7 +654,7 @@ idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
-	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
+	auto available_memory = memory.IsValid() ? memory.GetIndex() : DConstants::INVALID_INDEX;
 
 #ifdef __linux__
 	// Check SLURM environment variables first

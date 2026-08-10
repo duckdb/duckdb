@@ -40,7 +40,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	}
 	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
 	                              StringUtil::Upper(rejects_error));
-	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 	auto rejects_scan_exist =
 	    catalog.GetEntry<TableCatalogEntry>(

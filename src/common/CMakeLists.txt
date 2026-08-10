@@ -43,6 +43,7 @@ add_library_unity(
   csv_writer.cpp
   compressed_file_system.cpp
   constants.cpp
+  database_memory_config.cpp
   checksum.cpp
   encryption_functions.cpp
   encryption_key_manager.cpp
@@ -63,6 +64,7 @@ add_library_unity(
   json_document.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  memory_context.cpp
   memory_mapped_file.cpp
   error_data.cpp
   opener_file_system.cpp

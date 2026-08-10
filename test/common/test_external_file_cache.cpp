@@ -67,10 +67,10 @@ idx_t TotalCachedBytes(ExternalFileCache &cache) {
 	return total;
 }
 
-void EvictObjectCache(ObjectCache &object_cache) {
-	const auto memory = object_cache.GetCurrentMemory();
+void EvictObjectCache(BoundObjectCache &object_cache) {
+	const auto memory = object_cache.GetMemoryDomainStats().current_memory;
 	REQUIRE(memory > 0);
-	REQUIRE(object_cache.EvictToReduceMemory(memory) > 0);
+	REQUIRE(object_cache.EvictFromMemoryDomain(memory) > 0);
 }
 
 } // namespace
@@ -414,12 +414,12 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	}
 
 	REQUIRE(CountCachedBlocks(cache) == 1);
-	REQUIRE(object_cache.GetCurrentMemory() > 0);
+	REQUIRE(object_cache.GetMemoryDomainStats().current_memory > 0);
 
 	cache.SetEnabled(false);
 	REQUIRE(CountCachedBlocks(cache) == 0);
 	REQUIRE(cache.GetCachedFileCount() == 0);
-	REQUIRE(object_cache.GetCurrentMemory() == 0);
+	REQUIRE(object_cache.GetMemoryDomainStats().current_memory == 0);
 
 	cache.SetEnabled(true);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);

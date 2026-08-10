@@ -4,6 +4,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_memory_manager.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/common/bit_utils.hpp"
 
@@ -239,7 +240,7 @@ BlockAllocator::~BlockAllocator() {
 }
 
 BlockAllocator &BlockAllocator::Get(DatabaseInstance &db) {
-	return *db.config.block_allocator;
+	return db.GetMemoryManager()->GetBlockAllocator();
 }
 
 BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {

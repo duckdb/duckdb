@@ -4,6 +4,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb; // NOLINT
@@ -59,6 +60,73 @@ struct EvictableTestObject : public ObjectCacheEntry {
 	}
 };
 
+struct CountingTestObject : public ObjectCacheEntry {
+	CountingTestObject(bool &destroyed_p) : destroyed(destroyed_p) {
+	}
+	~CountingTestObject() override {
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "CountingTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+
+	bool &destroyed;
+};
+
+struct CountingEvictableTestObject : public ObjectCacheEntry {
+	CountingEvictableTestObject(bool &destroyed_p, idx_t size_p) : destroyed(destroyed_p), size(size_p) {
+	}
+	~CountingEvictableTestObject() override {
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "CountingEvictableTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx(size);
+	}
+
+	bool &destroyed;
+	idx_t size;
+};
+
+struct ContextLifetimeTestObject : public ObjectCacheEntry {
+	ContextLifetimeTestObject(BoundObjectCache &owner_cache_p, BoundObjectCache &reentry_cache_p,
+	                          shared_ptr<BlockHandle> block_p, bool &destroyed_p, bool &reentered_cache_p)
+	    : owner_cache(owner_cache_p), reentry_cache(reentry_cache_p), block(std::move(block_p)), destroyed(destroyed_p),
+	      reentered_cache(reentered_cache_p) {
+	}
+	~ContextLifetimeTestObject() override {
+		owner_cache.Put("context-lifetime-resurrected", make_shared_ptr<TestObject>(42));
+		reentered_cache = reentry_cache.GetObject("context-lifetime-missing") == nullptr;
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "ContextLifetimeTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx(1);
+	}
+
+	BoundObjectCache &owner_cache;
+	BoundObjectCache &reentry_cache;
+	shared_ptr<BlockHandle> block;
+	bool &destroyed;
+	bool &reentered_cache;
+};
+
 } // namespace
 
 TEST_CASE("Test ObjectCache", "[api][object_cache]") {
@@ -66,7 +134,7 @@ TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	Connection con(db);
 	auto &context = *con.context;
 
-	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 
 	REQUIRE(cache.GetObject("test") == nullptr);
 	cache.Put("test", make_shared_ptr<TestObject>(42));
@@ -84,11 +152,247 @@ TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	REQUIRE(cache.GetOrCreate<AnotherTestObject>("test", 13) == nullptr);
 }
 
+TEST_CASE("Database instances share isolated memory managers and object cache", "[api][object_cache][buffer_pool]") {
+	auto first = make_uniq<DuckDB>();
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first->instance);
+	DuckDB second(nullptr, &second_config);
+
+	REQUIRE(first->instance->GetMemoryManager() == second.instance->GetMemoryManager());
+	REQUIRE(&first->instance->GetBufferPool() == &second.instance->GetBufferPool());
+	REQUIRE(&first->instance->GetBufferManager() != &second.instance->GetBufferManager());
+	REQUIRE(&first->instance->GetObjectCache() != &second.instance->GetObjectCache());
+	REQUIRE(first->instance->GetMemoryContextId() != second.instance->GetMemoryContextId());
+	{
+		auto &first_buffer_manager = first->instance->GetBufferManager();
+		auto first_pin = first_buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
+		auto first_block = first_pin.GetBlockHandle();
+		REQUIRE(first_block->GetMemory().GetMemoryContextId() == first->instance->GetMemoryContextId());
+		REQUIRE(first_block->GetMemory().GetMemoryContextId() != second.instance->GetMemoryContextId());
+	}
+	{
+		auto &first_buffer_manager = first->instance->GetBufferManager();
+		auto first_pin = first_buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
+		auto first_queued_block = first_pin.GetBlockHandle();
+		REQUIRE(!first_queued_block->GetMemory().IsUnloaded());
+	}
+
+	ObjectCache::Get(*first->instance).Put("first-only", make_shared_ptr<TestObject>(42));
+	REQUIRE(ObjectCache::Get(*second.instance).Get<TestObject>("first-only") == nullptr);
+
+	auto &shared_pool = second.instance->GetBufferPool();
+	const auto initial_memory = shared_pool.GetUsedMemory();
+	constexpr idx_t cache_entry_size = 1024 * 1024;
+	ObjectCache::Get(*first->instance).Put("first-memory", make_shared_ptr<EvictableTestObject>(1, cache_entry_size));
+	ObjectCache::Get(*second.instance).Put("second-memory", make_shared_ptr<EvictableTestObject>(2, cache_entry_size));
+	REQUIRE(shared_pool.GetUsedMemory() == initial_memory + cache_entry_size * 2);
+
+	first.reset();
+
+	// Query with second database instance still works.
+	Connection connection(second);
+	auto result = connection.Query("SELECT sum(i) FROM range(10000) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
+}
+
+TEST_CASE("Database instance uses its configured custom buffer manager", "[api][object_cache][buffer_pool]") {
+	DuckDB buffer_manager_source;
+	auto custom_buffer_manager =
+	    shared_ptr<BufferManager>(buffer_manager_source.instance, &buffer_manager_source.instance->GetBufferManager());
+
+	DBConfig config;
+	config.buffer_manager = custom_buffer_manager;
+	DuckDB db(nullptr, &config);
+
+	REQUIRE(&db.instance->GetBufferManager() == custom_buffer_manager.get());
+	REQUIRE(db.instance->GetMemoryManager() == buffer_manager_source.instance->GetMemoryManager());
+	REQUIRE(&db.instance->GetBufferPool() == &buffer_manager_source.instance->GetBufferPool());
+
+	Connection connection(db);
+	auto result = connection.Query("SELECT sum(i) FROM range(10000) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
+}
+
+TEST_CASE("Shared memory manager rejects a buffer manager from another memory domain",
+          "[api][object_cache][buffer_pool]") {
+	DuckDB memory_manager_source;
+	DuckDB buffer_manager_source;
+	auto custom_buffer_manager =
+	    shared_ptr<BufferManager>(buffer_manager_source.instance, &buffer_manager_source.instance->GetBufferManager());
+
+	SECTION("Set custom buffer manager before sharing memory") {
+		DBConfig config;
+		config.buffer_manager = custom_buffer_manager;
+		REQUIRE_THROWS_AS(config.ShareMemoryWith(*memory_manager_source.instance), InvalidInputException);
+	}
+
+	SECTION("Set custom buffer manager after sharing memory") {
+		DBConfig config;
+		config.ShareMemoryWith(*memory_manager_source.instance);
+		config.buffer_manager = custom_buffer_manager;
+		REQUIRE_THROWS_AS(DuckDB(nullptr, &config), InvalidInputException);
+	}
+
+	SECTION("Custom buffer manager and shared memory manager use the same domain") {
+		DBConfig config;
+		config.buffer_manager = custom_buffer_manager;
+		config.ShareMemoryWith(*buffer_manager_source.instance);
+		DuckDB db(nullptr, &config);
+		REQUIRE(&db.instance->GetBufferManager() == custom_buffer_manager.get());
+		REQUIRE(db.instance->GetMemoryManager() == buffer_manager_source.instance->GetMemoryManager());
+	}
+}
+
+TEST_CASE("Shared memory manager settings are consistent across database instances",
+          "[api][object_cache][buffer_pool]") {
+	DuckDB first;
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first.instance);
+	DuckDB second(nullptr, &second_config);
+	Connection first_connection(first);
+	Connection second_connection(second);
+
+	auto set_result = first_connection.Query("SET GLOBAL memory_limit = '128MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	auto first_result = first_connection.Query("SELECT current_setting('memory_limit')");
+	auto second_result = second_connection.Query("SELECT current_setting('memory_limit')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = second_connection.Query("SET GLOBAL memory_limit = '256MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('memory_limit')");
+	second_result = second_connection.Query("SELECT current_setting('memory_limit')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = first_connection.Query("SET GLOBAL allocator_bulk_deallocation_flush_threshold = '16MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('allocator_bulk_deallocation_flush_threshold')");
+	second_result = second_connection.Query("SELECT current_setting('allocator_bulk_deallocation_flush_threshold')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = second_connection.Query("SET GLOBAL block_allocator_memory = '16MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('block_allocator_memory')");
+	second_result = second_connection.Query("SELECT current_setting('block_allocator_memory')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+}
+
+TEST_CASE("Memory pressure from one database evicts another database's object cache entry",
+          "[api][object_cache][buffer_pool]") {
+	DuckDB first;
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first.instance);
+	DuckDB second(nullptr, &second_config);
+
+	auto &first_cache = ObjectCache::Get(*first.instance);
+	auto &second_cache = ObjectCache::Get(*second.instance);
+	auto &buffer_pool = first.instance->GetBufferPool();
+	auto &second_buffer_manager = second.instance->GetBufferManager();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t page_size = 1024 * 1024;
+	const auto allocation_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	buffer_pool.SetLimit(initial_memory + allocation_size * 3, "");
+
+	first_cache.Put("first-entry", make_shared_ptr<EvictableTestObject>(1, allocation_size));
+	second_cache.Put("second-entry", make_shared_ptr<EvictableTestObject>(2, allocation_size));
+	REQUIRE(first_cache.GetMemoryDomainStats().entry_count == 2);
+
+	vector<BufferHandle> second_pins;
+	second_pins.emplace_back(second_buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, true));
+	second_pins.emplace_back(second_buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, true));
+
+	REQUIRE(first_cache.Get<EvictableTestObject>("first-entry") == nullptr);
+	REQUIRE(second_cache.Get<EvictableTestObject>("second-entry") != nullptr);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + allocation_size * 3);
+}
+
+TEST_CASE("ObjectCache drops all entries for a memory context", "[api][object_cache][buffer_pool]") {
+	auto first = make_uniq<DuckDB>();
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first->instance);
+	auto second = make_uniq<DuckDB>(nullptr, &second_config);
+	DBConfig third_config;
+	third_config.ShareMemoryWith(*second->instance);
+	DuckDB third(nullptr, &third_config);
+
+	auto &third_cache = ObjectCache::Get(*third.instance);
+	constexpr idx_t obj_size = 1024 * 1024;
+	bool first_non_evictable_destroyed = false;
+	bool first_evictable_destroyed = false;
+
+	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
+	ObjectCache::Get(*first->instance)
+	    .Put("first-non-evictable", make_shared_ptr<CountingTestObject>(first_non_evictable_destroyed));
+	ObjectCache::Get(*first->instance)
+	    .Put("first-evictable", make_shared_ptr<CountingEvictableTestObject>(first_evictable_destroyed, obj_size));
+	ObjectCache::Get(*second->instance).Put("second-non-evictable", make_shared_ptr<TestObject>(2));
+
+	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
+	REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 3);
+	REQUIRE(!first_non_evictable_destroyed);
+	REQUIRE(!first_evictable_destroyed);
+
+	{
+		auto &second_cache = ObjectCache::Get(*second->instance);
+		first.reset();
+
+		REQUIRE(first_non_evictable_destroyed);
+		REQUIRE(first_evictable_destroyed);
+		REQUIRE(second_cache.Get<TestObject>("second-non-evictable") != nullptr);
+		REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
+		REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 1);
+		REQUIRE(!third_cache.GetMemoryDomainStats().is_empty);
+	}
+
+	second.reset();
+	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
+	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
+}
+
+TEST_CASE("ObjectCache entries are destroyed before their database context", "[api][object_cache][buffer_pool]") {
+	auto first = make_uniq<DuckDB>();
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first->instance);
+	DuckDB second(nullptr, &second_config);
+
+	bool destroyed = false;
+	bool reentered_cache = false;
+	weak_ptr<BlockHandle> weak_block;
+	{
+		auto &cache = ObjectCache::Get(*first->instance);
+		auto &reentry_cache = ObjectCache::Get(*second.instance);
+		auto &buffer_manager = first->instance->GetBufferManager();
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
+		auto block = pin.GetBlockHandle();
+		weak_block = block;
+		cache.Put("context-lifetime", make_shared_ptr<ContextLifetimeTestObject>(cache, reentry_cache, std::move(block),
+		                                                                         destroyed, reentered_cache));
+	}
+
+	first.reset();
+
+	REQUIRE(destroyed);
+	REQUIRE(reentered_cache);
+	REQUIRE(weak_block.expired());
+	REQUIRE(ObjectCache::Get(*second.instance).GetMemoryDomainStats().is_empty);
+}
+
 TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
-	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -108,10 +412,10 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
-	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
-	REQUIRE(cache.IsEmpty());
+	REQUIRE(cache.GetMemoryDomainStats().is_empty);
 
 	// Put and check accountable memory for buffer pool.
 	constexpr idx_t obj_size = 1024 * 1024;
@@ -119,16 +423,16 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	for (idx_t idx = 0; idx < obj_count; ++idx) {
 		cache.Put(StringUtil::Format("evictable%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
-	REQUIRE(cache.GetEntryCount() == 10);
+	REQUIRE(cache.GetMemoryDomainStats().entry_count == 10);
 	const idx_t after_put_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_put_memory == initial_memory + obj_size * obj_count);
 
 	// Evict 5 objects, leaving 5 objects in cache
 	const idx_t bytes_to_free = 5 * obj_size;
-	idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	idx_t freed = cache.EvictFromMemoryDomain(bytes_to_free);
 	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
-	REQUIRE(cache.GetCurrentMemory() == 5 * obj_size);
-	REQUIRE(cache.GetEntryCount() == 5);
+	REQUIRE(cache.GetMemoryDomainStats().current_memory == 5 * obj_size);
+	REQUIRE(cache.GetMemoryDomainStats().entry_count == 5);
 
 	// First five items should be evicted.
 	for (idx_t idx = 0; idx < 5; ++idx) {
@@ -141,5 +445,5 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 		auto value = cache.GetObject(StringUtil::Format("evictable%llu", idx));
 		REQUIRE(value != nullptr);
 	}
-	REQUIRE(!cache.IsEmpty());
+	REQUIRE(!cache.GetMemoryDomainStats().is_empty);
 }
