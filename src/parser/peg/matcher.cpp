@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -1574,23 +1575,6 @@ void ParserCache::Invalidate() {
 	transformer_factory = nullptr;
 }
 
-static const char *ParserCacheKeywordCategoryToString(PEGKeywordCategory category) {
-	switch (category) {
-	case PEGKeywordCategory::KEYWORD_RESERVED:
-		return "reserved";
-	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		return "unreserved";
-	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		return "function-name";
-	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		return "column-name";
-	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		return "type-name";
-	default:
-		return "none";
-	}
-}
-
 static PEGKeywordCategory ToParserCachePEGKeywordCategory(ExtensionKeywordCategory category) {
 	switch (category) {
 	case ExtensionKeywordCategory::RESERVED:
@@ -1670,8 +1654,7 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 		return;
 	}
 	throw InvalidInputException("Cannot register parser keyword \"%s\" as %s: it is already registered as %s", text,
-	                            ParserCacheKeywordCategoryToString(category),
-	                            ParserCacheKeywordCategoryToString(existing_category));
+	                            EnumUtil::ToString(category), EnumUtil::ToString(existing_category));
 }
 
 void ParserCache::RegisterKeywordInternal(const string &text, PEGKeywordCategory category) {
