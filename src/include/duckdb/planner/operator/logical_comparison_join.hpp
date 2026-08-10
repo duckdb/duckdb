@@ -14,7 +14,6 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
-#include "duckdb/parallel/pipeline_dependency_set.hpp"
 
 namespace duckdb {
 
