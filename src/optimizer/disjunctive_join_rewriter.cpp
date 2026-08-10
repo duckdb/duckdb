@@ -219,15 +219,46 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::MakeCTERef(const CTEInfo &c
 	                                std::move(bound_columns));
 }
 
-unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                                                    const vector<Branch> &branches) {
+vector<DisjunctiveJoinRewriter::Branch> DisjunctiveJoinRewriter::SwapBranches(const vector<Branch> &branches) {
+	vector<Branch> swapped;
+	for (auto &branch : branches) {
+		Branch b;
+		b.left_expr = branch.right_expr->Copy();
+		b.right_expr = branch.left_expr->Copy();
+		swapped.push_back(std::move(b));
+	}
+	return swapped;
+}
+
+void DisjunctiveJoinRewriter::RemapBranchExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte,
+                                                     TableIndex left_ref, TableIndex right_ref,
+                                                     unique_ptr<Expression> &left_expr,
+                                                     unique_ptr<Expression> &right_expr) {
+	ColumnBindingReplacer expr_replacer;
+	for (idx_t col = 0; col < left_cte.original_bindings.size(); col++) {
+		expr_replacer.replacement_bindings.emplace_back(
+		    left_cte.original_bindings[col], ColumnBinding(left_ref, ProjectionIndex(col)), left_cte.output_types[col]);
+	}
+	expr_replacer.VisitExpression(&left_expr);
+
+	expr_replacer.replacement_bindings.clear();
+	for (idx_t col = 0; col < right_cte.original_bindings.size(); col++) {
+		expr_replacer.replacement_bindings.emplace_back(right_cte.original_bindings[col],
+		                                                ColumnBinding(right_ref, ProjectionIndex(col)),
+		                                                right_cte.output_types[col]);
+	}
+	expr_replacer.VisitExpression(&right_expr);
+}
+
+vector<unique_ptr<LogicalOperator>> DisjunctiveJoinRewriter::BuildMatchedBranches(const CTEInfo &left_cte,
+                                                                                  const CTEInfo &right_cte,
+                                                                                  const vector<Branch> &branches) {
 	vector<unique_ptr<LogicalOperator>> union_children;
 
 	for (idx_t i = 0; i < branches.size(); i++) {
 		TableIndex left_ref_idx = NewTableIndex();
 		TableIndex right_ref_idx = NewTableIndex();
 
-		// Build exclusion predicates for branches after the first
 		vector<unique_ptr<Expression>> exclusion_preds;
 		if (i > 0) {
 			exclusion_preds = BuildExclusionPredicates(left_cte, right_cte, branches, i, left_ref_idx, right_ref_idx);
@@ -237,14 +268,12 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerJoin(const CTEInf
 		    BuildHashJoinBranch(left_cte, right_cte, branches[i], JoinType::INNER,
 		                        exclusion_preds.empty() ? nullptr : &exclusion_preds, left_ref_idx, right_ref_idx);
 
-		// Project only the original columns
 		TableIndex proj_tbl = NewTableIndex();
 		vector<unique_ptr<Expression>> proj_exprs;
 
 		for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
 			proj_exprs.push_back(ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(col)), left_cte.output_types[col]));
 		}
-
 		for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
 			proj_exprs.push_back(
 			    ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(col)), right_cte.output_types[col]));
@@ -252,76 +281,62 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerJoin(const CTEInf
 
 		auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
 		proj->AddChild(std::move(branch_plan));
-
 		union_children.push_back(std::move(proj));
 	}
+	return union_children;
+}
 
+unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildUnmatchedPart(const CTEInfo &probe_cte,
+                                                                        const CTEInfo &build_cte,
+                                                                        const vector<Branch> &branches,
+                                                                        bool put_probe_first) {
+	TableIndex probe_ref = NewTableIndex();
+	auto anti_chain = BuildAntiJoinChain(probe_cte, build_cte, branches, probe_ref);
+
+	TableIndex proj_tbl = NewTableIndex();
+	vector<unique_ptr<Expression>> proj_exprs;
+
+	if (put_probe_first) {
+		// Project: [probe_cols..., NULL(build_cols)...]
+		for (idx_t col = 0; col < probe_cte.output_types.size(); col++) {
+			proj_exprs.push_back(ColRef(ColumnBinding(probe_ref, ProjectionIndex(col)), probe_cte.output_types[col]));
+		}
+		for (idx_t col = 0; col < build_cte.output_types.size(); col++) {
+			proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value(build_cte.output_types[col])));
+		}
+	} else {
+		// Project: [NULL(build_cols)..., probe_cols...]
+		for (idx_t col = 0; col < build_cte.output_types.size(); col++) {
+			proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value(build_cte.output_types[col])));
+		}
+		for (idx_t col = 0; col < probe_cte.output_types.size(); col++) {
+			proj_exprs.push_back(ColRef(ColumnBinding(probe_ref, ProjectionIndex(col)), probe_cte.output_types[col]));
+		}
+	}
+
+	auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
+	proj->AddChild(std::move(anti_chain));
+	return proj;
+}
+
+unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildUnionAll(vector<unique_ptr<LogicalOperator>> children,
+                                                                   idx_t total_columns) {
 	TableIndex union_tbl = NewTableIndex();
-	idx_t total_columns = left_cte.output_types.size() + right_cte.output_types.size();
-	auto union_op = make_uniq<LogicalSetOperation>(union_tbl, total_columns, std::move(union_children),
-	                                               LogicalOperatorType::LOGICAL_UNION, true, true);
+	return make_uniq<LogicalSetOperation>(union_tbl, total_columns, std::move(children),
+	                                      LogicalOperatorType::LOGICAL_UNION, true, true);
+}
 
-	return union_op;
+unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
+                                                                    const vector<Branch> &branches) {
+	auto children = BuildMatchedBranches(left_cte, right_cte, branches);
+	return BuildUnionAll(std::move(children), left_cte.output_types.size() + right_cte.output_types.size());
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildLeftJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
                                                                    const vector<Branch> &branches) {
-	vector<unique_ptr<LogicalOperator>> union_children;
-
-	for (idx_t i = 0; i < branches.size(); i++) {
-		TableIndex left_ref_idx = NewTableIndex();
-		TableIndex right_ref_idx = NewTableIndex();
-
-		vector<unique_ptr<Expression>> exclusion_preds;
-		if (i > 0) {
-			exclusion_preds = BuildExclusionPredicates(left_cte, right_cte, branches, i, left_ref_idx, right_ref_idx);
-		}
-
-		auto branch_plan =
-		    BuildHashJoinBranch(left_cte, right_cte, branches[i], JoinType::INNER,
-		                        exclusion_preds.empty() ? nullptr : &exclusion_preds, left_ref_idx, right_ref_idx);
-
-		TableIndex proj_tbl = NewTableIndex();
-		vector<unique_ptr<Expression>> proj_exprs;
-
-		for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
-			proj_exprs.push_back(ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(col)), left_cte.output_types[col]));
-		}
-		for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
-			proj_exprs.push_back(
-			    ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(col)), right_cte.output_types[col]));
-		}
-
-		auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
-		proj->AddChild(std::move(branch_plan));
-		union_children.push_back(std::move(proj));
-	}
-
-	TableIndex anti_probe_ref = NewTableIndex();
-	auto anti_chain = BuildAntiJoinChain(left_cte, right_cte, branches, anti_probe_ref);
-
-	TableIndex anti_proj_tbl = NewTableIndex();
-	vector<unique_ptr<Expression>> anti_proj_exprs;
-
-	for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
-		anti_proj_exprs.push_back(
-		    ColRef(ColumnBinding(anti_probe_ref, ProjectionIndex(col)), left_cte.output_types[col]));
-	}
-
-	for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
-		anti_proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value(right_cte.output_types[col])));
-	}
-
-	auto anti_proj = make_uniq<LogicalProjection>(anti_proj_tbl, std::move(anti_proj_exprs));
-	anti_proj->AddChild(std::move(anti_chain));
-	union_children.push_back(std::move(anti_proj));
-
-	TableIndex union_tbl = NewTableIndex();
-	idx_t total_columns = left_cte.output_types.size() + right_cte.output_types.size();
-	auto union_op = make_uniq<LogicalSetOperation>(union_tbl, total_columns, std::move(union_children),
-	                                               LogicalOperatorType::LOGICAL_UNION, true, true);
-
-	return union_op;
+	auto children = BuildMatchedBranches(left_cte, right_cte, branches);
+	children.push_back(BuildUnmatchedPart(left_cte, right_cte, branches));
+	return BuildUnionAll(std::move(children), left_cte.output_types.size() + right_cte.output_types.size());
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildRightJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
@@ -330,106 +345,15 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildRightJoin(const CTEInf
 	                      right_cte.original_bindings};
 	CTEInfo swapped_right {left_cte.table_index, left_cte.output_types, left_cte.output_bindings,
 	                       left_cte.original_bindings};
-
-	vector<Branch> swapped_branches;
-	for (auto &branch : branches) {
-		Branch swapped;
-		swapped.left_expr = branch.right_expr->Copy();
-		swapped.right_expr = branch.left_expr->Copy();
-		swapped_branches.push_back(std::move(swapped));
-	}
-
-	auto result = BuildLeftJoin(swapped_left, swapped_right, swapped_branches);
-
-	return result;
+	return BuildLeftJoin(swapped_left, swapped_right, SwapBranches(branches));
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildFullJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
                                                                    const vector<Branch> &branches) {
-	vector<unique_ptr<LogicalOperator>> union_children;
-
-	for (idx_t i = 0; i < branches.size(); i++) {
-		TableIndex branch_left_ref = NewTableIndex();
-		TableIndex branch_right_ref = NewTableIndex();
-
-		vector<unique_ptr<Expression>> exclusion_preds;
-		if (i > 0) {
-			exclusion_preds =
-			    BuildExclusionPredicates(left_cte, right_cte, branches, i, branch_left_ref, branch_right_ref);
-		}
-
-		auto branch_plan = BuildHashJoinBranch(left_cte, right_cte, branches[i], JoinType::INNER,
-		                                       exclusion_preds.empty() ? nullptr : &exclusion_preds, branch_left_ref,
-		                                       branch_right_ref);
-
-		TableIndex proj_tbl = NewTableIndex();
-		vector<unique_ptr<Expression>> proj_exprs;
-
-		for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
-			proj_exprs.push_back(
-			    ColRef(ColumnBinding(branch_left_ref, ProjectionIndex(col)), left_cte.output_types[col]));
-		}
-		for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
-			proj_exprs.push_back(
-			    ColRef(ColumnBinding(branch_right_ref, ProjectionIndex(col)), right_cte.output_types[col]));
-		}
-
-		auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
-		proj->AddChild(std::move(branch_plan));
-		union_children.push_back(std::move(proj));
-	}
-
-	TableIndex lhs_anti_ref = NewTableIndex();
-	auto lhs_anti_chain = BuildAntiJoinChain(left_cte, right_cte, branches, lhs_anti_ref);
-
-	TableIndex lhs_anti_proj_tbl = NewTableIndex();
-	vector<unique_ptr<Expression>> lhs_anti_proj_exprs;
-
-	for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
-		lhs_anti_proj_exprs.push_back(
-		    ColRef(ColumnBinding(lhs_anti_ref, ProjectionIndex(col)), left_cte.output_types[col]));
-	}
-	for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
-		lhs_anti_proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value(right_cte.output_types[col])));
-	}
-
-	auto lhs_anti_proj = make_uniq<LogicalProjection>(lhs_anti_proj_tbl, std::move(lhs_anti_proj_exprs));
-	lhs_anti_proj->AddChild(std::move(lhs_anti_chain));
-	union_children.push_back(std::move(lhs_anti_proj));
-
-	// TODO: change reverse ANTI when adding support for CTE-fanout execution
-	vector<Branch> swapped_branches;
-	for (auto &branch : branches) {
-		Branch swapped;
-		swapped.left_expr = branch.right_expr->Copy();
-		swapped.right_expr = branch.left_expr->Copy();
-		swapped_branches.push_back(std::move(swapped));
-	}
-
-	TableIndex rhs_anti_ref = NewTableIndex();
-	auto rhs_anti_chain = BuildAntiJoinChain(right_cte, left_cte, swapped_branches, rhs_anti_ref);
-
-	TableIndex rhs_anti_proj_tbl = NewTableIndex();
-	vector<unique_ptr<Expression>> rhs_anti_proj_exprs;
-
-	for (idx_t col = 0; col < left_cte.output_types.size(); col++) {
-		rhs_anti_proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value(left_cte.output_types[col])));
-	}
-	for (idx_t col = 0; col < right_cte.output_types.size(); col++) {
-		rhs_anti_proj_exprs.push_back(
-		    ColRef(ColumnBinding(rhs_anti_ref, ProjectionIndex(col)), right_cte.output_types[col]));
-	}
-
-	auto rhs_anti_proj = make_uniq<LogicalProjection>(rhs_anti_proj_tbl, std::move(rhs_anti_proj_exprs));
-	rhs_anti_proj->AddChild(std::move(rhs_anti_chain));
-	union_children.push_back(std::move(rhs_anti_proj));
-
-	TableIndex union_tbl = NewTableIndex();
-	idx_t total_columns = left_cte.output_types.size() + right_cte.output_types.size();
-	auto union_op = make_uniq<LogicalSetOperation>(union_tbl, total_columns, std::move(union_children),
-	                                               LogicalOperatorType::LOGICAL_UNION, true, true);
-
-	return union_op;
+	auto children = BuildMatchedBranches(left_cte, right_cte, branches);
+	children.push_back(BuildUnmatchedPart(left_cte, right_cte, branches));
+	children.push_back(BuildUnmatchedPart(right_cte, left_cte, SwapBranches(branches), false));
+	return BuildUnionAll(std::move(children), left_cte.output_types.size() + right_cte.output_types.size());
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,

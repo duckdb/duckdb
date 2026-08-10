@@ -2,7 +2,6 @@
 
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/parallel/pipeline_dependency_set.hpp"
 
 namespace duckdb {
 
@@ -68,6 +67,25 @@ private:
 	//! Build ANTI join: chained anti joins
 	unique_ptr<LogicalOperator> BuildAntiJoin(const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                          const vector<Branch> &branches);
+
+	//! Creates the matching INNER join branches and projects original columns
+	vector<unique_ptr<LogicalOperator>> BuildMatchedBranches(const CTEInfo &left_cte, const CTEInfo &right_cte,
+	                                                         const vector<Branch> &branches);
+
+	//! Creates the anti-join chain for unmatched rows and NULL-pads the build side
+	unique_ptr<LogicalOperator> BuildUnmatchedPart(const CTEInfo &probe_cte, const CTEInfo &build_cte,
+	                                               const vector<Branch> &branches, bool put_probe_first = true);
+
+	//! Wraps multiple operator plans into a UNION ALL
+	unique_ptr<LogicalOperator> BuildUnionAll(vector<unique_ptr<LogicalOperator>> children, idx_t total_columns);
+
+	//! Swaps left/right expressions in branches
+	vector<Branch> SwapBranches(const vector<Branch> &branches);
+
+	//! Remaps branch expressions to current CTE references
+	void RemapBranchExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte, TableIndex left_ref,
+	                            TableIndex right_ref, unique_ptr<Expression> &left_expr,
+	                            unique_ptr<Expression> &right_expr);
 
 	//! Builds a single hash join branch for a specific equality predicate
 	unique_ptr<LogicalOperator>
