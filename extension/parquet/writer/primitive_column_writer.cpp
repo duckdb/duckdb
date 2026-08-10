@@ -118,8 +118,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	const idx_t page_size_limit = writer.DataPageSizeLimit();
 	const bool check_parent_empty = parent && !parent->is_empty.empty();
 	if (!check_parent_empty && validity.CannotHaveNull() && TypeIsConstantSize(vector.GetType().InternalType()) &&
-	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
-	        page_size_limit) {
+	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount < page_size_limit) {
 		// Fast path: fixed-size type, all valid, and it fits on the current page
 		auto &page_info = page_info_ref.get();
 		page_info.row_count += vcount;
