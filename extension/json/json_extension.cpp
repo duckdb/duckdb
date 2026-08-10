@@ -30,6 +30,14 @@ static const DefaultMacro JSON_MACROS[] = {
     {nullptr, nullptr, nullptr}};
 
 static void LoadInternal(ExtensionLoader &loader) {
+	// JSON settings
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.AddExtensionOption(
+	    "json_geometry_format",
+	    "How GEOMETRY values are written to JSON: 'wkt' for Well-Known Text, or 'geojson' for GeoJSON geometry "
+	    "objects. COPY ... TO ... (FORMAT GEOJSON) always writes GeoJSON regardless of this setting.",
+	    LogicalType::VARCHAR, Value("wkt"), JSONFunctions::ValidateGeometryFormat);
+
 	// JSON type
 	auto json_type = LogicalType::JSON();
 	loader.RegisterType(LogicalType::JSON_TYPE_NAME, std::move(json_type));

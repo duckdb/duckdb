@@ -158,7 +158,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	// The column-selecting GeoJSON options are three-state: unset means "use the default", NULL means "explicitly
 	// none", and anything else names a column
 	unique_ptr<ParsedExpression> geometry_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
-	unique_ptr<ParsedExpression> feature_id_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
+	unique_ptr<ParsedExpression> id_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
 	bool write_bbox = false;
 	// Partition columns are kept as separate columns (instead of being packed into the JSON object), so that the
 	// COPY writer can partition on them. By default they are excluded from the written JSON, matching the behavior
@@ -190,7 +190,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			}
 			array_output =
 			    option_values.empty() || BooleanValue::Get(option_values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-		} else if (is_geojson && (option_name == "geometry_column" || option_name == "feature_id")) {
+		} else if (is_geojson && (option_name == "geometry_column" || option_name == "id_column")) {
 			// NULL explicitly unsets these, so unlike the other options a NULL value is meaningful here
 			if (option_values.size() != 1) {
 				ThrowJSONCopyParameterException(format, option_name);
@@ -201,7 +201,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			}
 			// An empty string marks "explicitly none", which a column name can never be
 			auto column = value.IsNull() ? Value("") : value;
-			auto &target = option_name == "geometry_column" ? geometry_column : feature_id_column;
+			auto &target = option_name == "geometry_column" ? geometry_column : id_column;
 			target = make_uniq<ConstantExpression>(std::move(column));
 		} else if (is_geojson && option_name == "bbox") {
 			write_bbox = GetJSONCopyBoolean(binder, format, option_name, option_values);
@@ -293,7 +293,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 		geojson_args.push_back(make_uniq<ConstantExpression>(timestamp_format.empty() ? Value(LogicalType::VARCHAR)
 		                                                                              : Value(timestamp_format)));
 		geojson_args.push_back(std::move(geometry_column));
-		geojson_args.push_back(std::move(feature_id_column));
+		geojson_args.push_back(std::move(id_column));
 		geojson_args.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(write_bbox)));
 		select_node.select_list.push_back(
 		    make_uniq<FunctionExpression>("__internal_json_copy_to_geojson", std::move(geojson_args)));

@@ -10,14 +10,14 @@ CREATE TABLE places (id INTEGER, name VARCHAR, geom GEOMETRY);
 statement ok
 INSERT INTO places VALUES (1, 'alpha', 'POINT(1 2)'), (2, 'beta', 'LINESTRING(0 0, 1 1)'), (3, NULL, NULL);
 
-# By default the output is a single FeatureCollection
+# By default the output is a single FeatureCollection. A column named "id" becomes the Feature-level "id".
 statement ok
 COPY places TO '{TEST_DIR}/places.geojson' (FORMAT GEOJSON);
 
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/places.geojson');
 ----
-{"type":"FeatureCollection","features":[ {"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":1,"name":"alpha"}}, {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"id":2,"name":"beta"}}, {"type":"Feature","geometry":null,"properties":{"id":3,"name":null}} ]}
+{"type":"FeatureCollection","features":[ {"type":"Feature","id":1,"geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"name":"alpha"}}, {"type":"Feature","id":2,"geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"name":"beta"}}, {"type":"Feature","id":3,"geometry":null,"properties":{"name":null}} ]}
 
 # ARRAY false writes one Feature per line instead
 statement ok
@@ -26,7 +26,7 @@ COPY places TO '{TEST_DIR}/places.geojsonl' (FORMAT GEOJSON, ARRAY false);
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/places.geojsonl');
 ----
-{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":1,"name":"alpha"}} {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"id":2,"name":"beta"}} {"type":"Feature","geometry":null,"properties":{"id":3,"name":null}}
+{"type":"Feature","id":1,"geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"name":"alpha"}} {"type":"Feature","id":2,"geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"name":"beta"}} {"type":"Feature","id":3,"geometry":null,"properties":{"name":null}}
 
 # FORMAT GEOJSONL writes one Feature per line by default
 statement ok
@@ -147,10 +147,10 @@ SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM r
 ----
 {"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"s":{"pt":{"type":"Point","coordinates":[3.0,4.0]}}}}
 
-# A column named "feature_id" becomes the Feature-level "id" without needing an option, so that a GeoJSON file
+# A column named "id" becomes the Feature-level "id" without needing an option, so that a GeoJSON file
 # read by DuckDB round-trips unchanged
 statement ok
-CREATE TABLE ids (feature_id VARCHAR, name VARCHAR, geom GEOMETRY);
+CREATE TABLE ids (id VARCHAR, name VARCHAR, geom GEOMETRY);
 
 statement ok
 INSERT INTO ids VALUES ('F-1', 'a', 'POINT(1 2)'), ('F-2', 'b', 'LINESTRING(0 0, 3 4)');
@@ -164,28 +164,28 @@ SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM r
 {"type":"Feature","id":"F-1","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"name":"a"}} {"type":"Feature","id":"F-2","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"properties":{"name":"b"}}
 
 query III
-SELECT feature_id, name, ST_AsText(geometry) FROM read_json('{TEST_DIR}/ids.geojsonl') ORDER BY feature_id;
+SELECT id, name, ST_AsText(geometry) FROM read_json('{TEST_DIR}/ids.geojsonl') ORDER BY id;
 ----
 F-1	a	POINT (1 2)
 F-2	b	LINESTRING (0 0, 3 4)
 
-# FEATURE_ID selects a different column
+# ID_COLUMN selects a different column
 statement ok
-COPY ids TO '{TEST_DIR}/ids_named.geojsonl' (FORMAT GEOJSON, ARRAY false, FEATURE_ID name);
+COPY ids TO '{TEST_DIR}/ids_named.geojsonl' (FORMAT GEOJSON, ARRAY false, ID_COLUMN name);
 
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/ids_named.geojsonl');
 ----
-{"type":"Feature","id":"a","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"feature_id":"F-1"}} {"type":"Feature","id":"b","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"properties":{"feature_id":"F-2"}}
+{"type":"Feature","id":"a","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":"F-1"}} {"type":"Feature","id":"b","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"properties":{"id":"F-2"}}
 
-# FEATURE_ID NULL unsets the default, so feature_id is written as an ordinary property
+# ID_COLUMN NULL unsets the default, so id is written as an ordinary property
 statement ok
-COPY ids TO '{TEST_DIR}/ids_none.geojsonl' (FORMAT GEOJSON, ARRAY false, FEATURE_ID NULL);
+COPY ids TO '{TEST_DIR}/ids_none.geojsonl' (FORMAT GEOJSON, ARRAY false, ID_COLUMN NULL);
 
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/ids_none.geojsonl');
 ----
-{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"feature_id":"F-1","name":"a"}} {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"properties":{"feature_id":"F-2","name":"b"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":"F-1","name":"a"}} {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"properties":{"id":"F-2","name":"b"}}
 
 # BBOX generates the bounding box from the geometry
 statement ok
@@ -197,7 +197,7 @@ SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM r
 {"type":"Feature","id":"F-1","geometry":{"type":"Point","coordinates":[1.0,2.0]},"bbox":[1.0,2.0,1.0,2.0],"properties":{"name":"a"}} {"type":"Feature","id":"F-2","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[3.0,4.0]]},"bbox":[0.0,0.0,3.0,4.0],"properties":{"name":"b"}}
 
 query II
-SELECT ST_AsText(geometry), feature_bbox FROM read_json('{TEST_DIR}/ids_bbox.geojsonl') ORDER BY feature_id;
+SELECT ST_AsText(geometry), bbox FROM read_json('{TEST_DIR}/ids_bbox.geojsonl') ORDER BY id;
 ----
 POINT (1 2)	[1.0, 2.0, 1.0, 2.0]
 LINESTRING (0 0, 3 4)	[0.0, 0.0, 3.0, 4.0]
@@ -231,7 +231,7 @@ TO '{TEST_DIR}/unlocated.geojsonl' (FORMAT GEOJSON, ARRAY false, GEOMETRY_COLUMN
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/unlocated.geojsonl');
 ----
-{"type":"Feature","geometry":null,"properties":{"id":1,"g":{"type":"Point","coordinates":[1.0,2.0]}}}
+{"type":"Feature","id":1,"geometry":null,"properties":{"g":{"type":"Point","coordinates":[1.0,2.0]}}}
 
 # A table with no geometry at all is allowed when the geometry is explicitly unset
 statement ok
@@ -241,7 +241,7 @@ TO '{TEST_DIR}/no_geom_ok.geojsonl' (FORMAT GEOJSON, ARRAY false, GEOMETRY_COLUM
 query I
 SELECT replace(replace(trim(content, chr(10)), chr(10), ' '), chr(9), '') FROM read_text('{TEST_DIR}/no_geom_ok.geojsonl');
 ----
-{"type":"Feature","geometry":null,"properties":{"id":1,"name":"x"}}
+{"type":"Feature","id":1,"geometry":null,"properties":{"name":"x"}}
 
 statement error
 COPY (SELECT 1 AS id, 'x' AS name) TO '{TEST_DIR}/no_geom.geojson' (FORMAT GEOJSON);
@@ -249,9 +249,9 @@ COPY (SELECT 1 AS id, 'x' AS name) TO '{TEST_DIR}/no_geom.geojson' (FORMAT GEOJS
 <REGEX>:.*requires a GEOMETRY column.*
 
 statement error
-COPY ids TO '{TEST_DIR}/bad_id.geojson' (FORMAT GEOJSON, FEATURE_ID nope);
+COPY ids TO '{TEST_DIR}/bad_id.geojson' (FORMAT GEOJSON, ID_COLUMN nope);
 ----
-<REGEX>:.*FEATURE_ID refers to column "nope", which is not being written.*
+<REGEX>:.*ID_COLUMN refers to column "nope", which is not being written.*
 
 statement error
 COPY ids TO '{TEST_DIR}/bad_geom.geojson' (FORMAT GEOJSON, GEOMETRY_COLUMN name);
@@ -259,15 +259,15 @@ COPY ids TO '{TEST_DIR}/bad_geom.geojson' (FORMAT GEOJSON, GEOMETRY_COLUMN name)
 <REGEX>:.*GEOMETRY_COLUMN refers to column "name", which has type VARCHAR instead of GEOMETRY.*
 
 statement error
-COPY ids TO '{TEST_DIR}/same_col.geojson' (FORMAT GEOJSON, FEATURE_ID geom);
+COPY ids TO '{TEST_DIR}/same_col.geojson' (FORMAT GEOJSON, ID_COLUMN geom);
 ----
 <REGEX>:.*same column as both the geometry and the Feature id.*
 
 # The GeoJSON-only options are not accepted by FORMAT JSON
 statement error
-COPY ids TO '{TEST_DIR}/opt.json' (FORMAT JSON, FEATURE_ID feature_id);
+COPY ids TO '{TEST_DIR}/opt.json' (FORMAT JSON, ID_COLUMN id);
 ----
-<REGEX>:.*Unknown option for COPY \.\.\. TO \.\.\. \(FORMAT JSON\): feature_id.*
+<REGEX>:.*Unknown option for COPY \.\.\. TO \.\.\. \(FORMAT JSON\): id_column.*
 
 statement error
 COPY ids TO '{TEST_DIR}/opt.json' (FORMAT JSON, BBOX true);

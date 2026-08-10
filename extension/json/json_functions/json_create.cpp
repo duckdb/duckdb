@@ -17,6 +17,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "json_common.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "json_functions.hpp"
 #include "json_geojson.hpp"
 
@@ -92,9 +93,39 @@ struct JSONCopyFormatOptions {
 	optional_ptr<const Expression> timestamptz_ns_format_expression;
 };
 
+static JSONGeometryFormat ParseGeometryFormat(const Value &value) {
+	if (value.IsNull()) {
+		return JSONGeometryFormat::WKT;
+	}
+	const auto format = StringUtil::Lower(StringValue::Get(value));
+	if (format == "wkt") {
+		return JSONGeometryFormat::WKT;
+	}
+	if (format == "geojson") {
+		return JSONGeometryFormat::GEOJSON;
+	}
+	throw InvalidInputException("Invalid value \"%s\" for json_geometry_format, expected 'wkt' or 'geojson'",
+	                            StringValue::Get(value));
+}
+
+void JSONFunctions::ValidateGeometryFormat(ClientContext &, SetScope, Value &parameter) {
+	ParseGeometryFormat(parameter);
+}
+
+//! GEOMETRY is written as WKT unless the json_geometry_format setting says otherwise. COPY ... TO ...
+//! (FORMAT GEOJSON) writes GeoJSON regardless, by overriding this afterwards.
+static JSONGeometryFormat ClientGeometryFormat(ClientContext &context) {
+	Value value;
+	if (!context.TryGetCurrentSetting("json_geometry_format", value)) {
+		return JSONGeometryFormat::WKT;
+	}
+	return ParseGeometryFormat(value);
+}
+
 static JSONCopyFormatOptions ClientFormatOptions(ClientContext &context) {
 	JSONCopyFormatOptions result;
 	result.context = context;
+	result.geometry_format = ClientGeometryFormat(context);
 	return result;
 }
 
@@ -131,6 +162,7 @@ public:
 
 	JSONCopyFormatOptions GetFormatOptions(ClientContext &context) {
 		JSONCopyFormatOptions result;
+		result.geometry_format = ClientGeometryFormat(context);
 		result.date_format = has_date_format ? optional_ptr<StrfTimeFormat>(&date_format) : nullptr;
 		result.timestamp_format = has_timestamp_format ? optional_ptr<StrfTimeFormat>(&timestamp_format) : nullptr;
 		result.context = context;
@@ -1194,7 +1226,7 @@ static void AddGeoJSONBoundingBoxes(yyjson_mut_doc *doc, yyjson_mut_val *feature
 	}
 }
 
-//! Turns one row into a GeoJSON Feature: the geometry column becomes "geometry", the FEATURE_ID column becomes
+//! Turns one row into a GeoJSON Feature: the geometry column becomes "geometry", the ID_COLUMN column becomes
 //! "id", and every other column becomes a member of "properties".
 static void JSONCopyToGeoJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -1341,17 +1373,17 @@ static unique_ptr<FunctionData> JSONCopyToGeoJSONBind(BindScalarFunctionInput &i
 		}
 	}
 
-	// FEATURE_ID selects the Feature-level "id", defaulting to a column named "feature_id" if there is one, so
-	// that a GeoJSON file read by DuckDB round-trips without needing the option
+	// ID_COLUMN selects the Feature-level "id", defaulting to a column named "id" if there is one, so that a
+	// GeoJSON file read by DuckDB round-trips without needing the option
 	optional_idx id_index;
-	string feature_id_column;
-	if (TryGetGeoJSONColumnOption(input.GetClientContext(), *arguments[4], feature_id_column)) {
-		if (!feature_id_column.empty()) {
-			id_index = FindGeoJSONColumn(child_types, feature_id_column, "FEATURE_ID");
+	string id_column;
+	if (TryGetGeoJSONColumnOption(input.GetClientContext(), *arguments[4], id_column)) {
+		if (!id_column.empty()) {
+			id_index = FindGeoJSONColumn(child_types, id_column, "ID_COLUMN");
 		}
 	} else {
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			if (child_types[i].first == "feature_id") {
+			if (child_types[i].first == "id") {
 				id_index = i;
 				break;
 			}
@@ -1531,6 +1563,9 @@ static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParam
 
 	JSONCopyFormatOptions options;
 	options.context = cast_data.client;
+	if (cast_data.client) {
+		options.geometry_format = ClientGeometryFormat(*cast_data.client);
+	}
 	ToJSONFunctionInternal(names, source, count, result, alc, options);
 	return true;
 }
