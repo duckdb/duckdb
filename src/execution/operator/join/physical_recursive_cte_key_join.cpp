@@ -323,7 +323,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		}
 	}
 	if (!hash_table_state->partial_matcher_initialized) {
-		vector<ExpressionType> predicates = layout.KeyComparisons();
+		const auto &predicates = layout.KeyComparisons();
 		vector<column_t> columns;
 		for (auto key_idx : state_key_indices) {
 			columns.push_back(key_idx);
