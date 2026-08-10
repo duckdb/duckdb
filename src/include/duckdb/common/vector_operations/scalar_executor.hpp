@@ -545,6 +545,60 @@ private:
 		                                                             adapter, indices);
 	}
 
+	template <uint64_t SPECIALIZED_MASKS, class SINK, class ADAPTER, class... ARGS, size_t... Is>
+	static bool TrySelectFlat(const std::array<VectorRef, sizeof...(ARGS)> &inputs, const SelectionVector &sel,
+	                          idx_t count, uint64_t constant_mask, const SINK &sink, ADAPTER &adapter,
+	                          std::index_sequence<Is...> indices, idx_t &result) {
+		constexpr idx_t N = sizeof...(ARGS);
+		switch (constant_mask) {
+		case 0:
+			if constexpr (SPECIALIZED_MASKS & (uint64_t(1) << 0)) {
+				result = SelectFlat<0, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 1:
+			if constexpr (N >= 2 && (SPECIALIZED_MASKS & (uint64_t(1) << 1))) {
+				result = SelectFlat<1, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 2:
+			if constexpr (N >= 2 && (SPECIALIZED_MASKS & (uint64_t(1) << 2))) {
+				result = SelectFlat<2, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 3:
+			if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 3))) {
+				result = SelectFlat<3, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 4:
+			if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 4))) {
+				result = SelectFlat<4, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 5:
+			if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 5))) {
+				result = SelectFlat<5, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		case 6:
+			if constexpr (N >= 3 && (SPECIALIZED_MASKS & (uint64_t(1) << 6))) {
+				result = SelectFlat<6, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
+				return true;
+			}
+			break;
+		default:
+			break;
+		}
+		return false;
+	}
+
 	template <bool RIGHT_CONSTANT, bool CAN_HAVE_NULL, class SINK, class CONSTANT_TYPE, class GENERIC_TYPE,
 	          class ADAPTER>
 	static idx_t SelectGenericConstantLoop(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
@@ -648,44 +702,10 @@ private:
 					auto local_sink = sink;
 					return local_sink.FillConstant(false, sel, count);
 				}
-				switch (profile.constant_mask) {
-				case 0:
-					if constexpr (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 0)) {
-						return SelectFlat<0, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 1:
-					if constexpr (N >= 2 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 1))) {
-						return SelectFlat<1, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 2:
-					if constexpr (N >= 2 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 2))) {
-						return SelectFlat<2, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 3:
-					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 3))) {
-						return SelectFlat<3, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 4:
-					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 4))) {
-						return SelectFlat<4, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 5:
-					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 5))) {
-						return SelectFlat<5, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				case 6:
-					if constexpr (N >= 3 && (POLICY::SPECIALIZED_MASKS & (uint64_t(1) << 6))) {
-						return SelectFlat<6, SINK, ADAPTER, ARGS...>(inputs, sel, count, sink, adapter, indices);
-					}
-					break;
-				default:
-					throw InternalException("Invalid flat/constant scalar selection profile");
+				idx_t result;
+				if (TrySelectFlat<POLICY::SPECIALIZED_MASKS, SINK, ADAPTER, ARGS...>(
+				        inputs, sel, count, profile.constant_mask, sink, adapter, indices, result)) {
+					return result;
 				}
 			}
 		}
@@ -722,22 +742,22 @@ public:
 			sel = FlatVector::IncrementalSelectionVector();
 		}
 		auto indices = std::index_sequence_for<ARGS...> {};
-		if constexpr (POLICY::DIRECT_TRUE_FLAT) {
-			static_assert(sizeof...(ARGS) == 2, "Direct true-only selection requires two inputs");
-			if (true_sel && !false_sel) {
+		auto profile = GetInputProfile(inputs, indices);
+		if constexpr (POLICY::DIRECT_TRUE_FLAT_MASKS != 0) {
+			static_assert(sizeof...(ARGS) <= 3, "Direct true-only selection supports up to three inputs");
+			if (true_sel && !false_sel && profile.all_flat_or_constant &&
+			    (POLICY::DIRECT_TRUE_FLAT_MASKS & (uint64_t(1) << profile.constant_mask))) {
 				StaticSelectionSink<true, false> sink(true_sel, false_sel);
-				auto left_type = inputs[0].get().GetVectorType();
-				auto right_type = inputs[1].get().GetVectorType();
-				if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
-					return SelectFlat<0, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
-				} else if (left_type == VectorType::FLAT_VECTOR && right_type == VectorType::CONSTANT_VECTOR) {
-					return SelectFlat<2, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
-				} else if (left_type == VectorType::CONSTANT_VECTOR && right_type == VectorType::FLAT_VECTOR) {
-					return SelectFlat<1, decltype(sink), ADAPTER, ARGS...>(inputs, *sel, count, sink, adapter, indices);
+				if (profile.any_constant_null) {
+					return sink.FillConstant(false, *sel, count);
+				}
+				idx_t result;
+				if (TrySelectFlat<POLICY::DIRECT_TRUE_FLAT_MASKS, decltype(sink), ADAPTER, ARGS...>(
+				        inputs, *sel, count, profile.constant_mask, sink, adapter, indices, result)) {
+					return result;
 				}
 			}
 		}
-		auto profile = GetInputProfile(inputs, indices);
 		if constexpr (POLICY::SPECIALIZE_OUTPUTS) {
 			if (true_sel && false_sel) {
 				StaticSelectionSink<true, true> sink(true_sel, false_sel);

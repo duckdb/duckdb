@@ -501,6 +501,10 @@ TEST_CASE("Scalar selection preserves result mappings and NULL semantics", "[sca
 	for (idx_t row = 0; row < COUNT; row++) {
 		REQUIRE(false_sel.get_index(row) == input_sel.get_index(row));
 	}
+	REQUIRE(BinaryExecutor::Select<int64_t, int64_t, LessThan>(constant_null, right, &input_sel, COUNT, &true_sel,
+	                                                           nullptr) == 0);
+	REQUIRE(BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, constant_null, &input_sel, COUNT, &true_sel,
+	                                                           nullptr) == 0);
 
 	REQUIRE(BinaryExecutor::Select<int64_t, int64_t, LessThan>(left, right, nullptr, 0, &true_sel, &false_sel) == 0);
 #ifndef DUCKDB_CRASH_ON_ASSERT
@@ -533,6 +537,14 @@ TEST_CASE("Scalar selection preserves result mappings and NULL semantics", "[sca
 			}
 		}
 	}
+
+	auto null_bound = MakeNullConstantVector(COUNT);
+	std::array<VariadicExecutor::VectorRef, 3> null_lower_inputs = {{left, null_bound, right_constant}};
+	std::array<VariadicExecutor::VectorRef, 3> null_upper_inputs = {{left, middle, null_bound}};
+	REQUIRE(VariadicExecutor::Select<TernaryLessThanSum, int64_t, int64_t, int64_t>(null_lower_inputs, &input_sel,
+	                                                                                COUNT, &true_sel, nullptr) == 0);
+	REQUIRE(VariadicExecutor::Select<TernaryLessThanSum, int64_t, int64_t, int64_t>(null_upper_inputs, &input_sel,
+	                                                                                COUNT, &true_sel, nullptr) == 0);
 }
 
 TEST_CASE("Binary comparison folding remains correct on dictionaries", "[scalar_executor]") {

@@ -106,15 +106,17 @@ private:
 	struct SelectPolicy {
 #if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flat)
 		static constexpr uint64_t SPECIALIZED_MASKS = SpecializeFlat<ARGS...>() ? 1 : 0;
+		static constexpr uint64_t DIRECT_TRUE_FLAT_MASKS =
+		    sizeof...(ARGS) == 3 && SpecializeFlat<ARGS...>() ? uint64_t(1) << 6 : 0;
 #else
 		static constexpr uint64_t SPECIALIZED_MASKS = 0;
+		static constexpr uint64_t DIRECT_TRUE_FLAT_MASKS = 0;
 #endif
 #if !DUCKDB_SMALLER_BINARY(variadic_executor_select_flags)
 		static constexpr bool SPECIALIZE_OUTPUTS = true;
 #else
 		static constexpr bool SPECIALIZE_OUTPUTS = false;
 #endif
-		static constexpr bool DIRECT_TRUE_FLAT = false;
 	};
 
 	template <size_t N, size_t... Is>

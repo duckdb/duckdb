@@ -49,7 +49,12 @@ struct ExecutorBenchmarkState : public DuckDBBenchmarkState {
 		InitializeInput(b, 3, 1);
 		InitializeInput(c, 5, 2);
 		InitializeInput(d, 7, 3);
-		if (selection_percent <= 100 && !(constant_mask & 0x3)) {
+		if (selection_percent <= 100 && constant_mask == 0x5) {
+			auto b_data = FlatVector::GetDataMutable<int64_t>(b);
+			for (idx_t i = 0; i < EXECUTOR_BENCHMARK_COUNT; i++) {
+				b_data[i] = i % 100 < selection_percent ? 1 : 3;
+			}
+		} else if (selection_percent <= 100 && !(constant_mask & 0x3)) {
 			auto a_data = FlatVector::GetData<int64_t>(a);
 			auto b_data = FlatVector::GetDataMutable<int64_t>(b);
 			for (idx_t i = 0; i < EXECUTOR_BENCHMARK_COUNT; i++) {
@@ -210,12 +215,15 @@ public:
 			}
 			break;
 		}
-		case ExecutorBenchmarkType::TERNARY_SELECT:
+		case ExecutorBenchmarkType::TERNARY_SELECT: {
+			auto true_sel = selection_output == ExecutorSelectionOutput::FALSE_ONLY ? nullptr : &state.true_sel;
+			auto false_sel = selection_output == ExecutorSelectionOutput::TRUE_ONLY ? nullptr : &state.false_sel;
 			for (idx_t i = 0; i < iterations; i++) {
 				state.selected_count = TernaryExecutor::Select<int64_t, int64_t, int64_t, ExecutorBetweenOperator>(
-				    state.b, state.a, state.c, nullptr, EXECUTOR_BENCHMARK_COUNT, &state.true_sel, &state.false_sel);
+				    state.b, state.a, state.c, nullptr, EXECUTOR_BENCHMARK_COUNT, true_sel, false_sel);
 			}
 			break;
+		}
 		}
 		if (type == ExecutorBenchmarkType::BINARY_SELECT ||
 		    type == ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS ||
@@ -303,6 +311,13 @@ ExecutorBenchmark
                                                      ExecutorBenchmarkType::BINARY_SELECT_GREATER_THAN_EQUALS, 0x2,
                                                      0x1);
 ExecutorBenchmark ternary_select_flat("ScalarExecutorTernarySelectFlat", ExecutorBenchmarkType::TERNARY_SELECT);
+ExecutorBenchmark ternary_select_fcc_true("ScalarExecutorTernarySelectFlatConstantConstantTrueOnly50",
+                                          ExecutorBenchmarkType::TERNARY_SELECT, 0x5, 0, ExecutorNullProfile::NONE, 50,
+                                          ExecutorSelectionOutput::TRUE_ONLY);
+ExecutorBenchmark ternary_select_fcc_true_sparse_null("ScalarExecutorTernarySelectFlatConstantConstantTrueOnlyNull01",
+                                                      ExecutorBenchmarkType::TERNARY_SELECT, 0x5, 0,
+                                                      ExecutorNullProfile::SPARSE, 50,
+                                                      ExecutorSelectionOutput::TRUE_ONLY);
 
 ExecutorBenchmark ternary_fff("ScalarExecutorTernaryFFF", ExecutorBenchmarkType::TERNARY_EXECUTE, 0x0);
 ExecutorBenchmark ternary_cff("ScalarExecutorTernaryCFF", ExecutorBenchmarkType::TERNARY_EXECUTE, 0x1);

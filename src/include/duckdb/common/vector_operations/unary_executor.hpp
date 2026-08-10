@@ -111,7 +111,7 @@ private:
 #else
 		static constexpr bool SPECIALIZE_OUTPUTS = false;
 #endif
-		static constexpr bool DIRECT_TRUE_FLAT = false;
+		static constexpr uint64_t DIRECT_TRUE_FLAT_MASKS = 0;
 	};
 
 	template <bool ADDS_NULLS, class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>

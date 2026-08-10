@@ -140,10 +140,10 @@ private:
 	struct SelectPolicy {
 #if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
 		static constexpr uint64_t SPECIALIZED_MASKS = 0x7;
-		static constexpr bool DIRECT_TRUE_FLAT = true;
+		static constexpr uint64_t DIRECT_TRUE_FLAT_MASKS = 0x7;
 #else
 		static constexpr uint64_t SPECIALIZED_MASKS = 0;
-		static constexpr bool DIRECT_TRUE_FLAT = false;
+		static constexpr uint64_t DIRECT_TRUE_FLAT_MASKS = 0;
 #endif
 #if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
 		static constexpr bool SPECIALIZE_OUTPUTS = true;
