@@ -508,10 +508,7 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
-		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
-			return false;
-		}
-		return BaseTokenizer::CharacterIsKeyword(text[0]);
+		return BaseTokenizer::CharacterIsIdentifierStart(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -1645,6 +1642,10 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 		if (StringUtil::CharacterIsDigit(character)) {
 			throw InvalidInputException("Cannot register parser keyword \"%s\": keywords cannot contain digits", text);
 		}
+	}
+	if (!BaseTokenizer::IsValidUnquotedIdentifier(text)) {
+		throw InvalidInputException(
+		    "Cannot register parser keyword \"%s\": keywords must be valid unquoted identifiers", text);
 	}
 	auto existing_category = BuiltinKeywordCategoryType(text);
 	if (existing_category == PEGKeywordCategory::KEYWORD_NONE) {

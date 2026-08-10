@@ -126,7 +126,17 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsKeyword(char c) {
+bool BaseTokenizer::CharacterIsIdentifierStart(char c) {
+	if (CharacterIsInitialNumber(c) || c == '$') {
+		return false;
+	}
+	return CharacterIsIdentifierContinuation(c);
+}
+
+bool BaseTokenizer::CharacterIsIdentifierContinuation(char c) {
+	if (c == '$') {
+		return true;
+	}
 	if (IsSingleByteOperator(c)) {
 		return false;
 	}
@@ -138,6 +148,18 @@ bool BaseTokenizer::CharacterIsKeyword(char c) {
 	}
 	if (CharacterIsControlFlow(c)) {
 		return false;
+	}
+	return true;
+}
+
+bool BaseTokenizer::IsValidUnquotedIdentifier(const string &text) {
+	if (text.empty() || !CharacterIsIdentifierStart(text[0])) {
+		return false;
+	}
+	for (idx_t i = 1; i < text.size(); i++) {
+		if (!CharacterIsIdentifierContinuation(text[i])) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -431,8 +453,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			break;
 		case TokenizeState::KEYWORD:
 			// keyword - check if this is still a keyword
-			// '$' is valid as a non-initial identifier character in PostgreSQL
-			if (c != '$' && !CharacterIsKeyword(c)) {
+			if (!CharacterIsIdentifierContinuation(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
 				auto token_type = (parser_cache ? parser_cache->IsKeyword(word) : keyword_helper.IsKeyword(word))

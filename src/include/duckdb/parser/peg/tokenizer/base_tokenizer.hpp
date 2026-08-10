@@ -65,7 +65,9 @@ public:
 	static bool CharacterIsNumber(char c);
 	static bool CharacterIsScientific(char c);
 	static bool CharacterIsControlFlow(char c);
-	static bool CharacterIsKeyword(char c);
+	static bool CharacterIsIdentifierStart(char c);
+	static bool CharacterIsIdentifierContinuation(char c);
+	static bool IsValidUnquotedIdentifier(const string &text);
 	static bool CharacterIsOperator(char c);
 	static bool CharacterIsSpecialStringCharacter(char c);
 	bool IsValidDollarTagCharacter(char c);

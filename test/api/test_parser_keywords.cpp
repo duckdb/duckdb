@@ -12,7 +12,8 @@ TEST_CASE("Parser keyword registration validates keyword spelling", "[api][parse
 	REQUIRE_NOTHROW(cache.RegisterKeyword("__", ExtensionKeywordCategory::RESERVED));
 	REQUIRE_NOTHROW(cache.RegisterKeyword("valid$keyword", ExtensionKeywordCategory::UNRESERVED));
 
-	for (const auto &keyword : {"", "a", "_", "1", "12", "12.5", "1keyword", "key1word", "keyword1"}) {
+	for (const auto &keyword : {"", "a", "_", "1", "12", "12.5", "1keyword", "key1word", "keyword1", "$keyword",
+	                            "key-word", "two words", "schema.word", "\"quoted\"", "keyword/operator"}) {
 		REQUIRE_THROWS_AS(cache.RegisterKeyword(keyword, ExtensionKeywordCategory::RESERVED), InvalidInputException);
 	}
 }
