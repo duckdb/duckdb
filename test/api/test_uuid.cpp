@@ -8,6 +8,9 @@ using namespace duckdb;
 
 namespace {
 
+constexpr idx_t THREAD_COUNT = 4;
+constexpr idx_t PER_THREAD = 2000;
+
 bool IsWellFormedV4(hugeint_t uuid) {
 	// version nibble lives in byte 6 (the lower half of `upper`), variant bits in byte 8 (top of `lower`)
 	auto version = (static_cast<uint64_t>(uuid.upper) >> 8) & 0xF0;
@@ -70,8 +73,6 @@ TEST_CASE("Test UUID::GenerateUniqueUUID", "[api]") {
 		}
 	}
 	SECTION("concurrent callers do not collide") {
-		constexpr idx_t THREAD_COUNT = 4;
-		constexpr idx_t PER_THREAD = 2000;
 		vector<vector<hugeint_t>> per_thread(THREAD_COUNT);
 		vector<thread> threads;
 		for (idx_t t = 0; t < THREAD_COUNT; t++) {
