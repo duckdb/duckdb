@@ -170,6 +170,12 @@ public:
 	static constexpr double BLOCK_FILL_FACTOR = 0.5;
 	//! By how many bits to repartition if a repartition is triggered
 	static constexpr idx_t REPARTITION_RADIX_BITS = 2;
+	//! Thread-limit divisor for state export and exported partition sizing
+	static constexpr idx_t AGGREGATE_STATE_SPILL_DIVISOR = 8;
+	//! Arena-only pressure that forces external aggregation
+	static constexpr idx_t AGGREGATE_STATE_PRESSURE_DIVISOR = 2;
+	//! Estimated memory amplification when importing exported states
+	static constexpr idx_t EXPORTED_STATE_MEMORY_MULTIPLIER = 2;
 };
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
@@ -667,8 +673,10 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 	for (auto &exported : lstate.abandoned_exported_data) {
 		exported_bytes += exported ? exported->SizeInBytes() : 0;
 	}
-	while (exported_bytes / lstate.abandoned_exported_data.size() > gstate.GetThreadLimit() / 8 &&
-	       exported_radix_bits + 2 <= RadixHTConfig::MAXIMUM_FINAL_SINK_RADIX_BITS) {
+	while (exported_bytes / lstate.abandoned_exported_data.size() >
+	           gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR &&
+	       exported_radix_bits + RadixHTConfig::REPARTITION_RADIX_BITS <=
+	           RadixHTConfig::MAXIMUM_FINAL_SINK_RADIX_BITS) {
 		{
 			// Widening beyond the native width forces every subsequent combine to export its
 			// rows. Once rows were combined natively, the exported width must stay instead.
@@ -678,8 +686,9 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 			}
 			gstate.spill_phase = SpillPhase::EXPORTED_ONLY;
 		}
-		GrowExportedData(context, gstate, lstate.abandoned_exported_data, lstate.abandoned_exported_data.size() * 4);
-		exported_radix_bits += 2;
+		exported_radix_bits += RadixHTConfig::REPARTITION_RADIX_BITS;
+		GrowExportedData(context, gstate, lstate.abandoned_exported_data,
+		                 RadixPartitioning::NumberOfPartitions(exported_radix_bits));
 	}
 	// The source rows were destroyed as they were exported, start over with an empty collection
 	lstate.abandoned_data =
@@ -689,12 +698,9 @@ void ExportAbandonedData(ClientContext &context, RadixHTGlobalSinkState &gstate,
 
 // Whether the aggregate arena alone approaches the thread memory limit
 bool StatePressureExceeded(RadixHTGlobalSinkState &gstate, GroupedAggregateHashTable &ht) {
-	return ht.GetAggregateAllocator()->AllocationSize() > gstate.GetThreadLimit() / 2;
+	return ht.GetAggregateAllocator()->AllocationSize() >
+	       gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
 }
-
-//! Under ordinary row pressure, keep native states while the arena is small relative to them:
-//! one non-inline value must not export millions of otherwise inline states
-constexpr double SPILL_ARENA_FRACTION = 0.1;
 
 // Whether this thread's aggregate states should be exported to spillable storage
 bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate, GroupedAggregateHashTable &ht) {
@@ -709,9 +715,7 @@ bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &l
 	if (!gstate.external) {
 		return false;
 	}
-	const auto native_size =
-	    ht.GetPartitionedData().SizeInBytes() + (lstate.abandoned_data ? lstate.abandoned_data->SizeInBytes() : 0);
-	return arena_size >= LossyNumericCast<idx_t>(SPILL_ARENA_FRACTION * static_cast<double>(native_size));
+	return arena_size >= gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_SPILL_DIVISOR;
 }
 
 void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate,
@@ -981,7 +985,8 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 			if (partition.exported_data) {
 				gstate.count_before_combining += partition.exported_data->Count();
 				gstate.max_partition_size =
-				    MaxValue(gstate.max_partition_size, 2 * partition.exported_data->SizeInBytes());
+				    MaxValue(gstate.max_partition_size,
+				             RadixHTConfig::EXPORTED_STATE_MEMORY_MULTIPLIER * partition.exported_data->SizeInBytes());
 			}
 		}
 		gstate.uncombined_exported_data.clear();
@@ -1009,7 +1014,8 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 				gstate.partitions.back()->exported_data = std::move(gstate.uncombined_exported_data[i]);
 				if (gstate.partitions.back()->exported_data) {
 					gstate.count_before_combining += gstate.partitions.back()->exported_data->Count();
-					partition_size += 2 * gstate.partitions.back()->exported_data->SizeInBytes();
+					partition_size += RadixHTConfig::EXPORTED_STATE_MEMORY_MULTIPLIER *
+					                  gstate.partitions.back()->exported_data->SizeInBytes();
 				}
 			}
 			gstate.max_partition_size = MaxValue(gstate.max_partition_size, partition_size);
