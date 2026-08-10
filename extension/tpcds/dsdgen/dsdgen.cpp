@@ -4,6 +4,7 @@
 #include "dsdgen_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -28,6 +29,7 @@ static constexpr idx_t DSDGEN_MIN_ROW_BATCH_SIZE = 10000;
 static constexpr idx_t DSDGEN_MAX_ROW_BATCH_SIZE = 100000;
 static constexpr idx_t DSDGEN_TARGET_CHUNK_ROWS = 2 * DEFAULT_ROW_GROUP_SIZE;
 static constexpr idx_t DSDGEN_PROGRESS_UNIT_SCALE = 100;
+static constexpr idx_t DSDGEN_MAX_SCALE_FACTOR = 100000;
 static constexpr idx_t DSDGEN_PARALLEL_SPLIT_MIN_ROWS = 1000000;
 static constexpr idx_t DSDGEN_MIN_PARALLEL_TASK_ROWS = DSDGEN_MIN_ROW_BATCH_SIZE;
 // TPC-DS worker initialization creates large per-thread caches, so fanout is bounded.
@@ -462,9 +464,18 @@ public:
 	TPCDSDSDGenGenerator(ClientContext &context, double scale, const Identifier &catalog_name,
 	                     const Identifier &schema, string suffix)
 	    : context(context), scale(scale), catalog_name(catalog_name), schema(schema), suffix(std::move(suffix)) {
+		if (Value::IsNan(scale)) {
+			throw InvalidInputException("DSDGen requires a valid scale factor");
+		}
+
 		if (scale <= 0) {
 			Finish();
 			return;
+		}
+
+		if (scale > DSDGEN_MAX_SCALE_FACTOR) {
+			throw InvalidInputException("DSDGen does not support a scale factor exceeding %d.",
+			                            DSDGEN_MAX_SCALE_FACTOR);
 		}
 
 #ifdef DEBUG
