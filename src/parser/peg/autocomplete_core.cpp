@@ -164,7 +164,7 @@ bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<U
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
 	AutoCompleteTokenizer(const string &sql, MatchState &state)
-	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	    : BaseTokenizer(sql, state.tokens, state.parser_cache), suggestions(state.suggestions) {
 		last_pos = 0;
 	}
 

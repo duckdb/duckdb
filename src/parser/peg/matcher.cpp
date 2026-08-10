@@ -635,15 +635,19 @@ private:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		auto keyword_category_type = [&](PEGKeywordCategory category) {
+			return state.parser_cache ? state.parser_cache->KeywordCategoryType(token_text, category)
+			                          : keyword_helper.KeywordCategoryType(token_text, category);
+		};
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
+			if (keyword_category_type(PEGKeywordCategory::KEYWORD_UNRESERVED) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
 				break;
 			}
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+			if (keyword_category_type(PEGKeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_COL_NAME)) {
 				return false;
 			}
 			break;
@@ -653,14 +657,12 @@ private:
 			                                           ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
 			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
 
-			const bool is_reserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool is_reserved = keyword_category_type(PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_category_type(banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
-			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			const bool is_unreserved = keyword_category_type(PEGKeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_category_type(allowed_override_category);
 			const bool has_allowed_flag = is_unreserved || has_override_flag;
 
 			if (has_banned_flag && !has_allowed_flag) {
@@ -1570,6 +1572,182 @@ void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;
+}
+
+static const char *ParserCacheKeywordCategoryToString(PEGKeywordCategory category) {
+	switch (category) {
+	case PEGKeywordCategory::KEYWORD_RESERVED:
+		return "reserved";
+	case PEGKeywordCategory::KEYWORD_UNRESERVED:
+		return "unreserved";
+	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
+		return "function-name";
+	case PEGKeywordCategory::KEYWORD_COL_NAME:
+		return "column-name";
+	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
+		return "type-name";
+	default:
+		return "none";
+	}
+}
+
+static PEGKeywordCategory ToParserCachePEGKeywordCategory(ExtensionKeywordCategory category) {
+	switch (category) {
+	case ExtensionKeywordCategory::RESERVED:
+		return PEGKeywordCategory::KEYWORD_RESERVED;
+	case ExtensionKeywordCategory::UNRESERVED:
+		return PEGKeywordCategory::KEYWORD_UNRESERVED;
+	case ExtensionKeywordCategory::FUNCTION_NAME:
+		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
+	case ExtensionKeywordCategory::COLUMN_NAME:
+		return PEGKeywordCategory::KEYWORD_COL_NAME;
+	case ExtensionKeywordCategory::TYPE_NAME:
+		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
+	default:
+		throw InvalidInputException("Invalid extension parser keyword category");
+	}
+}
+
+static PEGKeywordCategory BuiltinKeywordCategoryType(const string &text) {
+	auto &helper = PEGKeywordHelper::Instance();
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
+		return PEGKeywordCategory::KEYWORD_RESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+		return PEGKeywordCategory::KEYWORD_UNRESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
+		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
+		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+		return PEGKeywordCategory::KEYWORD_COL_NAME;
+	}
+	return PEGKeywordCategory::KEYWORD_NONE;
+}
+
+PEGKeywordCategory ParserCache::ExtensionKeywordCategoryTypeInternal(const string &text) const {
+	if (reserved_keyword_map.find(text) != reserved_keyword_map.end()) {
+		return PEGKeywordCategory::KEYWORD_RESERVED;
+	}
+	if (unreserved_keyword_map.find(text) != unreserved_keyword_map.end()) {
+		return PEGKeywordCategory::KEYWORD_UNRESERVED;
+	}
+	if (typename_keyword_map.find(text) != typename_keyword_map.end()) {
+		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
+	}
+	if (typefunc_keyword_map.find(text) != typefunc_keyword_map.end()) {
+		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
+	}
+	if (colname_keyword_map.find(text) != colname_keyword_map.end()) {
+		return PEGKeywordCategory::KEYWORD_COL_NAME;
+	}
+	return PEGKeywordCategory::KEYWORD_NONE;
+}
+
+void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCategory category) const {
+	if (text.empty()) {
+		throw InvalidInputException("Cannot register an empty parser keyword");
+	}
+	if (category == PEGKeywordCategory::KEYWORD_NONE) {
+		throw InvalidInputException("Cannot register parser keyword \"%s\" with category KEYWORD_NONE", text);
+	}
+	auto existing_category = BuiltinKeywordCategoryType(text);
+	if (existing_category == PEGKeywordCategory::KEYWORD_NONE) {
+		existing_category = ExtensionKeywordCategoryTypeInternal(text);
+	}
+	if (existing_category == PEGKeywordCategory::KEYWORD_NONE || existing_category == category) {
+		return;
+	}
+	if (existing_category == PEGKeywordCategory::KEYWORD_TYPE_FUNC &&
+	    category == PEGKeywordCategory::KEYWORD_TYPE_NAME) {
+		return;
+	}
+	if (existing_category == PEGKeywordCategory::KEYWORD_TYPE_NAME &&
+	    category == PEGKeywordCategory::KEYWORD_TYPE_FUNC) {
+		return;
+	}
+	throw InvalidInputException("Cannot register parser keyword \"%s\" as %s: it is already registered as %s", text,
+	                            ParserCacheKeywordCategoryToString(category),
+	                            ParserCacheKeywordCategoryToString(existing_category));
+}
+
+void ParserCache::RegisterKeywordInternal(const string &text, PEGKeywordCategory category) {
+	ValidateKeywordRegistration(text, category);
+	switch (category) {
+	case PEGKeywordCategory::KEYWORD_RESERVED:
+		reserved_keyword_map.insert(text);
+		break;
+	case PEGKeywordCategory::KEYWORD_UNRESERVED:
+		unreserved_keyword_map.insert(text);
+		break;
+	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
+		typefunc_keyword_map.insert(text);
+		break;
+	case PEGKeywordCategory::KEYWORD_COL_NAME:
+		colname_keyword_map.insert(text);
+		break;
+	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
+		typefunc_keyword_map.insert(text);
+		typename_keyword_map.insert(text);
+		break;
+	default:
+		throw InternalException("Unexpected parser keyword category");
+	}
+}
+
+void ParserCache::RegisterKeyword(const string &keyword, ExtensionKeywordCategory category) {
+	std::unique_lock<std::mutex> lock(mutex);
+	RegisterKeywordInternal(keyword, ToParserCachePEGKeywordCategory(category));
+}
+
+bool ParserCache::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
+	if (PEGKeywordHelper::Instance().KeywordCategoryType(text, category)) {
+		return true;
+	}
+	std::unique_lock<std::mutex> lock(mutex);
+	switch (category) {
+	case PEGKeywordCategory::KEYWORD_RESERVED:
+		return reserved_keyword_map.find(text) != reserved_keyword_map.end();
+	case PEGKeywordCategory::KEYWORD_UNRESERVED:
+		return unreserved_keyword_map.find(text) != unreserved_keyword_map.end();
+	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
+		return typefunc_keyword_map.find(text) != typefunc_keyword_map.end();
+	case PEGKeywordCategory::KEYWORD_COL_NAME:
+		return colname_keyword_map.find(text) != colname_keyword_map.end();
+	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
+		return typename_keyword_map.find(text) != typename_keyword_map.end();
+	default:
+		return false;
+	}
+}
+
+bool ParserCache::IsKeyword(const string &text) const {
+	if (PEGKeywordHelper::Instance().IsKeyword(text)) {
+		return true;
+	}
+	std::unique_lock<std::mutex> lock(mutex);
+	return ExtensionKeywordCategoryTypeInternal(text) != PEGKeywordCategory::KEYWORD_NONE;
+}
+
+vector<ParserKeyword> ParserCache::KeywordList() const {
+	auto result = PEGKeywordHelper::Instance().KeywordList();
+	std::unique_lock<std::mutex> lock(mutex);
+	for (auto &kw : reserved_keyword_map) {
+		result.push_back({kw, KeywordCategory::KEYWORD_RESERVED});
+	}
+	for (auto &kw : unreserved_keyword_map) {
+		result.push_back({kw, KeywordCategory::KEYWORD_UNRESERVED});
+	}
+	for (auto &kw : typefunc_keyword_map) {
+		result.push_back({kw, KeywordCategory::KEYWORD_TYPE_FUNC});
+	}
+	for (auto &kw : colname_keyword_map) {
+		result.push_back({kw, KeywordCategory::KEYWORD_COL_NAME});
+	}
+	return result;
 }
 
 } // namespace duckdb

@@ -1259,6 +1259,12 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	}
 
 	// add a parser extension
+	loader.RegisterKeyword("quack_reserved_keyword", ExtensionKeywordCategory::RESERVED);
+	loader.RegisterKeyword("quack_unreserved_keyword", ExtensionKeywordCategory::UNRESERVED);
+	loader.RegisterKeyword("quack_column_name_keyword", ExtensionKeywordCategory::COLUMN_NAME);
+	loader.RegisterKeyword("quack_function_name_keyword", ExtensionKeywordCategory::FUNCTION_NAME);
+	loader.RegisterKeyword("quack_type_name_keyword", ExtensionKeywordCategory::TYPE_NAME);
+
 	auto &config = DBConfig::GetConfig(db);
 	ParserExtension::Register(config, QuackExtension());
 	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());

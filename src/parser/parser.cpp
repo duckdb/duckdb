@@ -267,7 +267,7 @@ void Parser::ParseQuery(const string &query_p) {
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
-	ParserTokenizer tokenizer(query, tokens);
+	ParserTokenizer tokenizer(query, tokens, options.parser_cache);
 	tokenizer.TokenizeInput();
 	idx_t token_cursor = 0;
 	while (token_cursor < tokens.size()) {

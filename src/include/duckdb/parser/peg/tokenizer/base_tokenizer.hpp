@@ -27,7 +27,7 @@ enum class TokenizeState {
 
 class BaseTokenizer {
 public:
-	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens);
+	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens, optional_ptr<ParserCache> parser_cache = nullptr);
 	virtual ~BaseTokenizer() = default;
 
 public:
@@ -75,7 +75,8 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	PEGKeywordHelper keyword_helper;
+	PEGKeywordHelper &keyword_helper;
+	optional_ptr<ParserCache> parser_cache;
 };
 
 } // namespace duckdb

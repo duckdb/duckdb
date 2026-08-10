@@ -6,7 +6,7 @@ struct MatcherToken;
 
 class ParserTokenizer : public BaseTokenizer {
 public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens);
+	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens, optional_ptr<ParserCache> parser_cache = nullptr);
 	~ParserTokenizer() override = default;
 
 	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false) override;

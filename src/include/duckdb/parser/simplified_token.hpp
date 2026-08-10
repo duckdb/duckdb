@@ -39,6 +39,9 @@ enum class KeywordCategory : uint8_t {
 	KEYWORD_NONE
 };
 
+//! Parser keyword categories exposed to extensions.
+enum class ExtensionKeywordCategory : uint8_t { RESERVED, UNRESERVED, COLUMN_NAME, FUNCTION_NAME, TYPE_NAME };
+
 struct ParserKeyword {
 	string name;
 	KeywordCategory category;
