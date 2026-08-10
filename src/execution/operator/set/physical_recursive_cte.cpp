@@ -357,8 +357,8 @@ public:
 	RecursiveCTELocalState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH), dummy_addresses(LogicalType::POINTER),
 	      new_groups(STANDARD_VECTOR_SIZE) {
-		if (!op.using_key) {
-			output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
+		if (!op.using_key || !op.union_all) {
+			output = make_uniq<ColumnDataCollection>(context, op.using_key ? op.internal_types : op.GetTypes());
 			output->InitializeAppend(append_state);
 		}
 		if (!op.using_key && !op.union_all) {
@@ -939,7 +939,13 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	gstate.AppendOutput(chunk);
+	if (union_all) {
+		gstate.AppendOutput(chunk);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+	auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+	D_ASSERT(lstate.output);
+	lstate.output->Append(lstate.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -950,8 +956,14 @@ void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkSta
 }
 
 SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
-	if (!using_key) {
-		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+	if (using_key) {
+		if (!union_all) {
+			auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+			D_ASSERT(lstate.output);
+			gstate.CombineOutput(*lstate.output);
+		}
+	} else {
 		if (union_all && !gstate.UsesLocalUnionAllOutput()) {
 			return SinkCombineResultType::FINISHED;
 		}
