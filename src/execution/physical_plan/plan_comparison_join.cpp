@@ -80,11 +80,17 @@ static optional_idx MatchRecursiveProbeKey(ClientContext &context, const Physica
 	return optional_idx();
 }
 
+struct RecursiveKeyProbe {
+	idx_t state_key_idx;
+	idx_t probe_key_idx;
+	ExpressionType comparison;
+};
+
 static bool TryGetRecursiveKeyProbe(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &left,
                                     PhysicalOperator &right, optional_ptr<PhysicalRecursiveCTEStateScan> left_state,
                                     optional_ptr<PhysicalRecursiveCTEStateScan> right_state,
                                     vector<idx_t> &state_key_indices, vector<idx_t> &probe_key_indices,
-                                    bool &state_on_left) {
+                                    vector<ExpressionType> &key_comparisons, bool &state_on_left) {
 	if (op.join_type != JoinType::INNER || (left_state && right_state)) {
 		return false;
 	}
@@ -98,9 +104,13 @@ static bool TryGetRecursiveKeyProbe(ClientContext &context, LogicalComparisonJoi
 		return false;
 	}
 
-	vector<pair<idx_t, idx_t>> key_pairs;
+	vector<RecursiveKeyProbe> key_probes;
 	for (auto &condition : op.conditions) {
-		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+		if (!condition.IsComparison()) {
+			return false;
+		}
+		const auto comparison = condition.GetComparisonType();
+		if (comparison != ExpressionType::COMPARE_EQUAL && comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return false;
 		}
 		auto &state_expr = state_on_left ? condition.GetLHS() : condition.GetRHS();
@@ -119,20 +129,23 @@ static bool TryGetRecursiveKeyProbe(ClientContext &context, LogicalComparisonJoi
 		if (key_idx >= state_scan->key_requires_normalization.size()) {
 			return false;
 		}
-		for (auto &key_pair : key_pairs) {
-			if (key_pair.first == key_idx) {
+		for (auto &key_probe : key_probes) {
+			if (key_probe.state_key_idx == key_idx) {
 				return false;
 			}
 		}
 		if (key_type.IsNested()) {
 			return false;
 		}
-		key_pairs.emplace_back(key_idx, probe_key_idx.GetIndex());
+		key_probes.push_back({key_idx, probe_key_idx.GetIndex(), comparison});
 	}
-	std::sort(key_pairs.begin(), key_pairs.end());
-	for (auto &key_pair : key_pairs) {
-		state_key_indices.push_back(key_pair.first);
-		probe_key_indices.push_back(key_pair.second);
+	std::sort(key_probes.begin(), key_probes.end(), [](const RecursiveKeyProbe &left, const RecursiveKeyProbe &right) {
+		return left.state_key_idx < right.state_key_idx;
+	});
+	for (auto &key_probe : key_probes) {
+		state_key_indices.push_back(key_probe.state_key_idx);
+		probe_key_indices.push_back(key_probe.probe_key_idx);
+		key_comparisons.push_back(key_probe.comparison);
 	}
 	return true;
 }
@@ -174,9 +187,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	auto right_state = FindDirectRecursiveStateScan(right, recursive_cte_planning);
 	vector<idx_t> state_key_indices;
 	vector<idx_t> probe_key_indices;
+	vector<ExpressionType> key_comparisons;
 	bool state_on_left;
 	if (TryGetRecursiveKeyProbe(context, op, left, right, left_state, right_state, state_key_indices, probe_key_indices,
-	                            state_on_left)) {
+	                            key_comparisons, state_on_left)) {
 		auto &state_scan = state_on_left ? *left_state : *right_state;
 		auto &probe = state_on_left ? right : left;
 		auto left_projection_map = PhysicalJoin::FillProjectionMap(left, op.left_projection_map);
@@ -193,9 +207,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 			}
 		}
 		return Make<PhysicalRecursiveCTEKeyJoin>(op, probe, state_scan, state_on_left, std::move(state_key_indices),
-		                                         std::move(probe_key_indices), std::move(probe_key_normalizers),
-		                                         std::move(left_projection_map), std::move(right_projection_map),
-		                                         op.estimated_cardinality);
+		                                         std::move(probe_key_indices), std::move(key_comparisons),
+		                                         std::move(probe_key_normalizers), std::move(left_projection_map),
+		                                         std::move(right_projection_map), op.estimated_cardinality);
 	}
 
 	if (op.conditions.empty()) {
