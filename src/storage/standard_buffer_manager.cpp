@@ -323,7 +323,7 @@ vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(QueryCo
 	vector<unique_ptr<AsyncTask>> tasks;
 	tasks.reserve(plan.size());
 	for (auto &run : plan) {
-		// the io size is the number of bytes this run wil read
+		// the io size is the number of bytes this run will read
 		auto io_size = run.handles.size() * run.handles[0]->GetBlockAllocSize();
 		tasks.push_back(make_uniq<CallbackAsyncTask>(
 		    [this, context, run = std::move(run)]() mutable { BatchRead(context, run); }, io_size));
