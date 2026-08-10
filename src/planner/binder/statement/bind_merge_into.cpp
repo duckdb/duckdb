@@ -286,6 +286,13 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	merge_into->bound_constraints = BindConstraints(table);
 
+	// Set return_chunk before binding any actions: the update binding uses it to expand to a full-row update so
+	// RETURNING can report the whole row. It must be set before the WHEN NOT MATCHED (BY SOURCE) actions below are
+	// bound, otherwise those updates only carry their SET columns and RETURNING reports zeroed values for the rest.
+	if (!node.returning_list.empty()) {
+		merge_into->return_chunk = true;
+	}
+
 	for (auto &entry : node.actions) {
 		if (entry.first == MergeActionCondition::WHEN_MATCHED) {
 			continue;
@@ -340,10 +347,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-
-	if (!node.returning_list.empty()) {
-		merge_into->return_chunk = true;
-	}
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {
