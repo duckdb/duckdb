@@ -1,0 +1,10 @@
+# name: test/sql/tpcds/tpcds_null_arg.test
+# description: PRAGMA tpcds rejects a NULL query number instead of throwing an INTERNAL error
+# group: [tpcds]
+
+require tpcds
+
+statement error
+PRAGMA tpcds(NULL);
+----
+<REGEX>:.*Binder Error.*TPC-DS query number must not be NULL.*

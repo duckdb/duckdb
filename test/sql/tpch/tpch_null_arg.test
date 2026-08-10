@@ -1,0 +1,10 @@
+# name: test/sql/tpch/tpch_null_arg.test
+# description: PRAGMA tpch rejects a NULL query number instead of throwing an INTERNAL error
+# group: [tpch]
+
+require tpch
+
+statement error
+PRAGMA tpch(NULL);
+----
+<REGEX>:.*Binder Error.*TPC-H query number must not be NULL.*
