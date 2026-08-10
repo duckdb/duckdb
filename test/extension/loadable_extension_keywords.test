@@ -25,6 +25,13 @@ quack_reserved_keyword	reserved
 quack_type_name_keyword	type_function
 quack_unreserved_keyword	unreserved
 
+query I
+SELECT keyword_category
+FROM duckdb_keywords()
+WHERE keyword_name = 'select';
+----
+reserved
+
 statement error
 SELECT NULL::quack_type_name_keyword;
 ----

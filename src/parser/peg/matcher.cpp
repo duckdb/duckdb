@@ -1658,6 +1658,9 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 }
 
 void ParserCache::RegisterKeywordInternal(const string &text, PEGKeywordCategory category) {
+	if (PEGKeywordHelper::Instance().KeywordCategoryType(text, category)) {
+		return;
+	}
 	ValidateKeywordRegistration(text, category);
 	switch (category) {
 	case PEGKeywordCategory::KEYWORD_RESERVED:

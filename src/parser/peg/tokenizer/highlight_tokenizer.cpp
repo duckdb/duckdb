@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-HighlightTokenizer::HighlightTokenizer(const string &sql) : BaseTokenizer(sql, tokens) {
+HighlightTokenizer::HighlightTokenizer(const string &sql, optional_ptr<ParserCache> parser_cache)
+    : BaseTokenizer(sql, tokens, parser_cache) {
 }
 
 void HighlightTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {

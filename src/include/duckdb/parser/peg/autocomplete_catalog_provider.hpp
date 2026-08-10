@@ -40,6 +40,10 @@ public:
 
 	//! Get the PEG matcher for syntax-level autocomplete.
 	virtual shared_ptr<PEGMatcher> GetPEGMatcher() = 0;
+	//! Get the parser cache containing extension-owned keywords.
+	virtual optional_ptr<ParserCache> GetParserCache() {
+		return nullptr;
+	}
 };
 
 //! Empty provider — returns no catalog suggestions.
@@ -78,6 +82,9 @@ public:
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
 		return cache.GetMatcher();
+	}
+	optional_ptr<ParserCache> GetParserCache() override {
+		return &cache;
 	}
 
 private:

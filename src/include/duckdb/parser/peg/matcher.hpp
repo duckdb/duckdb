@@ -125,8 +125,9 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
-	           ParserPackratCache *packrat_cache_p = nullptr, optional_ptr<ParserCache> parser_cache_p = nullptr)
+	           idx_t &max_token_index, optional_ptr<ParserCache> parser_cache_p = nullptr,
+	           bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	           ParserPackratCache *packrat_cache_p = nullptr)
 	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
 	      packrat_cache(packrat_cache_p), parser_cache(parser_cache_p) {
