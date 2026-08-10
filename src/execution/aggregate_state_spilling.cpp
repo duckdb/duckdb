@@ -3,7 +3,7 @@
 #include "duckdb/function/aggregate_state_serialization.hpp"
 
 #include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/common/types/row/tuple_data_iterator.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -163,7 +163,7 @@ void AggregateStateSpilling::ExportStates(ClientContext &context, const TupleDat
 	}
 }
 
-void AggregateStateSpilling::ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
+void AggregateStateSpilling::ImportStates(ClientContext &context, const shared_ptr<TupleDataLayout> &layout,
                                           const AggregateStateSpillPlan &plan, ColumnDataCollection &exported,
                                           ArenaAllocator &allocator,
                                           const std::function<void(TupleDataCollection &)> &combine) {

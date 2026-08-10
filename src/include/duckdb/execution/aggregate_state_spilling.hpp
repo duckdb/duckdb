@@ -36,7 +36,7 @@ public:
 	                         TupleDataCollection &source, vector<unique_ptr<ColumnDataCollection>> &exported,
 	                         idx_t exported_radix_bits, ArenaAllocator &allocator);
 	//! Imports and combines one chunk of exported states at a time
-	static void ImportStates(ClientContext &context, shared_ptr<TupleDataLayout> layout,
+	static void ImportStates(ClientContext &context, const shared_ptr<TupleDataLayout> &layout,
 	                         const AggregateStateSpillPlan &plan, ColumnDataCollection &exported,
 	                         ArenaAllocator &allocator, const std::function<void(TupleDataCollection &)> &combine);
 };
