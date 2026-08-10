@@ -1063,6 +1063,24 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &resu
 	}
 }
 
+//! Fold the operators of a secure view into the boundary node, so that all sub-timings and sub-metrics are reported
+//! on the secure view itself and nothing about the inside of the view is exposed. This runs before any profiling
+//! output is produced, so every consumer (EXPLAIN ANALYZE in any format, the profiling output, the query profile
+//! result) sees the collapsed tree.
+static void CollapseSecureViews(ProfilingNode &node) {
+	if (node.GetOperatorMetrics().operator_type != PhysicalOperatorType::SECURE_VIEW) {
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			CollapseSecureViews(*node.GetChild(i));
+		}
+		return;
+	}
+	auto &metrics = node.GetOperatorMetrics();
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		MergeOperatorMeasurements(*node.GetChild(i), metrics);
+	}
+	node.children.clear();
+}
+
 void QueryProfiler::FinalizeMetricsInternal() {
 	if (metrics_finalized || !IsEnabled() || !metrics) {
 		return;
@@ -1079,6 +1097,7 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		CollapseSecureViews(*root);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;
