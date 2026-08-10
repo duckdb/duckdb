@@ -36,6 +36,9 @@ CALL dbgen(sf=1e19);
 <REGEX>:.*does not support a scale factor exceeding 100000.*
 
 statement ok
+CALL dbgen(sf=-9223372036854775808);
+
+statement ok
 CALL dbgen(sf=1, children =100, step = 0);
 
 query IIII

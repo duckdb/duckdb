@@ -1088,6 +1088,11 @@ public:
 			throw InvalidInputException("DBGen requires a valid scale factor.");
 		}
 
+		if (flt_scale <= 0) {
+			Finish();
+			return;
+		}
+
 		if (flt_scale > MAX_SCALE) {
 			throw InvalidInputException("DBGen does not support a scale factor exceeding %d.",
 			                            static_cast<int>(MAX_SCALE));
@@ -1095,7 +1100,7 @@ public:
 
 		InitializeBaseContext();
 
-		if (flt_scale == 0 || current_step >= children) {
+		if (current_step >= children) {
 			Finish();
 			return;
 		}
