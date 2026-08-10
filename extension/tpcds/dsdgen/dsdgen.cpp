@@ -4,7 +4,6 @@
 #include "dsdgen_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/data_table.hpp"

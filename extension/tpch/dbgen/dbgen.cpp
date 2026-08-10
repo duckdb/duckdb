@@ -3,7 +3,6 @@
 #include "tpch_constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
