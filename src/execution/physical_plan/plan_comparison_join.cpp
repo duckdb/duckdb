@@ -168,12 +168,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
-
-		if (op.dep_set) {
-			auto &phy_hash_join = join.Cast<PhysicalHashJoin>();
-			phy_hash_join.dep_set = op.dep_set;
-			phy_hash_join.is_disjunctive_branch = op.is_disjunctive_branch;
-		}
 		return join;
 	}
 
