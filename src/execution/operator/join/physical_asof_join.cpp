@@ -25,13 +25,14 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 		D_ASSERT(cond.IsComparison());
 		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
 		join_key_types.push_back(cond.GetLHS().GetReturnType());
+		const auto join_key_idx = join_key_types.size() - 1;
 
 		auto left_cond = cond.LeftReference()->Copy();
 		auto right_cond = cond.RightReference()->Copy();
 		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHAN:
-			null_sensitive.emplace_back(lhs_orders.size());
+			null_sensitive.emplace_back(join_key_idx);
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_cond));
 			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right_cond));
 			comparison_type = cond.GetComparisonType();
@@ -39,13 +40,13 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
 			//	Always put NULLS LAST so they can be ignored.
-			null_sensitive.emplace_back(lhs_orders.size());
+			null_sensitive.emplace_back(join_key_idx);
 			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left_cond));
 			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right_cond));
 			comparison_type = cond.GetComparisonType();
 			break;
 		case ExpressionType::COMPARE_EQUAL:
-			null_sensitive.emplace_back(lhs_orders.size());
+			null_sensitive.emplace_back(join_key_idx);
 			DUCKDB_EXPLICIT_FALLTHROUGH;
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			lhs_partitions.emplace_back(std::move(left_cond));
@@ -730,14 +731,25 @@ struct SortKeyPrefixComparison {
 			auto lhs_width = col.size;
 			auto rhs_width = col.size;
 			int cmp = 1;
+			const auto has_null =
+			    col.type != SortKeyPrefixComparisonType::NESTED &&
+			    (CreateSortKeyHelpers::IsNullSortKey(const_data_ptr_cast(lhs_ptr), modifiers.null_type) ||
+			     CreateSortKeyHelpers::IsNullSortKey(const_data_ptr_cast(rhs_ptr), modifiers.null_type));
+			if (has_null) {
+				lhs_width = 1;
+				rhs_width = 1;
+			}
+
 			switch (col.type) {
 			case SortKeyPrefixComparisonType::FIXED:
 				cmp = memcmp(lhs_ptr, rhs_ptr, lhs_width);
 				break;
 			case SortKeyPrefixComparisonType::VARCHAR:
-				//	Include first null byte.
-				lhs_width = 1 + strlen(lhs_ptr);
-				rhs_width = 1 + strlen(rhs_ptr);
+				if (!has_null) {
+					//	Include first null byte.
+					lhs_width = 1 + strlen(lhs_ptr);
+					rhs_width = 1 + strlen(rhs_ptr);
+				}
 				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				break;
 			case SortKeyPrefixComparisonType::NESTED:

@@ -817,7 +817,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer
 	// resolve the join type name against the JoinType enum (case-insensitive); accept an optional `_join` suffix,
 	// so e.g. `mark` and `mark_join` are equivalent. EnumUtil::FromString throws on an unknown name.
 	auto type_name = col_label;
-	if (StringUtil::EndsWith(StringUtil::Lower(type_name), "_join")) {
+	if (StringUtil::CIEndsWith(type_name, "_join")) {
 		type_name = type_name.substr(0, type_name.size() - 5);
 	}
 	result->type = EnumUtil::FromString<JoinType>(type_name);
