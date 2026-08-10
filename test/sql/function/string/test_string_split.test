@@ -189,6 +189,22 @@ a
 a
 a
 
+statement ok
+CREATE TABLE dynamic_regex_splits(input VARCHAR, pattern VARCHAR)
+
+statement ok
+INSERT INTO dynamic_regex_splits VALUES ('a1b22c', '[0-9]+'), ('aXbxc', 'x')
+
+query T
+SELECT string_split_regex(input, pattern) FROM dynamic_regex_splits WHERE input = 'a1b22c'
+----
+[a, b, c]
+
+query T
+SELECT string_split_regex(input, pattern, 'i') FROM dynamic_regex_splits WHERE input = 'aXbxc'
+----
+[a, b, c]
+
 query T
 SELECT UNNEST(string_split('aaaaa', NULL))
 ----
