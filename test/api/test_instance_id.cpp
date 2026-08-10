@@ -21,6 +21,7 @@ TEST_CASE("Test that every DatabaseInstance has its own id", "[api]") {
 		REQUIRE(db1.instance->GetInstanceId() != db2.instance->GetInstanceId());
 	}
 	SECTION("many instances are all distinct") {
+		// UUID::GenerateUniqueUUID counts within the process, so this holds regardless of the entropy source
 		set<string> ids;
 		for (idx_t i = 0; i < 32; i++) {
 			DuckDB db(nullptr);

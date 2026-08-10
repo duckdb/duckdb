@@ -1,4 +1,5 @@
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"
 
@@ -167,6 +168,15 @@ hugeint_t UUIDv4::GenerateRandomUUID(RandomEngine &engine) {
 hugeint_t UUIDv4::GenerateRandomUUID() {
 	RandomEngine engine;
 	return GenerateRandomUUID(engine);
+}
+
+hugeint_t UUIDv4::GenerateUniqueUUID() {
+	static const hugeint_t PROCESS_BASE = GenerateRandomUUID();
+	static atomic<uint64_t> counter(0);
+	auto result = PROCESS_BASE;
+	// the variant bits live in the top byte of the lower half, so a counter below 2^56 keeps this a valid v4
+	result.lower ^= counter++;
+	return result;
 }
 
 //////////////////

@@ -63,6 +63,10 @@ public:
 	//! Generate a random UUID v4 value.
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
 	static hugeint_t GenerateRandomUUID();
+	//! Generate a UUID v4 value that no other call in this process returns, and that is distinct across
+	//! processes. Distinctness within the process is guaranteed rather than probabilistic, and does not
+	//! depend on the entropy source, which is drawn once per process instead of once per call.
+	static hugeint_t GenerateUniqueUUID();
 };
 
 using UUIDv4 = UUID;

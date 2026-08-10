@@ -78,7 +78,7 @@ DBConfig::DBConfig(const identifier_map_t<Value> &config_dict, bool read_only) :
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : instance_id(UUID::ToString(UUIDv4::GenerateRandomUUID())), db_validity(*this) {
+DatabaseInstance::DatabaseInstance() : instance_id(UUID::ToString(UUIDv4::GenerateUniqueUUID())), db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
