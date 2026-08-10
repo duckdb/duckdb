@@ -149,6 +149,22 @@ void RecursiveCTEEpochMetrics::RecordKeyPreaggregationCombine(idx_t elapsed_ns) 
 	key_preaggregation_combine_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregationClassification(idx_t elapsed_ns) {
+	local_key_preaggregation_classification_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns) {
+	D_ASSERT(groups <= candidate_rows);
+	local_key_preaggregation_candidate_rows.fetch_add(candidate_rows);
+	local_key_preaggregation_groups.fetch_add(groups);
+	local_key_preaggregation_states.fetch_add(1);
+	local_key_preaggregation_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordLocalKeyPreaggregationResidual(idx_t candidate_rows) {
+	local_key_preaggregation_residual_rows.fetch_add(candidate_rows);
+}
+
 void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
 	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
 }
@@ -357,6 +373,15 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"key_preaggregation_combine_work_ns", to_string(epoch_metrics.key_preaggregation_combine_work_ns.load())},
 	     {"key_preaggregation_candidate_rows", to_string(epoch_metrics.key_preaggregation_candidate_rows.load())},
 	     {"key_preaggregation_groups", to_string(epoch_metrics.key_preaggregation_groups.load())},
+	     {"local_key_preaggregation_classification_work_ns",
+	      to_string(epoch_metrics.local_key_preaggregation_classification_work_ns.load())},
+	     {"local_key_preaggregation_work_ns", to_string(epoch_metrics.local_key_preaggregation_work_ns.load())},
+	     {"local_key_preaggregation_candidate_rows",
+	      to_string(epoch_metrics.local_key_preaggregation_candidate_rows.load())},
+	     {"local_key_preaggregation_groups", to_string(epoch_metrics.local_key_preaggregation_groups.load())},
+	     {"local_key_preaggregation_states", to_string(epoch_metrics.local_key_preaggregation_states.load())},
+	     {"local_key_preaggregation_residual_rows",
+	      to_string(epoch_metrics.local_key_preaggregation_residual_rows.load())},
 	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
 	     {"key_delta_work_ns", to_string(epoch_metrics.key_delta_work_ns.load())},
 	     {"key_delta_candidate_rows", to_string(epoch_metrics.key_delta_candidate_rows.load())},
