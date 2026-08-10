@@ -38,7 +38,6 @@ static bool CanReuseAlignedStats(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
 		return true;
 	default:
 		return false;
