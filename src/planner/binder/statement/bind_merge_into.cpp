@@ -286,9 +286,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	merge_into->bound_constraints = BindConstraints(table);
 
-	// Set return_chunk before binding any actions: the update binding uses it to expand to a full-row update so
-	// RETURNING can report the whole row. It must be set before the WHEN NOT MATCHED (BY SOURCE) actions below are
-	// bound, otherwise those updates only carry their SET columns and RETURNING reports zeroed values for the rest.
+	// Set return_chunk before binding any actions
 	if (!node.returning_list.empty()) {
 		merge_into->return_chunk = true;
 	}
