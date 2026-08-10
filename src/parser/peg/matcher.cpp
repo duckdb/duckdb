@@ -1638,6 +1638,14 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 	if (category == PEGKeywordCategory::KEYWORD_NONE) {
 		throw InvalidInputException("Cannot register parser keyword \"%s\" with category KEYWORD_NONE", text);
 	}
+	if (text.size() == 1) {
+		throw InvalidInputException("Cannot register single-character parser keyword \"%s\"", text);
+	}
+	for (auto character : text) {
+		if (StringUtil::CharacterIsDigit(character)) {
+			throw InvalidInputException("Cannot register parser keyword \"%s\": keywords cannot contain digits", text);
+		}
+	}
 	auto existing_category = BuiltinKeywordCategoryType(text);
 	if (existing_category == PEGKeywordCategory::KEYWORD_NONE) {
 		existing_category = ExtensionKeywordCategoryTypeInternal(text);
