@@ -1,0 +1,18 @@
+# name: test/extension/loadable_extension_keyword_tools.test
+# description: Test parser extension keywords in optional parser tools
+# group: [extension]
+
+require skip_reload
+
+require autocomplete
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query III
+SELECT start, token_type, word
+FROM sql_tokenize('SELECT quack_reserved_keyword')
+ORDER BY start;
+----
+0	KEYWORD	SELECT
+7	KEYWORD	quack_reserved_keyword
