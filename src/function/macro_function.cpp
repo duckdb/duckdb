@@ -1,5 +1,7 @@
 #include "duckdb/function/macro_function.hpp"
 
+#include "duckdb/common/sql_identifier.hpp"
+
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -332,7 +334,7 @@ string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
 		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		auto param_string = param_name.GetIdentifierName();
+		auto param_string = SQLIdentifier::ToString(param_name.GetIdentifierName());
 		if (types[param_idx] != LogicalType::UNKNOWN) {
 			param_string += " " + types[param_idx].ToString();
 		}
