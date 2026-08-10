@@ -188,6 +188,17 @@ public:
 		return selection_data ? selection_data->row_span : 0;
 	}
 	void Flatten() const;
+	//! Identity of the underlying representation: two selections sharing it select identically
+	const void *RepresentationHandle() const {
+		if (sel_vector) {
+			return sel_vector;
+		}
+		return selection_data && selection_data->is_bitmap ? selection_data->bitmap_data.get() : nullptr;
+	}
+	static bool SameSelection(const SelectionVector &a, const SelectionVector &b) {
+		return a.RepresentationHandle() == b.RepresentationHandle() && a.RowSpan() == b.RowSpan() &&
+		       a.capacity == b.capacity;
+	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 

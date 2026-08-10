@@ -94,6 +94,8 @@ private:
 	//! Only valid when the expression is eligible for the dictionary expression optimization
 	//! This is the case when the input is "practically unary", i.e., only one non-const input column
 	optional_idx input_col_idx;
+	//! Non-constant children; several are only usable when they share one selection (dense arithmetic)
+	vector<idx_t> dictionary_input_indices;
 	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;

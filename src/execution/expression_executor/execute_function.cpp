@@ -44,14 +44,17 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			if (child.IsFoldable()) {
 				continue; // Constant
 			}
-			if (input_col_idx.IsValid()) {
-				input_col_idx.SetInvalid(); // Found more than 1 non-constant
-				break;
-			}
 			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
+				dictionary_input_indices.clear();
 				break; // FIXME
 			}
-			input_col_idx = child_idx;
+			dictionary_input_indices.push_back(child_idx);
+		}
+		if (dictionary_input_indices.size() > 1 && !safe_autovec_arith) {
+			dictionary_input_indices.clear(); // only the dense path can evaluate several dictionaries
+		}
+		if (!dictionary_input_indices.empty()) {
+			input_col_idx = dictionary_input_indices[0];
 		}
 		break;
 	}
@@ -87,6 +90,16 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	if (safe_autovec_arith && AutoVecCountPaysOff(args.size()) && // dense dictionary arithmetic
 	    input_dictionary_size <= STANDARD_VECTOR_SIZE &&
 	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
+		for (idx_t i = 1; i < dictionary_input_indices.size(); i++) { // every input must index the same dictionary
+			const auto &input = args.data[dictionary_input_indices[i]];
+			const auto sz = input.GetVectorType() == VectorType::DICTIONARY_VECTOR
+			                    ? DictionaryVector::DictionarySize(input)
+			                    : optional_idx();
+			if (!sz.IsValid() || sz.GetIndex() != input_dictionary_size ||
+			    !SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
+				return false;
+			}
+		}
 		if (!output_dictionary || output_dictionary->data.size() != input_dictionary_size) {
 			output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 			output_dictionary->id.clear(); // reused result has no stable dictionary id
@@ -97,7 +110,9 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		for (idx_t i = 0; i < args.ColumnCount(); i++) {
 			dictionary_input_chunk.data[i].Reference(args.data[i]); // constants stay as-is
 		}
-		dictionary_input_chunk.data[unary_col_idx].Reference(DictionaryVector::Child(unary_input));
+		for (auto idx : dictionary_input_indices) {
+			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
+		}
 		dictionary_input_chunk.SetChildCardinality(input_dictionary_size);
 		expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
 		result.Dictionary(output_dictionary, input_sel, args.size());
@@ -105,7 +120,8 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	const auto &input_dictionary_id = DictionaryVector::DictionaryId(unary_input); // storage dictionary cache path
-	if (input_dictionary_id.empty() || input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
+	if (dictionary_input_indices.size() != 1 || input_dictionary_id.empty() ||
+	    input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
 		return false;
 	}
 	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
