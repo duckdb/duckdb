@@ -297,6 +297,12 @@ not recognized
 # Casts
 #
 
+# TIME => TIME_NS
+query I
+SELECT '23:59:59.123456'::TIME::TIME_NS;
+----
+23:59:59.123456
+
 # TIME_NS => TIME
 query II
 SELECT tns, tns::TIME t

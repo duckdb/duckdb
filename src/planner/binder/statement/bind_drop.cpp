@@ -22,11 +22,12 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
 	}
 	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-	BindSchemaOrCatalog(base_table_ref.GetQualifiedNameMutable());
+	// resolve the (possibly nested) catalog/schema qualification of the base table
+	base_table_ref.SetQualifiedName(BindTableName(base_table_ref.GetQualifiedName()));
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, base_table_ref.GetQualifiedName());
-	stmt.info->SetQualifiedName(QualifiedName(table_entry.ParentCatalog().GetName(), table_entry.ParentSchema().name,
-	                                          stmt.info->GetQualifiedName().Name()));
+	// the trigger lives in the same (possibly nested) schema as its base table
+	stmt.info->SetQualifiedName(table_entry.ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 }
 
@@ -57,7 +58,10 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
-		BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+		// Resolve the catalog + (possibly nested) schema path. A leading component is the catalog when it names an
+		// attached database, and otherwise the outermost schema of a nested schema path. The entry lookup below
+		// navigates whatever qualification comes out of this.
+		stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->GetQualifiedName().Catalog());
 		if (catalog) {
 			// mark catalog as accessed
@@ -93,8 +97,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
 		}
-		stmt.info->SetQualifiedName(QualifiedName(entry->ParentCatalog().GetName(), entry->ParentSchema().name,
-		                                          stmt.info->GetQualifiedName().Name()));
+		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
+		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
 			properties.RegisterDBModify(entry->ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);

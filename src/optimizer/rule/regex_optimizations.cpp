@@ -156,6 +156,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
 	bool is_full_match = (root.Function().GetName() == "regexp_full_match");
+	for (idx_t i = 0; i < 2; i++) {
+		const auto &type = root.GetChildren()[i]->GetReturnType();
+		if (type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(type).empty()) {
+			return nullptr;
+		}
+	}
 	auto regexp_bind_data = root.BindInfo().get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);

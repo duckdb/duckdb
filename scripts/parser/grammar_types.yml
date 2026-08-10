@@ -102,6 +102,11 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - ExternalResourceStatement
+    - CreateExternalResourceStmt
+    - RegisterExternalResourceStmt
+    - DestroyExternalResourceStmt
+    - ShowExternalResourcesStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -127,6 +132,7 @@ SetStatement:
   by_value: true
   rules:
     - SetAssignmentOrTimeZone
+    - SetSchema
     - SetTimeZone
     - StandardAssignment
 
@@ -544,6 +550,15 @@ TableRef:
     - JoinOrPivot
     - JoinClause
     - RegularJoinClause
+    - NearestJoinClause
+    - NearestJoinAliased
+    - NearestJoinBare
+    - NearestBareTableRef
+    - NearestValuesRef
+    - NearestTableFunction
+    - NearestTableSubquery
+    - NearestBaseTableRef
+    - NearestParensTableRef
     - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause
@@ -1093,6 +1108,9 @@ Bool:
     - Lateral
     - WithOrdinality
     - Asof
+    - ApproxOrExact
+    - NearestApprox
+    - NearestExact
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1115,6 +1133,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
     - FunctionTypeFunction
@@ -1142,6 +1161,7 @@ Int64:
   by_value: false
   rules:
     - ArrayBounds
+    - ArrayKeywordWithBounds
     - SquareBracketsArray
     - ArrayKeyword
 
@@ -1339,6 +1359,9 @@ OrderTypeValue:
   rules:
     - DescendingOrder
     - AscendingOrder
+    - DistanceOrSimilarity
+    - NearestDistance
+    - NearestSimilarity
 
 OrderByNullTypeValue:
   type: "OrderByNullType"

@@ -11,5 +11,4 @@ DuckDB-specific integration files in this directory are:
 - `aoc24.csv` for manually running the AoC benchmark suite through the regression tooling
 - `answers/` for the expected benchmark results
 
-The vendored benchmark subset currently covers:
-`day01`-`day15`, `day18`-`day21`, `day23`, and `day25`.
+The vendored benchmark suite covers all 25 days.

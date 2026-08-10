@@ -1,0 +1,61 @@
+# name: test/sql/optimizer/array_extract_row_group_pruning.test
+# description: Fixed-size array extracts use child statistics for row-group pruning
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/array_extract_row_group_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE arrays AS
+SELECT [i::INTEGER, (i + 1)::INTEGER, (i + 2)::INTEGER]::INTEGER[3] AS a
+FROM range(6144) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[1] BETWEEN 2900 AND 3100;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[1] BETWEEN 2900 AND 3100;
+----
+201
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM arrays WHERE a[-1] BETWEEN 2902 AND 3102;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM arrays WHERE a[-1] BETWEEN 2902 AND 3102;
+----
+201
+
+# Out-of-range extracts remain NULL
+query I
+SELECT count(*) FROM arrays WHERE a[4] IS NULL;
+----
+6144
+
+statement ok
+CREATE TABLE nullable_arrays(a INTEGER[3]);
+
+statement ok
+INSERT INTO nullable_arrays VALUES (NULL), ([1, NULL, 3]), ([4, 5, 6]);
+
+query I
+SELECT count(*) FROM nullable_arrays WHERE a[1] IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM nullable_arrays WHERE a[2] IS NULL;
+----
+2
+
+query I
+SELECT count(*) FROM nullable_arrays WHERE a[4] IS NULL;
+----
+3

@@ -138,8 +138,11 @@ ScalarFunction UUIDExtractVersionFun::GetFunction() {
 }
 
 ScalarFunction UUIDExtractTimestampFun::GetFunction() {
-	return ScalarFunction({LogicalType::UUID}, LogicalType::TIMESTAMP_TZ,
-	                      ExtractTimestampFunction<hugeint_t, ExtractTimestampUuidOperator>);
+	ScalarFunction function({LogicalType::UUID}, LogicalType::TIMESTAMP_TZ,
+	                        ExtractTimestampFunction<hugeint_t, ExtractTimestampUuidOperator>);
+	// throws if the UUID is not a version 7 UUID
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

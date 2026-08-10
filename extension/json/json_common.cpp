@@ -1,5 +1,5 @@
 #include "json_common.hpp"
-
+#include "yyjson_memory.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
@@ -134,14 +134,14 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) {
 	D_ASSERT(ptr != end);
 	if (*ptr == '*') { // Wildcard
-		if (*(ptr + 1) == '*') {
+		if (ptr + 1 != end && *(ptr + 1) == '*') {
 			return JSONKeyReadResult::RecWildCard();
 		}
 		return JSONKeyReadResult::WildCard();
 	}
 	bool recursive = false;
 	if (*ptr == '.') {
-		char next = *(ptr + 1);
+		const char next = ptr + 1 == end ? '\0' : *(ptr + 1);
 		if (next == '*') {
 			return JSONKeyReadResult::RecWildCard();
 		}
@@ -150,6 +150,10 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 		}
 		ptr++;
 		recursive = true;
+	}
+	if (ptr == end) {
+		// recursive '.' with no key following it
+		return JSONKeyReadResult::Empty();
 	}
 	bool escaped = false;
 	if (*ptr == '"') {
@@ -264,39 +268,56 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 	return path_type;
 }
 
+//! Resolve a single path element against a JSON value
+static inline yyjson_val *GetPathElement(yyjson_val *val, const JSONPathElement &element) {
+	switch (element.type) {
+	case JSONPathElementType::KEY:
+		if (!unsafe_yyjson_is_obj(val)) {
+			return nullptr;
+		}
+		return yyjson_obj_getn(val, element.key.c_str(), element.key.size());
+	case JSONPathElementType::INDEX:
+	case JSONPathElementType::REVERSE_INDEX: {
+		if (!unsafe_yyjson_is_arr(val)) {
+			return nullptr;
+		}
+		auto array_index = element.index;
+		if (element.type == JSONPathElementType::REVERSE_INDEX && array_index != 0) {
+			array_index = unsafe_yyjson_get_len(val) - array_index;
+		}
+		return yyjson_arr_get(val, array_index);
+	}
+	case JSONPathElementType::APPEND:
+		// [#] always returns NULL in SQLite
+		return nullptr;
+	default: // LCOV_EXCL_START
+		throw InternalException("Invalid JSON path element encountered, call JSONCommon::ValidatePath first!");
+	} // LCOV_EXCL_STOP
+}
+
 yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &len) {
 	// Path has been validated at this point
 	JSONPathIterator iterator(ptr, len, false);
 	JSONPathElement element;
 	while (val != nullptr && iterator.Next(element)) {
-		switch (element.type) {
-		case JSONPathElementType::KEY: {
-			if (!unsafe_yyjson_is_obj(val)) {
-				return nullptr;
-			}
-			val = yyjson_obj_getn(val, element.key.c_str(), element.key.size());
-			break;
-		}
-		case JSONPathElementType::INDEX:
-		case JSONPathElementType::REVERSE_INDEX: {
-			if (!unsafe_yyjson_is_arr(val)) {
-				return nullptr;
-			}
-			auto array_index = element.index;
-			if (element.type == JSONPathElementType::REVERSE_INDEX && array_index != 0) {
-				array_index = unsafe_yyjson_get_len(val) - array_index;
-			}
-			val = yyjson_arr_get(val, array_index);
-			break;
-		}
-		case JSONPathElementType::APPEND: {
-			// [#] always returns NULL in SQLite
-			return nullptr;
-		}
-		default: // LCOV_EXCL_START
-			throw InternalException(
-			    "Invalid JSON Path encountered in JSONCommon::GetPath, call JSONCommon::ValidatePath first!");
-		} // LCOV_EXCL_STOP
+		val = GetPathElement(val, element);
+	}
+	return val;
+}
+
+vector<JSONPathElement> JSONCommon::ParsePathElements(const char *ptr, idx_t len, bool binder) {
+	vector<JSONPathElement> elements;
+	JSONPathIterator iterator(ptr, len, binder);
+	JSONPathElement element;
+	while (iterator.Next(element)) {
+		elements.push_back(element);
+	}
+	return elements;
+}
+
+yyjson_val *JSONCommon::GetPathElements(yyjson_val *val, const vector<JSONPathElement> &elements) {
+	for (idx_t i = 0; val != nullptr && i < elements.size(); i++) {
+		val = GetPathElement(val, elements[i]);
 	}
 	return val;
 }

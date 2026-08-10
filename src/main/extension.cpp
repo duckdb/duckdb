@@ -104,7 +104,7 @@ bool VersioningUtils::IsSupportedCAPIVersion(string &capi_version_string) {
 }
 
 bool VersioningUtils::IsReleaseVersion(const string &version_tag) {
-	return !StringUtil::Contains(version_tag, "-dev") && !StringUtil::Contains(version_tag, "-alpha");
+	return !StringUtil::Contains(version_tag, "-dev");
 }
 
 bool VersioningUtils::IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch) {

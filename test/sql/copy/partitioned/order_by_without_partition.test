@@ -1,0 +1,217 @@
+# name: test/sql/copy/partitioned/order_by_without_partition.test
+# description: Test ORDER_BY for COPY without PARTITION_BY
+# group: [partitioned]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+statement ok
+CREATE TABLE ordered_only_source AS
+SELECT
+	i::INTEGER AS id,
+	CASE WHEN i % 97 = 0 THEN NULL ELSE ((i * 15485863) % 32768)::INTEGER END AS v
+FROM range(16384) tbl(i);
+
+# Without PARTITION_BY, ORDER_BY writes sorted runs at the root of the output directory
+statement ok
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_asc'
+(FORMAT PARQUET, ORDER_BY (v ASC NULLS LAST), ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*) > 1
+FROM glob('{TEST_DIR}/ordered_only_asc/*.parquet');
+----
+true
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/ordered_only_asc/*.parquet');
+----
+16384
+
+query I
+WITH per_file AS (
+	SELECT
+		file_row_number,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_only_asc/*.parquet',
+		filename = true,
+		file_row_number = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE file_row_number > 0
+	AND ((prev_v IS NULL AND v IS NOT NULL) OR (prev_v IS NOT NULL AND v IS NOT NULL AND prev_v > v));
+----
+0
+
+# Rotation and metadata use the same implicit partition and root-level filename pattern
+statement ok
+SET partitioned_write_flush_threshold=1000000;
+
+query II
+WITH stats AS (
+	COPY ordered_only_source
+	TO '{TEST_DIR}/ordered_only_desc'
+	(FORMAT PARQUET, ORDER_BY (v DESC NULLS FIRST), ROW_GROUP_SIZE 2048, ROW_GROUPS_PER_FILE 1,
+	 FILENAME_PATTERN 'sorted_{i}', RETURN_STATS)
+)
+SELECT count(*) > 1, bool_and(partition_keys IS NULL)
+FROM stats;
+----
+true	true
+
+query I
+SELECT count(*) = count(DISTINCT file)
+FROM glob('{TEST_DIR}/ordered_only_desc/sorted_*.parquet');
+----
+true
+
+query I
+WITH per_file AS (
+	SELECT
+		file_row_number,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_only_desc/sorted_*.parquet',
+		filename = true,
+		file_row_number = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE file_row_number > 0
+	AND ((prev_v IS NOT NULL AND v IS NULL) OR (prev_v IS NOT NULL AND v IS NOT NULL AND prev_v < v));
+----
+0
+
+# Parallel sinking uses the same implicit partition
+statement ok
+SET threads=4;
+
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+statement ok
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_parallel'
+(FORMAT PARQUET, ORDER_BY (id DESC), ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/ordered_only_parallel/*.parquet');
+----
+16384
+
+query I
+WITH per_file AS (
+	SELECT
+		file_row_number,
+		id,
+		lag(id) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_id
+	FROM read_parquet(
+		'{TEST_DIR}/ordered_only_parallel/*.parquet',
+		filename = true,
+		file_row_number = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE file_row_number > 0 AND prev_id < id;
+----
+0
+
+# Empty ordered output follows partitioned COPY semantics: create the directory but no data file
+statement ok
+COPY (SELECT * FROM ordered_only_source LIMIT 0)
+TO '{TEST_DIR}/ordered_only_empty'
+(FORMAT PARQUET, ORDER_BY (v));
+
+query I
+SELECT count(*)
+FROM glob('{TEST_DIR}/ordered_only_empty/*.parquet');
+----
+0
+
+# ORDER_BY uses directory-style output and cannot be combined with single-file or per-thread options
+statement error
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_tmp'
+(FORMAT PARQUET, ORDER_BY (v), USE_TMP_FILE false);
+----
+Can't combine USE_TMP_FILE and ORDER_BY for COPY
+
+statement error
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_per_thread'
+(FORMAT PARQUET, ORDER_BY (v), PER_THREAD_OUTPUT);
+----
+Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY
+
+statement error
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_skip_empty'
+(FORMAT PARQUET, ORDER_BY (v), WRITE_EMPTY_FILE false);
+----
+Can't combine WRITE_EMPTY_FILE false with ORDER_BY
+
+statement error
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_preserve'
+(FORMAT PARQUET, ORDER_BY (v), PRESERVE_ORDER);
+----
+PRESERVE_ORDER is not supported with these parameters
+
+# Legacy COPY writers also use the ordered implicit-partition path
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+statement ok
+COPY ordered_only_source
+TO '{TEST_DIR}/ordered_only_csv'
+(FORMAT CSV, HEADER, ORDER_BY (v ASC NULLS LAST));
+
+query I
+SELECT count(*)
+FROM read_csv('{TEST_DIR}/ordered_only_csv/*.csv', HEADER = true, AUTO_DETECT = true);
+----
+16384
+
+# SQL ORDER BY remains the way to produce one globally ordered file
+statement ok
+COPY (SELECT * FROM ordered_only_source ORDER BY v ASC NULLS LAST)
+TO '{TEST_DIR}/ordered_single_file.parquet'
+(FORMAT PARQUET);
+
+query I
+SELECT count(*)
+FROM glob('{TEST_DIR}/ordered_single_file.parquet');
+----
+1
+
+query I
+WITH ordered_file AS (
+	SELECT
+		file_row_number,
+		v,
+		lag(v) OVER (ORDER BY file_row_number) AS prev_v
+	FROM read_parquet('{TEST_DIR}/ordered_single_file.parquet', file_row_number = true)
+)
+SELECT count(*)
+FROM ordered_file
+WHERE file_row_number > 0
+	AND ((prev_v IS NULL AND v IS NOT NULL) OR (prev_v IS NOT NULL AND v IS NOT NULL AND prev_v > v));
+----
+0

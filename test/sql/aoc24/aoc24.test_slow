@@ -137,6 +137,24 @@ SELECT * FROM query(getvariable('aoc_sql'));
 ----
 10092	9021
 
+# day16
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day16.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+7036	45
+
+# day17
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day17.sql'));
+
+query TI
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+5,7,3,0	117440
+
 # day18
 statement ok
 SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day18.sql'));
@@ -173,6 +191,15 @@ SELECT * FROM query(getvariable('aoc_sql'));
 ----
 270084	329431019997766
 
+# day22
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day22.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+37327623	24
+
 # day23
 statement ok
 SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day23.sql'));
@@ -181,6 +208,15 @@ query IT
 SELECT * FROM query(getvariable('aoc_sql'));
 ----
 1046	de,id,ke,ls,po,sn,tf,tl,tm,uj,un,xw,yz
+
+# day24
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day24.sql'));
+
+query IT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+4	NULL
 
 # day25
 statement ok

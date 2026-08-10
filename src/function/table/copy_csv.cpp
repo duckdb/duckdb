@@ -178,10 +178,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
-	for (auto &option : input.info.options) {
-		auto loption = StringUtil::Lower(option.first);
-		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
+	for (auto &[option_name, option_values] : input.info.options) {
+		bind_data->options.SetWriteOption(option_name, ConvertVectorToValue(option_values));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {

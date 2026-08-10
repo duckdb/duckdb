@@ -47,6 +47,11 @@ JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path
 
 JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONPathType path_type_p)
     : constant(constant), path(std::move(path_p)), path_type(path_type_p), ptr(path.c_str()), len(len) {
+	if (constant && len != 0 && path[0] == '$' && path_type == JSONPathType::REGULAR) {
+		// The path was validated in CheckPath, parse it once so execution can skip tokenizing it per row
+		elements = JSONCommon::ParsePathElements(ptr, len, false);
+		use_elements = true;
+	}
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
@@ -59,7 +64,6 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
@@ -67,12 +71,10 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 	string path;
 	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (arguments[1]->IsFoldable()) {
-		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		if (!path_val.IsNull()) {
-			constant = true;
-			path_type = CheckPath(path_val, path, len);
-		}
+	auto path_val = input.TryGetConstant(1);
+	if (path_val && !path_val->IsNull()) {
+		constant = true;
+		path_type = CheckPath(*path_val, path, len);
 	}
 	if (arguments[1]->GetReturnType().IsIntegral()) {
 		bound_function.GetArguments()[1] = LogicalType::BIGINT;
@@ -90,6 +92,16 @@ JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vecto
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
 	}
+	for (idx_t i = 0; i < paths.size(); i++) {
+		if (lens[i] != 0 && paths[i][0] == '$') {
+			// The paths were validated in CheckPath, parse them once
+			elements.push_back(JSONCommon::ParsePathElements(ptrs[i], lens[i], false));
+			use_elements.push_back(true);
+		} else {
+			elements.emplace_back();
+			use_elements.push_back(false);
+		}
+	}
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
@@ -102,19 +114,11 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
 	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("List of paths must be constant");
-	}
 
 	vector<string> paths;
 	vector<idx_t> lens;
-	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto paths_val = input.GetConstant(1);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");

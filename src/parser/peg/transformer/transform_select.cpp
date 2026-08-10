@@ -20,11 +20,27 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
 
 namespace duckdb {
+
+static bool IsDMLCTEQueryNode(QueryNodeType type) {
+	return type == QueryNodeType::INSERT_QUERY_NODE || type == QueryNodeType::UPDATE_QUERY_NODE ||
+	       type == QueryNodeType::DELETE_QUERY_NODE;
+}
+
+static void ValidateRecursiveCTEQueryNode(const QueryNode &query_node) {
+	if (query_node.type == QueryNodeType::COPY_QUERY_NODE) {
+		throw ParserException("Recursive CTEs with COPY statements are not supported");
+	}
+	if (IsDMLCTEQueryNode(query_node.type)) {
+		throw ParserException("Recursive CTEs with DML statements are not supported");
+	}
+}
 
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
@@ -425,51 +441,6 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLi
 	return result;
 }
 
-static bool IsConditionlessJoin(const JoinRef &join) {
-	if (join.condition || !join.using_columns.empty()) {
-		return false;
-	}
-	if (join.ref_type != JoinRefType::CROSS && join.ref_type != JoinRefType::POSITIONAL &&
-	    join.ref_type != JoinRefType::NATURAL) {
-		return false;
-	}
-	return true;
-}
-
-static unique_ptr<TableRef> ReassociateJoins(unique_ptr<TableRef> root) {
-	// Left-rotate while the current node is a conditionless join and its right child is a join.
-	// This converts right-associative join trees (from PEG grammar) to left-associative.
-	while (root->type == TableReferenceType::JOIN) {
-		auto &current = root->Cast<JoinRef>();
-		if (!IsConditionlessJoin(current) || !current.right || current.right->type != TableReferenceType::JOIN) {
-			break;
-		}
-		// Left rotation:
-		//   current(left=A, right=inner(left=B, right=C))
-		//   => inner(left=current(left=A, right=B), right=C)
-		auto inner = std::move(current.right);
-		auto &inner_join = inner->Cast<JoinRef>();
-		current.right = std::move(inner_join.left);
-		inner_join.left = std::move(root);
-		root = std::move(inner);
-	}
-	return root;
-}
-
-//! Check whether the RHS TableRef of a JoinOrPivot parse result has its own JoinOrPivot* entries.
-//! This distinguishes PEG right-recursion (has entries) from parenthesized joins (no entries).
-//! Navigation: JoinOrPivot → Choice → JoinClause → Choice → JoinWithoutOnClause → child(2)=TableRef → child(1)=Optional
-static bool RHSTableRefHasJoinOrPivot(ParseResult &join_or_pivot_pr) {
-	auto &jop_list = join_or_pivot_pr.Cast<ListParseResult>();
-	auto &jop_choice = jop_list.Child<ChoiceParseResult>(0);
-	auto &join_clause = jop_choice.GetResult().Cast<ListParseResult>();
-	auto &jc_choice = join_clause.Child<ChoiceParseResult>(0);
-	auto &join_impl = jc_choice.GetResult().Cast<ListParseResult>();
-	// For JoinWithoutOnClause the TableRef is at index 2
-	auto &table_ref = join_impl.Child<ListParseResult>(2);
-	return table_ref.Child<OptionalParseResult>(1).HasResult();
-}
-
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto inner_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
@@ -483,11 +454,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
 			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
 			join_ref.left = std::move(inner_table_ref);
-			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(join_or_pivot)) {
-				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
-			} else {
-				inner_table_ref = std::move(transform_join_or_pivot);
-			}
+			inner_table_ref = std::move(transform_join_or_pivot);
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
@@ -537,11 +504,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoli
 		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
 			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
 			join_ref.left = std::move(inner_table_ref);
-			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(repeat_children[i].get())) {
-				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
-			} else {
-				inner_table_ref = std::move(transform_join_or_pivot);
-			}
+			inner_table_ref = std::move(transform_join_or_pivot);
 		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
 			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
 			pivot_ref.source = std::move(inner_table_ref);
@@ -735,6 +698,118 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 	return std::move(result);
 }
 
+//! Shared builder for both NEAREST BY alternatives (aliased and bare target).
+static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+                                             const optional<bool> &approx_or_exact,
+                                             optional<unique_ptr<ParsedExpression>> number_literal,
+                                             const OrderType &distance_or_similarity,
+                                             unique_ptr<ParsedExpression> expression) {
+	auto result = make_uniq<JoinRef>(JoinRefType::NEAREST);
+	result->type = join_type.value_or(JoinType::INNER);
+	if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
+		throw ParserException("NEAREST BY only supports INNER and LEFT OUTER joins, not %s",
+		                      EnumUtil::ToString(result->type));
+	}
+	if (number_literal) {
+		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
+		auto literal_text = value.ToString();
+		int64_t count = 0;
+		if (value.type().IsIntegral() && value.DefaultTryCastAs(LogicalType::BIGINT)) {
+			count = value.GetValue<int64_t>();
+		}
+		if (count < 1) {
+			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
+		}
+		result->nearest_count = NumericCast<idx_t>(count);
+	}
+	result->nearest_order_type = distance_or_similarity;
+	result->nearest_approx = approx_or_exact.value_or(false);
+	result->ranking_expression = std::move(expression);
+	result->right = std::move(table_ref);
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestJoinAliased(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+    const optional<bool> &approx_or_exact, optional<unique_ptr<ParsedExpression>> number_literal,
+    const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression) {
+	return BuildNearestJoin(join_type, std::move(table_ref), approx_or_exact, std::move(number_literal),
+	                        distance_or_similarity, std::move(expression));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestJoinBare(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> nearest_bare_table_ref,
+    const optional<bool> &approx_or_exact, optional<unique_ptr<ParsedExpression>> number_literal,
+    const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression) {
+	return BuildNearestJoin(join_type, std::move(nearest_bare_table_ref), approx_or_exact, std::move(number_literal),
+	                        distance_or_similarity, std::move(expression));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestValuesRef(PEGTransformer &transformer,
+                                                                      unique_ptr<SelectStatement> values_clause) {
+	return make_uniq<SubqueryRef>(std::move(values_clause));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestTableFunction(
+    PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
+    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality) {
+	auto result = make_uniq<TableFunctionRef>();
+	result->with_ordinality =
+	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestTableSubquery(PEGTransformer &transformer,
+                                                                          const optional<bool> &lateral,
+                                                                          unique_ptr<TableRef> subquery_reference) {
+	return subquery_reference;
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestBaseTableRef(
+    PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name, optional<unique_ptr<AtClause>> at_clause,
+    optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (at_clause) {
+		base_table_name->at_clause = std::move(*at_clause);
+	}
+	if (sample_clause) {
+		base_table_name->sample = std::move(*sample_clause);
+	}
+	return std::move(base_table_name);
+}
+
+unique_ptr<TableRef>
+PEGTransformerFactory::TransformNearestParensTableRef(PEGTransformer &transformer, unique_ptr<TableRef> table_ref,
+                                                      optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (!sample_clause) {
+		return table_ref;
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+	select_statement->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
+	subquery->sample = std::move(*sample_clause);
+	return std::move(subquery);
+}
+
+bool PEGTransformerFactory::TransformNearestApprox(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformNearestExact(PEGTransformer &transformer) {
+	return false;
+}
+
+OrderType PEGTransformerFactory::TransformNearestDistance(PEGTransformer &transformer) {
+	return OrderType::ASCENDING;
+}
+
+OrderType PEGTransformerFactory::TransformNearestSimilarity(PEGTransformer &transformer) {
+	return OrderType::DESCENDING;
+}
+
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer &transformer, const string &col_label,
                                                                   unique_ptr<TableRef> table_ref,
                                                                   JoinQualifier join_qualifier) {
@@ -742,7 +817,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer
 	// resolve the join type name against the JoinType enum (case-insensitive); accept an optional `_join` suffix,
 	// so e.g. `mark` and `mark_join` are equivalent. EnumUtil::FromString throws on an unknown name.
 	auto type_name = col_label;
-	if (StringUtil::EndsWith(StringUtil::Lower(type_name), "_join")) {
+	if (StringUtil::CIEndsWith(type_name, "_join")) {
 		type_name = type_name.substr(0, type_name.size() - 5);
 	}
 	result->type = EnumUtil::FromString<JoinType>(type_name);
@@ -1070,11 +1145,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 			if (!query_node) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
 			}
-			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
-			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
-			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
-				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
+			ValidateRecursiveCTEQueryNode(*query_node);
 			// Now safe to call on SELECT, VALUES, etc.
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
 			                            with_entry.second->key_targets);
@@ -1116,11 +1187,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampo
 			if (!query_node) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
 			}
-			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
-			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
-			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
-				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
+			ValidateRecursiveCTEQueryNode(*query_node);
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
 			                            with_entry.second->key_targets);
 		}
@@ -1180,8 +1247,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformCTEDMLBody(PEGTransformer &
 	case StatementType::DELETE_STATEMENT:
 		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(statement->Cast<DeleteStatement>().node));
 		break;
+	case StatementType::COPY_STATEMENT: {
+		auto &copy = statement->Cast<CopyStatement>();
+		if (copy.info->is_from) {
+			throw ParserException("COPY FROM cannot be used as a CTE body");
+		}
+		query_node = make_uniq<CopyQueryNode>(std::move(copy.info));
+		break;
+	}
 	default:
-		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement");
+		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, DELETE, or COPY TO statement");
 	}
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(query_node);
@@ -1606,16 +1681,16 @@ unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &tr
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtSpecifier(PEGTransformer &transformer, const string &at_unit,
                                                                  unique_ptr<ParsedExpression> expression) {
-	return make_uniq<AtClause>(at_unit, std::move(expression));
+	return make_uniq<AtClause>(Identifier(at_unit), std::move(expression));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinWithoutOnClause(PEGTransformer &transformer,
                                                                          const JoinPrefix &join_prefix,
-                                                                         unique_ptr<TableRef> table_ref) {
+                                                                         unique_ptr<TableRef> inner_table_ref) {
 	auto result = make_uniq<JoinRef>();
 	result->ref_type = join_prefix.ref_type;
 	result->type = join_prefix.join_type;
-	result->right = std::move(table_ref);
+	result->right = std::move(inner_table_ref);
 	return std::move(result);
 }
 

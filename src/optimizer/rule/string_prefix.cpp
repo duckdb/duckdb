@@ -45,6 +45,26 @@ StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter
 	root = std::move(op);
 }
 
+InstrPrefixRule::InstrPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	op->policy = SetMatcher::Policy::UNORDERED;
+
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"instr", "position", "strpos"});
+	func->type = make_uniq<TypeMatcherId>(LogicalTypeId::BIGINT);
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	func->policy = SetMatcher::Policy::ORDERED;
+	op->matchers.push_back(std::move(func));
+
+	auto constant = make_uniq<ConstantExpressionMatcher>();
+	constant->type = make_uniq<TypeMatcherId>(LogicalTypeId::BIGINT);
+	op->matchers.push_back(std::move(constant));
+
+	root = std::move(op);
+}
+
 unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                bool &changes_made, bool is_root) {
 	const auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -145,6 +165,25 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(constant.GetValue()));
 	auto prefix_expr = PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
 	return std::move(prefix_expr);
+}
+
+unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                              bool &changes_made, bool is_root) {
+	auto &func = bindings[1].get().Cast<BoundFunctionExpression>();
+	auto &needle = bindings[3].get().Cast<BoundConstantExpression>();
+	auto &position = bindings[4].get().Cast<BoundConstantExpression>();
+
+	// If requested position is 1, rewrite as prefix comparison.
+	if (position.GetValue().IsNull() || position.GetValue().GetValue<int64_t>() != 1) {
+		return nullptr;
+	}
+
+	auto &children = func.GetChildrenMutable();
+	D_ASSERT(children.size() == 2);
+	vector<unique_ptr<Expression>> prefix_children;
+	prefix_children.emplace_back(std::move(children[0]));
+	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(needle.GetValue()));
+	return PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
 }
 
 } // namespace duckdb

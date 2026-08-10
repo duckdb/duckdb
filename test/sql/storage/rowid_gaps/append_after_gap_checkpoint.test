@@ -31,6 +31,10 @@ SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_latest.t;
 ----
 0	6143	4096
 
+# Keep the rowid gap until the append frontier is checked.
+statement ok
+SET max_vacuum_tasks = 0;
+
 statement ok
 INSERT INTO rowid_gap_append_latest.t VALUES (999999);
 
@@ -52,6 +56,9 @@ query II
 SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
 ----
 6144	999999
+
+statement ok
+SET max_vacuum_tasks = 99;
 
 statement ok
 DROP INDEX rowid_gap_append_latest.idx_i;

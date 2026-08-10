@@ -31,7 +31,7 @@ SELECT sum(payload) FROM long_strings WHERE v > repeat('b', 12);
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 12);
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 2.*
 
 query I
 SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 12);
@@ -51,7 +51,7 @@ SELECT sum(payload) FROM long_strings WHERE v >= repeat('b', 12);
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 12);
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
 query I
 SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 12);
@@ -61,7 +61,7 @@ SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 12);
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 12);
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
 query I
 SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 12);

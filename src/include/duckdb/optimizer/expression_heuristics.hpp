@@ -39,7 +39,6 @@ public:
 
 private:
 	static idx_t ExpressionCost(const BoundCaseExpression &expr);
-	static idx_t ExpressionCost(const BoundCastExpression &expr);
 	static idx_t ExpressionCost(const BoundConjunctionExpression &expr);
 	static idx_t ExpressionCost(const BoundFunctionExpression &expr);
 	static idx_t ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type);
@@ -48,5 +47,6 @@ private:
 
 	static idx_t ComparisonExpressionCost(const BoundFunctionExpression &expr);
 	static idx_t BetweenExpressionCost(const BoundFunctionExpression &expr);
+	static idx_t CastExpressionCost(const BoundFunctionExpression &expr);
 };
 } // namespace duckdb

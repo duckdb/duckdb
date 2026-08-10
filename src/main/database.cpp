@@ -21,6 +21,7 @@
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
@@ -69,7 +70,7 @@ DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	}
 }
 
-DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+DBConfig::DBConfig(const identifier_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
 	SetOptionsByName(config_dict);
 }
 
@@ -132,6 +133,13 @@ ExternalResourceTypeRegistry &DatabaseInstance::GetExternalResourceTypeRegistry(
 		throw InternalException("Missing external resource type registry");
 	}
 	return *external_resource_type_registry;
+}
+
+ExternalResourcesManager &DatabaseInstance::GetExternalResourcesManager() {
+	if (!external_resources_manager) {
+		throw InternalException("Missing external resources manager");
+	}
+	return *external_resources_manager;
 }
 
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
@@ -228,10 +236,10 @@ void DatabaseInstance::CreateMainDatabase() {
 	con.Commit();
 }
 
-static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
+static void ThrowExtensionSetUnrecognizedOptions(const identifier_map_t<Value> &unrecognized_options) {
 	D_ASSERT(!unrecognized_options.empty());
 
-	vector<string> options;
+	vector<duckdb::Identifier> options;
 	for (auto &kv : unrecognized_options) {
 		options.push_back(kv.first);
 	}
@@ -252,7 +260,6 @@ void DatabaseInstance::LoadExtensionSettings() {
 		Connection con(*this);
 		con.BeginTransaction();
 
-		vector<string> extension_options;
 		for (auto &option : unrecognized_options_copy) {
 			auto &name = option.first;
 			auto &value = option.second;
@@ -273,8 +280,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
-			extension_options.push_back(name);
+			PhysicalSet::SetExtensionVariable(context, extension_option, SetScope::GLOBAL, value);
 		}
 
 		con.Commit();
@@ -303,6 +309,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	external_resource_type_registry = make_uniq<ExternalResourceTypeRegistry>();
+	external_resources_manager = make_uniq<ExternalResourcesManager>();
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
 	} else {
@@ -579,7 +586,7 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Value &result) const {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const Identifier &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	return db_config.TryGetCurrentSetting(key, result);

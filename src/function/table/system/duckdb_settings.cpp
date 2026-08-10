@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct DuckDBSettingValue {
-	string name;
+	Identifier name;
 	Value value;
 	string description;
 	string input_type;
@@ -27,7 +27,7 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -85,7 +85,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		}
 		for (auto &alias : value.aliases) {
 			DuckDBSettingValue alias_value = value;
-			alias_value.name = StringValue::Get(alias);
+			alias_value.name = alias.GetValue<Identifier>();
 			alias_value.aliases.clear();
 			result->settings.push_back(std::move(alias_value));
 		}

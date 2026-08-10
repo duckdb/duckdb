@@ -36,6 +36,8 @@ class PhysicalPlan;
 
 enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+enum class PipelineExternalInputSupport : uint8_t { UNSUPPORTED, SUPPORTED };
+enum class PipelineSourceConsumption : uint8_t { ALL_INPUT, MAY_STOP_EARLY };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -110,6 +112,14 @@ public:
 		return false;
 	}
 
+	virtual PipelineExternalInputSupport GetExternalInputSupport() const {
+		return PipelineExternalInputSupport::UNSUPPORTED;
+	}
+
+	virtual PipelineSourceConsumption GetSourceConsumption() const {
+		return PipelineSourceConsumption::ALL_INPUT;
+	}
+
 	virtual bool RequiresFinalExecute() const {
 		return false;
 	}
@@ -128,6 +138,8 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                           const OperatorPartitionInfo &partition_info) const;
 
 protected:
 	virtual SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -148,6 +160,11 @@ public:
 		return false;
 	}
 
+	//! Whether this source creates partitioned work that is not bounded by its input chunks
+	virtual bool HasSourceTasks() const {
+		return false;
+	}
+
 	//! How this source manages parallelism
 	virtual TableFunctionParallelism SourceParallelism() const;
 
@@ -165,6 +182,7 @@ public:
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual void SourceFinished(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
@@ -194,6 +212,8 @@ public:
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk)
 	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
+	//! Called after NextBatch when the pipeline minimum advances without subsequent input for this local sink state
+	virtual SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

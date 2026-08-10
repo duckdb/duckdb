@@ -13,68 +13,10 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
-
-class JSONAllocator;
-
-class JSONStringVectorBuffer : public AuxiliaryDataHolder {
-public:
-	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p) : allocator(std::move(allocator_p)) {
-	}
-
-private:
-	shared_ptr<JSONAllocator> allocator;
-};
-
-//! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
-class JSONAllocator : public enable_shared_from_this<JSONAllocator> {
-public:
-	explicit JSONAllocator(Allocator &allocator)
-	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, this}) {
-	}
-
-	inline yyjson_alc *GetYYAlc() {
-		return &yyjson_allocator;
-	}
-
-	void Reset() {
-		arena_allocator.Reset();
-	}
-
-	void AddBuffer(Vector &vector) {
-		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-			StringVector::AddAuxiliaryData(vector, make_uniq<JSONStringVectorBuffer>(shared_from_this()));
-		}
-	}
-
-	static void AddBuffer(Vector &vector, yyjson_alc *alc) {
-		auto alloc = (JSONAllocator *)alc->ctx; // NOLINT
-		alloc->AddBuffer(vector);
-	}
-
-private:
-	static inline void *Allocate(void *ctx, size_t size) {
-		auto alloc = (JSONAllocator *)ctx; // NOLINT
-		return alloc->arena_allocator.AllocateAligned(size);
-	}
-
-	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
-		auto alloc = (JSONAllocator *)ctx; // NOLINT
-		return alloc->arena_allocator.ReallocateAligned(data_ptr_cast(ptr), old_size, size);
-	}
-
-	static inline void Free(void *ctx, void *ptr) {
-		// NOP because ArenaAllocator can't free
-	}
-
-private:
-	ArenaAllocator arena_allocator;
-	yyjson_alc yyjson_allocator;
-};
 
 //! JSONKey / json_key_map_t speeds up mapping from JSON key to column ID
 struct JSONKey {
@@ -362,6 +304,11 @@ public:
 
 	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
 	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
+
+	//! Parse a JSON path ($.field[index]... syntax, no wildcards) into path elements
+	static vector<JSONPathElement> ParsePathElements(const char *ptr, idx_t len, bool binder);
+	//! Get JSON value by walking pre-parsed path elements
+	static yyjson_val *GetPathElements(yyjson_val *val, const vector<JSONPathElement> &elements);
 
 public:
 	//! Same as BigQuery json_value
