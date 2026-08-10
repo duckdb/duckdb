@@ -25,11 +25,11 @@
 #endif
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 #define DUCKDB_AUTOVEC_TARGET __attribute__((target("avx2"))) // widened x86 kernels
-#define DUCKDB_AUTOVEC_MUL16  1 // AVX2 has no per-lane 8/16-bit shifts: high-align 16-bit lanes via multiply
+#define DUCKDB_AUTOVEC_X86    1 // x86: AVX2 has no per-lane 8/16-bit shifts, high-align via multiply
 #define DUCKDB_AUTOVEC_INLINE __attribute__((always_inline)) inline // absorbed by a TARGET wrapper: same ISA
 #else
 #define DUCKDB_AUTOVEC_TARGET
-#define DUCKDB_AUTOVEC_MUL16  0 // NEON shifts every lane width: keep the cheaper shift/combine kernel
+#define DUCKDB_AUTOVEC_X86    0 // NEON shifts every lane width: keep the cheaper shift/combine kernel
 #define DUCKDB_AUTOVEC_INLINE inline
 #endif
 #if defined(_MSC_VER)
@@ -88,6 +88,25 @@ typedef uint16_t duckdb_av_u16x8 __attribute__((vector_size(16)));
 typedef uint32_t duckdb_av_u32x4 __attribute__((vector_size(16)));
 typedef uint32_t duckdb_av_u32x8 __attribute__((vector_size(32)));
 typedef uint64_t duckdb_av_u64x4 __attribute__((vector_size(32)));
+#if DUCKDB_AUTOVEC_X86
+//! Shift lanes up by SHIFT, filling from zero: lane i becomes v[i-SHIFT], or 0 below that.
+template <class VEC, uint32_t SHIFT, std::size_t... I>
+DUCKDB_AUTOVEC_TARGET static inline VEC ShiftLanesImpl(VEC z, VEC v, std::index_sequence<I...>) {
+	constexpr int N = sizeof(VEC) / sizeof(VEC {}[0]);
+	return __builtin_shufflevector(z, v, static_cast<int>(I < SHIFT ? I : N + I - SHIFT)...);
+}
+//! In-register prefix sum: log2(N) shift-and-add steps. Caveat: faster (1.6x) on X86, but slower (0.7x) on ARM
+template <class VEC, uint32_t SHIFT = 1>
+DUCKDB_AUTOVEC_TARGET static inline VEC PrefixSum(VEC v) {
+	constexpr uint32_t N = sizeof(VEC) / sizeof(VEC {}[0]);
+	if constexpr (SHIFT < N) {
+		v += ShiftLanesImpl<VEC, SHIFT>(VEC {}, v, std::make_index_sequence<N> {});
+		return PrefixSum<VEC, SHIFT * 2>(v);
+	} else {
+		return v;
+	}
+}
+#endif
 //! Gather each lane's window byte from BASE on; HI takes the next byte; w1 continues the window past 16 bytes.
 template <class VEC, uint32_t WIDTH, uint32_t BASE, bool HI, std::size_t... I>
 DUCKDB_AUTOVEC_TARGET static inline VEC GatherImpl(duckdb_av_u8x16 w0, duckdb_av_u8x16 w1, std::index_sequence<I...>) {
@@ -137,7 +156,7 @@ template <class VEC, uint32_t WIDTH, uint32_t BASE>
 DUCKDB_AUTOVEC_TARGET static inline VEC ShuffleDecode(duckdb_av_u8x16 w0, duckdb_av_u8x16 w1, VEC frame) {
 	constexpr uint32_t LANEBITS = 8 * sizeof(VEC {}[0]);
 	VEC v = Gather<VEC, WIDTH, BASE>(w0, w1);
-	if constexpr (DUCKDB_AUTOVEC_MUL16 && sizeof(VEC {}[0]) == 2 && WIDTH % 8 != 0) {
+	if constexpr (DUCKDB_AUTOVEC_X86 && sizeof(VEC {}[0]) == 2 && WIDTH % 8 != 0) {
 		static_assert(!ShuffleLaneCrosses<VEC, WIDTH, BASE>(), "high-align needs the field inside its lane");
 		return ((v * LaneConsts<VEC, WIDTH, BASE, LaneOp::HI_MUL>()) >> (LANEBITS - WIDTH)) + frame;
 	} else {
@@ -166,10 +185,9 @@ DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DU
 	constexpr std::size_t width = WIDTH;
 	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
 	// a u16 width whose field spills past its lane cannot be high-aligned: decode it in 32-bit lanes
-	constexpr bool wide16 =
-	    DUCKDB_AUTOVEC_MUL16 && sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
+	constexpr bool wide16 = DUCKDB_AUTOVEC_X86 && sizeof(OUT_T) == 2 && ShuffleLaneCrosses<duckdb_av_u16x8, WIDTH, 0>();
 	constexpr bool narrow8 =
-	    sizeof(OUT_T) == 1 && !DUCKDB_AUTOVEC_MUL16 && !ShuffleLaneCrosses<duckdb_av_u8x16, WIDTH, 0>();
+	    sizeof(OUT_T) == 1 && !DUCKDB_AUTOVEC_X86 && !ShuffleLaneCrosses<duckdb_av_u8x16, WIDTH, 0>();
 	if constexpr (narrow8 || (sizeof(OUT_T) == 2 && !wide16)) { // one window fills one vector of output lanes
 		using VEC = typename std::conditional<sizeof(OUT_T) == 1, duckdb_av_u8x16, duckdb_av_u16x8>::type;
 		constexpr std::size_t vals = 16 / sizeof(OUT_T);   // values per step

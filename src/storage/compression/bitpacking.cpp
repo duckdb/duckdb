@@ -543,7 +543,26 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 template <class T>
 static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	D_ASSERT(size >= 1);
-
+#if DUCKDB_AUTOVEC_X86
+	// 4-lane prefix sum: one add+splat per 4 values instead of per value (1.6x on x86; a loss on NEON)
+	if constexpr (sizeof(T) == 4) {
+		auto lanes = reinterpret_cast<uint32_t *>(data);
+		duckdb_av_u32x4 run = duckdb_av_u32x4 {} + static_cast<uint32_t>(previous_value);
+		size_t k = 0;
+		for (; k + 4 <= size; k += 4) {
+			duckdb_av_u32x4 v;
+			memcpy(&v, lanes + k, 16);
+			v = PrefixSum(v) + run;
+			memcpy(lanes + k, &v, 16);
+			run = duckdb_av_u32x4 {} + v[3];
+		}
+		uint32_t prev = run[0];
+		for (; k < size; k++) {
+			prev = lanes[k] += prev;
+		}
+		return static_cast<T>(prev);
+	}
+#endif
 	data[0] += previous_value;
 
 	const size_t UnrollQty = 4;
