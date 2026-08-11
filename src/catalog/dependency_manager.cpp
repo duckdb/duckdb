@@ -761,9 +761,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			break;
 		}
 
-		// Triggers are the case when the dependency flags are taken into consideration during ALTER
 		// TODO - consider whether we should have separate types of dependency flags - one from DROP and other for ALTER
 		if (dep.EntryInfo().type == CatalogType::TRIGGER_ENTRY && !dep.Dependent().flags.IsBlocking()) {
+			// a trigger does not prevent altering the table it is defined on, only referencing its body
 			disallow_alter = false;
 		}
 		if (disallow_alter) {
