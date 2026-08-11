@@ -194,3 +194,21 @@ DROP TABLE base5;
 
 statement ok
 DROP TABLE log5;
+
+# --- A trigger body referencing a table from a different catalog is rejected ---
+statement ok
+CREATE TABLE t6(i INT);
+
+statement ok
+CREATE TEMP TABLE log6(i INT);
+
+statement error
+CREATE TRIGGER tr6 AFTER INSERT ON t6 FOR EACH STATEMENT INSERT INTO temp.log6 VALUES (1);
+----
+<REGEX>:.*cannot reference.*different catalog.*
+
+statement ok
+DROP TABLE t6;
+
+statement ok
+DROP TABLE temp.log6;

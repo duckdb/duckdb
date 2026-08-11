@@ -722,7 +722,11 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// so DROP of a table/view/function referenced by the body is blocked.
 	validation_binder->SetCatalogLookupCallback([&create_trigger_info, &catalog](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
-			return;
+			if (entry.internal) {
+				return;
+			}
+			throw BinderException("Trigger \"%s\" cannot reference \"%s\" from a different catalog (\"%s\")",
+			                      create_trigger_info.GetTriggerName(), entry.name, entry.ParentCatalog().GetName());
 		}
 		create_trigger_info.dependencies.AddDependency(entry);
 	});
