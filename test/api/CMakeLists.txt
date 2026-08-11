@@ -7,6 +7,7 @@ if(${DISABLE_THREADS})
 endif()
 
 add_subdirectory(capi)
+add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp

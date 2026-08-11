@@ -10,6 +10,7 @@
 
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/main/capi_v2/extension_load_v2.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/valid_checker.hpp"
@@ -160,6 +161,8 @@ public:
 	typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 	// Load a statically compiled C API extension by calling its init function directly (no vtable needed)
 	DUCKDB_API void LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun);
+	// Same, for an extension built against the V2 C API
+	DUCKDB_API void LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun);
 
 	DUCKDB_API FileSystem &GetFileSystem();
 

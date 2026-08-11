@@ -81,10 +81,11 @@ endif()
 if(TARGET duckdb AND NOT WIN32)
   # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
   # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
+  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls
+                        duckdb_cpp_api)
 else()
   # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
-  target_link_libraries(unittest duckdb_static test_helpers)
+  target_link_libraries(unittest duckdb_static test_helpers duckdb_cpp_api)
   link_extension_libraries(unittest "")
 endif()
 
