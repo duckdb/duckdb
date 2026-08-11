@@ -485,18 +485,37 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(*bound_create_info, info);
 
-	// Update any UPDATE OF triggers whose column list references the renamed column
+	// Update any UPDATE OF triggers whose column list references the renamed column.
+	// Also detect concurrent uncommitted (or recently-committed) triggers that reference the same
+	// column: the snapshot scan cannot see them, so we raise a write-write conflict so the caller
+	// retries after the concurrent transaction completes.
 	auto txn = catalog.GetCatalogTransaction(context);
 	vector<Identifier> triggers_to_update;
-	triggers->Scan(txn, [&](CatalogEntry &raw_entry) {
-		auto &trig = raw_entry.Cast<TriggerCatalogEntry>();
-		for (const auto &col : trig.columns) {
-			if (col == info.old_name) {
-				triggers_to_update.push_back(trig.name);
-				break;
-			}
-		}
-	});
+	triggers->ScanWithConflictDetection(
+	    txn,
+	    [&](CatalogEntry &raw_entry) {
+		    auto &trig = raw_entry.Cast<TriggerCatalogEntry>();
+		    for (const auto &col : trig.columns) {
+			    if (col == info.old_name) {
+				    triggers_to_update.push_back(trig.name);
+				    break;
+			    }
+		    }
+	    },
+	    [&](CatalogEntry &concurrent_entry) {
+		    if (concurrent_entry.type != CatalogType::TRIGGER_ENTRY || concurrent_entry.deleted) {
+			    return;
+		    }
+		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
+		    for (const auto &col : trig.columns) {
+			    if (col == info.old_name) {
+				    throw TransactionException(
+				        "Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
+				        "references column \"%s\" which is being renamed",
+				        name, trig.name, info.old_name);
+			    }
+		    }
+	    });
 	for (const auto &trigger_name : triggers_to_update) {
 		triggers->AlterEntry(txn, trigger_name, info);
 	}
