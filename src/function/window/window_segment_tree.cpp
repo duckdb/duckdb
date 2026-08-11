@@ -212,6 +212,11 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 void WindowSegmentTreePart::Combine(WindowSegmentTreePart &other, idx_t count) {
 	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateCombineCallback()(other.statef, statef, aggr_input_data, count);
+
+	//	Destruct the input aggregates (otherwise they will leak)
+	if (aggr.function.HasStateDestructorCallback()) {
+		aggr.function.GetStateDestructorCallback()(other.statef, aggr_input_data, count);
+	}
 }
 
 void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t state_ptr) {
@@ -279,6 +284,7 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 		}
 	}
 }
+
 void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
 	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
