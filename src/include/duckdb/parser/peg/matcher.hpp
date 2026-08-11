@@ -150,11 +150,7 @@ struct MatchState {
 			text = StringUtil::Lower(text);
 			break;
 		case IdentifierCaseMode::UPPERCASE:
-			// not StringUtil::Upper - that one folds through std::toupper, which is locale dependent,
-			// whereas StringUtil::Lower and CharacterToUpper are not
-			for (auto &c : text) {
-				c = StringUtil::CharacterToUpper(c);
-			}
+			text = StringUtil::Upper(text);
 			break;
 		default:
 			break;
