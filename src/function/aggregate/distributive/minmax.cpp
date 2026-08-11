@@ -331,6 +331,29 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	}
 }
 
+const AggregateFunction &GetCollatedMinMaxFunction(ClientContext &context, const Identifier &name,
+                                                   const vector<LogicalType> &types) {
+	const auto function_name = name == "min" ? "arg_min" : "arg_max";
+	QueryErrorContext error_context;
+	auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier(), Identifier(), Identifier(function_name)), OnEntryNotFound::RETURN_NULL,
+	    error_context);
+	if (!func) {
+		throw NotImplementedException(
+		    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
+		    "catalog - load the core_functions module to fix this issue",
+		    name);
+	}
+
+	FunctionBinder function_binder(context);
+	ErrorData error;
+	auto best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+	if (!best_function.IsValid()) {
+		throw BinderException("Fail to find corresponding function for collation min/max: %s", error.Message());
+	}
+	return func->functions.GetFunctionByOffset(best_function.GetIndex());
+}
+
 template <class OP, class OP_STRING, class OP_VECTOR>
 unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
@@ -338,39 +361,19 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto input_type = arguments[0]->GetReturnType();
 
-	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT uses an explicit
-	// binary-comparable key so min/max follows the same logical order as comparisons and ORDER BY.
+	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT and VARIANT use explicit
+	// binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
 	const auto varchar_collation =
 	    input_type.id() == LogicalTypeId::VARCHAR &&
 	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
-	const auto collation = input_type.id() == LogicalTypeId::BIT || varchar_collation;
+	const auto collation =
+	    input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT || varchar_collation;
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
-		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
-		QueryErrorContext error_context;
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
-		    context, QualifiedName(Identifier(), Identifier(), Identifier(function_name)), OnEntryNotFound::RETURN_NULL,
-		    error_context);
-		if (!func) {
-			throw NotImplementedException(
-			    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
-			    "catalog - load the core_functions module to fix this issue",
-			    function.GetName());
-		}
-
-		auto &func_entry = *func;
-
-		FunctionBinder function_binder(context);
 		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
-		ErrorData error;
-		auto best_function = function_binder.BindFunction(func_entry.name, func_entry.functions, types, error);
-		if (!best_function.IsValid()) {
-			throw BinderException(string("Fail to find corresponding function for collation min/max: ") +
-			                      error.Message());
-		}
-		function.ReplaceImplementation(func_entry.functions.GetFunctionByOffset(best_function.GetIndex()));
+		function.ReplaceImplementation(GetCollatedMinMaxFunction(context, function.GetName(), types));
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
@@ -532,11 +535,30 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &fu
 
 template <class COMPARATOR>
 unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	for (auto &arg : arguments) {
+	for (const auto &arg : arguments) {
 		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
+		}
+	}
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARIANT) {
+		auto collated_arg = arguments[0]->Copy();
+		if (ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
+			vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType(),
+			                           arguments[1]->GetReturnType()};
+			auto &collated_function = GetCollatedMinMaxFunction(context, function.GetName(), types);
+
+			vector<unique_ptr<Expression>> collated_arguments;
+			collated_arguments.reserve(3);
+			collated_arguments.push_back(std::move(arguments[0]));
+			collated_arguments.push_back(std::move(collated_arg));
+			collated_arguments.push_back(std::move(arguments[1]));
+			auto expr = collated_function.Bind(context, std::move(collated_arguments));
+			arguments = std::move(expr->GetChildrenMutable());
+			function = std::move(expr->FunctionMutable());
+			return std::move(expr->BindInfoMutable());
 		}
 	}
 

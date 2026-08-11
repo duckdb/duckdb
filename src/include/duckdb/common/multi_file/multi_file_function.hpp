@@ -31,10 +31,10 @@ struct MultiFileReaderInterface {
 	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
-	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+	virtual bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
 	                             BaseFileReaderOptions &options, vector<string> &expected_names,
 	                             vector<LogicalType> &expected_types) = 0;
-	virtual bool ParseOption(ClientContext &context, const string &key, const Value &val,
+	virtual bool ParseOption(ClientContext &context, const Identifier &key, const Value &val,
 	                         MultiFileOptions &file_options, BaseFileReaderOptions &options) = 0;
 	virtual void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
 	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
@@ -101,7 +101,7 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context,
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
+	                                                      vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
@@ -120,7 +120,7 @@ public:
 			result->names.emplace_back("empty");
 			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
 			return std::move(result);
 		}
 
@@ -143,7 +143,7 @@ public:
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
 		} else {
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
@@ -183,14 +183,14 @@ public:
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
-			result->table_columns = names;
+			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names) {
+	                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
@@ -198,9 +198,8 @@ public:
 
 		MultiFileOptions file_options;
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
-			if (loption == "allow_empty") {
-				multi_file_reader->ParseOption(loption, kv.second, file_options, context);
+			if (kv.first == "allow_empty") {
+				multi_file_reader->ParseOption(kv.first, kv.second, file_options, context);
 				if (file_options.allow_empty) {
 					glob_input.allow_empty = true;
 				}
@@ -214,11 +213,10 @@ public:
 
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
-			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
+			if (multi_file_reader->ParseOption(kv.first, kv.second, file_options, context)) {
 				continue;
 			}
-			if (interface->ParseOption(context, kv.first.GetIdentifierName(), kv.second, file_options, *options)) {
+			if (interface->ParseOption(context, kv.first, kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);
@@ -242,17 +240,21 @@ public:
 		MultiFileOptions file_options;
 		file_options.auto_detect_hive_partitioning = false;
 
-		for (auto &option : input.info.options) {
-			auto loption = StringUtil::Lower(option.first);
-			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
+		for (auto &[option_name, option_values] : input.info.options) {
+			if (interface->ParseCopyOption(context, option_name, option_values, *options, expected_names,
+			                               expected_types)) {
 				continue;
 			}
-			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
+			throw NotImplementedException("Unsupported option for COPY FROM: %s", option_name);
 		}
 		interface->FinalizeCopyBind(context, *options, expected_names, expected_types);
 
-		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-		                             expected_names, std::move(file_options), std::move(options), std::move(interface));
+		// the COPY bind still operates on plain strings - convert around the table function bind
+		auto names = StringsToIdentifiers(expected_names);
+		auto result = MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
+		                                    names, std::move(file_options), std::move(options), std::move(interface));
+		expected_names = IdentifiersToStrings(names);
+		return result;
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,

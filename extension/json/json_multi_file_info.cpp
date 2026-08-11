@@ -35,23 +35,22 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 	return std::move(reader_options);
 }
 
-bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value, MultiFileOptions &,
-                                    BaseFileReaderOptions &options_p) {
+bool JSONMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
+                                    MultiFileOptions &, BaseFileReaderOptions &options_p) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
 	if (value.IsNull()) {
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
-	auto loption = StringUtil::Lower(key);
-	if (loption == "ignore_errors") {
+	if (key == "ignore_errors") {
 		options.ignore_errors = BooleanValue::Get(value);
 		return true;
 	}
-	if (loption == "maximum_object_size") {
+	if (key == "maximum_object_size") {
 		options.maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(value), options.maximum_object_size);
 		return true;
 	}
-	if (loption == "format") {
+	if (key == "format") {
 		auto arg = StringUtil::Lower(StringValue::Get(value));
 		static const auto FORMAT_OPTIONS =
 		    case_insensitive_map_t<JSONFormat> {{"auto", JSONFormat::AUTO_DETECT},
@@ -70,11 +69,11 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		options.format = lookup->second;
 		return true;
 	}
-	if (loption == "compression") {
+	if (key == "compression") {
 		options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(value)));
 		return true;
 	}
-	if (loption == "columns") {
+	if (key == "columns") {
 		auto &child_type = value.type();
 		if (child_type.id() != LogicalTypeId::STRUCT) {
 			throw BinderException("read_json \"columns\" parameter requires a struct as input.");
@@ -99,11 +98,11 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "auto_detect") {
+	if (key == "auto_detect") {
 		options.auto_detect = BooleanValue::Get(value);
 		return true;
 	}
-	if (loption == "sample_size") {
+	if (key == "sample_size") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.sample_size = NumericLimits<idx_t>::Maximum();
@@ -115,7 +114,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "maximum_depth") {
+	if (key == "maximum_depth") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.max_depth = NumericLimits<idx_t>::Maximum();
@@ -124,7 +123,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "field_appearance_threshold") {
+	if (key == "field_appearance_threshold") {
 		auto arg = DoubleValue::Get(value);
 		if (arg < 0 || arg > 1) {
 			throw BinderException("read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
@@ -132,7 +131,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		options.field_appearance_threshold = arg;
 		return true;
 	}
-	if (loption == "map_inference_threshold") {
+	if (key == "map_inference_threshold") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.map_inference_threshold = NumericLimits<idx_t>::Maximum();
@@ -144,7 +143,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "dateformat" || loption == "date_format") {
+	if (key == "dateformat" || key == "date_format") {
 		auto format_string = StringValue::Get(value);
 		if (StringUtil::Lower(format_string) == "iso") {
 			format_string = "%Y-%m-%d";
@@ -158,7 +157,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "timestampformat" || loption == "timestamp_format") {
+	if (key == "timestampformat" || key == "timestamp_format") {
 		auto format_string = StringValue::Get(value);
 		if (StringUtil::Lower(format_string) == "iso") {
 			format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
@@ -172,7 +171,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "records") {
+	if (key == "records") {
 		auto arg = StringValue::Get(value);
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
@@ -185,7 +184,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "maximum_sample_files") {
+	if (key == "maximum_sample_files") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
@@ -197,37 +196,36 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "convert_strings_to_integers") {
+	if (key == "convert_strings_to_integers") {
 		options.convert_strings_to_integers = BooleanValue::Get(value);
 		return true;
 	}
 	return false;
 }
 
-static void JSONCheckSingleParameter(const string &key, const vector<Value> &values) {
+static void JSONCheckSingleParameter(const Identifier &key, const vector<Value> &values) {
 	if (values.size() == 1) {
 		return;
 	}
 	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", key);
 }
 
-bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                         BaseFileReaderOptions &options_p, vector<string> &expected_names,
                                         vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
-	const auto &loption = StringUtil::Lower(key);
-	if (loption == "dateformat" || loption == "date_format") {
+	if (key == "dateformat" || key == "date_format") {
 		JSONCheckSingleParameter(key, values);
 		options.date_format = StringValue::Get(values.back());
 		return true;
 	}
-	if (loption == "timestampformat" || loption == "timestamp_format") {
+	if (key == "timestampformat" || key == "timestamp_format") {
 		JSONCheckSingleParameter(key, values);
 		options.timestamp_format = StringValue::Get(values.back());
 		return true;
 	}
-	if (loption == "auto_detect") {
+	if (key == "auto_detect") {
 		if (values.empty()) {
 			options.auto_detect = true;
 		} else {
@@ -239,13 +237,13 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		}
 		return true;
 	}
-	if (loption == "compression") {
+	if (key == "compression") {
 		JSONCheckSingleParameter(key, values);
 		options.compression =
 		    EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(values.back())));
 		return true;
 	}
-	if (loption == "array") {
+	if (key == "array") {
 		if (values.empty()) {
 			options.format = JSONFormat::ARRAY;
 		} else {

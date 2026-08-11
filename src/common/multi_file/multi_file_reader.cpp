@@ -133,12 +133,11 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return CreateFileList(context, paths, glob_input);
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
-	auto loption = StringUtil::Lower(key);
-	if (loption == "filename") {
+	if (key == "filename") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
@@ -152,30 +151,30 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 				options.filename = BooleanValue::Get(boolean_value);
 			}
 		}
-	} else if (loption == "hive_partitioning") {
+	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-	} else if (loption == "union_by_name") {
+	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "allow_empty") {
+	} else if (key == "allow_empty") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "hive_types" || loption == "hive_type") {
+	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -283,8 +282,14 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 			auto lookup = std::find_if(names.begin(), names.end(),
 			                           [&](const Identifier &col_name) { return col_name == part.first; });
 			if (lookup != names.end()) {
-				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
+				if (bind_data.filename_idx == idx) {
+					throw BinderException(
+					    "Option filename adds column \"%s\", but a hive partition column with this "
+					    "name also exists. Try setting a different name: filename='<filename column name>'",
+					    options.filename_column);
+				}
+				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -382,7 +387,8 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.Add(global_idx, Value(type));
+				auto &constant_type = col_id.HasType() ? col_id.GetScanType() : type;
+				reader_data.constant_map.Add(global_idx, Value(constant_type));
 				continue;
 			}
 		}

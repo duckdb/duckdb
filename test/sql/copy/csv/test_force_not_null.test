@@ -38,30 +38,30 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY test TO '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
 ----
-<REGEX>:.*Option "(FORCE_NOT_NULL|force_not_null)" is not supported for writing.*
+<REGEX>:.*Option (FORCE_NOT_NULL|force_not_null) is not supported for writing.*
 
 # FORCE_NOT_NULL must not be empty and must have the correct parameter type
 statement error
 COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
 ----
-"force_not_null" expects a column list or * as parameter
+force_not_null expects a column list or * as parameter
 
 statement error
 COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
 ----
-"force_not_null" expected to find 42, but it was not found in the table
+force_not_null expected to find 42, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
 statement error
 COPY test (col_b, col_a) FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
 ----
-"force_not_null" expected to find col_c, but it was not found in the table
+force_not_null expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not a column of the table
 statement error
 COPY test FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 ----
-"force_not_null" expected to find col_d, but it was not found in the table
+force_not_null expected to find col_d, but it was not found in the table
 
 # FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I

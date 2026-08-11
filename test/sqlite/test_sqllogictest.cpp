@@ -50,17 +50,13 @@ static void register_sqllogic_test_case(void (*test_fun)(), const string &path, 
 template <bool AUTO_SWITCH_TEST_DIR>
 static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input) {
 	const auto test_dir_path = TestDirectoryPath(); // can vary between tests, and does IO
+	// Tracks TEMP_DIR test-for-test, on the same materialization schedule.
+	const auto local_test_dir_path = LocalTestDirectoryPath();
 	// Absolute (main-cwd-anchored) form of the per-test temp dir we just materialized. Captured HERE,
 	// before the AUTO_SWITCH_TEST_DIR block below may chdir into an extension source dir: it names the
 	// physical dir regardless of the cwd in effect when {TEST_DIR}/TEMP_DIR are later substituted.
 	// (After the extension chdir the relative test_dir_path would resolve to a non-existent sibling.)
-	string test_dir_absolute = test_dir_path;
-	{
-		auto local_fs = FileSystem::CreateLocal();
-		if (!FileSystem::IsRemoteFile(test_dir_absolute) && !local_fs->IsPathAbsolute(test_dir_absolute)) {
-			test_dir_absolute = local_fs->JoinPath(TestGetCurrentDirectory(), test_dir_absolute);
-		}
-	}
+	string test_dir_absolute = TestMakeAbsolute(test_dir_path, TestGetCurrentDirectory());
 	// HOME is NOT touched per-test: main sets it once to the run-wide sandbox (GetTempDirHome(), a
 	// sibling of the run root). Pointing HOME at {TEST_DIR} here would put ~/.duckdb inside a dir tests
 	// whitelist via allowed_directories, breaking permission tests (e.g. INSTALL-is-denied).
@@ -114,7 +110,8 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	for (auto &kv : test_config.GetTestEnvMap()) {
 		runner.environment_variables[kv.first] = kv.second;
 	}
-	// Per runner vars
+	// Per runner vars. Every name set here is reserved against --env-passthrough
+	// (IsReservedEnvName, test_helpers.cpp).
 	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
@@ -122,6 +119,9 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// TEMP_DIR -> assigned per-test to $BASE[/$RUN_ID][/$TEST_ID] -- RUN_ID and TEST_ID when enabled
 	// (absolute in the extension case; see temp_dir_for_test above).
 	runner.environment_variables["TEMP_DIR"] = temp_dir_for_test;
+	// A separate local tree is already absolute, so only the base-is-local case needs chdir pinning.
+	runner.environment_variables["LOCAL_TEMP_DIR"] =
+	    (local_test_dir_path == test_dir_path) ? temp_dir_for_test : local_test_dir_path;
 	// TEMP_DIR_ABSOLUTE is always the main-cwd-anchored absolute path captured before any extension
 	// chdir -- computing it from the post-chdir cwd here would point at the wrong (extension) tree.
 	runner.environment_variables["TEMP_DIR_ABSOLUTE"] = test_dir_absolute;

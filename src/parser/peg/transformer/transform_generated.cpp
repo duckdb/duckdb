@@ -1284,11 +1284,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdTypeListIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMapTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<LogicalType> type;
-	auto type_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
-	for (auto &type_item : type_items) {
-		auto type_value = transformer.Transform<LogicalType>(type_item.get());
-		type.push_back(type_value);
+	optional<vector<LogicalType>> type {};
+	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (type_opt.HasResult()) {
+		vector<LogicalType> type_value;
+		auto type_value_items_1 = ExtractParseResultsFromList(ExtractResultFromParens(type_opt.GetResult()));
+		for (auto &type_value_item_1 : type_value_items_1) {
+			auto type_value_value_1 = transformer.Transform<LogicalType>(type_value_item_1.get());
+			type_value.push_back(type_value_value_1);
+		}
+		type = type_value;
 	}
 	auto result = TransformMapType(transformer, type);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -1327,6 +1332,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformArrayBoundsInte
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformArrayKeywordInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto result = TransformArrayKeyword(transformer);
+	return make_uniq<TypedTransformResult<int64_t>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto square_brackets_array = transformer.Transform<int64_t>(list_pr.GetChild(1));
+	auto result = TransformArrayKeywordWithBounds(transformer, square_brackets_array);
 	return make_uniq<TypedTransformResult<int64_t>>(result);
 }
 
@@ -4955,9 +4968,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseElseInterna
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeLiteralInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(0));
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
-	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	auto result = TransformTypeLiteral(transformer, type, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -9305,8 +9318,8 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformJoinWithoutOnClauseInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto join_prefix = transformer.Transform<JoinPrefix>(list_pr.GetChild(0));
-	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
-	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(table_ref));
+	auto inner_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
+	auto result = TransformJoinWithoutOnClause(transformer, join_prefix, std::move(inner_table_ref));
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 
@@ -10019,6 +10032,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformResetStatementI
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetSchemaInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
+	auto result = TransformSetSchema(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStandardAssignmentInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10717,6 +10738,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColIdType", &PEGTransformerFactory::TransformColIdTypeInternal},
 	    {"ArrayBounds", &PEGTransformerFactory::TransformArrayBoundsInternal},
 	    {"ArrayKeyword", &PEGTransformerFactory::TransformArrayKeywordInternal},
+	    {"ArrayKeywordWithBounds", &PEGTransformerFactory::TransformArrayKeywordWithBoundsInternal},
 	    {"SquareBracketsArray", &PEGTransformerFactory::TransformSquareBracketsArrayInternal},
 	    {"TimeType", &PEGTransformerFactory::TransformTimeTypeInternal},
 	    {"TimeOrTimestamp", &PEGTransformerFactory::TransformTimeOrTimestampInternal},
@@ -11524,6 +11546,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"SetStatement", &PEGTransformerFactory::TransformSetStatementInternal},
 	    {"SetAssignmentOrTimeZone", &PEGTransformerFactory::TransformSetAssignmentOrTimeZoneInternal},
 	    {"ResetStatement", &PEGTransformerFactory::TransformResetStatementInternal},
+	    {"SetSchema", &PEGTransformerFactory::TransformSetSchemaInternal},
 	    {"StandardAssignment", &PEGTransformerFactory::TransformStandardAssignmentInternal},
 	    {"SetVariableOrSetting", &PEGTransformerFactory::TransformSetVariableOrSettingInternal},
 	    {"SetTimeZone", &PEGTransformerFactory::TransformSetTimeZoneInternal},

@@ -33,16 +33,128 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
-# This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
+# Frontier metrics describe each iteration input once, while scheduler metrics account for both scan references.
 query II
-WITH RECURSIVE t(i, digest, level) AS (
-	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
-	UNION
-	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+WITH RECURSIVE t(i, level) AS (
+	VALUES (1, 0), (2, 0)
+	UNION ALL
+	SELECT a.i, a.level + 1
+	FROM t a
+	JOIN t b USING (i)
+	WHERE a.level < 1 AND b.level < 1
 )
 SELECT count(*), max(level) FROM t;
 ----
-400000	7
+4	1
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT info.frontier_rows::UBIGINT = 4,
+       info.frontier_chunks::UBIGINT = 2,
+       info.scheduler_input_rows::UBIGINT = 8
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+query IIIIIIIIIIII
+SELECT info.epochs::UBIGINT = 2,
+       info.frontier_rows_p50_upper_bound::UBIGINT = 3,
+       info.frontier_rows_max::UBIGINT = 2,
+       info.workers_p50_upper_bound::UBIGINT <= info.workers_max::UBIGINT * 2,
+       info.workers_max::UBIGINT >= 1,
+       info.tasks_p50_upper_bound::UBIGINT <= info.tasks_max::UBIGINT * 2,
+       info.tasks_max::UBIGINT >= 1,
+       info.elapsed_us_p50_upper_bound::UBIGINT <= info.elapsed_us_max::UBIGINT * 2,
+       info.frontier_storage_byte_epochs::UBIGINT >= info.peak_frontier_storage_bytes::UBIGINT,
+       info.peak_frontier_storage_bytes::UBIGINT > 0,
+       info.frontier_allocation_byte_epochs::UBIGINT >= info.peak_frontier_allocation_bytes::UBIGINT,
+       info.peak_frontier_allocation_bytes::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1	1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Cached nested states can be destroyed after their derived physical operator. Their snapshotted identity remains valid.
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k, v) USING KEY (k) AS (
+			SELECT a, 0 FROM outer_cte WHERE b < 4
+			UNION ALL
+			SELECT n.k, r.v + 1
+			FROM inner_cte n
+			JOIN recurring.inner_cte r USING (k)
+			WHERE n.v < 1
+		)
+		SELECT k, b + 1
+		FROM inner_cte, outer_cte
+		WHERE v = 1 AND b < 4
+	)
+)
+SELECT * FROM outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+statement ok
+CALL disable_logging();
+
+query TIIII rowsort
+SELECT parameters['CTE Name'],
+       min(info.invocation_id::UBIGINT) = 1,
+       count(*) = count(DISTINCT info.invocation_id::UBIGINT),
+       max(info.invocation_id::UBIGINT) = count(*),
+       count(*) >= CASE parameters['CTE Name'] WHEN 'inner_cte' THEN 3 ELSE 1 END
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics'
+GROUP BY parameters['CTE Name'];
+----
+inner_cte	1	1	1	1
+outer_cte	1	1	1	1
+
+query I
+SELECT count(*) = (SELECT count(*)
+	FROM duckdb_logs_parsed('PhysicalOperator')
+	WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics')
+FROM duckdb_logs_parsed('PhysicalOperator') runtime
+JOIN duckdb_logs_parsed('PhysicalOperator') summary
+  ON runtime.parameters['Table Index'] = summary.parameters['Table Index']
+ AND runtime.info.invocation_id = summary.info.invocation_id
+WHERE runtime.class = 'PhysicalRecursiveCTE' AND runtime.event = 'RuntimeMetrics'
+  AND summary.class = 'PhysicalRecursiveCTE' AND summary.event = 'EpochSummary';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
+query II
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0
+	FROM range(current_setting('standard_vector_size')::BIGINT * 24) r(i)
+	UNION
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 24 * 8, max(level) FROM t;
+----
+1	7
 
 statement ok
 CALL disable_logging();
@@ -57,7 +169,7 @@ query IIII
 SELECT info.epochs::UBIGINT > 0,
        info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
        info.scheduled_tasks::UBIGINT >= info.epochs::UBIGINT,
-       info.hash_rows::UBIGINT >= 400000
+       info.hash_rows::UBIGINT >= current_setting('standard_vector_size')::UBIGINT * 24 * 8
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
@@ -70,6 +182,51 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
   AND info.migrated_rows::UBIGINT > 0;
 ----
 1
+
+query IIIII
+SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
+       info.distinct_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 24 * 8,
+       info.distinct_inserted_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 24 * 8,
+       info.distinct_duplicate_rows::UBIGINT = 0,
+       info.recursive_pipeline_execute_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Distinct metrics separate useful insertions from rejected recursive duplicates.
+query II
+WITH RECURSIVE t(i) AS (
+	VALUES (1)
+	UNION
+	(
+		SELECT i + 1 FROM t WHERE i < 4
+		UNION ALL
+		SELECT i + 1 FROM t WHERE i < 4
+	)
+)
+SELECT count(*), max(i) FROM t;
+----
+4	4
+
+statement ok
+CALL disable_logging();
+
+query IIII
+SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
+       info.distinct_candidate_rows::UBIGINT = 7,
+       info.distinct_inserted_rows::UBIGINT = 4,
+       info.distinct_duplicate_rows::UBIGINT = 3
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');
@@ -276,6 +433,26 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1
 
+query IIIIIII
+SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT > 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0,
+       info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.partial_index_maintenance_work_ns::UBIGINT = 0,
+       info.recurring_scan_work_ns::UBIGINT = 0,
+       info.final_state_drain_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
 statement ok
 CALL enable_logging('PhysicalOperator');
 
@@ -307,3 +484,131 @@ FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1	1	1
+
+query IIIII
+SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT > 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0,
+       info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.partial_index_maintenance_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# A sparse direct probe uses the broad anchor once, then schedules its narrow probe frontiers inline.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i,
+	       CASE WHEN i < greatest(current_setting('standard_vector_size')::BIGINT / 4, 1) THEN 0 ELSE 100 END
+	FROM range(current_setting('standard_vector_size')::BIGINT * 16) r(i)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n
+	JOIN recurring.t r USING (k)
+	WHERE n.v < 4
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 16, min(v) FROM t;
+----
+1	4
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT + 7,
+       info.recurring_scan_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Partial-key match chains do not create independently splittable work.
+query II
+WITH RECURSIVE t(bucket, item, level) USING KEY (bucket, item) AS (
+	SELECT bucket, item, CASE WHEN bucket = 0 THEN 0 ELSE 100 END
+	FROM range(current_setting('standard_vector_size')::BIGINT * 4) b(bucket), range(8) i(item)
+	UNION ALL
+	SELECT n.bucket + 1, r.item, n.level + 1
+	FROM t n
+	JOIN recurring.t r ON r.bucket = n.bucket
+	WHERE n.item = 0 AND n.level < 4
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 4 * 8,
+       (SELECT level FROM t WHERE bucket = 4 AND item = 0)
+FROM t;
+----
+1	4
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
+       info.scheduled_workers::UBIGINT < info.epochs::UBIGINT * 8,
+       info.partial_probe_chain_visits::UBIGINT > info.direct_probe_rows::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# A filter on recurring state rejects the direct probe and retains full-scan work accounting.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0
+	FROM range(current_setting('standard_vector_size')::BIGINT * 4) r(i)
+	UNION ALL
+	SELECT r.k, r.v + 1
+	FROM range(current_setting('standard_vector_size')::BIGINT * 4) n(i)
+	JOIN (SELECT * FROM recurring.t WHERE v < 2) r ON r.k = n.i
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 4, max(v) FROM t;
+----
+1	2
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
+       info.direct_probe_rows::UBIGINT = 0,
+       info.recurring_scan_rows::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+query III
+SELECT info.direct_probe_lookup_work_ns::UBIGINT = 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT = 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1
+
+query II
+SELECT info.recurring_scan_work_ns::UBIGINT > 0,
+       info.final_state_drain_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1

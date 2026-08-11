@@ -289,6 +289,17 @@ public:
 	HTTPUtil(const HTTPUtil &other) = delete;
 	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 

@@ -125,24 +125,24 @@ jobs:
       matrix:
         include:
           - name: Ingestion Perf
-            benchmarks: .github/regression/ingestion.csv
+            benchmark: .github/regression/ingestion.csv
           - name: Micro
-            benchmarks: .github/regression/micro.csv
+            benchmark: .github/regression/micro.csv
           - name: H2OAI
-            benchmarks: .github/regression/h2oai.csv
+            benchmark: .github/regression/h2oai.csv
           - name: IMDB
-            benchmarks: .github/regression/imdb.csv
+            benchmark: .github/regression/imdb.csv
           - name: CSV
-            benchmarks: .github/regression/csv.csv
+            benchmark: .github/regression/csv.csv
           - name: RealNest
-            benchmarks: .github/regression/realnest.csv
+            benchmark: .github/regression/realnest.csv
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
-          - name: Recursive CTE + AoC24
-            benchmarks: benchmark/recursive_cte/recursive_cte.csv benchmark/aoc24/aoc24.csv
-            timed_runs: 7
-            regression_threshold_seconds: 0.01
+          - name: Recursive CTE
+            benchmark: benchmark/recursive_cte/recursive_cte.csv
+          - name: AoC24
+            benchmark: benchmark/aoc24/aoc24.csv
 
     steps:
       - uses: actions/checkout@v6
@@ -179,38 +179,21 @@ jobs:
         if: ${{ matrix.data_setup }}
         run: ${{ matrix.data_setup }}
 
-      - name: Run regression benchmarks
+      - name: Run regression benchmark
         run: |
-          status=0
+          extra_args=(--benchmark-cache=clear)
+          if [[ "${{ matrix.benchmark }}" == ".github/regression/realnest.csv" ]]; then
+            extra_args=()
+          fi
 
-          for benchmark in ${{ matrix.benchmarks }}; do
-            extra_args=(--clear-benchmark-cache)
-            if [[ "$benchmark" == ".github/regression/realnest.csv" ]]; then
-              extra_args=()
-            fi
-            if [[ -n "${{ matrix.timed_runs }}" ]]; then
-              extra_args+=(--timed-runs "${{ matrix.timed_runs }}")
-            fi
-            if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
-              extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
-            fi
-
-            echo "::group::$(basename "$benchmark" .csv)"
-            if ! python scripts/regression/test_runner.py \
-              --old build/base/release/benchmark/benchmark_runner \
-              --new build/current/release/benchmark/benchmark_runner \
-              --benchmarks "$benchmark" \
-              --verbose \
-              --threads 2 \
-              "${extra_args[@]}"; then
-              status=1
-              echo "::error title=Regression suite failed::$(basename "$benchmark" .csv) in ${{ matrix.name }}"
-            else
-              echo "::endgroup::"
-            fi
-          done
-
-          exit $status
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks "${{ matrix.benchmark }}" \
+            --verbose \
+            --early-stop \
+            --threads 2 \
+            "${extra_args[@]}"
 
   regression-bench-tpc:
     name: Bench ${{ matrix.name }}
@@ -225,12 +208,15 @@ jobs:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
             threads: 4
-          - name: TPCDS SF3
-            benchmarks: .github/regression/tpcds_sf3.csv
+            sf: 10
+          - name: TPCDS SF10
+            benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
+            sf: 10
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
+            sf: 1
 
     steps:
       - name: "Checkout"
@@ -272,11 +258,11 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
-            --clear-benchmark-cache \
+            --early-stop \
+            --benchmark-cache=clear \
             --disable-timeout \
-            --max-timeout 3600 \
-            --threads ${{ matrix.threads }} \
-            --timed-runs 30
+            --benchmark-argument sf=${{ matrix.sf }} \
+            --threads ${{ matrix.threads }}
 
   regression-bench-fivetran:
     name: Bench Fivetran
@@ -327,7 +313,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
 
   regression-test-storage:
     name: Storage Size Regression Test

@@ -4,7 +4,7 @@
 
 name fsst Compression Scan
 group fsst
-storage persistent
+storage persistent v1.2.0
 
 load
 DROP TABLE IF EXISTS test;

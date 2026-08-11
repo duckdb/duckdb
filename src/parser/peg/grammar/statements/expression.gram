@@ -62,7 +62,7 @@ SubqueryExists <- 'EXISTS'
 CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
-TypeLiteral <- ColId StringLiteral
+TypeLiteral <- Type StringLiteral
 IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
 IntervalParameter <- IntervalStringParameter / NumberLiteral / ParensExpression
 IntervalStringParameter <- StringLiteral

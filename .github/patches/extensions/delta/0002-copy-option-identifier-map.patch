@@ -1,0 +1,51 @@
+diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
+index 8e39c99..73d848f 100644
+--- a/src/functions/delta_scan/delta_multi_file_reader.cpp
++++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -295,27 +295,25 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
+ 	D_ASSERT(delta_global_state.file_list);
+ };
+ 
+-bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
++bool DeltaMultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
+                                        ClientContext &context) {
+-	auto loption = StringUtil::Lower(key);
+-
+-	if (loption == "pushdown_partition_info") {
++	if (key == "pushdown_partition_info") {
+ 		options.custom_options["pushdown_partition_info"] = val;
+ 		return true;
+ 	}
+ 
+-	if (loption == "log_tail") {
++	if (key == "log_tail") {
+ 		options.custom_options["log_tail"] = val;
+ 		return true;
+ 	}
+ 
+ 	// We need to capture this one to know whether to emit
+-	if (loption == "pushdown_filters") {
++	if (key == "pushdown_filters") {
+ 		options.custom_options["pushdown_filters"] = val;
+ 		return true;
+ 	}
+ 
+-	if (loption == "version") {
++	if (key == "version") {
+ 		requested_version = val.DefaultCastAs(LogicalType::UBIGINT).GetValue<idx_t>();
+ 		return true;
+ 	}
+diff --git a/src/include/functions/delta_scan/delta_multi_file_reader.hpp b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+index e66d3b6..c04791f 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_reader.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+@@ -63,7 +63,8 @@ struct DeltaMultiFileReader : public MultiFileReader {
+ 	                   ExpressionExecutor &executor, optional_ptr<MultiFileReaderGlobalState> global_state) override;
+ 
+ 	//! Override the ParseOption call to parse delta_scan specific options
+-	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
++	bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
++	                 ClientContext &context) override;
+ 
+ 	// A snapshot can be injected into the multifilereader, this ensures the GetMultiFileList can return this snapshot
+ 	// (note that the path should match the one passed to CreateFileList)

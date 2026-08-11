@@ -167,7 +167,7 @@ TEST_CASE("Abandoned streaming result must release the active query", "[api]") {
 	SECTION("Abandon via Close() before consuming") {
 		auto result = con.SendQuery("SELECT * FROM range(10000)");
 		REQUIRE(!result->HasError());
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		// the stream is in flight: the active query is still open
 		REQUIRE(con.context->transaction.HasActiveTransaction());
 
@@ -177,7 +177,7 @@ TEST_CASE("Abandoned streaming result must release the active query", "[api]") {
 	SECTION("Abandon via Close() after a partial fetch") {
 		auto result = con.SendQuery("SELECT * FROM range(10000)");
 		REQUIRE(!result->HasError());
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		auto chunk = result->Fetch(); // consume one chunk; the stream is not drained
 		REQUIRE(chunk);
 		REQUIRE(con.context->transaction.HasActiveTransaction());
@@ -202,7 +202,7 @@ TEST_CASE("PROBE cancel a streaming producer parked on a full buffer", "[api][.]
 	SECTION("abandon by dropping, then run another query") {
 		auto result = con.SendQuery("SELECT * FROM range(10000000)");
 		REQUIRE(!result->HasError());
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		auto chunk = result->Fetch(); // ensure the pipeline is actually streaming and re-parks
 		REQUIRE(chunk);
 		result.reset(); // abandon while the producer is parked on the full buffer
@@ -213,7 +213,7 @@ TEST_CASE("PROBE cancel a streaming producer parked on a full buffer", "[api][.]
 	SECTION("abandon via Close(), then run another query") {
 		auto result = con.SendQuery("SELECT * FROM range(10000000)");
 		REQUIRE(!result->HasError());
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		auto chunk = result->Fetch();
 		REQUIRE(chunk);
 		result->Cast<StreamQueryResult>().Close();
@@ -269,12 +269,13 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		REQUIRE(!pending->HasError());
 
 		auto result = pending->Execute();
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		idx_t count = 0;
 		while (auto chunk = result->Fetch()) {
 			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
 			count += chunk->size();
 		}
+		REQUIRE(!result->HasError());
 		REQUIRE(count == 1000000);
 	}
 	SECTION("Buffered unordered exchange") {
@@ -283,12 +284,45 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		REQUIRE(!pending->HasError());
 
 		auto result = pending->Execute();
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		idx_t count = 0;
 		while (auto chunk = result->Fetch()) {
 			count += chunk->size();
 		}
 		REQUIRE(count == 1000000);
+	}
+	SECTION("Buffered batch-indexed exchange") {
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED ("
+		                                "SELECT i FROM integers WHERE i < 500000 "
+		                                "UNION ALL "
+		                                "SELECT i FROM integers WHERE i >= 500000) "
+		                                "SELECT i FROM c",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(!result->HasError());
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Abandon buffered batch-indexed exchange") {
+		auto result = con.SendQuery("WITH c AS MATERIALIZED ("
+		                            "SELECT i FROM integers WHERE i < 500000 "
+		                            "UNION ALL "
+		                            "SELECT i FROM integers WHERE i >= 500000) "
+		                            "SELECT i FROM c");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->Fetch());
+
+		result->Cast<StreamQueryResult>().Close();
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
 	}
 	SECTION("Ordered sink pipeline sequencing") {
 		auto pending = con.PendingQuery("WITH c1 AS MATERIALIZED (SELECT i FROM range(10000) t(i)), "
@@ -299,7 +333,7 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		REQUIRE(!pending->HasError());
 
 		auto result = pending->Execute();
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		idx_t count = 0;
 		while (auto chunk = result->Fetch()) {
 			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));

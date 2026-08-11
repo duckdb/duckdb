@@ -671,6 +671,13 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalBatchCopyToFile::UpdateMinBatchIndex(ExecutionContext &,
+                                                               OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	gstate.memory_manager.UpdateMinBatchIndex(input.local_state.partition_info.min_batch_index.GetIndex());
+	return SinkNextBatchType::READY;
+}
+
 unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<FixedBatchCopyLocalState>(function.copy_to_initialize_local(context, *bind_data));
 }

@@ -22,7 +22,7 @@ public:
 	bool HasError() const override;
 	ErrorData &GetError() override;
 	const vector<LogicalType> &Types() const override;
-	const vector<string> &Names() const override;
+	const vector<Identifier> &Names() const override;
 
 private:
 	void InternalLoad(ErrorData &error);
