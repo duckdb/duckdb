@@ -100,12 +100,12 @@ SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value
 	return SettingLookupResult();
 }
 
-bool GlobalUserSettings::HasExtensionOption(const string &name) const {
+bool GlobalUserSettings::HasExtensionOption(const Identifier &name) const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters.find(name) != extension_parameters.end();
 }
 
-idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
+idx_t GlobalUserSettings::AddExtensionOption(const Identifier &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
 	const auto new_option = extension_parameters.emplace(make_pair(name, std::move(extension_option)));
 	const auto did_insert = new_option.second;
@@ -121,14 +121,14 @@ idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption
 	return setting_index;
 }
 
-case_insensitive_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
+identifier_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters;
 }
 
-bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+bool GlobalUserSettings::TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const {
 	lock_guard<mutex> l(lock);
-	auto entry = extension_parameters.find(name.ToStdString());
+	auto entry = extension_parameters.find(name);
 	if (entry == extension_parameters.end()) {
 		return false;
 	}

@@ -10,6 +10,7 @@
 
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "json_common.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 
