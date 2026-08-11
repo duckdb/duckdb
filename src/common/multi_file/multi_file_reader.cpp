@@ -68,6 +68,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	result->names = names;
 	result->virtual_columns = virtual_columns;
 	result->table_columns = table_columns;
+	result->aggregates_pushed = aggregates_pushed;
 	return std::move(result);
 }
 

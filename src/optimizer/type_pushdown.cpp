@@ -47,7 +47,8 @@ static bool IsPassthrough(const LogicalProjection &projection) {
 void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections &projections) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
-		if (auto &get = op.Cast<LogicalGet>(); get.function.projection_expression_pushdown != nullptr) {
+		if (auto &get = op.Cast<LogicalGet>();
+		    get.function.projection_expression_pushdown != nullptr || get.function.aggregate_pushdown != nullptr) {
 			analyses.emplace(get.table_index, GetAnalysis {get, {}});
 		}
 		break;
@@ -73,7 +74,8 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 			get = &child.Cast<LogicalGet>();
 		}
 
-		if (get != nullptr && get->function.projection_expression_pushdown != nullptr) {
+		if (get != nullptr &&
+		    (get->function.projection_expression_pushdown != nullptr || get->function.aggregate_pushdown != nullptr)) {
 			projections.emplace(projection.table_index, projection);
 		}
 		break;

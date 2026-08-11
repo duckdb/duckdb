@@ -61,6 +61,8 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
+	//! Every aggregate pushed into this scan is a count(*):
+	bool count_star_pushdown = false;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -78,6 +80,7 @@ struct ParquetReadBindData : public TableFunctionData {
 		result->explicit_cardinality = explicit_cardinality;
 		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
 		result->projection_expressions = projection_expressions;
+		result->count_star_pushdown = count_star_pushdown;
 		return std::move(result);
 	}
 
@@ -99,6 +102,9 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	atomic<idx_t> row_groups_scanned_unreported {0};
 	//! Total considered, across all scan states
 	atomic<idx_t> total_row_groups_to_scan {0};
+	bool count_star_pushdown = false;
+	atomic<idx_t> count_star {0};
+	atomic<bool> count_star_written {false};
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -299,6 +305,7 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	// don't push this field. If projection expression worked,
 	// it modified "types" which we serialize ultimately
 	serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
+	serializer.WritePropertyWithDefault(106, "count_star_pushdown", parquet_data.count_star_pushdown, false);
 }
 
 static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -312,6 +319,7 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto projection_expressions =
 	    deserializer.ReadPropertyWithExplicitDefault<unordered_map<idx_t, ParquetReaderProjectionExpression>>(
 	        105, "projection_expressions", unordered_map<idx_t, ParquetReaderProjectionExpression> {});
+	auto count_star_pushdown = deserializer.ReadPropertyWithExplicitDefault<bool>(106, "count_star_pushdown", false);
 
 	vector<Value> file_path;
 	for (auto &path : files) {
@@ -333,6 +341,8 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	inner_bind_data.table_columns = std::move(table_columns);
 	auto &parquet_bind_data = inner_bind_data.bind_data->Cast<ParquetReadBindData>();
 	parquet_bind_data.projection_expressions = std::move(projection_expressions);
+	parquet_bind_data.count_star_pushdown = count_star_pushdown;
+	inner_bind_data.aggregates_pushed = count_star_pushdown;
 
 	for (const auto &[idx, expr] : parquet_bind_data.projection_expressions) {
 		if (idx < inner_bind_data.columns.size()) {
@@ -380,6 +390,41 @@ static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	// each local state drains the not-yet-reported count
 	input.operator_metrics.row_groups_scanned = parquet_gstate.row_groups_scanned_unreported.exchange(0);
 	input.operator_metrics.total_row_groups_to_scan = parquet_gstate.total_row_groups_to_scan.load();
+}
+
+bool ParquetMultiFileInfo::TryPushdownAggregates(ClientContext &context, MultiFileBindData &bind_data,
+                                                 const TableFunctionAggregateInput &input) {
+	// Don't do pushdown on custom schema users like Ducklake.
+	// We may support it and UNION readers in the future
+	if (!bind_data.reader_bind.schema.empty() || !bind_data.union_readers.empty()) {
+		return false;
+	}
+	for (const auto &[column_index, expr] : input.projections) {
+		if (column_index.IsValid()) { // only count(*) is supported
+			return false;
+		}
+	}
+	bind_data.bind_data->Cast<ParquetReadBindData>().count_star_pushdown = true;
+	return true;
+}
+
+bool ParquetMultiFileInfo::SupportsReadAhead(const MultiFileBindData &bind_data) const {
+	// count(*) is answered from footer metadata, there is no column IO
+	return !bind_data.bind_data->Cast<ParquetReadBindData>().count_star_pushdown;
+}
+
+bool ParquetMultiFileInfo::FinalizeScan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                        DataChunk &output) {
+	auto &gstate = global_state.Cast<ParquetReadGlobalState>();
+	if (!gstate.count_star_pushdown || gstate.count_star_written.exchange(true)) {
+		return false;
+	}
+	const auto count = Value::BIGINT(NumericCast<int64_t>(gstate.count_star.load()));
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		output.data[col_idx].Append(count);
+	}
+	output.CheckCardinality(1);
+	return true;
 }
 
 static bool ParquetProjectionExpressionPushdown(ClientContext &context,
@@ -895,9 +940,12 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	return std::move(result);
 }
 
-unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
+unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &,
+                                                                                 MultiFileBindData &bind_data,
                                                                                  MultiFileGlobalState &global_state) {
-	return make_uniq<ParquetReadGlobalState>(global_state.op);
+	auto result = make_uniq<ParquetReadGlobalState>(global_state.op);
+	result->count_star_pushdown = bind_data.bind_data->Cast<ParquetReadBindData>().count_star_pushdown;
+	return std::move(result);
 }
 
 unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ClientContext &,
@@ -909,6 +957,9 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
                                       LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	if (gstate.count_star_pushdown) {
+		return false; // count(*) is taken from metadata, don't read row groups
+	}
 	if (gstate.row_group_index >= NumRowGroups()) {
 		// scanned all row groups in this file
 		return false;
@@ -944,6 +995,9 @@ AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctio
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
+	if (gstate.count_star_pushdown) {
+		gstate.count_star += NumericCast<idx_t>(GetFileMetadata()->num_rows);
+	}
 	gstate.row_group_index = 0;
 }
 

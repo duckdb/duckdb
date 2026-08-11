@@ -1,0 +1,52 @@
+# name: test/optimizer/pushdown/parquet_count_star_pushdown.test
+# description: Test count(*) pushdown into Parquet
+# group: [pushdown]
+
+require parquet
+
+statement ok
+COPY (SELECT range i FROM range(100)) TO '{TEST_DIR}/count_star_1.parquet';
+
+statement ok
+COPY (SELECT range i FROM range(50)) TO '{TEST_DIR}/count_star_2.parquet';
+
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/count_star_*.parquet';
+----
+physical_plan	<!REGEX>:(?i).*aggregate.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/count_star_*.parquet';
+----
+150
+
+query II
+SELECT count(*), count(*) FROM '{TEST_DIR}/count_star_*.parquet';
+----
+150	150
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/count_star_1.parquet';
+----
+100
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/count_star_*.parquet' WHERE i >= 10;
+----
+130
+
+query II
+EXPLAIN SELECT count(i) FROM '{TEST_DIR}/count_star_*.parquet';
+----
+physical_plan	<REGEX>:(?i).*aggregate.*
+
+query I
+SELECT count(i) FROM '{TEST_DIR}/count_star_*.parquet';
+----
+150
+
+query II
+SELECT i % 2 AS g, count(*) FROM '{TEST_DIR}/count_star_*.parquet' GROUP BY g ORDER BY g;
+----
+0	75
+1	75

@@ -72,9 +72,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
 
-	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override {
-		return true;
-	}
+	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -88,6 +86,9 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<MultiFileReaderInterface> Copy() override;
 	FileGlobInput GetGlobInput() override;
+	bool TryPushdownAggregates(ClientContext &context, MultiFileBindData &bind_data,
+	                           const TableFunctionAggregateInput &input) override;
+	bool FinalizeScan(ClientContext &context, GlobalTableFunctionState &global_state, DataChunk &output) override;
 };
 
 class ParquetScanFunction {
