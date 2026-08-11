@@ -15,7 +15,7 @@ query I
 SELECT nth_value(1929, 42) OVER (
 	PARTITION BY (
 		"usmallint" > "smallint"
-	), 747 ROWS BETWEEN "bigint" PRECEDING AND CURRENT ROW
+	), 747 ROWS BETWEEN greatest("bigint", 0) PRECEDING AND CURRENT ROW
 )
 FROM all_types;
 ----
