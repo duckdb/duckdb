@@ -1,0 +1,53 @@
+# name: benchmark/micro/optimizer/duplicate_eliminated_domain_reused_exists_unnest.benchmark
+# description: EXISTS over reused windowed and unnested CTEs
+# group: [optimizer]
+
+name Duplicate-Eliminated Domain Reused EXISTS UNNEST
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE dedup_bench_users AS
+SELECT i::INTEGER AS id
+FROM range(3000) t(i);
+CREATE TABLE dedup_bench_posts AS
+SELECT i::INTEGER AS id, ('post-' || i)::VARCHAR AS title,
+       TIMESTAMP '2025-01-01' + i * INTERVAL 1 SECOND AS creation_date,
+       (i % 100)::INTEGER AS score, (i % 10000)::INTEGER AS view_count,
+       ('<tag' || (i % 100) || '><sql>')::VARCHAR AS tags,
+       (i % 3000)::INTEGER AS owner_user_id, 1::INTEGER AS post_type_id
+FROM range(30000) t(i);
+
+run
+WITH ranked_posts AS (
+    SELECT p.id AS post_id, p.title, p.creation_date, p.score, p.view_count, p.tags,
+           row_number() OVER (PARTITION BY p.tags ORDER BY p.creation_date DESC) AS tag_rank
+    FROM dedup_bench_posts p
+    JOIN dedup_bench_users u ON p.owner_user_id = u.id
+    WHERE p.post_type_id = 1
+), filtered_posts AS (
+    SELECT post_id, title, creation_date, score, view_count, tags
+    FROM ranked_posts
+    WHERE tag_rank <= 5
+), post_tags AS (
+    SELECT fp.post_id,
+           unnest(string_to_array(substring(fp.tags, 2, length(fp.tags) - 2), '><')) AS tag
+    FROM filtered_posts fp
+), tag_usage AS (
+    SELECT tag, count(*) AS post_count, avg(fp.view_count) AS avg_views, avg(fp.score) AS avg_score
+    FROM post_tags pt
+    JOIN filtered_posts fp ON pt.post_id = fp.post_id
+    GROUP BY tag
+)
+SELECT count(*)
+FROM (
+    SELECT tu.tag, tu.post_count, tu.avg_views, tu.avg_score,
+           string_agg(fp.title, ', ' ORDER BY fp.view_count DESC) AS related_posts
+    FROM tag_usage tu
+    JOIN filtered_posts fp ON EXISTS (
+        SELECT 1
+        FROM post_tags pt
+        WHERE pt.post_id = fp.post_id AND pt.tag = tu.tag
+    )
+    GROUP BY tu.tag, tu.post_count, tu.avg_views, tu.avg_score
+) result;

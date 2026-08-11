@@ -255,6 +255,7 @@ template <class TYPE>
 void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
 	auto function = AggregateFunction::UnaryAggregate<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	    type, LogicalType::BIT);
+	function.SetFallible();
 	function.SetBindCallback(BindBitstringAgg); // create new a 'BitstringAggBindData'
 	function.SetSerializeCallback(BitstringAggBindData::Serialize);
 	function.SetDeserializeCallback(BitstringAggBindData::Deserialize);

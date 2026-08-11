@@ -190,6 +190,12 @@
       ]
     },
     {
+      "reason": "Asserts the physical layout of a separately attached database rather than the compatibility database.",
+      "paths": [
+        "test/sql/storage/compression/fsst/fsst_greedy_long_strings.test"
+      ]
+    },
+    {
       "reason": "Contents of view were altered",
       "paths": [
         "test/sql/table_function/duckdb_columns.test",

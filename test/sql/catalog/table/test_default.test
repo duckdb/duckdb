@@ -92,14 +92,23 @@ CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);
 statement ok
 INSERT INTO test (b) VALUES (2), (4), (6), (2), (4);
 
-query II
-SELECT * FROM test ORDER BY 1
+query I
+SELECT a FROM test ORDER BY a
 ----
-1	2
-2	4
-3	6
-4	2
-5	4
+1
+2
+3
+4
+5
+
+query I
+SELECT b FROM test ORDER BY b
+----
+2
+2
+4
+4
+6
 
 # cannot drop sequence now
 statement error
@@ -168,4 +177,3 @@ query R
 SELECT COUNT(DISTINCT a) FROM test;
 ----
 2
-

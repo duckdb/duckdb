@@ -4,8 +4,11 @@ add_library_unity(
   build_probe_side_optimizer.cpp
   column_binding_rewrite.cpp
   common_subplan_nonserializable.cpp
+  duplicate_eliminated_domain_candidate.cpp
+  duplicate_eliminated_domain_properties.cpp
   filter_pushdown_alias.cpp
   join_order_conflict_detector.cpp
+  projection_pullup.cpp
   relation_statistics.cpp
   union_alls.cpp)
 

@@ -1,0 +1,322 @@
+# name: test/optimizer/duplicate_eliminated_domain_estimates.test
+# description: Cardinality estimates after duplicate-eliminated domain lowering
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+CREATE TABLE dedup_est_users(id INTEGER);
+
+statement ok
+INSERT INTO dedup_est_users VALUES (1), (2), (3), (4);
+
+statement ok
+CREATE TABLE dedup_est_posts(id INTEGER, creation_date TIMESTAMP);
+
+statement ok
+INSERT INTO dedup_est_posts VALUES
+    (10, '2024-09-20'), (11, '2024-09-21'), (12, '2024-09-22'), (13, '2024-09-23'), (14, '2020-01-01');
+
+statement ok
+CREATE TABLE dedup_est_votes(id INTEGER, user_id INTEGER, post_id INTEGER);
+
+statement ok
+INSERT INTO dedup_est_votes VALUES
+    (1, 1, 10), (2, 1, 10), (3, 1, 10), (4, 1, 10), (5, 1, 10), (6, 1, 10),
+    (7, 2, 12), (8, 3, 13);
+
+# Preparing the pair payload must invalidate estimates inherited from joins that filter pushdown turns into a cross
+# product. A cached zero makes build/probe selection flip the final SEMI join and build on the complete pair payload.
+statement ok
+CREATE VIEW dedup_est_pair_in AS
+WITH ranked_posts AS (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+), user_engagement AS (
+    SELECT u.id, count(v.id) AS vote_count
+    FROM dedup_est_users u
+    LEFT JOIN dedup_est_votes v ON u.id = v.user_id
+    GROUP BY u.id
+)
+SELECT p.id AS post_id, u.id AS user_id
+FROM ranked_posts p
+JOIN user_engagement u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+
+query II
+SELECT * FROM dedup_est_pair_in ORDER BY ALL;
+----
+10	1
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<REGEX>:.*Cross Product[^~]*~[1-9][0-9,]* rows.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*Join Type: MARK.*
+
+# A materialized candidate can safely provide the domain through a second CTE reference without introducing a new
+# factor boundary around the marker filter and join.
+query II
+WITH ranked_posts AS MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+)
+ORDER BY ALL;
+----
+10	1
+
+query II
+EXPLAIN
+WITH ranked_posts AS MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|Join Type: MARK).*
+
+# NOT MATERIALIZED requires the window definition to be copied. Since it is outside the bounded source-duplication
+# proof, retain the canonical generated domain.
+query II
+WITH ranked_posts AS NOT MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+)
+ORDER BY ALL;
+----
+10	1
+
+query II
+EXPLAIN
+WITH ranked_posts AS NOT MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Aggregate statistics contain both child and aggregate-output entries. A CTE reference must rank candidates using the
+# output entries. Here the aggregate output has a conservative NDV, so the equivalent base-table key wins.
+statement ok
+CREATE TABLE dedup_agg_source(group_id INTEGER, constant_k INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_source SELECT i, 0 FROM range(10) r(i);
+
+statement ok
+CREATE TABLE dedup_agg_equivalent(n BIGINT, payload INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_equivalent
+SELECT CASE WHEN i % 2 = 0 THEN 1 ELSE 2 END, i FROM range(6) r(i);
+
+statement ok
+CREATE TABLE dedup_agg_probe(v INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_probe SELECT i FROM range(100) r(i);
+
+statement ok
+ANALYZE;
+
+query I
+WITH grouped AS (
+    SELECT group_id, count(*) AS n
+    FROM dedup_agg_source
+    GROUP BY group_id
+)
+SELECT count(*)
+FROM (
+    SELECT g.n, p.v
+    FROM grouped g
+    JOIN dedup_agg_equivalent e ON g.n = e.n
+    CROSS JOIN dedup_agg_probe p
+    WHERE p.v < (
+        SELECT avg(x.payload) FROM dedup_agg_equivalent x WHERE x.n = g.n
+    )
+);
+----
+60
+
+query II
+EXPLAIN
+WITH grouped AS (
+    SELECT group_id, count(*) AS n
+    FROM dedup_agg_source
+    GROUP BY group_id
+)
+SELECT g.n, p.v
+FROM grouped g
+JOIN dedup_agg_equivalent e ON g.n = e.n
+CROSS JOIN dedup_agg_probe p
+WHERE p.v < (
+    SELECT avg(x.payload) FROM dedup_agg_equivalent x WHERE x.n = g.n
+);
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
+
+# A reusable CTE is only an alternative domain source for a MARK join. A SINGLE join retains the observed payload
+# domain because using the broader CTE keys would evaluate scalar groups that later payload joins can discard.
+statement ok
+CREATE TABLE dedup_cte_keys AS SELECT i::INTEGER AS k FROM range(100) r(i);
+
+statement ok
+CREATE TABLE dedup_cte_payload AS SELECT (i % 100)::INTEGER AS k FROM range(10000) r(i);
+
+statement ok
+CREATE TABLE dedup_cte_measure AS SELECT (i % 100)::INTEGER AS k, i::INTEGER AS v FROM range(1000) r(i);
+
+statement ok
+ANALYZE;
+
+query I
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT count(*)
+FROM (
+    SELECT p.k, (SELECT count(*) FROM dedup_cte_measure m WHERE m.k = keyed.k) AS n
+    FROM dedup_cte_payload p
+    JOIN keyed ON p.k = keyed.k
+);
+----
+10000
+
+query II
+EXPLAIN
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT p.k, (SELECT count(*) FROM dedup_cte_measure m WHERE m.k = keyed.k) AS n
+FROM dedup_cte_payload p
+JOIN keyed ON p.k = keyed.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# The same rule applies when a correlated IN predicate is the condition of a LEFT join. The broader CTE key set must
+# not replace the exact payload domain merely because the CTE source itself is cheaper to scan.
+statement ok
+CREATE TABLE dedup_cte_probe AS SELECT i::INTEGER AS v FROM range(100) r(i);
+
+query II
+EXPLAIN
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT p.k, q.v
+FROM dedup_cte_payload p
+JOIN keyed ON p.k = keyed.k
+LEFT JOIN dedup_cte_probe q ON q.v IN (
+    SELECT m.v FROM dedup_cte_measure m WHERE m.k = keyed.k
+);
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Safety to evaluate additional groups does not imply that globally aggregating a large relation is profitable. Keep
+# the observed one-key domain below the aggregate.
+statement ok
+CREATE TABLE dedup_tiny_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_tiny_outer VALUES (1);
+
+statement ok
+CREATE TABLE dedup_tiny_measure(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_tiny_measure SELECT i % 1000, i FROM range(10000) r(i);
+
+statement ok
+ANALYZE dedup_tiny_outer;
+
+statement ok
+ANALYZE dedup_tiny_measure;
+
+query II
+SELECT k, (SELECT sum(v) FROM dedup_tiny_measure m WHERE m.k = o.k)
+FROM dedup_tiny_outer o;
+----
+1	45010
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM dedup_tiny_measure m WHERE m.k = o.k)
+FROM dedup_tiny_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*Join Type: (RIGHT_)?SEMI.*Aggregate.*

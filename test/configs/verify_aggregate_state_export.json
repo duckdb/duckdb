@@ -7,12 +7,14 @@
       "reason": "Explain/profiling output is different due to verification",
       "paths": [
         "test/optimizer/deliminator.test",
+        "test/optimizer/duplicate_eliminated_domain_estimates.test",
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",
         "test/optimizer/partition_stats_exactness.test",
         "test/optimizer/test_aggregate_function_rewrite.test",
         "test/optimizer/ordered_aggregate.test",
+        "test/sql/cte/materialized/test_materialized_cte.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/parquet_stats.test",
@@ -92,6 +94,7 @@
     {
       "reason": "FIXME: correlated COUNT(*) subqueries return NULL instead of 0 - empty groups produce NULL aggregate states",
       "paths": [
+        "test/optimizer/duplicate_eliminated_domain_count_regressions.test",
         "test/sql/subquery/scalar/test_count_star_subquery.test"
       ]
     }

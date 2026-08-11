@@ -183,6 +183,10 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 			}
 		}
 	}
+
+	// The caller's traversal no longer reaches the subtree left behind by the moved projection.
+	ProjectionPullup next(optimizer, root);
+	next.Optimize(op);
 }
 
 void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression>> &projection_map,

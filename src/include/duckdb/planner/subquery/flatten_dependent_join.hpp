@@ -22,12 +22,15 @@ class LogicalComparisonJoin;
 class LogicalCTERef;
 class LogicalExpressionGet;
 class LogicalJoin;
+class DelimJoinCTEOptimization;
 
 //! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
 //! flattened subquery
 class FlattenDependentJoins {
 public:
-	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
+	static unique_ptr<LogicalOperator>
+	DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan,
+	                       optional_ptr<DelimJoinCTEOptimization> optimization = nullptr);
 
 private:
 	struct UnnestingState {

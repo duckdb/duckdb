@@ -27,6 +27,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_optimizer.hpp"
 
 namespace duckdb {
 
@@ -71,7 +72,7 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	}
 }
 
-static bool ContainsDependentJoin(const LogicalOperator &op) {
+static inline bool ContainsDependentJoin(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		return true;
 	}
@@ -83,7 +84,7 @@ static bool ContainsDependentJoin(const LogicalOperator &op) {
 	return false;
 }
 
-static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
+static inline bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
 	if (plan.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    plan.type == LogicalOperatorType::LOGICAL_DELIM_JOIN || plan.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		auto &join = plan.Cast<LogicalComparisonJoin>();
@@ -113,7 +114,7 @@ static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
 	return true;
 }
 
-static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
+static inline bool VerifyPlannedExpressions(const LogicalOperator &plan) {
 	bool valid = true;
 	LogicalOperatorVisitor::EnumerateExpressions(plan, [&](const unique_ptr<Expression> *expression) {
 		if ((*expression)->HasSubquery()) {
@@ -196,7 +197,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
-		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		auto duplicate_eliminated_domain_strategy = DuplicateEliminatedDomainStrategy::Create(context);
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan),
+		                                                           duplicate_eliminated_domain_strategy.get());
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));

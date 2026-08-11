@@ -25,7 +25,8 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto column_ids = op.GetColumnIds();
-	if (!op.children.empty()) {
+	if (op.HasTableInOutInput()) {
+		D_ASSERT(op.children.size() == 1);
 		reference<PhysicalOperator> child = ResolveAndPlan(std::move(op.children[0]));
 		auto &child_types = child.get().types;
 
