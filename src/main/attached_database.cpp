@@ -154,6 +154,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Ide
 	deleter_payload = options.deleter_payload;
 	deleter_resource_type = options.deleter_resource_type;
 	deleter_resource_name = options.deleter_resource_name;
+	borrowed_resource_name = options.borrowed_resource_name;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -182,6 +183,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	deleter_payload = options.deleter_payload;
 	deleter_resource_type = options.deleter_resource_type;
 	deleter_resource_name = options.deleter_resource_name;
+	borrowed_resource_name = options.borrowed_resource_name;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name.GetIdentifierName(), info, options);

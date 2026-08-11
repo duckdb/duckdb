@@ -317,6 +317,35 @@ void DatabaseManager::DrainPendingTeardowns() {
 	}
 }
 
+void DatabaseManager::DetachResourceBorrowers(ClientContext &context, const string &resource_name) {
+	vector<Identifier> to_detach;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		for (auto &entry : databases) {
+			// Both sides come from ColId -> Identifier::GetIdentifierName(), matching how the manager keys names.
+			if (entry.second->GetBorrowedResourceName() == resource_name) {
+				to_detach.push_back(entry.second->GetName());
+			}
+		}
+	}
+	// Detach outside the lock: DetachDatabase takes databases_lock itself. A borrowed attachment binds no
+	// deleter, so this runs no teardown -- the resource is already gone.
+	for (auto &name : to_detach) {
+		try {
+			DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+		} catch (std::exception &) {
+			// Best-effort by design: DETACH refuses a connection's default database, and a detach that has to
+			// talk to the endpoint can fail now that it is gone. DESTROY goes through either way; the
+			// attachment is left in place for the user to DETACH.
+			//
+			// Deliberately NOT marked invalid here. ValidChecker::Invalidate would make the next use report
+			// why, but MetaTransaction::GetTransaction throws for *every* statement resolving through that
+			// database -- including USE and DETACH themselves. For the dominant failure (it is the default
+			// database) that recommends a recovery it has just made impossible, and the connection is stuck.
+		}
+	}
+}
+
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	auto &db_info = info.Cast<AlterDatabaseInfo>();
 

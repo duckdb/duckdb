@@ -99,6 +99,9 @@ struct AttachOptions {
 	//! logging only. resource_name is empty for an anonymous resource.
 	string deleter_resource_type;
 	string deleter_resource_name;
+	//! Registered resource this attachment BORROWS (from `ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`): it binds
+	//! no deleter and does not block DESTROY, it only lets DESTROY report what it invalidated. Empty if none.
+	string borrowed_resource_name;
 	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
 };
@@ -167,6 +170,10 @@ public:
 	bool IsEphemeral() const {
 		return ephemeral;
 	}
+	//! The registered external resource this attachment borrows, or empty if it borrows none.
+	const string &GetBorrowedResourceName() const {
+		return borrowed_resource_name;
+	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
@@ -211,6 +218,8 @@ private:
 	Value deleter_payload;
 	string deleter_resource_type;
 	string deleter_resource_name;
+	//! Registered resource this attachment borrows without owning; see AttachOptions.
+	string borrowed_resource_name;
 
 private:
 	//! Clean any (shared) resources held by the database.

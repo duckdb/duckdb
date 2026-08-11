@@ -30,7 +30,7 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 	// identifier REFERENCES a registered resource this attachment only BORROWS (no deleter; DETACH leaves
 	// it registered for DESTROY).
 	LaunchedResource launched;
-	string resource_type, resource_name;
+	string resource_type, resource_name, borrowed_resource_name;
 	bool owns_resource = false;
 	if (attach_info->external_resource) {
 		auto &external_resource = *attach_info->external_resource;
@@ -40,8 +40,10 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 				throw InvalidInputException("no external resource named \"%s\" is registered",
 				                            external_resource.reference_name);
 			}
-			// Resolve the current endpoint from the registered handle (status); bind no deleter.
+			// Resolve the current endpoint from the registered handle (status); bind no deleter. Record the
+			// borrow so DESTROY refuses while this attachment is still pointing at the resource.
 			launched = ProvisionExternalResource(context.client, instance->type, {}, instance->name, instance->handle);
+			borrowed_resource_name = instance->name;
 		} else {
 			resource_type = external_resource.provider;
 			resource_name = external_resource.alias.GetIdentifierName();
@@ -60,6 +62,7 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 		options.deleter_resource_type = resource_type;
 		options.deleter_resource_name = resource_name;
 	}
+	options.borrowed_resource_name = borrowed_resource_name;
 
 	// get the name and path of the database
 	auto &name = attach_info->name;

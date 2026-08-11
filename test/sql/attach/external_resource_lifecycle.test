@@ -144,3 +144,83 @@ query I
 SELECT count(*) FROM duckdb_external_resources() WHERE name = 'shared';
 ----
 0
+
+# DESTROY is never blocked by a live borrower: it is the operation that stops the meter, so it must not
+# depend on a DETACH that can itself be refused. It cleans up after itself instead — the attachments that
+# borrowed the resource are detached best-effort, since they now point at nothing.
+statement ok
+CREATE EXTERNAL RESOURCE 'quack@local' AS busy;
+
+statement ok
+ATTACH TO EXTERNAL RESOURCE busy AS still_here1;
+
+statement ok
+ATTACH TO EXTERNAL RESOURCE busy AS still_here2;
+
+# A second resource with its own borrower — DESTROY must only detach ITS borrowers.
+statement ok
+CREATE EXTERNAL RESOURCE 'quack@local' AS bystander;
+
+statement ok
+ATTACH TO EXTERNAL RESOURCE bystander AS untouched;
+
+statement ok
+DESTROY EXTERNAL RESOURCE busy;
+
+# Both borrowers of 'busy' are gone; the unrelated borrow survives.
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name IN ('still_here1', 'still_here2');
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'untouched';
+----
+1
+
+statement ok
+DESTROY EXTERNAL RESOURCE bystander;
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'untouched';
+----
+0
+
+# A borrower that DETACH refuses is left attached rather than force-removed: DETACH will not detach a
+# connection's default database. DESTROY still goes through, and the stale attachment is the user's to
+# clean up. (It is not marked invalid: that would also block the USE/DETACH needed to recover.)
+statement ok
+CREATE EXTERNAL RESOURCE 'quack@local' AS pinned;
+
+statement ok
+ATTACH TO EXTERNAL RESOURCE pinned AS in_use;
+
+statement ok
+USE in_use;
+
+statement ok
+DESTROY EXTERNAL RESOURCE pinned;
+
+# DESTROY went through — the resource is deregistered.
+query I
+SELECT count(*) FROM duckdb_external_resources() WHERE name = 'pinned';
+----
+0
+
+# The default database could not be detached, so it is still attached (pointing at nothing now).
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'in_use';
+----
+1
+
+# The connection is not wedged: USE and DETACH both still work, so the user can clean up.
+statement ok
+USE memory;
+
+statement ok
+DETACH in_use;
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'in_use';
+----
+0

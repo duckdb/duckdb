@@ -62,6 +62,12 @@ public:
 	void AddPendingTeardown(unique_ptr<ResourceDeleter> deleter);
 	//! Run queued teardowns, best-effort. Called once no transaction locks are held.
 	void DrainPendingTeardowns();
+	//! Detach every attachment borrowing the named external resource (from `ATTACH/CONNECT TO EXTERNAL
+	//! RESOURCE <name>`), after that resource has been destroyed. Best-effort: DETACH can legitimately
+	//! refuse (e.g. the default database) and DESTROY must go through regardless. Scans rather than keeping
+	//! a refcount -- the attachment list is the ground truth and cannot drift, and this runs only after a
+	//! teardown that has already made a network round-trip.
+	void DetachResourceBorrowers(ClientContext &context, const string &resource_name);
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database

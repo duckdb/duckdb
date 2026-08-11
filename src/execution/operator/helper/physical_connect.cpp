@@ -44,7 +44,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		// A string type PROVISIONS a resource this connection OWNS (deleter bound, DISCONNECT reaps it);
 		// a bare identifier REFERENCES a registered resource it only BORROWS (no deleter).
 		LaunchedResource launched;
-		string resource_type, resource_name;
+		string resource_type, resource_name, borrowed_resource_name;
 		bool owns_resource = false;
 		if (!external_resource.reference_name.empty()) {
 			auto instance = ExternalResourcesManager::Get(client).Lookup(external_resource.reference_name);
@@ -53,6 +53,8 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 				                            external_resource.reference_name);
 			}
 			launched = ProvisionExternalResource(client, instance->type, {}, instance->name, instance->handle);
+			// Record the borrow so DESTROY refuses while this connection is still using the resource.
+			borrowed_resource_name = instance->name;
 		} else {
 			resource_type = external_resource.provider;
 			resource_name = external_resource.alias.GetIdentifierName();
@@ -78,6 +80,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 			options.deleter_resource_type = resource_type;
 			options.deleter_resource_name = resource_name;
 		}
+		options.borrowed_resource_name = borrowed_resource_name;
 		if (options.db_type.empty()) {
 			DBPathAndType::ExtractExtensionPrefix(attach_info.path, options.db_type);
 		}

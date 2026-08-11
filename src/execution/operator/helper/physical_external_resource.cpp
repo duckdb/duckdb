@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/external_resources_manager.hpp"
 
 namespace duckdb {
@@ -46,10 +47,17 @@ static void DestroyExternalResource(ClientContext &client, const BoundExternalRe
 	if (!instance) {
 		throw InvalidInputException("external resource \"%s\" is not registered", data.name);
 	}
-	ResourceDeleter(DatabaseInstance::GetDatabase(client), instance->deleter_function, instance->deleter_payload,
-	                instance->type, instance->name)
+	// DESTROY is never blocked by a borrower (`ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`). It is the
+	// operation that stops the meter, so it must not be contingent on a DETACH that can itself be held up --
+	// by the default database, an in-flight query, or another connection. A stranded resource costs money
+	// indefinitely and is invisible; a dangling attachment costs nothing.
+	auto &db = DatabaseInstance::GetDatabase(client);
+	ResourceDeleter(db, instance->deleter_function, instance->deleter_payload, instance->type, instance->name)
 	    .Delete();
 	manager.Remove(data.name);
+	// Then clean up after it: the borrowing attachments now point at nothing, so detach them best-effort.
+	// Runs only after a successful teardown, so the scan never sits in front of the remote call.
+	DatabaseManager::Get(client).DetachResourceBorrowers(client, instance->name);
 }
 
 SourceResultType PhysicalExternalResource::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
