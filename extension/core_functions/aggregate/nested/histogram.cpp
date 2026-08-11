@@ -8,8 +8,6 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 namespace {
@@ -17,40 +15,14 @@ namespace {
 template <class T>
 struct HistogramLess {
 	inline bool operator()(const T &lhs, const T &rhs) const {
-		return std::less<T> {}(lhs, rhs);
+		return LessThan::Operation<T>(lhs, rhs);
 	}
 };
 
-//	Impose ordering on NaNs
-template <>
-struct HistogramLess<double> {
-	bool operator()(const double &lhs, const double &rhs) const {
-		if (isnan(lhs)) {
-			if (!isnan(rhs)) {
-				return false;
-			}
-			return Hash(lhs) < Hash(rhs);
-		} else if (isnan(rhs)) {
-			return true;
-		} else {
-			return std::less<double> {}(lhs, rhs);
-		}
-	}
-};
-
-template <>
-struct HistogramLess<float> {
-	bool operator()(const float &lhs, const float &rhs) const {
-		if (isnan(lhs)) {
-			if (!isnan(rhs)) {
-				return false;
-			}
-			return Hash(lhs) < Hash(rhs);
-		} else if (isnan(rhs)) {
-			return true;
-		} else {
-			return std::less<float> {}(lhs, rhs);
-		}
+template <class T>
+struct HistogramEquals {
+	inline bool operator()(const T &lhs, const T &rhs) const {
+		return Equals::Operation<T>(lhs, rhs);
 	}
 };
 
@@ -197,7 +169,7 @@ AggregateFunction GetMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
 		return GetMapTypeInternal<OP, T, DefaultMapType<map<T, idx_t, HistogramLess<T>>>>(type);
 	}
-	return GetMapTypeInternal<OP, T, DefaultMapType<unordered_map<T, idx_t>>>(type);
+	return GetMapTypeInternal<OP, T, DefaultMapType<unordered_map<T, idx_t, std::hash<T>, HistogramEquals<T>>>>(type);
 }
 
 template <class OP, bool IS_ORDERED>
