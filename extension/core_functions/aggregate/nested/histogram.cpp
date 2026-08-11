@@ -2,12 +2,13 @@
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+
+#include <cmath>
 
 namespace duckdb {
 
