@@ -52,7 +52,7 @@ protected:
 	void Merge(uint8_t other) {
 		value |= other;
 	}
-	uint8_t Value() {
+	uint8_t Value() const {
 		return value;
 	}
 
@@ -97,6 +97,12 @@ private:
 	static constexpr uint8_t OWNED_BY = 1;
 
 public:
+	DependencyDependentFlags() = default;
+	explicit DependencyDependentFlags(uint8_t raw_value) {
+		Merge(raw_value);
+	}
+
+public:
 	DependencyDependentFlags &Apply(DependencyDependentFlags other) {
 		Merge(other.Value());
 		return *this;
@@ -121,6 +127,24 @@ public:
 	}
 
 public:
+	uint8_t RawValue() const {
+		return Value();
+	}
+
+public:
+	//! The flags to fall back to for a dependency whose `LogicalDependency.flags` came out as the deserialization
+	//! default rather than a deliberately-set value - i.e. it was read from a database written before the `flags`
+	//! field existed. Indexes predate that field (unlike triggers, which require v2.0.0+ storage) and were always
+	//! non-blocking, so this corrects the otherwise-misleading blocking default specifically for them.
+	static DependencyDependentFlags LegacyDefaultFor(CatalogType dependent_type) {
+		DependencyDependentFlags result;
+		if (dependent_type != CatalogType::INDEX_ENTRY) {
+			result.SetBlocking();
+		}
+		return result;
+	}
+
+public:
 	string ToString() const override {
 		string result;
 		if (IsBlocking()) {
@@ -134,6 +158,10 @@ public:
 		}
 		return result;
 	}
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static DependencyDependentFlags Deserialize(Deserializer &deserializer);
 };
 
 struct CatalogEntryInfo {

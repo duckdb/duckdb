@@ -633,6 +633,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("CREATE TRIGGER requires a base table");
 	}
 	auto &table = *table_ptr;
+	// Dropping/altering the trigger's own table must not require CASCADE, so this dependency is non-blocking. If the
+	// trigger body also references this same table, the body-reference dependency below is added as blocking. since a
+	// duplicate entry is a no-op, adding the non-blocking one first is what makes it win.
+	create_trigger_info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
 	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
@@ -776,9 +780,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	} else {
 		validation_binder->Bind(*body_copy);
 	}
-
-	// Add table dependency
-	create_trigger_info.dependencies.AddDependency(table);
 
 	return schema;
 }

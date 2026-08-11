@@ -302,21 +302,9 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 	CreateSubject(transaction, info);
 }
 
-//! Whether the subject is the table that the dependent trigger is defined on
-static bool IsOwningTableOfTrigger(const CatalogEntryInfo &dependent, const CatalogEntryInfo &subject) {
-	if (dependent.type != CatalogType::TRIGGER_ENTRY || subject.type != CatalogType::TABLE_ENTRY) {
-		return false;
-	}
-	return subject.schema_path == dependent.schema_path && subject.name == dependent.table;
-}
-
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
                                            const LogicalDependencyList &dependencies) {
-	DependencyDependentFlags dependency_flags;
-	if (object.type != CatalogType::INDEX_ENTRY) {
-		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-		dependency_flags.SetBlocking();
-	}
+	auto legacy_default = DependencyDependentFlags::LegacyDefaultFor(object.type);
 
 	const auto object_info = GetLookupProperties(object);
 	// check for each object in the sources if they were not deleted yet
@@ -331,10 +319,9 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		auto flags = dependency_flags;
-		if (IsOwningTableOfTrigger(object_info, dependency.entry)) {
-			// a trigger is dropped along with the table it is defined on, so it must not block dropping that table
-			flags = DependencyDependentFlags();
+		auto flags = legacy_default;
+		if (!dependency.flags.IsBlocking()) {
+			flags = dependency.flags;
 		}
 		DependencyInfo info {
 		    /*dependent = */ DependencyDependent {object_info, flags},
@@ -773,8 +760,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		default:
 			break;
 		}
-		if (IsOwningTableOfTrigger(dep.EntryInfo(), old_info)) {
-			// a trigger does not prevent altering the table it is defined on, only referencing its body
+
+		// Triggers are the case when the dependency flags are taken into consideration during ALTER
+		// TODO - consider whether we should have separate types of dependency flags - one from DROP and other for ALTER
+		if (dep.EntryInfo().type == CatalogType::TRIGGER_ENTRY && !dep.Dependent().flags.IsBlocking()) {
 			disallow_alter = false;
 		}
 		if (disallow_alter) {

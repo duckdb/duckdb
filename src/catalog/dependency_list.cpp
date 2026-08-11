@@ -69,8 +69,13 @@ bool LogicalDependency::operator==(const LogicalDependency &other) const {
 }
 
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
+	AddDependency(entry, DependencyDependentFlags().SetBlocking());
+}
+
+void LogicalDependencyList::AddDependency(CatalogEntry &entry, DependencyDependentFlags flags) {
 	LogicalDependency dependency(entry);
-	set.insert(dependency);
+	dependency.flags = std::move(flags);
+	AddDependency(dependency);
 }
 
 void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
