@@ -132,7 +132,7 @@ static unique_ptr<Expression> BindSiblingFunction(FunctionBindExpressionInput &i
 static unique_ptr<Expression> IsNull(unique_ptr<Expression> expression) {
 	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 	result->GetChildrenMutable().push_back(std::move(expression));
-	return result;
+	return std::move(result);
 }
 
 static unique_ptr<Expression> CastToResultType(FunctionBindExpressionInput &input, unique_ptr<Expression> expression) {
