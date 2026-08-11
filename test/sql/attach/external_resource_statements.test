@@ -4,7 +4,7 @@
 
 # CREATE / REGISTER of an unregistered type parse and bind, then fail at provisioning with a clear error.
 statement error
-CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x (SPOT, REGION 'eu-west-1');
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x WITH (SPOT, REGION 'eu-west-1');
 ----
 <REGEX>:.*unknown resource type.*
 

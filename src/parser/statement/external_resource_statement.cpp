@@ -38,7 +38,7 @@ string ExternalResourceStatement::ToString() const {
 				stringified.push_back(
 				    StringUtil::Format("%s %s", SQLIdentifier(opt.first).ToString(opt.first), opt.second->ToString()));
 			}
-			result += " (" + StringUtil::Join(stringified, ", ") + ")";
+			result += " WITH (" + StringUtil::Join(stringified, ", ") + ")";
 		}
 		break;
 	case ExternalResourceOperation::REGISTER:

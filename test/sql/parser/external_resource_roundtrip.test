@@ -48,17 +48,30 @@ Invalid Input Error: external resource "MixedCase" is not registered
 # --- CREATE: name plus an option list, with and without option values ---------------------------------
 
 statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x WITH (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "weird name" WITH (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "select" WITH (REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+# Recipe create params must be introduced by WITH, so they can never be confused with the DuckDB-side
+# option list that ATTACH/CONNECT TO ... EXTERNAL RESOURCE carries in the same position.
+statement error
 CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x (SPOT, REGION 'eu-west-1')
 ----
-<REGEX>:.*unknown resource type.*
+<REGEX>:Parser Error:.*syntax error.*
 
+# WITH is only required when there are params; omitting the whole clause stays valid.
 statement error
-CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "weird name" (SPOT, REGION 'eu-west-1')
-----
-<REGEX>:.*unknown resource type.*
-
-statement error
-CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "select" (REGION 'eu-west-1')
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x
 ----
 <REGEX>:.*unknown resource type.*
 
