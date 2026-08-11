@@ -133,12 +133,14 @@ SET samply_tracks = 'query,';
 ----
 empty track
 
-# Query tracking retains the existing query profiler and marker behavior.
-statement ok
-PRAGMA profiling_output = '{TEST_DIR}/samply_profile.txt';
-
+# Query tracking gathers internal profile data without enabling normal profiler output.
 statement ok
 SET samply_tracks = 'query';
+
+query II
+SELECT current_setting('samply_tracks'), current_setting('enable_profiling');
+----
+query	NULL
 
 statement ok
 CREATE TABLE build_side AS SELECT i FROM range(10) t(i);
@@ -153,11 +155,6 @@ SELECT count(*) FROM probe_side JOIN build_side USING (i);
 
 statement ok
 SET samply_tracks = 'none';
-
-query I
-SELECT contains(content, 'Hash Join') FROM read_text('{TEST_DIR}/samply_profile.txt');
-----
-true
 
 statement ok
 SET enable_profiling = 'json';

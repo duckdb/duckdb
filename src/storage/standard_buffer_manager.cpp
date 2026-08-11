@@ -36,6 +36,7 @@ static void WriteGarbageIntoBuffer(BlockHandle &block) {
 
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(StandardBufferManager &manager) : manager(manager) {
+		track_allocations = false;
 	}
 
 	StandardBufferManager &manager;

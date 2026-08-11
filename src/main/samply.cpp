@@ -1,12 +1,13 @@
 #include "duckdb/main/profiler/samply.hpp"
 
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "utf8proc_wrapper.hpp"
 
 #include <cerrno>
-#include <cinttypes>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -14,8 +15,6 @@
 #include <limits>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
-#include <vector>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <cstdlib>
@@ -28,71 +27,15 @@
 #endif
 
 #ifdef __linux__
-#include <sys/mman.h>
 #include <sys/syscall.h>
 #endif
 
 #ifdef __APPLE__
-#include <mach/mach.h>
 #include <mach/mach_time.h>
-#include <net/if.h>
-#include <net/route.h>
 #include <pthread.h>
-#include <sys/sysctl.h>
 #endif
 
 namespace duckdb {
-
-string SamplyQueryMarkerName(const string &query) {
-	static constexpr idx_t MAX_QUERY_CHARACTERS = 500;
-	static constexpr idx_t MAX_MARKER_NAME_BYTES = 900;
-	const string prefix = "Query: ";
-	const string ellipsis = "…";
-
-	string normalized_query;
-	normalized_query.reserve(MinValue<idx_t>(query.size(), MAX_MARKER_NAME_BYTES));
-	bool pending_space = false;
-	for (const auto character : query) {
-		if (StringUtil::CharacterIsSpace(character)) {
-			pending_space = !normalized_query.empty();
-			continue;
-		}
-		if (pending_space) {
-			normalized_query += ' ';
-			pending_space = false;
-		}
-		normalized_query += character == '\0' ? '?' : character;
-	}
-	if (normalized_query.empty()) {
-		return prefix + "<empty>";
-	}
-	if (!Utf8Proc::IsValid(normalized_query.c_str(), normalized_query.size())) {
-		Utf8Proc::MakeValid(&normalized_query[0], normalized_query.size());
-	}
-
-	idx_t character_count = 0;
-	idx_t query_bytes = 0;
-	while (query_bytes < normalized_query.size() && character_count < MAX_QUERY_CHARACTERS) {
-		auto next_position =
-		    Utf8Proc::NextGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
-		if (prefix.size() + next_position > MAX_MARKER_NAME_BYTES) {
-			break;
-		}
-		query_bytes = next_position;
-		character_count++;
-	}
-
-	if (query_bytes == normalized_query.size()) {
-		return prefix + normalized_query;
-	}
-	if (character_count == MAX_QUERY_CHARACTERS) {
-		query_bytes = Utf8Proc::PreviousGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
-	}
-	while (prefix.size() + query_bytes + ellipsis.size() > MAX_MARKER_NAME_BYTES) {
-		query_bytes = Utf8Proc::PreviousGraphemeCluster(normalized_query.c_str(), normalized_query.size(), query_bytes);
-	}
-	return prefix + normalized_query.substr(0, query_bytes) + ellipsis;
-}
 
 #if defined(__linux__) || defined(__APPLE__)
 
@@ -292,43 +235,6 @@ static uint64_t SamplyUnixTimestamp() noexcept {
 	return static_cast<uint64_t>(timestamp.tv_sec) * 1000000000ULL + static_cast<uint64_t>(timestamp.tv_nsec);
 }
 
-struct SamplyNetworkInterface {
-	string name;
-	uint64_t received;
-	uint64_t transmitted;
-};
-
-static bool SamplyReadRSS(uint64_t &rss) noexcept {
-#ifdef __linux__
-	FILE *file = fopen("/proc/self/statm", "r");
-	if (!file) {
-		return false;
-	}
-	uint64_t total_pages = 0;
-	uint64_t resident_pages = 0;
-	auto result = fscanf(file, "%" SCNu64 " %" SCNu64, &total_pages, &resident_pages);
-	fclose(file);
-	if (result != 2) {
-		return false;
-	}
-	auto page_size = sysconf(_SC_PAGESIZE);
-	if (page_size <= 0 || resident_pages > std::numeric_limits<uint64_t>::max() / static_cast<uint64_t>(page_size)) {
-		return false;
-	}
-	rss = resident_pages * static_cast<uint64_t>(page_size);
-	return true;
-#else
-	mach_task_basic_info_data_t info;
-	mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-	if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
-	    KERN_SUCCESS) {
-		return false;
-	}
-	rss = info.resident_size;
-	return true;
-#endif
-}
-
 class SamplyResourceSampler {
 public:
 	static shared_ptr<SamplyResourceSampler> Get() {
@@ -340,12 +246,7 @@ public:
 	    : memory_references(0), network_references(0), http_references(0), pending_final_tracks(0),
 	      completed_final_tracks(0), stopping(false), periodic_sampling(periodic_sampling_p),
 	      directory(directory_p ? directory_p : ""), writer(directory_p ? directory.c_str() : nullptr),
-	      network_buffer() {
-		try {
-			network_interfaces.reserve(32);
-			network_buffer.reserve(idx_t(16) * 1024);
-		} catch (...) {
-		}
+	      received_baseline(HTTPUtil::GetTotalBytesReceived()), sent_baseline(HTTPUtil::GetTotalBytesSent()) {
 	}
 
 	~SamplyResourceSampler() {
@@ -367,6 +268,10 @@ public:
 			memory_references++;
 		}
 		if (SamplyTrackEnabled(tracks, SamplyTrack::NETWORK)) {
+			if (network_references == 0) {
+				received_baseline.store(HTTPUtil::GetTotalBytesReceived(), std::memory_order_relaxed);
+				sent_baseline.store(HTTPUtil::GetTotalBytesSent(), std::memory_order_relaxed);
+			}
 			network_references++;
 		}
 		if (SamplyTrackEnabled(tracks, SamplyTrack::HTTP)) {
@@ -433,115 +338,23 @@ private:
 #endif
 	}
 
-	bool ReadNetwork() noexcept {
-		network_interfaces.clear();
-#ifdef __linux__
-		FILE *file = fopen("/proc/net/dev", "r");
-		if (!file) {
-			return false;
-		}
-		char line[1024];
-		while (fgets(line, sizeof(line), file)) {
-			char name[64];
-			uint64_t counters[9];
-			if (sscanf(line,
-			           " %63[^:]: %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64 " %" SCNu64
-			           " %" SCNu64 " %" SCNu64,
-			           name, &counters[0], &counters[1], &counters[2], &counters[3], &counters[4], &counters[5],
-			           &counters[6], &counters[7], &counters[8]) != 10 ||
-			    strcmp(name, "lo") == 0) {
-				continue;
-			}
-			try {
-				network_interfaces.push_back({name, counters[0], counters[8]});
-			} catch (...) {
-				fclose(file);
-				return false;
-			}
-		}
-		fclose(file);
-		return true;
-#else
-		int mib[6] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0};
-		size_t needed = 0;
-		if (sysctl(mib, 6, nullptr, &needed, nullptr, 0) != 0) {
-			return false;
-		}
-		try {
-			if (network_buffer.size() < needed) {
-				network_buffer.resize(needed);
-			}
-		} catch (...) {
-			return false;
-		}
-		if (sysctl(mib, 6, network_buffer.data(), &needed, nullptr, 0) != 0) {
-			return false;
-		}
-		char *current = network_buffer.data();
-		char *end = current + needed;
-		while (current + sizeof(if_msghdr) <= end) {
-			auto message = reinterpret_cast<if_msghdr *>(current);
-			if (message->ifm_msglen == 0 || current + message->ifm_msglen > end) {
-				return false;
-			}
-			if (message->ifm_type == RTM_IFINFO2 && message->ifm_msglen >= sizeof(if_msghdr2)) {
-				auto info = reinterpret_cast<if_msghdr2 *>(current);
-				if ((info->ifm_flags & IFF_LOOPBACK) == 0) {
-					char name[IF_NAMESIZE];
-					if (if_indextoname(info->ifm_index, name)) {
-						try {
-							network_interfaces.push_back({name, info->ifm_data.ifi_ibytes, info->ifm_data.ifi_obytes});
-						} catch (...) {
-							return false;
-						}
-					}
-				}
-			}
-			current += message->ifm_msglen;
-		}
-		return true;
-#endif
-	}
-
 	void SampleNetwork(uint64_t timestamp) noexcept {
-		if (!ReadNetwork()) {
-			return;
-		}
-		uint64_t received_delta = 0;
-		uint64_t transmitted_delta = 0;
-		std::unordered_map<string, std::pair<uint64_t, uint64_t>> next_baselines;
-		try {
-			next_baselines.reserve(network_interfaces.size());
-			for (const auto &interface : network_interfaces) {
-				auto previous = network_baselines.find(interface.name);
-				if (previous != network_baselines.end()) {
-					if (interface.received >= previous->second.first) {
-						received_delta += interface.received - previous->second.first;
-					}
-					if (interface.transmitted >= previous->second.second) {
-						transmitted_delta += interface.transmitted - previous->second.second;
-					}
-				}
-				next_baselines.emplace(interface.name, std::make_pair(interface.received, interface.transmitted));
-			}
-			network_baselines.swap(next_baselines);
-		} catch (...) {
-			return;
-		}
-		if (received_delta <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-			writer.WriteSample(timestamp, "network-rx", static_cast<int64_t>(received_delta));
-		}
-		if (transmitted_delta <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-			writer.WriteSample(timestamp, "network-tx", static_cast<int64_t>(transmitted_delta));
-		}
+		auto received = HTTPUtil::GetTotalBytesReceived();
+		auto sent = HTTPUtil::GetTotalBytesSent();
+		auto previous_received = received_baseline.exchange(received, std::memory_order_relaxed);
+		auto previous_sent = sent_baseline.exchange(sent, std::memory_order_relaxed);
+		writer.WriteSample(timestamp, "http-download",
+		                   static_cast<int64_t>(received >= previous_received ? received - previous_received : 0));
+		writer.WriteSample(timestamp, "http-upload",
+		                   static_cast<int64_t>(sent >= previous_sent ? sent - previous_sent : 0));
 	}
 
 	void Sample(uint8_t tracks) noexcept {
 		auto timestamp = SamplyTimestamp();
 		if (SamplyTrackEnabled(tracks, SamplyTrack::MEMORY)) {
-			uint64_t rss;
-			if (SamplyReadRSS(rss) && rss <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-				writer.WriteSample(timestamp, "rss", static_cast<int64_t>(rss));
+			auto memory = Allocator::GetTrackedMemory();
+			if (memory <= static_cast<idx_t>(std::numeric_limits<int64_t>::max())) {
+				writer.WriteSample(timestamp, "tracked-memory", static_cast<int64_t>(memory));
 			}
 		}
 		if (SamplyTrackEnabled(tracks, SamplyTrack::NETWORK)) {
@@ -581,9 +394,6 @@ private:
 			}
 
 			Sample(tracks);
-			if (SamplyTrackEnabled(final_tracks, SamplyTrack::NETWORK)) {
-				network_baselines.clear();
-			}
 			if (final_tracks != 0) {
 				writer.Flush();
 				std::lock_guard<std::mutex> guard(lock);
@@ -619,9 +429,8 @@ private:
 	std::thread worker;
 	string directory;
 	SamplyCounterWriter writer;
-	vector<SamplyNetworkInterface> network_interfaces;
-	vector<char> network_buffer;
-	std::unordered_map<string, std::pair<uint64_t, uint64_t>> network_baselines;
+	atomic<idx_t> received_baseline;
+	atomic<idx_t> sent_baseline;
 };
 
 #endif
@@ -795,11 +604,11 @@ void WriteSamplyHTTPAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const 
 	                                time_to_first_byte_ns, request_range, response_content_range);
 }
 
-SamplyMarkerWriter::SamplyMarkerWriter(const char *directory_p) noexcept
+SamplyQueryWriter::SamplyQueryWriter(const char *directory_p) noexcept
     : directory(directory_p), file_descriptor(-1), failed(false), path {0} {
 }
 
-SamplyMarkerWriter::~SamplyMarkerWriter() {
+SamplyQueryWriter::~SamplyQueryWriter() {
 #if defined(__linux__) || defined(__APPLE__)
 	if (file_descriptor >= 0) {
 		close(file_descriptor);
@@ -807,7 +616,7 @@ SamplyMarkerWriter::~SamplyMarkerWriter() {
 #endif
 }
 
-bool SamplyMarkerWriter::Initialize() noexcept {
+bool SamplyQueryWriter::Initialize() noexcept {
 #if defined(__linux__) || defined(__APPLE__)
 	if (failed) {
 		return false;
@@ -823,33 +632,17 @@ bool SamplyMarkerWriter::Initialize() noexcept {
 		return false;
 	}
 	auto length =
-	    snprintf(path, sizeof(path), "%s/marker-%llu-%llu.txt", directory, static_cast<unsigned long long>(getpid()),
+	    snprintf(path, sizeof(path), "%s/query-%llu-%llu.jsonl", directory, static_cast<unsigned long long>(getpid()),
 	             static_cast<unsigned long long>(SamplyThreadId()));
 	if (length <= 0 || static_cast<idx_t>(length) >= sizeof(path)) {
 		failed = true;
 		return false;
 	}
-	file_descriptor = open(path, O_RDWR | O_CREAT | O_APPEND | O_CLOEXEC, S_IRUSR | S_IWUSR);
+	file_descriptor = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, S_IRUSR | S_IWUSR);
 	if (file_descriptor < 0) {
 		failed = true;
 		return false;
 	}
-#ifdef __linux__
-	if (ftruncate(file_descriptor, 1) != 0) {
-		failed = true;
-		return false;
-	}
-	auto mapping = mmap(nullptr, 1, PROT_READ | PROT_EXEC, MAP_PRIVATE, file_descriptor, 0);
-	if (mapping == MAP_FAILED) {
-		failed = true;
-		return false;
-	}
-	munmap(mapping, 1);
-	if (ftruncate(file_descriptor, 0) != 0) {
-		failed = true;
-		return false;
-	}
-#endif
 	return true;
 #else
 	failed = true;
@@ -857,7 +650,7 @@ bool SamplyMarkerWriter::Initialize() noexcept {
 #endif
 }
 
-bool SamplyMarkerWriter::Write(const char *data, idx_t size) noexcept {
+bool SamplyQueryWriter::Write(const char *data, idx_t size) noexcept {
 #if defined(__linux__) || defined(__APPLE__)
 	if (!Initialize()) {
 		return false;
@@ -880,68 +673,31 @@ bool SamplyMarkerWriter::Write(const char *data, idx_t size) noexcept {
 #endif
 }
 
-bool SamplyMarkerWriter::WriteMarker(uint64_t start_ns, uint64_t end_ns, const char *name) noexcept {
-#if defined(__linux__) || defined(__APPLE__)
-	char marker[1024];
-	auto length = snprintf(marker, sizeof(marker), "%llu %llu %s\n", static_cast<unsigned long long>(start_ns),
-	                       static_cast<unsigned long long>(end_ns), name);
-	if (length <= 0 || static_cast<idx_t>(length) >= sizeof(marker)) {
+bool SamplyQueryWriter::WriteProfile(uint64_t start_unix_ns, uint64_t duration_ns,
+                                     const string &profile_json) noexcept {
+	try {
+		auto record = StringUtil::Format(
+		    "{\"version\":1,\"start_unix_ns\":%llu,\"duration_ns\":%llu,\"profile\":", start_unix_ns, duration_ns);
+		record += profile_json;
+		record += "}\n";
+		return Write(record.data(), record.size());
+	} catch (...) {
 		failed = true;
 		return false;
 	}
-	return Write(marker, static_cast<idx_t>(length));
-#else
-	return false;
-#endif
 }
 
-const char *SamplyMarkerWriter::GetPath() const noexcept {
+const char *SamplyQueryWriter::GetPath() const noexcept {
 	return path;
 }
 
-static SamplyMarkerWriter &ThreadMarkerWriter() noexcept {
-	thread_local SamplyMarkerWriter writer;
+static SamplyQueryWriter &ThreadQueryWriter() noexcept {
+	thread_local SamplyQueryWriter writer;
 	return writer;
 }
 
-SamplyMarker::SamplyMarker() noexcept : start_ns(0), active(false) {
-}
-
-SamplyMarker::SamplyMarker(bool enabled) noexcept : start_ns(0), active(false) {
-#if defined(__linux__) || defined(__APPLE__)
-	if (enabled) {
-		start_ns = SamplyTimestamp();
-		active = start_ns != 0;
-	}
-#else
-	(void)enabled;
-#endif
-}
-
-SamplyMarker::SamplyMarker(SamplyMarker &&other) noexcept : start_ns(other.start_ns), active(other.active) {
-	other.active = false;
-}
-
-SamplyMarker &SamplyMarker::operator=(SamplyMarker &&other) noexcept {
-	start_ns = other.start_ns;
-	active = other.active;
-	other.active = false;
-	return *this;
-}
-
-void SamplyMarker::End(const char *name) noexcept {
-#if defined(__linux__) || defined(__APPLE__)
-	if (active) {
-		active = false;
-		ThreadMarkerWriter().WriteMarker(start_ns, SamplyTimestamp(), name);
-	}
-#else
-	(void)name;
-#endif
-}
-
-void SamplyMarker::Reset() noexcept {
-	active = false;
+void WriteSamplyQueryProfile(uint64_t start_unix_ns, uint64_t duration_ns, const string &profile_json) noexcept {
+	ThreadQueryWriter().WriteProfile(start_unix_ns, duration_ns, profile_json);
 }
 
 } // namespace duckdb

@@ -31,6 +31,8 @@ struct PrivateAllocatorData {
 	virtual ~PrivateAllocatorData();
 
 	AllocatorFreeType free_type = AllocatorFreeType::REQUIRES_FREE;
+	//! Whether this allocator owns backing allocations rather than forwarding to another allocator.
+	bool track_allocations = true;
 	//! Debug info for tracking allocations. Only initialized when the Allocator is constructed in a DEBUG build.
 	//! Code accessing this must check for nullptr because e.g. statically-linked extensions may have a different
 	//! DEBUG/release configuration than the host binary.
@@ -121,6 +123,9 @@ public:
 
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
+	DUCKDB_API static idx_t GetTrackedMemory();
+	DUCKDB_API static void AddTrackedMemory(idx_t size);
+	DUCKDB_API static void RemoveTrackedMemory(idx_t size);
 
 	static bool SupportsFlush();
 	static optional_idx DecayDelay();
@@ -142,6 +147,9 @@ private:
 	bool ShouldUseDebugInfo() const {
 		return private_data && private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE &&
 		       private_data->debug_info;
+	}
+	bool ShouldTrackAllocations() const {
+		return !private_data || private_data->track_allocations;
 	}
 };
 

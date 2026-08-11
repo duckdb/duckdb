@@ -3,8 +3,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/profiler/samply.hpp"
-
 #include "duckdb/main/settings.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -332,7 +330,6 @@ SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, b
 }
 
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
-	SamplyMarkerScope samply_marker(pipeline.GetSamplyMarkerName().c_str());
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	ExecutionBudget chunk_budget(max_chunks);

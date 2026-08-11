@@ -497,7 +497,6 @@ void Executor::Reset() {
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;
-	next_pipeline_id = 0;
 	completed_pipelines = 0;
 	total_pipelines = 0;
 	error_manager.Reset();

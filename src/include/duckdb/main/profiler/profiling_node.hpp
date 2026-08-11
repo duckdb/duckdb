@@ -29,6 +29,8 @@ struct OperatorMetrics {
 	idx_t rows_scanned;
 	idx_t row_groups_scanned;
 	idx_t total_row_groups_to_scan;
+	idx_t timing_start_ns;
+	idx_t timing_end_ns;
 
 	profiler_metrics_t GetMetrics(const GatheredMetrics &info) const;
 	void ResetMetrics() {
@@ -40,6 +42,8 @@ struct OperatorMetrics {
 		rows_scanned = 0;
 		row_groups_scanned = 0;
 		total_row_groups_to_scan = 0;
+		timing_start_ns = DConstants::INVALID_INDEX;
+		timing_end_ns = 0;
 		operator_type = PhysicalOperatorType::INVALID;
 		extra_info.clear();
 	}
@@ -53,6 +57,7 @@ struct OperatorMetrics {
 		return extra_info;
 	}
 	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
+	void UpdateTimingBounds(idx_t start_ns, idx_t end_ns);
 	void Merge(const OperatorMetrics &other);
 	void Accumulate(const OperatorMetrics &other);
 
@@ -90,6 +95,7 @@ private:
 	bool enabled;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
+	idx_t active_start_ns = 0;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to profiled operator information.

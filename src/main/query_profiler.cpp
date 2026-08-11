@@ -21,6 +21,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/common/json_document.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/profiler/samply.hpp"
 
 #include <utility>
 
@@ -122,15 +124,10 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
+	query_metrics.query_start_tick_ns = TimePoint::GetTickNanos();
+	query_metrics.query_start_unix_ns = NumericCast<uint64_t>(Timestamp::GetCurrentTimestamp().value) * 1000;
 	query_metrics.query_sql = query;
-	auto &config = ClientConfig::GetConfig(context);
-	string samply_marker_name;
-	const auto samply_query_enabled = SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY);
-	if (samply_query_enabled) {
-		samply_marker_name = SamplyQueryMarkerName(query);
-	}
-	query_metrics.latency_timer = make_uniq<MetricsTimer>(query_metrics, MetricQueryTotalTime::Name, IsEnabled(),
-	                                                      samply_query_enabled, std::move(samply_marker_name));
+	query_metrics.latency_timer = make_uniq<MetricsTimer>(query_metrics, MetricQueryTotalTime::Name, IsEnabled());
 }
 
 void QueryProfiler::Reset() {
@@ -225,11 +222,16 @@ void QueryProfiler::EndQuery() {
 
 	FinalizeMetricsInternal();
 	running = false;
+	auto &config = ClientConfig::GetConfig(context);
+	const bool emit_samply_profile =
+	    !is_explain_analyze && root && SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY);
+	const auto query_start_unix_ns = query_metrics.query_start_unix_ns;
+	const auto query_duration_ns = query_metrics.GetMetricTimingNanos(MetricQueryTotalTime::Name);
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler, and the "no_output" format emits no output.
-	if (!is_explain_analyze && ClientConfig::GetConfig(context).profiler_print_format != "no_output") {
+	if (!is_explain_analyze && config.enable_profiler && config.profiler_print_format != "no_output") {
 		emit_output = true;
 	}
 
@@ -239,6 +241,9 @@ void QueryProfiler::EndQuery() {
 	ToLogInternal();
 
 	guard.unlock();
+	if (emit_samply_profile) {
+		WriteSamplyQueryProfile(query_start_unix_ns, query_duration_ns, ToSamplyJSON());
+	}
 
 	if (emit_output) {
 		auto save_location = GetSaveLocation();
@@ -300,8 +305,7 @@ idx_t QueryProfiler::GetBytesWritten() const {
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
-	auto &config = ClientConfig::GetConfig(context);
-	return MetricsTimer(query_metrics, key, IsEnabled(), SamplyTrackEnabled(config.samply_tracks, SamplyTrack::QUERY));
+	return MetricsTimer(query_metrics, key, IsEnabled() && running);
 }
 
 string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
@@ -429,7 +433,13 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 
 	// Start the timing of the current operator.
+	active_start_ns = QueryProfiler::Get(context).GetElapsedNanos();
 	op.Start();
+}
+
+void OperatorMetrics::UpdateTimingBounds(idx_t start_ns, idx_t end_ns) {
+	timing_start_ns = timing_start_ns == DConstants::INVALID_INDEX ? start_ns : MinValue(timing_start_ns, start_ns);
+	timing_end_ns = MaxValue(timing_end_ns, end_ns);
 }
 
 void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk) {
@@ -455,6 +465,9 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	if (other.timing_start_ns != DConstants::INVALID_INDEX) {
+		UpdateTimingBounds(other.timing_start_ns, other.timing_end_ns);
+	}
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -483,6 +496,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 
 	auto &info = GetOperatorMetrics(*active_operator);
 	op.End();
+	info.UpdateTimingBounds(active_start_ns, QueryProfiler::Get(context).GetElapsedNanos());
 	info.GatherMetrics(context, op.Elapsed(), chunk);
 	active_operator = nullptr;
 }
@@ -827,16 +841,23 @@ void QueryProfiler::ToLog() const {
 	ToLogInternal();
 }
 
-static void OperatorToResultTree(const GatheredMetrics &settings, ProfilingNode &node, QueryProfileResult &result) {
+static void OperatorToResultTree(const GatheredMetrics &settings, ProfilingNode &node, QueryProfileResult &result,
+                                 bool include_timing_bounds) {
 	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(settings);
 	for (auto &entry : operator_metrics) {
 		result.AddValue(entry.first, std::move(entry.second));
+	}
+	const auto &metrics = node.GetOperatorMetrics();
+	if (include_timing_bounds && metrics.timing_start_ns != DConstants::INVALID_INDEX) {
+		auto &bounds = result.AddObject("timing_bounds");
+		bounds.AddValue("start_ns", Value::UBIGINT(metrics.timing_start_ns));
+		bounds.AddValue("end_ns", Value::UBIGINT(metrics.timing_end_ns));
 	}
 	if (node.GetChildCount() > 0) {
 		auto &children_list = result.AddList("children");
 		for (idx_t i = 0; i < node.GetChildCount(); i++) {
 			auto &child_result = children_list.AppendObject();
-			OperatorToResultTree(settings, *node.GetChild(i), child_result);
+			OperatorToResultTree(settings, *node.GetChild(i), child_result, include_timing_bounds);
 		}
 	}
 }
@@ -956,8 +977,8 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 	return result;
 }
 
-unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
-	if (Settings::Get<LegacyMetricsFormatSetting>(context)) {
+unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree(bool include_timing_bounds) const {
+	if (!include_timing_bounds && Settings::Get<LegacyMetricsFormatSetting>(context)) {
 		return ToLegacyResultTree();
 	}
 	auto result = make_uniq<QueryProfileResult>();
@@ -966,10 +987,25 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 		return result;
 	}
 	metrics->MetricsToProfileResult(*result);
+	if (include_timing_bounds && !query_metrics.GetTimingBounds().empty()) {
+		auto &bounds_list = result->AddList("timing_bounds");
+		vector<string> names;
+		for (const auto &entry : query_metrics.GetTimingBounds()) {
+			names.push_back(entry.first);
+		}
+		std::sort(names.begin(), names.end());
+		for (const auto &name : names) {
+			const auto &timing = query_metrics.GetTimingBounds().at(name);
+			auto &bounds = bounds_list.AppendObject();
+			bounds.AddValue("name", Value(name));
+			bounds.AddValue("start_ns", Value::UBIGINT(timing.start_ns));
+			bounds.AddValue("end_ns", Value::UBIGINT(timing.end_ns));
+		}
+	}
 	if (metrics->AnyOperatorMetricTracked()) {
 		auto &op_list = result->AddList("operator");
 		auto &op_node = op_list.AppendObject();
-		OperatorToResultTree(*metrics, *root, op_node);
+		OperatorToResultTree(*metrics, *root, op_node, include_timing_bounds);
 	}
 	return result;
 }
@@ -992,6 +1028,14 @@ string QueryProfiler::ToJSON() const {
 	auto result = ToResultTree();
 	writer.SetRoot(QueryProfileResultToJSON(writer, *result));
 	return writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN | JSONWriteFlags::PRETTY);
+}
+
+string QueryProfiler::ToSamplyJSON() const {
+	lock_guard<std::mutex> guard(lock);
+	JSONWriter writer;
+	auto result = ToResultTree(true);
+	writer.SetRoot(QueryProfileResultToJSON(writer, *result));
+	return writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {

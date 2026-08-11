@@ -158,6 +158,7 @@ public:
 	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API void ToLog() const;
 	DUCKDB_API string ToJSON() const;
+	DUCKDB_API string ToSamplyJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
@@ -166,6 +167,9 @@ public:
 	QueryProfileResult &GetResult();
 	//! Returns true if the last query produced a profiling tree (i.e. profiling was enabled and the query succeeded)
 	bool HasRoot() const;
+	idx_t GetElapsedNanos() const {
+		return query_metrics.GetElapsedNanos();
+	}
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
@@ -226,7 +230,7 @@ private:
 	//! Write metrics to log without acquiring the lock (must be called with lock held).
 	void ToLogInternal() const;
 
-	unique_ptr<QueryProfileResult> ToResultTree() const;
+	unique_ptr<QueryProfileResult> ToResultTree(bool include_timing_bounds = false) const;
 	unique_ptr<QueryProfileResult> ToLegacyResultTree() const;
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling

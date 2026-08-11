@@ -71,7 +71,11 @@ def write_profile_atomic(profile: dict[str, Any], output: Path) -> None:
 
 def read_sidecar(path: Path) -> tuple[int, int, dict[str, list[tuple[int, int]]]]:
     calibration: tuple[int, int] | None = None
-    samples: dict[str, list[tuple[int, int]]] = {"rss": [], "network-rx": [], "network-tx": []}
+    samples: dict[str, list[tuple[int, int]]] = {
+        "tracked-memory": [],
+        "http-download": [],
+        "http-upload": [],
+    }
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as error:
@@ -157,6 +161,38 @@ def read_http_sidecar(path: Path) -> list[dict[str, Any]]:
     return requests
 
 
+def read_query_sidecar(path: Path) -> list[dict[str, Any]]:
+    records = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        raise ProfileInjectionError(f"could not read query sidecar {path}: {error}") from error
+    for line_number, line in enumerate(lines, 1):
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+            if not isinstance(record, dict) or record.get("version") != 1:
+                raise ValueError("expected a version 1 query profile record")
+            start_unix_ns = record.get("start_unix_ns")
+            duration_ns = record.get("duration_ns")
+            profile = record.get("profile")
+            if (
+                isinstance(start_unix_ns, bool)
+                or not isinstance(start_unix_ns, int)
+                or start_unix_ns < 0
+                or isinstance(duration_ns, bool)
+                or not isinstance(duration_ns, int)
+                or duration_ns < 0
+                or not isinstance(profile, dict)
+            ):
+                raise ValueError("invalid query timestamps or profile")
+            records.append(record)
+        except (json.JSONDecodeError, ValueError) as error:
+            raise ProfileInjectionError(f"malformed {path}:{line_number}: {error}") from error
+    return records
+
+
 def _time_deltas(times: list[float]) -> list[float]:
     if not times:
         return []
@@ -170,13 +206,13 @@ def _memory_display() -> dict[str, Any]:
         "color": "red",
         "markerSchemaLocation": "timeline-memory",
         "sortWeight": 0,
-        "label": "Memory usage (RSS)",
+        "label": "Tracked Memory",
         "tooltipRows": [
             {
                 "type": "value",
                 "source": "accumulated",
                 "format": {"unit": "bytes"},
-                "label": "Resident memory",
+                "label": "Tracked memory",
             }
         ],
     }
@@ -290,29 +326,29 @@ def inject_counters(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
                 converted_samples.append((profile_ms, value))
             return ([sample[0] for sample in converted_samples], [sample[1] for sample in converted_samples])
 
-        rss_times, rss_values = converted("rss")
-        if rss_times:
-            rss_deltas = [
-                rss_values[0],
-                *(current - previous for previous, current in zip(rss_values, rss_values[1:])),
+        memory_times, memory_values = converted("tracked-memory")
+        if memory_times:
+            memory_deltas = [
+                memory_values[0],
+                *(current - previous for previous, current in zip(memory_values, memory_values[1:])),
             ]
             counters.append(
                 _make_counter(
-                    name="Memory usage (RSS)",
+                    name="Tracked Memory",
                     category="Memory",
-                    description="Resident memory used by the DuckDB process",
+                    description="Live bytes requested through DuckDB memory allocators",
                     pid=thread["pid"],
                     main_thread_index=main_thread_index,
-                    times=rss_times,
-                    counts=rss_deltas,
+                    times=memory_times,
+                    counts=memory_deltas,
                     display=_memory_display(),
                 )
             )
             added += 1
 
         for track, name, color, sort_weight in (
-            ("network-rx", "System network RX", "blue", 10),
-            ("network-tx", "System network TX", "green", 11),
+            ("http-download", "HTTP Download", "blue", 10),
+            ("http-upload", "HTTP Upload", "green", 11),
         ):
             times, values = converted(track)
             if times:
@@ -320,7 +356,7 @@ def inject_counters(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
                     _make_counter(
                         name=name,
                         category="Network",
-                        description="Bytes transferred across system non-loopback interfaces",
+                        description="HTTP payload bytes transferred by DuckDB",
                         pid=thread["pid"],
                         main_thread_index=main_thread_index,
                         times=times,
@@ -390,6 +426,219 @@ def _append_raw_marker(
     markers["phase"].append(1)
     markers["startTime"].append(start_time)
     markers["length"] += 1
+
+
+def _duckdb_category(profile: dict[str, Any]) -> int:
+    categories = profile["meta"].get("categories")
+    if not isinstance(categories, list):
+        categories = []
+        profile["meta"]["categories"] = categories
+    for index, category in enumerate(categories):
+        if isinstance(category, dict) and category.get("name") == "DuckDB":
+            return index
+    categories.append({"name": "DuckDB", "color": "purple", "subcategories": ["Other"]})
+    return len(categories) - 1
+
+
+def _ensure_duckdb_marker_schema(profile: dict[str, Any]) -> None:
+    schemas = profile["meta"].get("markerSchema")
+    if schemas is None:
+        schemas = []
+        profile["meta"]["markerSchema"] = schemas
+    elif not isinstance(schemas, list):
+        raise ProfileInjectionError("profile meta.markerSchema must be an array")
+    if any(isinstance(schema, dict) and schema.get("name") == "DuckDBProfile" for schema in schemas):
+        return
+    schemas.append(
+        {
+            "name": "DuckDBProfile",
+            "display": ["marker-chart", "marker-table"],
+            "chartLabel": "{marker.data.name}",
+            "tooltipLabel": "{marker.data.name}",
+            "tableLabel": "{marker.data.name}",
+            "data": [
+                {"key": "name", "label": "Name", "format": "unique-string", "searchable": True},
+                {"key": "kind", "label": "Kind", "format": "unique-string", "searchable": True},
+                {"key": "metric", "label": "Metric", "format": "unique-string", "searchable": True},
+                {"key": "activeDuration", "label": "Active time", "format": "duration"},
+                {"key": "path", "label": "Operator path", "format": "unique-string", "searchable": True},
+                {"key": "details", "label": "Details", "format": "unique-string", "searchable": True},
+            ],
+        }
+    )
+
+
+def _query_marker_name(sql: Any) -> str:
+    if not isinstance(sql, str):
+        return "Query: <unknown>"
+    normalized = " ".join(sql.split()).replace("\x00", "?") or "<empty>"
+    prefix = "Query: "
+    maximum_bytes = 900 - len(prefix.encode("utf-8"))
+    encoded = normalized.encode("utf-8")
+    if len(encoded) <= maximum_bytes:
+        return prefix + normalized
+    ellipsis = "…"
+    normalized = normalized[:500]
+    while len((normalized + ellipsis).encode("utf-8")) > maximum_bytes:
+        normalized = normalized[:-1]
+    return prefix + normalized + ellipsis
+
+
+def _metric_title(metric: str) -> str:
+    return metric.rsplit(".", 1)[-1].replace("_", " ").title()
+
+
+def inject_query_profiles(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
+    meta = profile.get("meta")
+    threads = profile.get("threads")
+    if not isinstance(meta, dict):
+        raise ProfileInjectionError("profile is missing its meta object")
+    start_time = _finite_number(meta.get("startTime"), "meta.startTime")
+    if not isinstance(threads, list) or not threads:
+        raise ProfileInjectionError("profile threads must be a non-empty array")
+
+    records_by_pid: dict[int, list[dict[str, Any]]] = {}
+    for sidecar in sidecars:
+        match = re.fullmatch(r"query-(\d+)-(\d+)\.jsonl", sidecar.name)
+        if match:
+            records_by_pid.setdefault(int(match.group(1)), []).extend(read_query_sidecar(sidecar))
+    if not records_by_pid:
+        return 0
+
+    category = _duckdb_category(profile)
+    _ensure_duckdb_marker_schema(profile)
+    added = 0
+    for pid, records in records_by_pid.items():
+        thread_match = _matching_thread(profile, pid)
+        if thread_match is None:
+            continue
+        thread_index, thread = thread_match
+        process_start = _finite_number(thread.get("processStartupTime"), f"threads[{thread_index}].processStartupTime")
+        process_end_value = thread.get("processShutdownTime")
+        process_end = (
+            math.inf
+            if process_end_value is None
+            else _finite_number(process_end_value, f"threads[{thread_index}].processShutdownTime")
+        )
+        markers = _marker_table(thread, thread_index)
+        string_array = thread["stringArray"]
+
+        for record in sorted(records, key=lambda item: item["start_unix_ns"]):
+            query_start = record["start_unix_ns"] / 1_000_000 - start_time
+            query_end = query_start + record["duration_ns"] / 1_000_000
+            if query_start < 0 or query_start < process_start or query_start > process_end:
+                continue
+            query_end = max(query_start, min(query_end, process_end))
+            query_profile = record["profile"]
+            candidates: list[tuple[float, float, str, dict[str, Any]]] = []
+
+            def add_marker(start: float, end: float, title: str, data: dict[str, Any]) -> None:
+                start = max(query_start, start)
+                end = min(query_end, max(start, end))
+                candidates.append((start, end, title, {"type": "DuckDBProfile", "name": title, **data}))
+
+            query = query_profile.get("query")
+            sql = query.get("sql") if isinstance(query, dict) else None
+            add_marker(query_start, query_end, _query_marker_name(sql), {"kind": "query"})
+
+            bounds_by_name = {}
+            timing_bounds = query_profile.get("timing_bounds")
+            if isinstance(timing_bounds, list):
+                for bounds in timing_bounds:
+                    if not isinstance(bounds, dict) or not isinstance(bounds.get("name"), str):
+                        continue
+                    start_ns = bounds.get("start_ns")
+                    end_ns = bounds.get("end_ns")
+                    if isinstance(start_ns, int) and isinstance(end_ns, int) and 0 <= start_ns <= end_ns:
+                        bounds_by_name[bounds["name"]] = (start_ns, end_ns)
+
+            planning_metrics = {
+                "parser.total_time": "Parser",
+                "planner.total_time": "Planner",
+                "optimizer.total_time": "Optimizer",
+                "physical_planner.total_time": "Physical Planner",
+            }
+            planning_spans = []
+            for metric, title in planning_metrics.items():
+                bounds = bounds_by_name.get(metric)
+                if bounds is None:
+                    continue
+                phase_start = query_start + bounds[0] / 1_000_000
+                phase_end = query_start + bounds[1] / 1_000_000
+                planning_spans.append((phase_start, phase_end))
+                add_marker(phase_start, phase_end, title, {"kind": "phase", "metric": metric})
+
+            if planning_spans:
+                planning_start = min(span[0] for span in planning_spans)
+                planning_end = max(span[1] for span in planning_spans)
+                add_marker(planning_start, planning_end, "Planning", {"kind": "phase"})
+            else:
+                planning_end = query_start
+            add_marker(planning_end, query_end, "Execution", {"kind": "phase"})
+
+            for metric, bounds in bounds_by_name.items():
+                if metric in planning_metrics or metric == "query.total_time":
+                    continue
+                if not metric.startswith(("planner.", "optimizer.", "physical_planner.")):
+                    continue
+                phase_start = query_start + bounds[0] / 1_000_000
+                phase_end = query_start + bounds[1] / 1_000_000
+                add_marker(
+                    phase_start,
+                    phase_end,
+                    _metric_title(metric),
+                    {"kind": "phase detail", "metric": metric},
+                )
+
+            def add_operators(nodes: Any, path: list[str]) -> None:
+                if not isinstance(nodes, list):
+                    return
+                for node in nodes:
+                    if not isinstance(node, dict):
+                        continue
+                    operator_type = node.get("type")
+                    operator_type = operator_type if isinstance(operator_type, str) else "UNKNOWN"
+                    operator_path = [*path, operator_type]
+                    bounds = node.get("timing_bounds")
+                    if isinstance(bounds, dict):
+                        start_ns = bounds.get("start_ns")
+                        end_ns = bounds.get("end_ns")
+                        if isinstance(start_ns, int) and isinstance(end_ns, int) and 0 <= start_ns <= end_ns:
+                            details = node.get("extra_info")
+                            payload: dict[str, Any] = {
+                                "kind": "operator",
+                                "path": " → ".join(operator_path),
+                                "details": (
+                                    json.dumps(details, separators=(",", ":"), ensure_ascii=False)
+                                    if isinstance(details, dict)
+                                    else ""
+                                ),
+                            }
+                            timing = node.get("timing")
+                            if isinstance(timing, (int, float)) and not isinstance(timing, bool):
+                                payload["activeDuration"] = timing * 1000
+                            add_marker(
+                                query_start + start_ns / 1_000_000,
+                                query_start + end_ns / 1_000_000,
+                                f"Operator: {operator_type}",
+                                payload,
+                            )
+                    add_operators(node.get("children"), operator_path)
+
+            add_operators(query_profile.get("operator"), [])
+            for marker_start, marker_end, title, data in sorted(candidates, key=lambda item: (item[0], -item[1])):
+                name_index = len(string_array)
+                string_array.append(title)
+                _append_raw_marker(
+                    markers,
+                    category=category,
+                    data=data,
+                    end_time=marker_end,
+                    name=name_index,
+                    start_time=marker_start,
+                )
+                added += 1
+    return added
 
 
 def inject_http_requests(profile: dict[str, Any], sidecars: Iterable[Path]) -> int:
@@ -497,12 +746,13 @@ def inject_http_requests(profile: dict[str, Any], sidecars: Iterable[Path]) -> i
     return added
 
 
-def inject_profile(raw_profile: Path, sidecar_directory: Path, output: Path) -> tuple[int, int]:
+def inject_profile(raw_profile: Path, sidecar_directory: Path, output: Path) -> tuple[int, int, int]:
     profile = load_profile(raw_profile)
     added_counters = inject_counters(profile, sorted(sidecar_directory.glob("counter-*.txt")))
     added_http_requests = inject_http_requests(profile, sorted(sidecar_directory.glob("http-*.txt")))
+    added_query_markers = inject_query_profiles(profile, sorted(sidecar_directory.glob("query-*.jsonl")))
     write_profile_atomic(profile, output)
-    return added_counters, added_http_requests
+    return added_counters, added_http_requests, added_query_markers
 
 
 def resolve_samply(argument: str | None) -> str:
@@ -600,10 +850,12 @@ def main(arguments: list[str] | None = None) -> int:
             preserve = True
             raise ProfileInjectionError(f"Samply did not create the raw profile {raw_profile}")
 
-        added_counters, added_http_requests = inject_profile(raw_profile, temporary_directory, output)
+        added_counters, added_http_requests, added_query_markers = inject_profile(
+            raw_profile, temporary_directory, output
+        )
         print(
             f"Injected {added_counters} DuckDB resource counter(s) and "
-            f"{added_http_requests} HTTP request(s) into {output}",
+            f"{added_http_requests} HTTP request(s), and {added_query_markers} query marker(s) into {output}",
             file=sys.stderr,
         )
 

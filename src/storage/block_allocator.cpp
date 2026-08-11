@@ -325,7 +325,9 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	if (!IsActive() || !IsEnabled() || size != block_size) {
 		return allocator.AllocateData(size);
 	}
-	return GetBlockAllocatorThreadLocalState(*this).Allocate();
+	auto result = GetBlockAllocatorThreadLocalState(*this).Allocate();
+	Allocator::AddTrackedMemory(size);
+	return result;
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
@@ -333,6 +335,7 @@ void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const 
 		return allocator.FreeData(pointer, size);
 	}
 	D_ASSERT(size == block_size);
+	Allocator::RemoveTrackedMemory(size);
 	GetBlockAllocatorThreadLocalState(*this).Free(pointer);
 }
 

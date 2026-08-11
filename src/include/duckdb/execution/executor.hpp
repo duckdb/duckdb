@@ -157,8 +157,6 @@ private:
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index
 	idx_t root_pipeline_idx;
-	//! The next query-local pipeline marker identifier
-	idx_t next_pipeline_id = 0;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! List of events

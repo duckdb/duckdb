@@ -22,6 +22,7 @@ public:
 
 	// Get current monotonic clock time in milliseconds.
 	static int64_t GetTickMs();
+	static int64_t GetTickNanos();
 	// Get two timepoints difference in different units
 	static double ElapsedSeconds(const TimePoint &start, const TimePoint &end);
 	static int64_t ElapsedMillis(const TimePoint &start, const TimePoint &end);

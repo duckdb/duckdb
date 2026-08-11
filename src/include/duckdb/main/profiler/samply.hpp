@@ -41,19 +41,18 @@ void WriteSamplyHTTPAttempt(uint64_t start_unix_ns, uint64_t duration_ns, const 
                             int32_t status_code, uint64_t bytes_received, int64_t time_to_first_byte_ns,
                             const string &request_range, const string &response_content_range) noexcept;
 
-//! Creates a single-line query label that fits in a Samply marker record.
-string SamplyQueryMarkerName(const string &query);
+//! Writes one completed query profile to the sidecar consumed by scripts/samply_profile.py.
+void WriteSamplyQueryProfile(uint64_t start_unix_ns, uint64_t duration_ns, const string &profile_json) noexcept;
 
-//! Writes the marker-file format consumed by Samply. This is public only for unit testing.
-class SamplyMarkerWriter {
+class SamplyQueryWriter {
 public:
-	explicit SamplyMarkerWriter(const char *directory = nullptr) noexcept;
-	~SamplyMarkerWriter();
+	explicit SamplyQueryWriter(const char *directory = nullptr) noexcept;
+	~SamplyQueryWriter();
 
-	SamplyMarkerWriter(const SamplyMarkerWriter &) = delete;
-	SamplyMarkerWriter &operator=(const SamplyMarkerWriter &) = delete;
+	SamplyQueryWriter(const SamplyQueryWriter &) = delete;
+	SamplyQueryWriter &operator=(const SamplyQueryWriter &) = delete;
 
-	bool WriteMarker(uint64_t start_ns, uint64_t end_ns, const char *name) noexcept;
+	bool WriteProfile(uint64_t start_unix_ns, uint64_t duration_ns, const string &profile_json) noexcept;
 	const char *GetPath() const noexcept;
 
 private:
@@ -117,41 +116,6 @@ private:
 	int file_descriptor;
 	bool failed;
 	char path[4096];
-};
-
-//! A movable timer whose completed span can be written as a named marker.
-class SamplyMarker {
-public:
-	SamplyMarker() noexcept;
-	explicit SamplyMarker(bool enabled) noexcept;
-	SamplyMarker(SamplyMarker &&other) noexcept;
-	SamplyMarker &operator=(SamplyMarker &&other) noexcept;
-
-	SamplyMarker(const SamplyMarker &) = delete;
-	SamplyMarker &operator=(const SamplyMarker &) = delete;
-
-	void End(const char *name) noexcept;
-	void Reset() noexcept;
-
-private:
-	uint64_t start_ns;
-	bool active;
-};
-
-class SamplyMarkerScope {
-public:
-	explicit SamplyMarkerScope(const char *name_p) noexcept : marker(name_p && name_p[0] != '\0'), name(name_p) {
-	}
-	~SamplyMarkerScope() {
-		marker.End(name);
-	}
-
-	SamplyMarkerScope(const SamplyMarkerScope &) = delete;
-	SamplyMarkerScope &operator=(const SamplyMarkerScope &) = delete;
-
-private:
-	SamplyMarker marker;
-	const char *name;
 };
 
 } // namespace duckdb

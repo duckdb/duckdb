@@ -15,7 +15,11 @@ from scripts import samply_profile
 
 def synthetic_profile():
     return {
-        "meta": {"startTime": 1000.0, "categories": [{"name": "Other", "color": "grey"}]},
+        "meta": {
+            "startTime": 1000.0,
+            "categories": [{"name": "Other", "color": "grey"}],
+            "markerSchema": [],
+        },
         "threads": [
             {"pid": 7, "processStartupTime": 0.0, "processShutdownTime": None},
             {"pid": 42, "processStartupTime": 50.0, "processShutdownTime": 300.0},
@@ -79,14 +83,14 @@ class SamplyInjectionTests(unittest.TestCase):
                 "\n".join(
                     [
                         "clock 1000000000 1000000000",
-                        "1000000000 rss 800",
-                        "1100000000 rss 1000",
-                        "1200000000 rss 1200",
-                        "1400000000 rss 9999",
-                        "1100000000 network-rx 25",
-                        "1200000000 network-rx 50",
-                        "1100000000 network-tx 10",
-                        "1200000000 network-tx 20",
+                        "1000000000 tracked-memory 800",
+                        "1100000000 tracked-memory 1000",
+                        "1200000000 tracked-memory 1200",
+                        "1400000000 tracked-memory 9999",
+                        "1100000000 http-download 25",
+                        "1200000000 http-download 50",
+                        "1100000000 http-upload 10",
+                        "1200000000 http-upload 20",
                     ]
                 )
                 + "\n",
@@ -112,7 +116,7 @@ class SamplyInjectionTests(unittest.TestCase):
     def test_ignores_sidecar_for_pid_not_in_profile(self):
         with tempfile.TemporaryDirectory() as directory_name:
             sidecar = Path(directory_name) / "counter-99.txt"
-            sidecar.write_text("clock 1 1\n2 rss 10\n", encoding="utf-8")
+            sidecar.write_text("clock 1 1\n2 tracked-memory 10\n", encoding="utf-8")
             profile = synthetic_profile()
             self.assertEqual(samply_profile.inject_counters(profile, [sidecar]), 0)
             self.assertEqual(profile["counters"], [{"name": "existing"}])
@@ -120,7 +124,7 @@ class SamplyInjectionTests(unittest.TestCase):
     def test_rejects_malformed_inputs_and_profiles(self):
         with tempfile.TemporaryDirectory() as directory_name:
             sidecar = Path(directory_name) / "counter-42.txt"
-            sidecar.write_text("1 rss 10\n", encoding="utf-8")
+            sidecar.write_text("1 tracked-memory 10\n", encoding="utf-8")
             with self.assertRaisesRegex(samply_profile.ProfileInjectionError, "no clock calibration"):
                 samply_profile.inject_counters(synthetic_profile(), [sidecar])
             sidecar.write_text("clock 1 1\n2 mystery 10\n", encoding="utf-8")
@@ -230,6 +234,66 @@ class SamplyInjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(samply_profile.ProfileInjectionError, "malformed"):
                 samply_profile.read_http_sidecar(sidecar)
 
+    def test_injects_query_phase_and_operator_markers_from_profiler_output(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            sidecar = Path(directory_name) / "query-42-100.jsonl"
+            query_profile = {
+                "query": {"sql": "  SELECT\n42  "},
+                "timing_bounds": [
+                    {"name": "parser.total_time", "start_ns": 1_000_000, "end_ns": 3_000_000},
+                    {"name": "planner.total_time", "start_ns": 3_000_000, "end_ns": 7_000_000},
+                    {"name": "optimizer.total_time", "start_ns": 7_000_000, "end_ns": 9_000_000},
+                    {"name": "physical_planner.total_time", "start_ns": 9_000_000, "end_ns": 10_000_000},
+                ],
+                "operator": [
+                    {
+                        "type": "TABLE_SCAN",
+                        "timing": 0.004,
+                        "timing_bounds": {"start_ns": 12_000_000, "end_ns": 30_000_000},
+                        "extra_info": {"Table": "integers"},
+                        "children": [],
+                    }
+                ],
+            }
+            sidecar.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "start_unix_ns": 1_100_000_000,
+                        "duration_ns": 50_000_000,
+                        "profile": query_profile,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            profile = synthetic_profile()
+            _add_marker_table(profile["threads"][1], main=True)
+            _add_marker_table(profile["threads"][2])
+            self.assertEqual(samply_profile.inject_query_profiles(profile, [sidecar]), 8)
+
+        thread = profile["threads"][1]
+        self.assertEqual(thread["markers"]["length"], 9)
+        self.assertEqual(
+            thread["stringArray"][1:],
+            [
+                "Query: SELECT 42",
+                "Planning",
+                "Parser",
+                "Planner",
+                "Optimizer",
+                "Physical Planner",
+                "Execution",
+                "Operator: TABLE_SCAN",
+            ],
+        )
+        operator = thread["markers"]["data"][-1]
+        self.assertEqual(operator["path"], "TABLE_SCAN")
+        self.assertEqual(operator["activeDuration"], 4.0)
+        self.assertEqual(thread["markers"]["startTime"][-1], 112.0)
+        self.assertEqual(thread["markers"]["endTime"][-1], 130.0)
+        self.assertEqual(profile["meta"]["markerSchema"][-1]["name"], "DuckDBProfile")
+
 
 FAKE_SAMPLY = r"""
 #!/usr/bin/env python3
@@ -250,13 +314,13 @@ if os.environ.get("FAKE_MALFORMED_PROFILE") == "1":
     output.write_text("not json", encoding="utf-8")
 else:
     profile = {
-        "meta": {"startTime": 1000.0},
+        "meta": {"startTime": 1000.0, "categories": [], "markerSchema": []},
         "threads": [{"pid": 42, "processStartupTime": 0.0, "processShutdownTime": 500.0}],
         "counters": [],
     }
     output.write_text(json.dumps(profile), encoding="utf-8")
     sidecar = Path(os.environ["DUCKDB_SAMPLY_DIR"]) / "counter-42.txt"
-    sidecar.write_text("clock 1000000000 1000000000\n1100000000 rss 1000\n", encoding="utf-8")
+    sidecar.write_text("clock 1000000000 1000000000\n1100000000 tracked-memory 1000\n", encoding="utf-8")
 raise SystemExit(int(os.environ.get("FAKE_RECORD_STATUS", "0")))
 """
 
@@ -307,7 +371,7 @@ class SamplyWrapperTests(unittest.TestCase):
         self.assertEqual(entry["argv"][-3:], ["--", "/bin/echo", "; not shell syntax"])
         self.assertFalse(Path(entry["sidecar"]).exists())
         with gzip.open(self.output, "rt", encoding="utf-8") as profile_file:
-            self.assertEqual(json.load(profile_file)["counters"][0]["name"], "Memory usage (RSS)")
+            self.assertEqual(json.load(profile_file)["counters"][0]["name"], "Tracked Memory")
 
     def test_load_is_run_and_failure_is_reported(self):
         with self.environment(FAKE_LOAD_STATUS="9"):

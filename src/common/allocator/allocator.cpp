@@ -25,6 +25,11 @@ namespace duckdb {
 
 constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
 
+static atomic<idx_t> &TrackedMemory() {
+	static atomic<idx_t> tracked_memory {0};
+	return tracked_memory;
+}
+
 AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
@@ -132,6 +137,9 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	if (!result) {
 		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
 	}
+	if (ShouldTrackAllocations()) {
+		AddTrackedMemory(size);
+	}
 	return result;
 }
 
@@ -145,6 +153,9 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 		private_data->debug_info->FreeData(pointer, size);
 	}
 #endif
+	if (ShouldTrackAllocations()) {
+		RemoveTrackedMemory(size);
+	}
 	free_function(private_data.get(), pointer, size);
 }
 
@@ -167,7 +178,30 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	if (!new_pointer) {
 		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
 	}
+	if (ShouldTrackAllocations()) {
+		if (size >= old_size) {
+			AddTrackedMemory(size - old_size);
+		} else {
+			RemoveTrackedMemory(old_size - size);
+		}
+	}
 	return new_pointer;
+}
+
+idx_t Allocator::GetTrackedMemory() {
+	return TrackedMemory().load(std::memory_order_relaxed);
+}
+
+void Allocator::AddTrackedMemory(idx_t size) {
+	TrackedMemory().fetch_add(size, std::memory_order_relaxed);
+}
+
+void Allocator::RemoveTrackedMemory(idx_t size) {
+	auto &tracked_memory = TrackedMemory();
+	auto current = tracked_memory.load(std::memory_order_relaxed);
+	while (!tracked_memory.compare_exchange_weak(current, current >= size ? current - size : 0,
+	                                             std::memory_order_relaxed)) {
+	}
 }
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
 	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared_ptr<Allocator>();

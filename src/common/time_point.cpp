@@ -14,6 +14,10 @@ int64_t TimePoint::GetTickMs() {
 	return std::chrono::duration_cast<std::chrono::milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
+int64_t TimePoint::GetTickNanos() {
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
 double TimePoint::ElapsedSeconds(const TimePoint &start, const TimePoint &end) {
 	D_ASSERT(start.value <= end.value);
 	return std::chrono::duration_cast<std::chrono::duration<double>>(end.value - start.value).count();

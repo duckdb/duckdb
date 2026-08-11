@@ -1,6 +1,7 @@
 #include "duckdb/common/http_util.hpp"
 
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -34,6 +35,16 @@
 #endif
 
 namespace duckdb {
+
+static atomic<idx_t> &TotalBytesReceived() {
+	static atomic<idx_t> total_bytes_received {0};
+	return total_bytes_received;
+}
+
+static atomic<idx_t> &TotalBytesSent() {
+	static atomic<idx_t> total_bytes_sent {0};
+	return total_bytes_sent;
+}
 
 HTTPParams::~HTTPParams() {
 }
@@ -141,6 +152,14 @@ bool HTTPUtil::IsIdempotent(RequestType type) {
 	return type != RequestType::POST_REQUEST;
 }
 
+idx_t HTTPUtil::GetTotalBytesReceived() {
+	return TotalBytesReceived().load(std::memory_order_relaxed);
+}
+
+idx_t HTTPUtil::GetTotalBytesSent() {
+	return TotalBytesSent().load(std::memory_order_relaxed);
+}
+
 bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &response) {
 	return response.ShouldRetry();
 }
@@ -196,8 +215,11 @@ public:
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
 		if (!info.response_handler && !info.content_handler) {
-			return TransformResult(client->Get(info.path, headers));
+			auto result = TransformResult(client->Get(info.path, headers));
+			info.bytes_received = result->body.size();
+			return result;
 		} else {
+			idx_t bytes_received = 0;
 			return TransformResult(client->Get(
 			    info.path, headers,
 			    [&](const duckdb_httplib::Response &response) {
@@ -205,7 +227,9 @@ public:
 				    return info.response_handler(*http_response);
 			    },
 			    [&](const char *data, size_t data_length) {
-				    return info.content_handler(const_data_ptr_cast(data), data_length);
+				    bytes_received += data_length;
+				    info.bytes_received = bytes_received;
+				    return !info.content_handler || info.content_handler(const_data_ptr_cast(data), data_length);
 			    }));
 		}
 	}
@@ -333,6 +357,10 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 			} catch (...) {
 			}
 		};
+		auto record_network_bytes = [&]() noexcept {
+			TotalBytesReceived().fetch_add(request.bytes_received, std::memory_order_relaxed);
+			TotalBytesSent().fetch_add(request.request_body_length, std::memory_order_relaxed);
+		};
 
 		try {
 			request.request_system_start = Timestamp::GetCurrentTimestamp();
@@ -340,11 +368,13 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 			response = client->Request(request);
 		} catch (...) {
 			request.request_monotonic_end = TimePoint::Tick();
+			record_network_bytes();
 			write_samply_attempt(nullptr);
 			LogRequest(request, nullptr);
 			throw;
 		}
 		request.request_monotonic_end = TimePoint::Tick();
+		record_network_bytes();
 		write_samply_attempt(response ? response.get() : nullptr);
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;

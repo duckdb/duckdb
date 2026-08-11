@@ -1,37 +1,30 @@
 #include "catch.hpp"
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/main/profiler/samply.hpp"
 #include "test_helpers.hpp"
-#include "utf8proc_wrapper.hpp"
 
 #include <fstream>
 
 using namespace duckdb;
 
-TEST_CASE("Samply markers are written in marker-file format", "[api][samply]") {
-	REQUIRE(SamplyQueryMarkerName("  SELECT\n  42;\t") == "Query: SELECT 42;");
-	REQUIRE(SamplyQueryMarkerName(" \n\t ") == "Query: <empty>");
-
-	auto long_query = StringUtil::Repeat("x", 501);
-	REQUIRE(SamplyQueryMarkerName(long_query) == "Query: " + StringUtil::Repeat("x", 499) + "…");
-	auto unicode_query_name = SamplyQueryMarkerName(StringUtil::Repeat("é", 450));
-	REQUIRE(Utf8Proc::IsValid(unicode_query_name.c_str(), unicode_query_name.size()));
-	REQUIRE(StringUtil::EndsWith(unicode_query_name, "…"));
-
-	auto directory = TestCreatePath("samply_markers");
+TEST_CASE("Samply query profiles are written in query sidecar format", "[api][samply]") {
+	auto directory = TestCreatePath("samply_query_profiles");
 	TestCreateDirectory(directory);
+	string path;
+	{
+		SamplyQueryWriter writer(directory.c_str());
+		REQUIRE(writer.WriteProfile(1000, 250, "{\"query\":{\"sql\":\"SELECT 42\"}}"));
+		path = writer.GetPath();
+	}
 
-	SamplyMarkerWriter writer(directory.c_str());
-	REQUIRE(writer.WriteMarker(10, 20, SamplyQueryMarkerName("SELECT 42;").c_str()));
-	REQUIRE(writer.WriteMarker(30, 40, "Pipeline 2: TABLE_SCAN[source] → HASH_JOIN[build]"));
-
-	string path = writer.GetPath();
-	REQUIRE(StringUtil::Contains(path, "/marker-"));
-	REQUIRE(StringUtil::EndsWith(path, ".txt"));
-
-	std::ifstream marker_file(path);
-	string contents((std::istreambuf_iterator<char>(marker_file)), std::istreambuf_iterator<char>());
-	REQUIRE(contents == "10 20 Query: SELECT 42;\n30 40 Pipeline 2: TABLE_SCAN[source] → HASH_JOIN[build]\n");
+	REQUIRE(StringUtil::Contains(path, "/query-"));
+	REQUIRE(StringUtil::EndsWith(path, ".jsonl"));
+	std::ifstream query_file(path);
+	string contents((std::istreambuf_iterator<char>(query_file)), std::istreambuf_iterator<char>());
+	REQUIRE(
+	    contents ==
+	    "{\"version\":1,\"start_unix_ns\":1000,\"duration_ns\":250,\"profile\":{\"query\":{\"sql\":\"SELECT 42\"}}}\n");
 }
 
 TEST_CASE("Samply counters are buffered and flushed in counter-file format", "[api][samply]") {
@@ -42,9 +35,9 @@ TEST_CASE("Samply counters are buffered and flushed in counter-file format", "[a
 		SamplyCounterWriter writer(directory.c_str());
 		REQUIRE(writer.WriteClock(100, 1000));
 		REQUIRE(writer.WriteClock(200, 2000));
-		REQUIRE(writer.WriteSample(110, "rss", 4096));
-		REQUIRE(writer.WriteSample(120, "network-rx", 50));
-		REQUIRE(writer.WriteSample(120, "network-tx", 25));
+		REQUIRE(writer.WriteSample(110, "tracked-memory", 4096));
+		REQUIRE(writer.WriteSample(120, "http-download", 50));
+		REQUIRE(writer.WriteSample(120, "http-upload", 25));
 		path = writer.GetPath();
 
 		std::ifstream before_flush(path);
@@ -54,7 +47,18 @@ TEST_CASE("Samply counters are buffered and flushed in counter-file format", "[a
 
 	std::ifstream counter_file(path);
 	string contents((std::istreambuf_iterator<char>(counter_file)), std::istreambuf_iterator<char>());
-	REQUIRE(contents == "clock 100 1000\n110 rss 4096\n120 network-rx 50\n120 network-tx 25\n");
+	REQUIRE(contents == "clock 100 1000\n110 tracked-memory 4096\n120 http-download 50\n120 http-upload 25\n");
+}
+
+TEST_CASE("DuckDB allocator reports tracked memory", "[api][samply]") {
+	Allocator allocator;
+	auto baseline = Allocator::GetTrackedMemory();
+	auto pointer = allocator.AllocateData(64);
+	REQUIRE(Allocator::GetTrackedMemory() == baseline + 64);
+	pointer = allocator.ReallocateData(pointer, 64, 96);
+	REQUIRE(Allocator::GetTrackedMemory() == baseline + 96);
+	allocator.FreeData(pointer, 96);
+	REQUIRE(Allocator::GetTrackedMemory() == baseline);
 }
 
 TEST_CASE("Samply HTTP attempts are written in HTTP sidecar format", "[api][samply]") {
@@ -119,8 +123,8 @@ TEST_CASE("Samply resources receive a final sample when deactivated", "[api][sam
 	auto lines = StringUtil::Split(contents, '\n');
 	REQUIRE(lines.size() == 4);
 	REQUIRE(StringUtil::StartsWith(lines[0], "clock "));
-	REQUIRE(StringUtil::Contains(lines[1], " rss "));
-	REQUIRE(StringUtil::Contains(lines[2], " network-rx "));
-	REQUIRE(StringUtil::Contains(lines[3], " network-tx "));
+	REQUIRE(StringUtil::Contains(lines[1], " tracked-memory "));
+	REQUIRE(StringUtil::Contains(lines[2], " http-download "));
+	REQUIRE(StringUtil::Contains(lines[3], " http-upload "));
 }
 #endif
