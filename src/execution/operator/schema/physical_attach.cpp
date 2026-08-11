@@ -46,7 +46,8 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 			borrowed_resource_name = instance->name;
 		} else {
 			resource_type = external_resource.provider;
-			resource_name = external_resource.alias.GetIdentifierName();
+			// The scoped resource is anonymous; label its log entries with the database it backs.
+			resource_name = attach_info->name.GetIdentifierName();
 			launched = ProvisionExternalResource(context.client, external_resource.provider, external_resource.params,
 			                                     resource_name);
 			owns_resource = true;

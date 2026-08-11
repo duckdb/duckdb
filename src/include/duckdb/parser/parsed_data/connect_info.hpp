@@ -42,8 +42,7 @@ public:
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_options;
 	//! Set of bound (key, value) options forwarded to the implicit ATTACH.
 	unordered_map<string, Value> options;
-	//! Set iff parsed as `ATTACH/CONNECT TO EXTERNAL RESOURCE ... CONNECT`: the resource to provision before
-	//! connecting.
+	//! Set iff parsed as `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE ...`: the resource to connect to.
 	unique_ptr<ExternalResourceOptions> external_resource;
 
 public:

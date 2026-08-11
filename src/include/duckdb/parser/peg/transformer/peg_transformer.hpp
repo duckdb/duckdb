@@ -4820,11 +4820,6 @@ public:
 	static unique_ptr<TransformResultValue>
 	FinalizeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
-	static void InitializeExternalResourceOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                        TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeExternalResourceOptionsTrampoline(PEGTransformer &transformer,
-	                                                                                  TransformStack &stack,
-	                                                                                  TransformStackFrame &frame);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED TRAMPOLINE RULES
 	//===--------------------------------------------------------------------===//
@@ -8546,8 +8541,6 @@ public:
 	TransformExternalResourceReferenceClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ExternalResourceOptions> TransformExternalResourceReferenceClause(PEGTransformer &transformer,
 	                                                                                    const Identifier &col_id);
-	static unique_ptr<TransformResultValue> TransformExternalResourceOptionsInternal(PEGTransformer &transformer,
-	                                                                                 ParseResult &parse_result);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

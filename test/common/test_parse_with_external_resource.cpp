@@ -11,7 +11,7 @@ using namespace duckdb;
 TEST_CASE("Parse ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE + ToString roundtrip", "[parse_external_resource]") {
 	Parser parser;
 	parser.ParseQuery(
-	    "ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1') "
+	    "ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1') "
 	    "AS my_db (READ_ONLY)");
 	REQUIRE(parser.statements.size() == 1);
 	REQUIRE(parser.statements[0]->type == StatementType::ATTACH_STATEMENT);
@@ -75,7 +75,7 @@ TEST_CASE("Parse ATTACH TO EXTERNAL RESOURCE (reference) + ToString roundtrip", 
 
 TEST_CASE("Parse CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE + ToString roundtrip", "[parse_external_resource]") {
 	Parser parser;
-	parser.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (region 'eu-west-1') (token 'abc')");
+	parser.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (region 'eu-west-1') (token 'abc')");
 	REQUIRE(parser.statements.size() == 1);
 	REQUIRE(parser.statements[0]->type == StatementType::CONNECT_STATEMENT);
 

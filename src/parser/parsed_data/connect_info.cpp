@@ -23,7 +23,7 @@ unique_ptr<ConnectInfo> ConnectInfo::Copy() const {
 
 string ConnectInfo::ToString() const {
 	if (external_resource) {
-		// `CONNECT TO [CREATE] EXTERNAL RESOURCE <resource> [(create opts)] [(connect opts)]`
+		// `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (create opts)] [(connect opts)]`
 		string result = "CONNECT TO " + external_resource->ToString();
 		if (!parsed_options.empty() || !options.empty()) {
 			vector<string> stringified;

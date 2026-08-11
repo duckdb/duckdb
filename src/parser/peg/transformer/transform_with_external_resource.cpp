@@ -7,12 +7,12 @@
 
 namespace duckdb {
 
-// `(ATTACH|CONNECT) TO [NEW] EXTERNAL RESOURCE <resource> [(opts)] ...` produces a normal
-// ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW '<type>' (opts)` provisions a fresh
+// `(ATTACH|CONNECT) TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (opts)] ...` produces a normal
+// ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY '<type>' WITH (opts)` provisions a fresh
 // resource this attachment owns (deleter bound, DETACH/DISCONNECT reaps it); a bare `<name>` references
 // an already-registered resource it only borrows.
 
-//! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)] — provision a fresh resource.
+//! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (create opts)] — provision a fresh resource.
 unique_ptr<ExternalResourceOptions> PEGTransformerFactory::TransformExternalResourceCreateClause(
     PEGTransformer &transformer, const string &string_literal,
     const optional<vector<GenericCopyOption>> &external_resource_options) {

@@ -43,7 +43,8 @@ create	ok	quack@local	yoooo	<null>	NULL
 status	ok	quack@local	yoooo	<null>	ready
 destroy	ok	quack@local	yoooo	<null>	NULL
 
-# An anonymous inline resource (ATTACH TO NEW) leaves resource_name NULL.
+# A scoped resource (ATTACH TO NEW) has no name of its own, so its log entries are labelled with the
+# database it backs — the only handle the user has on it.
 statement ok
 CALL truncate_duckdb_logs();
 
@@ -52,6 +53,23 @@ ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' AS anon;
 
 statement ok
 DETACH anon;
+
+query II
+SELECT operation, resource_name FROM duckdb_logs_parsed('ExternalResource') ORDER BY timestamp;
+----
+create	anon
+status	anon
+destroy	anon
+
+# CONNECT has no alias to borrow, so there the resource stays unlabelled.
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local';
+
+statement ok
+DISCONNECT;
 
 query II
 SELECT operation, resource_name IS NULL FROM duckdb_logs_parsed('ExternalResource') ORDER BY timestamp;

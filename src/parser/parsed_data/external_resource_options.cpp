@@ -12,7 +12,6 @@ unique_ptr<ExternalResourceOptions> ExternalResourceOptions::Copy() const {
 	for (auto &entry : parsed_params) {
 		result->parsed_params[entry.first] = entry.second->Copy();
 	}
-	result->alias = alias;
 	result->provider = provider;
 	result->params = params;
 	result->reference_name = reference_name;
@@ -24,7 +23,7 @@ string ExternalResourceOptions::ToString() const {
 	if (!reference_name.empty()) {
 		return "EXTERNAL RESOURCE " + SQLIdentifier(reference_name);
 	}
-	// Create form: NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)].
+	// Create form: NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (create opts)].
 	string result = "NEW TEMPORARY EXTERNAL RESOURCE " + SQLString(provider);
 	vector<string> stringified;
 	for (auto &entry : parsed_params) {
@@ -34,13 +33,12 @@ string ExternalResourceOptions::ToString() const {
 		stringified.push_back(StringUtil::Format("%s %s", entry.first, entry.second.ToSQLString()));
 	}
 	if (!stringified.empty()) {
-		result += " (" + StringUtil::Join(stringified, ", ") + ")";
+		result += " WITH (" + StringUtil::Join(stringified, ", ") + ")";
 	}
 	return result;
 }
 
 void ExternalResourceOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<Identifier>(100, "alias", alias);
 	serializer.WritePropertyWithDefault<string>(101, "provider", provider);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(102, "params", params);
 	serializer.WritePropertyWithDefault<string>(103, "reference_name", reference_name);
@@ -48,7 +46,6 @@ void ExternalResourceOptions::Serialize(Serializer &serializer) const {
 
 unique_ptr<ExternalResourceOptions> ExternalResourceOptions::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<ExternalResourceOptions>();
-	deserializer.ReadPropertyWithDefault<Identifier>(100, "alias", result->alias);
 	deserializer.ReadPropertyWithDefault<string>(101, "provider", result->provider);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(102, "params", result->params);
 	deserializer.ReadPropertyWithDefault<string>(103, "reference_name", result->reference_name);

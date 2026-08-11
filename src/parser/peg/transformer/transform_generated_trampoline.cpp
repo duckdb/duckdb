@@ -2902,9 +2902,6 @@ static const TransformFrameOps EXTERNAL_RESOURCE_CREATE_CLAUSE_OPS = {
 static const TransformFrameOps EXTERNAL_RESOURCE_REFERENCE_CLAUSE_OPS = {
     "ExternalResourceReferenceClause", &PEGTransformerFactory::InitializeExternalResourceReferenceClauseTrampoline,
     &PEGTransformerFactory::FinalizeExternalResourceReferenceClauseTrampoline};
-static const TransformFrameOps EXTERNAL_RESOURCE_OPTIONS_OPS = {
-    "ExternalResourceOptions", &PEGTransformerFactory::InitializeExternalResourceOptionsTrampoline,
-    &PEGTransformerFactory::FinalizeExternalResourceOptionsTrampoline};
 
 const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
@@ -3928,7 +3925,6 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExternalResourceSource", &EXTERNAL_RESOURCE_SOURCE_OPS},
 	    {"ExternalResourceCreateClause", &EXTERNAL_RESOURCE_CREATE_CLAUSE_OPS},
 	    {"ExternalResourceReferenceClause", &EXTERNAL_RESOURCE_REFERENCE_CLAUSE_OPS},
-	    {"ExternalResourceOptions", &EXTERNAL_RESOURCE_OPTIONS_OPS},
 	};
 	return result;
 }
@@ -24962,22 +24958,6 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExternalResource
 	auto col_id = frame.TakeResult<Identifier>(0);
 	auto result = TransformExternalResourceReferenceClause(transformer, col_id);
 	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
-}
-
-void PEGTransformerFactory::InitializeExternalResourceOptionsTrampoline(PEGTransformer &transformer,
-                                                                        TransformStack &stack,
-                                                                        TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(0), GENERIC_COPY_OPTION_LIST_OPS,
-	                TransformFrameResultTarget(frame.frame_index, 0));
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeExternalResourceOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                 TransformStackFrame &frame) {
-	auto result = frame.TakeResult<vector<GenericCopyOption>>(0);
-	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
 }
 
 } // namespace duckdb

@@ -45,7 +45,7 @@ SELECT count(*) FROM duckdb_databases() WHERE database_name = 'qk';
 # Arbitrary params are accepted and passed through to the create callback (which ignores them here),
 # including a bare flag (no value), which binds to boolean true like ATTACH/CONNECT options.
 statement ok
-ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1', SPOT, ANYTHING 'else') AS qk2;
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1', SPOT, ANYTHING 'else') AS qk2;
 
 query I
 SELECT count(*) FROM duckdb_databases() WHERE database_name = 'qk2';

@@ -38,7 +38,7 @@ public:
 	unordered_map<string, Value> options;
 	//! What to do on create conflict
 	OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	//! Set iff parsed as `ATTACH/CONNECT TO EXTERNAL RESOURCE ... ATTACH`: the resource to provision before attaching.
+	//! Set iff parsed as `ATTACH TO [NEW TEMPORARY] EXTERNAL RESOURCE ...`: the resource to attach.
 	unique_ptr<ExternalResourceOptions> external_resource;
 
 public:

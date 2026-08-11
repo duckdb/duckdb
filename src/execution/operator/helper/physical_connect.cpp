@@ -57,7 +57,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 			borrowed_resource_name = instance->name;
 		} else {
 			resource_type = external_resource.provider;
-			resource_name = external_resource.alias.GetIdentifierName();
+			// CONNECT has no alias to borrow a label from, so the resource stays unnamed in the logs.
 			launched =
 			    ProvisionExternalResource(client, external_resource.provider, external_resource.params, resource_name);
 			owns_resource = true;

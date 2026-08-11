@@ -10782,15 +10782,6 @@ PEGTransformerFactory::TransformExternalResourceReferenceClauseInternal(PEGTrans
 	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
 }
 
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformExternalResourceOptionsInternal(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.GetChild(0));
-	auto result = generic_copy_option_list;
-	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
-}
-
 void PEGTransformerFactory::RegisterGenerated() {
 	static const TransformRule builtin_transform_rules[] = {
 	    {"AlterStatement", &PEGTransformerFactory::TransformAlterStatementInternal},
@@ -11802,7 +11793,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExternalResourceSource", &PEGTransformerFactory::TransformExternalResourceSourceInternal},
 	    {"ExternalResourceCreateClause", &PEGTransformerFactory::TransformExternalResourceCreateClauseInternal},
 	    {"ExternalResourceReferenceClause", &PEGTransformerFactory::TransformExternalResourceReferenceClauseInternal},
-	    {"ExternalResourceOptions", &PEGTransformerFactory::TransformExternalResourceOptionsInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
 		sql_transform_functions[rule.name] = rule.transform;

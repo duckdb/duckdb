@@ -18,15 +18,12 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-//! The `EXTERNAL RESOURCE '<type>' [AS r] [(params)]` clause of a `ATTACH/CONNECT TO EXTERNAL RESOURCE ...
-//! ATTACH|CONNECT` statement. Owned by AttachInfo/ConnectInfo. Separates the resource TYPE (the recipe/registry key)
+//! The `[NEW TEMPORARY] EXTERNAL RESOURCE '<type>' [WITH (params)]` clause of an
+//! `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` statement. Owned by AttachInfo/ConnectInfo. Separates the resource TYPE (the recipe/registry key)
 //! from its create PARAMS, which is why provider is its own field rather than a magic key inside the params.
 struct ExternalResourceOptions {
 	//! Create params (key -> expression); transient — consumed at bind, then `params` holds them.
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_params;
-	//! Optional resource alias (`AS r`). Currently informational (a scoped resource is anonymous;
-	//! naming becomes meaningful with the instance registry).
-	Identifier alias;
 	//! The resource type (provider) — the registered external-resource-type name to provision. A string
 	//! literal, so it is fixed at parse time.
 	string provider;
@@ -38,7 +35,7 @@ struct ExternalResourceOptions {
 	string reference_name;
 
 	unique_ptr<ExternalResourceOptions> Copy() const;
-	//! Renders `EXTERNAL RESOURCE '<type>' [AS r] (k v, ...)` (without the leading WITH or trailing verb).
+	//! Renders `NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (k v, ...)]`, or the reference form.
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;

@@ -26,7 +26,7 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 
 string AttachInfo::ToString() const {
 	string result = "";
-	// `ATTACH TO [CREATE] EXTERNAL RESOURCE <resource> [(create opts)] [AS name] [(attach opts)]`
+	// `ATTACH TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (create opts)] [AS name] [(attach opts)]`
 	if (external_resource) {
 		result += "ATTACH TO " + external_resource->ToString();
 		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
