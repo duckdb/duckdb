@@ -1,0 +1,23 @@
+# name: test/sql/settings/lock_temp_directory_unset.test
+# description: Without lock_temp_directory, disabling the local file system also stops the buffer manager spilling
+# group: [settings]
+
+require vector_size 2048
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+PRAGMA temp_directory='{TEST_DIR}/lock_temp_directory_unset'
+
+statement ok
+PRAGMA memory_limit='2MB'
+
+statement ok
+SET disabled_filesystems='LocalFileSystem'
+
+statement error
+CREATE TEMP TABLE t2 AS SELECT * FROM range(1000000);
+----
+File system LocalFileSystem has been disabled by configuration

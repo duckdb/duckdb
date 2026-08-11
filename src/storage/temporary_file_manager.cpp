@@ -310,7 +310,7 @@ bool TemporaryFileHandle::DeleteIfEmpty() {
 	}
 	// the file is empty: delete it
 	handle.reset();
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	fs.RemoveFile(path);
 	return true;
 }
@@ -331,7 +331,7 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	if (handle) {
 		return;
 	}
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 	// Temp files have no per-file IO_MODE; they follow the global default_io_mode setting.
 	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
@@ -347,7 +347,7 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 		// as a result we can truncate the file
 #ifndef WIN32 // this ended up causing issues when sorting
 		auto max_index = index_manager.GetMaxIndex();
-		auto &fs = FileSystem::GetFileSystem(db);
+		auto &fs = FileSystem::GetTemporaryFileSystem(db);
 		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index + 1)));
 #endif
 	}
@@ -704,7 +704,7 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 }
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
-	return FileSystem::GetFileSystem(db).JoinPath(
+	return FileSystem::GetTemporaryFileSystem(db).JoinPath(
 	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
 	                                       identifier.file_index.GetIndex()));
 }
@@ -733,7 +733,7 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
                                                    optional_idx max_swap_space)
     : db(db), temp_directory(std::move(path_p)),
       temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
@@ -746,7 +746,7 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// first release any temporary files
 	temp_file.reset();
 	// then delete the temporary file directory
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	if (!temp_directory.empty()) {
 		bool delete_directory = created_directory;
 		vector<string> files_to_delete;

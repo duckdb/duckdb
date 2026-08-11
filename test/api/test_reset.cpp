@@ -188,6 +188,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "experimental_parallel_csv",
 	    "lock_configuration",            // cant change this while db is running
 	    "disabled_filesystems",          // cant change this while db is running
+	    "lock_temp_directory",           // cant be unset once set
 	    "enable_external_access",        // cant change this while db is running
 	    "allow_unsigned_extensions",     // cant change this while db is running
 	    "allow_community_extensions",    // cant change this while db is running

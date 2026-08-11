@@ -1,0 +1,70 @@
+# name: test/sql/settings/lock_temp_directory.test
+# description: Test lock_temp_directory - the buffer manager keeps spilling when the local file system is disabled
+# group: [settings]
+
+require vector_size 2048
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+PRAGMA temp_directory='{TEST_DIR}/lock_temp_directory'
+
+statement ok
+PRAGMA memory_limit='2MB'
+
+query I
+SELECT current_setting('lock_temp_directory')
+----
+false
+
+statement ok
+SET lock_temp_directory=true
+
+query I
+SELECT current_setting('lock_temp_directory')
+----
+true
+
+# the exempted directory can no longer be pointed somewhere else
+statement error
+PRAGMA temp_directory='{TEST_DIR}/lock_temp_directory_elsewhere'
+----
+the temp directory has been locked
+
+statement error
+RESET temp_directory
+----
+the temp directory has been locked
+
+# ...and the lock cannot be lifted to get that ability back
+statement error
+SET lock_temp_directory=false
+----
+the temp directory has been locked
+
+statement error
+RESET lock_temp_directory
+----
+the temp directory has been locked
+
+statement ok
+SET disabled_filesystems='LocalFileSystem'
+
+# reading a local file is still refused
+statement error
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
+----
+File system LocalFileSystem has been disabled by configuration
+
+# ...but this does not fit in memory_limit and still spills to the locked temp directory.
+# A TEMP table on purpose: a persistent one would have to commit through the file system
+# this test has just disabled, which is not what is under test here.
+statement ok
+CREATE TEMP TABLE t2 AS SELECT * FROM range(1000000);
+
+query I
+SELECT count(*) FROM t2
+----
+1000000

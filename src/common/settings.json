@@ -980,6 +980,13 @@
         "default_value": "false"
     },
     {
+        "name": "lock_temp_directory",
+        "description": "Fix the temp directory in place: 'temp_directory' can no longer be modified, and the temporary files written by the buffer manager bypass 'disabled_filesystems'",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "log_query_path",
         "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
         "type": "VARCHAR",

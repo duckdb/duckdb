@@ -1460,6 +1460,18 @@ struct LockConfigurationSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct LockTempDirectorySetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "lock_temp_directory";
+	static constexpr const char *Description =
+	    "Fix the temp directory in place: 'temp_directory' can no longer be modified, and the temporary files written "
+	    "by the buffer manager bypass 'disabled_filesystems'";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LogQueryPathSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "log_query_path";

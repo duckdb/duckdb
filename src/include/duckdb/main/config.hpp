@@ -103,6 +103,12 @@ struct DBConfigOptions {
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
+	//! Whether the temporary directory is fixed in place. Once set this cannot be unset: 'temporary_directory' can no
+	//! longer be modified, and in exchange the buffer manager reaches its temporary files through the local file
+	//! system rather than the virtual one, so 'disabled_filesystems' no longer applies to them. Declared at the end of
+	//! the bool run so it takes a padding byte the struct already had: extensions are compiled against this layout,
+	//! and every member above keeps the offset it has in a release without this one.
+	bool lock_temp_directory = false;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
