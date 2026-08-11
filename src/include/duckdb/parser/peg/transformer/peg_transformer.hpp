@@ -426,6 +426,11 @@ public:
 	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
 	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
 	                                unordered_map<string, Value> &options, const char *statement_name);
+	//! Fold `(k v, ...)` into unbound expressions, for statements that resolve every option at bind time
+	//! instead of splitting literals out at parse time. Validates like SplitGenericOptions.
+	static void CollectGenericOptions(const vector<GenericCopyOption> &options_in,
+	                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+	                                  const char *statement_name);
 	static void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
 	                                unique_ptr<AlterInfo> alter_info);
 	static void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,

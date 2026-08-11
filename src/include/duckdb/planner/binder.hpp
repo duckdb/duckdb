@@ -468,6 +468,11 @@ private:
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
 	BoundStatement Bind(ExternalResourceStatement &stmt);
+	//! Bind + constant-fold a single EXTERNAL RESOURCE expression (a create param, or the REGISTER handle).
+	Value BindExternalResourceValue(unique_ptr<ParsedExpression> &expr);
+	//! Bind + constant-fold the create params of an EXTERNAL RESOURCE statement or clause.
+	void BindExternalResourceParams(case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_params,
+	                                unordered_map<string, Value> &params);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
