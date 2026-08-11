@@ -19,14 +19,7 @@ unique_ptr<ExternalResourceOptions> PEGTransformerFactory::TransformExternalReso
 	auto result = make_uniq<ExternalResourceOptions>();
 	result->provider = string_literal;
 	if (external_resource_options) {
-		for (const auto &opt : *external_resource_options) {
-			if (!opt.expression && opt.children.empty()) {
-				// Bare flag (e.g. `(SPOT)`): boolean true, mirroring ATTACH/CONNECT option handling.
-				result->parsed_params[opt.name.GetIdentifierName()] = make_uniq<ConstantExpression>(Value(true));
-			} else {
-				result->parsed_params[opt.name.GetIdentifierName()] = opt.GetFirstChildOrExpression();
-			}
-		}
+		CollectGenericOptions(*external_resource_options, result->parsed_params, "EXTERNAL RESOURCE");
 	}
 	return result;
 }

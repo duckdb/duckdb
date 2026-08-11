@@ -73,6 +73,12 @@ SELECT count(*) FROM duckdb_external_resources() WHERE name = 'shared_res';
 statement ok
 DESTROY EXTERNAL RESOURCE shared_res;
 
+# Create params go through the same validation as any other option list, on this path too.
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (REGION NULL) AS qknull;
+----
+<REGEX>:.*NULL is not supported as a valid option for EXTERNAL RESOURCE option "region".*
+
 # An unknown resource type errors.
 statement error
 ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'does-not-exist' AS bad;
