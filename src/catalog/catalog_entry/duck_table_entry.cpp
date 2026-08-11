@@ -509,10 +509,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		    auto &trig = concurrent_entry.Cast<TriggerCatalogEntry>();
 		    for (const auto &col : trig.columns) {
 			    if (col == info.old_name) {
-				    throw TransactionException(
-				        "Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
-				        "references column \"%s\" which is being renamed",
-				        name, trig.name, info.old_name);
+				    throw TransactionException("Catalog write-write conflict on alter with \"%s\": trigger \"%s\" "
+				                               "references column \"%s\" which is being renamed",
+				                               name, trig.name, info.old_name);
 			    }
 		    }
 	    });
