@@ -5,6 +5,17 @@
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
+statement ok
+create table tbl1(t timestamp);
+
+statement ok
+insert into tbl1 values (timestamp '-infinity'), (timestamp '2025-01-01'), (timestamp 'infinity'), (NULL);
+
+query I
+select count(*) from tbl1 where t::date == date 'infinity';
+----
+1
+
 require icu
 
 foreach timezone UTC ECT

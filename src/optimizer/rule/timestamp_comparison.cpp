@@ -81,6 +81,9 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		auto original_val = result.GetValue<duckdb::date_t>();
 		auto no_seconds = dtime_t(0);
 
+		if (!original_val.IsFinite()) {
+			return nullptr;
+		}
 		// original date as timestamp with no seconds
 		auto original_val_ts = Value::TIMESTAMP(original_val, no_seconds);
 		auto original_val_for_comparison = make_uniq<BoundConstantExpression>(original_val_ts);
