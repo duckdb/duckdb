@@ -195,6 +195,7 @@ void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
 }
 
 void Optimizer::RunBuiltInOptimizers() {
+	const bool reusable_prepared_plan = plan->type == LogicalOperatorType::LOGICAL_PREPARE;
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -401,12 +402,9 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
-	// Skip when the plan contains a DML CTE: statistics are captured at plan time
-	// and do not reflect the table state after the DML executes.  Propagating them
-	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
-	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
+	// Cached plans and DML CTEs can outlive the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	if (!CTEContainsDML(*plan)) {
+	if (!reusable_prepared_plan && !CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
