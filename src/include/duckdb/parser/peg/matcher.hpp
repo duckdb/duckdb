@@ -113,7 +113,7 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::ON,
+	           idx_t &max_token_index, IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
 	           ParserPackratCache *packrat_cache_p = nullptr)
 	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
 	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
@@ -130,7 +130,7 @@ struct MatchState {
 	reference_set_t<const Matcher> added_suggestions;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
-	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::ON;
+	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	ParserPackratCache *packrat_cache;
 
 	void UpdateMaxTokenIndex() {
@@ -147,11 +147,11 @@ struct MatchState {
 	void FoldIdentifier(string &text) const {
 		switch (identifier_case_mode) {
 		case IdentifierCaseMode::LOWERCASE:
-			for (auto &c : text) {
-				c = StringUtil::CharacterToLower(c);
-			}
+			text = StringUtil::Lower(text);
 			break;
 		case IdentifierCaseMode::UPPERCASE:
+			// not StringUtil::Upper - that one folds through std::toupper, which is locale dependent,
+			// whereas StringUtil::Lower and CharacterToUpper are not
 			for (auto &c : text) {
 				c = StringUtil::CharacterToUpper(c);
 			}

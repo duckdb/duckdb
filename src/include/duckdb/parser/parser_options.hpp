@@ -20,7 +20,7 @@ class ParserExtension;
 struct ParserCache;
 
 struct ParserOptions {
-	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::ON;
+	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	bool integer_division = false;
 	bool debug_transformer_trampoline_style = false;
 	RegexMatchOperatorSemantics regex_match_operator_semantics = RegexMatchOperatorSemantics::PARTIAL;

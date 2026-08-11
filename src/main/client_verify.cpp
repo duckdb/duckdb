@@ -90,7 +90,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		auto parser_options = GetParserOptions();
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
-		parser_options.identifier_case_mode = IdentifierCaseMode::ON;
+		parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 		Parser parser(parser_options);
 		ErrorData error;
 		parser.ParseQuery(statement->ToString());

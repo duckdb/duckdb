@@ -83,9 +83,11 @@ overrides = {
         "FALLBACK_OVERRIDE": "FALLBACK",
         "STRICT_OVERRIDE": "STRICT",
     },
-    # "true"/"false" are accepted for backwards compatibility with the boolean preserve_identifier_case setting
+    # "true"/"false" are accepted for backwards compatibility with the boolean preserve_identifier_case setting.
+    # These are input spellings only - preserve_identifier_case is a generic setting, so duckdb_settings()
+    # reports back whatever spelling was set rather than a canonical one.
     "IdentifierCaseMode": {
-        "ON": ["ON", "TRUE", "PRESERVE"],
+        "PRESERVE_CASE": ["ON", "TRUE", "PRESERVE", "PRESERVE_CASE"],
         "LOWERCASE": ["LOWERCASE", "FALSE", "LOWER"],
         "UPPERCASE": ["UPPERCASE", "UPPER"],
     },

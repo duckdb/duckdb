@@ -13,6 +13,6 @@
 namespace duckdb {
 
 //! How non-quoted identifiers are folded by the parser
-enum class IdentifierCaseMode : uint8_t { ON, LOWERCASE, UPPERCASE };
+enum class IdentifierCaseMode : uint8_t { PRESERVE_CASE, LOWERCASE, UPPERCASE };
 
 } // namespace duckdb
