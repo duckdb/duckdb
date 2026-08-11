@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/external_resource_options.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -27,10 +28,12 @@ string ExternalResourceOptions::ToString() const {
 	string result = "NEW TEMPORARY EXTERNAL RESOURCE " + SQLString(provider);
 	vector<string> stringified;
 	for (auto &entry : parsed_params) {
-		stringified.push_back(StringUtil::Format("%s %s", entry.first, entry.second->ToString()));
+		stringified.push_back(
+		    StringUtil::Format("%s %s", SQLIdentifier::ToString(entry.first), entry.second->ToString()));
 	}
 	for (auto &entry : params) {
-		stringified.push_back(StringUtil::Format("%s %s", entry.first, entry.second.ToSQLString()));
+		stringified.push_back(
+		    StringUtil::Format("%s %s", SQLIdentifier::ToString(entry.first), entry.second.ToSQLString()));
 	}
 	if (!stringified.empty()) {
 		result += " WITH (" + StringUtil::Join(stringified, ", ") + ")";

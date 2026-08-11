@@ -1,4 +1,4 @@
-# name: test/sql/attach/with_external_resource.test
+# name: test/sql/attach/attach_to_external_resource.test
 # description: ATTACH/CONNECT TO [CREATE] EXTERNAL RESOURCE — provision + attach/connect, or borrow a registered resource
 # group: [attach]
 

@@ -28,22 +28,21 @@ string AttachInfo::ToString() const {
 	string result = "";
 	// `ATTACH TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (create opts)] [AS name] [(attach opts)]`
 	if (external_resource) {
+		// No IF NOT EXISTS / OR REPLACE: AttachToExternalResource has no slot for either, so rendering
+		// one would produce SQL that cannot be parsed back.
 		result += "ATTACH TO " + external_resource->ToString();
-		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-			result += " IF NOT EXISTS";
-		} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-			result += " OR REPLACE";
-		}
 		if (!name.empty()) {
 			result += " AS " + SQLIdentifier(name);
 		}
 		if (!parsed_options.empty() || !options.empty()) {
 			vector<string> stringified;
 			for (auto &opt : parsed_options) {
-				stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+				stringified.push_back(
+				    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second->ToString()));
 			}
 			for (auto &opt : options) {
-				stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
+				stringified.push_back(
+				    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second.ToSQLString()));
 			}
 			result += " (" + StringUtil::Join(stringified, ", ") + ")";
 		}

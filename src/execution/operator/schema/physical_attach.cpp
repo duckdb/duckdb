@@ -21,8 +21,8 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
                                                  OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
 
-	// Attach mutates the info (name resolution, path prefix stripping, injected provision options), so
-	// work on a copy: the plan-owned info must stay pristine for a re-executed prepared statement.
+	// Attach mutates the info (name resolution, path prefix stripping) and the external-resource path
+	// writes the provisioned endpoint into it, so work on a copy and leave the plan-owned info pristine.
 	auto attach_info = info->Copy();
 
 	// `ATTACH TO [NEW] EXTERNAL RESOURCE`: get the resource's endpoint, then attach under this alias.

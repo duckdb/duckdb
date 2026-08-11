@@ -94,3 +94,36 @@ TEST_CASE("Parse CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE + ToString roundtrip
 	REQUIRE(reparser.statements[0]->Cast<ConnectStatement>().info->external_resource != nullptr);
 	REQUIRE(reparser.statements[0]->Cast<ConnectStatement>().info->ToString() == str);
 }
+
+TEST_CASE("ATTACH TO EXTERNAL RESOURCE ToString stays reparseable", "[parse_external_resource]") {
+	Parser parser;
+	parser.ParseQuery("ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (\"weird param\" 'v') "
+	                  "AS my_db (\"weird option\" 'w')");
+	REQUIRE(parser.statements.size() == 1);
+	auto &attach = parser.statements[0]->Cast<AttachStatement>();
+
+	// Option names that need quoting keep their quotes, so the rendering can be parsed back.
+	auto str = attach.info->ToString();
+	REQUIRE(StringUtil::Contains(str, "\"weird param\""));
+	REQUIRE(StringUtil::Contains(str, "\"weird option\""));
+	Parser reparser;
+	reparser.ParseQuery(str);
+	REQUIRE(reparser.statements.size() == 1);
+	REQUIRE(reparser.statements[0]->type == StatementType::ATTACH_STATEMENT);
+
+	// The grammar has no IF NOT EXISTS / OR REPLACE slot for this form, so ToString must not render one
+	// even if the field says otherwise - doing so would emit SQL that no longer parses.
+	attach.info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	auto ignore_str = attach.info->ToString();
+	REQUIRE(!StringUtil::Contains(ignore_str, "IF NOT EXISTS"));
+	Parser ignore_parser;
+	ignore_parser.ParseQuery(ignore_str);
+	REQUIRE(ignore_parser.statements.size() == 1);
+
+	attach.info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto replace_str = attach.info->ToString();
+	REQUIRE(!StringUtil::Contains(replace_str, "OR REPLACE"));
+	Parser replace_parser;
+	replace_parser.ParseQuery(replace_str);
+	REQUIRE(replace_parser.statements.size() == 1);
+}

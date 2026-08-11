@@ -1,4 +1,4 @@
-# name: test/sql/attach/with_external_resource_logging.test
+# name: test/sql/attach/external_resource_logging.test
 # description: ExternalResource log type — recipe create/status/destroy calls are logged on response
 # group: [attach]
 
