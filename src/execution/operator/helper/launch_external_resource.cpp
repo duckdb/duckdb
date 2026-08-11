@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -70,10 +71,24 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 	return out;
 }
 
+//! The statement's own options are already in place by the time the resource is applied, so a key the
+//! resource also supplies would silently overrule what the user wrote. Refuse instead: the resource
+//! dictates how it is reached, and a statement cannot override that quietly.
+static void RejectOptionCollision(const AttachInfo &info, const string &key) {
+	for (auto &entry : info.options) {
+		if (StringUtil::CIEquals(entry.first, key)) {
+			throw InvalidInputException("EXTERNAL RESOURCE: the resource supplies \"%s\", so it cannot also be given "
+			                            "as an option on the statement",
+			                            key);
+		}
+	}
+}
+
 void ApplyLaunchedResource(const LaunchedResource &launched, AttachInfo &info) {
 	info.path = launched.uri;
 	// A NULL/empty db type falls back to the extension prefix extracted from the uri.
 	if (!launched.attached_db_type.empty()) {
+		RejectOptionCollision(info, "type");
 		info.options["type"] = Value(launched.attached_db_type);
 	}
 	// The remaining connect options (e.g. token) flow through as attach options.
@@ -84,6 +99,7 @@ void ApplyLaunchedResource(const LaunchedResource &launched, AttachInfo &info) {
 			if (key == "uri" || key == "attached_db_type") {
 				continue;
 			}
+			RejectOptionCollision(info, key);
 			info.options[key] = kv[1];
 		}
 	}

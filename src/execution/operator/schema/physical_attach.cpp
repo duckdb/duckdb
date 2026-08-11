@@ -52,7 +52,18 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 			                                     resource_name);
 			owns_resource = true;
 		}
-		ApplyLaunchedResource(launched, *attach_info);
+		try {
+			ApplyLaunchedResource(launched, *attach_info);
+		} catch (...) {
+			// Same compensating teardown as a failed attach: the resource is provisioned by now and
+			// nothing owns it yet, so a rejection here must not strand it.
+			if (owns_resource) {
+				ResourceDeleter(DatabaseInstance::GetDatabase(context.client), launched.deleter_function,
+				                launched.deleter_payload, resource_type, resource_name)
+				    .TryDelete();
+			}
+			throw;
+		}
 	}
 
 	// construct the options

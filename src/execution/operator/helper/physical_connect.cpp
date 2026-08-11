@@ -68,7 +68,17 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		for (auto &opt : info->options) {
 			attach_info.options[opt.first] = opt.second;
 		}
-		ApplyLaunchedResource(launched, attach_info);
+		try {
+			ApplyLaunchedResource(launched, attach_info);
+		} catch (...) {
+			// Compensating teardown, as below: the resource exists by now and nothing owns it yet.
+			if (owns_resource) {
+				ResourceDeleter(DatabaseInstance::GetDatabase(client), launched.deleter_function,
+				                launched.deleter_payload, resource_type, resource_name)
+				    .TryDelete();
+			}
+			throw;
+		}
 
 		auto &config = DBConfig::GetConfig(client);
 		AttachOptions options(attach_info.options, config.options.access_mode);
