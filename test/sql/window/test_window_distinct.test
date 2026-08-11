@@ -251,12 +251,12 @@ SELECT i
 FROM nested
 ORDER BY i, s NULLS LAST
 ----
-1	a	b
+1	a	a
 2	b	b
 3	b	b
 4	c	b
-5	c	c
-6	b	c
+5	c	b
+6	b	b
 7	c	b
 8	a	b
 9	NULL	b
