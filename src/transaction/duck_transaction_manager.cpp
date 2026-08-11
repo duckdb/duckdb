@@ -442,6 +442,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	CleanupTransactions();
 
+	// A failed commit rolls the transaction back inline (see above), which can queue external-resource
+	// teardowns just like RollbackTransaction does. Drain here too, so the queue is always drained by the
+	// call that filled it rather than by whichever rollback happens to come next.
+	DatabaseManager::Get(db.GetDatabase()).DrainPendingTeardowns();
+
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
 	if (checkpoint_decision.can_checkpoint) {
