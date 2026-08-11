@@ -1,0 +1,323 @@
+# name: test/sql/parser/statement_tostring_roundtrip.test
+# description: Every statement form must survive Copy() and ToString()+reparse with quoted identifiers
+# group: [parser]
+
+# SQLStatement::ToString() and Copy() are executed by exactly one thing - debug_verify_statement -
+# and no test in the fast suite enables it. So for any statement type, ToString() is unexercised by
+# construction, and the failure mode is silent: it only shows up when something re-parses the printed
+# SQL (EXPLAIN, the shell's formatter, a serialized plan, a downstream tool).
+#
+# Sweeping ~110 statement forms with identifiers that need quoting found six real round-trip bugs,
+# all fixed alongside this file:
+#
+#   DESTROY EXTERNAL RESOURCE "weird name"        -> ...RESOURCE weird name          (#24056 surface)
+#   CREATE/REGISTER EXTERNAL RESOURCE AS "..."    -> unquoted alias
+#   ALTER TABLE t ADD COLUMN "new col" INTEGER    -> ...ADD COLUMN new col INTEGER
+#   PREPARE "weird prep" AS ...                   -> PREPARE weird prep AS ...
+#   EXECUTE "weird prep"(1)                       -> EXECUTE weird prep(1)
+#   ... REFERENCES "t fk"("a b")                  -> REFERENCES t fk("a b")
+#   CREATE MACRO m("a b") AS "a b" + 1            -> CREATE MACRO m(a b) AS ...
+#   CREATE TYPE t AS ENUM ('c''d')                -> ENUM ('c'd')  (unterminated string literal)
+#
+# Everything below succeeds, so any ToString regression surfaces as a parser error.
+
+foreach mode COPY_STATEMENT REPARSE_STATEMENT
+
+statement ok
+SET debug_verify_statement='{mode}'
+
+# --- DDL with identifiers that need quoting -----------------------------------------------------------
+
+statement ok
+CREATE TABLE "weird name"("odd col" INTEGER, "select" VARCHAR, "He said ""hi""" INTEGER)
+
+statement ok
+CREATE TABLE "t chk"("a b" INTEGER CHECK ("a b" > 0), "c d" INTEGER UNIQUE)
+
+statement ok
+CREATE TABLE "t gen"("a b" INTEGER, "g h" INTEGER GENERATED ALWAYS AS ("a b" * 2))
+
+statement ok
+CREATE TABLE "t fk"("a b" INTEGER PRIMARY KEY, "c d" INTEGER REFERENCES "t fk"("a b"))
+
+statement ok
+CREATE TABLE "t comp"("a b" INTEGER NOT NULL DEFAULT 7, "c d" INTEGER, PRIMARY KEY ("a b", "c d"))
+
+statement ok
+CREATE SCHEMA "weird schema"
+
+statement ok
+CREATE TABLE "weird schema"."qualified tbl"("x y" INTEGER)
+
+statement ok
+CREATE TABLE "t fk2"("a b" INTEGER, FOREIGN KEY ("a b") REFERENCES "t fk"("a b"))
+
+statement ok
+CREATE VIEW "weird view"("col a", "col b") AS SELECT 1, 2
+
+statement ok
+CREATE SEQUENCE "weird seq" START WITH 3 INCREMENT BY 2 MINVALUE 1 MAXVALUE 99 CYCLE
+
+statement ok
+CREATE TYPE "weird enum" AS ENUM ('a b', 'c''d', '')
+
+statement ok
+CREATE TYPE "weird struct" AS STRUCT("a b" INTEGER, "c d" VARCHAR)
+
+statement ok
+CREATE TYPE "weird union" AS UNION("a b" INTEGER, "c d" VARCHAR)
+
+statement ok
+CREATE MACRO "weird macro"("a b") AS "a b" + 1
+
+statement ok
+CREATE MACRO "macro defaults"(a, "b c" := 3) AS a + "b c"
+
+statement ok
+CREATE MACRO "table macro"() AS TABLE SELECT 1 AS "q q"
+
+# --- ALTER ---------------------------------------------------------------------------------------------
+
+statement ok
+ALTER TABLE "weird name" ADD COLUMN "new col" INTEGER
+
+statement ok
+ALTER TABLE "weird name" ADD COLUMN IF NOT EXISTS "new col2" INTEGER DEFAULT 4
+
+statement ok
+ALTER TABLE "weird name" RENAME COLUMN "odd col" TO "odder col"
+
+statement ok
+ALTER TABLE "weird name" ALTER COLUMN "odder col" SET DEFAULT 5
+
+statement ok
+ALTER TABLE "weird name" ALTER COLUMN "odder col" DROP DEFAULT
+
+statement ok
+ALTER TABLE "weird name" ALTER COLUMN "odder col" TYPE BIGINT
+
+statement ok
+ALTER TABLE "weird name" DROP COLUMN "new col2"
+
+statement ok
+ALTER TABLE "weird name" RENAME TO "other name"
+
+statement ok
+ALTER TABLE "other name" RENAME TO "weird name"
+
+statement ok
+ALTER VIEW "weird view" RENAME TO "other view"
+
+statement ok
+COMMENT ON TABLE "weird name" IS 'a comment with '' a quote'
+
+statement ok
+COMMENT ON COLUMN "weird name"."odder col" IS 'hi'
+
+# indexes are created after the ALTERs, since an index blocks a column rename
+statement ok
+CREATE INDEX "weird idx" ON "weird name"("odder col")
+
+statement ok
+CREATE UNIQUE INDEX "weird uidx" ON "weird name"("select")
+
+# --- DML -------------------------------------------------------------------------------------------------
+
+statement ok
+INSERT INTO "weird name"("odder col", "select", "He said ""hi""") VALUES (1, 'x', 2)
+
+statement ok
+INSERT INTO "weird name" BY NAME SELECT 3 AS "odder col", 'y' AS "select"
+
+statement ok
+INSERT INTO "t chk" VALUES (1, 1) ON CONFLICT DO NOTHING
+
+statement ok
+UPDATE "weird name" SET "select" = 'z' WHERE "odder col" = 1
+
+statement ok
+DELETE FROM "weird name" WHERE "odder col" = 99
+
+statement ok
+MERGE INTO "t chk" USING "t chk" AS "src x" ON "t chk"."a b" = "src x"."a b" WHEN MATCHED THEN DELETE
+
+# --- queries ------------------------------------------------------------------------------------------
+
+statement ok
+SELECT "odder col" AS "a b" FROM "weird name" AS "al ias" ORDER BY "a b"
+
+statement ok
+SELECT * FROM "weird name" t1 JOIN "weird name" t2 USING ("odder col")
+
+statement ok
+SELECT sum("odder col") FILTER (WHERE "odder col" > 0) OVER (PARTITION BY "select" ORDER BY "odder col")
+FROM "weird name"
+
+statement ok
+SELECT * FROM "weird name" QUALIFY row_number() OVER (ORDER BY "odder col") = 1
+
+statement ok
+SELECT list_transform([1,2], lambda "x y": "x y" * 2), {'a b': 1}['a b'], MAP{'k k': 1}['k k']
+
+statement ok
+SELECT * FROM (VALUES (1)) AS "v v"("c c")
+
+# a qualified star: the relation name is the one part of StarExpression::ToString that was raw
+# (EXCLUDE / RENAME / REPLACE already quoted their identifiers)
+statement ok
+SELECT "weird name".* FROM "weird name"
+
+statement ok
+SELECT "weird name".* EXCLUDE ("select") FROM "weird name"
+
+statement ok
+SELECT * EXCLUDE ("select") RENAME ("odder col" AS "renamed col") FROM "weird name"
+
+statement ok
+SELECT * REPLACE ("odder col" + 1 AS "odder col") FROM "weird name"
+
+statement ok
+SELECT COLUMNS('od.*') FROM "weird name"
+
+statement ok
+SELECT * FROM (PIVOT "weird name" ON "select" USING sum("odder col"))
+
+statement ok
+SELECT * FROM (UNPIVOT "weird name" ON "odder col" INTO NAME "n n" VALUE "v v")
+
+statement ok
+WITH "cte name"("c one") AS (SELECT 1) SELECT "c one" FROM "cte name"
+
+statement ok
+SELECT * FROM "weird name" TABLESAMPLE reservoir(2 ROWS) REPEATABLE (1)
+
+# --- prepared statements ---------------------------------------------------------------------------------
+
+statement ok
+PREPARE "weird prep" AS SELECT $1
+
+statement ok
+EXECUTE "weird prep"(1)
+
+statement ok
+DEALLOCATE "weird prep"
+
+# --- COPY --------------------------------------------------------------------------------------------------
+
+statement ok
+COPY "weird name" TO '{TEST_DIR}/roundtrip.csv' (FORMAT csv, DELIMITER '|', HEADER, NULLSTR 'NULL')
+
+statement ok
+COPY (SELECT "odder col" AS "a b" FROM "weird name") TO '{TEST_DIR}/roundtrip2.csv' (FORMAT csv)
+
+statement ok
+COPY "weird name" TO '{TEST_DIR}/rtdir' (FORMAT csv, PARTITION_BY ("select"), OVERWRITE_OR_IGNORE)
+
+# the FORMAT value is a copy function name that is stored as a plain string - it was printed raw, so
+# a name needing quotes came back as two tokens and the re-parse failed with a syntax error instead
+# of reaching the catalog lookup. Both the identifier and the string literal spelling reach here.
+statement error
+COPY (SELECT 1) TO '{TEST_DIR}/rt_fmt.csv' (FORMAT "odd format")
+----
+Catalog Error: Copy Function with name odd format does not exist!
+
+statement error
+COPY (SELECT 1) TO '{TEST_DIR}/rt_fmt.csv' (FORMAT 'odd format')
+----
+Catalog Error: Copy Function with name odd format does not exist!
+
+# --- attach / catalog ----------------------------------------------------------------------------------------
+
+statement ok
+ATTACH IF NOT EXISTS ':memory:' AS "db two"
+
+statement ok
+DETACH "db two"
+
+# option KEYS need quoting too, on all three surfaces that take a (key value) list. An unknown
+# option is rejected at bind time, so the point is that the message is the bind error and not a
+# parser/catalog error from re-parsing mangled SQL.
+statement error
+ATTACH ':memory:' AS "db three" ("odd opt" 'v')
+----
+Binder Error: Unrecognized option for attach "odd opt"
+
+statement error
+COPY "weird name" TO '{TEST_DIR}/rt_opt.csv' ("odd opt" 'v')
+----
+Not implemented Error: Unrecognized option "odd opt" for csv
+
+statement error
+CONNECT 'some_target' ("odd opt" 'v')
+----
+Binder Error: Unrecognized option for attach "odd opt"
+
+statement ok
+ATTACH IF NOT EXISTS ':memory:' AS "db four" (READ_ONLY false)
+
+statement ok
+DETACH "db four"
+
+statement ok
+DESCRIBE SELECT "odder col" AS "a b" FROM "weird name"
+
+statement ok
+SUMMARIZE SELECT "odder col" AS "a b" FROM "weird name"
+
+# --- teardown (also exercises the DROP ToString paths) ----------------------------------------------------
+
+statement ok
+DROP INDEX "weird uidx"
+
+statement ok
+DROP INDEX "weird idx"
+
+statement ok
+DROP MACRO "weird macro"
+
+statement ok
+DROP MACRO "macro defaults"
+
+statement ok
+DROP MACRO TABLE "table macro"
+
+statement ok
+DROP VIEW "other view"
+
+statement ok
+DROP SEQUENCE "weird seq"
+
+statement ok
+DROP TYPE "weird enum"
+
+statement ok
+DROP TYPE "weird struct"
+
+statement ok
+DROP TYPE "weird union"
+
+statement ok
+DROP TABLE "t fk2"
+
+statement ok
+DROP TABLE "t fk"
+
+statement ok
+DROP TABLE "t gen"
+
+statement ok
+DROP TABLE "t chk"
+
+statement ok
+DROP TABLE "t comp"
+
+statement ok
+DROP TABLE "weird name"
+
+statement ok
+DROP SCHEMA "weird schema" CASCADE
+
+statement ok
+RESET debug_verify_statement
+
+endloop
