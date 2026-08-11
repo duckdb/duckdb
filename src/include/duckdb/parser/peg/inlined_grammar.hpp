@@ -8,8 +8,6 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TopLevelStatement <- Statement? (';'+ / EndOfInput)\n"
 	"Statement <-\n"
 	"	ExternalResourceStatement /\n"
-	"	AttachToExternalResource /\n"
-	"	ConnectToExternalResource /\n"
 	"	CreateStatement /\n"
 	"	SelectStatement /\n"
 	"	SetStatement /\n"
@@ -1763,11 +1761,6 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"OptFreeze <- 'FREEZE'\n"
 	"OptVerbose <- 'VERBOSE'\n"
 	"NameList <- Parens(List(ColId))\n"
-	"AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias? AttachOptions?\n"
-	"ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?\n"
-	"ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause\n"
-	"ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceOptions?\n"
-	"ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId\n"
 
 };
 
