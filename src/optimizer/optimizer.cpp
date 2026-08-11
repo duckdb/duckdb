@@ -9,6 +9,7 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
+#include "duckdb/optimizer/constant_or_null_simplification.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
@@ -228,7 +229,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	}
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
-	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
+	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {
+		rewriter.VisitOperator(*plan);
+		if (!plan->HasSideEffects()) {
+			ConstantOrNullSimplification constant_or_null_simplification(context);
+			plan = constant_or_null_simplification.Optimize(std::move(plan));
+		}
+	});
 
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {

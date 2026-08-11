@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -101,6 +102,7 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	vector<unique_ptr<Expression>> in_children;
 	in_children.emplace_back(enum_expr.Copy());
 
+	unordered_set<uint64_t> matched_enum_values{};
 	for (idx_t i = 1; i < children.size(); ++i) {
 		auto &child = *children[i];
 		auto &v = child.Cast<BoundConstantExpression>().GetValue();
@@ -113,15 +115,18 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 			if (it != enum_domain.end()) {
 				//	The literal is in the ENUM domain, so translate it
 				in_children.emplace_back(make_uniq<BoundConstantExpression>(Value::ENUM(it->second, enum_type)));
+				matched_enum_values.insert(it->second);
 			}
 			// Not in the domain, so ignore it.
 		}
 	}
 
-	//	If ALL the children are string constants being matched against an ENUM (NOT) IN,
-	//	and SOME of them are in the domain
-	//	then swap out the children for the valid ENUM values
-	if (in_children.size() > 1) {
+	//	If all ENUM values are present, replace with a constant for non-NULL inputs.
+	//	If SOME of them are in the domain, swap out the children for the valid ENUM values.
+	if (matched_enum_values.size() == EnumType::GetSize(enum_type)) {
+		const bool in_clause = (expr.GetExpressionType() == ExpressionType::COMPARE_IN);
+		return rewriter.ConstantOrNull(in_children[0]->Copy(), Value::BOOLEAN(in_clause));
+	} else if (in_children.size() > 1) {
 		children.swap(in_children);
 	} else {
 		// constant_or_null(not_in, child[0])
