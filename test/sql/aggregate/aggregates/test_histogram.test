@@ -141,3 +141,41 @@ query I
 SELECT histogram(e) FROM enums
 ----
 {ok=1, happy=1}
+
+# NaNs
+foreach fp double float
+
+query I
+WITH t(id, x) AS (
+  VALUES
+    (1, 0.0::{fp}),
+    (2, 'NaN'::{fp}),
+    (3, 1.0::{fp})
+)
+SELECT HISTOGRAM(x)
+FROM t
+----
+{0.0=1, 1.0=1, nan=1}
+
+query II
+WITH t(id, x) AS (
+  VALUES
+    (1, 0.0::{fp}),
+    (2, 'NaN'::{fp}),
+    (3, 1.0::{fp})
+)
+SELECT
+  id,
+  HISTOGRAM(x) OVER (
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    EXCLUDE TIES
+  ) AS actual
+FROM t
+ORDER BY id;
+----
+1	{0.0=1, 1.0=1, nan=1}
+2	{0.0=1, 1.0=1, nan=1}
+3	{0.0=1, 1.0=1, nan=1}
+
+endloop
