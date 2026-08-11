@@ -143,7 +143,7 @@ static unique_ptr<Expression> CastToResultType(FunctionBindExpressionInput &inpu
 	return BoundCastExpression::AddCastToType(input.context, std::move(expression), result_type);
 }
 
-//! Binds map_values(map), list_position(map_keys(map), key) and friends for the collated rewrites below.
+//! Shared sub-expressions for collated map-search rewrites.
 struct MapSearchRewrite {
 	unique_ptr<Expression> values;
 	unique_ptr<Expression> position;
@@ -172,25 +172,17 @@ static MapSearchRewrite BindMapSearch(FunctionBindExpressionInput &input) {
 }
 
 static unique_ptr<Expression> BindMapExtractValueExpression(FunctionBindExpressionInput &input) {
-	// Untyped NULL maps are left to the direct implementation (they evaluate to NULL).
+	// Untyped NULL maps evaluate to NULL in the direct path.
 	if (input.children[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		return nullptr;
 	}
-	// Check both key types: template "K" unifies the map-key and search-key types, but the
-	// binder does not insert casts for types that only differ in their collation annotation,
-	// so the collation shows up on whichever side originally carried it.
+	// Collation remains on whichever unified key type originally carried it.
 	if (!TypeHasCollation(input.children[1]->GetReturnType()) &&
 	    !TypeHasCollation(MapType::KeyType(input.children[0]->GetReturnType()))) {
 		return nullptr;
 	}
 
-	// Rebind a collated lookup through the collation-aware list search:
-	//
-	//   map_extract_value(m, k) == list_extract(map_values(m), list_position(map_keys(m), k))
-	//
-	// Map keys are unique, so the first match is the only match. NULL propagation is preserved:
-	// a NULL map yields NULL through map_keys/map_values, and a missing key yields a NULL
-	// position, which list_extract turns into NULL.
+	// Rebind through list_extract(map_values(m), list_position(map_keys(m), k)).
 	auto rewrite = BindMapSearch(input);
 
 	vector<unique_ptr<Expression>> extract_children;
@@ -198,40 +190,25 @@ static unique_ptr<Expression> BindMapExtractValueExpression(FunctionBindExpressi
 	extract_children.push_back(std::move(rewrite.position));
 	auto extract = CastToResultType(input, BindSiblingFunction(input, "list_extract", std::move(extract_children)));
 
-	// A NULL search key never matches because map keys are never NULL; the guard keeps the
-	// rewrite exact even for maps carrying NULL keys, e.g. read from a file that skips
-	// validation.
+		// list_position matches NULL elements; the direct map search does not, so
+		// the key_is_null guard preserves behaviour for NULL keys in unvalidated maps.
 	const auto &result_type = input.bound_function.GetReturnType();
 	auto null_result = make_uniq<BoundConstantExpression>(Value(result_type));
 	return make_uniq<BoundCaseExpression>(std::move(rewrite.key_is_null), std::move(null_result), std::move(extract));
 }
 
 static unique_ptr<Expression> BindMapExtractExpression(FunctionBindExpressionInput &input) {
-	// Untyped NULL maps are left to the direct implementation (they evaluate to NULL).
+	// Untyped NULL maps evaluate to NULL in the direct path.
 	if (input.children[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		return nullptr;
 	}
-	// Check both key types: template "K" unifies the map-key and search-key types, but the
-	// binder does not insert casts for types that only differ in their collation annotation,
-	// so the collation shows up on whichever side originally carried it.
+	// Collation remains on whichever unified key type originally carried it.
 	if (!TypeHasCollation(input.children[1]->GetReturnType()) &&
 	    !TypeHasCollation(MapType::KeyType(input.children[0]->GetReturnType()))) {
 		return nullptr;
 	}
 
-	// Rebind a collated lookup through the collation-aware list search:
-	//
-	//   map_extract(m, k) == CASE WHEN m IS NULL THEN NULL
-	//                             WHEN k IS NULL THEN []
-	//                             WHEN pos IS NULL THEN []
-	//                             ELSE [list_extract(map_values(m), pos)] END
-	//
-	//   with pos = list_position(map_keys(m), k)
-	//
-	// Map keys are unique, so the first match is the only match. The explicit NULL guards
-	// preserve the direct implementation's NULL handling: a NULL map yields NULL, and a NULL
-	// or missing search key yields an empty list (a NULL key can never match because map keys
-	// are never NULL).
+	// Rebind through a CASE over list_extract(map_values(m), list_position(map_keys(m), k)).
 	const auto &result_type = input.bound_function.GetReturnType();
 	const auto &value_type = ListType::GetChildType(result_type);
 
@@ -252,6 +229,7 @@ static unique_ptr<Expression> BindMapExtractExpression(FunctionBindExpressionInp
 	auto found_case =
 	    make_uniq<BoundCaseExpression>(std::move(position_is_null), std::move(missing_result), std::move(packed));
 
+		// list_position matches NULL elements; the direct map search does not.
 	auto null_key_result = make_uniq<BoundConstantExpression>(Value::LIST(value_type, {}));
 	auto key_case = make_uniq<BoundCaseExpression>(std::move(rewrite.key_is_null), std::move(null_key_result),
 	                                               std::move(found_case));

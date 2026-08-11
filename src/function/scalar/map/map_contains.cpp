@@ -32,16 +32,14 @@ static bool TypeHasCollation(const LogicalType &type) {
 }
 
 static unique_ptr<Expression> BindMapContainsExpression(FunctionBindExpressionInput &input) {
-	// Check both key types: template "K" unifies the map-key and search-key types, but the
-	// binder does not insert casts for types that only differ in their collation annotation,
-	// so the collation shows up on whichever side originally carried it.
+	// Collation remains on whichever unified key type originally carried it.
 	auto &key_type = input.children[1]->GetReturnType();
 	auto &map_key_type = MapType::KeyType(input.children[0]->GetReturnType());
 	if (!TypeHasCollation(key_type) && !TypeHasCollation(map_key_type)) {
 		return nullptr;
 	}
 
-	// Rebind collated map searches through the existing collation-aware list search.
+	// Rebind through list_contains(map_keys(map), key), which already handles collations.
 	auto &catalog = Catalog::GetSystemCatalog(input.context);
 	auto &map_keys = catalog.GetEntry<ScalarFunctionCatalogEntry>(
 	    input.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "map_keys"));
