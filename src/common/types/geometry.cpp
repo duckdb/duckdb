@@ -900,6 +900,9 @@ struct WKBAnalysis {
 
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 	WKBAnalysis result;
+	if (reader.IsAtEnd()) {
+		return result;
+	}
 	// Collection children are complete WKB objects embedded in the root object.
 	uint64_t geometries_remaining = 1;
 
