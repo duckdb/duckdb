@@ -1130,9 +1130,13 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		                            file.path);
 	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
-	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
-		throw InvalidInputException("Failed to read Parquet file \"%s\": row group does not have enough columns",
-		                            file.path);
+	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
+		const auto &row_group = file_meta_data->row_groups[row_group_idx];
+		if (next_file_idx != row_group.columns.size()) {
+			throw InvalidInputException("Failed to read Parquet file \"%s\": row group %llu has %llu columns, but "
+			                            "schema requires %llu",
+			                            file.path, row_group_idx, row_group.columns.size(), next_file_idx);
+		}
 	}
 	if (parquet_options.file_row_number) {
 		for (auto &column : root.children) {
