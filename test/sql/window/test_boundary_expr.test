@@ -143,3 +143,39 @@ ORDER BY id;
 ----
 1	2	2	2
 2	2	2	2
+
+# Issue #24632: NULL dynamic ROWS bounds are equivalent to zero
+loop i 0 50
+
+query IIIIII
+WITH src AS MATERIALIZED (
+  SELECT * FROM (VALUES (1, 1), (2, NULL), (3, 1), (4, NULL)) AS v(id, off)
+)
+SELECT
+  id,
+  off,
+  COUNT(*) OVER (
+    ORDER BY id
+    ROWS BETWEEN off PRECEDING AND CURRENT ROW
+  ) AS preceding_start,
+  COUNT(*) OVER (
+    ORDER BY id
+    ROWS BETWEEN off FOLLOWING AND UNBOUNDED FOLLOWING
+  ) AS following_start,
+  COUNT(*) OVER (
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND off PRECEDING
+  ) AS preceding_end,
+  COUNT(*) OVER (
+    ORDER BY id
+    ROWS BETWEEN CURRENT ROW AND off FOLLOWING
+  ) AS following_end
+FROM src
+ORDER BY id;
+----
+1	1	1	3	0	2
+2	NULL	1	3	2	1
+3	1	2	1	2	2
+4	NULL	1	1	4	1
+
+endloop
