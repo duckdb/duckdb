@@ -58,7 +58,7 @@ unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
 	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
 	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
 	                                           aggregate->GetAggregateType());
-	return result;
+	return unique_ptr_cast<BoundAggregateExpression, Expression>(std::move(result));
 }
 
 //! The aggregate state of first/last/any_value is nullable on two levels: the state itself is NULL when no row has
