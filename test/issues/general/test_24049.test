@@ -84,6 +84,19 @@ ORDER BY k;
 1	0	0
 2	0	0
 
+# A LIST correlation key exercises the perform_delim=false path where correlated
+# values are carried through the first aggregation rather than the deliminator.
+query II
+WITH outer_t(k) AS (VALUES ([1]), ([2])),
+     inner_t(k, v) AS (VALUES ([1], 10))
+SELECT k,
+       (SELECT approx_count_distinct(v) FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+[1]	1
+[2]	0
+
 # GROUP BY and HAVING can suppress the aggregate row; that remains NULL rather than an empty-input result.
 query III
 WITH outer_t(k) AS (VALUES (1), (2)),
