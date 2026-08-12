@@ -35,6 +35,18 @@ SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
 ----
 hit
 
+# Simple CASE retains its historical implicit result-column name.
+query I
+SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END"
+FROM (SELECT CASE 1 WHEN 1 THEN 2 END)
+----
+2
+
+query I
+SELECT simple_case_alias FROM (SELECT CASE 1 WHEN 1 THEN 2 END AS simple_case_alias)
+----
+2
+
 query I
 SELECT CASE (SELECT 2) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END
 ----
@@ -119,24 +131,57 @@ EXECUTE simple_case_parameter(1)
 ----
 2
 
-# Do not silently use repeated-evaluation semantics for volatile operands.
+# A single comparison contains only one operand reference and does not require invoke.
+statement ok
+CREATE SEQUENCE simple_case_single_subquery_seq START 1
+
+query I
+SELECT CASE nextval('simple_case_single_subquery_seq') WHEN 1 THEN (SELECT 2) ELSE 0 END
+----
+2
+
+statement ok
+CREATE SEQUENCE simple_case_single_unnest_seq START 1
+
+query I
+SELECT CASE nextval('simple_case_single_unnest_seq') WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+----
+2
+
+statement ok
+CREATE SEQUENCE simple_case_single_macro_subquery_seq START 1
+
+query I
+SELECT CASE nextval('simple_case_single_macro_subquery_seq') WHEN 1 THEN simple_case_subquery() ELSE 0 END
+----
+2
+
+statement ok
+CREATE SEQUENCE simple_case_single_macro_unnest_seq START 1
+
+query I
+SELECT CASE nextval('simple_case_single_macro_unnest_seq') WHEN 1 THEN simple_case_unnest() ELSE 0 END
+----
+2
+
+# Do not silently use repeated-evaluation semantics for multiple comparisons.
 statement error
-SELECT CASE nextval('simple_case_seq') WHEN 1 THEN (SELECT 2) ELSE 0 END
+SELECT CASE random() WHEN 0 THEN (SELECT 2) WHEN 1 THEN 3 ELSE 0 END
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
 statement error
-SELECT CASE nextval('simple_case_seq') WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+SELECT CASE random() WHEN 0 THEN unnest([2]) WHEN 1 THEN 3 ELSE 0 END
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
 statement error
-SELECT CASE random() WHEN 1 THEN simple_case_subquery() ELSE 0 END
+SELECT CASE random() WHEN 0 THEN simple_case_subquery() WHEN 1 THEN 3 ELSE 0 END
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
 statement error
-SELECT CASE random() WHEN 1 THEN simple_case_unnest() ELSE 0 END
+SELECT CASE random() WHEN 0 THEN simple_case_unnest() WHEN 1 THEN 3 ELSE 0 END
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
@@ -172,12 +217,20 @@ CREATE VIEW stored_simple_case AS
 	END AS result
 	FROM range(10000)
 
+statement ok
+CREATE VIEW stored_simple_case_name AS SELECT CASE 1 WHEN 1 THEN 2 END
+
 restart
 
 query I
 SELECT count(*) FROM stored_simple_case WHERE result = 'other'
 ----
 0
+
+query I
+SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END" FROM stored_simple_case_name
+----
+2
 
 # Old storage versions receive the historical searched-CASE representation.
 statement ok

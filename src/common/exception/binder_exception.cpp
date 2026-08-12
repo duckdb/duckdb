@@ -57,6 +57,11 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
 	                       call_str, candidate_str));
 }
 
+BinderException BinderException::UnsupportedLambdaExpression(const string &message) {
+	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED_LAMBDA_EXPRESSION", QueryLocation());
+	return BinderException(extra_info, message);
+}
+
 BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {
 	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.GetQueryLocation());
 	return BinderException(extra_info, message);
