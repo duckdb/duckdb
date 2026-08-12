@@ -1,0 +1,241 @@
+# name: test/sql/alter/add_fk/test_add_fk_in_tran.test
+# description: Test ALTER TABLE ADD FOREIGN KEY in a transaction
+# group: [add_fk]
+
+statement ok
+PRAGMA enable_verification
+
+# Scenario #1: FK column is not the first column, with NULL values
+# NULL FK values should be excluded from the index (SQL standard)
+
+statement ok
+CREATE TABLE pk_nulls (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_nulls VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE fk_nulls (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk_nulls VALUES (1, 1), (2, NULL), (3, 2)
+
+# NULL in FK column should not cause a violation
+statement ok
+ALTER TABLE fk_nulls ADD CONSTRAINT fk_nulls_fk FOREIGN KEY (val) REFERENCES pk_nulls(id)
+
+# Valid FK value works
+statement ok
+INSERT INTO fk_nulls VALUES (4, 3)
+
+# NULL FK value works (SQL standard: NULL is exempt from FK check)
+statement ok
+INSERT INTO fk_nulls VALUES (5, NULL)
+
+# Invalid FK value fails
+statement error
+INSERT INTO fk_nulls VALUES (6, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE fk_nulls
+
+statement ok
+DROP TABLE pk_nulls
+
+# Scenario #2: Existing invalid FK data causes ALTER to fail
+
+statement ok
+CREATE TABLE pk2 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk2 VALUES (1), (2)
+
+statement ok
+CREATE TABLE fk2 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk2 VALUES (1, 1), (2, 999)
+
+statement error
+ALTER TABLE fk2 ADD CONSTRAINT fk2_fk FOREIGN KEY (val) REFERENCES pk2(id)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE fk2
+
+statement ok
+DROP TABLE pk2
+
+# Scenario #3: ALTER FK with uncommitted valid data in transaction
+
+statement ok
+CREATE TABLE pk3 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk3 VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE fk3 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk3 VALUES (1, 1), (2, 2)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO fk3 VALUES (3, 3)
+
+statement ok
+ALTER TABLE fk3 ADD CONSTRAINT fk3_fk FOREIGN KEY (val) REFERENCES pk3(id)
+
+statement ok
+COMMIT
+
+# Constraint enforced after commit
+statement error
+INSERT INTO fk3 VALUES (4, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE fk3
+
+statement ok
+DROP TABLE pk3
+
+# Scenario #4: ALTER FK with uncommitted invalid data causes failure
+
+statement ok
+CREATE TABLE pk4 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk4 VALUES (1), (2)
+
+statement ok
+CREATE TABLE fk4 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk4 VALUES (1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO fk4 VALUES (2, 999)
+
+statement ok
+ALTER TABLE fk4 ADD CONSTRAINT fk4_fk FOREIGN KEY (val) REFERENCES pk4(id)
+
+statement error
+commit
+----
+ROLLBACK
+
+statement ok
+DROP TABLE fk4
+
+statement ok
+DROP TABLE pk4
+
+# Scenario #5: Rollback of ALTER FK - constraint should not be active
+
+statement ok
+CREATE TABLE pk5 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk5 VALUES (1), (2)
+
+statement ok
+CREATE TABLE fk5 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk5 VALUES (1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE fk5 ADD CONSTRAINT fk5_fk FOREIGN KEY (val) REFERENCES pk5(id)
+
+statement ok
+ROLLBACK
+
+# After rollback, invalid FK values can be inserted freely
+statement ok
+INSERT INTO fk5 VALUES (2, 999)
+
+query II
+SELECT * FROM fk5 WHERE val = 999
+----
+2	999
+
+statement ok
+DROP TABLE fk5
+
+statement ok
+DROP TABLE pk5
+
+# Scenario #6: FK on large table (uses sorted index build path)
+
+statement ok
+CREATE TABLE pk6 (id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk6 SELECT range FROM range(1, 65537)
+
+statement ok
+CREATE TABLE fk6 (id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO fk6 SELECT range, range FROM range(1, 65537)
+
+statement ok
+ALTER TABLE fk6 ADD CONSTRAINT fk6_fk FOREIGN KEY (val) REFERENCES pk6(id)
+
+statement error
+INSERT INTO fk6 VALUES (99999, 99999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+# NULL still allowed
+statement ok
+INSERT INTO fk6 VALUES (99999, NULL)
+
+statement ok
+DROP TABLE fk6
+
+statement ok
+DROP TABLE pk6
+
+# Scenario #7: Self-referencing FK
+
+statement ok
+CREATE TABLE self (id INTEGER PRIMARY KEY, parent_id INTEGER)
+
+statement ok
+INSERT INTO self VALUES (1, NULL), (2, 1), (3, 1)
+
+statement ok
+ALTER TABLE self ADD CONSTRAINT self_fk FOREIGN KEY (parent_id) REFERENCES self(id)
+
+# Valid parent
+statement ok
+INSERT INTO self VALUES (4, 2)
+
+# NULL parent is allowed
+statement ok
+INSERT INTO self VALUES (5, NULL)
+
+# Invalid parent
+statement error
+INSERT INTO self VALUES (6, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+DROP TABLE self
+
