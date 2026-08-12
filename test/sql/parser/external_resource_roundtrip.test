@@ -1,0 +1,106 @@
+# name: test/sql/parser/external_resource_roundtrip.test
+# description: EXTERNAL RESOURCE statements must survive Copy() and ToString()+reparse
+# group: [parser]
+
+# Found by ranking recently merged PRs by patch coverage: #24056 landed the CREATE / REGISTER /
+# DESTROY / SHOW EXTERNAL RESOURCE surface at 57.6% coverage of the lines it added, and
+# src/parser/statement/external_resource_statement.cpp was 2/45 - i.e. nothing had ever copied or
+# printed one of these statements, because no fast-suite test runs under debug_verify_statement.
+#
+# It was broken. ToString() emitted the resource name and the option keys raw, so any identifier
+# needing quotes produced SQL that does not parse back:
+#     DESTROY EXTERNAL RESOURCE "weird name"   ->   DESTROY EXTERNAL RESOURCE weird name
+#                                              ->   Parser Error: syntax error at or near "name"
+# Reserved words ("select") and embedded double quotes broke the same way.
+
+foreach mode COPY_STATEMENT REPARSE_STATEMENT
+
+statement ok
+SET debug_verify_statement='{mode}'
+
+# --- DESTROY: the name is the whole statement, so a quoting bug is immediately fatal ------------------
+
+statement error
+DESTROY EXTERNAL RESOURCE plain_name
+----
+Invalid Input Error: external resource "plain_name" is not registered
+
+statement error
+DESTROY EXTERNAL RESOURCE "weird name"
+----
+Invalid Input Error: external resource "weird name" is not registered
+
+statement error
+DESTROY EXTERNAL RESOURCE "select"
+----
+Invalid Input Error: external resource "select" is not registered
+
+statement error
+DESTROY EXTERNAL RESOURCE "he said ""hi"""
+----
+<REGEX>:Invalid Input Error.*is not registered.*
+
+statement error
+DESTROY EXTERNAL RESOURCE "MixedCase"
+----
+Invalid Input Error: external resource "MixedCase" is not registered
+
+# --- CREATE: name plus an option list, with and without option values ---------------------------------
+
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "weird name" (SPOT, REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "select" (REGION 'eu-west-1')
+----
+<REGEX>:.*unknown resource type.*
+
+# no alias at all: the name is required, and the statement still has to copy/reparse to get there
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack'
+----
+Binder Error: EXTERNAL RESOURCE requires a name (AS <name>)
+
+# a resource type string that itself needs escaping
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:it''s quacky' AS x
+----
+<REGEX>:.*unknown resource type.*
+
+# --- REGISTER: name plus an arbitrary handle expression ------------------------------------------------
+
+statement error
+REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x FROM {'id': 'i-123'}
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS "weird name" FROM {'id': 'i-123', 'tags': ['a','b']}
+----
+<REGEX>:.*unknown resource type.*
+
+# a scalar handle reaches the cast rather than the type lookup - still a full ToString round-trip
+statement error
+REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x FROM 'plain-handle'
+----
+<REGEX>:.*can't be cast to the destination type MAP\(VARCHAR, VARCHAR\).*
+
+# --- SHOW: no identifiers, but both forms must still copy and reparse ----------------------------------
+
+statement ok
+SHOW EXTERNAL RESOURCES
+
+statement ok
+SELECT count(*) FROM duckdb_external_resources()
+
+statement ok
+RESET debug_verify_statement
+
+endloop
