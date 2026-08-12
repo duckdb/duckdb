@@ -124,7 +124,7 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 
 unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
                                                                                 ParserOptions options) {
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(default_macro.macro);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw InternalException("Expected a single select statement in CreateTableMacroInfo internal");
@@ -135,8 +135,8 @@ unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
-                                                              const Identifier &input_name, ParserOptions options) {
+static unique_ptr<CreateFunctionInfo>
+GetDefaultTableFunction(const Identifier &input_schema, const Identifier &input_name, const ParserOptions &options) {
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
 			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index], options);

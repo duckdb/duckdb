@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-Parser::Parser(ParserOptions options_p) : options(options_p) {
+Parser::Parser(ParserOptions options_p) : options(std::move(options_p)) {
 }
 
 Parser::~Parser() = default;
@@ -566,7 +566,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;
 	// parse the query
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -602,7 +602,7 @@ GroupByNode Parser::ParseGroupByList(const string &group_by, ParserOptions optio
 	// construct a mock SELECT query with our group_by expressions
 	string mock_query = StringUtil::Format("SELECT 42 GROUP BY %s", group_by);
 	// parse the query
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	// check the result
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -618,7 +618,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
 	// parse the query
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -640,7 +640,7 @@ void Parser::ParseUpdateList(const string &update_list, vector<Identifier> &upda
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
 	// parse the query
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
@@ -655,7 +655,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	// construct a mock query
 	string mock_query = "VALUES " + value_list;
 	// parse the query
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -675,7 +675,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 
 ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions options) {
 	string mock_query = "CREATE TABLE tbl (" + column_list + ")";
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(mock_query);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
 		throw ParserException("Expected a single CREATE statement");
@@ -689,7 +689,7 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 }
 
 ColumnDefinition Parser::ParseColumnDefinition(const string &column_definition, ParserOptions options) {
-	auto column_list = ParseColumnList(column_definition, options);
+	auto column_list = ParseColumnList(column_definition, std::move(options));
 	return column_list.GetColumn(LogicalIndex(0)).Copy();
 }
 

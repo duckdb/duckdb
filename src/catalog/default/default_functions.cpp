@@ -238,7 +238,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
 	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
 	auto sql = StringUtil::Format("CREATE MACRO __dummy__%s", default_macro.macro_definition);
-	Parser parser(options);
+	Parser parser(std::move(options));
 	parser.ParseQuery(sql);
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
@@ -267,7 +267,7 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name,
-                                                         ParserOptions options) {
+	                                                     const ParserOptions &options) {
 	auto &schema = input_schema;
 	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
