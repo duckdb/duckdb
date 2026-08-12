@@ -35,6 +35,23 @@ SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
 ----
 hit
 
+query I
+SELECT CASE (SELECT 2) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END
+----
+2
+
+# Volatile branches of a deterministic simple CASE remain visible to the optimizer.
+query II
+SELECT count(*) FILTER (WHERE a = b), count(*)
+FROM (
+	SELECT
+		CASE 1 WHEN 1 THEN random() ELSE 0 END a,
+		CASE 1 WHEN 1 THEN random() ELSE 0 END b
+	FROM range(10000)
+)
+----
+0	10000
+
 # The generated lambda parameter must not shadow a user column.
 query I
 SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
@@ -44,6 +61,27 @@ ORDER BY i
 42
 0
 
+# The internal invoke call cannot be shadowed by a user macro.
+statement ok
+CREATE SEQUENCE invoke_shadow_seq START 1
+
+statement ok
+CREATE VIEW invoke_shadow_view AS
+	SELECT CASE nextval('invoke_shadow_seq') WHEN 1 THEN 42 ELSE 0 END
+
+statement ok
+CREATE MACRO invoke(x, y) AS 999
+
+query I
+SELECT CASE 1 WHEN 1 THEN 42 ELSE 0 END
+----
+42
+
+query I
+SELECT * FROM invoke_shadow_view
+----
+42
+
 # CASE bodies that cannot execute inside a lambda keep working for deterministic operands.
 query I
 SELECT CASE 1 WHEN 1 THEN (SELECT 2) ELSE 0 END
@@ -52,6 +90,32 @@ SELECT CASE 1 WHEN 1 THEN (SELECT 2) ELSE 0 END
 
 query I
 SELECT CASE 1 WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+----
+2
+
+# Eligibility is determined after macro expansion.
+statement ok
+CREATE MACRO simple_case_subquery() AS (SELECT 2)
+
+query I
+SELECT CASE 1 WHEN 1 THEN simple_case_subquery() ELSE 0 END
+----
+2
+
+statement ok
+CREATE MACRO simple_case_unnest() AS unnest([2])
+
+query I
+SELECT CASE 1 WHEN 1 THEN simple_case_unnest() ELSE 0 END
+----
+2
+
+statement ok
+PREPARE simple_case_parameter AS
+	SELECT CASE $1 WHEN 1 THEN simple_case_subquery() WHEN 2 THEN 3 ELSE 0 END
+
+query I
+EXECUTE simple_case_parameter(1)
 ----
 2
 
@@ -66,14 +130,27 @@ SELECT CASE nextval('simple_case_seq') WHEN 1 THEN unnest([2]) ELSE unnest([3]) 
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
-# Aggregate and window expressions can be captured by the generated invoke.
+statement error
+SELECT CASE random() WHEN 1 THEN simple_case_subquery() ELSE 0 END
+----
+Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+
+statement error
+SELECT CASE random() WHEN 1 THEN simple_case_unnest() ELSE 0 END
+----
+Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+
+# Aggregate and window expressions can be captured when a volatile operand requires invoke.
+statement ok
+CREATE SEQUENCE simple_case_capture_seq START 1
+
 query I
-SELECT CASE 1 WHEN 1 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
+SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
 ----
 3
 
 query I
-SELECT CASE 1 WHEN 1 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
+SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
 ----
 1
 2

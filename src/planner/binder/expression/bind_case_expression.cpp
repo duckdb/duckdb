@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -7,40 +8,10 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-
-static bool ContainsUnnest(const ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto &function = expr.Cast<FunctionExpression>();
-		if (ExpressionBinder::IsUnnestFunction(function.FunctionName())) {
-			return true;
-		}
-	}
-	for (auto &child : expr.Children()) {
-		if (ContainsUnnest(child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool PreventsInvoke(const ParsedExpression &expr) {
-	return expr.HasSubquery() || ContainsUnnest(expr);
-}
-
-static bool CaseBodyPreventsInvoke(const CaseExpression &expr) {
-	for (auto &check : expr.CaseChecks()) {
-		if (PreventsInvoke(*check.when_expr) || PreventsInvoke(*check.then_expr)) {
-			return true;
-		}
-	}
-	return PreventsInvoke(expr.Else());
-}
 
 static void CollectColumnNames(const ParsedExpression &expr, unordered_set<string> &column_names) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &column_ref) {
@@ -64,7 +35,36 @@ static string GetCaseParameterName(const CaseExpression &expr) {
 	return result;
 }
 
-static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpression &expr) {
+static unique_ptr<CaseExpression> CreateLegacyCaseExpression(const CaseExpression &expr,
+                                                             unique_ptr<Expression> case_operand) {
+	auto result = make_uniq<CaseExpression>();
+	const bool can_copy_bound_operand = !case_operand->HasParameter() && !case_operand->HasSubquery();
+	for (idx_t i = 0; i < expr.CaseChecks().size(); i++) {
+		auto &check = expr.CaseChecks()[i];
+		unique_ptr<ParsedExpression> operand;
+		if (can_copy_bound_operand) {
+			auto bound_operand = i + 1 == expr.CaseChecks().size() ? std::move(case_operand) : case_operand->Copy();
+			operand = make_uniq<BoundExpression>(std::move(bound_operand));
+		} else if (i == 0) {
+			operand = make_uniq<BoundExpression>(std::move(case_operand));
+		} else {
+			operand = expr.CaseOperand()->Copy();
+		}
+
+		CaseCheck legacy_check;
+		legacy_check.when_expr =
+		    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(operand), check.when_expr->Copy());
+		legacy_check.then_expr = check.then_expr->Copy();
+		result->CaseChecksMutable().push_back(std::move(legacy_check));
+	}
+	result->ElseMutable() = expr.Else().Copy();
+	result->SetAlias(expr.GetAlias());
+	result->SetQueryLocation(expr.GetQueryLocation());
+	return result;
+}
+
+static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpression &expr,
+                                                               unique_ptr<Expression> case_operand) {
 	auto parameter_name = GetCaseParameterName(expr);
 	auto case_body = make_uniq<CaseExpression>();
 	for (auto &check : expr.CaseChecks()) {
@@ -81,36 +81,57 @@ static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpress
 	parameters.push_back(parameter_name);
 	vector<unique_ptr<ParsedExpression>> arguments;
 	arguments.push_back(make_uniq<LambdaExpression>(std::move(parameters), std::move(case_body)));
-	arguments.push_back(expr.CaseOperand()->Copy());
-	auto result = make_uniq<FunctionExpression>("invoke", std::move(arguments));
+	arguments.push_back(make_uniq<BoundExpression>(std::move(case_operand)));
+	auto invoke_name = QualifiedName(Identifier(SYSTEM_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier("invoke"));
+	auto result = make_uniq<FunctionExpression>(invoke_name, std::move(arguments));
 	result->SetAlias(expr.GetAlias());
 	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
 
+static bool IsUnsupportedLambdaBody(const ErrorData &error) {
+	if (!error.HasError()) {
+		return false;
+	}
+	auto &message = error.RawMessage();
+	return StringUtil::Contains(message, "subqueries in lambda expressions are not supported") ||
+	       StringUtil::Contains(message, "UNNEST in lambda expressions is not supported");
+}
+
+static BindResult UnsupportedVolatileCase(const CaseExpression &expr) {
+	return BindResult(BinderException(
+	    expr,
+	    "Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported"));
+}
+
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	if (expr.CaseOperand()) {
-		if (!CaseBodyPreventsInvoke(expr)) {
-			auto invoke_expr = CreateCaseInvokeExpression(expr);
-			return BindExpression(invoke_expr, depth);
+		auto case_operand = expr.CaseOperand()->Copy();
+		ErrorData error;
+		BindChild(case_operand, depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
+		auto bound_operand = std::move(BoundExpression::GetExpression(*case_operand));
+
+		if (!bound_operand->IsVolatile()) {
+			auto legacy_case = CreateLegacyCaseExpression(expr, std::move(bound_operand));
+			return BindExpression(*legacy_case, depth);
 		}
 
-		auto legacy_case = expr.GetLegacyCaseExpression();
-		auto legacy_result = BindExpression(*legacy_case, depth);
-		if (legacy_result.HasError()) {
-			return legacy_result;
+		auto invoke_expr = CreateCaseInvokeExpression(expr, std::move(bound_operand));
+		try {
+			auto result = BindExpression(invoke_expr, depth);
+			if (result.HasError() && IsUnsupportedLambdaBody(result.error)) {
+				return UnsupportedVolatileCase(expr);
+			}
+			return result;
+		} catch (const std::exception &ex) {
+			if (IsUnsupportedLambdaBody(ErrorData(ex))) {
+				return UnsupportedVolatileCase(expr);
+			}
+			throw;
 		}
-		auto &bound_case = legacy_result.expression->Cast<BoundCaseExpression>();
-		D_ASSERT(!bound_case.CaseChecks().empty());
-		auto &first_check = *bound_case.CaseChecks()[0].when_expr;
-		D_ASSERT(BoundComparisonExpression::IsComparison(first_check));
-		auto &comparison = first_check.Cast<BoundFunctionExpression>();
-		if (BoundComparisonExpression::Left(comparison).IsVolatile()) {
-			return BindResult(BinderException(
-			    expr, "Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not "
-			          "supported"));
-		}
-		return legacy_result;
 	}
 
 	// first try to bind the children of the case expression
