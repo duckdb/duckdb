@@ -190,7 +190,7 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
 				if (dataflow_mode == DataflowDependencyMode::SKIP_CONFLICTING) {
-					bool conflicts_with_dataflow = false;
+					bool conflicts_with_dataflow = pipeline->HasExternalInputProducer(*new_dependency);
 					for (auto &dataflow_dependency : pipeline->GetDataflowDependencies()) {
 						auto dependency = dataflow_dependency.lock();
 						D_ASSERT(dependency);
@@ -249,7 +249,8 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline.dependencies = current.dependencies;
 	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
-	union_pipeline.external_finish_dependencies = current.external_finish_dependencies;
+	union_pipeline.input_mode = current.input_mode;
+	union_pipeline.external_input_producers = current.external_input_producers;
 	auto it = pipeline_dependencies.find(current);
 	if (it != pipeline_dependencies.end()) {
 		pipeline_dependencies[union_pipeline] = it->second;

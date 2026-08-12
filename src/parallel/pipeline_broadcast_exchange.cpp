@@ -681,6 +681,7 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	consumer.mode = PipelineBroadcastExchangeConsumerMode::DIRECT;
 	DeactivateConsumerLocked(consumer, buffer->BasePosition());
 	direct_pipelines.push_back(pipeline);
+	pipeline.SetExternalInput(producer_pipelines);
 	if (pipeline.IsStreamingResultPipeline()) {
 		for (auto &producer_pipeline : producer_pipelines) {
 			producer_pipeline.get().SetExternalStreamingResultProducer();

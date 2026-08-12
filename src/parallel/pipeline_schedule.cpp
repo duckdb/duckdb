@@ -34,6 +34,38 @@ static void AddDependency(PipelineSchedule &result, idx_t dependent, idx_t depen
 	result.stages[dependent].dependencies.push_back(dependency);
 }
 
+bool PipelineSchedule::HasCycle() const {
+	vector<idx_t> remaining_dependencies;
+	vector<vector<idx_t>> dependents(stages.size());
+	vector<idx_t> ready;
+	remaining_dependencies.reserve(stages.size());
+	ready.reserve(stages.size());
+	for (idx_t stage_idx = 0; stage_idx < stages.size(); stage_idx++) {
+		remaining_dependencies.push_back(stages[stage_idx].dependencies.size());
+		if (stages[stage_idx].dependencies.empty()) {
+			ready.push_back(stage_idx);
+		}
+		for (auto dependency : stages[stage_idx].dependencies) {
+			D_ASSERT(dependency < stages.size());
+			dependents[dependency].push_back(stage_idx);
+		}
+	}
+
+	idx_t completed = 0;
+	while (!ready.empty()) {
+		auto stage_idx = ready.back();
+		ready.pop_back();
+		completed++;
+		for (auto dependent : dependents[stage_idx]) {
+			D_ASSERT(remaining_dependencies[dependent] > 0);
+			if (--remaining_dependencies[dependent] == 0) {
+				ready.push_back(dependent);
+			}
+		}
+	}
+	return completed != stages.size();
+}
+
 static PipelineScheduleStageStack AddBasePipeline(PipelineSchedule &result, const shared_ptr<Pipeline> &pipeline) {
 	auto initialize = AddStage(result, PipelineScheduleStageType::INITIALIZE, pipeline);
 	auto execute = AddStage(result, PipelineScheduleStageType::EXECUTE, pipeline);
@@ -142,16 +174,6 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 				AddDependency(*result, entry.second.execute, dep_entry->second.initialize);
 			}
 		}
-		// External finish dependencies block both execution and PrepareFinalize on the producer's execution.
-		for (auto &dependency : pipeline.GetExternalFinishDependencies()) {
-			auto dep = dependency.lock();
-			D_ASSERT(dep);
-			auto dep_entry = stage_map.find(*dep);
-			if (dep_entry != stage_map.end()) {
-				AddDependency(*result, entry.second.execute, dep_entry->second.execute);
-				AddDependency(*result, entry.second.prepare_finish, dep_entry->second.execute);
-			}
-		}
 	}
 
 	// Meta-pipeline dependencies order their execute stages directly.
@@ -219,6 +241,47 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 			}
 		}
 	}
+
+	// External producers execute in place of the consumer's source. They wait until the consumer state and its
+	// blocking inputs are ready, while independent scheduling constraints remain attached to the consumer itself.
+	// The consumer execution and finalization stages remain open until every producer has finished pushing.
+	for (auto &entry : stage_map) {
+		auto &consumer = entry.first.get();
+		if (!consumer.IsExternalInput()) {
+			continue;
+		}
+		for (auto &producer_ref : consumer.GetExternalInputProducers()) {
+			auto producer = producer_ref.lock();
+			D_ASSERT(producer);
+			auto producer_entry = stage_map.find(*producer);
+			if (producer_entry == stage_map.end()) {
+				if (!allow_missing_meta_pipelines) {
+					throw InternalException("Missing external input producer pipeline");
+				}
+				continue;
+			}
+			AddDependency(*result, producer_entry->second.execute, entry.second.initialize);
+			for (auto &dependency : consumer.GetDependencies()) {
+				auto dep = dependency.lock();
+				D_ASSERT(dep);
+				auto dep_entry = stage_map.find(*dep);
+				if (dep_entry != stage_map.end()) {
+					AddDependency(*result, producer_entry->second.execute, dep_entry->second.complete);
+				}
+			}
+			for (auto &dependency : consumer.GetDataflowDependencies()) {
+				auto dep = dependency.lock();
+				D_ASSERT(dep);
+				auto dep_entry = stage_map.find(*dep);
+				if (dep_entry != stage_map.end()) {
+					AddDependency(*result, producer_entry->second.execute, dep_entry->second.initialize);
+				}
+			}
+			AddDependency(*result, entry.second.execute, producer_entry->second.execute);
+			AddDependency(*result, entry.second.prepare_finish, producer_entry->second.execute);
+		}
+	}
+
 	return result;
 }
 

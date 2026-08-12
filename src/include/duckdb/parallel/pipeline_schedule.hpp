@@ -30,6 +30,8 @@ struct PipelineScheduleStage {
 struct PipelineSchedule {
 	vector<PipelineScheduleStage> stages;
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
+
+	bool HasCycle() const;
 };
 
 unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,

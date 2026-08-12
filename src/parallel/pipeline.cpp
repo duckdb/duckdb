@@ -215,11 +215,28 @@ bool Pipeline::IsOrderDependent() const {
 	return false;
 }
 
-void Pipeline::SetExternalInput() {
+void Pipeline::SetExternalInput(const vector<reference<Pipeline>> &producer_pipelines) {
+	D_ASSERT(!producer_pipelines.empty());
 	input_mode = PipelineInputMode::EXTERNAL_INPUT;
+	external_input_producers.clear();
+	external_input_producers.reserve(producer_pipelines.size());
+	for (auto &producer : producer_pipelines) {
+		external_input_producers.emplace_back(producer.get().shared_from_this());
+	}
 	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	external_input_event.reset();
 	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
+}
+
+bool Pipeline::HasExternalInputProducer(const Pipeline &pipeline) const {
+	for (auto &producer_ref : external_input_producers) {
+		auto producer = producer_ref.lock();
+		D_ASSERT(producer);
+		if (RefersToSameObject(*producer, pipeline)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool Pipeline::IsStreamingResultPipeline() const {
@@ -569,12 +586,6 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 void Pipeline::AddDataflowDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dataflow_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
-	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
-}
-
-void Pipeline::AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline) {
-	D_ASSERT(pipeline);
-	external_finish_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 

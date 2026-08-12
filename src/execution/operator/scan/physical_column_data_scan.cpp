@@ -247,10 +247,6 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 			// Prefer direct fanout. Buffered exchange is only used when it can avoid full materialization or
 			// when the consumer can stop early; otherwise this scan reads the materialized working table.
 			if (cte.TryRegisterDirectConsumer(current, source.consumer_idx)) {
-				auto current_pipeline = current.shared_from_this();
-				current.SetExternalInput();
-				current.AddExternalFinishDependency(cte_dependency);
-				cte_dependency->AddDataflowDependency(current_pipeline);
 				DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
 				           {{"consumer", to_string(source.consumer_idx)}, {"mode", "DIRECT"}});
 				state.SetPipelineSource(current, *cte_source);

@@ -98,13 +98,9 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
-	void AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline);
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
 	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
 		return dataflow_dependencies;
-	}
-	const vector<weak_ptr<Pipeline>> &GetExternalFinishDependencies() const {
-		return external_finish_dependencies;
 	}
 	bool HasDataflowDependencies() const {
 		return !dataflow_dependencies.empty();
@@ -148,10 +144,14 @@ public:
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
 	//! Marks this pipeline as fed externally instead of by scheduled source tasks
-	void SetExternalInput();
+	void SetExternalInput(const vector<reference<Pipeline>> &producer_pipelines);
 	bool IsExternalInput() const {
 		return input_mode == PipelineInputMode::EXTERNAL_INPUT;
 	}
+	const vector<weak_ptr<Pipeline>> &GetExternalInputProducers() const {
+		return external_input_producers;
+	}
+	bool HasExternalInputProducer(const Pipeline &pipeline) const;
 	void SetExternalStreamingResultProducer() {
 		external_streaming_result_producer = true;
 	}
@@ -194,8 +194,8 @@ private:
 	vector<weak_ptr<Pipeline>> dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;
-	//! Pipelines that must run before this externally fed pipeline can finish its sink
-	vector<weak_ptr<Pipeline>> external_finish_dependencies;
+	//! Pipelines that push input into this pipeline instead of scanning its source
+	vector<weak_ptr<Pipeline>> external_input_producers;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
