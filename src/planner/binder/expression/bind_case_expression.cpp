@@ -90,12 +90,12 @@ static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpress
 }
 
 static bool IsUnsupportedLambdaBody(const ErrorData &error) {
-	if (!error.HasError()) {
+	if (!error.HasError() || error.Type() != ExceptionType::BINDER) {
 		return false;
 	}
-	auto &message = error.RawMessage();
-	return StringUtil::Contains(message, "subqueries in lambda expressions are not supported") ||
-	       StringUtil::Contains(message, "UNNEST in lambda expressions is not supported");
+	auto &extra_info = error.ExtraInfo();
+	auto entry = extra_info.find("error_subtype");
+	return entry != extra_info.end() && entry->second == "UNSUPPORTED_LAMBDA_EXPRESSION";
 }
 
 static BindResult UnsupportedVolatileCase(const CaseExpression &expr) {
@@ -114,7 +114,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		}
 		auto bound_operand = std::move(BoundExpression::GetExpression(*case_operand));
 
-		if (!bound_operand->IsVolatile()) {
+		if (expr.CaseChecks().size() == 1 || !bound_operand->IsVolatile()) {
 			auto legacy_case = CreateLegacyCaseExpression(expr, std::move(bound_operand));
 			return BindExpression(*legacy_case, depth);
 		}
@@ -126,7 +126,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 				return UnsupportedVolatileCase(expr);
 			}
 			return result;
-		} catch (const std::exception &ex) {
+		} catch (const BinderException &ex) {
 			if (IsUnsupportedLambdaBody(ErrorData(ex))) {
 				return UnsupportedVolatileCase(expr);
 			}

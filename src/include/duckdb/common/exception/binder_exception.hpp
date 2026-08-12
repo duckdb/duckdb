@@ -59,6 +59,7 @@ public:
 	                                          const Identifier &name, const vector<LogicalType> &arguments,
 	                                          const vector<pair<Identifier, LogicalType>> &named_arguments,
 	                                          const vector<string> &candidates);
+	static BinderException UnsupportedLambdaExpression(const string &message);
 	static BinderException Unsupported(ParsedExpression &expr, const string &message);
 };
 
