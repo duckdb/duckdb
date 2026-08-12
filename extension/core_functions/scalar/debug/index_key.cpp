@@ -134,9 +134,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
 	}
 
-	// Register a catalog dependency so that prepared statements are invalidated when the table/index is dropped.
-	// The binder may not be available when this function is called through expression
-	// serialization/deserialization (e.g. LogicalOperator::Verify in debug builds).
+	// index_key resolves index metadata during binding.
+	// Register the owning catalog so cached prepared statements rebind after catalog changes.
 	if (input.HasBinder()) {
 		auto &binder = input.GetBinder();
 		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
