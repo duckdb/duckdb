@@ -1,0 +1,410 @@
+# name: test/optimizer/aggregate_reuse.test
+# description: Reuse exact grouped payloads retained by SEMI joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE reuse_dim(id INTEGER, label VARCHAR)
+
+statement ok
+INSERT INTO reuse_dim VALUES (10, 'x'), (20, 'b'), (30, 'x'), (40, 'd')
+
+statement ok
+CREATE TABLE reuse_owner(k INTEGER, dim_id INTEGER)
+
+statement ok
+INSERT INTO reuse_owner VALUES (1, 10), (2, 20), (3, 30), (4, 40)
+
+statement ok
+CREATE TABLE reuse_fact(k INTEGER, v INTEGER, w INTEGER)
+
+statement ok
+INSERT INTO reuse_fact VALUES (1, 10, 1), (1, 20, 2), (2, 5, 3), (3, 40, 4), (3, 50, 5), (4, NULL, 6)
+
+statement ok
+PRAGMA explain_output = 'physical_only'
+
+# The baseline scans the fact table once for the SEMI join and again for the outer aggregate.
+statement ok
+SET disabled_optimizers = 'aggregate_reuse'
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+statement ok
+RESET disabled_optimizers
+
+# The grouped state replaces the outer fact scan while an upper combine preserves owner multiplicity.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<!REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<!REGEX>:.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+statement ok
+SET debug_verify_serializer = true
+
+query IIT rowsort
+SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+1	x	30
+3	x	90
+
+# NULL aggregate results remain NULL when carried through the inner join.
+query IIT rowsort
+SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) IS NULL)
+GROUP BY o.k, d.label
+----
+4	d	NULL
+
+# A key can determine the output label without making the label a unique grouping key.
+query II
+EXPLAIN SELECT d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY d.label
+----
+physical_plan	<!REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query IT
+SELECT d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY d.label
+----
+x	120
+
+statement ok
+SET debug_verify_serializer = false
+
+# DISTINCT has a separate state lifecycle and is not reused.
+query II
+EXPLAIN SELECT o.k, d.label, count(DISTINCT f.w)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING count(DISTINCT w) > 1)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# Every outer aggregate would have to be available in the retained payload.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v), count(*)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# A different argument or function is not an exact payload match.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.w)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, max(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# Filters on either aggregate input change the row domain.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact WHERE w >= 2 GROUP BY k HAVING sum(v) > 15)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f ON o.k = f.k AND f.w >= 2
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# The SEMI join must consume the grouped key, not another output of the aggregate.
+query II
+EXPLAIN SELECT o.k, d.label, sum(f.v)
+FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT CAST(sum(v) AS INTEGER) FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k, d.label
+----
+physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+# Duplicate owners repeat the state and are combined by the retained outer aggregate.
+statement ok
+CREATE TABLE reuse_duplicate_owner AS SELECT * FROM reuse_owner UNION ALL SELECT * FROM reuse_owner
+
+query II
+EXPLAIN SELECT o.k, sum(f.v)
+FROM reuse_duplicate_owner o JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k
+----
+physical_plan	<!REGEX>:(?s).*reuse_fact.*reuse_fact.*
+
+query II
+EXPLAIN SELECT o.k, sum(f.v)
+FROM reuse_duplicate_owner o JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+query II rowsort
+SELECT o.k, sum(f.v)
+FROM reuse_duplicate_owner o JOIN reuse_fact f USING (k)
+WHERE o.k IN (SELECT k FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+GROUP BY o.k
+----
+1	60
+3	180
+
+# A correlated aggregate can reuse an equivalent materialized payload when the producer only adds a unique relation.
+statement ok
+SET delim_join_as_cte = true
+
+statement ok
+CREATE TABLE payload_part(k INTEGER, size INTEGER, kind VARCHAR, label VARCHAR)
+
+statement ok
+CREATE TABLE payload_fact(k INTEGER, supplier_id INTEGER, cost INTEGER)
+
+statement ok
+CREATE TABLE payload_supplier(id INTEGER PRIMARY KEY, region_id INTEGER, name VARCHAR, address VARCHAR, phone VARCHAR)
+
+statement ok
+CREATE TABLE payload_region(id INTEGER PRIMARY KEY, name VARCHAR)
+
+statement ok
+INSERT INTO payload_part VALUES (1, 15, 'BRASS', 'p1'), (2, 15, 'BRASS', 'p2'), (3, 10, 'STEEL', 'p3')
+
+statement ok
+INSERT INTO payload_supplier VALUES (10, 1, 's1', 'a1', '1'), (20, 1, 's2', 'a2', '2'),
+                                   (30, 2, 's3', 'a3', '3')
+
+statement ok
+INSERT INTO payload_region VALUES (1, 'EUROPE'), (2, 'ASIA')
+
+statement ok
+INSERT INTO payload_fact VALUES (1, 10, 7), (1, 20, 5), (1, 30, 1), (2, 10, 9), (2, 20, 9), (3, 10, 2)
+
+statement ok
+PRAGMA explain_output = 'optimized_only'
+
+statement ok
+SET disabled_optimizers = 'aggregate_reuse'
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<!REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+SET debug_verify_serializer = true
+
+query TTTITI rowsort
+WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, p.label, f.cost, s.name, s.address, s.phone
+  FROM payload_part p, payload_fact f, payload_supplier s, payload_region r
+  WHERE p.k = f.k AND s.id = f.supplier_id AND s.region_id = r.id
+    AND p.size = 15 AND p.kind = 'BRASS' AND r.name = 'EUROPE'
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f, payload_supplier s, payload_region r
+  WHERE s.id = f.supplier_id AND s.region_id = r.id AND r.name = 'EUROPE'
+    AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.name, o.address, o.phone, o.k, o.label, o.cost
+FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+s1	a1	1	2	p2	9
+s2	a2	2	1	p1	5
+s2	a2	2	2	p2	9
+
+statement ok
+SET debug_verify_serializer = false
+
+# Uniform duplication by the added relation does not change MIN.
+statement ok
+CREATE TABLE payload_unproven_part AS SELECT * FROM payload_part UNION ALL SELECT * FROM payload_part
+
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.k, o.cost FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<!REGEX>:(?s).*payload_fact.*payload_fact.*
+
+query II rowsort
+WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.k, o.cost FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+1	1
+1	1
+2	9
+2	9
+2	9
+2	9
+
+# Multiple replication-invariant aggregates can be reused together.
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), cost_stats AS (
+  SELECT f.k, min(f.cost) AS minimum, max(f.cost) AS maximum
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT * FROM cost_stats
+----
+logical_opt	<!REGEX>:(?s).*payload_fact.*payload_fact.*
+
+query III rowsort
+WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), cost_stats AS (
+  SELECT f.k, min(f.cost) AS minimum, max(f.cost) AS maximum
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT * FROM cost_stats
+----
+1	1	7
+2	9	9
+
+# Multiplicity-sensitive aggregates cannot consume the duplicated producer.
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_unproven_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), total_cost AS (
+  SELECT f.k, sum(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT * FROM total_cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+# A different core filter changes the aggregate row domain.
+query II
+EXPLAIN WITH outer_rows AS MATERIALIZED (
+  SELECT p.k, f.cost, f.supplier_id
+  FROM payload_part p JOIN payload_fact f USING (k)
+  WHERE p.size = 15
+), minimum_cost AS (
+  SELECT f.k, min(f.cost) AS cost
+  FROM payload_fact f
+  WHERE f.cost >= 7 AND f.k IN (SELECT k FROM outer_rows)
+  GROUP BY f.k
+)
+SELECT o.k, o.cost FROM outer_rows o JOIN minimum_cost m ON o.k = m.k AND o.cost = m.cost
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
+
+statement ok
+RESET delim_join_as_cte
+
+# A changed inner row domain cannot consume the materialized payload.
+query II
+EXPLAIN SELECT p.k, f.cost
+FROM payload_part p JOIN payload_fact f USING (k)
+WHERE p.size = 15 AND f.cost = (SELECT min(f2.cost) FROM payload_fact f2
+                                WHERE f2.k = p.k AND f2.supplier_id = 10)
+----
+logical_opt	<REGEX>:(?s).*payload_fact.*payload_fact.*
