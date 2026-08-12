@@ -1,0 +1,136 @@
+# name: test/sql/projection/test_simple_case.test
+# description: Test simple CASE expressions
+# group: [projection]
+
+# A simple CASE operand is evaluated once per input row.
+statement ok
+CREATE SEQUENCE simple_case_seq START 1
+
+query I
+SELECT count(*) FROM (
+	SELECT CASE nextval('simple_case_seq') % 3
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM range(10000)
+) WHERE result = 'other'
+----
+0
+
+# Existing comparison binding supplies NULL, coercion, and collation semantics.
+query T
+SELECT CASE NULL WHEN NULL THEN 'hit' ELSE 'miss' END
+----
+miss
+
+query T
+SELECT CASE 1 WHEN '1' THEN 'hit' ELSE 'miss' END
+----
+hit
+
+query T
+SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
+----
+hit
+
+# The generated lambda parameter must not shadow a user column.
+query I
+SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
+FROM (VALUES (1, 42), (2, 99)) tbl(i, __duckdb_simple_case_subject)
+ORDER BY i
+----
+42
+0
+
+# CASE bodies that cannot execute inside a lambda keep working for deterministic operands.
+query I
+SELECT CASE 1 WHEN 1 THEN (SELECT 2) ELSE 0 END
+----
+2
+
+query I
+SELECT CASE 1 WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+----
+2
+
+# Do not silently use repeated-evaluation semantics for volatile operands.
+statement error
+SELECT CASE nextval('simple_case_seq') WHEN 1 THEN (SELECT 2) ELSE 0 END
+----
+Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+
+statement error
+SELECT CASE nextval('simple_case_seq') WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+----
+Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+
+# Aggregate and window expressions can be captured by the generated invoke.
+query I
+SELECT CASE 1 WHEN 1 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
+----
+3
+
+query I
+SELECT CASE 1 WHEN 1 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
+----
+1
+2
+3
+
+# The parsed operand survives current-format storage and is lowered again after restart.
+load {TEST_DIR}/simple_case_storage.db
+
+statement ok
+CREATE SEQUENCE stored_simple_case_seq START 1
+
+statement ok
+CREATE VIEW stored_simple_case AS
+	SELECT CASE nextval('stored_simple_case_seq') % 3
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM range(10000)
+
+restart
+
+query I
+SELECT count(*) FROM stored_simple_case WHERE result = 'other'
+----
+0
+
+# Old storage versions receive the historical searched-CASE representation.
+statement ok
+ATTACH '{TEST_DIR}/simple_case_legacy.db' AS legacy (STORAGE_VERSION 'v1.5.0')
+
+statement ok
+CREATE TABLE legacy.simple_case_input AS SELECT * FROM range(2) tbl(i)
+
+statement ok
+CREATE SEQUENCE legacy.simple_case_seq START 3
+
+statement ok
+CREATE VIEW legacy.simple_case AS
+	SELECT i, CASE nextval('legacy.simple_case_seq') % 3
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM legacy.simple_case_input
+
+statement ok
+DETACH legacy
+
+statement ok
+ATTACH '{TEST_DIR}/simple_case_legacy.db' AS legacy
+
+# Lossy legacy serialization deliberately retains the behavior of old DuckDB versions.
+query IT
+SELECT i, result FROM legacy.simple_case ORDER BY i
+----
+0	zero
+1	other
