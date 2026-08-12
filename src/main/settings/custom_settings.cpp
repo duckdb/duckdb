@@ -1208,21 +1208,13 @@ void PreserveIdentifierCaseSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto parameter = StringValue::Get(input);
 	try {
 		EnumUtil::FromString<IdentifierCaseMode>(parameter);
-		return;
 	} catch (NotImplementedException &) {
-		// not one of the mode names - fall through and try the boolean spellings below
+		// the generated setter reports this as a NotImplementedException naming the C++ enum
+		throw InvalidInputException(
+		    "Unrecognized parameter for option preserve_identifier_case \"%s\", expected one of: "
+		    "preserve_case, lowercase, uppercase",
+		    parameter);
 	}
-	// this setting used to be a BOOLEAN, so anything the boolean cast accepts still has to work.
-	// Defer to that cast rather than listing the spellings, so the two cannot drift apart.
-	Value as_boolean;
-	string cast_error;
-	if (Value(parameter).DefaultTryCastAs(LogicalType::BOOLEAN, as_boolean, &cast_error) && !as_boolean.IsNull()) {
-		input = Value(BooleanValue::Get(as_boolean) ? "on" : "lowercase");
-		return;
-	}
-	throw InvalidInputException("Unrecognized parameter for option preserve_identifier_case \"%s\", expected one of: "
-	                            "on, lowercase, uppercase",
-	                            parameter);
 }
 
 //===----------------------------------------------------------------------===//

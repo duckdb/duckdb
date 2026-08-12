@@ -5,9 +5,9 @@
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-on
+preserve_case
 
-# 'on' preserves the case as written
+# 'preserve_case' keeps the case as written
 statement ok
 CREATE SCHEMA MySchema;
 
@@ -97,104 +97,6 @@ SELECT * FROM '{TEST_DIR}/NoSuch/Mixed/File.csv';
 ----
 <REGEX>:.*NoSuch/Mixed/File\.csv.*
 
-statement ok
-SET preserve_identifier_case TO 'uppercase';
-
-# the boolean spellings are still accepted for backwards compatibility
-statement ok
-SET preserve_identifier_case TO true;
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-MyTable
-
-statement ok
-DROP TABLE MyTable
-
-statement ok
-SET preserve_identifier_case TO false;
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-mytable
-
-statement ok
-DROP TABLE mytable
-
-# every spelling the BOOLEAN cast accepts still works, not just true/false
-foreach truthy 1 't' 'yes' 'y' 'TRUE'
-
-statement ok
-SET preserve_identifier_case TO {truthy};
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-MyTable
-
-statement ok
-DROP TABLE MyTable
-
-endloop
-
-foreach falsy 0 'f' 'no' 'n' 'FALSE'
-
-statement ok
-SET preserve_identifier_case TO {falsy};
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-mytable
-
-statement ok
-DROP TABLE mytable
-
-endloop
-
-# the 'preserve'/'lower'/'upper' aliases are accepted as well
-statement ok
-SET preserve_identifier_case TO 'upper';
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-MYTABLE
-
-statement ok
-DROP TABLE MYTABLE
-
-statement ok
-SET preserve_identifier_case TO 'preserve';
-
-statement ok
-CREATE TABLE MyTable(i INTEGER);
-
-query I
-SELECT table_name FROM duckdb_tables;
-----
-MyTable
-
-statement ok
-DROP TABLE MyTable
-
 # RESET restores the default
 statement ok
 SET preserve_identifier_case TO 'uppercase';
@@ -205,14 +107,24 @@ RESET preserve_identifier_case;
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-on
+preserve_case
 
 statement error
 SET preserve_identifier_case TO 'bogus';
 ----
-<REGEX>:.*Unrecognized parameter for option preserve_identifier_case "bogus", expected one of: on, lowercase, uppercase.*
+<REGEX>:.*Unrecognized parameter for option preserve_identifier_case "bogus", expected one of: preserve_case, lowercase, uppercase.*
 
 statement error
 SET preserve_identifier_case TO NULL;
 ----
 <REGEX>:.*preserve_identifier_case setting cannot be NULL.*
+
+# the setting used to be a BOOLEAN - the boolean spellings are deliberately no longer accepted
+foreach boolish true false 0 1 'yes' 'no'
+
+statement error
+SET preserve_identifier_case TO {boolish};
+----
+<REGEX>:.*expected one of: preserve_case, lowercase, uppercase.*
+
+endloop

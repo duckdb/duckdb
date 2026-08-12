@@ -1731,10 +1731,10 @@ struct PreferRangeJoinsSetting {
 struct PreserveIdentifierCaseSetting {
 	using RETURN_TYPE = IdentifierCaseMode;
 	static constexpr const char *Name = "preserve_identifier_case";
-	static constexpr const char *Description = "How to fold non-quoted identifiers: 'on' preserves the case as "
+	static constexpr const char *Description = "How to fold non-quoted identifiers: 'preserve_case' keeps the case as "
 	                                           "written, 'lowercase' lowercases them, 'uppercase' uppercases them";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "on";
+	static constexpr const char *DefaultValue = "preserve_case";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

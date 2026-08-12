@@ -2899,27 +2899,21 @@ HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetIdentifierCaseModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "ON" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "TRUE" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "PRESERVE" },
 		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "PRESERVE_CASE" },
 		{ static_cast<uint32_t>(IdentifierCaseMode::LOWERCASE), "LOWERCASE" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::LOWERCASE), "FALSE" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::LOWERCASE), "LOWER" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::UPPERCASE), "UPPERCASE" },
-		{ static_cast<uint32_t>(IdentifierCaseMode::UPPERCASE), "UPPER" }
+		{ static_cast<uint32_t>(IdentifierCaseMode::UPPERCASE), "UPPERCASE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value) {
-	return StringUtil::EnumToString(GetIdentifierCaseModeValues(), 9, "IdentifierCaseMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetIdentifierCaseModeValues(), 3, "IdentifierCaseMode", static_cast<uint32_t>(value));
 }
 
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value) {
-	return static_cast<IdentifierCaseMode>(StringUtil::StringToEnum(GetIdentifierCaseModeValues(), 9, "IdentifierCaseMode", value));
+	return static_cast<IdentifierCaseMode>(StringUtil::StringToEnum(GetIdentifierCaseModeValues(), 3, "IdentifierCaseMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {

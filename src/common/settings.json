@@ -1176,10 +1176,10 @@
     },
     {
         "name": "preserve_identifier_case",
-        "description": "How to fold non-quoted identifiers: 'on' preserves the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
+        "description": "How to fold non-quoted identifiers: 'preserve_case' keeps the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
         "type": "ENUM<IdentifierCaseMode>",
         "default_scope": "local",
-        "default_value": "on",
+        "default_value": "preserve_case",
         "custom_implementation": [
             "set"
         ]
