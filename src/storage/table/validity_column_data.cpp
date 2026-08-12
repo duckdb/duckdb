@@ -14,9 +14,8 @@ ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInf
     : ValidityColumnData(block_manager, info, column_index, parent.GetDataType(), parent) {
 }
 
-FilterPropagateResult
-ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
-                                 optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                                       optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
 	checked_segment = nullptr;
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }

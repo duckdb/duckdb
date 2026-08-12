@@ -433,10 +433,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
 	state.segment_checked = !is_dynamic;
-	checked_segment =
-	    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-	        ? state.child_states[0].current
-	        : state.current;
+	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+	                      ? state.child_states[0].current
+	                      : state.current;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
