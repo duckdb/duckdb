@@ -1689,7 +1689,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	auto &column_reader = state.GetColumnReader(col_idx);
 
 	// keep track of column and row group ordinal if data is encrypted
-	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+	if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 		                                       GetGroup(state).ordinal);
 	}
@@ -2283,7 +2283,7 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 		}
 		auto &result_vector = result.data[i];
 		auto &child_reader = state.GetColumnReader(col_idx);
-		if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+		if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 			child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 			                                      GetGroup(state).ordinal);
 		}
@@ -2360,7 +2360,7 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = state.GetColumnReader(col_idx);
-			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+			if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}

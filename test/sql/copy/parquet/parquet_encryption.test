@@ -148,6 +148,12 @@ SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cac
 ----
 1	168	168
 
+# plain parquet metadata cache hits must still support row group scans
+query I
+SELECT * FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet')
+----
+168
+
 statement error
 SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet',
 	encryption_config={footer_key: 'key256'})
