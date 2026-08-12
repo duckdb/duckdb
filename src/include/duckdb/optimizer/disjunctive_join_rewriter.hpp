@@ -82,11 +82,6 @@ private:
 	//! Swaps left/right expressions in branches
 	vector<Branch> SwapBranches(const vector<Branch> &branches);
 
-	//! Remaps branch expressions to current CTE references
-	void RemapBranchExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte, TableIndex left_ref,
-	                            TableIndex right_ref, unique_ptr<Expression> &left_expr,
-	                            unique_ptr<Expression> &right_expr);
-
 	//! Builds a single hash join branch for a specific equality predicate
 	unique_ptr<LogicalOperator>
 	BuildHashJoinBranch(const CTEInfo &left_cte, const CTEInfo &right_cte, const Branch &branch, JoinType join_type,
@@ -109,8 +104,6 @@ private:
 	                                            const vector<ColumnBinding> &orig_bindings,
 	                                            const vector<LogicalType> &orig_types, const CTEInfo &left_cte,
 	                                            const CTEInfo &right_cte, JoinType join_type);
-
-	idx_t GetCTEColumnIndex(const CTEInfo &cte, ColumnBinding original_binding);
 
 	ClientContext &context;
 	Binder &binder;

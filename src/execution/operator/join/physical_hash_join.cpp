@@ -39,7 +39,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/parallel/meta_pipeline.hpp"
 
 namespace duckdb {
 

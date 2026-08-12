@@ -230,26 +230,6 @@ vector<DisjunctiveJoinRewriter::Branch> DisjunctiveJoinRewriter::SwapBranches(co
 	return swapped;
 }
 
-void DisjunctiveJoinRewriter::RemapBranchExpressions(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                                     TableIndex left_ref, TableIndex right_ref,
-                                                     unique_ptr<Expression> &left_expr,
-                                                     unique_ptr<Expression> &right_expr) {
-	ColumnBindingReplacer expr_replacer;
-	for (idx_t col = 0; col < left_cte.original_bindings.size(); col++) {
-		expr_replacer.replacement_bindings.emplace_back(
-		    left_cte.original_bindings[col], ColumnBinding(left_ref, ProjectionIndex(col)), left_cte.output_types[col]);
-	}
-	expr_replacer.VisitExpression(&left_expr);
-
-	expr_replacer.replacement_bindings.clear();
-	for (idx_t col = 0; col < right_cte.original_bindings.size(); col++) {
-		expr_replacer.replacement_bindings.emplace_back(right_cte.original_bindings[col],
-		                                                ColumnBinding(right_ref, ProjectionIndex(col)),
-		                                                right_cte.output_types[col]);
-	}
-	expr_replacer.VisitExpression(&right_expr);
-}
-
 vector<unique_ptr<LogicalOperator>> DisjunctiveJoinRewriter::BuildMatchedBranches(const CTEInfo &left_cte,
                                                                                   const CTEInfo &right_cte,
                                                                                   const vector<Branch> &branches) {
@@ -686,15 +666,6 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormalizeOutput(unique_ptr<
 unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, const LogicalType &type,
                                                        const string &alias) {
 	return make_uniq<BoundColumnRefExpression>(Identifier(alias), type, binding);
-}
-
-idx_t DisjunctiveJoinRewriter::GetCTEColumnIndex(const CTEInfo &cte, ColumnBinding original_binding) {
-	for (idx_t i = 0; i < cte.output_bindings.size(); i++) {
-		if (cte.output_bindings[i] == original_binding) {
-			return i;
-		}
-	}
-	throw InternalException("Binding not found in CTE");
 }
 
 } // namespace duckdb
