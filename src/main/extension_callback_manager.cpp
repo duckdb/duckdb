@@ -13,6 +13,8 @@ namespace duckdb {
 struct ExtensionCallbackRegistry {
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Keywords registered by parser extensions
+	KeywordExtension keyword_extension;
 	//! Extensions made to the planner
 	vector<PlannerExtension> planner_extensions;
 	//! Extensions made to the optimizer
@@ -56,6 +58,15 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->parser_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
+void ExtensionCallbackManager::Register(const vector<ExtensionKeyword> &keywords) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	for (const auto &keyword : keywords) {
+		new_registry->keyword_extension.RegisterKeyword(keyword);
+	}
 	callback_registry.atomic_store(new_registry);
 }
 
@@ -162,6 +173,16 @@ optional_ptr<ProfilerExtension> ExtensionCallbackManager::FindProfilerExtension(
 bool ExtensionCallbackManager::HasParserExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	return !registry->parser_extensions.empty();
+}
+
+shared_ptr<const vector<ParserExtension>> ExtensionCallbackManager::GetParserExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	return shared_ptr<const vector<ParserExtension>>(registry, &registry->parser_extensions);
+}
+
+shared_ptr<const KeywordExtension> ExtensionCallbackManager::GetKeywordExtension() const {
+	auto registry = callback_registry.atomic_load();
+	return shared_ptr<const KeywordExtension>(registry, &registry->keyword_extension);
 }
 
 void OptimizerExtension::Register(DBConfig &config, OptimizerExtension extension) {

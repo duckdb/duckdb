@@ -40,16 +40,17 @@ public:
 
 	//! Get the PEG matcher for syntax-level autocomplete.
 	virtual shared_ptr<PEGMatcher> GetPEGMatcher() = 0;
-	//! Get the parser cache containing extension-owned keywords.
-	virtual optional_ptr<ParserCache> GetParserCache() {
-		return nullptr;
-	}
+	//! Get the keywords registered by extensions.
+	virtual shared_ptr<const KeywordExtension> GetKeywordExtension() = 0;
 };
 
 //! Empty provider — returns no catalog suggestions.
 //! Keywords and SQL syntax completion still work via the PEG grammar.
 class EmptyCatalogProvider : public AutoCompleteCatalogProvider {
 public:
+	shared_ptr<const KeywordExtension> GetKeywordExtension() override {
+		return nullptr;
+	}
 	vector<AutoCompleteCandidate> SuggestCatalogName() override {
 		return {};
 	}
@@ -82,9 +83,6 @@ public:
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
 		return cache.GetMatcher();
-	}
-	optional_ptr<ParserCache> GetParserCache() override {
-		return &cache;
 	}
 
 private:

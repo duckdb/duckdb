@@ -1,11 +1,13 @@
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens, optional_ptr<ParserCache> parser_cache_p)
-    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()), parser_cache(parser_cache_p) {
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens,
+                             optional_ptr<const KeywordExtension> keyword_extension_p)
+    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()), keyword_extension(keyword_extension_p) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -456,9 +458,10 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			if (!CharacterIsIdentifierContinuation(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
-				auto token_type = (parser_cache ? parser_cache->IsKeyword(word) : keyword_helper.IsKeyword(word))
-				                      ? TokenType::KEYWORD
-				                      : TokenType::IDENTIFIER;
+				auto token_type =
+				    (keyword_extension ? keyword_extension->IsKeyword(word) : keyword_helper.IsKeyword(word))
+				        ? TokenType::KEYWORD
+				        : TokenType::IDENTIFIER;
 				PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
@@ -585,7 +588,7 @@ void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t las
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		state = (parser_cache ? parser_cache->IsKeyword(last_word) : keyword_helper.IsKeyword(last_word))
+		state = (keyword_extension ? keyword_extension->IsKeyword(last_word) : keyword_helper.IsKeyword(last_word))
 		            ? TokenizeState::KEYWORD
 		            : TokenizeState::STANDARD;
 	}

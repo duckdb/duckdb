@@ -8,10 +8,13 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+
+class KeywordExtension;
 
 //! Controls how SQL keywords are cased in the formatted output.
 enum class KeywordCase : uint8_t {
@@ -44,6 +47,7 @@ struct FormatterConfig {
 //! Keywords are uppercased; major clause keywords (SELECT, FROM, WHERE, etc.)
 //! are placed on their own lines; short clauses are optionally inlined based on
 //! FormatterConfig::inline_threshold.
-string FormatSQL(const string &sql, const FormatterConfig &config = FormatterConfig {});
+string FormatSQL(const string &sql, const FormatterConfig &config = FormatterConfig {},
+                 optional_ptr<const KeywordExtension> keyword_extension = nullptr);
 
 } // namespace duckdb

@@ -234,10 +234,10 @@ string Parser::NormalizeSQLString(const string &query) {
 
 void Parser::ParseQuery(const string &query_p) {
 	const string query = NormalizeSQLString(query_p);
-	if (options.extensions) {
+	if (options.parser_extensions) {
 		bool has_strict_extension_error = false;
 		ErrorData last_strict_extension_error;
-		for (auto &ext : options.extensions->ParserExtensions()) {
+		for (auto &ext : *options.parser_extensions) {
 			if (!ext.parser_override) {
 				continue;
 			}
@@ -267,7 +267,7 @@ void Parser::ParseQuery(const string &query_p) {
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
-	ParserTokenizer tokenizer(query, tokens, options.parser_cache);
+	ParserTokenizer tokenizer(query, tokens, options.keyword_extension.get());
 	tokenizer.TokenizeInput();
 	idx_t token_cursor = 0;
 	while (token_cursor < tokens.size()) {
@@ -305,7 +305,7 @@ void Parser::ParseQuery(const string &query_p) {
 
 unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
                                                             const string &query) {
-	if (!options.extensions || !options.extensions->HasParserExtensions()) {
+	if (!options.parser_extensions || options.parser_extensions->empty()) {
 		return nullptr;
 	}
 	idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
@@ -317,7 +317,7 @@ unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken>
 	for (idx_t i = token_cursor; i < tokens.size(); i++) {
 		simple_tokens.emplace_back(tokens[i].text, tokens[i].type);
 	}
-	for (auto &ext : options.extensions->ParserExtensions()) {
+	for (auto &ext : *options.parser_extensions) {
 		if (!ext.parse_function) {
 			continue;
 		}

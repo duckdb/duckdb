@@ -1,6 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
@@ -634,8 +634,8 @@ private:
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
 		auto keyword_category_type = [&](PEGKeywordCategory category) {
-			return state.parser_cache ? state.parser_cache->KeywordCategoryType(token_text, category)
-			                          : keyword_helper.KeywordCategoryType(token_text, category);
+			return state.keyword_extension ? state.keyword_extension->KeywordCategoryType(token_text, category)
+			                               : keyword_helper.KeywordCategoryType(token_text, category);
 		};
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
@@ -1570,194 +1570,6 @@ void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;
-}
-
-static PEGKeywordCategory ToParserCachePEGKeywordCategory(ExtensionKeywordCategory category) {
-	switch (category) {
-	case ExtensionKeywordCategory::RESERVED:
-		return PEGKeywordCategory::KEYWORD_RESERVED;
-	case ExtensionKeywordCategory::UNRESERVED:
-		return PEGKeywordCategory::KEYWORD_UNRESERVED;
-	case ExtensionKeywordCategory::FUNCTION_NAME:
-		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
-	case ExtensionKeywordCategory::COLUMN_NAME:
-		return PEGKeywordCategory::KEYWORD_COL_NAME;
-	case ExtensionKeywordCategory::TYPE_NAME:
-		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
-	default:
-		throw InvalidInputException("Invalid extension parser keyword category");
-	}
-}
-
-static PEGKeywordCategory BuiltinKeywordCategoryType(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
-		return PEGKeywordCategory::KEYWORD_RESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-		return PEGKeywordCategory::KEYWORD_UNRESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
-		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
-		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
-		return PEGKeywordCategory::KEYWORD_COL_NAME;
-	}
-	return PEGKeywordCategory::KEYWORD_NONE;
-}
-
-PEGKeywordCategory ParserCache::ExtensionKeywordCategoryTypeInternal(const ExtensionKeywordMaps &maps,
-                                                                     const string &text) {
-	if (maps.reserved.find(text) != maps.reserved.end()) {
-		return PEGKeywordCategory::KEYWORD_RESERVED;
-	}
-	if (maps.unreserved.find(text) != maps.unreserved.end()) {
-		return PEGKeywordCategory::KEYWORD_UNRESERVED;
-	}
-	if (maps.type_name.find(text) != maps.type_name.end()) {
-		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
-	}
-	if (maps.function_name.find(text) != maps.function_name.end()) {
-		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
-	}
-	if (maps.column_name.find(text) != maps.column_name.end()) {
-		return PEGKeywordCategory::KEYWORD_COL_NAME;
-	}
-	return PEGKeywordCategory::KEYWORD_NONE;
-}
-
-void ParserCache::ValidateKeywordRegistration(const ExtensionKeywordMaps &maps, const string &text,
-                                              PEGKeywordCategory category) {
-	if (text.empty()) {
-		throw InvalidInputException("Cannot register an empty parser keyword");
-	}
-	if (category == PEGKeywordCategory::KEYWORD_NONE) {
-		throw InvalidInputException("Cannot register parser keyword \"%s\" with category KEYWORD_NONE", text);
-	}
-	if (text.size() == 1) {
-		throw InvalidInputException("Cannot register single-character parser keyword \"%s\"", text);
-	}
-	for (auto character : text) {
-		if (StringUtil::CharacterIsDigit(character)) {
-			throw InvalidInputException("Cannot register parser keyword \"%s\": keywords cannot contain digits", text);
-		}
-	}
-	if (!BaseTokenizer::IsValidUnquotedIdentifier(text)) {
-		throw InvalidInputException(
-		    "Cannot register parser keyword \"%s\": keywords must be valid unquoted identifiers", text);
-	}
-	auto existing_category = BuiltinKeywordCategoryType(text);
-	if (existing_category == PEGKeywordCategory::KEYWORD_NONE) {
-		existing_category = ExtensionKeywordCategoryTypeInternal(maps, text);
-	}
-	if (existing_category == PEGKeywordCategory::KEYWORD_NONE || existing_category == category) {
-		return;
-	}
-	if (existing_category == PEGKeywordCategory::KEYWORD_TYPE_FUNC &&
-	    category == PEGKeywordCategory::KEYWORD_TYPE_NAME) {
-		return;
-	}
-	if (existing_category == PEGKeywordCategory::KEYWORD_TYPE_NAME &&
-	    category == PEGKeywordCategory::KEYWORD_TYPE_FUNC) {
-		return;
-	}
-	throw InvalidInputException("Cannot register parser keyword \"%s\" as %s: it is already registered as %s", text,
-	                            EnumUtil::ToString(category), EnumUtil::ToString(existing_category));
-}
-
-void ParserCache::RegisterKeywordInternal(ExtensionKeywordMaps &maps, const string &text, PEGKeywordCategory category) {
-	if (PEGKeywordHelper::Instance().KeywordCategoryType(text, category)) {
-		return;
-	}
-	ValidateKeywordRegistration(maps, text, category);
-	switch (category) {
-	case PEGKeywordCategory::KEYWORD_RESERVED:
-		maps.reserved.insert(text);
-		break;
-	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		maps.unreserved.insert(text);
-		break;
-	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		maps.function_name.insert(text);
-		break;
-	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		maps.column_name.insert(text);
-		break;
-	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		maps.function_name.insert(text);
-		maps.type_name.insert(text);
-		break;
-	default:
-		throw InternalException("Unexpected parser keyword category");
-	}
-}
-
-void ParserCache::RegisterKeyword(const string &keyword, ExtensionKeywordCategory category) {
-	vector<ExtensionKeyword> keywords;
-	keywords.push_back({keyword, category});
-	RegisterKeywords(keywords);
-}
-
-void ParserCache::RegisterKeywords(const vector<ExtensionKeyword> &keywords) {
-	if (keywords.empty()) {
-		return;
-	}
-	std::unique_lock<std::mutex> lock(mutex);
-	auto updated_keywords = extension_keywords;
-	for (const auto &keyword : keywords) {
-		RegisterKeywordInternal(updated_keywords, keyword.keyword, ToParserCachePEGKeywordCategory(keyword.category));
-	}
-	extension_keywords = std::move(updated_keywords);
-}
-
-bool ParserCache::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
-	if (PEGKeywordHelper::Instance().KeywordCategoryType(text, category)) {
-		return true;
-	}
-	std::unique_lock<std::mutex> lock(mutex);
-	switch (category) {
-	case PEGKeywordCategory::KEYWORD_RESERVED:
-		return extension_keywords.reserved.find(text) != extension_keywords.reserved.end();
-	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		return extension_keywords.unreserved.find(text) != extension_keywords.unreserved.end();
-	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		return extension_keywords.function_name.find(text) != extension_keywords.function_name.end();
-	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		return extension_keywords.column_name.find(text) != extension_keywords.column_name.end();
-	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		return extension_keywords.type_name.find(text) != extension_keywords.type_name.end();
-	default:
-		return false;
-	}
-}
-
-bool ParserCache::IsKeyword(const string &text) const {
-	if (PEGKeywordHelper::Instance().IsKeyword(text)) {
-		return true;
-	}
-	std::unique_lock<std::mutex> lock(mutex);
-	return ExtensionKeywordCategoryTypeInternal(extension_keywords, text) != PEGKeywordCategory::KEYWORD_NONE;
-}
-
-vector<ParserKeyword> ParserCache::KeywordList() const {
-	auto result = PEGKeywordHelper::Instance().KeywordList();
-	std::unique_lock<std::mutex> lock(mutex);
-	for (auto &kw : extension_keywords.reserved) {
-		result.push_back({kw, KeywordCategory::KEYWORD_RESERVED});
-	}
-	for (auto &kw : extension_keywords.unreserved) {
-		result.push_back({kw, KeywordCategory::KEYWORD_UNRESERVED});
-	}
-	for (auto &kw : extension_keywords.function_name) {
-		result.push_back({kw, KeywordCategory::KEYWORD_TYPE_FUNC});
-	}
-	for (auto &kw : extension_keywords.column_name) {
-		result.push_back({kw, KeywordCategory::KEYWORD_COL_NAME});
-	}
-	return result;
 }
 
 } // namespace duckdb

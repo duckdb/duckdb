@@ -6,7 +6,7 @@ struct MatcherToken;
 
 class HighlightTokenizer : public BaseTokenizer {
 public:
-	explicit HighlightTokenizer(const string &sql, optional_ptr<ParserCache> parser_cache = nullptr);
+	explicit HighlightTokenizer(const string &sql, optional_ptr<const KeywordExtension> keyword_extension = nullptr);
 	~HighlightTokenizer() override = default;
 
 	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) override;

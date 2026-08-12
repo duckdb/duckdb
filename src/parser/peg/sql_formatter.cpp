@@ -23,11 +23,12 @@ namespace duckdb {
 
 class SQLFormatter {
 public:
-	explicit SQLFormatter(const FormatterConfig &config);
+	SQLFormatter(const FormatterConfig &config, optional_ptr<const KeywordExtension> keyword_extension);
 	string Format(const string &sql);
 
 private:
 	const FormatterConfig &config;
+	optional_ptr<const KeywordExtension> keyword_extension;
 
 	// Keyword classification helpers
 	static bool IsClauseKeyword(const string &kw);
@@ -83,11 +84,12 @@ private:
 // Constructor and top-level Format
 // ─────────────────────────────────────────────────────────────────────────────
 
-SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
+SQLFormatter::SQLFormatter(const FormatterConfig &config, optional_ptr<const KeywordExtension> keyword_extension)
+    : config(config), keyword_extension(keyword_extension) {
 }
 
 string SQLFormatter::Format(const string &sql) {
-	HighlightTokenizer tokenizer(sql);
+	HighlightTokenizer tokenizer(sql, keyword_extension);
 	tokenizer.TokenizeInput();
 	if (!tokenizer.tokens.empty()) {
 		auto back_type = tokenizer.tokens.back().type;
@@ -1634,8 +1636,9 @@ string SQLFormatter::ExpandLongParenLists(const string &formatted) const {
 // Public entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-string FormatSQL(const string &sql, const FormatterConfig &config) {
-	return SQLFormatter(config).Format(sql);
+string FormatSQL(const string &sql, const FormatterConfig &config,
+                 optional_ptr<const KeywordExtension> keyword_extension) {
+	return SQLFormatter(config, keyword_extension).Format(sql);
 }
 
 } // namespace duckdb
