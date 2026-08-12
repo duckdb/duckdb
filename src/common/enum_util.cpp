@@ -6676,12 +6676,12 @@ const StringUtil::EnumStringLiteral *GetVectorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value) {
-	return StringUtil::EnumToString(GetVectorTypeValues(), 6, "VectorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVectorTypeValues(), 7, "VectorType", static_cast<uint32_t>(value));
 }
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value) {
-	return static_cast<VectorType>(StringUtil::StringToEnum(GetVectorTypeValues(), 6, "VectorType", value));
+	return static_cast<VectorType>(StringUtil::StringToEnum(GetVectorTypeValues(), 7, "VectorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {
