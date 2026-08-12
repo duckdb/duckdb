@@ -115,7 +115,7 @@ struct BinaryExecutor {
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
-					DUCKDB_UNROLL_LOOP
+					DUCKDB_UNROLL_FLAT_LOOP
 					for (; base_idx < next; base_idx++) {
 						auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 						auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
@@ -142,7 +142,7 @@ struct BinaryExecutor {
 				}
 			}
 		} else {
-			DUCKDB_UNROLL_LOOP
+			DUCKDB_UNROLL_FLAT_LOOP
 			for (idx_t i = 0; i < count; i++) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
