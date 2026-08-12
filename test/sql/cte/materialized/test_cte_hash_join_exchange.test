@@ -242,11 +242,14 @@ PRAGMA threads=1;
 statement ok
 SET memory_limit='64MB';
 
+statement ok
+SET operator_memory_limit='16MB';
+
 # Materialization pressure first selects direct fanout, then a required cycle falls back one consumer.
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(2000000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
 )
 SELECT count(*), sum(length(l.payload))
 FROM c l JOIN c r USING (i);
@@ -256,36 +259,39 @@ analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Mate
 # Direct consumers get independent chunk wrappers when one hash join slices its probe input while spilling.
 query III
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(2000000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
 )
 SELECT branch, count(*), sum(v)
 FROM (
-  SELECT 1 branch, length(c.payload) v FROM c JOIN range(2000000) r(i) USING (i)
+  SELECT 1 branch, length(c.payload) v FROM c JOIN range(500000) r(i) USING (i)
   UNION ALL
-  SELECT 2 branch, length(c.payload) v FROM c JOIN range(2000000) r(i) USING (i)
+  SELECT 2 branch, length(c.payload) v FROM c JOIN range(500000) r(i) USING (i)
 )
 GROUP BY branch
 ORDER BY branch;
 ----
-1	2000000	64000000
-2	2000000	64000000
+1	500000	16000000
+2	500000	16000000
 
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(2000000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
 )
 SELECT count(*)
 FROM (
-  SELECT c.i FROM c JOIN range(2000000) r(i) USING (i)
+  SELECT c.i FROM c JOIN range(500000) r(i) USING (i)
   UNION ALL
-  SELECT c.i FROM c JOIN range(2000000) r(i) USING (i)
+  SELECT c.i FROM c JOIN range(500000) r(i) USING (i)
 );
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
 
 statement ok
 RESET memory_limit;
+
+statement ok
+RESET operator_memory_limit;
 
 query I
 WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
