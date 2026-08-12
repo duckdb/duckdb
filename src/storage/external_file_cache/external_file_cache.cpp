@@ -199,6 +199,19 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	return blocks;
 }
 
+void ExternalFileCache::RetireBlocks(CachedFile &cached_file, idx_t first_block,
+                                     const vector<shared_ptr<CacheBlock>> &blocks) {
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	for (idx_t idx = 0; idx < blocks.size(); idx++) {
+		const auto block_idx = first_block + idx;
+		auto entry = cached_file.blocks.find(block_idx);
+		if (entry == cached_file.blocks.end() || entry->second != blocks[idx]) {
+			continue;
+		}
+		cached_file.blocks.erase(entry);
+	}
+}
+
 ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
 }
