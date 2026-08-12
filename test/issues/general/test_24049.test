@@ -111,3 +111,22 @@ ORDER BY k;
 ----
 1	1	NULL
 2	NULL	NULL
+
+# The LIST path also applies the replacement in HAVING and retains ungrouped-aggregate semantics under an explicit GROUP BY ().
+query III
+WITH outer_t(k) AS (VALUES ([1]), ([2])),
+     inner_t(k, v) AS (VALUES ([1], 10))
+SELECT k,
+       (SELECT regr_count(v, v)
+        FROM inner_t
+        WHERE inner_t.k = outer_t.k
+        HAVING regr_count(v, v) = 0),
+       (SELECT regr_count(v, v)
+        FROM inner_t
+        WHERE inner_t.k = outer_t.k
+        GROUP BY ())
+FROM outer_t
+ORDER BY k;
+----
+[1]	NULL	1
+[2]	0	0
