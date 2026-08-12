@@ -76,3 +76,11 @@ select v::varchar,
 from forced_case;
 ----
 {'foo': 2}	2	NULL
+
+# The same field must be reachable through an isolated pushdown (exercises
+# FindShreddedColumnInternal's exact field-name match).
+query I
+select count(*) from forced_case where v.foo = 2
+----
+1
+
