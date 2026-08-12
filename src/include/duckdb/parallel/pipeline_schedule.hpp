@@ -19,21 +19,22 @@ class Pipeline;
 enum class PipelineScheduleStageType : uint8_t { INITIALIZE, EXECUTE, PREPARE_FINISH, FINISH, COMPLETE };
 enum class PipelineScheduleMode : uint8_t { COMPLETE, ACTIVE_SUBSET };
 
-struct PipelineScheduleDependency {
-	PipelineScheduleDependency(idx_t stage_p, optional_ptr<Pipeline> external_input_consumer_p)
-	    : stage(stage_p), external_input_consumer(external_input_consumer_p) {
-	}
-
-	idx_t stage;
-	optional_ptr<Pipeline> external_input_consumer;
-};
-
 struct PipelineScheduleStage {
 	PipelineScheduleStage(PipelineScheduleStageType type, shared_ptr<Pipeline> pipeline);
 
 	PipelineScheduleStageType type;
 	shared_ptr<Pipeline> pipeline;
-	vector<PipelineScheduleDependency> dependencies;
+	vector<idx_t> dependencies;
+};
+
+struct PipelineScheduleExternalInputDependency {
+	PipelineScheduleExternalInputDependency(idx_t dependent_p, idx_t dependency_index_p, Pipeline &consumer_p)
+	    : dependent(dependent_p), dependency_index(dependency_index_p), consumer(consumer_p) {
+	}
+
+	idx_t dependent;
+	idx_t dependency_index;
+	reference<Pipeline> consumer;
 };
 
 struct PipelineScheduleEdge {
@@ -49,6 +50,7 @@ struct PipelineScheduleEdge {
 struct PipelineSchedule {
 	vector<PipelineScheduleStage> stages;
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
+	vector<PipelineScheduleExternalInputDependency> external_input_dependencies;
 
 	bool HasCycle() const;
 	vector<PipelineScheduleEdge> GetCycle() const;

@@ -31,12 +31,24 @@ static idx_t AddStage(PipelineSchedule &result, PipelineScheduleStageType type, 
 }
 
 static void AddDependency(PipelineSchedule &result, idx_t dependent, idx_t dependency) {
-	result.stages[dependent].dependencies.emplace_back(dependency, nullptr);
+	result.stages[dependent].dependencies.push_back(dependency);
 }
 
 static void AddExternalInputDependency(PipelineSchedule &result, idx_t dependent, idx_t dependency,
                                        Pipeline &consumer) {
-	result.stages[dependent].dependencies.emplace_back(dependency, consumer);
+	auto dependency_index = result.stages[dependent].dependencies.size();
+	result.stages[dependent].dependencies.push_back(dependency);
+	result.external_input_dependencies.emplace_back(dependent, dependency_index, consumer);
+}
+
+static optional_ptr<Pipeline> GetExternalInputConsumer(const PipelineSchedule &schedule, idx_t dependent,
+                                                       idx_t dependency_index) {
+	for (auto &dependency : schedule.external_input_dependencies) {
+		if (dependency.dependent == dependent && dependency.dependency_index == dependency_index) {
+			return dependency.consumer.get();
+		}
+	}
+	return nullptr;
 }
 
 enum class CycleVisitState : uint8_t { UNVISITED, VISITING, VISITED };
@@ -58,7 +70,7 @@ vector<PipelineScheduleEdge> PipelineSchedule::GetCycle() const {
 				stack.pop_back();
 				continue;
 			}
-			auto dependency = dependencies[entry.second++].stage;
+			auto dependency = dependencies[entry.second++];
 			D_ASSERT(dependency < stages.size());
 			if (states[dependency] == CycleVisitState::UNVISITED) {
 				states[dependency] = CycleVisitState::VISITING;
@@ -77,13 +89,12 @@ vector<PipelineScheduleEdge> PipelineSchedule::GetCycle() const {
 			for (idx_t path_idx = cycle_start; path_idx + 1 < stack.size(); path_idx++) {
 				auto dependent = stack[path_idx].first;
 				auto dependency_idx = stack[path_idx].second - 1;
-				auto &schedule_dependency = stages[dependent].dependencies[dependency_idx];
-				result.emplace_back(dependent, schedule_dependency.stage, schedule_dependency.external_input_consumer);
+				result.emplace_back(dependent, stages[dependent].dependencies[dependency_idx],
+				                    GetExternalInputConsumer(*this, dependent, dependency_idx));
 			}
 			auto dependent = stack.back().first;
 			auto dependency_idx = stack.back().second - 1;
-			result.emplace_back(dependent, dependency,
-			                    stages[dependent].dependencies[dependency_idx].external_input_consumer);
+			result.emplace_back(dependent, dependency, GetExternalInputConsumer(*this, dependent, dependency_idx));
 			return result;
 		}
 	}

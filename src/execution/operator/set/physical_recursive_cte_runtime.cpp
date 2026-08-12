@@ -416,10 +416,7 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 		}
 		unordered_set<idx_t> visited_dependencies;
 		unordered_set<idx_t> resolved_dependencies;
-		vector<idx_t> pending_dependencies;
-		for (auto &dependency : schedule->stages[stage_idx].dependencies) {
-			pending_dependencies.push_back(dependency.stage);
-		}
+		vector<idx_t> pending_dependencies = schedule->stages[stage_idx].dependencies;
 		while (!pending_dependencies.empty()) {
 			const auto dependency = pending_dependencies.back();
 			pending_dependencies.pop_back();
@@ -431,8 +428,8 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 				resolved_dependencies.insert(recursive_dependency);
 				continue;
 			}
-			for (auto &transitive_dependency : schedule->stages[dependency].dependencies) {
-				pending_dependencies.push_back(transitive_dependency.stage);
+			for (auto transitive_dependency : schedule->stages[dependency].dependencies) {
+				pending_dependencies.push_back(transitive_dependency);
 			}
 		}
 		for (auto recursive_dependency : resolved_dependencies) {
