@@ -184,16 +184,16 @@ KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<Fi
 KeyValueSecretReader::~KeyValueSecretReader() {
 }
 
-SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const string &secret_key, Value &result) {
-	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
+SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const Identifier &secret_key, Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	return SettingLookupResult();
 }
 
-SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
-                                                                   Value &result) {
-	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
+SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const Identifier &secret_key,
+                                                                   const Identifier &setting_name, Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	if (context) {
@@ -208,7 +208,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string 
 	return SettingLookupResult();
 }
 
-Value KeyValueSecretReader::GetSecretKey(const string &secret_key) {
+Value KeyValueSecretReader::GetSecretKey(const Identifier &secret_key) {
 	Value result;
 	if (TryGetSecretKey(secret_key, result)) {
 		return result;
@@ -216,7 +216,7 @@ Value KeyValueSecretReader::GetSecretKey(const string &secret_key) {
 	ThrowNotFoundError(secret_key);
 }
 
-Value KeyValueSecretReader::GetSecretKeyOrSetting(const string &secret_key, const string &setting_name) {
+Value KeyValueSecretReader::GetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name) {
 	Value result;
 	if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
 		return result;
@@ -224,8 +224,8 @@ Value KeyValueSecretReader::GetSecretKeyOrSetting(const string &secret_key, cons
 	ThrowNotFoundError(secret_key, setting_name);
 }
 
-void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
-	string base_message = "Failed to fetch required secret key '%s' from secret";
+void KeyValueSecretReader::ThrowNotFoundError(const Identifier &secret_key) {
+	string base_message = "Failed to fetch required secret key %s from secret";
 
 	if (!secret) {
 		string secret_scope = path;
@@ -234,11 +234,11 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
 		                                    secret_scope_hint_message);
 	}
 
-	throw InvalidConfigurationException(base_message + " '%s'.", secret_key, secret->GetName());
+	throw InvalidConfigurationException(base_message + " %s.", secret_key, secret->GetName());
 }
 
-void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const string &setting_name) {
-	string base_message = "Failed to fetch a parameter from either the secret key '%s' or the setting '%s'";
+void KeyValueSecretReader::ThrowNotFoundError(const Identifier &secret_key, const Identifier &setting_name) {
+	string base_message = "Failed to fetch a parameter from either the secret key %s or the setting %s";
 
 	if (!secret) {
 		string secret_scope = path;
@@ -248,7 +248,7 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const st
 	}
 
 	throw InvalidConfigurationException(base_message +
-	                                        ": secret '%s' did not contain the key, also the setting was not found.",
+	                                        ": secret %s did not contain the key, also the setting was not found.",
 	                                    secret_key, setting_name, secret->GetName());
 }
 

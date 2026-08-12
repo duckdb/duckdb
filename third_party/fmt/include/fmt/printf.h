@@ -116,7 +116,10 @@ template <typename T, typename Context> class arg_converter {
 
   template <typename U, FMT_ENABLE_IF(is_integral<U>::value)>
   void operator()(U value) {
-    bool is_signed = type_ == 'd' || type_ == 'i';
+    bool is_signed = type_ == 'd' || type_ == 'i' ||
+                     ((type_ == 'a' || type_ == 'A' || type_ == 'e' || type_ == 'E' ||
+                       type_ == 'f' || type_ == 'F' || type_ == 'g' || type_ == 'G') &&
+                      (std::numeric_limits<U>::is_signed || std::is_same<U, int128_t>::value));
     using target_type = conditional_t<std::is_same<T, void>::value, U, T>;
     if (const_check(sizeof(target_type) <= sizeof(int))) {
       // Extra casts are used to silence warnings.
@@ -147,9 +150,9 @@ template <typename T, typename Context> class arg_converter {
 };
 
 // Converts an integer argument to T for printf, if T is an integral type.
-// If T is void, the argument is converted to corresponding signed or unsigned
-// type depending on the type specifier: 'd' and 'i' - signed, other -
-// unsigned).
+// If T is void, the argument is converted to the signedness expected by the
+// type specifier. 'd' and 'i' are signed, floating-point specifiers preserve
+// the argument's signedness, and other specifiers are unsigned.
 template <typename T, typename Context, typename Char>
 void convert_arg(basic_format_arg<Context>& arg, Char type) {
   visit_format_arg(arg_converter<T, Context>(arg, type), arg);

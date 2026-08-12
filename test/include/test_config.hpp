@@ -24,7 +24,7 @@ namespace duckdb {
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 
 struct ConfigSetting {
-	string name;
+	Identifier name;
 	Value value;
 };
 

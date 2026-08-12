@@ -208,12 +208,15 @@ jobs:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
             threads: 4
-          - name: TPCDS SF3
-            benchmarks: .github/regression/tpcds_sf3.csv
+            sf: 10
+          - name: TPCDS SF10
+            benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
+            sf: 10
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
+            sf: 1
 
     steps:
       - name: "Checkout"
@@ -258,6 +261,7 @@ jobs:
             --early-stop \
             --benchmark-cache=clear \
             --disable-timeout \
+            --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
 
   regression-bench-fivetran:
