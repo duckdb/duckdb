@@ -204,6 +204,21 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
+unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatisticsIfUpdatesInRange(idx_t start_row, idx_t count) {
+	auto stats = ColumnData::GetUpdateStatisticsIfUpdatesInRange(start_row, count);
+	auto validity_stats = validity->GetUpdateStatisticsIfUpdatesInRange(start_row, count);
+	if (!stats && !validity_stats) {
+		return nullptr;
+	}
+	if (!stats) {
+		stats = BaseStatistics::CreateEmpty(type).ToUnique();
+	}
+	if (validity_stats) {
+		stats->Merge(*validity_stats);
+	}
+	return stats;
+}
+
 void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                    idx_t fetch_count, Vector &result, idx_t result_offset) {

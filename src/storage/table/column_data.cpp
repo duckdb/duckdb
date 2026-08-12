@@ -287,6 +287,15 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 	return updates ? updates->GetStatistics() : nullptr;
 }
 
+unique_ptr<BaseStatistics> ColumnData::GetUpdateStatisticsIfUpdatesInRange(idx_t start_row, idx_t count) {
+	D_ASSERT(count > 0);
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates || !updates->HasUpdates(start_row, start_row + count - 1)) {
+		return nullptr;
+	}
+	return updates->GetStatistics();
+}
+
 void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
                               UpdateScanType update_type) {
 	lock_guard<mutex> update_guard(update_lock);
@@ -427,6 +436,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	auto &current_segment = state.current->GetNode();
 	// for dynamic filters we never consider the segment being "checked" as it can always change
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
@@ -437,7 +447,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		auto &segment_stats =
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 		        ? state.child_states[0].current->GetNode().GetStatsMutable()
-		        : state.current->GetNode().GetStatsMutable();
+		        : current_segment.GetStatsMutable();
 		auto context = state.context.GetClientContext();
 		prune_result =
 		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
@@ -445,7 +455,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	}
-	auto update_stats = GetUpdateStatistics();
+	auto update_stats = GetUpdateStatisticsIfUpdatesInRange(state.current->GetRowStart(), current_segment.count);
 	if (!update_stats) {
 		// no updates - return original result
 		return prune_result;

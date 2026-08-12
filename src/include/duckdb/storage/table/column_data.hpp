@@ -188,6 +188,8 @@ public:
 	                          const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
 	                          idx_t update_count, idx_t depth, idx_t row_group_start);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
+	//! Returns global update statistics if [start_row, start_row + count) contains updates, otherwise nullptr.
+	virtual unique_ptr<BaseStatistics> GetUpdateStatisticsIfUpdatesInRange(idx_t start_row, idx_t count);
 
 	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 

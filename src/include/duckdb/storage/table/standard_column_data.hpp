@@ -50,6 +50,7 @@ public:
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
+	unique_ptr<BaseStatistics> GetUpdateStatisticsIfUpdatesInRange(idx_t start_row, idx_t count) override;
 
 	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
