@@ -4,6 +4,8 @@
 
 require json
 
+require no_force_storage
+
 require vector_size 2048
 
 statement ok
