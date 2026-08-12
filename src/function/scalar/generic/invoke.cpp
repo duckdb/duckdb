@@ -33,9 +33,12 @@ struct LambdaInvokeData final : public LambdaFunctionData {
 	}
 
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(
 		    101, "lambda_expr", unique_ptr<Expression>());
+		if (lambda_expr && lambda_expr->Cast<BoundLambdaExpression>().LambdaExpr()->CanThrow()) {
+			function.SetFallible();
+		}
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
 	}
 
@@ -111,6 +114,9 @@ unique_ptr<FunctionData> LambdaInvokeBind(BindScalarFunctionInput &input) {
 	}
 
 	bound_function.SetReturnType(bound_lambda_expr.LambdaExpr()->GetReturnType());
+	if (bound_lambda_expr.LambdaExpr()->CanThrow()) {
+		bound_function.SetFallible();
+	}
 
 	return make_uniq<LambdaInvokeData>(bound_lambda_expr.Copy());
 }
