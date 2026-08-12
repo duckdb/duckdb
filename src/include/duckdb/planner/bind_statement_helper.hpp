@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names,vector<PhysicalIndex> &indexes);
+void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names,vector<PhysicalIndex> &indexes);
 void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk);
 void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk);
 void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,bool &contains_gcol);
