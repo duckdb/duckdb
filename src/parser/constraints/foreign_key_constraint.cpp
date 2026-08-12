@@ -16,11 +16,11 @@ ForeignKeyConstraint::ForeignKeyConstraint(vector<Identifier> pk_columns, vector
 
 string ForeignKeyConstraint::GetName(const string& table_name) const {
 	string name = table_name + "_";
-	for (const auto &column_name: fk_columns){
-		name += StringUtil::Lower(column_name) + "_";
+	for (const auto &column_name : fk_columns) {
+		name += StringUtil::Lower(column_name.GetIdentifierName()) + "_";
 	}
-	for (const auto &column_name: pk_columns){
-		name += StringUtil::Lower(column_name) + "_";
+	for (const auto &column_name : pk_columns) {
+		name += StringUtil::Lower(column_name.GetIdentifierName()) + "_";
 	}
 	name += "fkey";
 	return name;

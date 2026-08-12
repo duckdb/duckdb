@@ -367,7 +367,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	}
 
 	// Fetch the updated FK table entry to extract FK information.
-	auto updated_entry = set.GetEntry(transaction, info.name);
+	auto updated_entry = set.GetEntry(transaction, info.GetQualifiedName().Name());
 	D_ASSERT(updated_entry);
 	auto &fk_table_entry = updated_entry->Cast<TableCatalogEntry>();
 
@@ -378,7 +378,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		Alter(transaction, *fk_info);
 
 		// Register the dependency between the FK table and the PK table.
-		auto pk_entry = set.GetEntry(transaction, fk_info->name);
+		auto pk_entry = set.GetEntry(transaction, fk_info->GetQualifiedName().Name());
 		D_ASSERT(pk_entry);
 		catalog.GetDependencyManager()->AddDependency(transaction, *updated_entry, *pk_entry);
 	}

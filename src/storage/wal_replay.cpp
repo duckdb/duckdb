@@ -940,10 +940,11 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		auto &table_info = alter_info.Cast<AlterTableInfo>();
 		auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
-		auto index_name = fk.GetName(table_info.name);
+		auto &qualified_name = table_info.GetQualifiedName();
+		auto index_name = fk.GetName(qualified_name.Name().GetIdentifierName());
 
 		auto &table =
-		    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
+		    catalog.GetEntry<TableCatalogEntry>(context, qualified_name).Cast<DuckTableEntry>();
 		auto &storage = table.GetStorage();
 
 		vector<LogicalIndex> column_indexes;
@@ -952,8 +953,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 			column_indexes.push_back(col.Logical());
 		}
 
-		IndexStorageInfo index_storage_info(index_name);
-		storage.AddIndex(table.GetColumns(), column_indexes, IndexConstraintType::FOREIGN, index_storage_info);
+		IndexStorageInfo index_storage_info{Identifier(index_name)};
+		storage.AddIndex(table.GetColumns(), column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
 		return;
 	}
 
