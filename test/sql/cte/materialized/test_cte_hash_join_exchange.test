@@ -239,6 +239,29 @@ endloop
 statement ok
 PRAGMA threads=1;
 
+# Direct consumers get independent chunk wrappers when one hash join slices its probe input while spilling.
+statement ok
+SET memory_limit='64MB';
+
+query III
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(1000000) t(i)
+)
+SELECT branch, count(*), sum(v)
+FROM (
+  SELECT 1 branch, length(c.payload) v FROM c JOIN range(1000000) r(i) USING (i)
+  UNION ALL
+  SELECT 2 branch, length(c.payload) v FROM c JOIN range(1000000) r(i) USING (i)
+)
+GROUP BY branch
+ORDER BY branch;
+----
+1	1000000	32000000
+2	1000000	32000000
+
+statement ok
+RESET memory_limit;
+
 query I
 WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
 SELECT count(*) FROM c l JOIN c r USING (i);

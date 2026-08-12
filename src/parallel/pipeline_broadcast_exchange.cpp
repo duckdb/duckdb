@@ -601,6 +601,9 @@ PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientC
 		auto &pipeline = pipeline_ref.get();
 		pipeline.PrepareExternalInput();
 		direct_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
+		auto input_chunk = make_uniq<DataChunk>();
+		input_chunk->InitializeEmpty(exchange.Types());
+		direct_input_chunks.push_back(std::move(input_chunk));
 	}
 }
 
@@ -895,7 +898,8 @@ SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastEx
 
 SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
                                                          const InterruptState &interrupt_state) {
-	if (direct_push_state != PipelineBroadcastExchangeDirectPushState::RESUMING) {
+	auto resuming = direct_push_state == PipelineBroadcastExchangeDirectPushState::RESUMING;
+	if (!resuming) {
 		direct_idx = 0;
 	}
 	auto source_partition_data = GetSourcePartitionData(partition_info);
@@ -904,13 +908,20 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 		auto &executor = *direct_executors[direct_idx];
 		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
+			resuming = false;
 			continue;
 		}
-		auto result = executor.PushExternal(chunk, source_partition_data, source_min_batch_index);
+		auto &input_chunk = *direct_input_chunks[direct_idx];
+		if (!resuming) {
+			// Operators may slice their input chunk. Keep each direct consumer's wrapper independent.
+			input_chunk.Reference(chunk);
+		}
+		auto result = executor.PushExternal(input_chunk, source_partition_data, source_min_batch_index);
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			direct_push_state = PipelineBroadcastExchangeDirectPushState::RESUMING;
 			return SinkResultType::BLOCKED;
 		}
+		resuming = false;
 	}
 
 	direct_push_state = PipelineBroadcastExchangeDirectPushState::FINISHED;
