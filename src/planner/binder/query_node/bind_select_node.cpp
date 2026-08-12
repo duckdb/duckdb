@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -447,11 +448,31 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
+static void ConvertSimpleCaseToLegacy(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::CASE) {
+		auto &case_expr = expr->Cast<CaseExpression>();
+		if (case_expr.CaseOperand()) {
+			expr = case_expr.GetLegacyCaseExpression();
+		}
+	}
+
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery = expr->Cast<SubqueryExpression>();
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *subquery.SubqueryMutable()->node,
+		    [&](unique_ptr<ParsedExpression> &child) { ConvertSimpleCaseToLegacy(child); });
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ConvertSimpleCaseToLegacy(child); });
+}
+
 Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
 	}
-	return expr.GetName();
+	auto name_expr = expr.Copy();
+	ConvertSimpleCaseToLegacy(name_expr);
+	return name_expr->GetName();
 }
 
 BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {

@@ -166,6 +166,12 @@ public:
 	bool IsLegacyFunctionCall() const {
 		return is_legacy_function_call;
 	}
+	bool IsGeneratedSimpleCase() const {
+		return is_generated_simple_case;
+	}
+	void SetGeneratedSimpleCase() {
+		is_generated_simple_case = true;
+	}
 
 	const vector<FunctionArgument> &GetArguments() const {
 		return arguments;
@@ -193,6 +199,8 @@ private:
 	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
 	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
 	bool is_legacy_function_call = false;
+	//! Whether this function was synthesized to bind a simple CASE operand.
+	bool is_generated_simple_case = false;
 
 private:
 	FunctionExpression();
