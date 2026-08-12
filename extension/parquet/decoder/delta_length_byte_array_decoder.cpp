@@ -43,6 +43,9 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
                                        Vector &result, idx_t result_offset) {
+	bool validate_individually =
+	    reader.Type().IsJSONType() ||
+	    reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option == StringColumnReader::Utf8ValidationOption::STRICT;
 	if (defines) {
 		if (reader.Type().IsJSONType()) {
 			ReadInternal<true, true>(block_ref, defines, read_count, result, result_offset);
@@ -75,6 +78,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	}
 
 	const auto &string_column_reader = reader.Cast<StringColumnReader>();
+	string_column_reader.SetCurrentResult(result);
 
 	const auto start_ptr = block.ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);

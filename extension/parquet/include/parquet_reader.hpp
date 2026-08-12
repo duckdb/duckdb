@@ -54,6 +54,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "parquet_column_schema.hpp"
 #include "thrift/protocol/TProtocol.h"
+#include "reader/string_column_reader.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -270,7 +271,7 @@ struct ParquetOptions {
 	idx_t explicit_cardinality = 0;
 	bool can_have_nan = false; // if floats or doubles can contain NaN values
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
-};
+	StringColumnReader::Utf8ValidationOption utf8_validation_option = StringColumnReader::Utf8ValidationOption::STRICT;};
 
 struct ParquetOptionsSerialization {
 	ParquetOptionsSerialization() = default;
