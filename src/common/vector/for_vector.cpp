@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/for_vector.hpp"
 
 #include "duckdb/common/autovec.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 namespace duckdb {
 
 void ForVector::Create(Vector &vector, PhysicalType stored_type, uint64_t max_stored, idx_t count) {
