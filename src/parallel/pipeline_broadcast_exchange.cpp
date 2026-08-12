@@ -661,7 +661,7 @@ void PipelineBroadcastExchange::SelectMaterializedConsumer(idx_t consumer_idx) {
 	DeactivateConsumerLocked(consumer, buffer->NextPosition());
 }
 
-bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+bool PipelineBroadcastExchange::CanRegisterDirectConsumer(Pipeline &pipeline) const {
 	auto source_partition_info =
 	    SupportsBatchIndex() ? OperatorPartitionInfo::BatchIndex() : OperatorPartitionInfo::NoPartitionInfo();
 	if (!pipeline.CanUseExternalInput(source_partition_info)) {
@@ -672,22 +672,39 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	if (required_partition_info.RequiresBatchIndex() && producer_pipelines.size() != 1) {
 		return false;
 	}
+	return true;
+}
+
+void PipelineBroadcastExchange::SelectDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
 	if (consumer.mode == PipelineBroadcastExchangeConsumerMode::DIRECT) {
-		return true;
+		return;
 	}
 	D_ASSERT(consumer.mode == PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
 	consumer.mode = PipelineBroadcastExchangeConsumerMode::DIRECT;
 	DeactivateConsumerLocked(consumer, buffer->BasePosition());
 	direct_pipelines.push_back(pipeline);
-	pipeline.SetExternalInput(producer_pipelines);
 	if (pipeline.IsStreamingResultPipeline()) {
 		for (auto &producer_pipeline : producer_pipelines) {
 			producer_pipeline.get().SetExternalStreamingResultProducer();
 		}
 	}
+}
+
+bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
+	if (!CanRegisterDirectConsumer(pipeline)) {
+		return false;
+	}
+	pipeline.SetExternalInput(GetProducerPipelines());
+	SelectDirectConsumer(pipeline, consumer_idx);
 	return true;
+}
+
+vector<reference<Pipeline>> PipelineBroadcastExchange::GetProducerPipelines() const {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	return producer_pipelines;
 }
 
 void PipelineBroadcastExchange::SelectBufferedConsumer(idx_t consumer_idx,

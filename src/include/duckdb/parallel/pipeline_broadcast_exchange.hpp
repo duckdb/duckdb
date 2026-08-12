@@ -112,7 +112,10 @@ public:
 
 	void SetProducerPipelines(const vector<shared_ptr<Pipeline>> &pipelines);
 	idx_t RegisterConsumer();
+	bool CanRegisterDirectConsumer(Pipeline &pipeline) const;
+	void SelectDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
+	vector<reference<Pipeline>> GetProducerPipelines() const;
 	void SelectBufferedConsumer(idx_t consumer_idx, PipelineBroadcastExchangeScanMode scan_mode);
 	void SelectMaterializedConsumer(idx_t consumer_idx);
 	void ResetConsumerRegistrations();

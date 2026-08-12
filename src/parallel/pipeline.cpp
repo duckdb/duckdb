@@ -7,11 +7,15 @@
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -223,6 +227,15 @@ void Pipeline::SetExternalInput(const vector<reference<Pipeline>> &producer_pipe
 	for (auto &producer : producer_pipelines) {
 		external_input_producers.emplace_back(producer.get().shared_from_this());
 	}
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+	external_input_event.reset();
+	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
+}
+
+void Pipeline::ClearExternalInput() {
+	D_ASSERT(IsExternalInput());
+	input_mode = PipelineInputMode::SCHEDULED_SOURCE;
+	external_input_producers.clear();
 	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	external_input_event.reset();
 	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
@@ -583,6 +596,32 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 
+void Pipeline::RemoveDependency(const shared_ptr<Pipeline> &pipeline) {
+	D_ASSERT(pipeline);
+	bool found_dependency = false;
+	for (auto entry = dependencies.begin(); entry != dependencies.end(); entry++) {
+		auto dependency = entry->lock();
+		D_ASSERT(dependency);
+		if (RefersToSameObject(*dependency, *pipeline)) {
+			dependencies.erase(entry);
+			found_dependency = true;
+			break;
+		}
+	}
+	if (!found_dependency) {
+		throw InternalException("Attempted to remove a missing pipeline dependency");
+	}
+	for (auto entry = pipeline->parents.begin(); entry != pipeline->parents.end(); entry++) {
+		auto parent = entry->lock();
+		D_ASSERT(parent);
+		if (RefersToSameObject(*parent, *this)) {
+			pipeline->parents.erase(entry);
+			return;
+		}
+	}
+	throw InternalException("Pipeline dependency had no matching parent");
+}
+
 void Pipeline::AddDataflowDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dataflow_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
@@ -675,6 +714,47 @@ idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
 //===--------------------------------------------------------------------===//
 // Pipeline Build State
 //===--------------------------------------------------------------------===//
+struct PipelineExternalInputCandidate {
+	PipelineExternalInputCandidate(Pipeline &pipeline_p, PhysicalOperator &materialized_source_p,
+	                               PhysicalOperator &external_source_p, shared_ptr<Pipeline> cte_dependency_p,
+	                               PhysicalCTE &cte_p, idx_t consumer_idx_p)
+	    : pipeline(pipeline_p), materialized_source(materialized_source_p), external_source(external_source_p),
+	      cte_dependency(std::move(cte_dependency_p)), cte(cte_p), consumer_idx(consumer_idx_p) {
+	}
+
+	reference<Pipeline> pipeline;
+	reference<PhysicalOperator> materialized_source;
+	reference<PhysicalOperator> external_source;
+	shared_ptr<Pipeline> cte_dependency;
+	reference<PhysicalCTE> cte;
+	idx_t consumer_idx;
+};
+
+struct CTEPipelineSelection {
+	CTEPipelineSelection(PhysicalCTE &cte_p, Pipeline &pipeline_p, shared_ptr<Pipeline> cte_dependency_p,
+	                     bool dependency_added_p)
+	    : cte(cte_p), pipeline(pipeline_p), cte_dependency(std::move(cte_dependency_p)),
+	      dependency_added(dependency_added_p) {
+	}
+
+	reference<PhysicalCTE> cte;
+	reference<Pipeline> pipeline;
+	shared_ptr<Pipeline> cte_dependency;
+	bool dependency_added;
+};
+
+class PipelineBuildStateData {
+public:
+	vector<PipelineExternalInputCandidate> external_input_candidates;
+	vector<CTEPipelineSelection> cte_selections;
+	reference_map_t<PhysicalCTE, idx_t> cte_selection_map;
+};
+
+PipelineBuildState::PipelineBuildState() : data(make_uniq<PipelineBuildStateData>()) {
+}
+
+PipelineBuildState::~PipelineBuildState() = default;
+
 void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op) {
 	pipeline.source = &op;
 }
@@ -709,6 +789,71 @@ shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor,
 
 vector<reference<PhysicalOperator>> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
 	return pipeline.operators;
+}
+
+void PipelineBuildState::AddExternalInputCandidate(Pipeline &pipeline, PhysicalOperator &materialized_source,
+                                                   PhysicalOperator &external_source,
+                                                   shared_ptr<Pipeline> cte_dependency, PhysicalCTE &cte,
+                                                   idx_t consumer_idx) {
+	data->external_input_candidates.emplace_back(pipeline, materialized_source, external_source,
+	                                             std::move(cte_dependency), cte, consumer_idx);
+}
+
+void PipelineBuildState::AddCTEPipelineSelection(PhysicalCTE &cte, Pipeline &pipeline,
+                                                 shared_ptr<Pipeline> cte_dependency, bool dependency_added) {
+	D_ASSERT(data->cte_selection_map.find(cte) == data->cte_selection_map.end());
+	data->cte_selection_map.emplace(cte, data->cte_selections.size());
+	data->cte_selections.emplace_back(cte, pipeline, std::move(cte_dependency), dependency_added);
+}
+
+void PipelineBuildState::ResolveExternalInputs(const vector<shared_ptr<MetaPipeline>> &meta_pipelines) {
+	if (data->external_input_candidates.empty()) {
+		return;
+	}
+	if (BuildPipelineSchedule(meta_pipelines)->HasCycle()) {
+		throw InternalException("Cyclic dependency in materialized pipeline schedule");
+	}
+
+	for (auto &candidate : data->external_input_candidates) {
+		auto selection_entry = data->cte_selection_map.find(candidate.cte.get());
+		D_ASSERT(selection_entry != data->cte_selection_map.end());
+		auto &selection = data->cte_selections[selection_entry->second];
+		auto &pipeline = candidate.pipeline.get();
+		auto &cte = candidate.cte.get();
+
+		pipeline.RemoveDependency(candidate.cte_dependency);
+		bool removed_cte_dependency = false;
+		if (selection.dependency_added) {
+			selection.pipeline.get().RemoveDependency(selection.cte_dependency);
+			removed_cte_dependency = true;
+		}
+		SetPipelineSource(pipeline, candidate.external_source.get());
+		pipeline.SetExternalInput(cte.GetProducerPipelines());
+
+		if (BuildPipelineSchedule(meta_pipelines)->HasCycle()) {
+			pipeline.ClearExternalInput();
+			SetPipelineSource(pipeline, candidate.materialized_source.get());
+			pipeline.AddDependency(candidate.cte_dependency);
+			if (removed_cte_dependency) {
+				selection.pipeline.get().AddDependency(selection.cte_dependency);
+			}
+			cte.RegisterMaterializedConsumer(candidate.consumer_idx);
+			DUCKDB_LOG(
+			    pipeline.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
+			    {{"consumer", to_string(candidate.consumer_idx)}, {"mode", "MATERIALIZED"}, {"reason", "CYCLE"}});
+			continue;
+		}
+
+		selection.dependency_added = false;
+		cte.RegisterDirectConsumer(pipeline, candidate.consumer_idx);
+		DUCKDB_LOG(pipeline.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
+		           {{"consumer", to_string(candidate.consumer_idx)}, {"mode", "DIRECT"}});
+	}
+
+	for (auto &selection : data->cte_selections) {
+		selection.cte.get().SetPipelineSelectionResolved();
+	}
+	D_ASSERT(!BuildPipelineSchedule(meta_pipelines)->HasCycle());
 }
 
 } // namespace duckdb

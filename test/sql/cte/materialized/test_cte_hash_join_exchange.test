@@ -1,0 +1,161 @@
+# name: test/sql/cte/materialized/test_cte_hash_join_exchange.test
+# description: Test materialized CTE exchange input for hash joins
+# group: [materialized]
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+PRAGMA threads=4;
+
+# A CTE can directly feed the hash join build side.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM range(10000) l(i) JOIN c ON l.i=c.i;
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM range(10000) l(i) JOIN c ON l.i=c.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+# Probe input is delayed until the independent hash build has finalized.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c JOIN range(10000) r(i) ON c.i=r.i;
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c JOIN range(10000) r(i) ON c.i=r.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+# Feeding both sides directly would make the producer wait for its own hash build.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*Materialized Consumers: 1.*
+
+# Preserve hash join semantics for NULLs, duplicates and adjacent join types while directly feeding each join.
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c INNER JOIN b ON c.i=b.i;
+----
+2
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c LEFT JOIN b ON c.i=b.i;
+----
+4
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c RIGHT JOIN b ON c.i=b.i;
+----
+4
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c FULL JOIN b ON c.i=b.i;
+----
+6
+
+query II
+EXPLAIN ANALYZE
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c FULL JOIN b ON c.i=b.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c SEMI JOIN b ON c.i=b.i;
+----
+2
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c ANTI JOIN b ON c.i=b.i;
+----
+2
+
+# Empty producers still finish externally fed hash builds.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(0) t(i))
+SELECT count(*) FROM range(10) l(i) LEFT JOIN c ON l.i=c.i;
+----
+10
+
+# Multiple CTE producer pipelines can feed an unordered hash build.
+query I
+WITH c AS MATERIALIZED (
+  SELECT i FROM range(1000) t(i)
+  UNION ALL
+  SELECT i + 1000 FROM range(1000) t(i)
+)
+SELECT count(*) FROM range(2000) l(i) JOIN c ON l.i=c.i;
+----
+2000
+
+# External input bindings can form an acyclic producer chain.
+query I
+WITH a AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     b AS MATERIALIZED (SELECT i FROM a)
+SELECT count(*) FROM range(10000) r(i) JOIN b ON r.i=b.i;
+----
+10000
+
+statement ok
+CREATE SEQUENCE cte_hash_sequence;
+
+# Side-effecting producers retain their run-to-completion ordering.
+query I
+WITH c AS MATERIALIZED (
+  SELECT nextval('cte_hash_sequence') AS i FROM range(3)
+)
+SELECT count(*) FROM c JOIN range(1, 4) r(i) ON c.i=r.i;
+----
+3
+
+query I
+SELECT currval('cte_hash_sequence');
+----
+3
+
+statement ok
+PREPARE cte_hash_join AS
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c JOIN range(1000) r(i) ON c.i=r.i;
+
+loop i 0 2
+
+query I
+EXECUTE cte_hash_join;
+----
+1000
+
+endloop
+
+statement ok
+PRAGMA threads=1;
+
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+1000
+
+statement ok
+RESET disabled_optimizers;
