@@ -14,9 +14,6 @@
 
 namespace duckdb {
 
-bool IsNestedComparison(const LogicalType &type) {
-	return type.IsNested();
-}
 
 NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p,
                                                      optional_ptr<LogicalOperator> plan_root_p)

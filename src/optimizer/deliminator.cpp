@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
@@ -216,7 +215,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		if (!cond.IsComparison()) {
 			return false;
 		}
-		if (IsNestedComparison(cond.GetLHS().GetReturnType())) {
+		if (cond.GetLHS().GetReturnType().IsNested()) {
 			return false;
 		}
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
