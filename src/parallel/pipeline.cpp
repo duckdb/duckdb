@@ -294,6 +294,18 @@ bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition
 	return true;
 }
 
+PipelineExternalInputCost Pipeline::GetExternalInputCost() const {
+	if (sink && sink->GetExternalInputCost() == PipelineExternalInputCost::SERIALIZED_FANOUT) {
+		return PipelineExternalInputCost::SERIALIZED_FANOUT;
+	}
+	for (auto &op_ref : operators) {
+		if (op_ref.get().GetExternalInputCost() == PipelineExternalInputCost::SERIALIZED_FANOUT) {
+			return PipelineExternalInputCost::SERIALIZED_FANOUT;
+		}
+	}
+	return PipelineExternalInputCost::PIPELINED;
+}
+
 bool Pipeline::CanStopSourceEarly() const {
 	// Used by CTE fanout selection to keep streaming only when the consumer may finish early.
 	if (sink && sink->GetSourceConsumption() == PipelineSourceConsumption::MAY_STOP_EARLY) {
@@ -723,7 +735,8 @@ struct PipelineExternalInputCandidate {
 	                               PhysicalCTE &cte_p, idx_t consumer_idx_p)
 	    : pipeline(pipeline_p), materialized_source(materialized_source_p), external_source(external_source_p),
 	      cte_dependency(std::move(cte_dependency_p)), cte(cte_p), consumer_idx(consumer_idx_p),
-	      has_blocking_dependencies(pipeline_p.GetDependencies().size() > 1) {
+	      has_blocking_dependencies(pipeline_p.GetDependencies().size() > 1),
+	      input_cost(pipeline_p.GetExternalInputCost()) {
 	}
 
 	reference<Pipeline> pipeline;
@@ -734,6 +747,7 @@ struct PipelineExternalInputCandidate {
 	idx_t consumer_idx;
 	idx_t selection_idx = DConstants::INVALID_INDEX;
 	bool has_blocking_dependencies;
+	PipelineExternalInputCost input_cost;
 	InputMode input_mode = InputMode::MATERIALIZED_COST;
 
 	bool UsesExternalInput() const {
@@ -752,6 +766,7 @@ struct CTEPipelineSelection {
 	reference<Pipeline> pipeline;
 	shared_ptr<Pipeline> cte_dependency;
 	idx_t candidate_count = 0;
+	idx_t serialized_fanout_candidate_count = 0;
 	idx_t direct_candidate_count = 0;
 	idx_t estimated_materialization_size = 0;
 	bool fallback_dependency_added;
@@ -829,6 +844,9 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 		candidate.selection_idx = selection_entry->second;
 		auto &selection = data.cte_selections[candidate.selection_idx];
 		selection.candidate_count++;
+		if (candidate.input_cost == PipelineExternalInputCost::SERIALIZED_FANOUT) {
+			selection.serialized_fanout_candidate_count++;
+		}
 	}
 
 	vector<idx_t> fanout_selections;
@@ -837,13 +855,16 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 		auto &selection = data.cte_selections[selection_idx];
 		auto &cte = selection.cte.get();
 		D_ASSERT(cte.exchange);
-		auto consumer_summary = cte.exchange->GetConsumerSummary();
-		// Cost selection only applies when every consumer is an unresolved candidate. Mixed exchange modes share
-		// producer completion, while an existing materialized consumer already pays the materialization cost.
-		if (consumer_summary.materialized > 0) {
+		// A mixed fanout retains the normal direct-first selection.
+		if (selection.serialized_fanout_candidate_count != selection.candidate_count) {
+			selection.stream_candidates = true;
 			continue;
 		}
-		if (selection.candidate_count == 1 || consumer_summary.ExchangeConsumerCount() > 0) {
+		auto consumer_summary = cte.exchange->GetConsumerSummary();
+		// Cost selection only applies when every consumer is an unresolved candidate. Preselected modes define the
+		// exchange's completion behavior and must retain their direct candidates.
+		if (selection.candidate_count == 1 || consumer_summary.direct > 0 || consumer_summary.buffered > 0 ||
+		    consumer_summary.materialized > 0) {
 			selection.stream_candidates = true;
 			continue;
 		}

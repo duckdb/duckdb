@@ -174,6 +174,7 @@ public:
 	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
+	PipelineExternalInputCost GetExternalInputCost() const;
 	bool CanStopSourceEarly() const;
 
 	idx_t GetBaseBatchIndex() const {

@@ -84,6 +84,9 @@ public:
 	PipelineExternalInputSupport GetExternalInputSupport() const override {
 		return PipelineExternalInputSupport::SUPPORTED;
 	}
+	PipelineExternalInputCost GetExternalInputCost() const override {
+		return PipelineExternalInputCost::SERIALIZED_FANOUT;
+	}
 
 protected:
 	// CachingOperator Interface
