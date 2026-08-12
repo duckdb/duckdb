@@ -1,4 +1,6 @@
 #include "duckdb/function/scalar/operator_functions.hpp"
+
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
@@ -72,6 +74,11 @@ void CastFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source = args.data[0];
 	idx_t count = args.size();
 
+	// FOR will makes a downcast to its narrow representation a noop; an upcast creates a new FOR vector
+	if (ForVector::TryRetype(source, result, count) || ForVector::TryPromote(source, result, count)) {
+		FlatVector::SetSize(result, count_t(count));
+		return; // -- FOR so absorbs Compressed Materialization cost
+	}
 	// Constant inputs are handled by the generic function executor (cardinality is reduced to 1). NULL handling is
 	// marked SPECIAL_HANDLING so that constant NULL inputs still reach the cast (required for e.g. UNION targets).
 	string error_message;

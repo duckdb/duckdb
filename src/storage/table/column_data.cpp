@@ -6,6 +6,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -141,7 +142,11 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 }
 
 ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
-	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
+	// a payload left by an earlier chunk must not read as "not flat" here: that would pick the entire-vector path
+	// for a scan that has to cross segments, and the scan would then cover only part of the vector. A FOR buffer is
+	// a flat allocation, so it takes the same decision - widening it here would just undo the scan's own Discard.
+	const auto result_vtype = result.GetVectorType();
+	if (result_vtype != VectorType::FLAT_VECTOR && result_vtype != VectorType::FOR_VECTOR) {
 		return ScanVectorType::SCAN_ENTIRE_VECTOR;
 	}
 	if (HasUpdates()) {
@@ -207,6 +212,13 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
                              idx_t base_result_offset) {
+	if (type.id() != LogicalTypeId::VALIDITY) { // validity only touches the mask, do not undo scan data work
+		if (base_result_offset == 0) {
+			ForVector::Discard(result); // scan is about to rewrite the payload, so widening is wasted work
+		} else {
+			ForVector::Widen(result);
+		}
+	}
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
 	}

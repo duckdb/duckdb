@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -462,12 +463,14 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
-	auto &result_mask = FlatVector::ValidityMutable(result);
+	auto &result_mask = result.BufferMutable().GetValidityMask();
 	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result_mask, result_offset, scan_count);
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten();
+	if (!ForVector::IsFor(result)) {
+		result.Flatten();
+	}
 
 	auto start = state.GetPositionInSegment();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
@@ -475,7 +478,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 
 		auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 		D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
-		auto &result_mask = FlatVector::ValidityMutable(result);
+		auto &result_mask = result.BufferMutable().GetValidityMask();
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result_mask, scan_count);
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
@@ -492,7 +495,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto &result_mask = FlatVector::ValidityMutable(result);
+	auto &result_mask = result.BufferMutable().GetValidityMask();
 	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
 	auto start = state.GetPositionInSegment();
@@ -514,7 +517,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto dataptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr), segment.count);
-	auto &result_mask = FlatVector::ValidityMutable(result);
+	auto &result_mask = result.BufferMutable().GetValidityMask();
 	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
 		result_mask.SetInvalid(result_idx);
 	}

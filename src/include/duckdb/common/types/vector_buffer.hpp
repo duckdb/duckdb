@@ -37,6 +37,7 @@ enum class VectorBufferType : uint8_t {
 	FSST_BUFFER,       // VectorType::FSST          - String          - Holds string_t array, StringHeap and FSST table
 	SHREDDED_BUFFER,   // VectorType::SHREDDED      - Variant         - Holds shredded variant
 	SEQUENCE_BUFFER    // VectorType::SEQUENCE      - Any             - Holds linear numeric sequence (start, increment)
+	                   // VectorType::FOR has no buffer of its own: it is a flag on a STANDARD_BUFFER
 };
 
 enum class VectorAppendMode { ALLOW_RESIZE, ERROR_ON_NO_SPACE };
@@ -148,6 +149,15 @@ public:
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
 	}
+
+	//! Inline FOR state: only used for FOR_VECTOR (thin representations of a wider integer columns)
+	PhysicalType for_stored_type = PhysicalType::INVALID;
+	uint64_t for_max = 0;     // the maximum value in this FOR-vector
+	idx_t for_count = 0;      // rows of narrow payload. Kept separate of vector size, which callers own and read.
+	bool cache_owned = false; // true if VectorCache owns buffer: then payload has full stride & can widen in place
+	//! Mechanism to avoid overhead by needless FOR: full widen-inplace sets it, FOR optimizations clear it
+	uint16_t for_cooldown = 0;  // vectors to skip before producing FOR again. Zero means produce it.
+	bool for_exploited = false; // whether a FOR optimized consumer used it. Prevents cooldown from being set.
 
 public:
 	//! Returns the actual size to reserve (a power-of-two)

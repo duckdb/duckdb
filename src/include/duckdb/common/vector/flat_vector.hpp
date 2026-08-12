@@ -66,6 +66,9 @@ protected:
 	idx_t type_size;
 	idx_t capacity;
 	AllocatedData allocated_data;
+	//! Reusable buffers for the FOR gather-widen, so a sparse flatten costs no allocation per vector.
+	mutable buffer_ptr<StandardVectorBuffer> widen_slots[2];
+	mutable uint8_t widen_slot = 0; // Two slots: an expression can hold slices of this buffer thru 2 inputs at once
 };
 
 template <class T>
@@ -74,6 +77,11 @@ template <class T>
 struct VectorScatterWriter;
 
 struct FlatVector {
+	static void WidenFor(const Vector &vector) {
+		if (vector.GetVectorType() == VectorType::FOR_VECTOR) {
+			vector.Flatten(); //! Widening makes every FOR-unaware kernel correct
+		}
+	}
 	static void VerifyFlatVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -116,11 +124,13 @@ struct FlatVector {
 	template <class T>
 	static inline const T *GetData(const Vector &vector) {
 		ConstantVector::VerifyVectorType<T>(vector);
+		WidenFor(vector);
 		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline T *GetDataMutable(Vector &vector) {
 		ConstantVector::VerifyVectorType<T>(vector);
+		WidenFor(vector);
 		return GetDataMutableUnsafe<T>(vector);
 	}
 	static inline idx_t GetCapacity(const Vector &vector) {

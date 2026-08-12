@@ -6668,7 +6668,8 @@ const StringUtil::EnumStringLiteral *GetVectorTypeValues() {
 		{ static_cast<uint32_t>(VectorType::CONSTANT_VECTOR), "CONSTANT_VECTOR" },
 		{ static_cast<uint32_t>(VectorType::DICTIONARY_VECTOR), "DICTIONARY_VECTOR" },
 		{ static_cast<uint32_t>(VectorType::SEQUENCE_VECTOR), "SEQUENCE_VECTOR" },
-		{ static_cast<uint32_t>(VectorType::SHREDDED_VECTOR), "SHREDDED_VECTOR" }
+		{ static_cast<uint32_t>(VectorType::SHREDDED_VECTOR), "SHREDDED_VECTOR" },
+		{ static_cast<uint32_t>(VectorType::FOR_VECTOR), "FOR_VECTOR" }
 	};
 	return values;
 }

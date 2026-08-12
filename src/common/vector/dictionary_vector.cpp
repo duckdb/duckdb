@@ -165,6 +165,8 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalTyp
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
+	// the child is an exclusively-owned full-stride allocation, so a FOR payload may widen in it in place
+	entry->data.BufferMutable().cache_owned = true;
 	FlatVector::SetSize(entry->data, size);
 	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
 	return entry;
