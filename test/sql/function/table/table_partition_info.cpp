@@ -14,7 +14,7 @@ struct NonPushdownPartitionFunction {
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		return_types = {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::DOUBLE};
 		names = {"region", "year", "value"};
 		auto result = make_uniq<BindData>();
