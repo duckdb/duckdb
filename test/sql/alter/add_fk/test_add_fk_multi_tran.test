@@ -1,0 +1,263 @@
+# name: test/sql/alter/add_fk/test_add_fk_multi_tran.test
+# description: Test ALTER TABLE ADD FOREIGN KEY in multiple transactions
+# group: [add_fk]
+
+# Scenario #1: con1 adds FK, con2 cannot insert invalid FK value
+
+statement ok con1
+CREATE TABLE pk1 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk1 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk1 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk1 VALUES (1, 1), (2, 2)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE fk1 ADD CONSTRAINT fk1_fk FOREIGN KEY (val) REFERENCES pk1(id)
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con2 cannot insert an invalid FK value while con1 has uncommitted ALTER
+statement error con2
+INSERT INTO fk1 VALUES (3, 999)
+----
+
+statement ok con1
+COMMIT
+
+statement ok con2
+ROLLBACK
+
+# After con1 commits, constraint is enforced
+statement error con1
+INSERT INTO fk1 VALUES (4, 999)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+# NULL is still allowed
+statement ok con1
+INSERT INTO fk1 VALUES (4, NULL)
+
+query I con1
+SELECT COUNT(*) FROM fk1
+----
+3
+
+statement ok con1
+DROP TABLE fk1
+
+statement ok con1
+DROP TABLE pk1
+
+# Scenario #2: con2 inserts invalid data before con1 adds FK, con2 commit fails
+
+statement ok con1
+CREATE TABLE pk2 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk2 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk2 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk2 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk2 VALUES (2, 999)
+
+statement ok con1
+ALTER TABLE fk2 ADD CONSTRAINT fk2_fk FOREIGN KEY (val) REFERENCES pk2(id)
+
+statement ok con1
+COMMIT
+
+# con2 commit fails because its insert violates the now-committed FK constraint
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM fk2
+----
+1
+
+statement ok con1
+DROP TABLE fk2
+
+statement ok con1
+DROP TABLE pk2
+
+# Scenario #3: con2 inserts valid data before con1 adds FK, both commit successfully
+
+statement ok con1
+CREATE TABLE pk3 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk3 VALUES (1), (2), (3)
+
+statement ok con1
+CREATE TABLE fk3 (id INTEGER, val INTEGER)
+
+statement ok con1
+INSERT INTO fk3 VALUES (1, 1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk3 VALUES (2, 2)
+
+statement ok con1
+ALTER TABLE fk3 ADD CONSTRAINT fk3_fk FOREIGN KEY (val) REFERENCES pk3(id)
+
+statement ok con1
+COMMIT
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk3
+----
+2
+
+statement ok con1
+DROP TABLE fk3
+
+statement ok con1
+DROP TABLE pk3
+
+# Scenario #4: a1+c1+i2 — con2 cannot insert invalid FK after con1 commits ALTER
+
+statement ok con1
+CREATE TABLE pk4 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk4 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk4 (id INTEGER, val INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE fk4 ADD CONSTRAINT fk4_fk FOREIGN KEY (val) REFERENCES pk4(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+INSERT INTO fk4 VALUES (1, 999)
+----
+
+statement ok con2
+ROLLBACK
+
+query I con1
+SELECT COUNT(*) FROM fk4
+----
+0
+
+statement ok con1
+DROP TABLE fk4
+
+statement ok con1
+DROP TABLE pk4
+
+# Scenario #5: i2+a1+c1+c2 — con2 inserts invalid FK, con1 adds FK and commits, con2 commit fails
+
+statement ok con1
+CREATE TABLE pk5 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk5 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk5 (id INTEGER, val INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO fk5 VALUES (1, 999)
+
+statement ok con1
+ALTER TABLE fk5 ADD CONSTRAINT fk5_fk FOREIGN KEY (val) REFERENCES pk5(id)
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+
+query I con1
+SELECT COUNT(*) FROM fk5
+----
+0
+
+statement ok con1
+DROP TABLE fk5
+
+statement ok con1
+DROP TABLE pk5
+
+# Scenario #6: con1 adds FK, con2 inserts NULL FK value (should succeed)
+
+statement ok con1
+CREATE TABLE pk6 (id INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk6 VALUES (1), (2)
+
+statement ok con1
+CREATE TABLE fk6 (id INTEGER, val INTEGER)
+
+statement ok con1
+ALTER TABLE fk6 ADD CONSTRAINT fk6_fk FOREIGN KEY (val) REFERENCES pk6(id)
+
+statement ok con2
+BEGIN TRANSACTION
+
+# NULL FK value is always allowed
+statement ok con2
+INSERT INTO fk6 VALUES (1, NULL)
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM fk6
+----
+1
+
+statement ok con1
+DROP TABLE fk6
+
+statement ok con1
+DROP TABLE pk6
