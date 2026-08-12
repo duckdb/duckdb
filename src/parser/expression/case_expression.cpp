@@ -8,13 +8,6 @@ namespace duckdb {
 CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
 }
 
-Identifier CaseExpression::GetName() const {
-	if (HasAlias() || !case_operand) {
-		return ParsedExpression::GetName();
-	}
-	return Identifier(GetLegacyCaseExpression()->ToString());
-}
-
 string CaseExpression::ToString() const {
 	string case_str = "CASE ";
 	if (case_operand) {

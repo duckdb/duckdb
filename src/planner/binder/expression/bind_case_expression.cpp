@@ -84,18 +84,10 @@ static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpress
 	arguments.push_back(make_uniq<BoundExpression>(std::move(case_operand)));
 	auto invoke_name = QualifiedName(Identifier(SYSTEM_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier("invoke"));
 	auto result = make_uniq<FunctionExpression>(invoke_name, std::move(arguments));
+	result->SetGeneratedSimpleCase();
 	result->SetAlias(expr.GetAlias());
 	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
-}
-
-static bool IsUnsupportedLambdaBody(const ErrorData &error) {
-	if (!error.HasError() || error.Type() != ExceptionType::BINDER) {
-		return false;
-	}
-	auto &extra_info = error.ExtraInfo();
-	auto entry = extra_info.find("error_subtype");
-	return entry != extra_info.end() && entry->second == "UNSUPPORTED_LAMBDA_EXPRESSION";
 }
 
 static BindResult UnsupportedVolatileCase(const CaseExpression &expr) {
@@ -114,6 +106,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		}
 		auto bound_operand = std::move(BoundExpression::GetExpression(*case_operand));
 
+		// Legacy lowering duplicates the operand when there is more than one check.
 		if (expr.CaseChecks().size() == 1 || !bound_operand->IsVolatile()) {
 			auto legacy_case = CreateLegacyCaseExpression(expr, std::move(bound_operand));
 			return BindExpression(*legacy_case, depth);
@@ -122,12 +115,12 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto invoke_expr = CreateCaseInvokeExpression(expr, std::move(bound_operand));
 		try {
 			auto result = BindExpression(invoke_expr, depth);
-			if (result.HasError() && IsUnsupportedLambdaBody(result.error)) {
+			if (result.HasError() && BinderException::IsUnsupportedLambdaExpression(result.error, true)) {
 				return UnsupportedVolatileCase(expr);
 			}
 			return result;
 		} catch (const BinderException &ex) {
-			if (IsUnsupportedLambdaBody(ErrorData(ex))) {
+			if (BinderException::IsUnsupportedLambdaExpression(ErrorData(ex), true)) {
 				return UnsupportedVolatileCase(expr);
 			}
 			throw;
