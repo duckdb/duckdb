@@ -46,6 +46,14 @@
 #define DUCKDB_UNROLL_LOOP
 #endif
 
+// Executor flat loops: unroll only on aarch64. The x86 avx2 vectorizer already unrolls, and the
+// pragma multiplies the per-instantiation code size of the widest-instantiated templates.
+#if defined(__aarch64__)
+#define DUCKDB_UNROLL_FLAT_LOOP DUCKDB_UNROLL_LOOP
+#else
+#define DUCKDB_UNROLL_FLAT_LOOP
+#endif
+
 namespace duckdb {
 inline bool CpuBenefitsFromAutoVec() {
 #if !DUCKDB_AUTOVEC
