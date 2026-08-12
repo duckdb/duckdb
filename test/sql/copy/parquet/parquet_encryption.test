@@ -131,7 +131,7 @@ physical_plan	<REGEX>:.*Column Data Scan.*
 statement error
 SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet')
 ----
-<REGEX>:Invalid Input Error: File '.*encrypted_metadata_cache.parquet' is encrypted, but 'encryption_config' was not set
+<REGEX>:.*Invalid Input Error: File '.*encrypted_metadata_cache.parquet' is encrypted, but 'encryption_config' was not set.*
 
 # with the wrong key, cached metadata statistics must not be used to answer the aggregate
 statement error
@@ -165,7 +165,7 @@ statement error
 SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet',
 	encryption_config={footer_key: 'key256'})
 ----
-<REGEX>:Invalid Input Error: File '.*plain_metadata_cache.parquet' is not encrypted, but 'encryption_config' was set
+<REGEX>:.*Invalid Input Error: File '.*plain_metadata_cache.parquet' is not encrypted, but 'encryption_config' was set.*
 
 statement error
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})
