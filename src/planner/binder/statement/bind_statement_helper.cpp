@@ -21,7 +21,7 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 		}
 		found_constraint = true;
 
-		vector<string> pk_names;
+		vector<Identifier> pk_names;
 		if (unique.HasIndex()) {
 			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
 		} else {
@@ -45,7 +45,7 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 		}
 		bool equals = true;
 		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (!StringUtil::CIEquals(fk.pk_columns[i], pk_names[i])) {
+			if (!(fk.pk_columns[i] == pk_names[i])) {
 				equals = false;
 				break;
 			}
@@ -78,13 +78,13 @@ void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<uniqu
 	                      fk.info.table, fk_names);
 }
 
-void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names,
+void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names,
                                   vector<PhysicalIndex> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
 		if (!columns.ColumnExists(name)) {
-			throw BinderException("column \"%s\" named in key does not exist", name);
+			throw BinderException("column \"%s\" named in key does not exist", name.GetIdentifierName());
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
@@ -113,7 +113,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const 
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
-		                                                               if (gcols.count(name)) {
+		                                                               if (gcols.count(name.GetIdentifierName())) {
 			                                                               contains_gcol = true;
 			                                                               return;
 		                                                               }
@@ -126,7 +126,7 @@ bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.Name());
+		generated_columns.insert(col.Name().GetIdentifierName());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -155,7 +155,7 @@ bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 			auto &constraint = constr->Cast<UniqueConstraint>();
 			if (!constraint.HasIndex()) {
 				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col)) {
+					if (generated_columns.count(col.GetIdentifierName())) {
 						return true;
 					}
 				}

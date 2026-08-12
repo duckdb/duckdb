@@ -13,6 +13,7 @@
 #include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 
 namespace duckdb {
 
@@ -122,9 +123,9 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 		DataChunk full_chunk;
 		full_chunk.InitializeEmpty(fk_table_types);
 		for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
-			full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(l_state.key_chunk.data[i]);
+			full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(lstate.key_chunk.data[i]);
 		}
-		full_chunk.SetCardinality(l_state.key_chunk.size());
+		full_chunk.SetCardinality(lstate.key_chunk.size());
 		table.GetStorage().VerifyFKReferentialIntegrity(*bound_fk, context.client, full_chunk);
 	}
 	

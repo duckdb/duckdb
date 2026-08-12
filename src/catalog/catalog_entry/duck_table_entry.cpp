@@ -1379,8 +1379,8 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-				auto index_name = fk.GetName(prev_table.name);
-				names.insert(index_name);
+				auto index_name = fk.GetName(prev_table.name.GetIdentifierName());
+				names.insert(Identifier(index_name));
 			}
 		}
 	}
@@ -1401,7 +1401,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
 			}
-			auto index_name = fk.GetName(table.name);
+			auto index_name = Identifier(fk.GetName(table.name.GetIdentifierName()));
 			if (names.find(index_name) == names.end()) {
 				prev_indexes.RemoveIndex(index_name);
 			}

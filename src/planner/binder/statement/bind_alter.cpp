@@ -15,6 +15,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_alter.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -54,7 +55,7 @@ void Binder::BindParsedForeignKeyConstraint(ForeignKeyConstraint& fk, SchemaCata
 	FindForeignKeyIndexes(table.GetColumns(), fk.fk_columns, fk.info.fk_keys);
 
 	// Resolve the self-reference.
-	if (StringUtil::CIEquals(table.name, fk.info.table)) {
+	if (table.name == fk.info.table) {
 		fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 		// Need table constraints!
 		FindMatchingPrimaryKeyColumns(table.GetColumns(), table.GetConstraints(), fk);
@@ -116,7 +117,7 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
-	create_index_info->table = table_info.name;
+	create_index_info->table = table_info.GetQualifiedName().Name();
 	create_index_info->index_type = ART::TYPE_NAME;
 	create_index_info->constraint_type = IndexConstraintType::FOREIGN;
 
@@ -126,27 +127,27 @@ BoundStatement Binder::BindAlterAddForeignKey(BoundStatement &result, CatalogEnt
 	// It's ForeignKeyInfo --> vector<PhysicalIndex> fk_keys;
 	for (const auto &physical_index : fk.info.fk_keys) {
 		auto &col = column_list.GetColumn(physical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
 	// TODO: ZZZ index name
 	// Need FK index name
-	auto index_name = fk.GetName(table_info.name);
-	create_index_info->index_name = index_name;
-	D_ASSERT(!create_index_info->index_name.empty());
+	auto index_name = fk.GetName(table_info.GetQualifiedName().Name().GetIdentifierName());
+	create_index_info->SetIndexName(Identifier(index_name));
+	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(table_info.catalog, table_info.schema, table_info.name);
+	TableDescription table_description(table_info.GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("can only add an index to a base table");
 	}
-	auto plan = CreatePlan(*bound_table);
+	auto plan = std::move(bound_table.plan);
 	auto &get = plan->Cast<LogicalGet>();
-	get.names = column_list.GetColumnNames();
+	get.names = StringsToIdentifiers(column_list.GetColumnNames());
 
 	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
 	result.plan = table.catalog.BindAlterAddForeignKey(*this, table, std::move(plan), std::move(create_index_info),
