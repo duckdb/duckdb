@@ -84,7 +84,7 @@ void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
 		if (!columns.ColumnExists(name)) {
-			throw BinderException("column \"%s\" named in key does not exist", name);
+			throw BinderException("column \"%s\" named in key does not exist", name.GetIdentifierName());
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
@@ -113,7 +113,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const 
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
-		                                                               if (gcols.count(name)) {
+		                                                               if (gcols.count(name.GetIdentifierName())) {
 			                                                               contains_gcol = true;
 			                                                               return;
 		                                                               }
@@ -126,7 +126,7 @@ bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.Name());
+		generated_columns.insert(col.Name().GetIdentifierName());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -155,7 +155,7 @@ bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 			auto &constraint = constr->Cast<UniqueConstraint>();
 			if (!constraint.HasIndex()) {
 				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col)) {
+					if (generated_columns.count(col.GetIdentifierName())) {
 						return true;
 					}
 				}
