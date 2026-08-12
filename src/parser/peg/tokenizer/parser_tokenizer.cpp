@@ -8,8 +8,8 @@ static bool IsEmptyQuotedIdentifier(const string &sql, idx_t start, idx_t end, T
 }
 
 ParserTokenizer::ParserTokenizer(const string &sql, vector<MatcherToken> &tokens,
-                                 optional_ptr<ParserCache> parser_cache)
-    : BaseTokenizer(sql, tokens, parser_cache) {
+                                 optional_ptr<const KeywordExtension> keyword_extension)
+    : BaseTokenizer(sql, tokens, keyword_extension) {
 }
 
 void ParserTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {

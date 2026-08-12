@@ -42,10 +42,10 @@ bool ParseIterator::Peek() {
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.
 	if (!override_resolved) {
 		override_resolved = true;
-		if (options.extensions) {
+		if (options.parser_extensions) {
 			bool has_strict_extension_error = false;
 			ErrorData last_strict_extension_error;
-			for (auto &ext : options.extensions->ParserExtensions()) {
+			for (auto &ext : *options.parser_extensions) {
 				if (!ext.parser_override) {
 					continue;
 				}
@@ -142,7 +142,7 @@ void ParseIterator::EnsureTokenized() {
 		// `token_cursor`; we never re-tokenize. Tokenization is grammar-free.
 		tokens = make_uniq<vector<MatcherToken>>();
 		auto options = context.GetParserOptions();
-		ParserTokenizer tokenizer(sql, *tokens, options.parser_cache);
+		ParserTokenizer tokenizer(sql, *tokens, options.keyword_extension.get());
 		tokenizer.TokenizeInput();
 	}
 }

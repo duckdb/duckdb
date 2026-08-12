@@ -16,3 +16,11 @@ ORDER BY start;
 ----
 0	KEYWORD	SELECT
 7	KEYWORD	quack_reserved_keyword
+
+query T
+SELECT duckdb_format_sql(
+	'SELECT QUACK_RESERVED_KEYWORD',
+	MAP {'keyword_case': 'lower'}
+);
+----
+select quack_reserved_keyword

@@ -21,7 +21,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
-
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "re2/re2.h"
 
@@ -119,7 +118,9 @@ void ExtensionLoader::FinalizeLoad() {
 		extension_info->load_info = std::move(info);
 	}
 
-	db.GetParserCache().RegisterKeywords(parser_keywords);
+	if (!parser_keywords.empty()) {
+		DBConfig::GetConfig(db).GetCallbackManager().Register(parser_keywords);
+	}
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
