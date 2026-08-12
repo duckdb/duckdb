@@ -2,7 +2,7 @@
 # description: Case-sensitive VARIANT keys that collide as STRUCT fields remain unshredded
 # group: [general]
 
-load {TEST_DIR}/variant_case_insensitive_field_collision.db readwrite
+load {TEST_DIR}/variant_case_insensitive_field_collision.db readwrite v1.5.0
 
 statement ok
 SET variant_minimum_shredding_size = 0
