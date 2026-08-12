@@ -37,6 +37,7 @@
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
+#include "duckdb/optimizer/aggregate_reuse.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/type_pushdown.hpp"
@@ -310,6 +311,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Reuse exact aggregate payloads exposed by filtering SEMI joins.
+	RunOptimizer(OptimizerType::AGGREGATE_REUSE, [&]() {
+		plan->ResolveOperatorTypes();
+		AggregateReuseOptimizer aggregate_reuse(*this);
+		aggregate_reuse.CollectCTEs(*plan);
+		aggregate_reuse.VisitOperator(plan);
 	});
 
 	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
