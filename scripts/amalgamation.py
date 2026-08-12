@@ -110,6 +110,12 @@ excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb
 linenumbers = False
 
 
+def is_excluded_file(fname):
+    # In-source CMake builds generate unity sources alongside the real sources.
+    # These are build artifacts and must not become inputs to the amalgamation.
+    return fname in excluded_files or (fname.startswith('ub_') and fname.endswith('.cpp'))
+
+
 def get_includes(fpath, text):
     # find all the includes referred to in the directory
     regex_include_statements = re.findall("(^[\t ]*[#][\t ]*include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
@@ -165,7 +171,7 @@ def need_to_write_file(current_file, ignore_excluded=False):
         return False
     if current_file in always_excluded:
         return False
-    if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
+    if is_excluded_file(current_file.split(os.sep)[-1]) and not ignore_excluded:
         # file is in ignored files set
         return False
     if current_file in written_files:
@@ -241,7 +247,7 @@ def write_dir(dir):
     files.sort()
     text = ""
     for fname in files:
-        if fname in excluded_files:
+        if is_excluded_file(fname):
             continue
         # print(fname)
         fpath = os.path.join(dir, fname)
@@ -374,7 +380,7 @@ def list_files(dname, file_list):
     files = os.listdir(dname)
     files.sort()
     for fname in files:
-        if fname in excluded_files:
+        if is_excluded_file(fname):
             continue
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
@@ -395,7 +401,7 @@ def list_include_files_recursive(dname, file_list):
     files = os.listdir(dname)
     files.sort()
     for fname in files:
-        if fname in excluded_files:
+        if is_excluded_file(fname):
             continue
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
@@ -456,7 +462,7 @@ def gather_files(dir, source_files, header_files):
     files = os.listdir(dir)
     files.sort()
     for fname in files:
-        if fname in excluded_files:
+        if is_excluded_file(fname):
             continue
         fpath = os.path.join(dir, fname)
         if os.path.isdir(fpath):
