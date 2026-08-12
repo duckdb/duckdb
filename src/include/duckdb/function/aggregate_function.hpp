@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -21,7 +22,8 @@ class BufferManager;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
-struct AggregateRewriteResult;
+struct AggregateRewritePlan;
+struct AggregateRewriteCostInput;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -130,8 +132,21 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deseri
 
 typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
 
-//! Creates an owned logical rewrite for a bound aggregate.
-typedef unique_ptr<AggregateRewriteResult> (*aggregate_rewrite_t)(AggregateRewriteInput &input);
+//! Replaces an aggregate with another expression in the same aggregate operator.
+typedef unique_ptr<Expression> (*aggregate_direct_rewrite_t)(AggregateRewriteInput &input);
+//! Creates an owned logical plan rewrite for a bound aggregate.
+typedef unique_ptr<AggregateRewritePlan> (*aggregate_rewrite_t)(AggregateRewriteInput &input);
+//! Decides whether a cost-based logical rewrite should be applied.
+typedef bool (*aggregate_rewrite_cost_t)(AggregateRewriteCostInput &input);
+
+enum class AggregateRewritePolicy : uint8_t {
+	//! Required lowering for aggregates whose native state is not suitable for ordinary grouped execution.
+	MANDATORY,
+	//! An optional rewrite that is always applied when its optimizer strategy is enabled.
+	UNCONDITIONAL,
+	//! An optional rewrite selected using propagated input statistics.
+	COST_BASED
+};
 
 //! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
 //! dest_buffer (state i at offset i * layout.total_state_size).
@@ -235,9 +250,26 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
+	bool HasDirectRewriteCallback() const { return direct_rewrite != nullptr; }
+	aggregate_direct_rewrite_t GetDirectRewriteCallback() const { return direct_rewrite; }
+	void SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) { direct_rewrite = callback; }
+
 	bool HasRewriteCallback() const { return rewrite != nullptr; }
 	aggregate_rewrite_t GetRewriteCallback() const { return rewrite; }
-	void SetRewriteCallback(aggregate_rewrite_t callback) { rewrite = callback; }
+	AggregateRewritePolicy GetRewritePolicy() const { return rewrite_policy; }
+	OptimizerType GetRewriteOptimizerType() const { return rewrite_optimizer_type; }
+	aggregate_rewrite_cost_t GetRewriteCostCallback() const { return rewrite_cost; }
+	void SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) {
+		D_ASSERT(callback);
+		D_ASSERT((policy == AggregateRewritePolicy::MANDATORY) == (optimizer_type == OptimizerType::INVALID));
+		D_ASSERT((policy == AggregateRewritePolicy::COST_BASED) == (cost != nullptr));
+		rewrite = callback;
+		rewrite_policy = policy;
+		rewrite_optimizer_type = optimizer_type;
+		rewrite_cost = cost;
+	}
 
 public:
 	//! The hashed aggregate state sizing function
@@ -274,8 +306,14 @@ public:
 
 	aggregate_deserialize_t deserialize = nullptr;
 
+	//! Optional expression rewrite that remains inside the original aggregate operator.
+	aggregate_direct_rewrite_t direct_rewrite = nullptr;
+
 	//! Optional logical-plan rewrite for aggregates represented by multiple aggregate stages.
 	aggregate_rewrite_t rewrite = nullptr;
+	AggregateRewritePolicy rewrite_policy = AggregateRewritePolicy::UNCONDITIONAL;
+	OptimizerType rewrite_optimizer_type = OptimizerType::INVALID;
+	aggregate_rewrite_cost_t rewrite_cost = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
 
@@ -402,9 +440,20 @@ public: // Callbacks
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
 
+	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
+	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
+	auto SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) -> void { callbacks.direct_rewrite = callback; }
+
 	auto HasRewriteCallback() const -> bool { return callbacks.rewrite != nullptr; }
 	auto GetRewriteCallback() const -> aggregate_rewrite_t { return callbacks.rewrite; }
-	auto SetRewriteCallback(aggregate_rewrite_t callback) -> void { callbacks.rewrite = callback; }
+	auto GetRewritePolicy() const -> AggregateRewritePolicy { return callbacks.rewrite_policy; }
+	auto GetRewriteOptimizerType() const -> OptimizerType { return callbacks.rewrite_optimizer_type; }
+	auto GetRewriteCostCallback() const -> aggregate_rewrite_cost_t { return callbacks.rewrite_cost; }
+	auto SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) -> void {
+		callbacks.SetRewriteCallback(callback, policy, optimizer_type, cost);
+	}
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }

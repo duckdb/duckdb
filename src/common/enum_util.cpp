@@ -133,6 +133,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -419,22 +420,41 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 	return static_cast<AggregateOrderDependent>(StringUtil::StringToEnum(GetAggregateOrderDependentValues(), 2, "AggregateOrderDependent", value));
 }
 
-const StringUtil::EnumStringLiteral *GetAggregateRewriteModeValues() {
+const StringUtil::EnumStringLiteral *GetAggregateRewritePolicyValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AggregateRewriteMode::DIRECT), "DIRECT" },
-		{ static_cast<uint32_t>(AggregateRewriteMode::MULTI_STAGE), "MULTI_STAGE" }
+		{ static_cast<uint32_t>(AggregateRewritePolicy::MANDATORY), "MANDATORY" },
+		{ static_cast<uint32_t>(AggregateRewritePolicy::UNCONDITIONAL), "UNCONDITIONAL" },
+		{ static_cast<uint32_t>(AggregateRewritePolicy::COST_BASED), "COST_BASED" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<AggregateRewriteMode>(AggregateRewriteMode value) {
-	return StringUtil::EnumToString(GetAggregateRewriteModeValues(), 2, "AggregateRewriteMode", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<AggregateRewritePolicy>(AggregateRewritePolicy value) {
+	return StringUtil::EnumToString(GetAggregateRewritePolicyValues(), 3, "AggregateRewritePolicy", static_cast<uint32_t>(value));
 }
 
 template<>
-AggregateRewriteMode EnumUtil::FromString<AggregateRewriteMode>(const char *value) {
-	return static_cast<AggregateRewriteMode>(StringUtil::StringToEnum(GetAggregateRewriteModeValues(), 2, "AggregateRewriteMode", value));
+AggregateRewritePolicy EnumUtil::FromString<AggregateRewritePolicy>(const char *value) {
+	return static_cast<AggregateRewritePolicy>(StringUtil::StringToEnum(GetAggregateRewritePolicyValues(), 3, "AggregateRewritePolicy", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAggregateRewriteSourceTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateRewriteSourceType::INPUT), "INPUT" },
+		{ static_cast<uint32_t>(AggregateRewriteSourceType::STAGE), "STAGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewriteSourceType>(AggregateRewriteSourceType value) {
+	return StringUtil::EnumToString(GetAggregateRewriteSourceTypeValues(), 2, "AggregateRewriteSourceType", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateRewriteSourceType EnumUtil::FromString<AggregateRewriteSourceType>(const char *value) {
+	return static_cast<AggregateRewriteSourceType>(StringUtil::StringToEnum(GetAggregateRewriteSourceTypeValues(), 2, "AggregateRewriteSourceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateStateExportModeValues() {
@@ -3978,21 +3998,19 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::TYPE_PUSHDOWN), "TYPE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::SCALAR_FN_PUSHDOWN), "SCALAR_FN_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::DISTINCT_AGGREGATE_REWRITE), "DISTINCT_AGGREGATE_REWRITE" },
-		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" },
-		{ static_cast<uint32_t>(OptimizerType::MULTI_STAGE_AGGREGATE_REWRITE), "MULTI_STAGE_AGGREGATE_REWRITE" },
-		{ static_cast<uint32_t>(OptimizerType::FREQUENCY_AGGREGATE_REWRITE), "FREQUENCY_AGGREGATE_REWRITE" }
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_REUSE), "AGGREGATE_REUSE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 47, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 45, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 47, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 45, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {

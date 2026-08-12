@@ -63,12 +63,6 @@
       ]
     },
     {
-      "reason": "Tests optimizer-dependent memory usage.",
-      "paths": [
-        "test/sql/aggregate/aggregates/mode_rewrite_memory.test"
-      ]
-    },
-    {
       "reason": "Runs too long in release mode.",
       "paths": [
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",

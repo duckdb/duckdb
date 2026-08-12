@@ -189,9 +189,9 @@ SELECT histogram(g), mode(g), entropy(g) FROM hist_data;
 logical_opt	<REGEX>:.*"Groups":\s*"g".*count_star\(\).*row.*arg_max.*sum\(.*map_from_entries.*list_sort.*
 
 statement ok
-SET disabled_optimizers='frequency_aggregate_rewrite';
+SET enable_optimizer=false;
 
-# the legacy aggregate uses the same SQL equality for floating-point keys
+# mandatory histogram lowering uses SQL equality without optional optimization
 query T
 WITH d(v) AS (
 	VALUES (1.0), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0)
@@ -201,4 +201,4 @@ SELECT histogram(v)::VARCHAR FROM d;
 {1.0=2, nan=2}
 
 statement ok
-SET disabled_optimizers='';
+SET enable_optimizer=true;

@@ -14,49 +14,53 @@
 
 namespace duckdb {
 
+AggregateRewriteSource AggregateRewriteSource::Input() {
+	return {AggregateRewriteSourceType::INPUT, DConstants::INVALID_INDEX};
+}
+
+AggregateRewriteSource AggregateRewriteSource::Stage(idx_t stage_index) {
+	return {AggregateRewriteSourceType::STAGE, stage_index};
+}
+
+bool AggregateRewriteSource::operator==(const AggregateRewriteSource &other) const {
+	return type == other.type && stage_index == other.stage_index;
+}
+
 AggregateRewriteStage::AggregateRewriteStage(TableIndex group_index_p, TableIndex aggregate_index_p,
+                                             vector<AggregateRewriteSource> sources_p,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<unique_ptr<Expression>> aggregates_p)
-    : group_index(group_index_p), aggregate_index(aggregate_index_p), groups(std::move(groups_p)),
-      aggregates(std::move(aggregates_p)) {
+    : group_index(group_index_p), aggregate_index(aggregate_index_p), sources(std::move(sources_p)),
+      groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
 }
 
-AggregateRewritePlan::AggregateRewritePlan(OptimizerType optimizer_type_p) : optimizer_type(optimizer_type_p) {
-}
-
-AggregateRewriteInput::AggregateRewriteInput(ClientContext &context_p, const BoundAggregateExpression &aggregate_p,
-                                             AggregateRewriteMode mode_p)
-    : context(context_p), aggregate(aggregate_p), mode(mode_p) {
+AggregateRewriteInput::AggregateRewriteInput(ClientContext &context_p, const BoundAggregateExpression &aggregate_p)
+    : context(context_p), aggregate(aggregate_p) {
 }
 
 AggregateRewriteInput::AggregateRewriteInput(Optimizer &optimizer_p, const LogicalAggregate &op_p,
-                                             const BoundAggregateExpression &aggregate_p, AggregateRewriteMode mode_p)
-    : context(optimizer_p.context), optimizer(optimizer_p), op(op_p), aggregate(aggregate_p), mode(mode_p) {
+                                             const BoundAggregateExpression &aggregate_p)
+    : context(optimizer_p.context), optimizer(optimizer_p), op(op_p), aggregate(aggregate_p) {
 }
 
-unique_ptr<AggregateRewriteResult> AggregateRewriteResult::Direct(unique_ptr<Expression> expression) {
-	auto result = make_uniq<AggregateRewriteResult>();
-	result->expression = std::move(expression);
-	return result;
-}
-
-unique_ptr<AggregateRewriteResult> AggregateRewriteResult::MultiStage(unique_ptr<AggregateRewritePlan> plan) {
-	auto result = make_uniq<AggregateRewriteResult>();
-	result->plan = std::move(plan);
-	return result;
+AggregateRewriteCostInput::AggregateRewriteCostInput(AggregateRewriteInput &rewrite_input_p,
+                                                     optional_idx input_cardinality_p,
+                                                     vector<optional_ptr<const BaseStatistics>> argument_statistics_p)
+    : rewrite_input(rewrite_input_p), input_cardinality(input_cardinality_p),
+      argument_statistics(std::move(argument_statistics_p)) {
 }
 
 unique_ptr<Expression> TryDirectAggregateRewrite(AggregateRewriteInput &input) {
-	if (input.mode != AggregateRewriteMode::DIRECT || !input.aggregate.Function().HasRewriteCallback() ||
+	if (!input.aggregate.Function().HasDirectRewriteCallback() ||
 	    input.aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
 		return nullptr;
 	}
-	auto rewrite = input.aggregate.Function().GetRewriteCallback()(input);
-	if (!rewrite || !rewrite->expression) {
+	auto rewrite = input.aggregate.Function().GetDirectRewriteCallback()(input);
+	if (!rewrite) {
 		return nullptr;
 	}
-	D_ASSERT(rewrite->expression->GetReturnType() == input.aggregate.GetReturnType());
-	return std::move(rewrite->expression);
+	D_ASSERT(rewrite->GetReturnType() == input.aggregate.GetReturnType());
+	return rewrite;
 }
 
 FrequencyAggregateFinalizeInput::FrequencyAggregateFinalizeInput(
@@ -93,17 +97,16 @@ static unique_ptr<Expression> CreateAggregateSortKey(ClientContext &context, con
 	return sort_key;
 }
 
-unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRewriteInput &input, bool ignore_nulls,
-                                                                     bool retain_order,
-                                                                     frequency_aggregate_finalize_t finalize) {
-	if (input.mode != AggregateRewriteMode::MULTI_STAGE || !input.optimizer || !input.op ||
-	    input.aggregate.GetChildren().size() != 1) {
+unique_ptr<AggregateRewritePlan> FrequencyAggregateRewrite::Create(AggregateRewriteInput &input, bool ignore_nulls,
+                                                                   bool retain_order,
+                                                                   frequency_aggregate_finalize_t finalize) {
+	if (!input.optimizer || !input.op || input.aggregate.GetChildren().size() != 1) {
 		return nullptr;
 	}
 	auto &optimizer = *input.optimizer;
 	auto &op = *input.op;
 
-	auto plan = make_uniq<AggregateRewritePlan>(OptimizerType::FREQUENCY_AGGREGATE_REWRITE);
+	auto plan = make_uniq<AggregateRewritePlan>();
 	const auto group_count = op.groups.size();
 	vector<unique_ptr<Expression>> frequency_groups;
 	frequency_groups.reserve(group_count + 2);
@@ -138,8 +141,9 @@ unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRe
 
 	auto frequency_group_index = optimizer.binder.GenerateTableIndex();
 	auto frequency_aggregate_index = optimizer.binder.GenerateTableIndex();
-	plan->stages.emplace_back(frequency_group_index, frequency_aggregate_index, std::move(frequency_groups),
-	                          std::move(frequency_aggregates));
+	plan->stages.emplace_back(frequency_group_index, frequency_aggregate_index,
+	                          vector<AggregateRewriteSource> {AggregateRewriteSource::Input()},
+	                          std::move(frequency_groups), std::move(frequency_aggregates));
 
 	vector<unique_ptr<Expression>> final_groups;
 	final_groups.reserve(group_count);
@@ -187,10 +191,12 @@ unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRe
 	                                               std::move(filter), std::move(order_key));
 	auto final_result = finalize(finalize_input);
 	D_ASSERT(final_result.result);
-	plan->stages.emplace_back(final_group_index, final_aggregate_index, std::move(final_groups),
-	                          std::move(final_result.aggregates));
+	plan->stages.emplace_back(final_group_index, final_aggregate_index,
+	                          vector<AggregateRewriteSource> {AggregateRewriteSource::Stage(0)},
+	                          std::move(final_groups), std::move(final_result.aggregates));
+	plan->result_stage = 1;
 	plan->result = std::move(final_result.result);
-	return AggregateRewriteResult::MultiStage(std::move(plan));
+	return plan;
 }
 
 } // namespace duckdb

@@ -96,7 +96,7 @@ static FrequencyAggregateFinalizeResult FinalizeModeRewrite(FrequencyAggregateFi
 	return result;
 }
 
-static unique_ptr<AggregateRewriteResult> RewriteMode(AggregateRewriteInput &input) {
+static unique_ptr<AggregateRewritePlan> RewriteMode(AggregateRewriteInput &input) {
 	return FrequencyAggregateRewrite::Create(input, true, true, FinalizeModeRewrite);
 }
 
@@ -600,7 +600,7 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
 	function.SetName("mode");
-	function.SetRewriteCallback(RewriteMode);
+	function.SetRewriteCallback(RewriteMode, AggregateRewritePolicy::MANDATORY);
 	return nullptr;
 }
 
@@ -652,7 +652,7 @@ static FrequencyAggregateFinalizeResult FinalizeEntropyRewrite(FrequencyAggregat
 	return result;
 }
 
-static unique_ptr<AggregateRewriteResult> RewriteEntropy(AggregateRewriteInput &input) {
+static unique_ptr<AggregateRewritePlan> RewriteEntropy(AggregateRewriteInput &input) {
 	return FrequencyAggregateRewrite::Create(input, true, false, FinalizeEntropyRewrite);
 }
 
@@ -743,7 +743,7 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
 	function.SetName("entropy");
-	function.SetRewriteCallback(RewriteEntropy);
+	function.SetRewriteCallback(RewriteEntropy, AggregateRewritePolicy::MANDATORY);
 	return nullptr;
 }
 

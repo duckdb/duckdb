@@ -264,7 +264,7 @@ static FrequencyAggregateFinalizeResult FinalizeHistogramRewrite(FrequencyAggreg
 	return result;
 }
 
-static unique_ptr<AggregateRewriteResult> RewriteHistogram(AggregateRewriteInput &input) {
+static unique_ptr<AggregateRewritePlan> RewriteHistogram(AggregateRewriteInput &input) {
 	return FrequencyAggregateRewrite::Create(input, true, false, FinalizeHistogramRewrite);
 }
 
@@ -278,7 +278,7 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 		throw ParameterNotResolvedException();
 	}
 	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
-	function.SetRewriteCallback(RewriteHistogram);
+	function.SetRewriteCallback(RewriteHistogram, AggregateRewritePolicy::MANDATORY);
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

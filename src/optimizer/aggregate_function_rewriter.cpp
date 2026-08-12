@@ -24,7 +24,7 @@ static void RewriteAggregateCallbacks(Optimizer &optimizer, unique_ptr<LogicalOp
 		auto &aggregate_op = op->Cast<LogicalAggregate>();
 		for (auto &expr : aggregate_op.expressions) {
 			auto &aggregate = expr->Cast<BoundAggregateExpression>();
-			AggregateRewriteInput input(optimizer, aggregate_op, aggregate, AggregateRewriteMode::DIRECT);
+			AggregateRewriteInput input(optimizer, aggregate_op, aggregate);
 			auto rewrite = TryDirectAggregateRewrite(input);
 			if (!rewrite) {
 				continue;

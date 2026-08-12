@@ -16,8 +16,8 @@ namespace duckdb {
 namespace {
 
 template <bool LAST, bool SKIP_NULLS>
-unique_ptr<AggregateRewriteResult> RewriteOrderedFirst(AggregateRewriteInput &input) {
-	if (input.mode != AggregateRewriteMode::DIRECT || !input.aggregate.GetOrderBys()) {
+unique_ptr<Expression> RewriteOrderedFirst(AggregateRewriteInput &input) {
+	if (!input.aggregate.GetOrderBys()) {
 		return nullptr;
 	}
 	auto aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(input.aggregate.Copy());
@@ -58,7 +58,7 @@ unique_ptr<AggregateRewriteResult> RewriteOrderedFirst(AggregateRewriteInput &in
 	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
 	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
 	                                           aggregate->GetAggregateType());
-	return AggregateRewriteResult::Direct(std::move(result));
+	return result;
 }
 
 //! The aggregate state of first/last/any_value is nullable on two levels: the state itself is NULL when no row has
@@ -487,7 +487,7 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	function.SetRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -510,7 +510,7 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
 	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	function.SetRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
+	function.SetDirectRewriteCallback(RewriteOrderedFirst<LAST, SKIP_NULLS>);
 	return nullptr;
 }
 
@@ -529,14 +529,14 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.SetName("first");
-	fun.SetRewriteCallback(RewriteOrderedFirst<false, false>);
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<false, false>);
 	return fun;
 }
 
 AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
 	fun.SetName("last");
-	fun.SetRewriteCallback(RewriteOrderedFirst<true, false>);
+	fun.SetDirectRewriteCallback(RewriteOrderedFirst<true, false>);
 	return fun;
 }
 

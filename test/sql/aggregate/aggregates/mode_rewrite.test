@@ -261,9 +261,22 @@ SELECT g, mode(v), entropy(v) FROM mode_rewrite GROUP BY g;
 logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s*"count_star\(\)".*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*sum\(.*log2.*COALESCE.*
 
 statement ok
-SET disabled_optimizers='frequency_aggregate_rewrite';
+SET disabled_optimizers='distinct_aggregate_rewrite';
 
-# optimizer-disabled execution agrees on NaN frequency buckets
+# mandatory aggregate lowering is independent from the DISTINCT strategy gate
+query II
+EXPLAIN (FORMAT JSON)
+SELECT mode(v), count(DISTINCT ord) FROM mode_rewrite;
+----
+logical_opt	<REGEX>:.*count_star\(\).*arg_max\(#[0-9]+, #[0-9]+\).*count\(DISTINCT ord\).*
+
+statement ok
+SET disabled_optimizers='';
+
+statement ok
+SET enable_optimizer=false;
+
+# mandatory lowering preserves DuckDB equality when optional optimization is disabled
 query TT
 WITH d(v) AS (
 	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
@@ -272,35 +285,27 @@ SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
 ----
 nan	0.970951
 
-# disabling frequency rewriting retains the legacy aggregate
+# ordinary mode, entropy and histogram never use their map states
 query II
 EXPLAIN (FORMAT JSON)
-SELECT mode(v) FROM mode_rewrite;
+SELECT mode(v), entropy(v), histogram(v) FROM mode_rewrite;
 ----
-logical_opt	<REGEX>:.*"Expressions":\s*"\\"mode\\"\(v\)".*
+logical_opt	<REGEX>:.*count_star\(\).*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*map_from_entries.*
+
+# grouping sets are lowered before mandatory aggregate recipes
+query ITI
+SELECT g, mode(v), GROUPING(g)
+FROM mode_rewrite
+WHERE g IN (1, 3)
+GROUP BY CUBE(g)
+ORDER BY GROUPING(g), g;
+----
+1	a	0
+3	q	0
+NULL	a	1
 
 statement ok
-SET disabled_optimizers='distinct_aggregate_rewrite';
-
-# DISTINCT and frequency strategy gates are independent
-query II
-EXPLAIN (FORMAT JSON)
-SELECT mode(v), count(DISTINCT ord) FROM mode_rewrite;
-----
-logical_opt	<REGEX>:.*count_star\(\).*arg_max\(#[0-9]+, #[0-9]+\).*count\(DISTINCT ord\).*
-
-statement ok
-SET disabled_optimizers='multi_stage_aggregate_rewrite';
-
-# disabling the umbrella pass retains both legacy aggregates
-query II
-EXPLAIN (FORMAT JSON)
-SELECT mode(v), count(DISTINCT ord) FROM mode_rewrite;
-----
-logical_opt	<REGEX>:.*\\"mode\\"\(v\).*count\(DISTINCT ord\).*
-
-statement ok
-SET disabled_optimizers='';
+SET enable_optimizer=true;
 
 # rewritten aggregates survive logical plan serialization
 statement ok

@@ -36,7 +36,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 		return nullptr;
 	}
 
-	AggregateRewriteInput input(context, aggr, AggregateRewriteMode::DIRECT);
+	AggregateRewriteInput input(context, aggr);
 	auto rewrite = TryDirectAggregateRewrite(input);
 	changes_made |= rewrite != nullptr;
 	return rewrite;
