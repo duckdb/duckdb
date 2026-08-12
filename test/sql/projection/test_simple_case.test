@@ -47,6 +47,25 @@ SELECT simple_case_alias FROM (SELECT CASE 1 WHEN 1 THEN 2 END AS simple_case_al
 ----
 2
 
+# Historical names are preserved when simple CASE is nested in another expression.
+query I
+SELECT "sum(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END)"
+FROM (SELECT sum(CASE i WHEN 0 THEN 1 ELSE 0 END) FROM range(2) tbl(i))
+----
+1
+
+query I
+SELECT "(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END + 1)"
+FROM (SELECT CASE i WHEN 0 THEN 1 ELSE 0 END + 1 FROM (VALUES (0)) tbl(i))
+----
+2
+
+query I
+SELECT "CAST(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END AS BIGINT)"
+FROM (SELECT CAST(CASE i WHEN 0 THEN 1 ELSE 0 END AS BIGINT) FROM (VALUES (0)) tbl(i))
+----
+1
+
 query I
 SELECT CASE (SELECT 2) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END
 ----
@@ -185,6 +204,25 @@ SELECT CASE random() WHEN 0 THEN simple_case_unnest() WHEN 1 THEN 3 ELSE 0 END
 ----
 Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
 
+# Errors originating from user-written nested lambdas are not remapped to CASE errors.
+statement error
+SELECT CASE random()
+	WHEN 0 THEN list_transform([1], lambda x: (SELECT 1))[1]
+	WHEN 1 THEN 3
+	ELSE 0
+END
+----
+<REGEX>:Binder Error:.*subqueries in lambda expressions are not supported.*
+
+statement error
+SELECT CASE random()
+	WHEN 0 THEN list_transform([1], lambda x: unnest([1]))[1]
+	WHEN 1 THEN 3
+	ELSE 0
+END
+----
+<REGEX>:Binder Error:.*UNNEST in lambda expressions is not supported.*
+
 # Aggregate and window expressions can be captured when a volatile operand requires invoke.
 statement ok
 CREATE SEQUENCE simple_case_capture_seq START 1
@@ -220,6 +258,10 @@ CREATE VIEW stored_simple_case AS
 statement ok
 CREATE VIEW stored_simple_case_name AS SELECT CASE 1 WHEN 1 THEN 2 END
 
+statement ok
+CREATE VIEW stored_nested_simple_case_name AS
+	SELECT sum(CASE i WHEN 0 THEN 1 ELSE 0 END) FROM range(2) tbl(i)
+
 restart
 
 query I
@@ -231,6 +273,11 @@ query I
 SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END" FROM stored_simple_case_name
 ----
 2
+
+query I
+SELECT "sum(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END)" FROM stored_nested_simple_case_name
+----
+1
 
 # Old storage versions receive the historical searched-CASE representation.
 statement ok
