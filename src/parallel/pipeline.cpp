@@ -750,6 +750,42 @@ public:
 	reference_map_t<PhysicalCTE, idx_t> cte_selection_map;
 };
 
+struct RemovedOptionalPipelineDependency {
+	RemovedOptionalPipelineDependency(MetaPipeline &meta_pipeline_p, Pipeline &pipeline_p, Pipeline &dependency_p)
+	    : meta_pipeline(meta_pipeline_p), pipeline(pipeline_p), dependency(dependency_p) {
+	}
+
+	reference<MetaPipeline> meta_pipeline;
+	reference<Pipeline> pipeline;
+	reference<Pipeline> dependency;
+};
+
+static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, const vector<pair<idx_t, idx_t>> &cycle,
+                                            const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
+                                            vector<RemovedOptionalPipelineDependency> &removed_dependencies) {
+	for (auto &edge : cycle) {
+		auto &pipeline_stage = schedule.stages[edge.first];
+		auto &dependency_stage = schedule.stages[edge.second];
+		if (pipeline_stage.type != PipelineScheduleStageType::EXECUTE ||
+		    dependency_stage.type != PipelineScheduleStageType::EXECUTE) {
+			continue;
+		}
+		for (auto &meta_pipeline : meta_pipelines) {
+			if (meta_pipeline->RemoveOptionalDependency(*pipeline_stage.pipeline, *dependency_stage.pipeline)) {
+				removed_dependencies.emplace_back(*meta_pipeline, *pipeline_stage.pipeline, *dependency_stage.pipeline);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static void RestoreOptionalDependencies(vector<RemovedOptionalPipelineDependency> &dependencies) {
+	for (auto &dependency : dependencies) {
+		dependency.meta_pipeline.get().AddOptionalDependency(dependency.pipeline, dependency.dependency);
+	}
+}
+
 PipelineBuildState::PipelineBuildState() : data(make_uniq<PipelineBuildStateData>()) {
 }
 
@@ -830,13 +866,22 @@ void PipelineBuildState::ResolveExternalInputs(const vector<shared_ptr<MetaPipel
 		SetPipelineSource(pipeline, candidate.external_source.get());
 		pipeline.SetExternalInput(cte.GetProducerPipelines());
 
-		if (BuildPipelineSchedule(meta_pipelines)->HasCycle()) {
+		vector<RemovedOptionalPipelineDependency> removed_dependencies;
+		auto schedule = BuildPipelineSchedule(meta_pipelines);
+		auto cycle = schedule->GetCycle();
+		while (!cycle.empty() &&
+		       RemoveOptionalDependencyInCycle(*schedule, cycle, meta_pipelines, removed_dependencies)) {
+			schedule = BuildPipelineSchedule(meta_pipelines);
+			cycle = schedule->GetCycle();
+		}
+		if (!cycle.empty()) {
 			pipeline.ClearExternalInput();
 			SetPipelineSource(pipeline, candidate.materialized_source.get());
 			pipeline.AddDependency(candidate.cte_dependency);
 			if (removed_cte_dependency) {
 				selection.pipeline.get().AddDependency(selection.cte_dependency);
 			}
+			RestoreOptionalDependencies(removed_dependencies);
 			cte.RegisterMaterializedConsumer(candidate.consumer_idx);
 			DUCKDB_LOG(
 			    pipeline.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",

@@ -32,6 +32,7 @@ struct PipelineSchedule {
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
 
 	bool HasCycle() const;
+	vector<pair<idx_t, idx_t>> GetCycle() const;
 };
 
 unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,

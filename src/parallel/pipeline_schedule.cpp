@@ -34,36 +34,49 @@ static void AddDependency(PipelineSchedule &result, idx_t dependent, idx_t depen
 	result.stages[dependent].dependencies.push_back(dependency);
 }
 
-bool PipelineSchedule::HasCycle() const {
-	vector<idx_t> remaining_dependencies;
-	vector<vector<idx_t>> dependents(stages.size());
-	vector<idx_t> ready;
-	remaining_dependencies.reserve(stages.size());
-	ready.reserve(stages.size());
-	for (idx_t stage_idx = 0; stage_idx < stages.size(); stage_idx++) {
-		remaining_dependencies.push_back(stages[stage_idx].dependencies.size());
-		if (stages[stage_idx].dependencies.empty()) {
-			ready.push_back(stage_idx);
-		}
-		for (auto dependency : stages[stage_idx].dependencies) {
-			D_ASSERT(dependency < stages.size());
-			dependents[dependency].push_back(stage_idx);
-		}
-	}
+enum class CycleVisitState : uint8_t { UNVISITED, VISITING, VISITED };
 
-	idx_t completed = 0;
-	while (!ready.empty()) {
-		auto stage_idx = ready.back();
-		ready.pop_back();
-		completed++;
-		for (auto dependent : dependents[stage_idx]) {
-			D_ASSERT(remaining_dependencies[dependent] > 0);
-			if (--remaining_dependencies[dependent] == 0) {
-				ready.push_back(dependent);
-			}
+static bool FindCycle(const PipelineSchedule &schedule, idx_t stage_idx, vector<CycleVisitState> &states,
+                      vector<idx_t> &path, vector<pair<idx_t, idx_t>> &result) {
+	states[stage_idx] = CycleVisitState::VISITING;
+	path.push_back(stage_idx);
+	for (auto dependency : schedule.stages[stage_idx].dependencies) {
+		D_ASSERT(dependency < schedule.stages.size());
+		if (states[dependency] == CycleVisitState::UNVISITED && FindCycle(schedule, dependency, states, path, result)) {
+			return true;
+		}
+		if (states[dependency] != CycleVisitState::VISITING) {
+			continue;
+		}
+		auto cycle_start = path.begin();
+		for (; cycle_start != path.end() && *cycle_start != dependency; cycle_start++) {
+		}
+		D_ASSERT(cycle_start != path.end());
+		for (auto entry = cycle_start; entry + 1 != path.end(); entry++) {
+			result.emplace_back(*entry, *(entry + 1));
+		}
+		result.emplace_back(path.back(), dependency);
+		return true;
+	}
+	path.pop_back();
+	states[stage_idx] = CycleVisitState::VISITED;
+	return false;
+}
+
+vector<pair<idx_t, idx_t>> PipelineSchedule::GetCycle() const {
+	vector<CycleVisitState> states(stages.size(), CycleVisitState::UNVISITED);
+	vector<idx_t> path;
+	vector<pair<idx_t, idx_t>> result;
+	for (idx_t stage_idx = 0; stage_idx < stages.size(); stage_idx++) {
+		if (states[stage_idx] == CycleVisitState::UNVISITED && FindCycle(*this, stage_idx, states, path, result)) {
+			break;
 		}
 	}
-	return completed != stages.size();
+	return result;
+}
+
+bool PipelineSchedule::HasCycle() const {
+	return !GetCycle().empty();
 }
 
 static PipelineScheduleStageStack AddBasePipeline(PipelineSchedule &result, const shared_ptr<Pipeline> &pipeline) {
@@ -187,7 +200,7 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 				continue;
 			}
 			for (auto &dependency : entry.second) {
-				auto dependency_entry = stage_map.find(dependency.get());
+				auto dependency_entry = stage_map.find(dependency.pipeline.get());
 				if (dependency_entry == stage_map.end()) {
 					if (!allow_missing_meta_pipelines) {
 						throw InternalException("Missing dependency pipeline in meta-pipeline dependency");
