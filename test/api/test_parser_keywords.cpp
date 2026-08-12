@@ -17,3 +17,13 @@ TEST_CASE("Parser keyword registration validates keyword spelling", "[api][parse
 		REQUIRE_THROWS_AS(cache.RegisterKeyword(keyword, ExtensionKeywordCategory::RESERVED), InvalidInputException);
 	}
 }
+
+TEST_CASE("Parser keyword batches are registered atomically", "[api][parser]") {
+	ParserCache cache;
+	vector<ExtensionKeyword> keywords;
+	keywords.push_back({"batch_keyword", ExtensionKeywordCategory::RESERVED});
+	keywords.push_back({"batch_keyword", ExtensionKeywordCategory::UNRESERVED});
+
+	REQUIRE_THROWS_AS(cache.RegisterKeywords(keywords), InvalidInputException);
+	REQUIRE_FALSE(cache.IsKeyword("batch_keyword"));
+}

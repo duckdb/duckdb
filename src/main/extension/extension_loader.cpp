@@ -118,6 +118,8 @@ void ExtensionLoader::FinalizeLoad() {
 		info->description = loader_info.extension_description;
 		extension_info->load_info = std::move(info);
 	}
+
+	db.GetParserCache().RegisterKeywords(parser_keywords);
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
@@ -391,7 +393,7 @@ void ExtensionLoader::RegisterMetric(MetricInfo info) {
 }
 
 void ExtensionLoader::RegisterKeyword(const string &keyword, ExtensionKeywordCategory category) {
-	db.GetParserCache().RegisterKeyword(keyword, category);
+	parser_keywords.push_back({keyword, category});
 }
 
 } // namespace duckdb

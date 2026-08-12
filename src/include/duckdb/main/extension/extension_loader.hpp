@@ -148,6 +148,7 @@ private:
 	DatabaseInstance &db;
 	ExtensionLoaderInfo loader_info;
 	optional_ptr<ExtensionInfo> extension_info;
+	vector<ExtensionKeyword> parser_keywords;
 };
 
 } // namespace duckdb

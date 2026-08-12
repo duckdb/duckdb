@@ -277,24 +277,31 @@ struct ParserCache {
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();
 	void RegisterKeyword(const string &keyword, ExtensionKeywordCategory category);
+	void RegisterKeywords(const vector<ExtensionKeyword> &keywords);
 	bool KeywordCategoryType(const string &text, PEGKeywordCategory category) const;
 	bool IsKeyword(const string &text) const;
 	vector<ParserKeyword> KeywordList() const;
 
 private:
-	PEGKeywordCategory ExtensionKeywordCategoryTypeInternal(const string &text) const;
-	void ValidateKeywordRegistration(const string &text, PEGKeywordCategory category) const;
-	void RegisterKeywordInternal(const string &text, PEGKeywordCategory category);
+	struct ExtensionKeywordMaps {
+		case_insensitive_set_t reserved;
+		case_insensitive_set_t unreserved;
+		case_insensitive_set_t column_name;
+		case_insensitive_set_t function_name;
+		case_insensitive_set_t type_name;
+	};
+
+	static PEGKeywordCategory ExtensionKeywordCategoryTypeInternal(const ExtensionKeywordMaps &maps,
+	                                                               const string &text);
+	static void ValidateKeywordRegistration(const ExtensionKeywordMaps &maps, const string &text,
+	                                        PEGKeywordCategory category);
+	static void RegisterKeywordInternal(ExtensionKeywordMaps &maps, const string &text, PEGKeywordCategory category);
 
 private:
 	mutable std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;
-	case_insensitive_set_t reserved_keyword_map;
-	case_insensitive_set_t unreserved_keyword_map;
-	case_insensitive_set_t colname_keyword_map;
-	case_insensitive_set_t typefunc_keyword_map;
-	case_insensitive_set_t typename_keyword_map;
+	ExtensionKeywordMaps extension_keywords;
 };
 
 } // namespace duckdb

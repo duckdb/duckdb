@@ -1609,26 +1609,28 @@ static PEGKeywordCategory BuiltinKeywordCategoryType(const string &text) {
 	return PEGKeywordCategory::KEYWORD_NONE;
 }
 
-PEGKeywordCategory ParserCache::ExtensionKeywordCategoryTypeInternal(const string &text) const {
-	if (reserved_keyword_map.find(text) != reserved_keyword_map.end()) {
+PEGKeywordCategory ParserCache::ExtensionKeywordCategoryTypeInternal(const ExtensionKeywordMaps &maps,
+                                                                     const string &text) {
+	if (maps.reserved.find(text) != maps.reserved.end()) {
 		return PEGKeywordCategory::KEYWORD_RESERVED;
 	}
-	if (unreserved_keyword_map.find(text) != unreserved_keyword_map.end()) {
+	if (maps.unreserved.find(text) != maps.unreserved.end()) {
 		return PEGKeywordCategory::KEYWORD_UNRESERVED;
 	}
-	if (typename_keyword_map.find(text) != typename_keyword_map.end()) {
+	if (maps.type_name.find(text) != maps.type_name.end()) {
 		return PEGKeywordCategory::KEYWORD_TYPE_NAME;
 	}
-	if (typefunc_keyword_map.find(text) != typefunc_keyword_map.end()) {
+	if (maps.function_name.find(text) != maps.function_name.end()) {
 		return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
 	}
-	if (colname_keyword_map.find(text) != colname_keyword_map.end()) {
+	if (maps.column_name.find(text) != maps.column_name.end()) {
 		return PEGKeywordCategory::KEYWORD_COL_NAME;
 	}
 	return PEGKeywordCategory::KEYWORD_NONE;
 }
 
-void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCategory category) const {
+void ParserCache::ValidateKeywordRegistration(const ExtensionKeywordMaps &maps, const string &text,
+                                              PEGKeywordCategory category) {
 	if (text.empty()) {
 		throw InvalidInputException("Cannot register an empty parser keyword");
 	}
@@ -1649,7 +1651,7 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 	}
 	auto existing_category = BuiltinKeywordCategoryType(text);
 	if (existing_category == PEGKeywordCategory::KEYWORD_NONE) {
-		existing_category = ExtensionKeywordCategoryTypeInternal(text);
+		existing_category = ExtensionKeywordCategoryTypeInternal(maps, text);
 	}
 	if (existing_category == PEGKeywordCategory::KEYWORD_NONE || existing_category == category) {
 		return;
@@ -1666,27 +1668,27 @@ void ParserCache::ValidateKeywordRegistration(const string &text, PEGKeywordCate
 	                            EnumUtil::ToString(category), EnumUtil::ToString(existing_category));
 }
 
-void ParserCache::RegisterKeywordInternal(const string &text, PEGKeywordCategory category) {
+void ParserCache::RegisterKeywordInternal(ExtensionKeywordMaps &maps, const string &text, PEGKeywordCategory category) {
 	if (PEGKeywordHelper::Instance().KeywordCategoryType(text, category)) {
 		return;
 	}
-	ValidateKeywordRegistration(text, category);
+	ValidateKeywordRegistration(maps, text, category);
 	switch (category) {
 	case PEGKeywordCategory::KEYWORD_RESERVED:
-		reserved_keyword_map.insert(text);
+		maps.reserved.insert(text);
 		break;
 	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		unreserved_keyword_map.insert(text);
+		maps.unreserved.insert(text);
 		break;
 	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		typefunc_keyword_map.insert(text);
+		maps.function_name.insert(text);
 		break;
 	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		colname_keyword_map.insert(text);
+		maps.column_name.insert(text);
 		break;
 	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		typefunc_keyword_map.insert(text);
-		typename_keyword_map.insert(text);
+		maps.function_name.insert(text);
+		maps.type_name.insert(text);
 		break;
 	default:
 		throw InternalException("Unexpected parser keyword category");
@@ -1694,8 +1696,21 @@ void ParserCache::RegisterKeywordInternal(const string &text, PEGKeywordCategory
 }
 
 void ParserCache::RegisterKeyword(const string &keyword, ExtensionKeywordCategory category) {
+	vector<ExtensionKeyword> keywords;
+	keywords.push_back({keyword, category});
+	RegisterKeywords(keywords);
+}
+
+void ParserCache::RegisterKeywords(const vector<ExtensionKeyword> &keywords) {
+	if (keywords.empty()) {
+		return;
+	}
 	std::unique_lock<std::mutex> lock(mutex);
-	RegisterKeywordInternal(keyword, ToParserCachePEGKeywordCategory(category));
+	auto updated_keywords = extension_keywords;
+	for (const auto &keyword : keywords) {
+		RegisterKeywordInternal(updated_keywords, keyword.keyword, ToParserCachePEGKeywordCategory(keyword.category));
+	}
+	extension_keywords = std::move(updated_keywords);
 }
 
 bool ParserCache::KeywordCategoryType(const string &text, PEGKeywordCategory category) const {
@@ -1705,15 +1720,15 @@ bool ParserCache::KeywordCategoryType(const string &text, PEGKeywordCategory cat
 	std::unique_lock<std::mutex> lock(mutex);
 	switch (category) {
 	case PEGKeywordCategory::KEYWORD_RESERVED:
-		return reserved_keyword_map.find(text) != reserved_keyword_map.end();
+		return extension_keywords.reserved.find(text) != extension_keywords.reserved.end();
 	case PEGKeywordCategory::KEYWORD_UNRESERVED:
-		return unreserved_keyword_map.find(text) != unreserved_keyword_map.end();
+		return extension_keywords.unreserved.find(text) != extension_keywords.unreserved.end();
 	case PEGKeywordCategory::KEYWORD_TYPE_FUNC:
-		return typefunc_keyword_map.find(text) != typefunc_keyword_map.end();
+		return extension_keywords.function_name.find(text) != extension_keywords.function_name.end();
 	case PEGKeywordCategory::KEYWORD_COL_NAME:
-		return colname_keyword_map.find(text) != colname_keyword_map.end();
+		return extension_keywords.column_name.find(text) != extension_keywords.column_name.end();
 	case PEGKeywordCategory::KEYWORD_TYPE_NAME:
-		return typename_keyword_map.find(text) != typename_keyword_map.end();
+		return extension_keywords.type_name.find(text) != extension_keywords.type_name.end();
 	default:
 		return false;
 	}
@@ -1724,22 +1739,22 @@ bool ParserCache::IsKeyword(const string &text) const {
 		return true;
 	}
 	std::unique_lock<std::mutex> lock(mutex);
-	return ExtensionKeywordCategoryTypeInternal(text) != PEGKeywordCategory::KEYWORD_NONE;
+	return ExtensionKeywordCategoryTypeInternal(extension_keywords, text) != PEGKeywordCategory::KEYWORD_NONE;
 }
 
 vector<ParserKeyword> ParserCache::KeywordList() const {
 	auto result = PEGKeywordHelper::Instance().KeywordList();
 	std::unique_lock<std::mutex> lock(mutex);
-	for (auto &kw : reserved_keyword_map) {
+	for (auto &kw : extension_keywords.reserved) {
 		result.push_back({kw, KeywordCategory::KEYWORD_RESERVED});
 	}
-	for (auto &kw : unreserved_keyword_map) {
+	for (auto &kw : extension_keywords.unreserved) {
 		result.push_back({kw, KeywordCategory::KEYWORD_UNRESERVED});
 	}
-	for (auto &kw : typefunc_keyword_map) {
+	for (auto &kw : extension_keywords.function_name) {
 		result.push_back({kw, KeywordCategory::KEYWORD_TYPE_FUNC});
 	}
-	for (auto &kw : colname_keyword_map) {
+	for (auto &kw : extension_keywords.column_name) {
 		result.push_back({kw, KeywordCategory::KEYWORD_COL_NAME});
 	}
 	return result;
