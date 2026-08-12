@@ -368,7 +368,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 					agg_result = rhs;
 				}
 			}
-			types.push_back(agg_result.GetTypeMutable());
+			types.push_back(agg_result.type());
 			auto expr = make_uniq<BoundConstantExpression>(agg_result);
 			agg_results.push_back(std::move(expr));
 		}
