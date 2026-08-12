@@ -36,43 +36,47 @@ static void AddDependency(PipelineSchedule &result, idx_t dependent, idx_t depen
 
 enum class CycleVisitState : uint8_t { UNVISITED, VISITING, VISITED };
 
-static bool FindCycle(const PipelineSchedule &schedule, idx_t stage_idx, vector<CycleVisitState> &states,
-                      vector<idx_t> &path, vector<pair<idx_t, idx_t>> &result) {
-	states[stage_idx] = CycleVisitState::VISITING;
-	path.push_back(stage_idx);
-	for (auto dependency : schedule.stages[stage_idx].dependencies) {
-		D_ASSERT(dependency < schedule.stages.size());
-		if (states[dependency] == CycleVisitState::UNVISITED && FindCycle(schedule, dependency, states, path, result)) {
-			return true;
-		}
-		if (states[dependency] != CycleVisitState::VISITING) {
-			continue;
-		}
-		auto cycle_start = path.begin();
-		for (; cycle_start != path.end() && *cycle_start != dependency; cycle_start++) {
-		}
-		D_ASSERT(cycle_start != path.end());
-		for (auto entry = cycle_start; entry + 1 != path.end(); entry++) {
-			result.emplace_back(*entry, *(entry + 1));
-		}
-		result.emplace_back(path.back(), dependency);
-		return true;
-	}
-	path.pop_back();
-	states[stage_idx] = CycleVisitState::VISITED;
-	return false;
-}
-
 vector<pair<idx_t, idx_t>> PipelineSchedule::GetCycle() const {
 	vector<CycleVisitState> states(stages.size(), CycleVisitState::UNVISITED);
-	vector<idx_t> path;
-	vector<pair<idx_t, idx_t>> result;
 	for (idx_t stage_idx = 0; stage_idx < stages.size(); stage_idx++) {
-		if (states[stage_idx] == CycleVisitState::UNVISITED && FindCycle(*this, stage_idx, states, path, result)) {
-			break;
+		if (states[stage_idx] != CycleVisitState::UNVISITED) {
+			continue;
+		}
+		vector<pair<idx_t, idx_t>> stack;
+		stack.emplace_back(stage_idx, 0);
+		states[stage_idx] = CycleVisitState::VISITING;
+		while (!stack.empty()) {
+			auto &entry = stack.back();
+			auto &dependencies = stages[entry.first].dependencies;
+			if (entry.second == dependencies.size()) {
+				states[entry.first] = CycleVisitState::VISITED;
+				stack.pop_back();
+				continue;
+			}
+			auto dependency = dependencies[entry.second++];
+			D_ASSERT(dependency < stages.size());
+			if (states[dependency] == CycleVisitState::UNVISITED) {
+				states[dependency] = CycleVisitState::VISITING;
+				stack.emplace_back(dependency, 0);
+				continue;
+			}
+			if (states[dependency] != CycleVisitState::VISITING) {
+				continue;
+			}
+			vector<pair<idx_t, idx_t>> result;
+			idx_t cycle_start = 0;
+			while (stack[cycle_start].first != dependency) {
+				cycle_start++;
+				D_ASSERT(cycle_start < stack.size());
+			}
+			for (idx_t path_idx = cycle_start; path_idx + 1 < stack.size(); path_idx++) {
+				result.emplace_back(stack[path_idx].first, stack[path_idx + 1].first);
+			}
+			result.emplace_back(stack.back().first, dependency);
+			return result;
 		}
 	}
-	return result;
+	return {};
 }
 
 bool PipelineSchedule::HasCycle() const {
