@@ -123,13 +123,36 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 	}
 }
 
+struct ListExtractBindData : public FunctionData {
+	ListExtractBindData(optional_idx array_size, optional<Value> index)
+	    : array_size(array_size), index(std::move(index)) {
+	}
+	optional_idx array_size;
+	optional<Value> index;
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<ListExtractBindData>(array_size, index);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ListExtractBindData>();
+		return array_size == other.array_size && index == other.index;
+	}
+};
+
 static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
+
+	optional_idx array_size;
+	optional<Value> index;
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::ARRAY) {
+		array_size = ArrayType::GetSize(arguments[0]->GetReturnType());
+		index = input.TryGetConstant(1);
+	}
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	return nullptr;
+	return make_uniq<ListExtractBindData>(array_size, std::move(index));
 }
 
 //! Extracting from a string throws if the index is outside of the range supported by substring - if the index is a
@@ -158,6 +181,16 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	auto &child_stats = input.child_stats;
 	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
 	auto child_copy = list_child_stats.Copy();
+
+	auto &bind_data = input.bind_data->Cast<ListExtractBindData>();
+	if (bind_data.array_size.IsValid() && bind_data.index && !bind_data.index->IsNull()) {
+		auto index_num = bind_data.index->GetValue<int64_t>();
+		list_entry_t bounds(0, bind_data.array_size.GetIndex());
+		if (!TryGetChildOffset(bounds, index_num).IsValid()) {
+			child_copy.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+		}
+	}
+
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
 	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy.ToUnique();
