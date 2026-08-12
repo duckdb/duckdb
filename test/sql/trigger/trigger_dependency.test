@@ -212,3 +212,53 @@ DROP TABLE t6;
 
 statement ok
 DROP TABLE temp.log6;
+
+# --- Renaming the table a trigger is defined on is rejected ---
+# FIXME - this is a known limitation of the current implementation of trigger dependency tracking
+statement ok
+CREATE TABLE t7(i INT);
+
+statement ok
+CREATE TABLE log7(i INT);
+
+statement ok
+CREATE TRIGGER tr7 AFTER INSERT ON t7 FOR EACH STATEMENT INSERT INTO log7 VALUES (1);
+
+statement error
+ALTER TABLE t7 RENAME TO t7b;
+----
+<REGEX>:.*Cannot alter entry "t7" because there are entries that depend on it.*
+
+# other alters on a table with a trigger are unaffected
+statement ok
+ALTER TABLE t7 ADD COLUMN j INT;
+
+statement ok
+ALTER TABLE t7 RENAME COLUMN j TO k;
+
+statement ok
+DROP TABLE t7 CASCADE;
+
+statement ok
+DROP TABLE log7;
+
+# --- Same restriction applies when the trigger body references its own table ---
+statement ok
+CREATE TABLE t8(i INT);
+
+statement ok
+CREATE TABLE log8(i INT);
+
+statement ok
+CREATE TRIGGER tr8 AFTER INSERT ON t8 FOR EACH STATEMENT INSERT INTO log8 SELECT COUNT(*) FROM t8;
+
+statement error
+ALTER TABLE t8 RENAME TO t8b;
+----
+<REGEX>:.*Cannot alter entry "t8" because there are entries that depend on it.*
+
+statement ok
+DROP TABLE t8 CASCADE;
+
+statement ok
+DROP TABLE log8;

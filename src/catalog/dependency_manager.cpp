@@ -762,8 +762,13 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		}
 
 		// TODO - consider whether we should have separate types of dependency flags - one from DROP and other for ALTER
-		if (dep.EntryInfo().type == CatalogType::TRIGGER_ENTRY && !dep.Dependent().flags.IsBlocking()) {
-			// a trigger does not prevent altering the table it is defined on, only referencing its body
+		bool renames_owning_table = alter_info.type == AlterType::ALTER_TABLE &&
+		                            alter_info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::RENAME_TABLE;
+		if (dep.EntryInfo().type == CatalogType::TRIGGER_ENTRY && !dep.Dependent().flags.IsBlocking() &&
+		    !renames_owning_table) {
+			// a trigger does not prevent altering the table it is defined on, only referencing its body,
+			// except renaming it, since the trigger's stored identity is keyed on the table's name for now
+			// FIXME - it should be possible to rename the referenced table
 			disallow_alter = false;
 		}
 		if (disallow_alter) {
