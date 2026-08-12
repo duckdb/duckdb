@@ -1,0 +1,141 @@
+# name: test/sql/cte/recursive_cte_research.test_slow
+# description: Published recursive CTE research workloads
+# group: [cte]
+
+statement ok
+SET threads=4;
+
+# BFS
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/bfs.sql'));
+
+query IIT
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+8	10	a,b,c,d,e,f,g,h
+
+# Bellman-Ford
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/bellman_ford.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+15	46	5
+
+# Connected components
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/connected_components.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+7	3	10
+
+# Distance vector routing
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/dvr.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+20	34	3
+
+# Game of Life
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/game_of_life.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+200	441	11
+
+# k-means
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/kmeans.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+15	28	228
+
+# PageRank
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/pagerank.sql'));
+
+query IIRR
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+5	100	0.260363636364	0.645090909091
+
+# Kruskal
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/kruskal.sql'));
+
+query IIII
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+1	1	39	43
+
+# Medium DVR
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/dvr.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+39800	364200	17
+
+# Medium connected components
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/connected_components.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+200	1	0
+
+# Offset-based Game of Life
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/game_of_life_offsets.sql'));
+
+query III
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+200	441	11
+
+# Medium PageRank
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/pagerank.sql'));
+
+query IIRR
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+50000	30	1.0	24998.6206529
+
+# Medium k-means
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/kmeans.sql'));
+
+query IIII
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+10000	43567	216779900	5
+
+# Sparse direct probes
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/direct_probe_sparse.sql'));
+
+query II
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+1000000	99920000
+
+# Dense direct probes
+statement ok
+SET VARIABLE recursive_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/direct_probe_dense.sql'));
+
+query II
+SELECT * FROM query(getvariable('recursive_sql'));
+----
+1000000	5000000

@@ -234,9 +234,13 @@ uint32_t ComputeDecimalWidth(T value) {
 	if (value == 0) {
 		return 1;
 	}
-	auto abs_val = value;
-	if (abs_val < 0) {
-		abs_val = -abs_val;
+	// |min| might not fit in signed T; use unsigned wrap.
+	using unsigned_t = std::make_unsigned_t<T>;
+	unsigned_t abs_val = 0;
+	if (value < 0) {
+		abs_val = static_cast<unsigned_t>(0) - static_cast<unsigned_t>(value);
+	} else {
+		abs_val = static_cast<unsigned_t>(value);
 	}
 	return static_cast<uint32_t>(floor(log10(static_cast<double>(abs_val))) + 1);
 }

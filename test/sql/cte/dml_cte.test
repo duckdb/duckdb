@@ -580,6 +580,17 @@ SELECT sel.* FROM sel;
 1	10
 2	20
 
+# The dependency also applies when the SELECT CTE streams through an exchange.
+statement ok
+TRUNCATE t1;
+
+query I
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20) RETURNING i),
+     sel AS MATERIALIZED (SELECT * FROM t1)
+SELECT count(*) FROM sel;
+----
+2
+
 # INSERT followed by UPDATE on the same table: the UPDATE's scan is initialised
 # after the INSERT completes, so it sees the newly inserted rows and updates them.
 statement ok

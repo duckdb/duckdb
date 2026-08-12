@@ -1,3 +1,9 @@
+# The version whose engine first shipped the function-pointer struct: the C_STRUCT
+# extension ABI was introduced in v1.2.0, so no slot can predate it and every band
+# below it collapses into the first one.
+version_floor: "v1.2.0"
+# The function-pointer struct, as the consumer template declares it.
+struct_typename: duckdb_ext_api_v1
 # Function assigning every member in the derived engine-side header.
 create_method: CreateAPIv1
 # Prefix of the engine-side version define macros.

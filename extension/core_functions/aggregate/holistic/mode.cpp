@@ -1,11 +1,12 @@
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/owning_string_map.hpp"
-#include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.
@@ -470,7 +471,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 
 AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(mode_types)
 	case PhysicalType::INT8:
 		return GetTypedModeFunction<int8_t>(type);
 	case PhysicalType::UINT8:
@@ -583,7 +584,7 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 
 AggregateFunction GetEntropyFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(entropy_types)
 	case PhysicalType::UINT16:
 		return GetTypedEntropyFunction<uint16_t>(type);
 	case PhysicalType::UINT32:

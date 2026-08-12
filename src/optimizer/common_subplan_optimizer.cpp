@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -91,6 +92,7 @@ private:
 			restore_original_table_index.clear();
 			restore_original_table_filter_index.clear();
 			column_ids.clear();
+			chunk_column_ids.clear();
 			projection_ids.clear();
 			table_indices.clear();
 			projection_maps.clear();
@@ -318,6 +320,39 @@ private:
 				break;
 			}
 		}
+		if (op.type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
+			auto &get = op.Cast<LogicalColumnDataGet>();
+			switch (TYPE) {
+			case ConversionType::TO_CANONICAL: {
+				D_ASSERT(chunk_column_ids.empty());
+				chunk_column_ids = get.GetColumnIds();
+
+				unordered_set<column_t> selected_columns;
+				for (auto column_id : chunk_column_ids) {
+					if (!selected_columns.insert(column_id).second) {
+						return false;
+					}
+				}
+
+				// Expose all collection columns so pruning does not change the scan signature.
+				vector<column_t> all_column_ids;
+				all_column_ids.reserve(get.chunk_types.size());
+				for (idx_t column_id = 0; column_id < get.chunk_types.size(); column_id++) {
+					all_column_ids.push_back(column_id);
+				}
+				get.SetColumnIds(std::move(all_column_ids));
+
+				auto &column_index_map = table_index_map.at(table_indices[0]);
+				for (idx_t column_idx = 0; column_idx < chunk_column_ids.size(); column_idx++) {
+					column_index_map.Insert(ProjectionIndex(column_idx), ProjectionIndex(chunk_column_ids[column_idx]));
+				}
+				break;
+			}
+			case ConversionType::RESTORE_ORIGINAL:
+				get.SetColumnIds(std::move(chunk_column_ids));
+				break;
+			}
+		}
 		return true;
 	}
 
@@ -415,6 +450,7 @@ private:
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
+	vector<column_t> chunk_column_ids;
 	vector<ProjectionIndex> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;

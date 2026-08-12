@@ -82,6 +82,7 @@ class ParquetReader;
 class DataChunk;
 class Deserializer;
 class EncryptionUtil;
+enum class ParquetIntervalBloomFilterVersion : uint8_t;
 class PhysicalOperator;
 class Serializer;
 class TableFilter;
@@ -336,6 +337,7 @@ public:
 	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
+	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
 	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
 
@@ -369,6 +371,9 @@ public:
 	idx_t GetDataSize() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
+	ParquetIntervalBloomFilterVersion GetIntervalBloomFilterVersion() const {
+		return interval_bloom_filter_version;
+	}
 	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) const;

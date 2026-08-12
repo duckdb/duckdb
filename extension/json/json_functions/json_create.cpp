@@ -1160,6 +1160,8 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	                   JSONFunctionLocalState::Init);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws if a key is NULL
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 

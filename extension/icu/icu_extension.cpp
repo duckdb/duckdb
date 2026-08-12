@@ -20,48 +20,39 @@
 #include "include/icu-timebucket.hpp"
 #include "include/icu-timezone.hpp"
 #include "include/icu_extension.hpp"
-#include "unicode/calendar.h"
-#include "unicode/coll.h"
-#include "unicode/stringpiece.h"
-#include "unicode/timezone.h"
-#include "unicode/ucol.h"
 #include "icu-helpers.hpp"
+#include "collation_collator.hpp"
+#include "calendar.hpp"
+#include "timezone.hpp"
 
 #include <cassert>
 
 namespace duckdb {
 
+//! The collation settings of the tagged collations that are registered by the extension
+static collation::CollationSettings SettingsFromTag(const string &tag) {
+	collation::CollationSettings settings;
+	// "und-u-ks-level1-kc-true": compare at the primary level, but keep case differences
+	if (tag == "und-u-ks-level1-kc-true") {
+		settings.strength = collation::CollationStrength::PRIMARY;
+		settings.case_level = true;
+		return settings;
+	}
+	throw InvalidInputException("Unknown collation tag %s", tag);
+}
+
 struct IcuBindData : public FunctionData {
-	duckdb::unique_ptr<icu::Collator> collator;
+	collation::Collator collator;
 	string language;
 	string country;
 	string tag;
 
-	explicit IcuBindData(duckdb::unique_ptr<icu::Collator> collator_p) : collator(std::move(collator_p)) {
+	IcuBindData(string language_p, string country_p)
+	    : collator(country_p.empty() ? language_p : language_p + "_" + country_p), language(std::move(language_p)),
+	      country(std::move(country_p)) {
 	}
 
-	IcuBindData(string language_p, string country_p) : language(std::move(language_p)), country(std::move(country_p)) {
-		UErrorCode status = U_ZERO_ERROR;
-		auto locale = icu::Locale(language.c_str(), country.c_str());
-		if (locale.isBogus()) {
-			throw InvalidInputException("Locale is bogus!?");
-		}
-		this->collator = duckdb::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
-		if (U_FAILURE(status)) {
-			auto error_name = u_errorName(status);
-			throw InvalidInputException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
-			                            language, country);
-		}
-	}
-
-	explicit IcuBindData(string tag_p) : tag(std::move(tag_p)) {
-		UErrorCode status = U_ZERO_ERROR;
-		UCollator *ucollator = ucol_open(tag.c_str(), &status);
-		if (U_FAILURE(status)) {
-			auto error_name = u_errorName(status);
-			throw InvalidInputException("Failed to create ICU collator with tag %s: %s", tag, error_name);
-		}
-		collator = unique_ptr<icu::Collator>(icu::Collator::fromUCollator(ucollator));
+	explicit IcuBindData(string tag_p) : collator(SettingsFromTag(tag_p)), tag(std::move(tag_p)) {
 	}
 
 	static duckdb::unique_ptr<FunctionData> CreateInstance(string language, string country, string tag) {
@@ -100,53 +91,77 @@ struct IcuBindData : public FunctionData {
 		return CreateInstance(language, country, tag);
 	}
 
+	//! The prefix of the collation functions, and of the ones that are kept for backwards
+	//! compatibility, which return the sort key in hexadecimal instead of as a blob
 	static const string FUNCTION_PREFIX;
+	static const string HEX_FUNCTION_PREFIX;
 
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
 	}
+	static string EncodeHexFunctionName(const string &collation) {
+		return HEX_FUNCTION_PREFIX + collation;
+	}
 	static string DecodeFunctionName(const Identifier &fname) {
-		return fname.GetIdentifierName().substr(FUNCTION_PREFIX.size());
+		auto &name = fname.GetIdentifierName();
+		auto prefix = StringUtil::StartsWith(name, HEX_FUNCTION_PREFIX) ? HEX_FUNCTION_PREFIX : FUNCTION_PREFIX;
+		return name.substr(prefix.size());
 	}
 };
 
-const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
+const string IcuBindData::FUNCTION_PREFIX = "collate_";
+const string IcuBindData::HEX_FUNCTION_PREFIX = "icu_collate_";
 
-static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
-                             int32_t &buffer_size) {
-	icu::UnicodeString unicode_string =
-	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), int32_t(input.GetSize())));
-	int32_t string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-	if (string_size > buffer_size) {
-		// have to resize the buffer
-		buffer_size = string_size;
-		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
-
-		string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-	}
-	return string_size;
+//! The two hexadecimal characters of every byte value
+static const uint16_t &HexDigits(uint8_t byte) {
+	static const auto HEX_PAIRS = []() {
+		const char digits[] = "0123456789ABCDEF";
+		array<uint16_t, 256> pairs {};
+		for (idx_t value = 0; value < 256; value++) {
+			auto low = static_cast<uint16_t>(digits[value % 16]);
+			auto high = static_cast<uint16_t>(digits[value / 16]);
+			// the pair is stored in the order it is written to memory
+			pairs[value] = static_cast<uint16_t>(high | (low << 8));
+		}
+		return pairs;
+	}();
+	return HEX_PAIRS[byte];
 }
 
-static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+//! Keeps the buffers the collator works in alive across the chunks of a scan, so that
+//! generating sort keys does not allocate
+struct CollatorLocalState : public FunctionLocalState {
+	collation::CollationBuffer buffer;
 
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &, const BoundFunctionExpression &, FunctionData *) {
+		return make_uniq<CollatorLocalState>();
+	}
+};
+
+//! Writes the sort key of every string, either as a blob or in hexadecimal. The hexadecimal
+//! form is only used by the functions that are kept for backwards compatibility.
+template <bool HEX>
+static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
-	auto &collator = *info.collator;
+	// the collator is immutable, it is shared between the threads that run the function
+	auto &collator = info.collator;
 
-	duckdb::unique_ptr<char[]> buffer;
-	int32_t buffer_size = 0;
+	auto &buffer = ExecuteFunctionState::GetFunctionState(state)->Cast<CollatorLocalState>().buffer;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
-		// create a sort key from the string
-		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
-		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
+		// create a sort key from the string, the trailing null byte is not part of the result
+		collator.GetSortKey(input.GetData(), input.GetSize(), buffer);
+		auto &key = buffer.key;
+		auto key_size = key.size() - 1;
+		if (!HEX) {
+			return StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data()), key_size);
+		}
+		auto str_result = StringVector::EmptyString(result, key_size * 2);
 		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < string_size - 1; i++) {
-			uint8_t byte = uint8_t(buffer[i]);
-			D_ASSERT(byte != 0);
-			str_data[i * 2] = HEX_TABLE[byte / 16];
-			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
+		for (idx_t i = 0; i < key_size; i++) {
+			D_ASSERT(key[i] != 0);
+			auto digits = HexDigits(key[i]);
+			memcpy(str_data + i * 2, &digits, sizeof(digits));
 		}
 		str_result.Finalize();
 		return str_result;
@@ -191,31 +206,39 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 	}
 }
 
-static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
+//! The function a collation pushes into a query, it writes the sort key as a blob
+static ScalarFunction GetCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction,
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::BLOB, ICUCollateFunction<false>,
 	                      ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
+	result.SetInitStateCallback(CollatorLocalState::Init);
 	result.SetSerializeCallback(IcuBindData::Serialize);
 	result.SetDeserializeCallback(IcuBindData::Deserialize);
 	return result;
 }
 
-unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
-	icu::StringPiece tz_name_utf8(tz_str);
-	const auto uid = icu::UnicodeString::fromUTF8(tz_name_utf8);
-	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
-	if (*tz != icu::TimeZone::getUnknown()) {
-		return tz;
-	}
-
-	return nullptr;
+//! The function collations used before they wrote blobs, it is kept registered so that
+//! queries and plans that call it directly keep working
+static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
+	string fname = IcuBindData::EncodeHexFunctionName(collation);
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction<true>,
+	                      ICUCollateBind);
+	result.extra_info = tag;
+	result.SetInitStateCallback(CollatorLocalState::Init);
+	result.SetSerializeCallback(IcuBindData::Serialize);
+	result.SetDeserializeCallback(IcuBindData::Deserialize);
+	return result;
 }
 
-unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
-	duckdb::unique_ptr<icu::TimeZone> tz;
-	if (tz = GetKnownTimeZone(tz_str)) {
+unique_ptr<TimeZone> GetKnownTimeZone(const string &tz_str) {
+	return TimeZone::TryCreate(tz_str);
+}
+
+unique_ptr<TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	auto tz = GetKnownTimeZone(tz_str);
+	if (tz) {
 		return tz;
 	}
 
@@ -235,7 +258,6 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 		auto sign = utc;
 		if (utc == '+') {
 			sign = '-';
-			;
 		} else if (utc == '-') {
 			sign = '+';
 		} else {
@@ -295,7 +317,7 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 	return nullptr;
 }
 
-unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
+unique_ptr<TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
 	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
@@ -304,37 +326,18 @@ unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &ca
 	// Try to be friendlier
 	// Go through all the zone names and look for a case insensitive match
 	// If we don't find one, make a suggestion
-	// FIXME: this is very inefficient
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
-	duckdb::unique_ptr<icu::StringEnumeration> tzs(icu::TimeZone::createEnumeration());
-	for (;;) {
-		auto long_id = tzs->snext(status);
-		if (U_FAILURE(status) || !long_id) {
-			break;
-		}
-		std::string candidate_tz_name;
-		long_id->toUTF8String(candidate_tz_name);
-		if (StringUtil::CIEquals(candidate_tz_name, tz_str)) {
+	for (const auto &candidate : TimeZone::GetAvailableIds()) {
+		if (StringUtil::CIEquals(candidate, tz_str)) {
 			// case insensitive match - return this timezone instead
-			tz_str = candidate_tz_name;
-			icu::StringPiece utf8(tz_str);
-			const auto tz_unicode_str = icu::UnicodeString::fromUTF8(utf8);
-			duckdb::unique_ptr<icu::TimeZone> insensitive_tz(icu::TimeZone::createTimeZone(tz_unicode_str));
-			return insensitive_tz;
+			tz_str = candidate;
+			return TimeZone::TryCreate(tz_str);
 		}
-
-		candidates.emplace_back(candidate_tz_name);
+		candidates.emplace_back(candidate);
 	}
 	return nullptr;
 }
 
-unique_ptr<icu::TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
-	vector<string> candidates;
-	return GetTimeZoneInternal(tz_str, candidates);
-}
-
-unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
+unique_ptr<TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
 	vector<string> candidates;
 	auto tz = GetTimeZoneInternal(tz_str, candidates);
 	if (tz) {
@@ -358,17 +361,11 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 }
 
 struct ICUCalendarData : public GlobalTableFunctionState {
-	ICUCalendarData() {
-		// All calendars are available in all locales
-		UErrorCode status = U_ZERO_ERROR;
-		calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
-	}
-
-	duckdb::unique_ptr<icu::StringEnumeration> calendars;
+	idx_t offset = 0;
 };
 
 static duckdb::unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFunctionBindInput &input,
-                                                        vector<LogicalType> &return_types, vector<string> &names) {
+                                                        vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -382,90 +379,41 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
-	idx_t index = 0;
+	const auto &types = Calendar::GetAvailableTypes();
 
 	// name, VARCHAR
 	auto &name_col = output.data[0];
 
-	while (index < STANDARD_VECTOR_SIZE) {
-		if (!data.calendars) {
-			break;
-		}
-
-		UErrorCode status = U_ZERO_ERROR;
-		auto calendar = data.calendars->snext(status);
-		if (U_FAILURE(status) || !calendar) {
-			break;
-		}
-
-		//	The calendar name is all we have
-		std::string utf8;
-		calendar->toUTF8String(utf8);
-		name_col.Append(Value(utf8));
-
+	idx_t index = 0;
+	while (index < STANDARD_VECTOR_SIZE && data.offset < types.size()) {
+		name_col.Append(Value(types[data.offset++]));
 		++index;
 	}
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
 	const auto name = parameter.Value::GetValueUnsafe<string>();
-	string locale_key = "@calendar=" + name;
-	icu::Locale locale(locale_key.c_str());
-
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
-	if (!U_FAILURE(status) && name == cal->getType()) {
-		return;
-	}
-
-	//	Try to be friendlier
-	//	Go through all the calendar names and look for a case insensitive match
-	//	If we don't find one, make a suggestion
-	status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::StringEnumeration> calendars;
-	calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
-
-	vector<string> candidates;
-	for (;;) {
-		auto calendar = calendars->snext(status);
-		if (U_FAILURE(status) || !calendar) {
-			break;
-		}
-
-		std::string utf8;
-		calendar->toUTF8String(utf8);
-		if (StringUtil::CIEquals(utf8, name)) {
-			parameter = Value(utf8);
+	//	Try to be friendlier: look for a case insensitive match, and if we don't find one,
+	//	make a suggestion
+	for (const auto &candidate : Calendar::GetAvailableTypes()) {
+		if (StringUtil::CIEquals(candidate, name)) {
+			parameter = Value(candidate);
 			return;
 		}
-
-		candidates.emplace_back(utf8);
 	}
 
-	string candidate_str =
-	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate calendars");
+	string candidate_str = StringUtil::CandidatesMessage(
+	    StringUtil::TopNJaroWinkler(Calendar::GetAvailableTypes(), name), "Candidate calendars");
 
 	throw NotImplementedException("Unknown Calendar '%s'!\n%s", name, candidate_str);
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
 	// iterate over all the collations
-	int32_t count;
-	auto locales = icu::Collator::getAvailableLocales(count);
-	for (int32_t i = 0; i < count; i++) {
-		string collation;
-		const auto &locale = locales[i]; // NOLINT
-		if (string(locale.getCountry()).empty()) {
-			// language only
-			collation = locale.getLanguage();
-		} else {
-			// language + country
-			collation = locale.getLanguage() + string("_") + locale.getCountry();
-		}
-		collation = StringUtil::Lower(collation);
-
-		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
+	for (auto &collation : collation::Collator::GetCollations()) {
+		CreateCollationInfo info(Identifier(collation), GetCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
+		loader.RegisterFunction(GetICUCollateFunction(collation, ""));
 	}
 
 	/**
@@ -478,25 +426,20 @@ static void LoadInternal(ExtensionLoader &loader) {
 	 * e.g. "und@colcaselevel=yes;colstrength=primary"
 	 *
 	 */
-	CreateCollationInfo info("icu_noaccent", GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"), false,
-	                         false);
+	CreateCollationInfo info("icu_noaccent", GetCollateFunction("noaccent", "und-u-ks-level1-kc-true"), false, false);
 	loader.RegisterCollation(info);
+	loader.RegisterFunction(GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"));
 
 	ScalarFunction sort_key("icu_sort_key", {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
-	                        LogicalType::VARCHAR, ICUCollateFunction, ICUSortKeyBind);
+	                        LogicalType::VARCHAR, ICUCollateFunction<true>, ICUSortKeyBind);
+	sort_key.SetInitStateCallback(CollatorLocalState::Init);
 	loader.RegisterFunction(sort_key);
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
-	icu::UnicodeString tz_id;
-	std::string tz_string;
-	tz->getID(tz_id).toUTF8String(tz_string);
-	// If the environment TZ is invalid, look for some alternatives
-	tz = GetNormalizedTimeZone(tz_string);
-	if (!tz) {
-		tz_string = "UTC";
-	}
+	auto tz = TimeZone::TryCreateDefault();
+	// If the host time zone is unknown, fall back to UTC
+	string tz_string = tz ? tz->GetId() : "UTC";
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
@@ -513,9 +456,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterICUTimeZoneFunctions(loader);
 
 	// Calendars
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value("gregorian"),
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);

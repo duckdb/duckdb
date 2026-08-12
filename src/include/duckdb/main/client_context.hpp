@@ -244,7 +244,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 	//! Returns the value of the current setting set by the user - if the user has set it.
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
@@ -288,15 +288,14 @@ private:
 
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
-	void StatementVerification(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> &statement,
+	void StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
 	                           PendingQueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
 	                     bool invalidate_transaction = false);
-	unique_ptr<PendingQueryResult> PendingStatement(ClientContextLock &lock, const string &query,
-	                                                unique_ptr<SQLStatement> statement,
+	unique_ptr<PendingQueryResult> PendingStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                const PendingQueryParameters &parameters);
 	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
 	                                                                shared_ptr<PreparedStatementData> statement_data_p,
@@ -304,14 +303,12 @@ private:
 	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
-	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
+	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock,
 	                                                          unique_ptr<SQLStatement> statement,
 	                                                          PendingQueryParameters parameters);
-	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
-	                                                        unique_ptr<SQLStatement> statement,
+	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
-	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
-	                                             unique_ptr<SQLStatement> statement,
+	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                             const PendingQueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
@@ -320,7 +317,7 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginQueryInternal(ClientContextLock &lock, const string &query);
+	void BeginQueryInternal(ClientContextLock &lock, const SQLStatement &statement);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);
 
@@ -334,7 +331,7 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
-	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
+	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
 

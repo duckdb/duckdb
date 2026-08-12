@@ -123,9 +123,9 @@ struct DBConfigOptions {
 	//! Debug setting - how to verify ORDER BY results (e.g. by rewriting ORDER BY into create_sort_key)
 	DebugOrderVerification debug_order_verification = DebugOrderVerification::NONE;
 	//! The set of user-provided options
-	case_insensitive_map_t<Value> user_options;
+	identifier_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
-	case_insensitive_map_t<Value> unrecognized_options;
+	identifier_map_t<Value> unrecognized_options;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Delta Only! - Fall back to recognizing Variant columns structurally
@@ -165,7 +165,7 @@ struct DBConfig {
 public:
 	DUCKDB_API DBConfig();
 	explicit DUCKDB_API DBConfig(bool read_only);
-	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
+	DUCKDB_API DBConfig(const identifier_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
@@ -209,35 +209,35 @@ public:
 	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static idx_t GetAliasCount();
-	DUCKDB_API static vector<string> GetOptionNames();
+	DUCKDB_API static vector<Identifier> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
-	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
+	DUCKDB_API void AddExtensionOption(const Identifier &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
-	DUCKDB_API bool HasExtensionOption(const string &name) const;
-	DUCKDB_API case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
-	DUCKDB_API bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
+	DUCKDB_API bool HasExtensionOption(const Identifier &name) const;
+	DUCKDB_API identifier_map_t<ExtensionOption> GetExtensionSettings() const;
+	DUCKDB_API bool TryGetExtensionOption(const Identifier &name, ExtensionOption &result) const;
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const Identifier &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
-	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(const Identifier &name, Value value);
 	DUCKDB_API void SetOption(idx_t setting_index, Value value);
-	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
-	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
+	DUCKDB_API void SetOptionByName(const Identifier &name, const Value &value);
+	DUCKDB_API void SetOptionsByName(const identifier_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
 	DUCKDB_API void ResetOption(const ExtensionOption &extension_option);
 	DUCKDB_API void ResetGenericOption(idx_t setting_index);
-	DUCKDB_API optional_idx TryGetSettingIndex(const String &name,
+	DUCKDB_API optional_idx TryGetSettingIndex(const Identifier &name,
 	                                           optional_ptr<const ConfigurationOption> &option) const;
 	static LogicalType ParseLogicalType(const string &type);
 
-	DUCKDB_API void CheckLock(const String &name);
+	DUCKDB_API void CheckLock(const Identifier &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
@@ -286,14 +286,14 @@ public:
 	const string UserAgent() const;
 
 	//! Returns the value of a setting currently. If the setting is not set by the user, returns the default value.
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 	//! Returns the value of a setting set by the user currently
 	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
 	bool CanAccessFile(const string &path, FileType type);
-	void AddAllowedConfig(const string &config_name);
+	void AddAllowedConfig(const Identifier &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;

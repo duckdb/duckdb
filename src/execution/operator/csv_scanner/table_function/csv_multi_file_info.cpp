@@ -20,15 +20,15 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 	return make_uniq<CSVFileReaderOptions>();
 }
 
-bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
                                        vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
-	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
+	options.options.SetReadOption(key, ConvertVectorToValue(values), expected_names);
 	return true;
 }
 
-bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool CSVMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                    MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.ParseOption(context, key, val);
@@ -231,7 +231,7 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 		}
 		for (auto &force_name : options.force_not_null_names) {
 			if (column_names.find(Identifier(force_name)) == column_names.end()) {
-				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
+				throw BinderException("force_not_null expected to find %s, but it was not found in the table",
 				                      force_name);
 			}
 		}
@@ -410,20 +410,16 @@ AsyncResult CSVFileScan::ScheduleIO(ClientContext &context, GlobalTableFunctionS
                                     LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	D_ASSERT(lstate.claim_state == CSVLocalState::ClaimState::PENDING);
-	auto io_tasks = CollectClaimIOTasks(lstate);
-	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-	}
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(CollectClaimIOTasks(lstate), TaskSchedulerType::ASYNC);
 }
 
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif
@@ -442,8 +438,7 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 		io_tasks.push_back(BufferLoadTask(csv_reader.buffer_manager, csv_reader.PendingBufferIdx()));
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
-	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
-	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	return AsyncResult::FromChunk(chunk);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

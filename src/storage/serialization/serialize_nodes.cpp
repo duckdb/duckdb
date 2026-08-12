@@ -323,6 +323,7 @@ void ExportedTableData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(3, "database_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(5, "not_null_columns", not_null_columns);
+	serializer.WritePropertyWithDefault<QualifiedName>(6, "qualified_name", qualified_name, QualifiedName());
 }
 
 ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
@@ -332,7 +333,11 @@ ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
 	auto database_name = deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name");
 	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(5, "not_null_columns", result.not_null_columns);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(6, "qualified_name", QualifiedName());
 	result.SetQualifiedName(std::move(database_name), std::move(schema_name), std::move(table_name));
+	if (!qualified_name.Path().empty()) {
+		result.qualified_name = std::move(qualified_name);
+	}
 	return result;
 }
 

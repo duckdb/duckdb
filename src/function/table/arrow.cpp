@@ -49,7 +49,7 @@ void ArrowTableFunction::PopulateArrowTableSchema(ClientContext &context, ArrowT
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
                                                                vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
+                                                               vector<Identifier> &names) {
 	auto bind_data = ArrowScanBind(context, input, return_types, names);
 	auto &arrow_bind_data = bind_data->Cast<ArrowScanFunctionData>();
 	arrow_bind_data.projection_pushdown_enabled = false;
@@ -57,7 +57,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &co
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names) {
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
 		throw BinderException("arrow_scan: pointers cannot be null");
 	}
@@ -80,7 +81,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
 	PopulateArrowTableSchema(context, res->arrow_table, data.schema_root.arrow_schema);
-	names = res->arrow_table.GetNames();
+	names = StringsToIdentifiers(res->arrow_table.GetNames());
 	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;
 	if (return_types.empty()) {

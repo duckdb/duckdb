@@ -14,6 +14,35 @@
 
 using namespace duckdb;
 
+namespace duckdb {
+
+class ManagedAsyncWriteQueueTest {
+public:
+	static bool TryAdopt(ManagedAsyncWriteQueue &queue, AsyncWriteRequest &request, ErrorData &error) {
+		return queue.TryAdoptAccountedWrite(request, error) == ManagedAsyncWriteQueue::AccountedWriteAdoption::ACCEPTED;
+	}
+
+	static void AddExternalPendingBytes(ManagedAsyncWriteQueue &queue, idx_t size) {
+		queue.AddExternalPendingBytes(size);
+	}
+
+	static void DiscardExternalPendingBytes(ManagedAsyncWriteQueue &queue, idx_t size) {
+		queue.DiscardExternalPendingBytes(size);
+	}
+
+	static idx_t ExternalPendingBytes(ManagedAsyncWriteQueue &queue) {
+		lock_guard<mutex> guard(queue.lock);
+		return queue.external_pending_bytes;
+	}
+
+	static idx_t PendingBytes(ManagedAsyncWriteQueue &queue) {
+		lock_guard<mutex> guard(queue.lock);
+		return queue.pending_bytes;
+	}
+};
+
+} // namespace duckdb
+
 namespace {
 
 class TrackingWriteFileSystem : public LocalFileSystem {
@@ -72,12 +101,12 @@ private:
 
 class BlockingWriteFileSystem : public TrackingWriteFileSystem {
 public:
-	explicit BlockingWriteFileSystem(bool positional_supported_p, bool local_file_p = true)
-	    : TrackingWriteFileSystem(local_file_p), positional_supported(positional_supported_p) {
+	explicit BlockingWriteFileSystem(FileWriteMode write_mode_p, bool local_file_p = true)
+	    : TrackingWriteFileSystem(local_file_p), write_mode(write_mode_p) {
 	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		if (!positional_supported) {
+		if (write_mode == FileWriteMode::SEQUENTIAL) {
 			throw NotImplementedException("Injected missing positional write support");
 		}
 		if (nr_bytes == 0) {
@@ -95,8 +124,8 @@ public:
 		}
 	}
 
-	bool SupportsPositionalWrites(FileHandle &handle) override {
-		return positional_supported;
+	FileWriteMode GetWriteMode(FileHandle &handle) override {
+		return write_mode;
 	}
 
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -154,7 +183,7 @@ private:
 	}
 
 private:
-	const bool positional_supported;
+	const FileWriteMode write_mode;
 
 	mutex block_lock;
 	std::condition_variable cv;
@@ -173,14 +202,14 @@ public:
 		throw NotImplementedException("Injected missing positional write support");
 	}
 
-	bool SupportsPositionalWrites(FileHandle &) override {
-		return false;
+	FileWriteMode GetWriteMode(FileHandle &) override {
+		return FileWriteMode::SEQUENTIAL;
 	}
 };
 
 class SequentialExplicitOffsetWriteFileSystem : public BlockingWriteFileSystem {
 public:
-	SequentialExplicitOffsetWriteFileSystem() : BlockingWriteFileSystem(false, false) {
+	SequentialExplicitOffsetWriteFileSystem() : BlockingWriteFileSystem(FileWriteMode::SEQUENTIAL, false) {
 	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -200,6 +229,130 @@ public:
 
 private:
 	idx_t next_write_offset = 0;
+};
+
+class ConcurrentSequentialWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	explicit ConcurrentSequentialWriteFileSystem(bool block_backend_writes_p = true)
+	    : TrackingWriteFileSystem(false), block_backend_writes(block_backend_writes_p) {
+	}
+
+	FileWriteMode GetWriteMode(FileHandle &) override {
+		return FileWriteMode::CONCURRENT_SEQUENTIAL;
+	}
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		if (nr_bytes == 0) {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			return;
+		}
+
+		auto write_size = UnsafeNumericCast<idx_t>(nr_bytes);
+		{
+			unique_lock<mutex> guard(state_lock);
+			if (!state_cv.wait_for(guard, std::chrono::seconds(5),
+			                       [&]() { return location == next_admission_offset; })) {
+				throw InternalException("Concurrent-sequential write was not admitted in stream order");
+			}
+			admitted_offsets.push_back(location);
+			next_admission_offset += write_size;
+			active_backend_writes++;
+			max_active_backend_writes = MaxValue(max_active_backend_writes, active_backend_writes);
+			entered_backend_writes++;
+			state_cv.notify_all();
+			if (block_backend_writes) {
+				state_cv.wait(guard, [&]() { return release_all_writes || IsReleased(location); });
+			}
+		}
+
+		try {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			{
+				lock_guard<mutex> guard(state_lock);
+				D_ASSERT(active_backend_writes > 0);
+				active_backend_writes--;
+				completed_offsets.push_back(location);
+			}
+			state_cv.notify_all();
+		} catch (...) {
+			{
+				lock_guard<mutex> guard(state_lock);
+				D_ASSERT(active_backend_writes > 0);
+				active_backend_writes--;
+			}
+			state_cv.notify_all();
+			throw;
+		}
+	}
+
+	bool WaitForBackendWrites(idx_t count) {
+		unique_lock<mutex> guard(state_lock);
+		return state_cv.wait_for(guard, std::chrono::seconds(5), [&]() { return entered_backend_writes >= count; });
+	}
+
+	bool WaitForCompletedWrites(idx_t count) {
+		unique_lock<mutex> guard(state_lock);
+		return state_cv.wait_for(guard, std::chrono::seconds(5), [&]() { return completed_offsets.size() >= count; });
+	}
+
+	void ReleaseWrite(idx_t offset) {
+		{
+			lock_guard<mutex> guard(state_lock);
+			released_offsets.push_back(offset);
+		}
+		state_cv.notify_all();
+	}
+
+	void ReleaseAllWrites() {
+		{
+			lock_guard<mutex> guard(state_lock);
+			release_all_writes = true;
+		}
+		state_cv.notify_all();
+	}
+
+	idx_t EnteredBackendWrites() {
+		lock_guard<mutex> guard(state_lock);
+		return entered_backend_writes;
+	}
+
+	idx_t MaxActiveBackendWrites() {
+		lock_guard<mutex> guard(state_lock);
+		return max_active_backend_writes;
+	}
+
+	vector<idx_t> AdmittedOffsets() {
+		lock_guard<mutex> guard(state_lock);
+		return admitted_offsets;
+	}
+
+	vector<idx_t> CompletedOffsets() {
+		lock_guard<mutex> guard(state_lock);
+		return completed_offsets;
+	}
+
+private:
+	bool IsReleased(idx_t offset) const {
+		for (auto released_offset : released_offsets) {
+			if (released_offset == offset) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+private:
+	const bool block_backend_writes;
+	mutex state_lock;
+	std::condition_variable state_cv;
+	vector<idx_t> admitted_offsets;
+	vector<idx_t> released_offsets;
+	vector<idx_t> completed_offsets;
+	idx_t next_admission_offset = 0;
+	idx_t entered_backend_writes = 0;
+	idx_t active_backend_writes = 0;
+	idx_t max_active_backend_writes = 0;
+	bool release_all_writes = false;
 };
 
 class FailingBlockedWriteFileSystem : public TrackingWriteFileSystem {
@@ -281,6 +434,60 @@ private:
 	string data;
 };
 
+class BlockingMaterializationState {
+public:
+	void Materialize() {
+		unique_lock<mutex> guard(lock);
+		entered = true;
+		cv.notify_all();
+		cv.wait(guard, [&]() { return released; });
+		if (fail) {
+			throw IOException("Injected payload materialization failure");
+		}
+	}
+
+	bool WaitForEntered() {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return entered; });
+	}
+
+	void Release(bool fail_p) {
+		{
+			lock_guard<mutex> guard(lock);
+			fail = fail_p;
+			released = true;
+		}
+		cv.notify_all();
+	}
+
+private:
+	mutex lock;
+	std::condition_variable cv;
+	bool entered = false;
+	bool released = false;
+	bool fail = false;
+};
+
+class BlockingMaterializationAsyncWriteBuffer : public AsyncWriteBuffer {
+public:
+	BlockingMaterializationAsyncWriteBuffer(string data_p, shared_ptr<BlockingMaterializationState> state_p)
+	    : data(std::move(data_p)), state(std::move(state_p)) {
+	}
+
+	data_ptr_t Ptr() override {
+		state->Materialize();
+		return data_ptr_cast(data.data());
+	}
+
+	idx_t Size() const override {
+		return data.size();
+	}
+
+private:
+	string data;
+	shared_ptr<BlockingMaterializationState> state;
+};
+
 class TrackingAsyncWriteTarget : public AsyncWriteTarget {
 public:
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
@@ -292,6 +499,16 @@ public:
 	mutex lock;
 	vector<string> writes;
 	vector<idx_t> offsets;
+};
+
+class FailingAsyncWriteTarget : public AsyncWriteTarget {
+public:
+	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
+		(void)buffer;
+		(void)size;
+		(void)offset;
+		throw IOException("Injected managed queue failure");
+	}
 };
 
 class BlockingAsyncWriteTarget : public AsyncWriteTarget {
@@ -426,6 +643,17 @@ static string ReadFile(const string &path) {
 	return result;
 }
 
+static string CaptureException(const std::function<void()> &action) {
+	try {
+		action();
+	} catch (const std::exception &ex) {
+		return ex.what();
+	} catch (...) {
+		return "unknown exception";
+	}
+	return string();
+}
+
 static unique_ptr<Connection> CreateConnectionWithAsyncThreads(DuckDB &db, idx_t async_threads = 1) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
@@ -539,6 +767,63 @@ TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[a
 	REQUIRE(saw_second);
 }
 
+TEST_CASE("ManagedAsyncWriteQueue reports accounted request adoption ownership", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	{
+		TrackingAsyncWriteTarget target;
+		ManagedAsyncWriteQueue queue(*con->context, target);
+		idx_t completion_count = 0;
+		bool completion_error = false;
+		auto completion = [&](idx_t, idx_t, optional_ptr<const ErrorData> error) {
+			completion_count++;
+			completion_error = completion_error || error;
+		};
+		AsyncWriteRequest request(make_uniq<StringAsyncWriteBuffer>("abc"), 7, completion);
+
+		ManagedAsyncWriteQueueTest::AddExternalPendingBytes(queue, 3);
+		ErrorData acceptance_error;
+		auto adopted = ManagedAsyncWriteQueueTest::TryAdopt(queue, request, acceptance_error);
+		REQUIRE(adopted);
+		REQUIRE(!acceptance_error.HasError());
+		REQUIRE(request.payload == nullptr);
+		REQUIRE(ManagedAsyncWriteQueueTest::ExternalPendingBytes(queue) == 0);
+		REQUIRE(ManagedAsyncWriteQueueTest::PendingBytes(queue) == 3);
+
+		queue.SchedulePendingWrites(ManagedAsyncWriteQueue::SchedulePolicy::FORCE);
+		queue.Close();
+		REQUIRE(target.writes == vector<string> {"abc"});
+		REQUIRE(target.offsets == vector<idx_t> {7});
+		REQUIRE(completion_count == 1);
+		REQUIRE(!completion_error);
+	}
+
+	{
+		FailingAsyncWriteTarget target;
+		ManagedAsyncWriteQueue queue(*con->context, target);
+		queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("failed"), 0);
+		auto wait_error = CaptureException([&]() { queue.WaitAll(); });
+		REQUIRE(wait_error.find("Injected managed queue failure") != string::npos);
+
+		idx_t completion_count = 0;
+		AsyncWriteRequest request(make_uniq<StringAsyncWriteBuffer>("abc"), 7,
+		                          [&](idx_t, idx_t, optional_ptr<const ErrorData>) { completion_count++; });
+		ManagedAsyncWriteQueueTest::AddExternalPendingBytes(queue, 3);
+		ErrorData rejection_error;
+		auto adopted = ManagedAsyncWriteQueueTest::TryAdopt(queue, request, rejection_error);
+		REQUIRE(!adopted);
+		REQUIRE(rejection_error.HasError());
+		REQUIRE(request.payload != nullptr);
+		REQUIRE(ManagedAsyncWriteQueueTest::ExternalPendingBytes(queue) == 3);
+		REQUIRE(ManagedAsyncWriteQueueTest::PendingBytes(queue) == 0);
+		REQUIRE(completion_count == 0);
+
+		ManagedAsyncWriteQueueTest::DiscardExternalPendingBytes(queue, 3);
+		auto close_error = CaptureException([&]() { queue.Close(); });
+		REQUIRE(close_error == wait_error);
+	}
+}
+
 static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -546,7 +831,7 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 	AsyncThreadBlocker async_thread_blocker(*con->context, NumericCast<idx_t>(scheduler.NumberOfAsyncThreads()));
 	REQUIRE(async_thread_blocker.WaitForStarted());
 
-	BlockingWriteFileSystem fs(true, local_file);
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, local_file);
 	auto path = TestCreatePath(path_name);
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -769,7 +1054,7 @@ TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]"
 TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(true, false);
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
 	auto path = TestCreatePath("async_file_writer_parallel_positional.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -814,7 +1099,7 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 TEST_CASE("AsyncFileWriter drains non-positional writes on one async thread", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(false, false);
+	BlockingWriteFileSystem fs(FileWriteMode::SEQUENTIAL, false);
 	auto path = TestCreatePath("async_file_writer_parallel_non_positional.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -849,10 +1134,193 @@ TEST_CASE("AsyncFileWriter drains non-positional writes on one async thread", "[
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter admits concurrent-sequential writes in order before overlapping backend work",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_parallel_concurrent_sequential.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
+	}
+
+	auto saw_two_backend_writes = fs.WaitForBackendWrites(2);
+	auto admitted_offsets = fs.AdmittedOffsets();
+	auto max_active_backend_writes = fs.MaxActiveBackendWrites();
+	bool completed_later_write_first = false;
+	if (saw_two_backend_writes) {
+		fs.ReleaseWrite(first.size());
+		if (fs.WaitForCompletedWrites(1)) {
+			auto completed_offsets = fs.CompletedOffsets();
+			completed_later_write_first = completed_offsets[0] == first.size();
+		}
+	}
+	fs.ReleaseAllWrites();
+	writer.Close();
+
+	REQUIRE(saw_two_backend_writes);
+	REQUIRE(admitted_offsets == vector<idx_t> {0, first.size()});
+	REQUIRE(max_active_backend_writes >= 2);
+	REQUIRE(completed_later_write_first);
+	REQUIRE(ReadFile(path) == first + second);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter concurrent-sequential writes use the configured async worker capacity",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 3);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_concurrent_sequential_worker_capacity.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	auto write_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		for (idx_t write_idx = 0; write_idx < 4; write_idx++) {
+			writer.WriteData(make_uniq<StringAsyncWriteBuffer>(
+			    string(UnsafeNumericCast<size_t>(write_size), UnsafeNumericCast<char>('a' + write_idx))));
+		}
+		batch_guard.Finish();
+	}
+
+	auto saw_three_backend_writes = fs.WaitForBackendWrites(3);
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto entered_before_release = fs.EnteredBackendWrites();
+	fs.ReleaseAllWrites();
+	writer.Close();
+
+	REQUIRE(saw_three_backend_writes);
+	REQUIRE(entered_before_release == 3);
+	REQUIRE(fs.EnteredBackendWrites() == 4);
+	REQUIRE(fs.MaxActiveBackendWrites() == 3);
+	REQUIRE(fs.OpenFile(path, FileFlags::FILE_FLAGS_READ)->GetFileSize() == 4 * write_size);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter uses concurrent-sequential offsets without async threads", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	ConcurrentSequentialWriteFileSystem fs(false);
+	auto path = TestCreatePath("async_file_writer_sync_concurrent_sequential.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
+	writer.Close();
+
+	REQUIRE(fs.AdmittedOffsets() == vector<idx_t> {0});
+	REQUIRE(fs.write_offsets == vector<idx_t> {0});
+	REQUIRE(ReadFile(path) == "abcdef");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter stops concurrent-sequential publication after refill materialization failure",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 1);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_concurrent_sequential_materialization_error.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	auto first_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
+	auto second_size = AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 1;
+	auto materialization = make_shared_ptr<BlockingMaterializationState>();
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(first_size), 'a')));
+	auto first_entered = fs.WaitForBackendWrites(1);
+	writer.WriteData(make_uniq<BlockingMaterializationAsyncWriteBuffer>(
+	    string(UnsafeNumericCast<size_t>(second_size), 'b'), materialization));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.ReleaseAllWrites();
+	auto materialization_entered = materialization->WaitForEntered();
+	std::atomic<bool> wait_started(false);
+	std::atomic<bool> wait_finished(false);
+	string wait_error;
+	std::thread wait_thread([&]() {
+		wait_started.store(true);
+		wait_error = CaptureException([&]() { writer.WaitAll(); });
+		wait_finished.store(true);
+	});
+	while (!wait_started.load()) {
+		std::this_thread::yield();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto wait_blocked_on_materialization = !wait_finished.load();
+	materialization->Release(true);
+	wait_thread.join();
+
+	auto write_error = CaptureException([&]() { writer.WriteData(make_uniq<StringAsyncWriteBuffer>("later")); });
+	auto close_error = CaptureException([&]() { writer.Close(); });
+	auto repeated_close_error = CaptureException([&]() { writer.Close(); });
+
+	REQUIRE(first_entered);
+	REQUIRE(materialization_entered);
+	REQUIRE(wait_blocked_on_materialization);
+	REQUIRE(wait_error.find("Injected payload materialization failure") != string::npos);
+	REQUIRE(write_error == wait_error);
+	REQUIRE(close_error == wait_error);
+	REQUIRE(repeated_close_error == wait_error);
+	REQUIRE(fs.EnteredBackendWrites() == 1);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
+TEST_CASE("AsyncFileWriter drains accepted concurrent-sequential writes before discarding a failed tail",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_concurrent_sequential_accepted_error.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	auto write_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'a')));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'b')));
+	auto accepted_writes_entered = fs.WaitForBackendWrites(2);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.fail_writes = true;
+	fs.ReleaseAllWrites();
+	auto close_error = CaptureException([&]() { writer.Close(); });
+	auto repeated_close_error = CaptureException([&]() { writer.Close(); });
+
+	REQUIRE(accepted_writes_entered);
+	REQUIRE(close_error.find("Injected async write failure") != string::npos);
+	REQUIRE(repeated_close_error == close_error);
+	REQUIRE(fs.EnteredBackendWrites() == 2);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
 TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drain", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(true, false);
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
 	auto path = TestCreatePath("async_file_writer_remote_coalesce_start.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -880,7 +1348,7 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(false, false);
+	BlockingWriteFileSystem fs(FileWriteMode::SEQUENTIAL, false);
 	auto path = TestCreatePath("async_file_writer_remote_non_positional_coalesce.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -909,7 +1377,7 @@ TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file
 TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one large write", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 4);
-	BlockingWriteFileSystem fs(true, false);
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
 	auto path = TestCreatePath("async_file_writer_remote_large_then_tiny.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -940,7 +1408,7 @@ TEST_CASE("AsyncFileWriter close force-drains remote non-positional tail after s
           "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(false, false);
+	BlockingWriteFileSystem fs(FileWriteMode::SEQUENTIAL, false);
 	auto path = TestCreatePath("async_file_writer_remote_non_positional_close_tail.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -1065,7 +1533,7 @@ TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as p
 TEST_CASE("AsyncFileWriter rethrows non-positional async write errors on close", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 1);
-	BlockingWriteFileSystem fs(false, false);
+	BlockingWriteFileSystem fs(FileWriteMode::SEQUENTIAL, false);
 	auto path = TestCreatePath("async_file_writer_non_positional_error.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);

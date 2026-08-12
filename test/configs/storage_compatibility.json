@@ -210,7 +210,13 @@
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
         "test/sql/catalog/nested_schema/nested_table.test",
         "test/sql/catalog/nested_schema/nested_table_dml.test",
-        "test/sql/catalog/nested_schema/nested_table_columnref.test"
+        "test/sql/catalog/nested_schema/nested_table_columnref.test",
+        "test/sql/catalog/nested_schema/nested_entries.test",
+        "test/sql/catalog/nested_schema/nested_alter.test",
+        "test/sql/catalog/nested_schema/nested_constraints.test",
+        "test/sql/catalog/nested_schema/nested_export.test",
+        "test/sql/catalog/nested_schema/nested_schema_limits.test",
+        "test/sql/catalog/nested_schema/nested_wal_replay.test"
       ]
     },
     {
@@ -226,6 +232,7 @@
     {
       "reason": "test_all_types() require latest storage",
       "paths": [
+        "test/fuzzer/sqlsmith/statistics_assertion_trigger.test",
         "test/sql/aggregate/aggregates/arg_min_max_all_types.test_slow",
         "test/sql/aggregate/aggregates/arg_min_max_n_all_types.test_slow",
         "test/sql/aggregate/aggregates/arg_min_max_nulls_last_all_types.test_slow",

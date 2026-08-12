@@ -60,7 +60,7 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, [&](string_t input, string_t error_option) {
-		    auto input_data = input.GetDataWriteable();
+		    auto input_data = input.GetData();
 		    auto input_length = input.GetSize();
 
 		    if (Utf8Proc::Analyze(input_data, input_length) != UnicodeType::INVALID) {
@@ -69,9 +69,14 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		    auto const error_behavior = GetDecodeErrorBehavior(error_option);
 
 		    switch (error_behavior) {
-		    case DecodeErrorBehavior::REPLACE:
-			    Utf8Proc::MakeValid(input_data, input_length);
-			    return input;
+		    case DecodeErrorBehavior::REPLACE: {
+			    auto target = StringVector::EmptyString(result, input_length);
+			    auto output = target.GetDataWriteable();
+			    memcpy(output, input_data, input_length);
+			    Utf8Proc::MakeValid(output, input_length);
+			    target.Finalize();
+			    return target;
+		    }
 
 		    case DecodeErrorBehavior::IGNORE: {
 			    auto new_str = Utf8Proc::RemoveInvalid(input_data, input_length);

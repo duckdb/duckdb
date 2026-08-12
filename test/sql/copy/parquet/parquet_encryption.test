@@ -97,7 +97,7 @@ SELECT * FROM read_parquet('{TEST_DIR}/encrypted256.parquet', encryption_config=
 ----
 42
 
-# encrypted parquet metadata cache hits must not skip encryption checks
+# encrypted parquet metadata cache hits must initialize encryption state and not skip encryption checks
 statement ok
 SET parquet_metadata_cache=true
 
@@ -153,3 +153,8 @@ SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cac
 	encryption_config={footer_key: 'key256'})
 ----
 <REGEX>:Invalid Input Error: File '.*plain_metadata_cache.parquet' is not encrypted, but 'encryption_config' was set
+
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
