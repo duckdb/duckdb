@@ -65,7 +65,7 @@ public:
 
 public:
 	PipelineBuildState();
-	~PipelineBuildState();
+	~PipelineBuildState(); // NOLINT: PipelineBuildStateData is incomplete here
 
 public:
 	//! Duplicate eliminated join scan dependencies
