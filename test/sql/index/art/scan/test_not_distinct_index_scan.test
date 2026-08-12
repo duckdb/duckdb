@@ -29,7 +29,7 @@ statement ok
 INSERT INTO tbl VALUES (NULL);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
 ----
 analyzed_plan	<REGEX>:.*Sequential Scan.*
 
