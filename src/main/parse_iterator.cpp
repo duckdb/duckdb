@@ -81,10 +81,8 @@ bool ParseIterator::Peek() {
 		current_statement = std::move((*overridden_statements)[override_cursor++]);
 		return true;
 	}
-	if (!parser) {
-		parser = make_uniq<Parser>(options);
-	}
-	EnsureTokenized();
+	parser = make_uniq<Parser>(options);
+	EnsureTokenized(options);
 	// Walk the token cursor through the cached `tokens`, calling Parser::ParseTopLevelStatement
 	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
@@ -136,15 +134,16 @@ bool ParseIterator::Peek() {
 	}
 }
 
-void ParseIterator::EnsureTokenized() {
-	if (!tokens) {
-		// Tokenize the full input once. Subsequent Peek/HasMore calls walk through `tokens` via
-		// `token_cursor`; we never re-tokenize. Tokenization is grammar-free.
-		tokens = make_uniq<vector<MatcherToken>>();
-		auto options = context.GetParserOptions();
-		ParserTokenizer tokenizer(sql, *tokens, options.keyword_extension.get());
-		tokenizer.TokenizeInput();
+void ParseIterator::EnsureTokenized(const ParserOptions &options) {
+	if (tokens && tokenized_keyword_extension.get() == options.keyword_extension.get()) {
+		return;
 	}
+	auto updated_tokens = make_uniq<vector<MatcherToken>>();
+	ParserTokenizer tokenizer(sql, *updated_tokens, options.keyword_extension.get());
+	tokenizer.TokenizeInput();
+	D_ASSERT(!tokens || tokens->size() == updated_tokens->size());
+	tokens = std::move(updated_tokens);
+	tokenized_keyword_extension = options.keyword_extension;
 }
 
 bool ParseIterator::HasMore() {
@@ -161,7 +160,7 @@ bool ParseIterator::HasMore() {
 	}
 	// PEG path: walk the token cursor without parsing. There is another statement iff a real token
 	// (neither a `;` separator nor the end-of-input sentinel) remains ahead of the cursor.
-	EnsureTokenized();
+	EnsureTokenized(context.GetParserOptions());
 	for (idx_t i = token_cursor; i < tokens->size(); i++) {
 		const auto type = (*tokens)[i].type;
 		if (type == TokenType::END_OF_INPUT) {

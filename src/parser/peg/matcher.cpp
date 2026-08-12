@@ -1,6 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/parser/keyword_extension.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)

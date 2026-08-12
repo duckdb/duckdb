@@ -9,14 +9,17 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class ClientContext;
+class KeywordExtension;
 class Parser;
 class SQLStatement;
 struct MatcherToken;
+struct ParserOptions;
 
 //! Iterator over the parse-facing statements of a multi-statement query.
 //!
@@ -60,19 +63,20 @@ public:
 	DUCKDB_API ClientContext &GetClientContext();
 
 private:
-	//! Tokenize the full input once (grammar-free); no-op if already tokenized.
-	void EnsureTokenized();
+	//! Tokenize the full input, refreshing classifications when extension keywords change.
+	void EnsureTokenized(const ParserOptions &options);
 
 private:
 	//! The bound context, used for parser options / metrics / override extensions.
 	ClientContext &context;
 	string sql;
-	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
-	//! stay warm. Constructed lazily on the first Peek.
+	//! Parser for the current peel, rebuilt from the latest extension snapshots.
 	unique_ptr<Parser> parser;
 	//! Tokenized view of `sql`. Populated once on the first Peek and walked thereafter via
 	//! `token_cursor`, avoiding O(N²) re-tokenization across N statements.
 	unique_ptr<vector<MatcherToken>> tokens;
+	//! Keyword snapshot used to classify the cached tokens.
+	shared_ptr<const KeywordExtension> tokenized_keyword_extension;
 	//! Index into `tokens` at which the next match starts.
 	idx_t token_cursor = 0;
 	//! Single-statement buffer holding the result of the most recent Peek. Cleared by

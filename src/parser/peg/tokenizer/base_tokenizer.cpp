@@ -1,5 +1,4 @@
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 

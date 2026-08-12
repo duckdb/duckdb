@@ -11,7 +11,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
