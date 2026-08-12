@@ -791,12 +791,12 @@ struct RemovedOptionalPipelineDependency {
 	reference<Pipeline> dependency;
 };
 
-static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, const vector<pair<idx_t, idx_t>> &cycle,
+static bool RemoveOptionalDependencyInCycle(const PipelineSchedule &schedule, const vector<PipelineScheduleEdge> &cycle,
                                             const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
                                             vector<RemovedOptionalPipelineDependency> &removed_dependencies) {
 	for (auto &edge : cycle) {
-		auto &pipeline_stage = schedule.stages[edge.first];
-		auto &dependency_stage = schedule.stages[edge.second];
+		auto &pipeline_stage = schedule.stages[edge.dependent];
+		auto &dependency_stage = schedule.stages[edge.dependency];
 		if (pipeline_stage.type != PipelineScheduleStageType::EXECUTE ||
 		    dependency_stage.type != PipelineScheduleStageType::EXECUTE) {
 			continue;
@@ -850,7 +850,6 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 	}
 
 	vector<idx_t> fanout_selections;
-	idx_t materialization_size = 0;
 	for (idx_t selection_idx = 0; selection_idx < data.cte_selections.size(); selection_idx++) {
 		auto &selection = data.cte_selections[selection_idx];
 		auto &cte = selection.cte.get();
@@ -861,15 +860,20 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 			continue;
 		}
 		auto consumer_summary = cte.exchange->GetConsumerSummary();
-		// Cost selection only applies when every consumer is an unresolved candidate. Preselected modes define the
-		// exchange's completion behavior and must retain their direct candidates.
-		if (selection.candidate_count == 1 || consumer_summary.direct > 0 || consumer_summary.buffered > 0 ||
-		    consumer_summary.materialized > 0) {
+		// Existing streaming consumers define the exchange's completion behavior and retain direct candidates.
+		if (consumer_summary.direct > 0 || consumer_summary.buffered > 0) {
+			selection.stream_candidates = true;
+			continue;
+		}
+		// An existing materialized consumer already makes the materialization cost unavoidable.
+		if (consumer_summary.materialized > 0) {
+			continue;
+		}
+		if (selection.candidate_count == 1) {
 			selection.stream_candidates = true;
 			continue;
 		}
 		selection.estimated_materialization_size = EstimateMaterializationSize(cte);
-		materialization_size = SaturatingAdd(materialization_size, selection.estimated_materialization_size);
 		fanout_selections.push_back(selection_idx);
 	}
 
@@ -877,21 +881,17 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 	// materialized, and stream the largest CTEs when materializing all eligible inputs would consume too much memory.
 	auto &context = data.external_input_candidates[0].pipeline.get().GetClientContext();
 	auto materialization_budget = BufferManager::GetBufferManager(context).GetOperatorMemoryLimit() / 2;
-	if (materialization_size > materialization_budget) {
-		std::sort(fanout_selections.begin(), fanout_selections.end(), [&](idx_t left, idx_t right) {
-			return data.cte_selections[left].estimated_materialization_size >
-			       data.cte_selections[right].estimated_materialization_size;
-		});
-		for (auto selection_idx : fanout_selections) {
-			auto &selection = data.cte_selections[selection_idx];
-			if (selection.estimated_materialization_size == 0) {
-				continue;
-			}
+	std::sort(fanout_selections.begin(), fanout_selections.end(), [&](idx_t left, idx_t right) {
+		return data.cte_selections[left].estimated_materialization_size <
+		       data.cte_selections[right].estimated_materialization_size;
+	});
+	idx_t materialization_size = 0;
+	for (auto selection_idx : fanout_selections) {
+		auto &selection = data.cte_selections[selection_idx];
+		if (selection.estimated_materialization_size <= materialization_budget - materialization_size) {
+			materialization_size += selection.estimated_materialization_size;
+		} else {
 			selection.stream_candidates = true;
-			materialization_size -= selection.estimated_materialization_size;
-			if (materialization_size <= materialization_budget) {
-				break;
-			}
 		}
 	}
 
@@ -903,30 +903,19 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 }
 
 static optional_ptr<PipelineExternalInputCandidate>
-FindExternalInputCandidateInCycle(PipelineBuildStateData &data, const PipelineSchedule &schedule,
-                                  const vector<pair<idx_t, idx_t>> &cycle) {
-	reference_set_t<Pipeline> cycle_pipelines;
+FindExternalInputCandidateInCycle(PipelineBuildStateData &data, const vector<PipelineScheduleEdge> &cycle) {
+	reference_set_t<const Pipeline> cycle_consumers;
 	for (auto &edge : cycle) {
-		cycle_pipelines.insert(*schedule.stages[edge.first].pipeline);
-		cycle_pipelines.insert(*schedule.stages[edge.second].pipeline);
+		if (edge.external_input_consumer) {
+			cycle_consumers.insert(*edge.external_input_consumer);
+		}
 	}
 	optional_ptr<PipelineExternalInputCandidate> result;
 	for (auto &candidate : data.external_input_candidates) {
 		if (!candidate.UsesExternalInput()) {
 			continue;
 		}
-		bool candidate_in_cycle = cycle_pipelines.find(candidate.pipeline.get()) != cycle_pipelines.end();
-		if (!candidate_in_cycle) {
-			for (auto &producer_ref : candidate.pipeline.get().GetExternalInputProducers()) {
-				auto producer = producer_ref.lock();
-				D_ASSERT(producer);
-				if (cycle_pipelines.find(*producer) != cycle_pipelines.end()) {
-					candidate_in_cycle = true;
-					break;
-				}
-			}
-		}
-		if (!candidate_in_cycle) {
+		if (cycle_consumers.find(candidate.pipeline.get()) == cycle_consumers.end()) {
 			continue;
 		}
 		if (candidate.has_blocking_dependencies) {
@@ -1046,7 +1035,7 @@ void PipelineBuildState::ResolveExternalInputs(const vector<shared_ptr<MetaPipel
 		if (RemoveOptionalDependencyInCycle(*schedule, cycle, meta_pipelines, removed_dependencies)) {
 			continue;
 		}
-		auto candidate = FindExternalInputCandidateInCycle(*data, *schedule, cycle);
+		auto candidate = FindExternalInputCandidateInCycle(*data, cycle);
 		if (!candidate) {
 			throw InternalException("Cyclic dependency in pipeline schedule without an external input candidate");
 		}

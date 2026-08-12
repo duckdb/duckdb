@@ -91,8 +91,8 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		events.push_back(CreatePipelineScheduleEvent(stage, event_data.initial_schedule));
 	}
 	for (idx_t stage_idx = 0; stage_idx < schedule->stages.size(); stage_idx++) {
-		for (auto dependency : schedule->stages[stage_idx].dependencies) {
-			events[stage_idx]->AddDependency(*events[dependency]);
+		for (auto &dependency : schedule->stages[stage_idx].dependencies) {
+			events[stage_idx]->AddDependency(*events[dependency.stage]);
 		}
 	}
 	for (auto &pipeline : schedule->initialize_on_schedule_pipelines) {

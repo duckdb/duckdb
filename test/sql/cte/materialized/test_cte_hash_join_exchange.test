@@ -47,6 +47,24 @@ SELECT count(*) FROM c l JOIN c r USING (i);
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*
 
+# Existing materialization is reused instead of serializing hash fanout.
+query III
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT i FROM c ORDER BY i LIMIT 1),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i)),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+0	10000	10000
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT i FROM c ORDER BY i LIMIT 1),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i)),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: MATERIALIZED.*Materialized Consumers: 3.*
+
 # Preserve hash join semantics for NULLs, duplicates and adjacent join types while directly feeding each join.
 query I
 WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
@@ -256,6 +274,23 @@ FROM c l JOIN c r USING (i);
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
 
+# Cycle fallback only materializes a consumer whose external edge closes the cycle.
+statement ok
+SET operator_memory_limit='4MB';
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(100000) t(i)
+)
+SELECT (SELECT sum(length(l.payload)) FROM c l JOIN c r USING (i)),
+       (SELECT sum(length(c.payload)) FROM range(100000) x(i) JOIN c USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 2.*Materialized Consumers: 1.*
+
+statement ok
+SET operator_memory_limit='16MB';
+
 # Direct consumers get independent chunk wrappers when one hash join slices its probe input while spilling.
 query III
 WITH c AS MATERIALIZED (
@@ -286,6 +321,26 @@ FROM (
 );
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
+
+# Saturated estimates do not hide a second materialization that exceeds the budget.
+statement ok
+CREATE TABLE cte_empty_stats AS SELECT i FROM range(1000) t(i);
+
+statement ok
+DELETE FROM cte_empty_stats;
+
+query II
+EXPLAIN ANALYZE
+WITH huge AS MATERIALIZED (
+  SELECT h.i FROM range(9223372036854775807) h(i), cte_empty_stats e
+),
+large AS MATERIALIZED (
+  SELECT h.i FROM range(2000000) h(i), cte_empty_stats e
+)
+SELECT (SELECT count(*) FROM huge l JOIN huge r USING (i)),
+       (SELECT count(*) FROM large l JOIN large r USING (i));
+----
+analyzed_plan	<REGEX>:.*CTE Name: huge.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*CTE Name: large.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
 
 statement ok
 RESET memory_limit;

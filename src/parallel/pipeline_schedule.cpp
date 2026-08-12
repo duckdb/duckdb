@@ -31,12 +31,17 @@ static idx_t AddStage(PipelineSchedule &result, PipelineScheduleStageType type, 
 }
 
 static void AddDependency(PipelineSchedule &result, idx_t dependent, idx_t dependency) {
-	result.stages[dependent].dependencies.push_back(dependency);
+	result.stages[dependent].dependencies.emplace_back(dependency, nullptr);
+}
+
+static void AddExternalInputDependency(PipelineSchedule &result, idx_t dependent, idx_t dependency,
+                                       Pipeline &consumer) {
+	result.stages[dependent].dependencies.emplace_back(dependency, consumer);
 }
 
 enum class CycleVisitState : uint8_t { UNVISITED, VISITING, VISITED };
 
-vector<pair<idx_t, idx_t>> PipelineSchedule::GetCycle() const {
+vector<PipelineScheduleEdge> PipelineSchedule::GetCycle() const {
 	vector<CycleVisitState> states(stages.size(), CycleVisitState::UNVISITED);
 	for (idx_t stage_idx = 0; stage_idx < stages.size(); stage_idx++) {
 		if (states[stage_idx] != CycleVisitState::UNVISITED) {
@@ -53,7 +58,7 @@ vector<pair<idx_t, idx_t>> PipelineSchedule::GetCycle() const {
 				stack.pop_back();
 				continue;
 			}
-			auto dependency = dependencies[entry.second++];
+			auto dependency = dependencies[entry.second++].stage;
 			D_ASSERT(dependency < stages.size());
 			if (states[dependency] == CycleVisitState::UNVISITED) {
 				states[dependency] = CycleVisitState::VISITING;
@@ -63,16 +68,22 @@ vector<pair<idx_t, idx_t>> PipelineSchedule::GetCycle() const {
 			if (states[dependency] != CycleVisitState::VISITING) {
 				continue;
 			}
-			vector<pair<idx_t, idx_t>> result;
+			vector<PipelineScheduleEdge> result;
 			idx_t cycle_start = 0;
 			while (stack[cycle_start].first != dependency) {
 				cycle_start++;
 				D_ASSERT(cycle_start < stack.size());
 			}
 			for (idx_t path_idx = cycle_start; path_idx + 1 < stack.size(); path_idx++) {
-				result.emplace_back(stack[path_idx].first, stack[path_idx + 1].first);
+				auto dependent = stack[path_idx].first;
+				auto dependency_idx = stack[path_idx].second - 1;
+				auto &schedule_dependency = stages[dependent].dependencies[dependency_idx];
+				result.emplace_back(dependent, schedule_dependency.stage, schedule_dependency.external_input_consumer);
 			}
-			result.emplace_back(stack.back().first, dependency);
+			auto dependent = stack.back().first;
+			auto dependency_idx = stack.back().second - 1;
+			result.emplace_back(dependent, dependency,
+			                    stages[dependent].dependencies[dependency_idx].external_input_consumer);
 			return result;
 		}
 	}
@@ -277,13 +288,14 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 				}
 				continue;
 			}
-			AddDependency(*result, producer_entry->second.execute, entry.second.initialize);
+			AddExternalInputDependency(*result, producer_entry->second.execute, entry.second.initialize, consumer);
 			for (auto &dependency : consumer.GetDependencies()) {
 				auto dep = dependency.lock();
 				D_ASSERT(dep);
 				auto dep_entry = stage_map.find(*dep);
 				if (dep_entry != stage_map.end()) {
-					AddDependency(*result, producer_entry->second.execute, dep_entry->second.complete);
+					AddExternalInputDependency(*result, producer_entry->second.execute, dep_entry->second.complete,
+					                           consumer);
 				}
 			}
 			for (auto &dependency : consumer.GetDataflowDependencies()) {
@@ -291,11 +303,12 @@ unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaP
 				D_ASSERT(dep);
 				auto dep_entry = stage_map.find(*dep);
 				if (dep_entry != stage_map.end()) {
-					AddDependency(*result, producer_entry->second.execute, dep_entry->second.initialize);
+					AddExternalInputDependency(*result, producer_entry->second.execute, dep_entry->second.initialize,
+					                           consumer);
 				}
 			}
-			AddDependency(*result, entry.second.execute, producer_entry->second.execute);
-			AddDependency(*result, entry.second.prepare_finish, producer_entry->second.execute);
+			AddExternalInputDependency(*result, entry.second.execute, producer_entry->second.execute, consumer);
+			AddExternalInputDependency(*result, entry.second.prepare_finish, producer_entry->second.execute, consumer);
 		}
 	}
 
