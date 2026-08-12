@@ -838,10 +838,12 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 		auto &cte = selection.cte.get();
 		D_ASSERT(cte.exchange);
 		auto consumer_summary = cte.exchange->GetConsumerSummary();
+		// Cost selection only applies when every consumer is an unresolved candidate. Mixed exchange modes share
+		// producer completion, while an existing materialized consumer already pays the materialization cost.
 		if (consumer_summary.materialized > 0) {
 			continue;
 		}
-		if (selection.candidate_count == 1 && consumer_summary.ExchangeConsumerCount() == 0) {
+		if (selection.candidate_count == 1 || consumer_summary.ExchangeConsumerCount() > 0) {
 			selection.stream_candidates = true;
 			continue;
 		}
