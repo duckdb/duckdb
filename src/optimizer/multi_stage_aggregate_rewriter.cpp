@@ -379,7 +379,9 @@ static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &
 					    optimizer, TableIndex(source_output.cte_index.GetIndex()), source_output.types,
 					    source_output.names, source_output.bindings, replacements));
 					auto bindings = sources.back()->GetColumnBindings();
-					source_groups.emplace_back(bindings.begin(), bindings.begin() + aggr.groups.size());
+					source_groups.emplace_back(
+					    bindings.begin(),
+					    bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(aggr.groups.size()));
 				} else {
 					sources.push_back(std::move(source_output.plan));
 					vector<ColumnBinding> groups;
