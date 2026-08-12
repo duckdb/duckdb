@@ -1314,10 +1314,14 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	} else {
 		metadata = std::move(metadata_p);
 	}
+	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
 	if (metadata->IsEncrypted()) {
 		if (!parquet_options.encryption_config) {
 			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
 			                            file_handle->GetPath());
+		}
+		if (!can_use_metadata_statistics) {
+			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
 		}
 		if (!encryption_util) {
 			encryption_util = context_p.db->GetEncryptionUtil(true);
@@ -1326,7 +1330,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
 		                            file_handle->GetPath());
 	}
-	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
 	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 	// Length-pushdown rewrites these columns to BIGINT, update the local schema
