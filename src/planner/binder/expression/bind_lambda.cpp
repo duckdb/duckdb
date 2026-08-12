@@ -221,7 +221,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const optional_ptr<BindLambdaContext> bind_lambda_context,
                                             const vector<LogicalType> &function_child_types) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		throw BinderException("subqueries in lambda expressions are not supported");
+		throw BinderException::UnsupportedLambdaExpression("subqueries in lambda expressions are not supported");
 	}
 
 	// lambdas are bound depth-first, so an inner lambda has already had its own columns captured by the

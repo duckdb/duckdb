@@ -54,6 +54,7 @@ public:
 	void LegacySerialize(Serializer &serializer) const;
 
 public:
+	Identifier GetName() const override;
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;

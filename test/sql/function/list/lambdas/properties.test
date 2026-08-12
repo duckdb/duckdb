@@ -1,0 +1,42 @@
+# name: test/sql/function/list/lambdas/properties.test
+# description: Test expression properties of list lambda functions
+# group: [lambdas]
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# Lambda volatility must be visible to common subexpression elimination.
+statement ok
+CREATE SEQUENCE list_lambda_cse_seq START 1
+
+query II
+SELECT count(*) FILTER (WHERE a = b), count(*)
+FROM (
+	SELECT
+		list_transform([i], lambda x: nextval('list_lambda_cse_seq'))[1] a,
+		list_transform([i], lambda x: nextval('list_lambda_cse_seq'))[1] b
+	FROM range(10000) tbl(i)
+)
+----
+0	10000
+
+# list_filter uses the same lambda property propagation.
+statement ok
+CREATE SEQUENCE list_filter_cse_seq START 1
+
+query I
+SELECT count(*) FILTER (WHERE a <> b) > 0
+FROM (
+	SELECT
+		list_filter([i], lambda x: nextval('list_filter_cse_seq') % 2049 = 0) a,
+		list_filter([i], lambda x: nextval('list_filter_cse_seq') % 2049 = 0) b
+	FROM range(10000) tbl(i)
+)
+----
+true
+
+# Throwing lambda bodies produce the original execution error.
+statement error
+SELECT list_transform([1], lambda x: error('expected list lambda error'))
+----
+expected list lambda error
