@@ -28,3 +28,20 @@ TEST_CASE("Test C API VARIANT type support", "[capi]") {
 
 	duckdb_destroy_logical_type(&type);
 }
+
+TEST_CASE("Test C API create VARIANT logical type", "[capi]") {
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_VARIANT);
+
+	REQUIRE(type);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_VARIANT);
+
+	auto vector_handle = duckdb_create_vector(type, 1);
+	REQUIRE(vector_handle);
+
+	auto vector_type = duckdb_vector_get_column_type(vector_handle);
+	REQUIRE(duckdb_get_type_id(vector_type) == DUCKDB_TYPE_VARIANT);
+
+	duckdb_destroy_logical_type(&vector_type);
+	duckdb_destroy_vector(&vector_handle);
+	duckdb_destroy_logical_type(&type);
+}
