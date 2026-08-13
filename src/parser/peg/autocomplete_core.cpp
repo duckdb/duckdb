@@ -163,8 +163,8 @@ bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<U
 
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
-	AutoCompleteTokenizer(const string &sql, MatchState &state)
-	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	AutoCompleteTokenizer(const string &sql, vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions_p)
+	    : BaseTokenizer(sql, tokens), suggestions(suggestions_p) {
 		last_pos = 0;
 	}
 
@@ -200,12 +200,13 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	AutoCompleteTokenizer tokenizer(sql_ref, state);
+	AutoCompleteTokenizer tokenizer(sql_ref, tokens, suggestions);
 	tokenizer.TokenizeInput();
+	TokenIterator token_iterator(tokens);
+	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
 	if (!tokenizer.CanAutocomplete()) {
 		return {};
 	}

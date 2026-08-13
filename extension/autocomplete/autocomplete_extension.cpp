@@ -464,7 +464,8 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
+	TokenIterator token_iterator(tokenizer.tokens);
+	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->ProgramMatcher().Match(state);
@@ -554,17 +555,18 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+	TokenIterator token_iterator(root_tokens);
+	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->ProgramMatcher().Match(state);
 	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
 	// consuming it.
-	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
+	if (match_result != MatchResultType::SUCCESS || state.token_iterator.Position() + 1 < root_tokens.size()) {
 		auto error_token = string("<eof>");
-		if (state.token_index < root_tokens.size() && root_tokens[state.token_index].type != TokenType::END_OF_INPUT &&
-		    root_tokens[state.token_index].type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			error_token = root_tokens[state.token_index].text;
+		if (state.token_iterator.HasCurrent() && state.token_iterator.Current().type != TokenType::END_OF_INPUT &&
+		    state.token_iterator.Current().type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			error_token = state.token_iterator.Current().text;
 		}
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
@@ -578,7 +580,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		throw BinderException(
 		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-		    state.token_index, error_token, token_list);
+		    state.token_iterator.Position(), error_token, token_list);
 	}
 	return nullptr;
 }
