@@ -151,7 +151,7 @@ bool DisjunctiveJoinRewriter::FlattenOR(const Expression &expr, const unordered_
 		return true;
 	}
 
-	if (!BoundComparisonExpression::IsComparison(expr) || expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL && expr.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		return false;
 	}
 
@@ -175,6 +175,7 @@ bool DisjunctiveJoinRewriter::FlattenOR(const Expression &expr, const unordered_
 		b.left_expr = right.Copy();
 		b.right_expr = left.Copy();
 	}
+	b.comparison_type = expr.GetExpressionType();
 	out.push_back(std::move(b));
 	return true;
 }
@@ -227,7 +228,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemiJoin(const CTEInfo
 
 		auto mark_join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
 		mark_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
+		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
 		mark_join->mark_index = mark_tbl;
 		mark_join->AddChild(std::move(current));
 		mark_join->AddChild(std::move(build_scan));
@@ -287,7 +288,7 @@ vector<unique_ptr<LogicalOperator>> DisjunctiveJoinRewriter::CreateMatchedBranch
 
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
+		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
 
 		if (!exclusion_preds.empty()) {
 			for (const auto &pred : exclusion_preds) {
@@ -341,7 +342,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateUnmatchedBuildSide(co
 
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
+		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
 
 		if (!exclusion_preds.empty()) {
 			for (const auto &pred : exclusion_preds) {
@@ -369,7 +370,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateUnmatchedBuildSide(co
 		auto right_expr =
 		    CreateColRef(ColumnBinding(matched_union_tbl, ProjectionIndex(col)), right_cte.output_types[col]);
 		anti_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
+		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
 	}
 
 	anti_join->AddChild(std::move(rhs_scan));
@@ -401,7 +402,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateAntiJoinChain(const C
 
 		auto anti_join = make_uniq<LogicalComparisonJoin>(JoinType::ANTI);
 		anti_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
+		    JoinCondition(std::move(left_expr), std::move(right_expr), branches[i].comparison_type));
 		anti_join->AddChild(std::move(current));
 		anti_join->AddChild(std::move(build_scan));
 
@@ -490,37 +491,54 @@ void DisjunctiveJoinRewriter::RemapExpressions(const CTEInfo &left_cte, const CT
 	expr_replacer.VisitExpression(&right_expr);
 }
 
-vector<unique_ptr<Expression>>
-DisjunctiveJoinRewriter::CreateExclusionPredicates(const CTEInfo &left_cte, const CTEInfo &right_cte,
-                                                   const vector<Branch> &branches, idx_t current_branch_idx,
-                                                   TableIndex left_ref_idx, TableIndex right_ref_idx) {
-	vector<unique_ptr<Expression>> exclusions;
+vector<unique_ptr<Expression>> DisjunctiveJoinRewriter::CreateExclusionPredicates(const CTEInfo &left_cte, const CTEInfo &right_cte, const vector<Branch> &branches, idx_t current_branch_idx, TableIndex left_ref_idx, TableIndex right_ref_idx) {
+    vector<unique_ptr<Expression>> exclusions;
 
-	for (idx_t i = 0; i < current_branch_idx; i++) {
-		auto earlier_left = branches[i].left_expr->Copy();
-		auto earlier_right = branches[i].right_expr->Copy();
-		RemapExpressions(left_cte, right_cte, left_ref_idx, right_ref_idx, earlier_left, earlier_right);
+    for (idx_t i = 0; i < current_branch_idx; i++) {
+        auto earlier_left = branches[i].left_expr->Copy();
+        auto earlier_right = branches[i].right_expr->Copy();
+        RemapExpressions(left_cte, right_cte, left_ref_idx, right_ref_idx, earlier_left, earlier_right);
 
-		auto left_is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		left_is_null->GetChildrenMutable().push_back(earlier_left->Copy());
+        unique_ptr<Expression> exclusion_expr;
 
-		auto right_is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		right_is_null->GetChildrenMutable().push_back(earlier_right->Copy());
+        if (branches[i].comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+            // Negation of IS_NOT_DISTINCT_FROM is IS_DISTINCT_FROM
+            exclusion_expr = BoundComparisonExpression::Create(
+                ExpressionType::COMPARE_DISTINCT_FROM,
+                std::move(earlier_left),
+                std::move(earlier_right)
+            );
+        } else {
+            // Negation of A = B is (A IS NULL OR B IS NULL OR A != B)
+            auto left_copy = earlier_left->Copy();
+            auto right_copy = earlier_right->Copy();
 
-		auto not_equal = BoundComparisonExpression::Create(ExpressionType::COMPARE_NOTEQUAL, std::move(earlier_left),
-		                                                   std::move(earlier_right));
+            auto left_is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+            left_is_null->GetChildrenMutable().push_back(std::move(earlier_left));
 
-		auto or_nulls = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		or_nulls->GetChildrenMutable().push_back(std::move(left_is_null));
-		or_nulls->GetChildrenMutable().push_back(std::move(right_is_null));
+            auto right_is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+            right_is_null->GetChildrenMutable().push_back(std::move(earlier_right));
 
-		auto final_or = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		final_or->GetChildrenMutable().push_back(std::move(or_nulls));
-		final_or->GetChildrenMutable().push_back(std::move(not_equal));
+            auto not_equal = BoundComparisonExpression::Create(
+                ExpressionType::COMPARE_NOTEQUAL,
+                std::move(left_copy),
+                std::move(right_copy)
+            );
 
-		exclusions.push_back(std::move(final_or));
-	}
-	return exclusions;
+            auto or_nulls = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+            or_nulls->GetChildrenMutable().push_back(std::move(left_is_null));
+            or_nulls->GetChildrenMutable().push_back(std::move(right_is_null));
+
+            auto final_or = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+            final_or->GetChildrenMutable().push_back(std::move(or_nulls));
+            final_or->GetChildrenMutable().push_back(std::move(not_equal));
+
+            exclusion_expr = std::move(final_or);
+        }
+
+        exclusions.push_back(std::move(exclusion_expr));
+    }
+    return exclusions;
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::CreateCTERef(const CTEInfo &cte, TableIndex ref_idx) {
@@ -575,6 +593,7 @@ vector<DisjunctiveJoinRewriter::Branch> DisjunctiveJoinRewriter::SwapBranches(co
 		Branch b;
 		b.left_expr = branch.right_expr->Copy();
 		b.right_expr = branch.left_expr->Copy();
+		b.comparison_type = branch.comparison_type;
 		swapped.push_back(std::move(b));
 	}
 	return swapped;

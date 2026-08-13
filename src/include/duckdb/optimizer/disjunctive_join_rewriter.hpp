@@ -22,6 +22,7 @@ private:
 	struct Branch {
 		unique_ptr<Expression> left_expr;
 		unique_ptr<Expression> right_expr;
+		ExpressionType comparison_type;
 	};
 
 	struct CTEInfo {
