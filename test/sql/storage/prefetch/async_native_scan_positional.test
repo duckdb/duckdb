@@ -2,7 +2,7 @@
 # description: Positional scans cannot receive resume callbacks, async scan I/O must fall back to synchronous execution
 # group: [prefetch]
 
-load __TEST_DIR__/async_native_scan_positional.db
+load {TEST_DIR}/async_native_scan_positional.db
 
 statement ok
 CREATE TABLE t1 AS SELECT range AS i FROM range(100000);

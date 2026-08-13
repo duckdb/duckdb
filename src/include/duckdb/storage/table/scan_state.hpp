@@ -226,14 +226,21 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+enum class VectorPrepareState : uint8_t {
+	//! No vector is currently prepared for processing
+	NONE,
+	//! A vector is prepared for processing
+	PREPARED,
+	//! A vector is prepared and its I/O has been registered
+	IO_REGISTERED
+};
+
 //! Eligibility state of one vector, computed by RowGroup::PrepareScan and consumed by ProcessPreparedScan
 struct PreparedScanVector {
 	PreparedScanVector();
 
-	//! Whether a vector is currently prepared for processing
-	bool prepared = false;
-	//! Whether I/O for the prepared vector has been registered
-	bool io_registered = false;
+	//! The prepare state of the current vector
+	VectorPrepareState prepare_state = VectorPrepareState::NONE;
 	//! The number of rows in the prepared vector
 	idx_t max_count = 0;
 	//! The number of rows visible to the transaction (held in CollectionScanState::valid_sel)

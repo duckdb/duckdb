@@ -2,7 +2,7 @@
 # description: Native storage scans route their prefetch I/O tasks onto the dedicated ASYNC pool
 # group: [prefetch]
 
-load __TEST_DIR__/async_native_scan_pool.db
+load {TEST_DIR}/async_native_scan_pool.db
 
 statement ok
 CREATE TABLE integers AS SELECT range AS i FROM range(1000000);

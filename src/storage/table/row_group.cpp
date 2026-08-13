@@ -390,7 +390,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	D_ASSERT(!state.prepared_vector.prepared);
+	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
 	state.row_group = node;
 	state.vector_index = vector_offset;
@@ -831,7 +831,7 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	auto &prepared = state.prepared_vector;
-	if (prepared.prepared) {
+	if (prepared.prepare_state != VectorPrepareState::NONE) {
 		return true;
 	}
 	while (true) {
@@ -888,7 +888,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		}
 		state.rows_scanned += count;
 
-		prepared.prepared = true;
+		prepared.prepare_state = VectorPrepareState::PREPARED;
 		prepared.max_count = max_count;
 		prepared.visible_count = count;
 		prepared.has_sample_selection = has_sample_selection;
@@ -902,7 +902,7 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 	auto &filter_info = state.GetFilterInfo();
 	auto &transaction = options.transaction;
 	auto &prepared = state.prepared_vector;
-	D_ASSERT(prepared.prepared);
+	D_ASSERT(prepared.prepare_state != VectorPrepareState::NONE);
 	idx_t max_count = prepared.max_count;
 	idx_t count = prepared.visible_count;
 	bool has_sample_selection = prepared.has_sample_selection;

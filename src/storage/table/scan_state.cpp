@@ -311,19 +311,18 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 		row_group = nullptr;
 		return false;
 	}
-	if (prepared_vector.io_registered) {
+	if (prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED) {
 		// I/O for the prepared vector was already registered (e.g. we are resuming after BLOCKED)
 		return true;
 	}
-	prepared_vector.io_registered = true;
+	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
 	tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
 	return true;
 }
 
 void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {
 	D_ASSERT(row_group);
-	D_ASSERT(prepared_vector.prepared);
-	D_ASSERT(prepared_vector.io_registered);
+	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
 	ScanOptions options {TransactionData(transaction)};
 	row_group->GetNode().ProcessPreparedScan(options, *this, result);
 }
@@ -332,8 +331,7 @@ PreparedScanVector::PreparedScanVector() : sample_sel(STANDARD_VECTOR_SIZE) {
 }
 
 void PreparedScanVector::Reset() {
-	prepared = false;
-	io_registered = false;
+	prepare_state = VectorPrepareState::NONE;
 }
 
 PrefetchState::~PrefetchState() {
