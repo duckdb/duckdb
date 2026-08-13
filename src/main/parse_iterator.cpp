@@ -90,11 +90,8 @@ bool ParseIterator::Peek() {
 	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
 	// at end means the input is exhausted.
-	auto at_end_of_real_tokens = [&]() {
-		return token_iterator->AtEnd();
-	};
 	while (true) {
-		if (at_end_of_real_tokens()) {
+		if (token_iterator->AtEnd()) {
 			exhausted = true;
 			return false;
 		}
@@ -129,7 +126,7 @@ bool ParseIterator::Peek() {
 			current_statement = std::move(stmt);
 			return true;
 		}
-		if (at_end_of_real_tokens()) {
+		if (token_iterator->AtEnd()) {
 			exhausted = true;
 			return false;
 		}
