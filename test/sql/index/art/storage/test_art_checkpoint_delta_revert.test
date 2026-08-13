@@ -1,0 +1,66 @@
+# name: test/sql/index/art/storage/test_art_checkpoint_delta_revert.test
+# description: Test reverting checkpoint delta index appends after a failed commit
+# group: [art]
+
+load __TEST_DIR__/checkpoint_delta_revert.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+CREATE TABLE t(i INTEGER UNIQUE);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET debug_checkpoint_sleep_ms = 1000;
+
+concurrentloop role 0 3
+
+onlyif role=0
+statement ok
+BEGIN TRANSACTION;
+
+onlyif role=0
+statement ok
+INSERT INTO t SELECT range + 10000 FROM range(2049);
+
+onlyif role=0
+statement ok
+SELECT sleep_ms(500);
+
+onlyif role=0
+statement error
+COMMIT;
+----
+<REGEX>:.*(duplicate key|Failed to delete all rows).*
+
+onlyif role=1
+statement ok
+SELECT sleep_ms(100);
+
+onlyif role=1
+statement ok
+INSERT INTO t VALUES (12048);
+
+onlyif role=2
+statement ok
+SELECT sleep_ms(250);
+
+onlyif role=2
+statement ok
+CHECKPOINT;
+
+endloop
+
+statement ok
+INSERT INTO t VALUES (10000);
+
+query I
+SELECT count(*) FROM t WHERE i = 10000;
+----
+1
