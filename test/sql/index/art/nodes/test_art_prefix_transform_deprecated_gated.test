@@ -15,22 +15,32 @@ statement ok
 ATTACH '{TEST_DIR}/prefix_transform_gated.db' AS db (STORAGE_VERSION 'v1.0.0');
 
 statement ok
-CREATE TABLE db.t(k VARCHAR, payload INTEGER);
+CREATE TABLE db.t(k1 VARCHAR, k2 VARCHAR, k VARCHAR, payload INTEGER);
 
 # Nine equal index keys create a gated nested leaf.
 statement ok
 INSERT INTO db.t
-SELECT repeat('a', 80) || 'gate' || repeat('b', 80) || 'tail', i
+SELECT
+	repeat('a', 80) || 'gate',
+	repeat('b', 80) || 'tail',
+	repeat('a', 80) || 'gate' || repeat('b', 80) || 'tail',
+	i
 FROM range(1, 10) AS r(i);
 
 # Split the long prefixes in both indexed columns.
 statement ok
 INSERT INTO db.t VALUES
-	(repeat('a', 80) || 'gath' || repeat('b', 80) || 'tail', 100),
-	(repeat('a', 80) || 'gate' || repeat('b', 80) || 'taih', 101);
+	(repeat('a', 80) || 'gath', repeat('b', 80) || 'tail',
+	 repeat('a', 80) || 'gath' || repeat('b', 80) || 'tail', 100),
+	(repeat('a', 80) || 'gate', repeat('b', 80) || 'taih',
+	 repeat('a', 80) || 'gate' || repeat('b', 80) || 'taih', 101);
 
 statement ok
-CREATE INDEX idx_t ON db.t(k);
+CREATE INDEX idx_t_compound ON db.t(k1, k2);
+
+# The single-column index lets us verify the loaded index with an index scan.
+statement ok
+CREATE INDEX idx_t_scan ON db.t(k);
 
 # Convert the in-memory prefixes and gated leaf to the v1.0.0 format.
 statement ok
