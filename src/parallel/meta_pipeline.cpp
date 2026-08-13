@@ -72,7 +72,7 @@ bool MetaPipeline::RemoveOptionalDependency(Pipeline &pipeline, Pipeline &depend
 		return false;
 	}
 	for (auto dependency_entry = entry->second.begin(); dependency_entry != entry->second.end(); dependency_entry++) {
-		if (dependency_entry->type == MetaPipelineDependencyType::OPTIONAL &&
+		if (dependency_entry->type == MetaPipelineDependencyType::OPTIONAL_DEPENDENCY &&
 		    RefersToSameObject(dependency_entry->pipeline.get(), dependency)) {
 			entry->second.erase(dependency_entry);
 			return true;
@@ -82,7 +82,7 @@ bool MetaPipeline::RemoveOptionalDependency(Pipeline &pipeline, Pipeline &depend
 }
 
 void MetaPipeline::AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency) {
-	pipeline_dependencies[pipeline].emplace_back(dependency, MetaPipelineDependencyType::OPTIONAL);
+	pipeline_dependencies[pipeline].emplace_back(dependency, MetaPipelineDependencyType::OPTIONAL_DEPENDENCY);
 }
 
 MetaPipelineType MetaPipeline::Type() const {
@@ -209,7 +209,7 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 			}
 			auto dependency_type = dependency_mode == RecursiveDependencyMode::FORCE
 			                           ? MetaPipelineDependencyType::REQUIRED
-			                           : MetaPipelineDependencyType::OPTIONAL;
+			                           : MetaPipelineDependencyType::OPTIONAL_DEPENDENCY;
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
 				if (dataflow_mode == DataflowDependencyMode::SKIP_CONFLICTING) {

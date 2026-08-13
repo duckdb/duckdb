@@ -21,7 +21,7 @@ enum class MetaPipelineType : uint8_t {
 enum class MetaPipelineDependencyMode : uint8_t { ADD_DEPENDENCY, NO_DEPENDENCY };
 enum class RecursiveDependencyMode : uint8_t { RESPECT_PARALLELISM, FORCE };
 enum class DataflowDependencyMode : uint8_t { INCLUDE, SKIP_CONFLICTING };
-enum class MetaPipelineDependencyType : uint8_t { REQUIRED, OPTIONAL };
+enum class MetaPipelineDependencyType : uint8_t { REQUIRED, OPTIONAL_DEPENDENCY };
 
 struct MetaPipelineDependency {
 	MetaPipelineDependency(Pipeline &pipeline_p, MetaPipelineDependencyType type_p)
