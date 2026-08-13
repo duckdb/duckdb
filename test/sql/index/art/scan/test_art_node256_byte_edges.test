@@ -1,0 +1,65 @@
+# name: test/sql/index/art/scan/test_art_node256_byte_edges.test
+# description: Test ART scans at Node256 byte boundaries before and after shrinking
+# group: [scan]
+
+statement ok
+SET index_scan_max_count = 1000;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+CREATE TABLE byte_edges(k INTEGER PRIMARY KEY);
+
+# The encoded keys for 0..255 create a Node256 over the final key byte.
+statement ok
+INSERT INTO byte_edges SELECT i FROM range(-1, 258) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT k FROM byte_edges WHERE k <= 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Enter the Node256 at byte 0 and advance to byte 1.
+query I
+SELECT k FROM byte_edges WHERE k <= 1 ORDER BY k;
+----
+-1
+0
+1
+
+# Advance from byte 254 to byte 255, then leave the Node256 subtree.
+query II
+EXPLAIN ANALYZE SELECT k FROM byte_edges WHERE k > 254;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT k FROM byte_edges WHERE k > 254 ORDER BY k;
+----
+255
+256
+257
+
+# Leave 36 children to shrink the Node256 to a Node48.
+statement ok
+DELETE FROM byte_edges WHERE k BETWEEN 36 AND 255;
+
+statement ok
+INSERT INTO byte_edges VALUES (255);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*), min(k), max(k), sum(k)
+FROM byte_edges
+WHERE k >= 0;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Scan the Node48 and leave its subtree after its maximum child byte.
+query IIII
+SELECT count(*), min(k), max(k), sum(k)
+FROM byte_edges
+WHERE k >= 0;
+----
+39	0	257	1398
