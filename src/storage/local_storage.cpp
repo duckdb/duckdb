@@ -11,6 +11,11 @@
 
 namespace duckdb {
 
+static optional_idx GetActiveCheckpointId(DuckTransaction &transaction) {
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	return active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+}
+
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
     : context(context), table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0),
       optimistic_writer(context, table) {
@@ -213,8 +218,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
 	auto &collection = *row_groups->collection;
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto checkpoint_id = GetActiveCheckpointId(transaction);
 	auto error =
 	    AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row, checkpoint_id);
 	if (error.HasError()) {
@@ -489,9 +493,7 @@ void LocalStorage::LocalMerge(DataTable &table, OptimisticWriteCollection &colle
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetTotalRows());
-		auto active_checkpoint =
-		    transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-		auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+		auto checkpoint_id = GetActiveCheckpointId(transaction);
 		auto error = storage.AppendToIndexes(transaction, *collection.collection, storage.append_indexes,
 		                                     table.GetTypes(), base_id, checkpoint_id);
 		if (error.HasError()) {
