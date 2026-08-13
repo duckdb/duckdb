@@ -155,7 +155,7 @@ void LocalTableStorage::FlushBlocks() {
 
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
-                                             row_t &start_row) {
+                                             row_t &start_row, optional_idx active_checkpoint) {
 	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
 	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
 	// the table's physical column mapped_column_ids[i].
@@ -166,9 +166,6 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
-	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
-	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
-
 	// The bound expressions of the indexes (and their bound column references) are in relation to
 	// ALL table columns, so we create an empty table chunk based on the table types. It references
 	// the indexed columns, and contains nothing for all non-indexed columns.
@@ -185,7 +182,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		table_chunk.SetCardinality(index_chunk);
 
 		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, start_row, index_append_mode,
-		                                   checkpoint_id);
+		                                   active_checkpoint);
 		if (error.HasError()) {
 			break;
 		}
@@ -216,7 +213,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
 	auto &collection = *row_groups->collection;
-	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+	auto error =
+	    AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row, checkpoint_id);
 	if (error.HasError()) {
 		// Revert all appended row IDs.
 		row_t current_row = append_state.row_start;
@@ -228,7 +228,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			}
 			// Remove the chunk.
 			try {
-				table.RevertIndexAppend(append_state, chunk, current_row);
+				table.RevertIndexAppend(append_state, chunk, current_row, checkpoint_id);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 				break;
@@ -489,8 +489,11 @@ void LocalStorage::LocalMerge(DataTable &table, OptimisticWriteCollection &colle
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetTotalRows());
+		auto active_checkpoint =
+		    transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+		auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 		auto error = storage.AppendToIndexes(transaction, *collection.collection, storage.append_indexes,
-		                                     table.GetTypes(), base_id);
+		                                     table.GetTypes(), base_id, checkpoint_id);
 		if (error.HasError()) {
 			error.Throw();
 		}

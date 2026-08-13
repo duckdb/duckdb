@@ -75,7 +75,7 @@ public:
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
-	                          const vector<LogicalType> &table_types, row_t &start_row);
+	                          const vector<LogicalType> &table_types, row_t &start_row, optional_idx active_checkpoint);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Create an optimistic row group collection for this table.
