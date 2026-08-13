@@ -185,7 +185,14 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			comparison_type = FlipComparisonExpression(comparison_type);
 		}
 
-		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+		if (comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			// Table filters discard NULL and false alike, so IS NOT DISTINCT FROM a
+			// non-NULL constant selects the same rows as equality. NULL is not indexed.
+			if (constant_value.IsNull()) {
+				return nullptr;
+			}
+			equal_value = constant_value;
+		} else if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 			// An equality value overrides any other bounds.
 			equal_value = constant_value;
 		} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||

@@ -13,7 +13,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
-#include "duckdb/optimizer/distinct_aggregate_rewriter.hpp"
+#include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -37,6 +37,7 @@
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
+#include "duckdb/optimizer/aggregate_reuse.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/type_pushdown.hpp"
@@ -269,11 +270,10 @@ void Optimizer::RunBuiltInOptimizers() {
 		grouping_sets_optimizer.VisitOperator(plan);
 	});
 
-	// rewrite eligible DISTINCT aggregates into explicit aggregate plans
-	RunOptimizer(OptimizerType::DISTINCT_AGGREGATE_REWRITE, [&]() {
-		DistinctAggregateRewriter distinct_aggregate_rewriter(*this);
-		distinct_aggregate_rewriter.VisitOperator(plan);
-	});
+	// Optional aggregate recipes own their optimizer strategy; DISTINCT remains controlled by its dedicated setting.
+	MultiStageAggregateRewriter aggregate_rewriter(*this, AggregateRewritePolicy::UNCONDITIONAL,
+	                                               !OptimizerDisabled(OptimizerType::DISTINCT_AGGREGATE_REWRITE));
+	aggregate_rewriter.VisitOperator(plan);
 
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
@@ -310,6 +310,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Reuse exact aggregate payloads exposed by filtering SEMI joins.
+	RunOptimizer(OptimizerType::AGGREGATE_REUSE, [&]() {
+		plan->ResolveOperatorTypes();
+		AggregateReuseOptimizer aggregate_reuse(*this);
+		aggregate_reuse.CollectCTEs(*plan);
+		aggregate_reuse.VisitOperator(plan);
 	});
 
 	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
@@ -406,12 +414,23 @@ void Optimizer::RunBuiltInOptimizers() {
 	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
 	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	bool propagated_statistics = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
+			propagated_statistics = true;
 		});
+	}
+	if (propagated_statistics) {
+		MultiStageAggregateRewriter costed_rewriter(*this, AggregateRewritePolicy::COST_BASED, false, statistics_map);
+		costed_rewriter.VisitOperator(plan);
+		if (costed_rewriter.WasChanged()) {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
+		}
 	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
@@ -469,7 +488,18 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 }
 
+unique_ptr<LogicalOperator> Optimizer::LowerMandatoryAggregateRewrites(unique_ptr<LogicalOperator> plan_p) {
+	Verify(*plan_p);
+	GroupingSetsOptimizer grouping_sets_optimizer(*this, true);
+	grouping_sets_optimizer.VisitOperator(plan_p);
+	MultiStageAggregateRewriter aggregate_rewriter(*this, AggregateRewritePolicy::MANDATORY);
+	aggregate_rewriter.VisitOperator(plan_p);
+	Verify(*plan_p);
+	return plan_p;
+}
+
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	plan_p = LowerMandatoryAggregateRewrites(std::move(plan_p));
 	if (!Settings::Get<EnableOptimizerSetting>(context)) {
 		return plan_p;
 	}

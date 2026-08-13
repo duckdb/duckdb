@@ -65,48 +65,41 @@ struct RecursiveCTEParallelism {
 	idx_t source_task_worker_count;
 };
 
-static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state) {
+static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state, idx_t direct_probe_work_units) {
 	auto &op = state.GetOperator();
+	auto &references = op.recursive_references;
 	idx_t work_units = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		work_units += state.CurrentInputTable().ChunkCount() * op.recursive_reference_count;
+	if (op.working_table && references.frontier_scans > 0) {
+		work_units += state.CurrentInputTable().ChunkCount() * references.frontier_scans;
 	}
-	if (op.recurring_table && op.recurring_reference_count > 0) {
+	if (op.recurring_table && references.recurring_scans > 0) {
 		const auto recurring_chunks =
 		    op.using_key ? (state.GetHashTable().Count() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE
 		                 : op.recurring_table->ChunkCount();
-		work_units += recurring_chunks * op.recurring_reference_count;
+		work_units += recurring_chunks * references.recurring_scans;
 	}
+	// Direct probes consume their visible input without scanning the frozen recurring state. Recursive probe inputs
+	// are counted above, while independent probe inputs contribute their estimated chunks.
+	work_units = MaxValue(work_units, direct_probe_work_units);
 	return MaxValue<idx_t>(work_units, 1);
 }
 
-static idx_t GetRecursiveFrontierRows(const RecursiveCTEState &state) {
+static idx_t GetRecursiveInputRows(const RecursiveCTEState &state) {
 	auto &op = state.GetOperator();
+	auto &references = op.recursive_references;
 	idx_t recursive_rows = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		recursive_rows += state.CurrentInputTable().Count() * op.recursive_reference_count;
+	if (op.working_table && references.frontier_scans > 0) {
+		recursive_rows += state.CurrentInputTable().Count() * references.frontier_scans;
 	}
-	if (op.recurring_table && op.recurring_reference_count > 0) {
+	if (op.recurring_table && references.recurring_scans > 0) {
 		const auto recurring_rows = op.using_key ? state.GetHashTable().Count() : op.recurring_table->Count();
-		recursive_rows += recurring_rows * op.recurring_reference_count;
+		recursive_rows += recurring_rows * references.recurring_scans;
 	}
 	return recursive_rows;
 }
 
-static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
-	auto &op = state.GetOperator();
-	idx_t recursive_bytes = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		recursive_bytes += state.CurrentInputTable().SizeInBytes() * op.recursive_reference_count;
-	}
-	if (op.recurring_table && op.recurring_reference_count > 0 && !op.using_key) {
-		recursive_bytes += op.recurring_table->SizeInBytes() * op.recurring_reference_count;
-	}
-	return recursive_bytes;
-}
-
-static idx_t GetRecursiveRowLimit(idx_t frontier_rows) {
-	return MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
+static idx_t GetRecursiveRowLimit(idx_t input_rows) {
+	return MaxValue<idx_t>((input_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
 }
 
 static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &state, idx_t work_units,
@@ -168,11 +161,31 @@ static void ExecuteRecursivePipelineInline(PipelineExecutor &pipeline_executor) 
 	}
 }
 
+template <bool COLLECT_METRICS>
+struct RecursiveCTETaskMetrics {
+	RecursiveCTETaskMetrics(RecursiveCTEState &, RecursiveCTEPipelineMetricType) {
+	}
+};
+
+template <>
+struct RecursiveCTETaskMetrics<true> {
+	RecursiveCTETaskMetrics(RecursiveCTEState &state_p, RecursiveCTEPipelineMetricType metric_type_p)
+	    : state(state_p), metric_type(metric_type_p) {
+	}
+
+	RecursiveCTEState &state;
+	RecursiveCTEPipelineMetricType metric_type;
+};
+
 //! A task that executes a cached PipelineExecutor
-class RecursiveCTETask : public ExecutorTask {
+template <bool COLLECT_METRICS>
+class RecursiveCTETask : public ExecutorTask, private RecursiveCTETaskMetrics<COLLECT_METRICS> {
 public:
-	RecursiveCTETask(Pipeline &pipeline_p, shared_ptr<Event> event_p, PipelineExecutor &executor_p)
-	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p), pipeline_executor(executor_p) {
+	RecursiveCTETask(Pipeline &pipeline_p, shared_ptr<Event> event_p, PipelineExecutor &executor_p,
+	                 RecursiveCTEState &state_p, RecursiveCTEPipelineMetricType metric_type_p)
+	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), RecursiveCTETaskMetrics<COLLECT_METRICS>(
+	                                                                 state_p, metric_type_p),
+	      pipeline(pipeline_p), pipeline_executor(executor_p) {
 	}
 
 	Pipeline &pipeline;
@@ -180,27 +193,27 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		pipeline_executor.SetTaskForInterrupts(shared_from_this());
-
-		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-			auto res = pipeline_executor.Execute(PARTIAL_CHUNK_COUNT);
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
-				return TaskExecutionResult::TASK_NOT_FINISHED;
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
-			}
-		} else {
-			auto res = pipeline_executor.Execute();
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
+		const auto execute_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		const auto result = mode == TaskExecutionMode::PROCESS_PARTIAL ? pipeline_executor.Execute(PARTIAL_CHUNK_COUNT)
+		                                                               : pipeline_executor.Execute();
+		if constexpr (COLLECT_METRICS) {
+			const auto execute_end = std::chrono::steady_clock::now();
+			this->state.GetEpochMetrics().RecordPipelineExecution(
+			    this->metric_type,
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(execute_end - execute_start).count()));
+		}
+		switch (result) {
+		case PipelineExecuteResult::NOT_FINISHED:
+			if (mode != TaskExecutionMode::PROCESS_PARTIAL) {
 				throw InternalException("Execute without limit should not return NOT_FINISHED");
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
 			}
+			return TaskExecutionResult::TASK_NOT_FINISHED;
+		case PipelineExecuteResult::INTERRUPTED:
+			return TaskExecutionResult::TASK_BLOCKED;
+		case PipelineExecuteResult::FINISHED:
+			break;
 		}
 
 		event->FinishTask();
@@ -224,12 +237,15 @@ private:
 //! root events must sometimes be reset up-front on the main thread to avoid reset-vs-execute races.
 class RecursiveCTEPipelineEvent : public BasePipelineEvent {
 public:
-	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p, idx_t worker_limit_p)
-	    : BasePipelineEvent(std::move(pipeline_p)), state(state_p), worker_limit(worker_limit_p) {
+	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p, idx_t worker_limit_p,
+	                          RecursiveCTEPipelineMetricType metric_type_p)
+	    : BasePipelineEvent(std::move(pipeline_p)), state(state_p), worker_limit(worker_limit_p),
+	      metric_type(metric_type_p) {
 	}
 
 	RecursiveCTEState &state;
 	idx_t worker_limit;
+	RecursiveCTEPipelineMetricType metric_type;
 	bool prepared_for_schedule = false;
 
 	void PrepareForSchedule() {
@@ -261,7 +277,13 @@ public:
 		vector<shared_ptr<Task>> tasks;
 		for (idx_t i = 0; i < max_threads; i++) {
 			executors[i]->PrepareForExecution();
-			tasks.push_back(make_uniq<RecursiveCTETask>(*pipeline, shared_from_this(), *executors[i]));
+			if (state.GetMetrics().Enabled()) {
+				tasks.push_back(make_uniq<RecursiveCTETask<true>>(*pipeline, shared_from_this(), *executors[i], state,
+				                                                  metric_type));
+			} else {
+				tasks.push_back(make_uniq<RecursiveCTETask<false>>(*pipeline, shared_from_this(), *executors[i], state,
+				                                                   metric_type));
+			}
 		}
 		SetTasks(std::move(tasks));
 	}
@@ -323,6 +345,14 @@ public:
 	}
 };
 
+static bool IsDirectRecursiveKeyProbe(const PhysicalOperator &op, TableIndex cte_index) {
+	if (op.type != PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
+		return false;
+	}
+	auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
+	return key_join.StateScan().cte_index == cte_index;
+}
+
 static unique_ptr<RecursiveCTEPipelineSchedulePlan>
 BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
                                    const PhysicalRecursiveCTE &recursive_cte) {
@@ -333,6 +363,22 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	// 1. a scheduler-free stage plan for the single-thread inline fast path
 	// 2. a per-iteration Event graph for the multi-threaded path
 	auto plan = make_uniq<RecursiveCTEPipelineSchedulePlan>();
+	reference_map_t<const Pipeline, RecursiveCTEPipelineMetricType> pipeline_metric_types;
+	for (auto &meta_pipeline : meta_pipelines) {
+		auto metric_type = RecursiveCTEPipelineMetricType::RECURSIVE;
+		if (recursive_cte.invariant_meta_pipelines.find(*meta_pipeline) !=
+		    recursive_cte.invariant_meta_pipelines.end()) {
+			auto sink = meta_pipeline->GetSink();
+			metric_type = sink && sink->type == PhysicalOperatorType::CTE
+			                  ? RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION
+			                  : RecursiveCTEPipelineMetricType::INVARIANT_BUILD;
+		}
+		vector<shared_ptr<Pipeline>> pipelines;
+		meta_pipeline->GetPipelines(pipelines, false);
+		for (auto &pipeline : pipelines) {
+			pipeline_metric_types.emplace(*pipeline, metric_type);
+		}
+	}
 	// Retained invariant meta-pipelines are absent after the first epoch, so build the induced schedule for
 	// the active subset and ignore dependencies whose other endpoint is already materialized.
 	auto schedule = BuildPipelineSchedule(meta_pipelines, PipelineScheduleMode::ACTIVE_SUBSET);
@@ -359,7 +405,9 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 			}
 		}
 		recursive_stage_indices[stage_idx] = plan->stages.size();
-		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks);
+		auto metric_type = pipeline_metric_types.find(pipeline);
+		D_ASSERT(metric_type != pipeline_metric_types.end());
+		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks, metric_type->second);
 	}
 	for (idx_t stage_idx = 0; stage_idx < schedule->stages.size(); stage_idx++) {
 		const auto recursive_stage_idx = recursive_stage_indices[stage_idx];
@@ -395,12 +443,45 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	return plan;
 }
 
+static bool ContainsVisibleRecursiveScanInternal(const PhysicalOperator &op, TableIndex cte_index,
+                                                 reference_set_t<const PhysicalOperator> &visited) {
+	if (!visited.insert(op).second) {
+		return false;
+	}
+	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
+	    op.type == PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
+		auto &scan = op.Cast<PhysicalColumnDataScan>();
+		if (scan.cte_index == cte_index) {
+			return true;
+		}
+	}
+	for (auto &child : op.GetChildren()) {
+		if (ContainsVisibleRecursiveScanInternal(child.get(), cte_index, visited)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ContainsVisibleRecursiveScan(const PhysicalOperator &op, TableIndex cte_index) {
+	reference_set_t<const PhysicalOperator> visited;
+	return ContainsVisibleRecursiveScanInternal(op, cte_index, visited);
+}
+
 static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index,
-                                           idx_t &recursive_reference_count, idx_t &recurring_reference_count) {
-	if (op.type == PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
+                                           RecursiveCTEReferenceInfo &references) {
+	if (IsDirectRecursiveKeyProbe(op, cte_index)) {
 		auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
-		if (key_join.StateScan().cte_index == cte_index) {
-			recurring_reference_count++;
+		if (key_join.Layout().IsPartial()) {
+			references.partial_key_probes++;
+		} else {
+			references.exact_key_probes++;
+		}
+		auto &probe = key_join.children[0].get();
+		if (!ContainsVisibleRecursiveScan(probe, cte_index)) {
+			const auto probe_work_units = probe.estimated_cardinality / STANDARD_VECTOR_SIZE +
+			                              (probe.estimated_cardinality % STANDARD_VECTOR_SIZE != 0);
+			references.direct_probe_work_units = MaxValue(references.direct_probe_work_units, probe_work_units);
 		}
 		return;
 	}
@@ -413,9 +494,9 @@ static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableInde
 		return;
 	}
 	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
-		recursive_reference_count++;
+		references.frontier_scans++;
 	} else {
-		recurring_reference_count++;
+		references.recurring_scans++;
 	}
 }
 
@@ -423,10 +504,9 @@ static bool OperatorDirectlyDependsOnRecursiveInput(const PhysicalOperator &op, 
 	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
 		return true;
 	}
-	idx_t recursive_reference_count = 0;
-	idx_t recurring_reference_count = 0;
-	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
-	if (recursive_reference_count > 0 || recurring_reference_count > 0) {
+	RecursiveCTEReferenceInfo references;
+	CountDirectRecursiveReferences(op, cte_index, references);
+	if (references.HasReferences()) {
 		return true;
 	}
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
@@ -692,7 +772,7 @@ static void ScheduleRecursivePlan(const RecursiveCTEPipelineSchedulePlan &plan, 
 		switch (stage.type) {
 		case PipelineScheduleStageType::EXECUTE:
 			events.push_back(make_shared_ptr<RecursiveCTEPipelineEvent>(
-			    std::move(pipeline), state, parallelism.WorkerCount(stage.has_source_tasks)));
+			    std::move(pipeline), state, parallelism.WorkerCount(stage.has_source_tasks), stage.metric_type));
 			break;
 		case PipelineScheduleStageType::PREPARE_FINISH:
 			events.push_back(make_shared_ptr<PipelinePrepareFinishEvent>(std::move(pipeline)));
@@ -736,6 +816,7 @@ static void ExecuteRecursivePipelineFinishInline(Pipeline &pipeline, Executor &e
 	}
 }
 
+template <bool COLLECT_METRICS>
 static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &executor,
                                        const RecursiveCTEPipelineSchedulePlan &plan) {
 	for (auto &pipeline : plan.initialize_on_schedule_pipelines) {
@@ -757,10 +838,19 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 			auto &executors = state.GetScheduler().GetExecutors(pipeline);
 			D_ASSERT(executors.size() >= max_threads);
 			executors[0]->PrepareForExecution();
-			if (state.GetMetrics().Enabled()) {
+			if constexpr (COLLECT_METRICS) {
 				state.GetMetrics().RecordTasks(1);
 			}
+			const auto execute_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			ExecuteRecursivePipelineInline(*executors[0]);
+			if constexpr (COLLECT_METRICS) {
+				const auto execute_end = std::chrono::steady_clock::now();
+				state.GetEpochMetrics().RecordPipelineExecution(
+				    stage.metric_type,
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(execute_end - execute_start).count()));
+			}
 			break;
 		}
 		case PipelineScheduleStageType::PREPARE_FINISH:
@@ -851,20 +941,30 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		}
 	}
 
-	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
-	const auto row_limit = GetRecursiveRowLimit(frontier_rows);
+	const auto scheduler_input_rows = GetRecursiveInputRows(gstate);
+	const auto direct_probe_work_units = recursive_references.direct_probe_work_units;
+	const auto row_limit = MaxValue(GetRecursiveRowLimit(scheduler_input_rows), direct_probe_work_units);
 	idx_t work_units = 1;
 	RecursiveCTEParallelism parallelism(1);
 	if (row_limit > 1) {
-		work_units = GetRecursiveWorkUnits(gstate);
+		work_units = GetRecursiveWorkUnits(gstate, direct_probe_work_units);
 		if (work_units > 1) {
 			parallelism = GetRecursiveParallelism(gstate, work_units, row_limit, *schedule_plan);
 		}
-	} else if (collect_metrics) {
-		// Runtime metrics report exact frontier work even when the row bound makes the epoch serial.
-		work_units = GetRecursiveWorkUnits(gstate);
 	}
-	const auto frontier_storage_bytes = collect_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
+	idx_t frontier_rows = 0;
+	idx_t frontier_chunks = 0;
+	idx_t frontier_storage_bytes = 0;
+	idx_t frontier_allocation_bytes = 0;
+	idx_t epoch_task_start = 0;
+	if (collect_metrics) {
+		const auto &frontier = static_cast<const RecursiveCTEState &>(gstate).CurrentInputTable();
+		frontier_rows = frontier.Count();
+		frontier_chunks = frontier.ChunkCount();
+		frontier_storage_bytes = frontier.SizeInBytes();
+		frontier_allocation_bytes = frontier.AllocationSize();
+		epoch_task_start = gstate.GetMetrics().TaskCount();
+	}
 	if (!using_key && union_all) {
 		const auto source_tasks_write_recursive_output = parallelism.frontier_worker_count == 1 &&
 		                                                 parallelism.source_task_worker_count > 1 &&
@@ -888,7 +988,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	auto inline_execution = allow_reuse && parallelism.IsInline();
 
 	if (inline_execution) {
-		ExecuteRecursiveInlinePlan(gstate, executor, *schedule_plan);
+		if (collect_metrics) {
+			ExecuteRecursiveInlinePlan<true>(gstate, executor, *schedule_plan);
+		} else {
+			ExecuteRecursiveInlinePlan<false>(gstate, executor, *schedule_plan);
+		}
 	} else {
 		vector<shared_ptr<Event>> events;
 		ScheduleRecursivePlan(*schedule_plan, gstate, events, parallelism);
@@ -899,8 +1003,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		const auto epoch_end = std::chrono::steady_clock::now();
 		const auto elapsed_us =
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
-		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, work_units,
-		                                frontier_storage_bytes);
+		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, frontier_chunks,
+		                                scheduler_input_rows);
+		const auto epoch_tasks = gstate.GetMetrics().TaskCount() - epoch_task_start;
+		gstate.GetEpochMetrics().Record(frontier_rows, max_worker_count, epoch_tasks, elapsed_us,
+		                                frontier_storage_bytes, frontier_allocation_bytes);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 		if (collect_metrics && !gstate.HasMaterializedInvariantPipelines()) {
@@ -959,22 +1066,22 @@ static void GatherRecursiveScans(PhysicalOperator &op, TableIndex cte_index,
 }
 
 static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIndex cte_index,
-                                             idx_t &recursive_reference_count, idx_t &recurring_reference_count,
+                                             RecursiveCTEReferenceInfo &references,
                                              reference_set_t<const PhysicalOperator> &visited) {
 	if (!visited.insert(op).second) {
 		return;
 	}
-	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
+	CountDirectRecursiveReferences(op, cte_index, references);
 	for (auto child : op.GetChildren()) {
-		CountRecursiveReferencesInternal(child.get(), cte_index, recursive_reference_count, recurring_reference_count,
-		                                 visited);
+		CountRecursiveReferencesInternal(child.get(), cte_index, references, visited);
 	}
 }
 
-static void CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index, idx_t &recursive_reference_count,
-                                     idx_t &recurring_reference_count) {
+static RecursiveCTEReferenceInfo CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index) {
 	reference_set_t<const PhysicalOperator> visited;
-	CountRecursiveReferencesInternal(op, cte_index, recursive_reference_count, recurring_reference_count, visited);
+	RecursiveCTEReferenceInfo result;
+	CountRecursiveReferencesInternal(op, cte_index, result, visited);
+	return result;
 }
 
 void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
@@ -988,8 +1095,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 		lock_guard<mutex> guard(shared_executor_pool->lock);
 		shared_executor_pool->executors.clear();
 	}
-	recursive_reference_count = 0;
-	recurring_reference_count = 0;
+	recursive_references = RecursiveCTEReferenceInfo();
 	recursive_scans.clear();
 	invariant_meta_pipelines.clear();
 
@@ -1007,7 +1113,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(children[1]);
-	CountRecursiveReferences(children[1], table_index, recursive_reference_count, recurring_reference_count);
+	recursive_references = CountRecursiveReferences(children[1], table_index);
 	GatherRecursiveScans(children[1], table_index, recursive_scans);
 
 	vector<const_reference<PhysicalOperator>> ops;

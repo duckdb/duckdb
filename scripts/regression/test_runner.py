@@ -56,16 +56,38 @@ class BenchmarkResult:
 
 
 @dataclass
+class FormattedDuration:
+    value: str
+    unit: str
+
+
+@dataclass
 class BenchmarkRow:
     display_name: str
-    old_timing: str
-    old_range: str
-    new_timing: str
-    new_range: str
-    delta: str
+    old_timing: Optional[FormattedDuration]
+    old_min: Optional[FormattedDuration]
+    old_max: Optional[FormattedDuration]
+    new_timing: Optional[FormattedDuration]
+    new_min: Optional[FormattedDuration]
+    new_max: Optional[FormattedDuration]
+    delta: Optional[FormattedDuration]
+    delta_percentage: str
     runs: str
     bucket: str
     percentage: float = 0
+
+
+@dataclass
+class TableLayout:
+    benchmark_width: int
+    timing_number_width: int
+    timing_unit_width: int
+    timing_width: int
+    delta_number_width: int
+    delta_unit_width: int
+    delta_percentage_width: int
+    delta_width: int
+    runs_width: int
 
 
 def positive_integer(value: str) -> int:
@@ -73,6 +95,13 @@ def positive_integer(value: str) -> int:
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be greater than zero")
     return parsed
+
+
+def benchmark_argument(value: str) -> Tuple[str, str]:
+    name, separator, argument_value = value.partition("=")
+    if not separator or not name or not argument_value or name.startswith("-"):
+        raise argparse.ArgumentTypeError("must use NAME=VALUE with a non-empty name and value")
+    return name, argument_value
 
 
 def parse_arguments():
@@ -96,6 +125,13 @@ def parse_arguments():
         choices=("keep", "clear"),
         default="keep",
         help="Keep benchmark data or clear runner caches before running (default: keep).",
+    )
+    parser.add_argument(
+        "--benchmark-argument",
+        action="append",
+        type=benchmark_argument,
+        default=[],
+        help="Benchmark runner argument in NAME=VALUE form; may be specified more than once.",
     )
     return parser.parse_args()
 
@@ -324,25 +360,34 @@ def duration_unit(value: float):
     return 1000000000.0, "ns"
 
 
-def format_duration(value: float, unit=None, signed: bool = False) -> str:
+def format_duration_parts(value: float, unit=None, signed: bool = False) -> FormattedDuration:
     scale, suffix = unit or duration_unit(value)
     scaled = value * scale
     if signed and scaled > 0:
         prefix = "+"
     else:
         prefix = ""
-    return f"{prefix}{scaled:.3g}{suffix}"
+    return FormattedDuration(f"{prefix}{scaled:.1f}", suffix)
+
+
+def format_duration(value: float, unit=None, signed: bool = False) -> str:
+    duration = format_duration_parts(value, unit, signed)
+    return f"{duration.value} {duration.unit}"
 
 
 def timing_parts(timing: float, minimum: float, maximum: float) -> Tuple[str, str]:
-    unit = duration_unit(timing)
-    return format_duration(timing, unit), f"[{format_duration(minimum, unit)}…{format_duration(maximum, unit)}]"
+    return format_duration(timing), f"[{format_duration(minimum)}…{format_duration(maximum)}]"
+
+
+def delta_parts(measurement: BenchmarkMeasurement) -> Tuple[FormattedDuration, str]:
+    delta = measurement.new_timing - measurement.old_timing
+    unit = duration_unit(delta) if delta else duration_unit(measurement.old_timing)
+    return format_duration_parts(delta, unit, signed=True), format_ratio_change(measurement.ratio)
 
 
 def delta_text(measurement: BenchmarkMeasurement) -> str:
-    delta = measurement.new_timing - measurement.old_timing
-    unit = duration_unit(delta) if delta else duration_unit(measurement.old_timing)
-    return f"{format_duration(delta, unit, signed=True)} ({format_ratio_change(measurement.ratio)})"
+    delta, percentage = delta_parts(measurement)
+    return f"{delta.value} {delta.unit} ({percentage})"
 
 
 def gray(value: str) -> str:
@@ -404,27 +449,39 @@ def classify_result(result: BenchmarkResult) -> str:
 
 
 def format_run_count(result: BenchmarkResult) -> str:
-    if result.confirmation_runs:
-        return f"{result.initial_runs}+{result.confirmation_runs}"
-    return str(result.initial_runs)
+    return str(result.initial_runs + result.confirmation_runs)
 
 
 def benchmark_row(result: BenchmarkResult, display_name: str) -> BenchmarkRow:
     bucket = classify_result(result)
     if result.outcome == OUTCOME_FAILURE:
-        return BenchmarkRow(display_name, "failed", "", "failed", "", "failed", format_run_count(result), bucket)
+        return BenchmarkRow(
+            display_name,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            "",
+            format_run_count(result),
+            bucket,
+        )
 
     measurement = result.measurement
     assert measurement is not None
-    old_timing, old_range = timing_parts(measurement.old_timing, measurement.old_min, measurement.old_max)
-    new_timing, new_range = timing_parts(measurement.new_timing, measurement.new_min, measurement.new_max)
+    delta, delta_percentage = delta_parts(measurement)
     return BenchmarkRow(
         display_name,
-        old_timing,
-        old_range,
-        new_timing,
-        new_range,
-        delta_text(measurement),
+        format_duration_parts(measurement.old_timing),
+        format_duration_parts(measurement.old_min),
+        format_duration_parts(measurement.old_max),
+        format_duration_parts(measurement.new_timing),
+        format_duration_parts(measurement.new_min),
+        format_duration_parts(measurement.new_max),
+        delta,
+        delta_percentage,
         format_run_count(result),
         bucket,
         ratio_change(measurement.ratio),
@@ -448,50 +505,133 @@ def row_sort_key(row: BenchmarkRow):
     return bucket_order[row.bucket], bucket_value, row.display_name
 
 
-def plain_timing_cell(timing: str, timing_range: str) -> str:
-    return f"{timing} {timing_range}" if timing_range else timing
+def duration_slot(duration: FormattedDuration, number_width: int, unit_width: int) -> str:
+    return f"{duration.value.rjust(number_width)} {duration.unit.ljust(unit_width)}"
 
 
-def styled_timing_cell(timing: str, timing_range: str) -> str:
-    return f"{timing} {gray(timing_range)}" if timing_range else timing
+def plain_timing_cell(
+    timing: Optional[FormattedDuration],
+    minimum: Optional[FormattedDuration],
+    maximum: Optional[FormattedDuration],
+    layout: TableLayout,
+) -> str:
+    if timing is None:
+        return "failed"
+    assert minimum is not None and maximum is not None
+    timing_text = duration_slot(timing, layout.timing_number_width, layout.timing_unit_width)
+    minimum_text = duration_slot(minimum, layout.timing_number_width, layout.timing_unit_width)
+    maximum_text = duration_slot(maximum, layout.timing_number_width, layout.timing_unit_width)
+    return f"{timing_text} [{minimum_text}…{maximum_text}]"
 
 
-def render_table(rows: List[BenchmarkRow]):
+def styled_timing_cell(
+    timing: Optional[FormattedDuration],
+    minimum: Optional[FormattedDuration],
+    maximum: Optional[FormattedDuration],
+    layout: TableLayout,
+) -> str:
+    if timing is None:
+        return "failed"
+    assert minimum is not None and maximum is not None
+    timing_text = duration_slot(timing, layout.timing_number_width, layout.timing_unit_width)
+    minimum_text = duration_slot(minimum, layout.timing_number_width, layout.timing_unit_width)
+    maximum_text = duration_slot(maximum, layout.timing_number_width, layout.timing_unit_width)
+    return f"{timing_text} {gray(f'[{minimum_text}…{maximum_text}]')}"
+
+
+def plain_delta_cell(row: BenchmarkRow, layout: TableLayout) -> str:
+    if row.delta is None:
+        return "failed"
+    delta = duration_slot(row.delta, layout.delta_number_width, layout.delta_unit_width)
+    return f"{delta} ({row.delta_percentage.rjust(layout.delta_percentage_width)})"
+
+
+def table_layout(rows: List[BenchmarkRow]) -> TableLayout:
+    durations = []
+    deltas = []
+    percentages = []
+    for row in rows:
+        for duration in (row.old_timing, row.old_min, row.old_max, row.new_timing, row.new_min, row.new_max):
+            if duration is not None:
+                durations.append(duration)
+        if row.delta is not None:
+            deltas.append(row.delta)
+            percentages.append(row.delta_percentage)
+
+    timing_number_width = max([len(duration.value) for duration in durations] + [1])
+    timing_unit_width = max([len(duration.unit) for duration in durations] + [1])
+    delta_number_width = max([len(duration.value) for duration in deltas] + [1])
+    delta_unit_width = max([len(duration.unit) for duration in deltas] + [1])
+    delta_percentage_width = max([len(percentage) for percentage in percentages] + [1])
+
+    provisional = TableLayout(
+        benchmark_width=max([len(row.display_name) for row in rows] + [len("benchmark")]),
+        timing_number_width=timing_number_width,
+        timing_unit_width=timing_unit_width,
+        timing_width=0,
+        delta_number_width=delta_number_width,
+        delta_unit_width=delta_unit_width,
+        delta_percentage_width=delta_percentage_width,
+        delta_width=0,
+        runs_width=max([len(row.runs) for row in rows] + [len("runs")]),
+    )
+    timing_width = max(
+        [len(plain_timing_cell(row.old_timing, row.old_min, row.old_max, provisional)) for row in rows]
+        + [len("base median"), len("PR median")]
+    )
+    delta_width = max([len(plain_delta_cell(row, provisional)) for row in rows] + [len("delta median")])
+    provisional.timing_width = timing_width
+    provisional.delta_width = delta_width
+    return provisional
+
+
+def render_table(rows: List[BenchmarkRow], layout: TableLayout):
     if not rows:
         return
     headers = ["benchmark", "base median", "PR median", "delta median", "runs"]
     plain_rows = [
         [
             row.display_name,
-            plain_timing_cell(row.old_timing, row.old_range),
-            plain_timing_cell(row.new_timing, row.new_range),
-            row.delta,
+            plain_timing_cell(row.old_timing, row.old_min, row.old_max, layout),
+            plain_timing_cell(row.new_timing, row.new_min, row.new_max, layout),
+            plain_delta_cell(row, layout),
             row.runs,
         ]
         for row in rows
     ]
-    widths = [len(header) for header in headers]
-    for plain_row in plain_rows:
-        for index, value in enumerate(plain_row):
-            widths[index] = max(widths[index], len(value))
+    widths = [
+        layout.benchmark_width,
+        layout.timing_width,
+        layout.timing_width,
+        layout.delta_width,
+        layout.runs_width,
+    ]
 
-    print("  ".join(headers[index].ljust(widths[index]) for index in range(len(headers))))
+    print(
+        "  ".join(
+            headers[index].rjust(widths[index]) if index == 4 else headers[index].ljust(widths[index])
+            for index in range(len(headers))
+        )
+    )
     print("  ".join("-" * widths[index] for index in range(len(headers))))
     for row, plain_row in zip(rows, plain_rows):
         styled_row = [
             row.display_name,
-            styled_timing_cell(row.old_timing, row.old_range),
-            styled_timing_cell(row.new_timing, row.new_range),
-            color_change(row.bucket, row.delta),
+            styled_timing_cell(row.old_timing, row.old_min, row.old_max, layout),
+            styled_timing_cell(row.new_timing, row.new_min, row.new_max, layout),
+            color_change(row.bucket, plain_delta_cell(row, layout)),
             row.runs,
         ]
         cells = []
         for index, value in enumerate(styled_row):
-            cells.append(value + " " * (widths[index] - len(plain_row[index])))
+            if index == 4:
+                cells.append(" " * (widths[index] - len(plain_row[index])) + value)
+            else:
+                cells.append(value + " " * (widths[index] - len(plain_row[index])))
         print("  ".join(cells))
 
 
-def print_bucket(title: str, rows: List[BenchmarkRow], unchanged_count: int = 0):
+def print_bucket(title: str, rows: List[BenchmarkRow], layout: TableLayout, unchanged_count: int = 0):
     if title == "UNCHANGED (±2%)":
         if not unchanged_count:
             return
@@ -503,7 +643,7 @@ def print_bucket(title: str, rows: List[BenchmarkRow], unchanged_count: int = 0)
         print(gray(f"{unchanged_count} benchmarks"))
     else:
         print(title)
-        render_table(rows)
+        render_table(rows, layout)
 
 
 def geomean(values: List[float]) -> Optional[float]:
@@ -578,12 +718,14 @@ def print_benchmark_report(
     print(gray(f"suite: {suite_text}"))
     print(gray(sampling_description(samples, rounded_samples, early_stop)))
     print(gray("query regression: median change ≥ +10.0% (warning)"))
-    print(gray("CI failure: geomean change ≥ +10.0% or ≥ +50.0ms"))
-    print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], len(buckets[BUCKET_UNCHANGED]))
-    print_bucket("FASTER", buckets[BUCKET_FASTER])
-    print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER])
-    print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION])
-    print_bucket("FAILURES", buckets[BUCKET_FAILURE])
+    print(gray("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms"))
+    displayed_rows = [row for row in rows if row.bucket != BUCKET_UNCHANGED]
+    layout = table_layout(displayed_rows)
+    print_bucket("UNCHANGED (±2%)", buckets[BUCKET_UNCHANGED], layout, len(buckets[BUCKET_UNCHANGED]))
+    print_bucket("FASTER", buckets[BUCKET_FASTER], layout)
+    print_bucket("SLOWER (+2%…<+10%)", buckets[BUCKET_SLOWER], layout)
+    print_bucket("REGRESSIONS (≥+10%)", buckets[BUCKET_REGRESSION], layout)
+    print_bucket("FAILURES", buckets[BUCKET_FAILURE], layout)
 
 
 def markdown_row(result: BenchmarkResult) -> str:
@@ -715,8 +857,24 @@ def main() -> int:
     with open(args.benchmarks, "r", encoding="utf-8") as benchmark_file:
         benchmarks = [line.strip() for line in benchmark_file if line.strip()]
     suite = Path(args.benchmarks).stem
-    old_runner = BenchmarkRunner(args.old, "base", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
-    new_runner = BenchmarkRunner(args.new, "PR", args.threads, args.memory_limit, args.verbose, args.disable_timeout)
+    old_runner = BenchmarkRunner(
+        args.old,
+        "base",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
+    new_runner = BenchmarkRunner(
+        args.new,
+        "PR",
+        args.threads,
+        args.memory_limit,
+        args.verbose,
+        args.disable_timeout,
+        args.benchmark_argument,
+    )
     rounded_samples = sum(sampling_batch_sizes(args.samples)) if args.samples is not None else None
     if args.samples is None:
         results = [

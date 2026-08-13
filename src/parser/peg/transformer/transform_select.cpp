@@ -714,8 +714,11 @@ static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type
 		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
 		auto literal_text = value.ToString();
 		int64_t count = 0;
-		if (value.type().IsIntegral() && value.DefaultTryCastAs(LogicalType::BIGINT)) {
-			count = value.GetValue<int64_t>();
+		if (value.type().IsIntegral()) {
+			auto bigint_value = value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (bigint_value) {
+				count = bigint_value->GetValue<int64_t>();
+			}
 		}
 		if (count < 1) {
 			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
@@ -817,7 +820,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer
 	// resolve the join type name against the JoinType enum (case-insensitive); accept an optional `_join` suffix,
 	// so e.g. `mark` and `mark_join` are equivalent. EnumUtil::FromString throws on an unknown name.
 	auto type_name = col_label;
-	if (StringUtil::EndsWith(StringUtil::Lower(type_name), "_join")) {
+	if (StringUtil::CIEndsWith(type_name, "_join")) {
 		type_name = type_name.substr(0, type_name.size() - 5);
 	}
 	result->type = EnumUtil::FromString<JoinType>(type_name);

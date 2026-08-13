@@ -893,7 +893,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// evaluate the constant side
-	Value constant_value, casted_value;
+	Value constant_value;
 	string error_msg;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -901,9 +901,11 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	if (constant_value.IsNull()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (!constant_value.TryCastAs(context, source_type, casted_value, &error_msg)) {
+	auto cast_result = constant_value.TryCastAs(context, source_type, &error_msg);
+	if (!cast_result) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto cast_value = std::move(*cast_result);
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
 		auto filter_expr =
@@ -914,14 +916,14 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	// push relaxed filter(s) as OptionalFilter
 	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 	if (IsGreaterThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value lower = casted_value;
+		Value lower = cast_value;
 		if (!AdjustTemporalValue(lower, -margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		push_optional(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(lower));
 	}
 	if (IsLessThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value upper = casted_value;
+		Value upper = cast_value;
 		if (!AdjustTemporalValue(upper, margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
