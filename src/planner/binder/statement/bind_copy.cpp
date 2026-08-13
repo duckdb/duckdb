@@ -103,12 +103,12 @@ static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		return DBConfig::ParseMemoryLimit(arg.ToString());
 	}
-	auto casted_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
-	if (!casted_arg) {
+	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (!cast_arg) {
 		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
 		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	return casted_arg->GetValue<idx_t>();
+	return cast_arg->GetValue<idx_t>();
 }
 
 struct CopyToParsedOptions {

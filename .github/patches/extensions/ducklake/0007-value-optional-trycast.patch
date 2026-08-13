@@ -23,12 +23,12 @@ index 6399814d..020063ba 100644
  	}
 -	Value casted;
 -	if (!constant.DefaultTryCastAs(col_type, casted, nullptr)) {
-+	auto casted = constant.DefaultTryCastAs(col_type);
-+	if (!casted) {
++	auto cast = constant.DefaultTryCastAs(col_type);
++	if (!cast) {
  		return optional_idx();
  	}
 -	auto const_expr = make_uniq<BoundConstantExpression>(std::move(casted));
-+	auto const_expr = make_uniq<BoundConstantExpression>(std::move(*casted));
++	auto const_expr = make_uniq<BoundConstantExpression>(std::move(*cast));
  	auto bucket_expr = DuckLakePartitionUtils::ApplyBucketTransform(context, std::move(const_expr), bucket_count);
  	Value result;
  	if (!ExpressionExecutor::TryEvaluateScalar(context, *bucket_expr, result)) {
@@ -42,11 +42,11 @@ index a485317f..f43b1c42 100644
  		// if casts fail, just skip pruning
 -		Value casted_constant;
 -		if (!constant.DefaultTryCastAs(col_filter.column_type, casted_constant, nullptr)) {
-+		auto casted_constant_opt = constant.DefaultTryCastAs(col_filter.column_type);
-+		if (!casted_constant_opt) {
++		auto cast_constant_opt = constant.DefaultTryCastAs(col_filter.column_type);
++		if (!cast_constant_opt) {
  			continue;
  		}
-+		auto &casted_constant = *casted_constant_opt;
++		auto &cast_constant = *cast_constant_opt;
  
  		switch (comparison_type) {
  		case ExpressionType::COMPARE_GREATERTHAN:
@@ -62,10 +62,10 @@ index a485317f..f43b1c42 100644
  			}
  			if (comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 -				return !(file_max > casted_constant);
-+				return !(*file_max > casted_constant);
++				return !(*file_max > cast_constant);
  			}
 -			return !(file_max >= casted_constant);
-+			return !(*file_max >= casted_constant);
++			return !(*file_max >= cast_constant);
  		}
  		case ExpressionType::COMPARE_LESSTHAN:
  		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
@@ -81,10 +81,10 @@ index a485317f..f43b1c42 100644
  			}
  			if (comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 -				return !(file_min < casted_constant);
-+				return !(*file_min < casted_constant);
++				return !(*file_min < cast_constant);
  			}
 -			return !(file_min <= casted_constant);
-+			return !(*file_min <= casted_constant);
++			return !(*file_min <= cast_constant);
  		}
  		default:
  			// nothing to prune

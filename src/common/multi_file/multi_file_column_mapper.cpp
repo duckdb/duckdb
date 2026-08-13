@@ -887,11 +887,11 @@ static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
 	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
 		return false;
 	}
-	auto casted = constant.DefaultTryCastAs(target_type);
-	if (!casted) {
+	auto cast = constant.DefaultTryCastAs(target_type);
+	if (!cast) {
 		return false;
 	}
-	constant = std::move(*casted);
+	constant = std::move(*cast);
 	return true;
 }
 

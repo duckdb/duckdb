@@ -50,11 +50,11 @@ static duckdb_value CAPICreateValue(T input) {
 template <class T, LogicalTypeId TYPE_ID>
 static T CAPIGetValue(duckdb_value val) {
 	auto &v = UnwrapValue(val);
-	auto casted = v.DefaultTryCastAs(TYPE_ID);
-	if (!casted) {
+	auto cast = v.DefaultTryCastAs(TYPE_ID);
+	if (!cast) {
 		return duckdb::NullValue<T>();
 	}
-	return casted->template GetValue<T>();
+	return cast->template GetValue<T>();
 }
 
 duckdb_value duckdb_create_bool(bool input) {

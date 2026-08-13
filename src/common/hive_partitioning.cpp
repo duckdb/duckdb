@@ -150,12 +150,12 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 
 	// cast to the target type
 	Value value(Unescape(str_val));
-	auto casted = value.TryCastAs(context, type);
-	if (!casted) {
+	auto cast = value.TryCastAs(context, type);
+	if (!cast) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(key), type.ToString());
 	}
-	return std::move(*casted);
+	return std::move(*cast);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.

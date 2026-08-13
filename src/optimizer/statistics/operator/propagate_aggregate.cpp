@@ -153,11 +153,11 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 	if (result.type() == result_type) {
 		return true;
 	}
-	auto casted = result.DefaultTryCastAs(result_type);
-	if (!casted) {
+	auto cast = result.DefaultTryCastAs(result_type);
+	if (!cast) {
 		return false;
 	}
-	result = std::move(*casted);
+	result = std::move(*cast);
 	return true;
 }
 

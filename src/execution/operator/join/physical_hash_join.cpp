@@ -1791,13 +1791,13 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 			// Cast to storage type, skip if fails
 			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
-				auto casted_min = min_val.DefaultTryCastAs(pushdown_column.storage_type);
-				auto casted_max = max_val.DefaultTryCastAs(pushdown_column.storage_type);
-				if (!casted_min || !casted_max) {
+				auto cast_min = min_val.DefaultTryCastAs(pushdown_column.storage_type);
+				auto cast_max = max_val.DefaultTryCastAs(pushdown_column.storage_type);
+				if (!cast_min || !cast_max) {
 					continue;
 				}
-				min_val = std::move(*casted_min);
-				max_val = std::move(*casted_max);
+				min_val = std::move(*cast_min);
+				max_val = std::move(*cast_max);
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {

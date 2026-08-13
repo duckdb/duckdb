@@ -7,20 +7,20 @@ index 50de71c7..3e312551 100644
  
  			if (StringUtil::CIEquals(key, "format-version")) {
 -				if (!val.DefaultTryCastAs(LogicalType::INTEGER, true)) {
-+				auto casted_val = val.DefaultTryCastAs(LogicalType::INTEGER, nullptr, true);
-+				if (!casted_val) {
++				auto cast_val = val.DefaultTryCastAs(LogicalType::INTEGER, nullptr, true);
++				if (!cast_val) {
  					throw InvalidInputException("Can't cast 'format-version' property (%s) to INTEGER", val.ToString());
  				}
 -				new_format_version = val.GetValue<int32_t>();
-+				new_format_version = casted_val->GetValue<int32_t>();
++				new_format_version = cast_val->GetValue<int32_t>();
  			} else {
 -				if (!val.DefaultTryCastAs(LogicalType::VARCHAR, true)) {
-+				auto casted_val = val.DefaultTryCastAs(LogicalType::VARCHAR, nullptr, true);
-+				if (!casted_val) {
++				auto cast_val = val.DefaultTryCastAs(LogicalType::VARCHAR, nullptr, true);
++				if (!cast_val) {
  					throw InvalidInputException("Can't cast '%s' property (%s) to VARCHAR", key, val.ToString());
  				}
 -				new_properties[key] = val.GetValue<string>();
-+				new_properties[key] = casted_val->GetValue<string>();
++				new_properties[key] = cast_val->GetValue<string>();
  			}
  		}
  
@@ -33,13 +33,13 @@ index df426e28..6fc1cd26 100644
  		throw BinderException("NULL is not supported as a valid option for '%s'", property_name);
  	}
 -	if (!val.DefaultTryCastAs(type, true)) {
-+	auto casted_val = val.DefaultTryCastAs(type, nullptr, true);
-+	if (!casted_val) {
++	auto cast_val = val.DefaultTryCastAs(type, nullptr, true);
++	if (!cast_val) {
  		throw InvalidInputException("Can't cast '%s' property (%s) to %s", property_name, val.ToString(),
  		                            type.ToString());
  	}
 -	return val;
-+	return std::move(*casted_val);
++	return std::move(*cast_val);
  }
  
  shared_ptr<IcebergTableInformation>

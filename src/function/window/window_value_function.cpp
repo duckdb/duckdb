@@ -382,11 +382,11 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		auto casted_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
-		if (!casted_value) {
+		auto cast_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
+		if (!cast_value) {
 			return false;
 		}
-		result = std::move(*casted_value);
+		result = std::move(*cast_value);
 		return true;
 	}
 

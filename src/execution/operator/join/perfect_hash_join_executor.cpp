@@ -61,11 +61,11 @@ bool ExtractNumericValue(const Value &val, hugeint_t &result) {
 			return false;
 		}
 	} else {
-		auto casted = val.DefaultTryCastAs(LogicalType::HUGEINT);
-		if (!casted) {
+		auto cast = val.DefaultTryCastAs(LogicalType::HUGEINT);
+		if (!cast) {
 			return false;
 		}
-		result = casted->GetValue<hugeint_t>();
+		result = cast->GetValue<hugeint_t>();
 	}
 	return true;
 }

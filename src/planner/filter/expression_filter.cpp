@@ -355,11 +355,11 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 	if (!TryGetVariantComparisonStatsType(typed_type, constant.type(), comparison_type)) {
 		return nullptr;
 	}
-	auto casted_constant = constant.DefaultTryCastAs(comparison_type);
-	if (!casted_constant) {
+	auto cast_constant = constant.DefaultTryCastAs(comparison_type);
+	if (!cast_constant) {
 		return nullptr;
 	}
-	constant = std::move(*casted_constant);
+	constant = std::move(*cast_constant);
 	if (typed_type == comparison_type) {
 		return &typed_stats;
 	}
