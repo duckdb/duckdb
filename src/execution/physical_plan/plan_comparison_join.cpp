@@ -14,7 +14,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
@@ -63,9 +62,17 @@ static bool TryGetRecursiveKeyProbe(LogicalComparisonJoin &op, PhysicalOperator 
 	}
 	vector<pair<idx_t, idx_t>> key_pairs;
 	for (auto &condition : op.conditions) {
-		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+		if (!condition.IsComparison()) {
 			return false;
 		}
+		switch (condition.GetComparisonType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			break;
+		default:
+			return false;
+		}
+
 		auto &state_expr = state_on_left ? condition.GetLHS() : condition.GetRHS();
 		auto &probe_expr = state_on_left ? condition.GetRHS() : condition.GetLHS();
 		if (state_expr.GetExpressionClass() != ExpressionClass::BOUND_REF ||
