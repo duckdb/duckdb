@@ -713,9 +713,11 @@ void WindowBoundariesState::FrameBegin(idx_t row_idx, const idx_t count, WindowI
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			int64_t computed_start;
-			int64_t boundary_value =
-			    boundary_begin.CellIsNull(chunk_idx) ? 0 : boundary_begin.GetCell<int64_t>(chunk_idx);
-			if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx), boundary_value, computed_start)) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				throw InvalidInputException("Window ROWS PRECEDING expression cannot be NULL");
+			}
+			if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx),
+			                                    boundary_begin.GetCell<int64_t>(chunk_idx), computed_start)) {
 				window_start = partition_begin_data[chunk_idx];
 			} else {
 				window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
@@ -726,9 +728,11 @@ void WindowBoundariesState::FrameBegin(idx_t row_idx, const idx_t count, WindowI
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			int64_t computed_start;
-			int64_t boundary_value =
-			    boundary_begin.CellIsNull(chunk_idx) ? 0 : boundary_begin.GetCell<int64_t>(chunk_idx);
-			if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_value, computed_start)) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				throw InvalidInputException("Window ROWS FOLLOWING expression cannot be NULL");
+			}
+			if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx),
+			                               boundary_begin.GetCell<int64_t>(chunk_idx), computed_start)) {
 				window_start = partition_begin_data[chunk_idx];
 			} else {
 				window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
@@ -870,8 +874,11 @@ void WindowBoundariesState::FrameEnd(idx_t row_idx, const idx_t count, WindowInp
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			int64_t computed_start;
-			int64_t boundary_value = boundary_end.CellIsNull(chunk_idx) ? 0 : boundary_end.GetCell<int64_t>(chunk_idx);
-			if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_value, computed_start)) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				throw InvalidInputException("Window ROWS PRECEDING expression cannot be NULL");
+			}
+			if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+			                                    computed_start)) {
 				window_end = partition_end_data[chunk_idx];
 			} else {
 				window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
@@ -883,8 +890,10 @@ void WindowBoundariesState::FrameEnd(idx_t row_idx, const idx_t count, WindowInp
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
 			int64_t computed_start;
-			int64_t boundary_value = boundary_end.CellIsNull(chunk_idx) ? 0 : boundary_end.GetCell<int64_t>(chunk_idx);
-			if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_value, computed_start)) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				throw InvalidInputException("Window ROWS FOLLOWING expression cannot be NULL");
+			}
+			if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx), computed_start)) {
 				window_end = partition_end_data[chunk_idx];
 			} else {
 				window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
