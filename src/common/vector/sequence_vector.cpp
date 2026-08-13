@@ -1,3 +1,4 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
