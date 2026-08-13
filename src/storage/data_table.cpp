@@ -1466,6 +1466,24 @@ ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes
 	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, row_start, index_append_mode, checkpoint_id);
 }
 
+// The caller must hold entry.lock until it finishes using the returned index.
+static BoundIndex &GetIndexAppendRevertTarget(IndexEntry &entry, optional_idx append_checkpoint) {
+	auto &main_index = entry.index->Cast<BoundIndex>();
+	if (!append_checkpoint.IsValid() || !main_index.SupportsDeltaIndexes()) {
+		return main_index;
+	}
+
+	const bool checkpoint_merged = entry.last_written_checkpoint.IsValid() &&
+	                               entry.last_written_checkpoint.GetIndex() >= append_checkpoint.GetIndex();
+	if (checkpoint_merged) {
+		return main_index;
+	}
+	if (!entry.added_data_during_checkpoint) {
+		throw InternalException("Missing checkpoint delta index while reverting an index append");
+	}
+	return *entry.added_data_during_checkpoint;
+}
+
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start,
                                   optional_idx append_checkpoint) {
 	D_ASSERT(IsMainTable());
@@ -1485,19 +1503,8 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 	D_ASSERT(IsMainTable());
 	for (auto &entry : info->indexes.IndexEntries()) {
 		lock_guard<mutex> guard(entry.lock);
-		auto &main_index = entry.index->Cast<BoundIndex>();
-		optional_ptr<BoundIndex> remove_index = main_index;
-		// If the index has not completed the checkpoint used for the append, the entries are still in its delta.
-		// Otherwise, MergeCheckpointDeltas has moved them to the main index.
-		if (append_checkpoint.IsValid() && main_index.SupportsDeltaIndexes() &&
-		    (!entry.last_written_checkpoint.IsValid() ||
-		     entry.last_written_checkpoint.GetIndex() < append_checkpoint.GetIndex())) {
-			if (!entry.added_data_during_checkpoint) {
-				throw InternalException("Missing checkpoint delta index while reverting an index append");
-			}
-			remove_index = entry.added_data_during_checkpoint;
-		}
-		remove_index->Delete(chunk, row_identifiers);
+		auto &remove_index = GetIndexAppendRevertTarget(entry, append_checkpoint);
+		remove_index.Delete(chunk, row_identifiers);
 	}
 }
 
