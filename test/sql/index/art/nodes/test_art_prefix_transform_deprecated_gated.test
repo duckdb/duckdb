@@ -104,6 +104,10 @@ DETACH db;
 statement ok
 ATTACH '{TEST_DIR}/prefix_transform_gated.db' AS db;
 
+# Use both loaded indexes after the second conversion.
+statement ok
+DELETE FROM db.t WHERE payload = 1;
+
 query II
 EXPLAIN ANALYZE
 SELECT payload
@@ -118,7 +122,6 @@ FROM db.t
 WHERE k = repeat('a', 80) || 'gate' || repeat('b', 80) || 'tail'
 ORDER BY payload;
 ----
-1
 3
 5
 7
