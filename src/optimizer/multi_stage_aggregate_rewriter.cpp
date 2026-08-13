@@ -1,12 +1,15 @@
-#include "duckdb/optimizer/distinct_aggregate_rewriter.hpp"
+#include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
@@ -15,7 +18,10 @@
 
 namespace duckdb {
 
-DistinctAggregateRewriter::DistinctAggregateRewriter(Optimizer &optimizer_p) : optimizer(optimizer_p) {
+MultiStageAggregateRewriter::MultiStageAggregateRewriter(
+    Optimizer &optimizer_p, AggregateRewritePolicy policy_p, bool rewrite_distinct_p,
+    optional_ptr<const column_binding_map_t<unique_ptr<BaseStatistics>>> statistics_p)
+    : optimizer(optimizer_p), policy(policy_p), rewrite_distinct(rewrite_distinct_p), statistics(statistics_p) {
 }
 
 namespace {
@@ -28,6 +34,17 @@ struct DistinctAggregateSet {
 	idx_t source_index;
 	vector<idx_t> aggregate_indices;
 	vector<unique_ptr<Expression>> order_expressions;
+};
+
+struct AggregateRewriteSet {
+	AggregateRewriteSet(idx_t source_index, unique_ptr<AggregateRewritePlan> plan_p) : plan(std::move(plan_p)) {
+		aggregate_indices.push_back(source_index);
+		results.push_back(std::move(plan->result));
+	}
+
+	unique_ptr<AggregateRewritePlan> plan;
+	vector<idx_t> aggregate_indices;
+	vector<unique_ptr<Expression>> results;
 };
 
 struct BranchResult {
@@ -189,6 +206,306 @@ static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate 
 	return result;
 }
 
+static void RebindRewriteExpression(unique_ptr<Expression> &expr,
+                                    const column_binding_map_t<ColumnBinding> &replacement_map) {
+	if (!expr || replacement_map.empty()) {
+		return;
+	}
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+		    auto entry = replacement_map.find(colref.Binding());
+		    if (entry != replacement_map.end()) {
+			    colref.BindingMutable() = entry->second;
+		    }
+	    });
+}
+
+static optional_idx FindExpression(const vector<unique_ptr<Expression>> &expressions,
+                                   const vector<unique_ptr<Expression>> &additional, const Expression &needle) {
+	auto result = FindExpression(expressions, needle);
+	if (result.IsValid()) {
+		return result;
+	}
+	for (idx_t expr_idx = 0; expr_idx < additional.size(); expr_idx++) {
+		if (Expression::Equals(*additional[expr_idx], needle)) {
+			return optional_idx(expressions.size() + expr_idx);
+		}
+	}
+	return optional_idx();
+}
+
+static bool TryMergeRewrite(AggregateRewriteSet &target, idx_t source_index, AggregateRewritePlan &candidate) {
+	if (target.plan->stages.size() != candidate.stages.size() || target.plan->result_stage != candidate.result_stage) {
+		return false;
+	}
+
+	column_binding_map_t<ColumnBinding> replacements;
+	vector<vector<unique_ptr<Expression>>> additions(candidate.stages.size());
+	for (idx_t stage_idx = 0; stage_idx < candidate.stages.size(); stage_idx++) {
+		auto &target_stage = target.plan->stages[stage_idx];
+		auto &candidate_stage = candidate.stages[stage_idx];
+		if (target_stage.groups.size() != candidate_stage.groups.size() ||
+		    target_stage.sources != candidate_stage.sources) {
+			return false;
+		}
+		for (idx_t group_idx = 0; group_idx < candidate_stage.groups.size(); group_idx++) {
+			auto group = candidate_stage.groups[group_idx]->Copy();
+			RebindRewriteExpression(group, replacements);
+			if (!Expression::Equals(*target_stage.groups[group_idx], *group)) {
+				return false;
+			}
+			replacements[ColumnBinding(candidate_stage.group_index, ProjectionIndex(group_idx))] =
+			    ColumnBinding(target_stage.group_index, ProjectionIndex(group_idx));
+		}
+		for (idx_t aggregate_idx = 0; aggregate_idx < candidate_stage.aggregates.size(); aggregate_idx++) {
+			auto aggregate = candidate_stage.aggregates[aggregate_idx]->Copy();
+			RebindRewriteExpression(aggregate, replacements);
+			auto target_idx = FindExpression(target_stage.aggregates, additions[stage_idx], *aggregate);
+			if (!target_idx.IsValid()) {
+				target_idx = target_stage.aggregates.size() + additions[stage_idx].size();
+				additions[stage_idx].push_back(std::move(aggregate));
+			}
+			replacements[ColumnBinding(candidate_stage.aggregate_index, ProjectionIndex(aggregate_idx))] =
+			    ColumnBinding(target_stage.aggregate_index, ProjectionIndex(target_idx.GetIndex()));
+		}
+	}
+
+	auto result = std::move(candidate.result);
+	RebindRewriteExpression(result, replacements);
+	for (idx_t stage_idx = 0; stage_idx < additions.size(); stage_idx++) {
+		for (auto &aggregate : additions[stage_idx]) {
+			target.plan->stages[stage_idx].aggregates.push_back(std::move(aggregate));
+		}
+	}
+	target.aggregate_indices.push_back(source_index);
+	target.results.push_back(std::move(result));
+	return true;
+}
+
+static BranchResult CreateRewriteBranch(Optimizer &optimizer, LogicalAggregate &aggr, AggregateRewriteSet &set,
+                                        unique_ptr<LogicalOperator> input,
+                                        const column_binding_map_t<ColumnBinding> &input_replacements) {
+	if (set.plan->stages.empty() || set.plan->result_stage >= set.plan->stages.size()) {
+		throw InternalException("Invalid aggregate rewrite plan");
+	}
+
+	for (auto &stage : set.plan->stages) {
+		for (auto &group : stage.groups) {
+			RebindRewriteExpression(group, input_replacements);
+		}
+		for (auto &aggregate : stage.aggregates) {
+			RebindRewriteExpression(aggregate, input_replacements);
+		}
+	}
+	for (auto &result : set.results) {
+		if (!result) {
+			throw InternalException("Aggregate rewrite plan has no result expression");
+		}
+		RebindRewriteExpression(result, input_replacements);
+	}
+
+	idx_t input_consumers = 0;
+	vector<idx_t> stage_consumers(set.plan->stages.size(), 0);
+	for (idx_t stage_idx = 0; stage_idx < set.plan->stages.size(); stage_idx++) {
+		auto &stage = set.plan->stages[stage_idx];
+		if (stage.sources.empty()) {
+			throw InternalException("Aggregate rewrite stage has no source");
+		}
+		if (stage.groups.size() < aggr.groups.size()) {
+			throw InternalException("Aggregate rewrite stage does not preserve the original groups");
+		}
+		for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+			if (stage.groups[group_idx]->GetReturnType() != aggr.groups[group_idx]->GetReturnType()) {
+				throw InternalException("Aggregate rewrite stage changed an original group type");
+			}
+		}
+		for (auto &source : stage.sources) {
+			if (source.type == AggregateRewriteSourceType::INPUT) {
+				input_consumers++;
+				if (stage.sources.size() != 1) {
+					throw InternalException("Aggregate rewrite input cannot be joined directly to another source");
+				}
+			} else if (source.stage_index >= stage_idx) {
+				throw InternalException("Aggregate rewrite plan is not topologically ordered");
+			} else {
+				stage_consumers[source.stage_index]++;
+			}
+		}
+	}
+	stage_consumers[set.plan->result_stage]++;
+	for (auto count : stage_consumers) {
+		if (count == 0) {
+			throw InternalException("Aggregate rewrite plan contains an unused stage");
+		}
+	}
+
+	input->ResolveOperatorTypes();
+	auto input_types = input->types;
+	auto input_bindings = input->GetColumnBindings();
+	auto input_names = AggregateRewriteHelper::GenerateColumnNames("__aggregate_rewrite_input", input_types.size());
+	optional_idx input_cte_index;
+	if (input_consumers > 1) {
+		input_cte_index = optimizer.binder.GenerateTableIndex().index;
+	}
+
+	struct StageOutput {
+		unique_ptr<LogicalOperator> plan;
+		vector<LogicalType> types;
+		vector<Identifier> names;
+		vector<ColumnBinding> bindings;
+		optional_idx cte_index;
+	};
+	vector<StageOutput> outputs(set.plan->stages.size());
+
+	for (idx_t stage_idx = 0; stage_idx < set.plan->stages.size(); stage_idx++) {
+		auto &stage = set.plan->stages[stage_idx];
+		vector<unique_ptr<LogicalOperator>> sources;
+		vector<vector<ColumnBinding>> source_groups;
+		for (auto &source : stage.sources) {
+			column_binding_map_t<ColumnBinding> replacements;
+			if (source.type == AggregateRewriteSourceType::INPUT) {
+				if (input_cte_index.IsValid()) {
+					sources.push_back(
+					    AggregateRewriteHelper::CreateCTERef(optimizer, TableIndex(input_cte_index.GetIndex()),
+					                                         input_types, input_names, input_bindings, replacements));
+				} else {
+					sources.push_back(std::move(input));
+				}
+			} else {
+				auto &source_stage = set.plan->stages[source.stage_index];
+				auto &source_output = outputs[source.stage_index];
+				if (source_output.cte_index.IsValid()) {
+					sources.push_back(AggregateRewriteHelper::CreateCTERef(
+					    optimizer, TableIndex(source_output.cte_index.GetIndex()), source_output.types,
+					    source_output.names, source_output.bindings, replacements));
+					auto bindings = sources.back()->GetColumnBindings();
+					source_groups.emplace_back(
+					    bindings.begin(),
+					    bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(aggr.groups.size()));
+				} else {
+					sources.push_back(std::move(source_output.plan));
+					vector<ColumnBinding> groups;
+					groups.reserve(aggr.groups.size());
+					for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+						groups.emplace_back(source_stage.group_index, ProjectionIndex(group_idx));
+					}
+					source_groups.push_back(std::move(groups));
+				}
+			}
+			for (auto &group : stage.groups) {
+				RebindRewriteExpression(group, replacements);
+			}
+			for (auto &aggregate : stage.aggregates) {
+				RebindRewriteExpression(aggregate, replacements);
+			}
+		}
+
+		unique_ptr<LogicalOperator> current = std::move(sources[0]);
+		if (sources.size() > 1) {
+			D_ASSERT(source_groups.size() == sources.size());
+			if (aggr.groups.empty()) {
+				for (idx_t source_idx = 1; source_idx < sources.size(); source_idx++) {
+					current = LogicalCrossProduct::Create(std::move(current), std::move(sources[source_idx]));
+				}
+			} else {
+				for (idx_t source_idx = 1; source_idx < sources.size(); source_idx++) {
+					auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+					for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+						auto left = make_uniq<BoundColumnRefExpression>(aggr.groups[group_idx]->GetReturnType(),
+						                                                source_groups[0][group_idx]);
+						auto right = make_uniq<BoundColumnRefExpression>(aggr.groups[group_idx]->GetReturnType(),
+						                                                 source_groups[source_idx][group_idx]);
+						join->conditions.emplace_back(std::move(left), std::move(right),
+						                              ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+					}
+					join->children.push_back(std::move(current));
+					join->children.push_back(std::move(sources[source_idx]));
+					current = std::move(join);
+				}
+			}
+		}
+
+		auto &output = outputs[stage_idx];
+		output.types.reserve(stage.groups.size() + stage.aggregates.size());
+		output.bindings.reserve(stage.groups.size() + stage.aggregates.size());
+		for (idx_t group_idx = 0; group_idx < stage.groups.size(); group_idx++) {
+			output.types.push_back(stage.groups[group_idx]->GetReturnType());
+			output.bindings.emplace_back(stage.group_index, ProjectionIndex(group_idx));
+		}
+		for (idx_t aggregate_idx = 0; aggregate_idx < stage.aggregates.size(); aggregate_idx++) {
+			output.types.push_back(stage.aggregates[aggregate_idx]->GetReturnType());
+			output.bindings.emplace_back(stage.aggregate_index, ProjectionIndex(aggregate_idx));
+		}
+		output.names = AggregateRewriteHelper::GenerateColumnNames("__aggregate_rewrite_stage", output.types.size());
+		if (stage_consumers[stage_idx] > 1) {
+			output.cte_index = optimizer.binder.GenerateTableIndex().index;
+		}
+
+		auto aggregate =
+		    make_uniq<LogicalAggregate>(stage.group_index, stage.aggregate_index, std::move(stage.aggregates));
+		aggregate->groups = std::move(stage.groups);
+		aggregate->children.push_back(std::move(current));
+		if (stage_idx == set.plan->result_stage && aggr.has_estimated_cardinality) {
+			aggregate->SetEstimatedCardinality(aggr.estimated_cardinality);
+		}
+		output.plan = std::move(aggregate);
+	}
+
+	auto &final_output = outputs[set.plan->result_stage];
+	column_binding_map_t<ColumnBinding> final_replacements;
+	unique_ptr<LogicalOperator> current;
+	vector<ColumnBinding> final_bindings;
+	if (final_output.cte_index.IsValid()) {
+		current = AggregateRewriteHelper::CreateCTERef(optimizer, TableIndex(final_output.cte_index.GetIndex()),
+		                                               final_output.types, final_output.names, final_output.bindings,
+		                                               final_replacements);
+		final_bindings = current->GetColumnBindings();
+		for (auto &result : set.results) {
+			RebindRewriteExpression(result, final_replacements);
+		}
+	} else {
+		current = std::move(final_output.plan);
+		final_bindings = final_output.bindings;
+	}
+
+	vector<unique_ptr<Expression>> projection_expressions;
+	projection_expressions.reserve(aggr.groups.size() + set.results.size());
+	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+		projection_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(aggr.groups[group_idx]->GetReturnType(), final_bindings[group_idx]));
+	}
+	for (idx_t result_idx = 0; result_idx < set.results.size(); result_idx++) {
+		D_ASSERT(set.results[result_idx]->GetReturnType() ==
+		         aggr.expressions[set.aggregate_indices[result_idx]]->GetReturnType());
+		projection_expressions.push_back(std::move(set.results[result_idx]));
+	}
+
+	BranchResult result;
+	result.aggregate_indices = set.aggregate_indices;
+	result.table_index = optimizer.binder.GenerateTableIndex();
+	auto projection = make_uniq<LogicalProjection>(result.table_index, std::move(projection_expressions));
+	projection->children.push_back(std::move(current));
+	result.plan = std::move(projection);
+
+	for (idx_t stage_idx = outputs.size(); stage_idx > 0; stage_idx--) {
+		auto &output = outputs[stage_idx - 1];
+		if (!output.cte_index.IsValid()) {
+			continue;
+		}
+		auto cte_name = Identifier(StringUtil::Format("__aggregate_rewrite_stage_%llu", output.cte_index.GetIndex()));
+		result.plan = make_uniq<LogicalMaterializedCTE>(
+		    std::move(cte_name), TableIndex(output.cte_index.GetIndex()), output.types.size(), std::move(output.plan),
+		    std::move(result.plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	}
+	if (input_cte_index.IsValid()) {
+		auto cte_name = Identifier(StringUtil::Format("__aggregate_rewrite_input_%llu", input_cte_index.GetIndex()));
+		result.plan = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), TableIndex(input_cte_index.GetIndex()),
+		                                                input_types.size(), std::move(input), std::move(result.plan),
+		                                                CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	}
+	return result;
+}
+
 static BranchResult CreateRegularBranch(Optimizer &optimizer, LogicalAggregate &aggr,
                                         const vector<idx_t> &aggregate_indices, unique_ptr<LogicalOperator> input,
                                         const column_binding_map_t<ColumnBinding> &input_replacements) {
@@ -257,7 +574,49 @@ static unique_ptr<LogicalOperator> JoinBranches(const vector<BranchResult> &bran
 
 } // namespace
 
-bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
+bool MultiStageAggregateRewriter::ShouldRewrite(const BoundAggregateExpression &aggregate,
+                                                const LogicalAggregate &op) const {
+	if (!aggregate.Function().HasRewriteCallback() ||
+	    aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT ||
+	    aggregate.Function().GetRewritePolicy() != policy) {
+		return false;
+	}
+	if (policy == AggregateRewritePolicy::MANDATORY) {
+		return true;
+	}
+	const auto optimizer_type = aggregate.Function().GetRewriteOptimizerType();
+	if (optimizer_type == OptimizerType::INVALID || optimizer.OptimizerDisabled(optimizer_type)) {
+		return false;
+	}
+	if (policy != AggregateRewritePolicy::COST_BASED) {
+		return true;
+	}
+	if (!statistics || !aggregate.Function().GetRewriteCostCallback()) {
+		return false;
+	}
+
+	optional_idx input_cardinality;
+	if (!op.children.empty() && op.children[0]->has_estimated_cardinality) {
+		input_cardinality = op.children[0]->estimated_cardinality;
+	}
+	vector<optional_ptr<const BaseStatistics>> argument_statistics;
+	argument_statistics.reserve(aggregate.GetChildren().size());
+	for (auto &child : aggregate.GetChildren()) {
+		optional_ptr<const BaseStatistics> child_statistics;
+		if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto entry = statistics->find(child->Cast<BoundColumnRefExpression>().Binding());
+			if (entry != statistics->end()) {
+				child_statistics = entry->second.get();
+			}
+		}
+		argument_statistics.push_back(child_statistics);
+	}
+	AggregateRewriteInput rewrite_input(optimizer, op, aggregate);
+	AggregateRewriteCostInput cost_input(rewrite_input, input_cardinality, std::move(argument_statistics));
+	return aggregate.Function().GetRewriteCostCallback()(cost_input);
+}
+
+bool MultiStageAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 	if (op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->children.size() != 1) {
 		return false;
 	}
@@ -276,28 +635,54 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		}
 	}
 
-	bool has_distinct = false;
-	for (auto &expr : aggr.expressions) {
+	bool has_rewrite = false;
+	vector<bool> rewrite_candidates(aggr.expressions.size(), false);
+	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
+		auto &expr = aggr.expressions[aggregate_idx];
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			return false;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct()) {
-			has_distinct = true;
+		if (rewrite_distinct && aggregate.IsDistinct()) {
+			has_rewrite = true;
+			continue;
+		}
+		if (ShouldRewrite(aggregate, aggr)) {
+			rewrite_candidates[aggregate_idx] = true;
+			has_rewrite = true;
 		}
 	}
-	if (!has_distinct) {
+	if (!has_rewrite) {
 		return false;
 	}
 
 	AggregateRewriteHelper::StageVolatileAggregateInputs(optimizer, aggr, op->children[0]);
 
 	vector<DistinctAggregateSet> distinct_sets;
+	vector<AggregateRewriteSet> rewrite_sets;
 	vector<idx_t> regular_aggregates;
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		if (!aggregate.IsDistinct()) {
+		if (rewrite_candidates[aggregate_idx]) {
+			AggregateRewriteInput rewrite_input(optimizer, aggr, aggregate);
+			auto rewrite = aggregate.Function().GetRewriteCallback()(rewrite_input);
+			if (!rewrite) {
+				throw InternalException("Selected aggregate rewrite did not return a plan");
+			}
+			bool merged = false;
+			for (auto &set : rewrite_sets) {
+				if (TryMergeRewrite(set, aggregate_idx, *rewrite)) {
+					merged = true;
+					break;
+				}
+			}
+			if (!merged) {
+				rewrite_sets.emplace_back(aggregate_idx, std::move(rewrite));
+			}
+			continue;
+		}
+		if (!rewrite_distinct || !aggregate.IsDistinct()) {
 			regular_aggregates.push_back(aggregate_idx);
 			continue;
 		}
@@ -317,11 +702,11 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 			AddOrderExpressions(distinct_sets.back(), aggregate);
 		}
 	}
-	if (distinct_sets.empty()) {
+	if (distinct_sets.empty() && rewrite_sets.empty()) {
 		return false;
 	}
 
-	const bool needs_cte = distinct_sets.size() + (regular_aggregates.empty() ? 0 : 1) > 1;
+	const bool needs_cte = distinct_sets.size() + rewrite_sets.size() + (regular_aggregates.empty() ? 0 : 1) > 1;
 	vector<LogicalType> input_types;
 	vector<Identifier> input_names;
 	vector<ColumnBinding> input_bindings;
@@ -329,7 +714,7 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 	if (needs_cte) {
 		op->children[0]->ResolveOperatorTypes();
 		input_types = op->children[0]->types;
-		input_names = AggregateRewriteHelper::GenerateColumnNames("__distinct_input", input_types.size());
+		input_names = AggregateRewriteHelper::GenerateColumnNames("__aggregate_input", input_types.size());
 		input_bindings = op->children[0]->GetColumnBindings();
 		cte_index = optimizer.binder.GenerateTableIndex();
 	}
@@ -348,6 +733,13 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 		column_binding_map_t<ColumnBinding> input_replacements;
 		auto branch =
 		    CreateDistinctBranch(optimizer, aggr, set, CreateBranchInput(input_replacements), input_replacements);
+		branch_plans.push_back(std::move(branch.plan));
+		branches.push_back(std::move(branch));
+	}
+	for (auto &set : rewrite_sets) {
+		column_binding_map_t<ColumnBinding> input_replacements;
+		auto branch =
+		    CreateRewriteBranch(optimizer, aggr, set, CreateBranchInput(input_replacements), input_replacements);
 		branch_plans.push_back(std::move(branch.plan));
 		branches.push_back(std::move(branch));
 	}
@@ -400,7 +792,7 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 
 	if (needs_cte) {
 		// DEFAULT keeps the shared input eligible for direct streaming fan-out during CTE planning.
-		auto cte_name = Identifier(StringUtil::Format("__distinct_aggregate_cte_%llu", cte_index.index));
+		auto cte_name = Identifier(StringUtil::Format("__aggregate_cte_%llu", cte_index.index));
 		result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
 		                                           std::move(op->children[0]), std::move(result),
 		                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
@@ -411,16 +803,21 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 
 	result->ResolveOperatorTypes();
 	op = std::move(result);
+	changed = true;
 	return true;
 }
 
-void DistinctAggregateRewriter::VisitOperator(unique_ptr<LogicalOperator> &op) {
+void MultiStageAggregateRewriter::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 	TryRewrite(op);
 }
 
-unique_ptr<Expression> DistinctAggregateRewriter::VisitReplace(BoundColumnRefExpression &expr,
-                                                               unique_ptr<Expression> *expr_ptr) {
+bool MultiStageAggregateRewriter::WasChanged() const {
+	return changed;
+}
+
+unique_ptr<Expression> MultiStageAggregateRewriter::VisitReplace(BoundColumnRefExpression &expr,
+                                                                 unique_ptr<Expression> *expr_ptr) {
 	auto entry = replacement_map.find(expr.Binding());
 	if (entry != replacement_map.end()) {
 		expr.BindingMutable() = entry->second;

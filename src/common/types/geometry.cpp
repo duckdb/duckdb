@@ -2429,9 +2429,7 @@ void Geometry::FromVectorizedFormat(const Vector &source, Vector &target, idx_t 
 }
 
 LogicalType Geometry::GetSpatialGeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
+	return LogicalType(LogicalTypeId::BLOB).WithAlias("GEOMETRY");
 }
 
 bool Geometry::IsSpatialGeometryType(const LogicalType &type) {

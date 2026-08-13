@@ -194,12 +194,11 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 
 		// Can we cast the constant at all?
 		string error_message;
-		Value cast_constant;
-		auto new_constant =
-		    constant_value.TryCastAs(rewriter.context, target_type, cast_constant, &error_message, true);
+		auto new_constant = constant_value.TryCastAs(rewriter.context, target_type, &error_message, true);
 		if (!new_constant) {
 			return nullptr;
 		}
+		auto &cast_constant = *new_constant;
 
 		// Is the constant cast invertible?
 		unique_ptr<Expression> replacement;
