@@ -134,6 +134,7 @@
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/aggregate_state_serialization.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -5616,6 +5617,24 @@ const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value) {
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value) {
 	return static_cast<StarExpressionType>(StringUtil::StringToEnum(GetStarExpressionTypeValues(), 4, "StarExpressionType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStateMemoryOwnershipValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StateMemoryOwnership::BORROWED), "BORROWED" },
+		{ static_cast<uint32_t>(StateMemoryOwnership::OWNED), "OWNED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StateMemoryOwnership>(StateMemoryOwnership value) {
+	return StringUtil::EnumToString(GetStateMemoryOwnershipValues(), 2, "StateMemoryOwnership", static_cast<uint32_t>(value));
+}
+
+template<>
+StateMemoryOwnership EnumUtil::FromString<StateMemoryOwnership>(const char *value) {
+	return static_cast<StateMemoryOwnership>(StringUtil::StringToEnum(GetStateMemoryOwnershipValues(), 2, "StateMemoryOwnership", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
