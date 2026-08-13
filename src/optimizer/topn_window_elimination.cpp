@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 
@@ -569,9 +570,17 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		if (bigint_value < 1) {
 			return false;
 		}
+		if (bigint_value >= MIN_MAX_N_MAX_VALUE) {
+			// The rewrite passes the limit as the n value to the min/max/arg_min/arg_max "n" aggregates, which
+			// require n < MIN_MAX_N_MAX_VALUE. Fall back to the regular window plan for larger limits.
+			return false;
+		}
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
 		if (bigint_value < 2) {
+			return false;
+		}
+		if (bigint_value - 1 >= MIN_MAX_N_MAX_VALUE) {
 			return false;
 		}
 		break;
