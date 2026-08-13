@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/peg/matcher_token.hpp"
@@ -26,15 +27,13 @@ public:
 	TokenIterator &operator=(const TokenIterator &) = delete;
 	TokenIterator &operator=(TokenIterator &&) = delete;
 
-	DUCKDB_API bool HasCurrent() const;
 	DUCKDB_API bool AtEnd() const;
 	DUCKDB_API bool HasMoreStatements() const;
 	DUCKDB_API idx_t Position() const;
 	DUCKDB_API idx_t Size() const;
-	DUCKDB_API idx_t CurrentOffset() const;
 	DUCKDB_API idx_t EndOffset() const;
 
-	DUCKDB_API const MatcherToken &Current() const;
+	DUCKDB_API optional_ptr<const MatcherToken> Current() const;
 	DUCKDB_API const MatcherToken &Previous() const;
 	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
 

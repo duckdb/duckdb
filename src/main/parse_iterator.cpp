@@ -114,8 +114,10 @@ bool ParseIterator::Peek() {
 			// (logging, error reporting, EXPLAIN) rely on that shape.
 			idx_t stmt_loc = stmt->stmt_location.offset;
 			idx_t end_loc = sql.size();
-			if (!token_iterator->AtEnd()) {
-				end_loc = token_iterator->CurrentOffset();
+			if (auto current = token_iterator->Current()) {
+				if (current->type != TokenType::END_OF_INPUT) {
+					end_loc = current->offset;
+				}
 			}
 			stmt->query = sql.substr(stmt_loc, end_loc - stmt_loc);
 			stmt->stmt_location = QueryLocation(0, stmt->query.size());

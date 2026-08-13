@@ -90,7 +90,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
                                                                            Matcher &root_matcher) {
-	if (!token_iterator.HasCurrent()) {
+	if (!token_iterator.Current()) {
 		return nullptr;
 	}
 	vector<MatcherSuggestion> suggestions;

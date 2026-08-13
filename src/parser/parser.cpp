@@ -271,7 +271,7 @@ void Parser::ParseQuery(const string &query_p) {
 	ParserTokenizer tokenizer(query, *owned_tokens);
 	tokenizer.TokenizeInput();
 	TokenIterator token_iterator(std::move(owned_tokens));
-	while (token_iterator.HasCurrent()) {
+	while (token_iterator.Current()) {
 		try {
 			auto stmt = ParseTopLevelStatement(token_iterator);
 			if (stmt) {
@@ -308,7 +308,8 @@ unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(TokenIterator &token
 	if (!options.extensions || !options.extensions->HasParserExtensions()) {
 		return nullptr;
 	}
-	idx_t failure_byte = token_iterator.HasCurrent() ? token_iterator.CurrentOffset() : query.size();
+	auto current = token_iterator.Current();
+	idx_t failure_byte = current ? current->offset : query.size();
 	// SimpleToken view of the tail: text + classified type, in source order, so extensions can
 	// dispatch on the token stream without re-tokenizing. The extension reports how many of these
 	// tokens it consumed.
@@ -347,7 +348,7 @@ unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(TokenIterator &token
 }
 
 unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_iterator) {
-	if (!token_iterator.HasCurrent()) {
+	if (!token_iterator.Current()) {
 		return nullptr;
 	}
 	auto &cache = GetCache();
