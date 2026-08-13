@@ -154,7 +154,6 @@ void Iterator::FindMinimum(Node current) {
 				ConstNodeHandle handle(art, current);
 				auto data = handle.GetPtr();
 				auto count = data[art.PrefixCount()];
-				auto prefix_child = ConstPrefixHandle::ChildRef(art, handle);
 
 				for (idx_t i = 0; i < count; i++) {
 					current_key.Push(data[i]);
@@ -164,7 +163,8 @@ void Iterator::FindMinimum(Node current) {
 						D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 					}
 				}
-				child = prefix_child;
+				// Copy the child locator before releasing the prefix handle.
+				child = ConstPrefixHandle::ChildRef(art, handle);
 			}
 			nodes.emplace(current, 0);
 			current = child;
@@ -243,13 +243,13 @@ bool Iterator::LowerBound(Node current, const ARTKey &key, const bool equal) {
 			ConstNodeHandle handle(art, current);
 			auto data = handle.GetPtr();
 			prefix_count = data[art.PrefixCount()];
-			auto child = ConstPrefixHandle::ChildRef(art, handle);
+			// Copy the child locator before releasing the prefix handle.
+			prefix_child = ConstPrefixHandle::ChildRef(art, handle);
 
 			for (idx_t i = 0; i < prefix_count; i++) {
 				current_key.Push(data[i]);
 			}
 			nodes.emplace(current, 0);
-			prefix_child = child;
 		}
 
 		// Compare the copied prefix bytes with the key bytes.

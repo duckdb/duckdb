@@ -35,7 +35,7 @@ private:
 		while (node.HasMetadata() && node.GetType() == PREFIX) {
 			ConstNodeHandle handle(art, node);
 			auto data = handle.GetPtr();
-			auto child = ChildRef(art, handle);
+			Node child = ChildRef(art, handle);
 
 			lambda(handle, data, child);
 
