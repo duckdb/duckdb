@@ -1,0 +1,13 @@
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -80,7 +80,7 @@ public:
+ 	void VerifyAllocations(IndexLock &state) override;
+ 	void VerifyBuffers(IndexLock &l) override;
+
+-	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+-	                                     DataChunk &input) override {
++	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
++	                                     DataChunk &input) const override {
+ 		return "Constraint violation in RTree index";
+ 	}

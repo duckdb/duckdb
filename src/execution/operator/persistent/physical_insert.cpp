@@ -351,7 +351,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   reference_set_t<Index> &matched_indexes) {
+                                                   const vector<shared_ptr<IndexEntry>> &matched_indexes) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -359,8 +359,9 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
-		for (auto index : matched_indexes) {
-			auto &index_column_ids = index.get().GetColumnIdSet();
+		for (const auto &entry : matched_indexes) {
+			auto index = entry->GetHandle();
+			auto index_column_ids = index->GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -521,30 +522,38 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	}
 
 	ConflictInfo conflict_info(conflict_target);
-	reference_set_t<Index> matching_indexes;
+	vector<shared_ptr<IndexEntry>> matching_indexes;
 
 	if (conflict_info.column_ids.empty()) {
-		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
+		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (auto &index : global_indexes.Indexes()) {
-			if (!index.IsUnique()) {
+		for (const auto &entry : global_indexes.GetEntries()) {
+			auto index = entry->GetHandle();
+
+			if (!index->IsUnique()) {
 				continue;
 			}
-			D_ASSERT(index.IsBound());
-			if (conflict_info.ConflictTargetMatches(index)) {
-				matching_indexes.insert(index);
+			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
+				continue;
 			}
+			D_ASSERT(index->IsBound());
+
+			matching_indexes.push_back(entry);
 		}
-		auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (auto &index : local_indexes.Indexes()) {
-			if (!index.IsUnique()) {
+
+		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
+		for (const auto &entry : local_indexes.GetEntries()) {
+			auto index = entry->GetHandle();
+
+			if (!index->IsUnique()) {
 				continue;
 			}
-			D_ASSERT(index.IsBound());
-			if (conflict_info.ConflictTargetMatches(index)) {
-				auto &bound_index = index.Cast<BoundIndex>();
-				matching_indexes.insert(bound_index);
+			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
+				continue;
 			}
+			D_ASSERT(index->IsBound());
+
+			matching_indexes.push_back(entry);
 		}
 	}
 

@@ -23,25 +23,22 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (auto &index : data_table_info->GetIndexes().Indexes()) {
-		auto constraint = index.GetConstraintType();
+	for (auto index : data_table_info->GetIndexes().IndexHandles()) {
+		const auto constraint = index->GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
 			continue;
 		}
-		if (!index.IsBound()) {
+		if (!index->IsBound()) {
 			continue;
 		}
-		auto &bound_index = index.Cast<BoundIndex>();
-		if (!bound_index.SupportsDeltaIndexes()) {
+		const auto bound_index = std::move(index).Into<BoundIndex>();
+		if (!bound_index->SupportsDeltaIndexes()) {
 			continue;
 		}
 
-		// Create a delete index and a local index.
-		auto delete_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
-		delete_indexes.AddIndex(std::move(delete_index));
-
-		auto append_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
-		append_indexes.AddIndex(std::move(append_index));
+		// Create the transaction-local delete and append indexes.
+		delete_indexes.AddLocalIndex(bound_index);
+		append_indexes.AddLocalIndex(bound_index);
 	}
 }
 
@@ -101,7 +98,7 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 	collection.InitializeScan(context, state, state.GetColumnIds(), table_filters.get());
 }
 
-idx_t LocalTableStorage::EstimatedSize() {
+idx_t LocalTableStorage::EstimatedSize() const {
 	// count the appended rows
 	auto &collection = *row_groups->collection;
 	idx_t data_size = 0;
@@ -128,11 +125,12 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (auto &index : append_indexes.Indexes()) {
-		if (!index.IsBound()) {
+	for (auto index : append_indexes.IndexHandles()) {
+		if (!index->IsBound()) {
 			continue;
 		}
-		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
+		const auto bound_index = std::move(index).Into<BoundIndex>();
+		index_sizes += bound_index->GetInMemorySize();
 	}
 
 	// return the size of the appended rows and the index size
@@ -448,13 +446,14 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
 	committed_row_ids.Flatten();
 
-	for (auto &index : delete_indexes.Indexes()) {
-		D_ASSERT(index.IsBound());
-		if (!index.IsUnique()) {
+	for (auto index : delete_indexes.MutableIndexHandles()) {
+		D_ASSERT(index->IsBound());
+		if (!index->IsUnique()) {
 			continue;
 		}
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = index.Cast<BoundIndex>().Append(committed_chunk, committed_row_ids, index_append_info);
+		auto result = bound_index->Append(committed_chunk, committed_row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}

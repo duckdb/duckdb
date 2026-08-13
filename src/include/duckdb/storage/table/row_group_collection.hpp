@@ -25,6 +25,7 @@ class CreateIndexScanState;
 class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
+class IndexEntry;
 class TableIndexList;
 class TableStatistics;
 struct TableAppendState;
@@ -147,7 +148,7 @@ public:
 	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy
 	GetVacuumIndexStrategy(AttachedDatabase &attached,
-	                       optional_ptr<vector<reference<BoundIndex>>> remap_indexes = nullptr) const;
+	                       optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes = nullptr) const;
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);
