@@ -893,7 +893,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// evaluate the constant side
-	Value constant_value, casted_value;
+	Value constant_value;
 	string error_msg;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -901,9 +901,11 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	if (constant_value.IsNull()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (!constant_value.TryCastAs(context, source_type, casted_value, &error_msg)) {
+	auto cast_result = constant_value.TryCastAs(context, source_type, &error_msg);
+	if (!cast_result) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto casted_value = std::move(*cast_result);
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
 		auto filter_expr =

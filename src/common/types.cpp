@@ -1813,8 +1813,7 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
-	Value copy = literal_info.constant_value;
-	return copy.DefaultTryCastAs(target);
+	return literal_info.constant_value.DefaultTryCastAs(target).has_value();
 }
 
 LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT

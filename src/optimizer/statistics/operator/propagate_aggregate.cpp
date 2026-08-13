@@ -150,9 +150,14 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	}
 	result = comparator.GetVal(*column_stats);
-	if (result.type() != result_type && !result.DefaultTryCastAs(result_type)) {
+	if (result.type() == result_type) {
+		return true;
+	}
+	auto casted = result.DefaultTryCastAs(result_type);
+	if (!casted) {
 		return false;
 	}
+	result = std::move(*casted);
 	return true;
 }
 

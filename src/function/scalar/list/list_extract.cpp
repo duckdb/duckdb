@@ -137,9 +137,8 @@ static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) 
 static unique_ptr<FunctionData> StringExtractBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto index = input.TryGetConstant(1);
-	Value index_value;
-	if (!index || !index->DefaultTryCastAs(LogicalType::BIGINT, index_value, nullptr) || index_value.IsNull() ||
-	    !SubstringInSupportedRange(BigIntValue::Get(index_value), 1)) {
+	auto index_value = index ? index->DefaultTryCastAs(LogicalType::BIGINT) : nullopt;
+	if (!index_value || index_value->IsNull() || !SubstringInSupportedRange(BigIntValue::Get(*index_value), 1)) {
 		bound_function.SetFallible();
 	}
 	return nullptr;

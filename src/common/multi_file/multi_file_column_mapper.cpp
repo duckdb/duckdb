@@ -887,7 +887,12 @@ static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
 	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
 		return false;
 	}
-	return constant.DefaultTryCastAs(target_type);
+	auto casted = constant.DefaultTryCastAs(target_type);
+	if (!casted) {
+		return false;
+	}
+	constant = std::move(*casted);
+	return true;
 }
 
 struct RewrittenMappedExpression {

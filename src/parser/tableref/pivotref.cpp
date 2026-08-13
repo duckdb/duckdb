@@ -219,9 +219,11 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+		auto casted_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
+		if (!casted_value) {
 			return false;
 		}
+		value = std::move(*casted_value);
 		return true;
 	}
 	default:
