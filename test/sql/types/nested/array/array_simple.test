@@ -69,3 +69,17 @@ query II
 SELECT MAX(i), arg_max(a, i) FROM t1;
 ----
 2	[3, 4]
+
+# issue #24443
+statement ok
+CREATE TABLE t4(a BIGINT);
+
+statement ok
+INSERT INTO t4 VALUES (1), (2), (3);
+
+query II
+SELECT array_value(a, 42), typeof(array_value(a, 42)) FROM t4;
+----
+[1, 42]	BIGINT[2]
+[2, 42]	BIGINT[2]
+[3, 42]	BIGINT[2]

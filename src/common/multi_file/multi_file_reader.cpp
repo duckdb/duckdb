@@ -282,8 +282,14 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 			auto lookup = std::find_if(names.begin(), names.end(),
 			                           [&](const Identifier &col_name) { return col_name == part.first; });
 			if (lookup != names.end()) {
-				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
+				if (bind_data.filename_idx == idx) {
+					throw BinderException(
+					    "Option filename adds column \"%s\", but a hive partition column with this "
+					    "name also exists. Try setting a different name: filename='<filename column name>'",
+					    options.filename_column);
+				}
+				// hive partitioning column also exists in file - override
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -381,7 +387,8 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.Add(global_idx, Value(type));
+				auto &constant_type = col_id.HasType() ? col_id.GetScanType() : type;
+				reader_data.constant_map.Add(global_idx, Value(constant_type));
 				continue;
 			}
 		}

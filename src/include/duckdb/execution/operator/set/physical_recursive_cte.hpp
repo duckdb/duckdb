@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -17,6 +18,7 @@
 namespace duckdb {
 
 class RecursiveCTEState;
+class RecursiveCTEMetrics;
 struct RecursiveExecutorPool;
 struct RecursiveCTEPipelineSchedulePlan;
 class PhysicalColumnDataScan;
@@ -38,11 +40,24 @@ private:
 	vector<idx_t> indices;
 };
 
+struct RecursiveCTEReferenceInfo {
+	idx_t frontier_scans = 0;
+	idx_t recurring_scans = 0;
+	idx_t exact_key_probes = 0;
+	idx_t partial_key_probes = 0;
+	idx_t direct_probe_work_units = 0;
+
+	bool HasReferences() const {
+		return frontier_scans > 0 || recurring_scans > 0 || exact_key_probes > 0 || partial_key_probes > 0;
+	}
+};
+
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 	using executor_cache_t = reference_map_t<Pipeline, vector<unique_ptr<PipelineExecutor>>>;
 	friend class RecursiveCTEState;
+	friend class RecursiveCTEMetrics;
 
 public:
 	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
@@ -72,10 +87,8 @@ public:
 	vector<unique_ptr<Expression>> payload_aggregates;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
-	//! Number of recursive table scans inside the recursive member
-	idx_t recursive_reference_count = 0;
-	//! Number of recurring table scans inside the recursive member
-	idx_t recurring_reference_count = 0;
+	//! Physical recursive inputs inside the recursive member
+	RecursiveCTEReferenceInfo recursive_references;
 	//! Recursive table scans rebound to the current iteration input buffer
 	vector<reference<PhysicalColumnDataScan>> recursive_scans;
 	//! Recursive meta-pipelines that are independent of the active recursive scan graph and can be materialized once
@@ -118,12 +131,14 @@ public:
 
 private:
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
+	idx_t NextMetricsInvocation() const;
 
 private:
 	mutable shared_ptr<RecursiveExecutorPool> shared_executor_pool;
 	//! Immutable recursive projections of the generic pipeline schedule.
 	unique_ptr<RecursiveCTEPipelineSchedulePlan> recursive_schedule_plan;
 	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_recursive_schedule_plan;
+	mutable atomic<idx_t> metrics_invocations {0};
 };
 
 //! Scans the frozen USING KEY state during a recursive epoch.
@@ -152,6 +167,10 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+private:
+	SourceResultType GetDataFromState(DataChunk &chunk, OperatorSourceInput &input,
+	                                  RecursiveCTEState &recursive_state) const;
 };
 
 } // namespace duckdb

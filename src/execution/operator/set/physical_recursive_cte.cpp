@@ -39,6 +39,10 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifi
 PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 }
 
+idx_t PhysicalRecursiveCTE::NextMetricsInvocation() const {
+	return metrics_invocations.fetch_add(1) + 1;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink State
 //===--------------------------------------------------------------------===//
@@ -47,6 +51,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
       allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)), metrics(context, op),
       scheduler(op.shared_executor_pool, allow_executor_reuse),
       intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
+	if (metrics.Enabled()) {
+		epoch_metrics = make_uniq<RecursiveCTEEpochMetrics>();
+	}
 	vector<LogicalType> aggr_input_types;
 	vector<AggregateObject> payload_aggregates;
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
@@ -89,6 +96,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 
 RecursiveCTEState::~RecursiveCTEState() {
 	metrics.Log(partial_key_indexes);
+	if (epoch_metrics) {
+		metrics.LogEpochSummary(*epoch_metrics);
+	}
 }
 
 const RecursiveCTEPartialKeyIndex &RecursiveCTEState::GetPartialKeyIndex(const vector<idx_t> &key_indices) const {
@@ -282,26 +292,32 @@ unique_ptr<LocalSinkState> PhysicalRecursiveCTE::GetLocalSinkState(ExecutionCont
 
 void RecursiveCTEState::SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &lstate) {
 	D_ASSERT(ht);
+	const auto collect_metrics = metrics.Enabled();
+	const auto candidate_count = chunk.size();
 	const auto before_lock =
-	    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	idx_t new_group_count;
 	{
 		lock_guard<mutex> guard(intermediate_table_lock);
 		const auto after_lock =
-		    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		if (metrics.Enabled()) {
-			metrics.RecordHashRows(chunk.size());
+		    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		if (collect_metrics) {
+			metrics.RecordHashRows(candidate_count);
 		}
 		new_group_count = ht->FindOrCreateGroups(chunk, lstate.dummy_addresses, lstate.new_groups);
 		chunk.Slice(lstate.new_groups, new_group_count);
-		if (metrics.Enabled()) {
+		if (collect_metrics) {
 			const auto after_work = std::chrono::steady_clock::now();
+			GetEpochMetrics().RecordDistinctGrouping(
+			    candidate_count, new_group_count,
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()));
 			RecordSinkMetrics(
 			    NumericCast<idx_t>(
 			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
 			    NumericCast<idx_t>(
 			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
-			    chunk.size());
+			    candidate_count);
 		}
 	}
 	if (new_group_count > 0) {
@@ -351,6 +367,10 @@ void RecursiveCTEState::SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &l
 			lstate.partition_chunk.Slice(lstate.new_groups, new_group_count);
 			if (collect_sink_metrics) {
 				const auto after_work = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordDistinctGrouping(
+				    partition_count, new_group_count,
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()));
 				RecordSinkMetrics(
 				    NumericCast<idx_t>(
 				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
@@ -414,14 +434,17 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	}
 }
 
-void RecursiveCTEState::CommitUsingKeyUpdates() {
+template <bool COLLECT_METRICS>
+void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 	D_ASSERT(op.using_key);
 	ColumnDataScanState update_scan_state;
 	intermediate_table.InitializeScan(update_scan_state);
 	while (intermediate_table.Scan(update_scan_state, update_rows)) {
-		if (metrics.Enabled()) {
+		if constexpr (COLLECT_METRICS) {
 			metrics.RecordHashRows(update_rows.size());
 		}
+		const auto hash_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		distinct_rows.Reset();
 		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
 		if (!executor.expressions.empty()) {
@@ -430,20 +453,41 @@ void RecursiveCTEState::CommitUsingKeyUpdates() {
 		}
 		if (partial_key_indexes.empty()) {
 			ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+			if constexpr (COLLECT_METRICS) {
+				const auto hash_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+			}
 			continue;
 		}
-		const auto build_start =
-		    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		const auto new_group_count = ht->AddChunkAndGetNewGroups(
 		    distinct_rows, payload_rows, AggregateType::NON_DISTINCT, new_group_addresses, new_groups);
+		if constexpr (COLLECT_METRICS) {
+			const auto hash_end = std::chrono::steady_clock::now();
+			GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+		}
+		const auto index_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		for (auto &index : partial_key_indexes) {
 			index->AddGroups(distinct_rows, new_groups, new_group_addresses, new_group_count);
 		}
-		if (metrics.Enabled()) {
-			const auto build_end = std::chrono::steady_clock::now();
+		if constexpr (COLLECT_METRICS) {
+			const auto index_end = std::chrono::steady_clock::now();
+			const auto elapsed_ns = NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(index_end - index_start).count());
+			GetEpochMetrics().RecordPartialIndexMaintenance(elapsed_ns);
 			metrics.RecordPartialIndexBuild(NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::microseconds>(build_end - build_start).count()));
+			    std::chrono::duration_cast<std::chrono::microseconds>(index_end - index_start).count()));
 		}
+	}
+}
+
+void RecursiveCTEState::CommitUsingKeyUpdates() {
+	if (metrics.Enabled()) {
+		CommitUsingKeyUpdatesInternal<true>();
+	} else {
+		CommitUsingKeyUpdatesInternal<false>();
 	}
 }
 
@@ -501,6 +545,19 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataInternal(ExecutionContext
 		throw InternalException("USING KEY state scan has no recursive state");
 	}
 	auto &recursive_state = recursive_cte->sink_state->Cast<RecursiveCTEState>();
+	if (!recursive_state.GetMetrics().Enabled()) {
+		return GetDataFromState(chunk, input, recursive_state);
+	}
+	const auto scan_start = std::chrono::steady_clock::now();
+	const auto result = GetDataFromState(chunk, input, recursive_state);
+	const auto scan_end = std::chrono::steady_clock::now();
+	recursive_state.GetEpochMetrics().RecordRecurringScan(
+	    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(scan_end - scan_start).count()));
+	return result;
+}
+
+SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chunk, OperatorSourceInput &input,
+                                                                 RecursiveCTEState &recursive_state) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEStateScanGlobalState>();
 	auto &lstate = input.local_state.Cast<RecursiveCTEStateScanLocalState>();
 	while (true) {
@@ -615,6 +672,14 @@ SourceResultType RecursiveCTEState::GetData(ExecutionContext &context, DataChunk
 }
 
 SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, DataChunk &chunk) {
+	if (metrics.Enabled()) {
+		return GetUsingKeyDataInternal<true>(context, chunk);
+	}
+	return GetUsingKeyDataInternal<false>(context, chunk);
+}
+
+template <bool COLLECT_METRICS>
+SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk) {
 	D_ASSERT(op.using_key);
 	while (true) {
 		switch (source_phase) {
@@ -640,6 +705,8 @@ SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, D
 			break;
 		}
 		case RecursiveCTESourcePhase::DRAINING_FINAL_KEY_STATE: {
+			const auto drain_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			while (ht->Scan(ht_scan_state, source_distinct_rows, source_payload_rows)) {
 				if (source_distinct_rows.size() == 0) {
 					continue;
@@ -647,10 +714,18 @@ SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, D
 				ScatterChunk(chunk, source_distinct_rows, op.distinct_idx);
 				ScatterChunk(chunk, source_payload_rows, op.payload_idx);
 				chunk.CheckCardinality(source_distinct_rows.size());
-				if (metrics.Enabled()) {
+				if constexpr (COLLECT_METRICS) {
 					metrics.RecordFinalStateRows(chunk.size());
+					const auto drain_end = std::chrono::steady_clock::now();
+					GetEpochMetrics().RecordFinalStateDrain(NumericCast<idx_t>(
+					    std::chrono::duration_cast<std::chrono::nanoseconds>(drain_end - drain_start).count()));
 				}
 				return SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			if constexpr (COLLECT_METRICS) {
+				const auto drain_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordFinalStateDrain(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(drain_end - drain_start).count()));
 			}
 			source_phase = RecursiveCTESourcePhase::FINISHED;
 			break;

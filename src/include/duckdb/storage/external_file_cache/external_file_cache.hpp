@@ -81,6 +81,9 @@ public:
 	//! Return the blocks cached for the given range.
 	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(CachedFile &cached_file, idx_t current_block_size,
 	                                                       idx_t first_block, idx_t num_blocks);
+	//! Remove an acquired block range from the cache without mutating blocks that may still be used by readers.
+	//! A block is only removed when it is still the current entry for its index.
+	void RetireBlocks(CachedFile &cached_file, idx_t first_block, const vector<shared_ptr<CacheBlock>> &blocks);
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the shared cached file for the given path, creating it if not yet present.

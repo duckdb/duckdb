@@ -404,6 +404,8 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 		D_ASSERT(bound_function.GetName() == "combine");
 		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	}
+	// these run the finalize/combine of the underlying aggregate, which can throw, e.g. skewness of a large sum
+	bound_function.SetFallible();
 
 	return std::move(bind_data);
 }
@@ -580,14 +582,9 @@ string OrderModifierToString(OrderType order_type, OrderByNullType null_order) {
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
                                      optional_ptr<FunctionData> bind_data) {
 	auto layout = bound_function.GetStateType(bind_data);
-	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
-	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = layout.type.DeepCopy();
-	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, bound_function, layout);
-	state_layout.SetExtensionInfo(std::move(ext_info));
-	return state_layout;
+	return layout.type.WithAlias("AGGREGATE_STATE").WithExtensionInfo(std::move(ext_info));
 }
 
 // constructs the AGGREGATE_STATE type for an ordered aggregate - the state is the buffer of values
@@ -596,7 +593,6 @@ LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_f
                                            optional_ptr<FunctionData> inner_bind_data, const LogicalType &buffer_struct,
                                            const vector<SortedAggregateStateOrder> &orders) {
 	LogicalType state_layout = LogicalType::LIST(buffer_struct);
-	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, inner_function, inner_function.GetStateType(inner_bind_data));
 	// per key: the buffered column it sorts on and the modifier string (the argument count is re-derived on re-bind)
@@ -608,8 +604,7 @@ LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_f
 		order_values.push_back(Value::STRUCT(std::move(children)));
 	}
 	ext_info->properties.emplace("order_bys", Value::LIST(OrderByEntryType(), std::move(order_values)));
-	state_layout.SetExtensionInfo(std::move(ext_info));
-	return state_layout;
+	return state_layout.WithAlias("AGGREGATE_STATE").WithExtensionInfo(std::move(ext_info));
 }
 
 // parses a single entry of the to_aggregate_state signature list - either a TYPE value (e.g. make_type('VARCHAR'))

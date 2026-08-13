@@ -591,7 +591,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
 			if (catalog_entry) {
-				entries.emplace_back(catalog, Identifier(catalog_entry->GetDefaultSchema()));
+				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
 			} else {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
 			}
@@ -658,11 +658,10 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	return false;
 }
 
-String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
+String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
-		auto extension_name =
-		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
+		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return extension_name;
@@ -670,7 +669,7 @@ String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Stri
 	}
 #endif
 
-	throw Catalog::UnrecognizedConfigurationError(context, configuration_name.ToStdString());
+	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
 static bool IsAutoloadableFunction(CatalogType type) {
@@ -714,7 +713,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 	return false;
 }
 
-bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
+bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
@@ -749,22 +748,22 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 	return false;
 }
 
-CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
+CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const Identifier &name) {
 	// check if the setting exists in any extensions
 	auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
 	if (!extension_name.empty()) {
-		auto error_message = "Setting with name \"" + name + "\" is not in the catalog, but it exists in the " +
-		                     extension_name + " extension.";
+		auto error_message = StringUtil::Format(
+		    "Setting with name %s is not in the catalog, but it exists in the %s extension.", name, extension_name);
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
 		return CatalogException(error_message);
 	}
 	// the setting is not in an extension
 	// get a list of all options
-	vector<string> potential_names = DBConfig::GetOptionNames();
+	vector<Identifier> potential_names = DBConfig::GetOptionNames();
 	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
 		potential_names.push_back(entry.first);
 	}
-	throw CatalogException::MissingEntry("configuration parameter", Identifier(name), potential_names);
+	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
 }
 
 CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &retriever,
@@ -795,7 +794,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// Check if the entry exists in any extension.
 	string extension_name;
 	auto type = lookup_info.GetCatalogType();
-	auto &entry_name = lookup_info.GetEntryName();
+	auto &entry_name = lookup_info.GetEntryIdentifier();
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
 		auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
@@ -820,7 +819,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			if (other_types.size() == 1) {
 				auto &function_type = other_types[0];
 				auto error =
-				    CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
+				    CatalogException("%s with name %s is not in the catalog, a function by this name exists "
 				                     "in the %s extension, but it's of a different type, namely %s",
 				                     CatalogTypeToString(type), entry_name, extension_for_error, function_type);
 				return error;
@@ -828,7 +827,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 				D_ASSERT(!other_types.empty());
 				auto list_of_types = StringUtil::Join(other_types, ", ");
 				auto error =
-				    CatalogException("%s with name \"%s\" is not in the catalog, functions with this name exist "
+				    CatalogException("%s with name %s is not in the catalog, functions with this name exist "
 				                     "in the %s extension, but they are of different types, namely %s",
 				                     CatalogTypeToString(type), entry_name, extension_for_error, list_of_types);
 				return error;
@@ -844,8 +843,9 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 
 	// if we found an extension that can handle this catalog entry, create an error hinting the user
 	if (!extension_name.empty()) {
-		auto error_message = CatalogTypeToString(type) + " with name \"" + entry_name +
-		                     "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
+		auto error_message =
+		    StringUtil::Format("%s with name %s is not in the catalog, but it exists in the %s extension.",
+		                       CatalogTypeToString(type), entry_name, extension_name);
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
 		return CatalogException(error_message);
 	}
@@ -1156,8 +1156,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 		auto transaction = catalog_by_name->GetCatalogTransaction(retriever.GetContext());
 		QueryErrorContext context;
 
-		string table_schema = catalog_by_name->GetDefaultTableSchema();
-		string table_name = catalog_by_name->GetDefaultTable();
+		auto table_schema = catalog_by_name->GetDefaultTableSchema();
+		auto table_name = catalog_by_name->GetDefaultTable();
 
 		optional_ptr<BoundAtClause> at_clause;
 		if (!catalog_by_name->SupportsTimeTravel() && allow_ignore_at_clause) {
@@ -1166,10 +1166,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 			at_clause = lookup_info.GetAtClause();
 		}
 
-		EntryLookupInfo info(
-		    CatalogType::TABLE_ENTRY,
-		    QualifiedName(catalog_by_name->GetName(), Identifier(table_schema), Identifier(table_name)), at_clause,
-		    context);
+		EntryLookupInfo info(CatalogType::TABLE_ENTRY,
+		                     QualifiedName(catalog_by_name->GetName(), table_schema, table_name), at_clause, context);
 		return catalog_by_name->TryLookupEntryInternal(transaction, info);
 	}
 
@@ -1186,9 +1184,9 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 			continue;
 		}
 		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
-		EntryLookupInfo default_schema_lookup(lookup_info, QualifiedName(catalog_entry->GetName(),
-		                                                                 Identifier(catalog_entry->GetDefaultSchema()),
-		                                                                 lookup_info.GetEntryIdentifier()));
+		EntryLookupInfo default_schema_lookup(lookup_info,
+		                                      QualifiedName(catalog_entry->GetName(), catalog_entry->GetDefaultSchema(),
+		                                                    lookup_info.GetEntryIdentifier()));
 		auto result = catalog_entry->TryLookupEntryInternal(transaction, default_schema_lookup);
 		if (result.Found() || result.error.HasError()) {
 			return result;
@@ -1205,7 +1203,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
-		                                    lookup_info.GetEntryName())) {
+		                                    lookup_info.GetEntryIdentifier())) {
 			result = TryLookupEntryAcrossCatalogs(retriever, lookup_info, if_not_found);
 		}
 	}
@@ -1262,7 +1260,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
-		                                    lookup_info.GetEntryName())) {
+		                                    lookup_info.GetEntryIdentifier())) {
 			result = TryLookupEntry(retriever, qualified, if_not_found);
 		}
 	}
@@ -1470,7 +1468,7 @@ ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	return ErrorData();
 }
 
-string Catalog::GetDefaultSchema() const {
+Identifier Catalog::GetDefaultSchema() const {
 	return DEFAULT_SCHEMA;
 }
 
@@ -1480,15 +1478,15 @@ bool Catalog::HasDefaultTable() const {
 }
 
 void Catalog::SetDefaultTable(const Identifier &schema, const Identifier &name) {
-	default_table = name.GetIdentifierName();
-	default_table_schema = schema.GetIdentifierName();
+	default_table = name;
+	default_table_schema = schema;
 }
 
-string Catalog::GetDefaultTable() const {
+Identifier Catalog::GetDefaultTable() const {
 	return default_table;
 }
 
-string Catalog::GetDefaultTableSchema() const {
+Identifier Catalog::GetDefaultTableSchema() const {
 	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 

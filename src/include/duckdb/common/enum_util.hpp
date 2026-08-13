@@ -184,6 +184,8 @@ enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
 
+enum class DeleteIdState : uint8_t;
+
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
@@ -243,6 +245,8 @@ enum class FileIOMode : uint8_t;
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
+
+enum class FileWriteMode : uint8_t;
 
 enum class FilterPropagateResult : uint8_t;
 
@@ -400,6 +404,8 @@ enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
 enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
+enum class PipelineBroadcastExchangeScanMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PipelineScheduleMode : uint8_t;
@@ -433,6 +439,8 @@ enum class QueryResultOutputType : uint8_t;
 enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
+
+enum class RecursiveCTEPipelineMetricType : uint8_t;
 
 enum class RecursiveCTESourcePhase : uint8_t;
 
@@ -499,6 +507,8 @@ enum class SinkNextBatchType : uint8_t;
 enum class SinkResultType : uint8_t;
 
 enum class SortKeyType : uint8_t;
+
+enum class SourceBatchIndexState : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
@@ -838,6 +848,9 @@ template<>
 const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value);
 
 template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value);
+
+template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
@@ -926,6 +939,9 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
 const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value);
+
+template<>
+const char* EnumUtil::ToChars<FileWriteMode>(FileWriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value);
@@ -1162,6 +1178,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1211,6 +1230,9 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTESourcePhase>(RecursiveCTESourcePhase value);
@@ -1310,6 +1332,9 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
+
+template<>
+const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
@@ -1703,6 +1728,9 @@ template<>
 DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value);
 
 template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value);
+
+template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
 
 template<>
@@ -1791,6 +1819,9 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
 FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value);
+
+template<>
+FileWriteMode EnumUtil::FromString<FileWriteMode>(const char *value);
 
 template<>
 FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *value);
@@ -2027,6 +2058,9 @@ template<>
 PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
 
 template<>
+PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value);
+
+template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
@@ -2076,6 +2110,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
+
+template<>
+RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value);
 
 template<>
 RecursiveCTESourcePhase EnumUtil::FromString<RecursiveCTESourcePhase>(const char *value);
@@ -2175,6 +2212,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
+
+template<>
+SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);

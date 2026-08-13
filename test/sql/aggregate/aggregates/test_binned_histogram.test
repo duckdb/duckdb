@@ -115,7 +115,12 @@ SELECT histogram([n], [[x] for x in [10, 20, 30, 40, 50]]) FROM obs
 query I
 SELECT histogram(n, [10, 10, 10, 10]) FROM obs
 ----
-{10=3}
+{10=3, 9223372036854775807=12}
+
+query I
+SELECT list_aggregate(map_values(histogram(n, [10, 10, 10, 10])), 'sum') FROM obs
+----
+15
 
 # null WITHIN bins
 statement error
