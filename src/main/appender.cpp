@@ -321,10 +321,10 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (value.type() == target.GetTypes()[col]) {
 		target.data[col].SetValue(row, value);
 	} else {
-		Value new_value;
 		string error_msg;
-		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.data[col].SetValue(row, new_value);
+		auto new_value = value.DefaultTryCastAs(target.GetTypes()[col], &error_msg);
+		if (new_value) {
+			target.data[col].SetValue(row, *new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
