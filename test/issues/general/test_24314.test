@@ -1,0 +1,76 @@
+# name: test/issues/general/test_24314.test
+# description: Issue 24314 - preserve precision when interpolating nearby large decimals
+# group: [general]
+
+query II
+WITH t(v) AS (
+    VALUES (9999999999999999999999999999::DECIMAL(38,0)),
+           (9999999999999999999999999997::DECIMAL(38,0))
+)
+SELECT quantile_cont(v, 0.5), median(v) FROM t;
+----
+9999999999999999999999999998	9999999999999999999999999998
+
+# The sign-aware path retains the same precision for negative endpoints.
+query II
+SELECT quantile_cont(v, 0.5), median(v)
+FROM (VALUES (-9999999999999999999999999999::DECIMAL(38,0)),
+             (-9999999999999999999999999997::DECIMAL(38,0))) t(v);
+----
+-9999999999999999999999999998	-9999999999999999999999999998
+
+# Interpolation must not perturb equal values at large magnitudes.
+query II
+SELECT quantile_cont(v, 0.5), median(v)
+FROM (VALUES (9999999999999999999999999999::DECIMAL(38,0)),
+             (9999999999999999999999999999::DECIMAL(38,0))) t(v);
+----
+9999999999999999999999999999	9999999999999999999999999999
+
+# Fractional quantiles and decimal scales use the same physical INT128 path.
+query II
+SELECT quantile_cont(v, [0.25, 0.5, 0.75]), median(v)
+FROM (VALUES (99999999999999999999999999.99::DECIMAL(38,2)),
+             (99999999999999999999999999.95::DECIMAL(38,2))) t(v);
+----
+[99999999999999999999999999.96, 99999999999999999999999999.97, 99999999999999999999999999.98]	99999999999999999999999999.97
+
+# Keep final-value truncation towards zero regardless of interpolation direction.
+query IIII
+SELECT quantile_cont(v, [0.25, 0.5, 0.75]),
+       quantile_cont(v, [-0.25, -0.5, -0.75]),
+       quantile_cont(-v, [0.25, 0.5, 0.75]),
+       quantile_cont(-v, [-0.25, -0.5, -0.75])
+FROM (VALUES (0::DECIMAL(38,0)), (3::DECIMAL(38,0))) t(v);
+----
+[0, 1, 2]	[2, 1, 0]	[-2, -1, 0]	[0, -1, -2]
+
+# Preserve the overflow-safe path when the endpoint difference does not fit in a signed INT128.
+query II
+SELECT quantile_cont(v, 0.5), median(v)
+FROM (VALUES (-99999999999999999999999999999999999999::DECIMAL(38,0)),
+             (99999999999999999999999999999999999999::DECIMAL(38,0))) t(v);
+----
+0	0
+
+# Do not round an exactly representable HUGEINT delta to double before interpolation.
+query II
+SELECT quantile_cont(v, [0.25, 0.5, 0.75]), median(v)
+FROM (VALUES (0::DECIMAL(38,0)), (18014398509481986::DECIMAL(38,0))) t(v);
+----
+[4503599627370496, 9007199254740993, 13510798882111489]	9007199254740993
+
+# The same exact offset calculation preserves truncation towards zero below zero.
+query II
+SELECT quantile_cont(v, [0.25, 0.5, 0.75]), median(v)
+FROM (VALUES (-18014398509481986::DECIMAL(38,0)), (0::DECIMAL(38,0))) t(v);
+----
+[-13510798882111489, -9007199254740993, -4503599627370496]	-9007199254740993
+
+# A weight of 1/4096 shifts the 192-bit product right by exactly one limb; the limb-aligned
+# shift must retain the middle limb rather than shifting the upper limb by 64.
+query I
+SELECT quantile_cont(v, 1::DECIMAL(38,0) / 4096)::VARCHAR
+FROM (VALUES (0::DECIMAL(38,0)), (99999999999999999999999999999999999999::DECIMAL(38,0))) t(v);
+----
+24414062499999999999999999999999999

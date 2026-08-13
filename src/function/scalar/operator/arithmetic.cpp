@@ -1326,16 +1326,100 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
-template <>
-hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	hugeint_t delta_hugeint = hi;
-	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
-		const auto delta = Hugeint::Cast<double>(delta_hugeint);
-		return lo + Hugeint::Convert(delta * d);
+static void MultiplyUint64(uint64_t lhs, uint64_t rhs, uint64_t &lower, uint64_t &upper) {
+	const auto lhs_lower = lhs & 0xffffffff;
+	const auto lhs_upper = lhs >> 32;
+	const auto rhs_lower = rhs & 0xffffffff;
+	const auto rhs_upper = rhs >> 32;
+
+	const auto product_lower = lhs_lower * rhs_lower;
+	const auto product_middle_left = lhs_lower * rhs_upper;
+	const auto product_middle_right = lhs_upper * rhs_lower;
+	const auto product_upper = lhs_upper * rhs_upper;
+	const auto middle = (product_lower >> 32) + static_cast<uint32_t>(product_middle_left) +
+	                    static_cast<uint32_t>(product_middle_right);
+
+	lower = (product_lower & 0xffffffff) | (middle << 32);
+	upper = product_upper + (product_middle_left >> 32) + (product_middle_right >> 32) + (middle >> 32);
+}
+
+static hugeint_t ShiftRight192(uint64_t lower, uint64_t middle, uint64_t upper, idx_t shift) {
+	if (shift < 64) {
+		return hugeint_t(static_cast<int64_t>((middle >> shift) | (upper << (64 - shift))),
+		                 (lower >> shift) | (middle << (64 - shift)));
+	}
+	if (shift == 64) {
+		return hugeint_t(static_cast<int64_t>(upper), middle);
+	}
+	if (shift < 128) {
+		return hugeint_t(static_cast<int64_t>(upper >> (shift - 64)),
+		                 (middle >> (shift - 64)) | (upper << (128 - shift)));
+	}
+	if (shift < 192) {
+		return hugeint_t(0, upper >> (shift - 128));
+	}
+	return hugeint_t(0);
+}
+
+// Computes floor(delta * weight) exactly for a non-negative HUGEINT delta and a finite double weight in [0, 1].
+// The caller uses the result as an offset from one endpoint, retaining the truncation-towards-zero behaviour of the
+// previous floating-point conversion without first rounding the delta to double precision.
+static hugeint_t MultiplyHugeintByDoubleFraction(const hugeint_t &delta, const double weight) {
+	if (weight == 0) {
+		return hugeint_t(0);
+	}
+	if (weight == 1) {
+		return delta;
 	}
 
-	// if delta overflows, we fall back to original subtraction to avoid UB
-	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
+	int exponent;
+	const auto fraction = std::frexp(weight, &exponent);
+	const auto mantissa = static_cast<uint64_t>(std::ldexp(fraction, 53));
+	const auto shift = static_cast<idx_t>(53 - exponent);
+
+	uint64_t lower_product;
+	uint64_t lower_carry;
+	MultiplyUint64(delta.lower, mantissa, lower_product, lower_carry);
+
+	uint64_t middle_product;
+	uint64_t upper_product;
+	MultiplyUint64(static_cast<uint64_t>(delta.upper), mantissa, middle_product, upper_product);
+	const auto middle = lower_carry + middle_product;
+	const auto carry = middle < lower_carry;
+	return ShiftRight192(lower_product, middle, upper_product + carry, shift);
+}
+
+template <>
+hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	if (d == 0 || lo == hi) {
+		return lo;
+	}
+	if (d == 1) {
+		return hi;
+	}
+	if (d > 0 && d < 1) {
+		const bool ascending = lo < hi;
+		const auto lower = ascending ? lo : hi;
+		const auto upper = ascending ? hi : lo;
+		if (lower >= 0 || upper <= 0) {
+			auto delta = upper;
+			if (Hugeint::TrySubtractInPlace(delta, lower)) {
+				// Preserve truncation towards zero by interpolating up from a non-negative lower bound or down from a
+				// non-positive upper bound. Calculating the offset from the delta retains precision for nearby large
+				// values.
+				const bool non_negative = lower >= 0;
+				const auto weight = non_negative ? (ascending ? d : 1 - d) : (ascending ? 1 - d : d);
+				const auto offset = MultiplyHugeintByDoubleFraction(delta, weight);
+				auto result = non_negative ? lower : upper;
+				const bool success =
+				    non_negative ? Hugeint::TryAddInPlace(result, offset) : Hugeint::TrySubtractInPlace(result, offset);
+				if (success) {
+					return result;
+				}
+			}
+		}
+	}
+	// Opposite-sign and very wide endpoints can overflow a signed delta. Retain the overflow-safe fallback.
 	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 
