@@ -13,6 +13,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
@@ -771,7 +772,7 @@ struct CTEPipelineSelection {
 	idx_t estimated_materialization_size = 0;
 	bool fallback_dependency_added;
 	bool fallback_dependency_active;
-	bool stream_candidates = false;
+	bool stream_serialized_candidates = false;
 };
 
 class PipelineBuildStateData {
@@ -854,23 +855,18 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 		auto &selection = data.cte_selections[selection_idx];
 		auto &cte = selection.cte.get();
 		D_ASSERT(cte.exchange);
-		// A mixed fanout retains the normal direct-first selection.
-		if (selection.serialized_fanout_candidate_count != selection.candidate_count) {
-			selection.stream_candidates = true;
-			continue;
-		}
 		auto consumer_summary = cte.exchange->GetConsumerSummary();
-		// Existing streaming consumers define the exchange's completion behavior and retain direct candidates.
-		if (consumer_summary.direct > 0 || consumer_summary.buffered > 0) {
-			selection.stream_candidates = true;
+		D_ASSERT(consumer_summary.unresolved == selection.candidate_count);
+		if (selection.serialized_fanout_candidate_count == 0) {
 			continue;
 		}
 		// An existing materialized consumer already makes the materialization cost unavoidable.
 		if (consumer_summary.materialized > 0) {
 			continue;
 		}
-		if (selection.candidate_count == 1) {
-			selection.stream_candidates = true;
+		// A single consumer cannot introduce serialized fanout.
+		if (selection.candidate_count == 1 && consumer_summary.ExchangeConsumerCount() == 0) {
+			selection.stream_serialized_candidates = true;
 			continue;
 		}
 		selection.estimated_materialization_size = EstimateMaterializationSize(cte);
@@ -891,12 +887,13 @@ static void SelectExternalInputCandidates(PipelineBuildStateData &data) {
 		if (selection.estimated_materialization_size <= materialization_budget - materialization_size) {
 			materialization_size += selection.estimated_materialization_size;
 		} else {
-			selection.stream_candidates = true;
+			selection.stream_serialized_candidates = true;
 		}
 	}
 
 	for (auto &candidate : data.external_input_candidates) {
-		if (data.cte_selections[candidate.selection_idx].stream_candidates) {
+		auto &selection = data.cte_selections[candidate.selection_idx];
+		if (candidate.input_cost == PipelineExternalInputCost::PIPELINED || selection.stream_serialized_candidates) {
 			candidate.input_mode = PipelineExternalInputCandidate::InputMode::EXTERNAL_INPUT;
 		}
 	}

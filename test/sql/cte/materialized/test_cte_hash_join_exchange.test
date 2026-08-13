@@ -65,6 +65,22 @@ SELECT (SELECT i FROM c ORDER BY i LIMIT 1),
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: MATERIALIZED.*Materialized Consumers: 3.*
 
+# A pipelined consumer does not force a small hash consumer into serialized direct fanout.
+query II
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT sum(i) FROM c),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+49995000	10000
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT sum(i) FROM c),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
+
 # Preserve hash join semantics for NULLs, duplicates and adjacent join types while directly feeding each join.
 query I
 WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
@@ -262,6 +278,17 @@ SET memory_limit='64MB';
 
 statement ok
 SET operator_memory_limit='16MB';
+
+# Materialization pressure keeps a mixed pipelined/hash fanout fully streaming.
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
+)
+SELECT (SELECT sum(length(payload)) FROM c),
+       (SELECT count(*) FROM c JOIN range(500000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
 
 # Materialization pressure first selects direct fanout, then a required cycle falls back one consumer.
 query II
