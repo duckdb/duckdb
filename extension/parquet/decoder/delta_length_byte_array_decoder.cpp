@@ -45,15 +45,15 @@ void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, 
                                        Vector &result, idx_t result_offset) {
 	bool validate_individually =
 	    reader.Type().IsJSONType() ||
-	    reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option == StringColumnReader::Utf8ValidationOption::STRICT;
+	    reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option != StringColumnReader::Utf8ValidationOption::STRICT;
 	if (defines) {
-		if (reader.Type().IsJSONType()) {
+		if (validate_individually) {
 			ReadInternal<true, true>(block_ref, defines, read_count, result, result_offset);
 		} else {
 			ReadInternal<true, false>(block_ref, defines, read_count, result, result_offset);
 		}
 	} else {
-		if (reader.Type().IsJSONType()) {
+		if (validate_individually) {
 			ReadInternal<false, true>(block_ref, defines, read_count, result, result_offset);
 		} else {
 			ReadInternal<false, false>(block_ref, defines, read_count, result, result_offset);
@@ -97,9 +97,11 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
-		result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		if (VALIDATE_INDIVIDUAL_STRINGS) {
-			string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			result_data.WriteValue(verified);
+		} else {
+			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		}
 		block.unsafe_inc(str_len);
 	}
