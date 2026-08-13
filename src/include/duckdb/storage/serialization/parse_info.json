@@ -752,6 +752,28 @@
         "id": 205,
         "name": "alias",
         "type": "Identifier"
+      },
+      {
+        "id": 206,
+        "name": "repository_url",
+        "type": "string"
+      },
+      {
+        "id": 207,
+        "name": "public_key",
+        "type": "string"
+      },
+      {
+        "id": 208,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
+      },
+      {
+        "id": 209,
+        "name": "missing_ok",
+        "type": "bool",
+        "default": "false"
       }
     ]
   },

@@ -53,6 +53,16 @@
         ]
     },
     {
+        "name": "allow_extension_repositories",
+        "description": "Allow creating and using custom trusted extension repositories",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
@@ -751,6 +761,13 @@
     {
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": ""
+    },
+    {
+        "name": "extension_repository_directory",
+        "description": "Set the directory in which trusted extension repositories are stored",
         "type": "VARCHAR",
         "scope": "global",
         "default_value": ""

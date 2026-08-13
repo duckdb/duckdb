@@ -7620,6 +7620,81 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVersionNumberIn
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExtensionRepositoryStatementInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCreateExtensionRepositoryStmtInternal(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> or_replace {};
+	auto &or_replace_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (or_replace_opt.HasResult()) {
+		auto or_replace_value = transformer.Transform<bool>(or_replace_opt.GetResult());
+		or_replace = or_replace_value;
+	}
+	optional<bool> if_not_exists {};
+	auto &if_not_exists_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (if_not_exists_opt.HasResult()) {
+		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
+		if_not_exists = if_not_exists_value;
+	}
+	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(5));
+	auto repository_prefix = transformer.Transform<string>(list_pr.GetChild(6));
+	optional<string> repository_public_key {};
+	auto &repository_public_key_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
+	if (repository_public_key_opt.HasResult()) {
+		auto repository_public_key_value = transformer.Transform<string>(repository_public_key_opt.GetResult());
+		repository_public_key = repository_public_key_value;
+	}
+	auto result = TransformCreateExtensionRepositoryStmt(transformer, or_replace, if_not_exists, col_id_or_string,
+	                                                     repository_prefix, repository_public_key);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRepositoryPrefixInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
+	auto result = TransformRepositoryPrefix(transformer, has_result, string_literal);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformRepositoryPublicKeyInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	auto result = TransformRepositoryPublicKey(transformer, has_result, string_literal);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformDropExtensionRepositoryStmtInternal(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> if_exists {};
+	auto &if_exists_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (if_exists_opt.HasResult()) {
+		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
+		if_exists = if_exists_value;
+	}
+	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(4));
+	auto result = TransformDropExtensionRepositoryStmt(transformer, if_exists, col_id_or_string);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMergeIntoStatementInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -11327,6 +11402,11 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"FromSourceIdentifier", &PEGTransformerFactory::TransformFromSourceIdentifierInternal},
 	    {"FromSourceString", &PEGTransformerFactory::TransformFromSourceStringInternal},
 	    {"VersionNumber", &PEGTransformerFactory::TransformVersionNumberInternal},
+	    {"ExtensionRepositoryStatement", &PEGTransformerFactory::TransformExtensionRepositoryStatementInternal},
+	    {"CreateExtensionRepositoryStmt", &PEGTransformerFactory::TransformCreateExtensionRepositoryStmtInternal},
+	    {"RepositoryPrefix", &PEGTransformerFactory::TransformRepositoryPrefixInternal},
+	    {"RepositoryPublicKey", &PEGTransformerFactory::TransformRepositoryPublicKeyInternal},
+	    {"DropExtensionRepositoryStmt", &PEGTransformerFactory::TransformDropExtensionRepositoryStmtInternal},
 	    {"MergeIntoStatement", &PEGTransformerFactory::TransformMergeIntoStatementInternal},
 	    {"MergeIntoUsingClause", &PEGTransformerFactory::TransformMergeIntoUsingClauseInternal},
 	    {"MergeMatch", &PEGTransformerFactory::TransformMergeMatchInternal},

@@ -143,6 +143,15 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 }
 
 //===----------------------------------------------------------------------===//
+// Allow Extension Repositories
+//===----------------------------------------------------------------------===//
+void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db && input.GetValue<bool>()) {
+		throw InvalidInputException("Cannot change allow_extension_repositories setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Persistent Secrets
 //===----------------------------------------------------------------------===//
 void AllowPersistentSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

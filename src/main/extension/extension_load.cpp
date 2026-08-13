@@ -347,9 +347,9 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 	return ParseExtensionMetaData(metadata_segment.data());
 }
 
-static bool CheckKnownSignatures(const string &two_level_hash, const string &signature,
-                                 const bool allow_community_extensions) {
-	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
+static bool CheckKnownSignatures(DatabaseInstance &db, const string &two_level_hash, const string &signature,
+                                 ExtensionRepositoryType repository_type, const string &repository_name) {
+	for (auto &key : ExtensionHelper::GetTrustedPublicKeys(db, repository_type, repository_name)) {
 		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
 			return true;
 		}
@@ -358,8 +358,9 @@ static bool CheckKnownSignatures(const string &two_level_hash, const string &sig
 	return false;
 }
 
-bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
-                                              const bool allow_community_extensions) {
+bool ExtensionHelper::CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
+                                              ParsedExtensionMetaData &parsed_metadata,
+                                              ExtensionRepositoryType repository_type, const string &repository_name) {
 	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
 
 	vector<string> hash_chunks;
@@ -373,11 +374,12 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	// TODO maybe we should do a stream read / hash update here
 	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
 
-	return CheckKnownSignatures(resulting_hash, parsed_metadata.signature, allow_community_extensions);
+	return CheckKnownSignatures(db, resulting_hash, parsed_metadata.signature, repository_type, repository_name);
 }
 
-bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
-                                                    const bool allow_community_extensions) {
+bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
+                                                    const string &signature, ExtensionRepositoryType repository_type,
+                                                    const string &repository_name) {
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
 	InitializeAncillaryData(hash_chunks, splits, buffer_length);
@@ -386,15 +388,16 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
-	return CheckKnownSignatures(resulting_hash, signature, allow_community_extensions);
+	return CheckKnownSignatures(db, resulting_hash, signature, repository_type, repository_name);
 }
 
-bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
-                                                    const bool allow_community_extensions) {
+bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
+                                                    ExtensionRepositoryType repository_type,
+                                                    const string &repository_name) {
 	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
 	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
 
-	return CheckExtensionBufferSignature(buffer, signature_offset, signature, allow_community_extensions);
+	return CheckExtensionBufferSignature(db, buffer, signature_offset, signature, repository_type, repository_name);
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
@@ -517,11 +520,23 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
+	auto filebase = fs.ExtractBaseName(filename);
+	auto lowercase_extension_name = StringUtil::Lower(filebase);
+
+	// The install info tells us where the extension came from, which determines the keys that are trusted to sign it.
+	// Extensions that are loaded directly have no install info: those are verified against the core keys
+	unique_ptr<ExtensionInstallInfo> install_info;
+	if (!direct_load) {
+		install_info = ExtensionInstallInfo::TryReadInfoFile(fs, filename + ".info", lowercase_extension_name);
+	}
+
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
-			bool allow_community_extensions = Settings::Get<AllowCommunityExtensionsSetting>(db);
-			signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
+			// the repository the extension was installed from determines which keys can have signed it
+			auto repository_type = install_info ? install_info->repository_type : ExtensionRepositoryType::CORE;
+			auto repository_name = install_info ? install_info->repository_name : string();
+			signature_valid = CheckExtensionSignature(db, *handle, parsed_metadata, repository_type, repository_name);
 		} else {
 			signature_valid = false;
 		}
@@ -540,8 +555,6 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 			throw InvalidInputException(metadata_mismatch_error);
 		}
 	}
-
-	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
@@ -570,8 +583,6 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
-	auto lowercase_extension_name = StringUtil::Lower(filebase);
-
 	// Initialize the ExtensionInitResult
 	result.filebase = lowercase_extension_name;
 	result.filename = filename;
@@ -579,9 +590,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	result.abi_type = parsed_metadata.abi_type;
 
 	if (!direct_load) {
-		auto info_file_name = filename + ".info";
-
-		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, lowercase_extension_name);
+		result.install_info = std::move(install_info);
 
 		if (result.install_info->mode == ExtensionInstallMode::UNKNOWN) {
 			// The info file was missing, we just set the version, since we have it from the parsed footer

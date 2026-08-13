@@ -12,6 +12,7 @@
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/settings.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
@@ -312,7 +313,12 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 		return result;
 	}
 
+	// update the extension from the repository it was installed from, so that it is verified against the same keys
 	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
+	repository_from_info.type = extension_install_info->repository_type;
+	if (!extension_install_info->repository_name.empty()) {
+		repository_from_info.name = extension_install_info->repository_name;
+	}
 	result.repository = repository_from_info.ToReadableString();
 
 	// Force install the full url found in this file, enabling etags to ensure efficient updating
@@ -863,6 +869,37 @@ const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensi
 		}
 	}
 	return keys;
+}
+
+vector<string> ExtensionHelper::GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
+                                                     const string &repository_name) {
+	vector<string> keys;
+	switch (repository_type) {
+	case ExtensionRepositoryType::COMMUNITY:
+		if (!Settings::Get<AllowCommunityExtensionsSetting>(db)) {
+			return keys;
+		}
+		for (idx_t i = 0; community_public_keys[i]; i++) {
+			keys.emplace_back(community_public_keys[i]);
+		}
+		return keys;
+	case ExtensionRepositoryType::USER_PROVIDED: {
+		// only the key of the repository the extension came from is trusted
+		ExtensionRepository repository;
+		auto &fs = FileSystem::GetLocal(db);
+		if (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository)) {
+			keys.push_back(ExtensionRepositoryManager::ToPEMPublicKey(repository.public_key));
+		}
+		return keys;
+	}
+	default:
+		// the core signing keys - note that these are the only keys that are ever trusted for extensions that come
+		// from the repositories maintained by DuckDB, or from any other origin we don't know
+		for (idx_t i = 0; public_keys[i]; i++) {
+			keys.emplace_back(public_keys[i]);
+		}
+		return keys;
+	}
 }
 
 } // namespace duckdb

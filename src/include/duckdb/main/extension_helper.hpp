@@ -134,14 +134,16 @@ public:
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	// Check signature of an Extension stored as FileHandle
-	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
-	                                    const bool allow_community_extensions);
+	static bool CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
+	                                    ParsedExtensionMetaData &parsed_metadata,
+	                                    ExtensionRepositoryType repository_type, const string &repository_name);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
-	                                          const bool allow_community_extensions);
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
+	                                          const string &signature, ExtensionRepositoryType repository_type,
+	                                          const string &repository_name);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
-	                                          const bool allow_community_extensions);
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
+	                                          ExtensionRepositoryType repository_type, const string &repository_name);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -160,8 +162,13 @@ public:
 	static idx_t ExtensionAliasCount();
 	static ExtensionAlias GetInternalExtensionAlias(idx_t index);
 
-	//! Get public signing keys for extension signing
+	//! Get the built-in public signing keys for extension signing
 	static const vector<string> GetPublicKeys(bool allow_community_extension = false);
+	//! Get the public keys that are trusted to sign extensions that originate from the given repository. Only the keys
+	//! of that repository are returned: the core keys, the community keys and the key of every user provided
+	//! repository are managed separately, so a leak of any of them only affects that single repository
+	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
+	                                           const string &repository_name);
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);

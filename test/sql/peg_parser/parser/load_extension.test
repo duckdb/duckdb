@@ -22,3 +22,24 @@ CALL check_peg_parser($TEST_PEG_PARSER$LOAD tpch;$TEST_PEG_PARSER$);
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD '{SPATIAL_EXTENSION}'$TEST_PEG_PARSER$);
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE OR REPLACE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY IF NOT EXISTS acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme PREFIX 'http://acme.com' PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$DROP EXTENSION REPOSITORY acme;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$DROP EXTENSION REPOSITORY IF EXISTS acme;$TEST_PEG_PARSER$);
+

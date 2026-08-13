@@ -5,6 +5,20 @@
 
 namespace duckdb {
 
+vector<LogicalType> LoadInfo::GetResultTypes(LoadType load_type) {
+	if (load_type == LoadType::CREATE_REPOSITORY) {
+		return {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+	}
+	return {LogicalType::BOOLEAN};
+}
+
+vector<Identifier> LoadInfo::GetResultNames(LoadType load_type) {
+	if (load_type == LoadType::CREATE_REPOSITORY) {
+		return {Identifier("repository_name"), Identifier("prefix"), Identifier("key_fingerprint")};
+	}
+	return {Identifier("Success")};
+}
+
 unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	auto result = make_uniq<LoadInfo>();
 	result->filename = filename;
@@ -13,6 +27,10 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	result->repo_is_alias = repo_is_alias;
 	result->version = version;
 	result->alias = alias;
+	result->repository_url = repository_url;
+	result->public_key = public_key;
+	result->on_conflict = on_conflict;
+	result->missing_ok = missing_ok;
 	return result;
 }
 
@@ -30,7 +48,35 @@ static string LoadInfoToString(LoadType load_type) {
 	}
 }
 
+//! Serialize the CREATE/DROP EXTENSION REPOSITORY statements
+static string RepositoryToString(const LoadInfo &info) {
+	string result;
+	if (info.load_type == LoadType::CREATE_REPOSITORY) {
+		result = "CREATE ";
+		if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+			result += "OR REPLACE ";
+		}
+		result += "EXTENSION REPOSITORY ";
+		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			result += "IF NOT EXISTS ";
+		}
+		result += SQLIdentifier(info.repository);
+		result += " WITH PREFIX " + SQLString(info.repository_url);
+		result += " USING PUBLIC KEY " + SQLString(info.public_key);
+	} else {
+		result = "DROP EXTENSION REPOSITORY ";
+		if (info.missing_ok) {
+			result += "IF EXISTS ";
+		}
+		result += SQLIdentifier(info.repository);
+	}
+	return result + ";";
+}
+
 string LoadInfo::ToString() const {
+	if (load_type == LoadType::CREATE_REPOSITORY || load_type == LoadType::DROP_REPOSITORY) {
+		return RepositoryToString(*this);
+	}
 	string result = "";
 	result += LoadInfoToString(load_type);
 	result += StringUtil::Format(" '%s'", filename);

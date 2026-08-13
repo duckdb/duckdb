@@ -79,4 +79,51 @@ string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer
 	return identifier_or_string_literal.Name().GetIdentifierName();
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExtensionRepositoryStmt(
+    PEGTransformer &transformer, const optional<bool> &or_replace, const optional<bool> &if_not_exists,
+    const Identifier &col_id_or_string, const string &repository_prefix,
+    const optional<string> &repository_public_key) {
+	auto result = make_uniq<LoadStatement>();
+	auto info = make_uniq<LoadInfo>();
+	info->load_type = LoadType::CREATE_REPOSITORY;
+	info->repo_is_alias = false;
+	info->repository = col_id_or_string.GetIdentifierName();
+	info->repository_url = repository_prefix;
+	if (repository_public_key) {
+		info->public_key = *repository_public_key;
+	}
+	if (or_replace && if_not_exists) {
+		throw ParserException("Cannot combine OR REPLACE with IF NOT EXISTS");
+	}
+	if (or_replace) {
+		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	} else if (if_not_exists) {
+		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	}
+	result->info = std::move(info);
+	return std::move(result);
+}
+
+string PEGTransformerFactory::TransformRepositoryPrefix(PEGTransformer &transformer, const bool &has_result,
+                                                        const string &string_literal) {
+	return string_literal;
+}
+
+string PEGTransformerFactory::TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
+                                                           const string &string_literal) {
+	return string_literal;
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropExtensionRepositoryStmt(
+    PEGTransformer &transformer, const optional<bool> &if_exists, const Identifier &col_id_or_string) {
+	auto result = make_uniq<LoadStatement>();
+	auto info = make_uniq<LoadInfo>();
+	info->load_type = LoadType::DROP_REPOSITORY;
+	info->repo_is_alias = false;
+	info->repository = col_id_or_string.GetIdentifierName();
+	info->missing_ok = if_exists.has_value();
+	result->info = std::move(info);
+	return std::move(result);
+}
+
 } // namespace duckdb

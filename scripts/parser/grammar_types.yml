@@ -107,6 +107,9 @@ SQLStatement:
     - RegisterExternalResourceStmt
     - DestroyExternalResourceStmt
     - ShowExternalResourcesStmt
+    - ExtensionRepositoryStatement
+    - CreateExtensionRepositoryStmt
+    - DropExtensionRepositoryStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -1004,6 +1007,8 @@ String:
     - ExportSource
     - ReservedKeyword
     - VersionNumber
+    - RepositoryPrefix
+    - RepositoryPublicKey
     - LikeVariations
     - LikeToken
     - ILikeToken

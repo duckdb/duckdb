@@ -93,6 +93,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"extension_repository_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
@@ -191,6 +192,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_external_access",        // cant change this while db is running
 	    "allow_unsigned_extensions",     // cant change this while db is running
 	    "allow_community_extensions",    // cant change this while db is running
+	    "allow_extension_repositories",  // cant change this while db is running
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
 	    "vacuum_rebuild_indexes",        // cant change this while db is running

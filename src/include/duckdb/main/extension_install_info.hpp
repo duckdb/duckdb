@@ -27,6 +27,18 @@ enum class ExtensionInstallMode : uint8_t {
 	NOT_INSTALLED = 4
 };
 
+//! The type of a repository determines which public keys are trusted to sign the extensions that it serves. Keys of
+//! different types are managed separately, so a leak of one of them must not affect the other types
+enum class ExtensionRepositoryType : uint8_t {
+	//! The repositories that are maintained by DuckDB itself - this is also the fallback for unknown repositories,
+	//! custom paths and urls
+	CORE = 0,
+	//! The community extension repository
+	COMMUNITY = 1,
+	//! A trusted repository that was added by the user
+	USER_PROVIDED = 2
+};
+
 struct ExtensionLoadedInfo {
 	string description;
 };
@@ -43,6 +55,12 @@ public:
 	string version;
 	//! (optional) ETag of last fetched resource
 	string etag;
+	//! The type of the repository the extension was installed from, together with the repository name for user
+	//! provided repositories. This identifies the repository the extension came from, and with that the public keys
+	//! that are trusted to sign this extension when it is loaded
+	ExtensionRepositoryType repository_type = ExtensionRepositoryType::CORE;
+	//! (optional) Name of the repository the extension came from
+	string repository_name;
 
 	void Serialize(Serializer &serializer) const;
 
@@ -66,6 +84,11 @@ struct ExtensionRepository {
 	//! The default is CORE
 	static constexpr const char *DEFAULT_REPOSITORY_URL = CORE_REPOSITORY_URL;
 
+	//! Try to look up one of the built-in repositories by name
+	static bool TryGetKnownRepository(const string &repository, ExtensionRepository &result);
+	//! The names of all built-in repositories
+	static vector<string> GetKnownRepositoryNames();
+
 	//! Returns the repository name is this is a known repository, or the full url if it is not
 	static string GetRepository(const string &repository_url);
 	//! Try to convert a repository to a url, will return empty string if the repository is unknown
@@ -81,7 +104,7 @@ struct ExtensionRepository {
 	static ExtensionRepository GetRepositoryByUrl(const string &url);
 
 	ExtensionRepository();
-	ExtensionRepository(const string &name, const string &url);
+	ExtensionRepository(const string &name, const string &url, const string &public_key = string());
 
 	//! Print the name if it has one, or the full path if not
 	string ToReadableString();
@@ -90,6 +113,10 @@ struct ExtensionRepository {
 	string name;
 	//! Repository path/url
 	string path;
+	//! (optional) Compact public key that signs the extensions in this repository (user provided repositories only)
+	string public_key;
+	//! Which public keys are trusted to sign the extensions of this repository
+	ExtensionRepositoryType type = ExtensionRepositoryType::CORE;
 };
 
 } // namespace duckdb

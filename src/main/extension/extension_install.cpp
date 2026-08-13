@@ -221,10 +221,11 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 }
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
-                                     idx_t data_size, DBConfig &config) {
-	if (!Settings::Get<AllowUnsignedExtensionsSetting>(config)) {
+                                     idx_t data_size, DatabaseInstance &db, ExtensionRepositoryType repository_type,
+                                     const string &repository_name) {
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
+		    db, static_cast<char *>(data), data_size, repository_type, repository_name);
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
@@ -299,7 +300,7 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
 static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
-                                ExtensionInstallInfo &info, DBConfig &config) {
+                                ExtensionInstallInfo &info, DatabaseInstance &db) {
 	// temp_path ends with '.duckdb_extension'
 	if (!StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
 		throw InternalException("Extension install temp_path of '%s' is not valid, should end in '.duckdb_extension'",
@@ -313,8 +314,10 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 		                        temp_path);
 	}
 
-	// Write extension to tmp file
-	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, config);
+	// Write extension to tmp file - the repository the extension comes from determines which keys are trusted to
+	// sign it
+	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, db, info.repository_type,
+	                         info.repository_name);
 	// When this exit, signature has already being checked (if enabled by config)
 
 	// Write metadata to tmp file
@@ -395,11 +398,13 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 		info.mode = ExtensionInstallMode::REPOSITORY;
 		info.full_path = file;
 		info.repository_url = options.repository->path;
+		info.repository_type = options.repository->type;
+		info.repository_name = options.repository->name;
 	}
 
 	QueryContext query_context(context);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
-	                    extension_decompressed_size, info, db.config);
+	                    extension_decompressed_size, info, db);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -493,6 +498,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		info.mode = ExtensionInstallMode::REPOSITORY;
 		info.full_path = url;
 		info.repository_url = options.repository->path;
+		info.repository_type = options.repository->type;
+		info.repository_name = options.repository->name;
 	} else {
 		info.mode = ExtensionInstallMode::CUSTOM_PATH;
 		info.full_path = url;
@@ -500,8 +507,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
-	                    db.config);
+	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info, db);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }

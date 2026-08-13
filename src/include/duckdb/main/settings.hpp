@@ -171,6 +171,17 @@ struct AllowCommunityExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowExtensionRepositoriesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "allow_extension_repositories";
+	static constexpr const char *Description = "Allow creating and using custom trusted extension repositories";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
@@ -1152,6 +1163,16 @@ struct ExtensionDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct ExtensionRepositoryDirectorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "extension_repository_directory";
+	static constexpr const char *Description = "Set the directory in which trusted extension repositories are stored";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
