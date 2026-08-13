@@ -74,3 +74,30 @@ SELECT quantile_cont(v, 1::DECIMAL(38,0) / 4096)::VARCHAR
 FROM (VALUES (0::DECIMAL(38,0)), (99999999999999999999999999999999999999::DECIMAL(38,0))) t(v);
 ----
 24414062499999999999999999999999999
+
+# Negative quantile weights select the complementary weight through the same exact path.
+query I
+SELECT quantile_cont(-v, [0.25, 0.5, 0.75])::VARCHAR
+FROM (VALUES (0::DECIMAL(38,0)), (18014398509481986::DECIMAL(38,0))) t(v);
+----
+[-13510798882111489, -9007199254740993, -4503599627370496]
+
+# The interpolation is shared with the window fill() function.
+query I
+SELECT fill(v ORDER BY x) OVER () z
+FROM (VALUES (0.0::DOUBLE, 0::DECIMAL(38,0)),
+             (1.0, 18014398509481986::DECIMAL(38,0)),
+             (0.5, NULL::DECIMAL(38,0))) t(x, v)
+ORDER BY x;
+----
+0
+9007199254740993
+18014398509481986
+
+# An asymmetric opposite-sign span whose delta overflows signed INT128 retains the double fallback.
+query I
+SELECT quantile_cont(v, 0.25)::VARCHAR
+FROM (VALUES (-99999999999999999999999999999999999999::DECIMAL(38,0)),
+             (80000000000000000000000000000000000000::DECIMAL(38,0))) t(v);
+----
+-55000000000000001595265292622605844480

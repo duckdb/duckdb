@@ -1362,9 +1362,8 @@ static hugeint_t ShiftRight192(uint64_t lower, uint64_t middle, uint64_t upper, 
 }
 
 // Computes floor(delta * weight) exactly for a non-negative HUGEINT delta and a finite double weight in [0, 1].
-// The caller uses the result as an offset from one endpoint, retaining the truncation-towards-zero behaviour of the
-// previous floating-point conversion without first rounding the delta to double precision.
 static hugeint_t MultiplyHugeintByDoubleFraction(const hugeint_t &delta, const double weight) {
+	D_ASSERT(delta >= 0);
 	if (weight == 0) {
 		return hugeint_t(0);
 	}
@@ -1404,9 +1403,7 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 		if (lower >= 0 || upper <= 0) {
 			auto delta = upper;
 			if (Hugeint::TrySubtractInPlace(delta, lower)) {
-				// Preserve truncation towards zero by interpolating up from a non-negative lower bound or down from a
-				// non-positive upper bound. Calculating the offset from the delta retains precision for nearby large
-				// values.
+				// Interpolate from the endpoint with the matching sign to truncate towards zero.
 				const bool non_negative = lower >= 0;
 				const auto weight = non_negative ? (ascending ? d : 1 - d) : (ascending ? 1 - d : d);
 				const auto offset = MultiplyHugeintByDoubleFraction(delta, weight);
@@ -1419,7 +1416,7 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 			}
 		}
 	}
-	// Opposite-sign and very wide endpoints can overflow a signed delta. Retain the overflow-safe fallback.
+	// Fall back when the endpoint range does not fit a signed delta.
 	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 
