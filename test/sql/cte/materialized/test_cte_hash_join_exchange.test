@@ -277,16 +277,16 @@ statement ok
 SET memory_limit='64MB';
 
 statement ok
-SET operator_memory_limit='16MB';
+SET operator_memory_limit='256KB';
 
 # Materialization pressure keeps a mixed pipelined/hash fanout fully streaming.
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
 SELECT (SELECT sum(length(payload)) FROM c),
-       (SELECT count(*) FROM c JOIN range(500000) r(i) USING (i));
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
 
@@ -294,7 +294,7 @@ analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*C
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
 SELECT count(*), sum(length(l.payload))
 FROM c l JOIN c r USING (i);
@@ -302,52 +302,52 @@ FROM c l JOIN c r USING (i);
 analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
 
 # Cycle fallback only materializes a consumer whose external edge closes the cycle.
-statement ok
-SET operator_memory_limit='4MB';
-
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(100000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
 SELECT (SELECT sum(length(l.payload)) FROM c l JOIN c r USING (i)),
-       (SELECT sum(length(c.payload)) FROM range(100000) x(i) JOIN c USING (i));
+       (SELECT sum(length(c.payload)) FROM range(10000) x(i) JOIN c USING (i));
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 2.*Materialized Consumers: 1.*
 
-statement ok
-SET operator_memory_limit='16MB';
-
 # Direct consumers get independent chunk wrappers when one hash join slices its probe input while spilling.
+statement ok
+SET debug_force_external=true;
+
 query III
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
 SELECT branch, count(*), sum(v)
 FROM (
-  SELECT 1 branch, length(c.payload) v FROM c JOIN range(500000) r(i) USING (i)
+  SELECT 1 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
   UNION ALL
-  SELECT 2 branch, length(c.payload) v FROM c JOIN range(500000) r(i) USING (i)
+  SELECT 2 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
 )
 GROUP BY branch
 ORDER BY branch;
 ----
-1	500000	16000000
-2	500000	16000000
+1	10000	320000
+2	10000	320000
 
 query II
 EXPLAIN ANALYZE
 WITH c AS MATERIALIZED (
-  SELECT i, repeat('x', 32) payload FROM range(500000) t(i)
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
 )
 SELECT count(*)
 FROM (
-  SELECT c.i FROM c JOIN range(500000) r(i) USING (i)
+  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
   UNION ALL
-  SELECT c.i FROM c JOIN range(500000) r(i) USING (i)
+  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
 );
 ----
 analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
+
+statement ok
+SET debug_force_external=false;
 
 # Saturated estimates do not hide a second materialization that exceeds the budget.
 statement ok
