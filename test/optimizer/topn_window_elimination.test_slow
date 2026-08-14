@@ -74,6 +74,76 @@ WHERE s < random()
 QUALIFY row_number() OVER (ORDER BY s) <= 1
 ----
 
+# Ordering expressions can introduce NULLs even when their input columns cannot
+statement ok
+CREATE TABLE expression_nulls(id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO expression_nulls VALUES (1), (2), (3)
+
+query II
+SELECT id, row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+2	1
+1	2
+3	3
+
+# Exercise the min_n/max_n rewrite without a payload column
+query I
+SELECT row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+1
+2
+3
+
+# An expression whose ordering key is always NULL must not fabricate a NULL payload
+query II
+SELECT count(*), count(id)
+FROM (
+	SELECT id
+	FROM expression_nulls
+	QUALIFY row_number() OVER (ORDER BY NULLIF(id, id) NULLS LAST) = 1
+)
+----
+1	1
+
+# This is not specific to NULLIF: TRY_CAST can also introduce NULLs
+query IIII
+SELECT count(*), count(id), min(rn), max(rn)
+FROM (
+	SELECT id, row_number() OVER (ORDER BY TRY_CAST(id::VARCHAR || 'x' AS INTEGER) NULLS LAST) AS rn
+	FROM expression_nulls
+	QUALIFY rn <= 3
+)
+----
+3	3	1	3
+
+# Preserve nullable ordering keys through the partitioned, multi-payload path
+statement ok
+CREATE TABLE expression_null_payload(id INTEGER PRIMARY KEY, payload VARCHAR NOT NULL, grp INTEGER NOT NULL)
+
+statement ok
+INSERT INTO expression_null_payload VALUES (1, 'a', 1), (2, 'b', 1), (3, 'c', 1), (4, 'd', 2)
+
+query IIII
+SELECT id, payload, grp, row_number() OVER (
+	PARTITION BY grp ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST
+) AS rn
+FROM expression_null_payload
+QUALIFY rn <= 3
+ORDER BY grp, rn;
+----
+2	b	1	1
+1	a	1	2
+3	c	1	3
+4	d	2	1
+
 # NaN sorts after all finite floating-point values
 query II
 WITH floating_values(id, val) AS (
