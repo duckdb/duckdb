@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -298,6 +299,30 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
+
+		// For a genuine CREATE TRIGGER (not an ALTER propagation), verify that every UPDATE OF
+		// column still exists in the table at commit time.  A concurrent committed transaction may
+		// have renamed a column after we bound the trigger, producing an inconsistent catalog.
+		// old_entry.type is TRIGGER_ENTRY only for column-rename propagations (ALTER), which we skip.
+		if (new_entry.type == CatalogType::TRIGGER_ENTRY && old_entry.type != CatalogType::TRIGGER_ENTRY) {
+			auto &trig = new_entry.Cast<TriggerCatalogEntry>();
+			if (!trig.columns.empty()) {
+				// Build a transaction view that sees all committed changes up to this commit
+				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
+				auto table_entry = trig.schema.GetEntry(commit_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
+				if (table_entry) {
+					auto &table = table_entry->Cast<TableCatalogEntry>();
+					for (const auto &col : trig.columns) {
+						if (!table.ColumnExists(col)) {
+							throw TransactionException("Catalog write-write conflict on create with \"%s\": "
+							                           "column \"%s\" was renamed by a concurrent transaction",
+							                           trig.name, col.GetIdentifierName());
+						}
+					}
+				}
+			}
+		}
+
 		// Set the timestamp of the catalog entry to the given commit_id, marking it as committed
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
