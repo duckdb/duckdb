@@ -1,0 +1,19 @@
+# name: test/sql/copy/partitioned/partition_by_syntax.test
+# description: Test spaced COPY partition and ordering option syntax
+# group: [copy]
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS payload) TO '{TEST_DIR}/single_partition' PARTITION BY a, HEADER;
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b, 3 AS c) TO '{TEST_DIR}/multiple_partitions' PARTITION BY (a, b), HEADER;
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/partitioned_by' PARTITIONED BY a, HEADER;
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/spaced_options' (FORMAT CSV, PARTITIONED BY (a), ORDER BY (b DESC), HEADER);
+
+# PARTITIONED_BY remains supported as an alias for backwards compatibility.
+statement ok
+COPY (SELECT 1 AS a, 2 AS payload) TO '{TEST_DIR}/partitioned_by_compatibility' (FORMAT CSV, PARTITIONED_BY (a), HEADER);

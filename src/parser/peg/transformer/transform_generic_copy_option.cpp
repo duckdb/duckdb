@@ -77,11 +77,10 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 	return CreateRowFunction(std::move(children));
 }
 
-GenericCopyOption
-PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
-                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+static GenericCopyOption TransformGenericCopyOption(const Identifier &generic_copy_option_name,
+                                                    optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
+	copy_option.name = Identifier(StringUtil::Lower(generic_copy_option_name.GetIdentifierName()));
 	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
 		return copy_option;
 	}
@@ -109,6 +108,23 @@ PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, c
 		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value->expression));
 	}
 	return copy_option;
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformNamedGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
+                                                       optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return TransformGenericCopyOption(copy_option_name, std::move(generic_copy_option_value));
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformOrderByGenericCopyOption(PEGTransformer &transformer,
+                                                         optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return TransformGenericCopyOption(Identifier("order_by"), std::move(generic_copy_option_value));
+}
+
+GenericCopyOption PEGTransformerFactory::TransformPartitionedByGenericCopyOption(
+    PEGTransformer &transformer, optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return TransformGenericCopyOption(Identifier("partition_by"), std::move(generic_copy_option_value));
 }
 
 GenericCopyOptionValue PEGTransformerFactory::TransformGenericCopyOptionOrderList(

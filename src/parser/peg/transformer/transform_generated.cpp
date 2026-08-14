@@ -1630,20 +1630,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyOptionListI
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSpecializedOptionListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	optional<vector<GenericCopyOption>> specialized_option {};
-	auto &specialized_option_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
-	if (specialized_option_opt.HasResult()) {
-		vector<GenericCopyOption> specialized_option_value;
-		auto &specialized_option_value_repeat_1 = specialized_option_opt.GetResult().Cast<RepeatParseResult>();
-		for (auto &specialized_option_value_item_1 : specialized_option_value_repeat_1.GetChildren()) {
-			auto specialized_option_value_value_1 =
-			    transformer.Transform<GenericCopyOption>(specialized_option_value_item_1.get());
-			specialized_option_value.push_back(specialized_option_value_value_1);
+	auto specialized_option = transformer.Transform<GenericCopyOption>(list_pr.GetChild(0));
+	optional<vector<GenericCopyOption>> specialized_option_tail {};
+	auto &specialized_option_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (specialized_option_tail_opt.HasResult()) {
+		vector<GenericCopyOption> specialized_option_tail_value;
+		auto &specialized_option_tail_value_repeat_1 =
+		    specialized_option_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &specialized_option_tail_value_item_1 : specialized_option_tail_value_repeat_1.GetChildren()) {
+			auto specialized_option_tail_value_value_1 =
+			    transformer.Transform<GenericCopyOption>(specialized_option_tail_value_item_1.get());
+			specialized_option_tail_value.push_back(specialized_option_tail_value_value_1);
 		}
-		specialized_option = specialized_option_value;
+		specialized_option_tail = specialized_option_tail_value;
 	}
-	auto result = TransformSpecializedOptionList(transformer, specialized_option);
+	auto result = TransformSpecializedOptionList(transformer, specialized_option, specialized_option_tail);
 	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSpecializedOptionTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto specialized_option = transformer.Transform<GenericCopyOption>(list_pr.GetChild(1));
+	auto result = TransformSpecializedOptionTail(transformer, has_result, specialized_option);
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSpecializedOptionInternal(PEGTransformer &transformer,
@@ -1779,9 +1792,42 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForceQuoteInter
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPartitionByOptionInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto star_symbol_column_list = transformer.Transform<vector<string>>(list_pr.GetChild(2));
-	auto result = TransformPartitionByOption(transformer, star_symbol_column_list);
+	auto partition_by_column_list = transformer.Transform<vector<string>>(list_pr.GetChild(2));
+	auto result = TransformPartitionByOption(transformer, partition_by_column_list);
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformPartitionByColumnListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<string>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStarPartitionByColumnListInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto result = TransformStarPartitionByColumnList(transformer);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformParenthesizedPartitionByColumnListInternal(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto column_list = transformer.Transform<vector<string>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformParenthesizedPartitionByColumnList(transformer, column_list);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSinglePartitionByColumnListInternal(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto result = TransformSinglePartitionByColumnList(transformer, col_id);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForceNullOptionInternal(PEGTransformer &transformer,
@@ -1820,6 +1866,44 @@ PEGTransformerFactory::TransformGenericCopyOptionListInternal(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGenericCopyOptionInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<GenericCopyOption>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOrderByGenericCopyOptionInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<GenericCopyOptionValue> generic_copy_option_value {};
+	auto &generic_copy_option_value_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (generic_copy_option_value_opt.HasResult()) {
+		auto generic_copy_option_value_value =
+		    transformer.Transform<GenericCopyOptionValue>(generic_copy_option_value_opt.GetResult());
+		generic_copy_option_value = std::move(generic_copy_option_value_value);
+	}
+	auto result = TransformOrderByGenericCopyOption(transformer, std::move(generic_copy_option_value));
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformPartitionedByGenericCopyOptionInternal(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<GenericCopyOptionValue> generic_copy_option_value {};
+	auto &generic_copy_option_value_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (generic_copy_option_value_opt.HasResult()) {
+		auto generic_copy_option_value_value =
+		    transformer.Transform<GenericCopyOptionValue>(generic_copy_option_value_opt.GetResult());
+		generic_copy_option_value = std::move(generic_copy_option_value_value);
+	}
+	auto result = TransformPartitionedByGenericCopyOption(transformer, std::move(generic_copy_option_value));
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNamedGenericCopyOptionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto copy_option_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	optional<GenericCopyOptionValue> generic_copy_option_value {};
 	auto &generic_copy_option_value_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
@@ -1828,7 +1912,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGenericCopyOpti
 		    transformer.Transform<GenericCopyOptionValue>(generic_copy_option_value_opt.GetResult());
 		generic_copy_option_value = std::move(generic_copy_option_value_value);
 	}
-	auto result = TransformGenericCopyOption(transformer, copy_option_name, std::move(generic_copy_option_value));
+	auto result = TransformNamedGenericCopyOption(transformer, copy_option_name, std::move(generic_copy_option_value));
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
@@ -10770,6 +10854,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CopyOptions", &PEGTransformerFactory::TransformCopyOptionsInternal},
 	    {"CopyOptionList", &PEGTransformerFactory::TransformCopyOptionListInternal},
 	    {"SpecializedOptionList", &PEGTransformerFactory::TransformSpecializedOptionListInternal},
+	    {"SpecializedOptionTail", &PEGTransformerFactory::TransformSpecializedOptionTailInternal},
 	    {"SpecializedOption", &PEGTransformerFactory::TransformSpecializedOptionInternal},
 	    {"SingleOption", &PEGTransformerFactory::TransformSingleOptionInternal},
 	    {"BinaryOption", &PEGTransformerFactory::TransformBinaryOptionInternal},
@@ -10786,10 +10871,18 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"StarSymbolColumnList", &PEGTransformerFactory::TransformStarSymbolColumnListInternal},
 	    {"ForceQuote", &PEGTransformerFactory::TransformForceQuoteInternal},
 	    {"PartitionByOption", &PEGTransformerFactory::TransformPartitionByOptionInternal},
+	    {"PartitionByColumnList", &PEGTransformerFactory::TransformPartitionByColumnListInternal},
+	    {"StarPartitionByColumnList", &PEGTransformerFactory::TransformStarPartitionByColumnListInternal},
+	    {"ParenthesizedPartitionByColumnList",
+	     &PEGTransformerFactory::TransformParenthesizedPartitionByColumnListInternal},
+	    {"SinglePartitionByColumnList", &PEGTransformerFactory::TransformSinglePartitionByColumnListInternal},
 	    {"ForceNullOption", &PEGTransformerFactory::TransformForceNullOptionInternal},
 	    {"ForceNotNull", &PEGTransformerFactory::TransformForceNotNullInternal},
 	    {"GenericCopyOptionList", &PEGTransformerFactory::TransformGenericCopyOptionListInternal},
 	    {"GenericCopyOption", &PEGTransformerFactory::TransformGenericCopyOptionInternal},
+	    {"OrderByGenericCopyOption", &PEGTransformerFactory::TransformOrderByGenericCopyOptionInternal},
+	    {"PartitionedByGenericCopyOption", &PEGTransformerFactory::TransformPartitionedByGenericCopyOptionInternal},
+	    {"NamedGenericCopyOption", &PEGTransformerFactory::TransformNamedGenericCopyOptionInternal},
 	    {"GenericCopyOptionValue", &PEGTransformerFactory::TransformGenericCopyOptionValueInternal},
 	    {"GenericCopyOptionOrderList", &PEGTransformerFactory::TransformGenericCopyOptionOrderListInternal},
 	    {"GenericCopyOptionExpression", &PEGTransformerFactory::TransformGenericCopyOptionExpressionInternal},

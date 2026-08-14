@@ -883,7 +883,11 @@ GenericCopyOption:
   by_value: false
   rules:
     - GenericCopyOption
+    - OrderByGenericCopyOption
+    - PartitionedByGenericCopyOption
+    - NamedGenericCopyOption
     - SpecializedOption
+    - SpecializedOptionTail
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -899,6 +903,15 @@ GenericCopyOption:
     - OidsOption
     - CsvOption
     - HeaderOption
+
+PartitionByColumnList:
+  type: "vector<string>"
+  by_value: false
+  rules:
+    - PartitionByColumnList
+    - StarPartitionByColumnList
+    - ParenthesizedPartitionByColumnList
+    - SinglePartitionByColumnList
 
 GenericCopyOptionValue:
   type: "GenericCopyOptionValue"
