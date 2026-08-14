@@ -138,7 +138,6 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	auto &aliases = output.data[5];
 	// value, LogicalType::VARIANT
 	auto &typed_value = output.data[6];
-	
 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
