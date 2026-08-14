@@ -124,3 +124,14 @@ jobs:
           export URL=https://api.github.com/repos/duckdb/duckdb-rs/actions/workflows/nightly.yaml/dispatches
           export DATA='{"ref": "main", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}" }}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+
+  notify-go-nightly:
+    name: Dispatch Go nightly build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /dispatch
+        if: ${{ github.repository == 'duckdb/duckdb' && inputs.override-git-describe == '' }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-go-bindings/actions/workflows/nightly.yaml/dispatches
+          export DATA='{"ref": "main", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}" }}'
+          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
