@@ -2,7 +2,6 @@
 
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -15,16 +14,16 @@ MultiFileReadAhead::~MultiFileReadAhead() {
 }
 
 unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context) {
-	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == 0) {
+	optional_idx depth;
+	if (!TryGetReadAheadDepth(context, depth)) {
 		return nullptr;
 	}
-	if (configured_depth == -1) {
+	if (!depth.IsValid()) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
 		return make_uniq<MultiFileReadAhead>(context, NumericLimits<idx_t>::Maximum(),
 		                                     make_uniq<ManagedAsyncMemoryGovernor>(context));
 	}
-	return make_uniq<MultiFileReadAhead>(context, NumericCast<idx_t>(configured_depth), nullptr);
+	return make_uniq<MultiFileReadAhead>(context, depth.GetIndex(), nullptr);
 }
 
 MultiFileGlobalState::MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {

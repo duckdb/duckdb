@@ -2,6 +2,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
@@ -41,6 +42,21 @@ bool ReadAheadJobCompletion::TryPark(TableFunctionInput &data_p) {
 void ScanReadAheadYield(ClientContext &context) {
 	context.InterruptCheck();
 	TaskScheduler::YieldThread();
+}
+
+bool TryGetReadAheadDepth(ClientContext &context, optional_idx &depth) {
+	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
+		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
+		return false;
+	}
+	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
+	if (configured_depth == 0) {
+		return false;
+	}
+	if (configured_depth > 0) {
+		depth = NumericCast<idx_t>(configured_depth);
+	}
+	return true;
 }
 
 void ReadAheadJobCompletion::WaitForIO() {

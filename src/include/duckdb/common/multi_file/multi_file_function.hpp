@@ -600,8 +600,7 @@ public:
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate) {
-		if (!bind_data.interface->SupportsReadAhead(bind_data) ||
-		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
+		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
 		gstate.read_ahead = MultiFileReadAhead::Create(context);

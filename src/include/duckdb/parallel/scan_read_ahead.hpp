@@ -15,6 +15,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -106,6 +107,10 @@ enum class ScanReadAheadAcquire : uint8_t {
 
 //! Throw when the query was interrupted, otherwise yield the thread
 void ScanReadAheadYield(ClientContext &context);
+
+//! Resolve the read_ahead_depth setting, returns false when read-ahead is disabled.
+//! An invalid depth means automatic mode, its interpretation is up to the scan.
+bool TryGetReadAheadDepth(ClientContext &context, optional_idx &depth);
 
 //! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
 //! JOB must derive from ScanReadAheadJob<STATE>.
