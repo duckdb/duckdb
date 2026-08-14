@@ -77,6 +77,11 @@ int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer
 	return -1;
 }
 
+int64_t PEGTransformerFactory::TransformArrayKeywordWithBounds(PEGTransformer &transformer,
+                                                               const int64_t &square_brackets_array) {
+	return square_brackets_array;
+}
+
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
                                                             optional<unique_ptr<ParsedExpression>> expression) {
 	if (!expression) {

@@ -594,31 +594,20 @@ public:
 
 class NestedLoopJoinLocalScanState : public LocalSourceState {
 public:
-	explicit NestedLoopJoinLocalScanState(ExecutionContext &context, const PhysicalNestedLoopJoin &op,
-	                                      NestedLoopJoinGlobalScanState &gstate)
-	    : op(op) {
-		ResetState(gstate);
-	}
-
-	const PhysicalNestedLoopJoin &op;
-	OuterJoinLocalScanState scan_state;
-
-private:
-	void ResetState(NestedLoopJoinGlobalScanState &gstate) {
+	explicit NestedLoopJoinLocalScanState(const PhysicalNestedLoopJoin &op, NestedLoopJoinGlobalScanState &gstate) {
 		auto &sink = op.sink_state->Cast<NestedLoopJoinGlobalState>();
 		sink.right_outer.InitializeScan(gstate.scan_state, scan_state);
 	}
+
+	OuterJoinLocalScanState scan_state;
 
 public:
 	bool SupportsReuse() const override {
 		return true;
 	}
 
-	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
-		auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalScanState>();
-		// The source only scans unmatched RHS rows for RIGHT/FULL OUTER joins. The materialized RHS payload and
-		// match bitmap live in the sink state, so a reused local source state must rebind its scan to that data.
-		ResetState(gstate);
+	void Reset(ExecutionContext &, GlobalSourceState &) override {
+		scan_state.Reset();
 	}
 };
 
@@ -628,7 +617,7 @@ unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(Clien
 
 unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(ExecutionContext &context,
                                                                          GlobalSourceState &gstate) const {
-	return make_uniq<NestedLoopJoinLocalScanState>(context, *this, gstate.Cast<NestedLoopJoinGlobalScanState>());
+	return make_uniq<NestedLoopJoinLocalScanState>(*this, gstate.Cast<NestedLoopJoinGlobalScanState>());
 }
 
 SourceResultType PhysicalNestedLoopJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,

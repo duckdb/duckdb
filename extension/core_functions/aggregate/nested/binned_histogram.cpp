@@ -71,7 +71,7 @@ struct HistogramBinState {
 			}
 		}
 
-		counts->resize(bin_list.length + 1);
+		counts->resize(bin_boundaries->size() + 1);
 	}
 };
 

@@ -1,0 +1,139 @@
+# name: test/sql/collate/test_collate_null_constant.test
+# description: Constant NULL expressions of types that require collation
+# group: [collate]
+
+# binding a collation over a constant NULL folds it away, replacing the expression that the
+# collation was pushed onto - see issue #24715
+
+# GROUP BY
+query I
+SELECT AGE(NULL, NULL) GROUP BY AGE(NULL, NULL);
+----
+NULL
+
+query I
+SELECT AGE(DATE '2024-01-01', NULL::TIMESTAMP) GROUP BY AGE(DATE '2024-01-01', NULL::TIMESTAMP);
+----
+NULL
+
+foreach type INTERVAL TIMETZ BIT VARIANT
+
+query I
+SELECT NULL::{type} GROUP BY NULL::{type};
+----
+NULL
+
+endloop
+
+# the collation of a LIST/ARRAY is pushed into the elements
+statement ok
+SET default_collation='nocase'
+
+query I
+SELECT NULL::VARCHAR GROUP BY NULL::VARCHAR;
+----
+NULL
+
+query I
+SELECT NULL::VARCHAR[] GROUP BY NULL::VARCHAR[];
+----
+NULL
+
+query I
+SELECT NULL::VARCHAR[2] GROUP BY NULL::VARCHAR[2];
+----
+NULL
+
+query I
+SELECT NULL::VARCHAR COLLATE nocase;
+----
+NULL
+
+query I
+SELECT min(NULL::VARCHAR);
+----
+NULL
+
+query I
+SELECT arg_min(1, NULL::VARCHAR);
+----
+NULL
+
+statement ok
+RESET default_collation
+
+# the other clauses that push collations
+query I
+SELECT DISTINCT NULL::INTERVAL;
+----
+NULL
+
+query I
+SELECT 1 ORDER BY NULL::INTERVAL;
+----
+1
+
+query I
+SELECT row_number() OVER (PARTITION BY NULL::INTERVAL ORDER BY NULL::INTERVAL);
+----
+1
+
+query I
+SELECT string_agg(s, ',' ORDER BY NULL::INTERVAL) FROM (SELECT 'a' s) t;
+----
+a
+
+query I
+SELECT NULL::INTERVAL = NULL::INTERVAL;
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL BETWEEN NULL::INTERVAL AND NULL::INTERVAL;
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL IN (NULL::INTERVAL, INTERVAL 1 DAY);
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL IN (SELECT INTERVAL 1 DAY);
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL = ANY (SELECT INTERVAL 1 DAY);
+----
+NULL
+
+query I
+SELECT (SELECT 1 WHERE t.i = NULL::INTERVAL) FROM (SELECT INTERVAL 1 DAY i) t;
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL UNION SELECT NULL::INTERVAL;
+----
+NULL
+
+query I
+SELECT NULL::INTERVAL EXCEPT SELECT NULL::INTERVAL;
+----
+
+query I
+SELECT max(NULL::BIT);
+----
+NULL
+
+# non-NULL constants of a collated type still group by the collated value
+query I
+SELECT AGE(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17') GROUP BY AGE(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17');
+----
+8 days
+
+query II
+SELECT i, count(*) FROM (VALUES (INTERVAL '30' DAY), (INTERVAL '1' MONTH), (INTERVAL '720' HOUR)) t(i) GROUP BY i;
+----
+30 days	3

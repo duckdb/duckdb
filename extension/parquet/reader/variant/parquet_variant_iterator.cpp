@@ -234,9 +234,13 @@ uint32_t ComputeDecimalWidth(T value) {
 	if (value == 0) {
 		return 1;
 	}
-	auto abs_val = value;
-	if (abs_val < 0) {
-		abs_val = -abs_val;
+	// |min| might not fit in signed T; use unsigned wrap.
+	using unsigned_t = std::make_unsigned_t<T>;
+	unsigned_t abs_val = 0;
+	if (value < 0) {
+		abs_val = static_cast<unsigned_t>(0) - static_cast<unsigned_t>(value);
+	} else {
+		abs_val = static_cast<unsigned_t>(value);
 	}
 	return static_cast<uint32_t>(floor(log10(static_cast<double>(abs_val))) + 1);
 }
@@ -517,7 +521,7 @@ string_t ParquetVariantNode::GetString() const {
 			return str;
 		}
 		if (!Utf8Proc::IsValid(str.GetData(), str.GetSize())) {
-			throw InternalException("Can't decode Variant string, it isn't valid UTF8");
+			throw IOException("Can't decode Variant string, it isn't valid UTF8");
 		}
 		return str;
 	}
@@ -528,7 +532,7 @@ string_t ParquetVariantNode::GetString() const {
 		auto string_data = const_char_ptr_cast(payload);
 		CheckBinaryRead(payload, value_metadata.string_size, binary_end);
 		if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
-			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+			throw IOException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
 		return string_t(string_data, value_metadata.string_size);
 	}
@@ -540,7 +544,7 @@ string_t ParquetVariantNode::GetString() const {
 		return string_t(string_data, size);
 	}
 	if (!Utf8Proc::IsValid(string_data, size)) {
-		throw InternalException("Can't decode Variant string, it isn't valid UTF8");
+		throw IOException("Can't decode Variant string, it isn't valid UTF8");
 	}
 	return string_t(string_data, size);
 }

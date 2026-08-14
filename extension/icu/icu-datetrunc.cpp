@@ -171,6 +171,8 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDateTruncFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
+		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}

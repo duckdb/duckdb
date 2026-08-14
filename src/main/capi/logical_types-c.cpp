@@ -373,7 +373,7 @@ char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
 
 void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias) {
 	auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(type));
-	logical_type.SetAlias(alias);
+	logical_type = logical_type.WithAlias(alias);
 }
 
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {

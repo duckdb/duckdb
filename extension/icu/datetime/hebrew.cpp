@@ -315,9 +315,10 @@ void HebrewCalendar::HandleComputeFields(int32_t julian_day) {
 		return;
 	}
 
-	// estimate the year from the number of lunar months that have passed
-	const auto months = FloorDiv::Divide(double(days) * double(DAY_PARTS), double(MONTH_PARTS));
-	auto year = int32_t(FloorDiv::Divide(19. * months + 234., 235.) + 1.);
+	// estimate the year from the number of lunar months that have passed. The parts of a day are
+	// whole numbers, so the estimate is exact rather than the nearest a double can hold.
+	const auto months = FloorDiv::Divide(days * int64_t(DAY_PARTS), int64_t(MONTH_PARTS));
+	auto year = int32_t(FloorDiv::Divide(19 * months + 234, int64_t(235)) + 1);
 
 	auto failure = false;
 	auto year_start = StartOfYear(year, failure);

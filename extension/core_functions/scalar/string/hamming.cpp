@@ -39,7 +39,10 @@ static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction HammingFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, MismatchesFunction);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, MismatchesFunction);
+	// throws if the strings are empty or of unequal length
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

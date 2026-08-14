@@ -999,9 +999,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
-	auto res = LogicalType::STRUCT(std::move(children));
-	res.SetAlias("PARQUET_VARIANT");
-	return res;
+	return LogicalType::STRUCT(std::move(children)).WithAlias("PARQUET_VARIANT");
 }
 
 static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
@@ -1036,6 +1034,8 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
 	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws for values that are out of range for the parquet variant encoding
+	transform.SetFallible();
 	return transform;
 }
 
