@@ -77,22 +77,22 @@ public:
 	}
 
 	//! Get the child node at byte, if it exists.
-	static OptionalNode GetChildNode(const Node256 &n, const uint8_t byte) {
+	static OptionalNodePtr GetChildNode(const Node256 &n, const uint8_t byte) {
 		if (n.children[byte].HasMetadata()) {
 			return n.children[byte];
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	//! Get the first child node >= byte, if it exists, and update byte.
-	static OptionalNode GetNextChildNode(const Node256 &n, uint8_t &byte) {
+	static OptionalNodePtr GetNextChildNode(const Node256 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < CAPACITY; i++) {
 			if (n.children[i].HasMetadata()) {
 				byte = UnsafeNumericCast<uint8_t>(i);
 				return n.children[i];
 			}
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	template <class NODE>

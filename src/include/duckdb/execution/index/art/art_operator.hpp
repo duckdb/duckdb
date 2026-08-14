@@ -20,8 +20,8 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns the leaf matching the key, or an empty OptionalNode if no such leaf exists.
-	static OptionalNode Lookup(ART &art, const NodePtr &node, const ARTKey &key, idx_t depth) {
+	//! Lookup returns the leaf matching the key, or an empty OptionalNodePtr if no such leaf exists.
+	static OptionalNodePtr Lookup(ART &art, const NodePtr &node, const ARTKey &key, idx_t depth) {
 		NodePtr current(node);
 
 		while (current.HasMetadata()) {
@@ -35,7 +35,7 @@ public:
 				NodePtr child = ConstPrefixHandle::ChildRef(art, handle);
 				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 					if (data[i] != key[depth]) {
-						return OptionalNode();
+						return OptionalNodePtr();
 					}
 					depth++;
 				}
@@ -46,7 +46,7 @@ public:
 			D_ASSERT(depth < key.len);
 			auto child = current.GetChildNode(art, key[depth]);
 			if (!child) {
-				return OptionalNode();
+				return OptionalNodePtr();
 			}
 
 			current = child.Get();
@@ -54,7 +54,7 @@ public:
 			depth++;
 		}
 
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	//! LookupInLeaf returns true if the rowid is in the leaf:

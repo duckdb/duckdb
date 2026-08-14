@@ -41,7 +41,7 @@ class ART;
 class Prefix;
 class ARTKey;
 class FixedSizeAllocator;
-class OptionalNode;
+class OptionalNodePtr;
 
 //! State for TransformToDeprecated operations
 class TransformToDeprecatedState {
@@ -148,9 +148,9 @@ public:
 	                        const ARTKey &row_id);
 
 	//! Get the child node at byte, if it exists.
-	OptionalNode GetChildNode(const ART &art, const uint8_t byte) const;
+	OptionalNodePtr GetChildNode(const ART &art, const uint8_t byte) const;
 	//! Get the first child node >= byte, if it exists, and update byte.
-	OptionalNode GetNextChildNode(const ART &art, uint8_t &byte) const;
+	OptionalNodePtr GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<NodePtr> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
@@ -239,20 +239,20 @@ struct NodeChildren {
 	array_ptr<NodePtr> children;
 };
 
-//! OptionalNode either holds a valid node, or is empty.
-//! Emptiness is derived from the node itself: a node without metadata is the empty state.
-class OptionalNode {
+//! OptionalNodePtr holds a copied NodePtr value or is empty.
+//! A NodePtr without metadata is the empty state.
+class OptionalNodePtr {
 public:
-	OptionalNode() = default;
-	OptionalNode(const NodePtr node) : node(node) { // NOLINT: allow implicit conversion from NodePtr
+	OptionalNodePtr() = default;
+	OptionalNodePtr(const NodePtr node) : node(node) { // NOLINT: allow implicit conversion from NodePtr
 	}
 
-	//! Returns true, if the OptionalNode holds a valid node.
+	//! Returns true if the OptionalNodePtr holds a valid NodePtr.
 	explicit operator bool() const {
 		return node.HasMetadata();
 	}
 
-	//! Returns the node. Must only be called if the OptionalNode holds a valid node.
+	//! Returns the copied NodePtr. Must only be called if it is valid.
 	NodePtr Get() const {
 		D_ASSERT(node.HasMetadata());
 		return node;

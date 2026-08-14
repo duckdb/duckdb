@@ -62,7 +62,7 @@ void NodePtr::FreeTree(ART &art, NodePtr &tree) {
 		return;
 	}
 	// All nodes should be pushed onto the stack.
-	auto child_handler = [](NodePtr &child) -> OptionalNode {
+	auto child_handler = [](NodePtr &child) -> OptionalNodePtr {
 		D_ASSERT(child.HasMetadata());
 		return child;
 	};
@@ -234,7 +234,7 @@ unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutable(ART &art, const uint8_t by
 	return GetChildInternal(art, *this, byte, unsafe);
 }
 
-OptionalNode NodePtr::GetChildNode(const ART &art, const uint8_t byte) const {
+OptionalNodePtr NodePtr::GetChildNode(const ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();
 	ConstNodeHandle handle(art, *this);
@@ -252,7 +252,7 @@ OptionalNode NodePtr::GetChildNode(const ART &art, const uint8_t byte) const {
 	}
 }
 
-OptionalNode NodePtr::GetNextChildNode(const ART &art, uint8_t &byte) const {
+OptionalNodePtr NodePtr::GetNextChildNode(const ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();
 	ConstNodeHandle handle(art, *this);
@@ -403,11 +403,11 @@ bool NodePtr::IsAnyLeaf() const {
 //===--------------------------------------------------------------------===//
 
 void NodePtr::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state) {
-	auto child_handler = [&](NodePtr &child) -> OptionalNode {
+	auto child_handler = [&](NodePtr &child) -> OptionalNodePtr {
 		D_ASSERT(child.HasMetadata());
 		if (child.GetGateStatus() == GateStatus::GATE_SET) {
 			Leaf::TransformToDeprecated(art, child);
-			return OptionalNode();
+			return OptionalNodePtr();
 		}
 		auto type = child.GetType();
 		switch (type) {
@@ -416,7 +416,7 @@ void NodePtr::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecat
 			return PrefixHandle::TransformToDeprecated(art, child, state);
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
-			return OptionalNode();
+			return OptionalNodePtr();
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
@@ -483,21 +483,21 @@ void NodePtr::Verify(ART &art) const {
 void NodePtr::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
 
-	auto child_handler = [&](const NodePtr &child) -> OptionalNode {
+	auto child_handler = [&](const NodePtr &child) -> OptionalNodePtr {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return OptionalNode();
+			return OptionalNodePtr();
 		case NType::LEAF: {
 			Leaf::DeprecatedVerifyAllocations(art, child, node_counts);
-			return OptionalNode();
+			return OptionalNodePtr();
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			node_counts[GetAllocatorIdx(type)]++;
-			return OptionalNode();
+			return OptionalNodePtr();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:

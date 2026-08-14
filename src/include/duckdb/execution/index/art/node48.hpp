@@ -86,18 +86,18 @@ public:
 	}
 
 	//! Get the child node at byte, if it exists.
-	static OptionalNode GetChildNode(const Node48 &n, const uint8_t byte) {
+	static OptionalNodePtr GetChildNode(const Node48 &n, const uint8_t byte) {
 		if (n.child_index[byte] != EMPTY_MARKER) {
 			if (!n.children[n.child_index[byte]].HasMetadata()) {
 				throw InternalException("empty child for byte %d in Node48::GetChildNode", byte);
 			}
 			return n.children[n.child_index[byte]];
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	//! Get the first child node >= byte, if it exists, and update byte.
-	static OptionalNode GetNextChildNode(const Node48 &n, uint8_t &byte) {
+	static OptionalNodePtr GetNextChildNode(const Node48 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				if (!n.children[n.child_index[i]].HasMetadata()) {
@@ -108,7 +108,7 @@ public:
 				return n.children[n.child_index[i]];
 			}
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	template <class NODE>

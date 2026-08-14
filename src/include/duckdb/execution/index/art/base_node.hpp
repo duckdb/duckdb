@@ -69,7 +69,7 @@ public:
 	}
 
 	//! Get the child node at byte, if it exists.
-	static OptionalNode GetChildNode(const BaseNode &n, const uint8_t byte) {
+	static OptionalNodePtr GetChildNode(const BaseNode &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				if (!n.children[i].HasMetadata()) {
@@ -78,11 +78,11 @@ public:
 				return n.children[i];
 			}
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	//! Get the first child node >= byte, if it exists, and update byte.
-	static OptionalNode GetNextChildNode(const BaseNode &n, uint8_t &byte) {
+	static OptionalNodePtr GetNextChildNode(const BaseNode &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
 				if (!n.children[i].HasMetadata()) {
@@ -93,7 +93,7 @@ public:
 				return n.children[i];
 			}
 		}
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 
 	//! Get the child at byte.

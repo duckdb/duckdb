@@ -1233,11 +1233,11 @@ void ART::Vacuum(IndexLock &state) {
 	auto &art = *this;
 	const auto vacuum_deprecated_leaves = indexes.find(NodePtr::GetAllocatorIdx(NType::LEAF)) != indexes.end();
 
-	auto child_handler = [&](NodePtr &child) -> OptionalNode {
+	auto child_handler = [&](NodePtr &child) -> OptionalNodePtr {
 		// Vacuums the pointer if needed and updates in place within the parent.
 		VacuumPointerIfNeeded(art, indexes, child);
 		if (child.GetType() == NType::LEAF_INLINED) {
-			return OptionalNode();
+			return OptionalNodePtr();
 		}
 		// Push the updated pointer onto the stack to continue vacuum traversal on the subtree.
 		return child;
@@ -1273,12 +1273,12 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(other_tree.HasMetadata());
 
-	auto child_handler = [&](NodePtr &child) -> OptionalNode {
+	auto child_handler = [&](NodePtr &child) -> OptionalNodePtr {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		// no-op
 		if (type == NType::LEAF_INLINED) {
-			return OptionalNode();
+			return OptionalNodePtr();
 		}
 		// FIXME: Implement merging for deprecated leaves.
 		if (type == NType::LEAF) {
@@ -1294,7 +1294,7 @@ void ART::InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bound
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			// no-op
-			return OptionalNode();
+			return OptionalNodePtr();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:

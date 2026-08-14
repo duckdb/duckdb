@@ -16,14 +16,14 @@ NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, NodePtr &n
 	return handle;
 }
 
-OptionalNode PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state) {
+OptionalNodePtr PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
 		NodePtr current = node;
 		auto &allocator = NodePtr::GetAllocator(art, PREFIX);
 		while (current.GetType() == PREFIX && current.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			if (!allocator.LoadedFromStorage(current)) {
-				return OptionalNode();
+				return OptionalNodePtr();
 			}
 			NodeHandle handle(art, current);
 			auto &child = ChildRef(art, handle);
@@ -31,7 +31,7 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, Transf
 			// Handle gated endpoints while the parent of the prefix chain is still pinned.
 			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
 				Leaf::TransformToDeprecated(art, child);
-				return OptionalNode();
+				return OptionalNodePtr();
 			}
 		}
 		return current;
@@ -46,7 +46,7 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, Transf
 	NodePtr current_node = node;
 	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		if (!allocator.LoadedFromStorage(current_node)) {
-			return OptionalNode();
+			return OptionalNodePtr();
 		}
 		{
 			// Decrease the readers on current_handle after moving all data over.
@@ -75,7 +75,7 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, Transf
 	NodePtr endpoint = new_child;
 	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
 		Leaf::TransformToDeprecated(art, new_child);
-		return OptionalNode();
+		return OptionalNodePtr();
 	}
 	return endpoint;
 }

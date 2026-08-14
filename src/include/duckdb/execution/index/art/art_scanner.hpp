@@ -21,7 +21,7 @@ enum class ARTScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
 //! Pins node and passes each of its child slots to child_handler.
 //! child_handler runs under the pin, can update the slot in place,
-//! and returns the node to push, or an empty OptionalNode.
+//! and returns the NodePtr value to push, or an empty OptionalNodePtr.
 template <class NODE, class NODE_HANDLE, class ART_TYPE, class CHILD_HANDLER, class PUSH>
 void ARTScanChildrenInternal(ART_TYPE &art, const NodePtr node, CHILD_HANDLER &&child_handler, PUSH &&push) {
 	NODE_HANDLE handle(art, node);
@@ -101,8 +101,8 @@ void ARTScanPreorderInternal(ART_TYPE &art, NODE_REF &root, CHILD_HANDLER &&chil
 
 //! Pre-order scanner.
 //! child_handler runs on the root and on each child slot. For child slots, it runs while the parent
-//! is pinned and can update the slot in place. It returns the node to continue the traversal with,
-//! or an empty OptionalNode to stop.
+//! is pinned and can update the slot in place. It returns the NodePtr value to continue the traversal with,
+//! or an empty OptionalNodePtr to stop.
 //! on_pop runs on each popped node with no scanner-owned handles held and decides whether to scan its children.
 //! The caller may still hold a pin protecting the root slot.
 template <class CHILD_HANDLER, class ON_POP>
@@ -131,7 +131,7 @@ struct ARTPostOrderScanEntry {
 
 //! Post-order scanner: each node is visited twice via the children_visited flag in ARTPostOrderScanEntry.
 //! On the first visit, child_handler runs on each child slot (under the parent's pin) and returns
-//! the node to push, or an empty OptionalNode.
+//! the NodePtr value to push, or an empty OptionalNodePtr.
 //! On the second visit, after all descendants have been processed, post_handler runs with no scanner-owned handles
 //! held. The caller may still hold a pin protecting the root slot.
 template <class CHILD_HANDLER, class POST_HANDLER>
