@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -17,7 +18,12 @@ struct CommitCounters {
 
 CommitCounters ReadCounters(Connection &con, const string &table_name) {
 	con.BeginTransaction();
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(*con.context, INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
+	// QualifiedName overload, not the (catalog, schema, name) one: that form is
+	// deprecated on main in favour of folding the qualification into a
+	// QualifiedName. The deprecated form also compiles here, but a new test
+	// should not add a deprecation warning to the build.
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+	    *con.context, QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, table_name));
 	auto &transaction_manager = DuckTransactionManager::Get(table_entry.GetStorage().GetAttached());
 	CommitCounters counters {transaction_manager.GetLastCommit(), transaction_manager.GetLastWriteCommit()};
 	con.Commit();
