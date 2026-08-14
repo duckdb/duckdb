@@ -229,8 +229,9 @@ SELECT count(*) FROM duckdb_extension_repositories() WHERE prefix='http://evil.e
 ----
 0
 
-# adding new repositories can be forbidden. existing repositories keep working: they can still be listed, installed
-# from and dropped - only *adding* new ones is blocked
+# repositories can be forbidden. this distrusts the keys of existing repositories (so extensions installed from them
+# can no longer be loaded), but the repositories can still be listed and dropped. the 'undecided' default is weaker:
+# it only blocks *adding* new repositories while still trusting existing ones (see the api tests for the trust checks)
 statement ok
 SET allow_extension_repositories='forbidden'
 

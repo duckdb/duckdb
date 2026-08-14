@@ -96,7 +96,13 @@ TEST_CASE("Test that the core and community signing keys are separate", "[api]")
 	}
 }
 
-TEST_CASE("Test that adding trusted extension repositories can be forbidden", "[api]") {
+static idx_t UserRepositoryCount(Connection &con) {
+	auto result = con.Query("SELECT count(*) FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'");
+	REQUIRE_NO_FAIL(*result);
+	return result->GetValue(0, 0).GetValue<idx_t>();
+}
+
+TEST_CASE("Test that forbidding repositories distrusts their keys", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_forbidden");
 
 	DBConfig config;
@@ -109,9 +115,19 @@ TEST_CASE("Test that adding trusted extension repositories can be forbidden", "[
 	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
 	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
 
-	// forbidding repositories only blocks adding new ones - existing repositories keep working
-	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='forbidden'"));
+	// 'undecided' still trusts existing repositories - extensions installed from them can still be loaded
+	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='undecided'"));
 	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+
+	// 'forbidden' distrusts the repository entirely: its key is no longer trusted, so loading an extension that was
+	// installed from it fails
+	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='forbidden'"));
+	REQUIRE(!KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+
+	// the repository can still be listed and dropped - only its keys are distrusted
+	REQUIRE(UserRepositoryCount(con) == 1);
+	REQUIRE_NO_FAIL(con.Query("DROP EXTENSION REPOSITORY acme"));
+	REQUIRE(UserRepositoryCount(con) == 0);
 
 	// adding a new repository is blocked
 	REQUIRE_FAIL(con.Query(StringUtil::Format(

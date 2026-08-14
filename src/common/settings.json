@@ -54,7 +54,7 @@
     },
     {
         "name": "allow_extension_repositories",
-        "description": "Whether adding custom trusted extension repositories is 'allowed', 'forbidden' or 'undecided' (the default, which blocks adding new repositories until the user opts in)",
+        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones)",
         "type": "VARCHAR",
         "scope": "global",
         "default_value": "undecided",
