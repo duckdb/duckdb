@@ -52,15 +52,15 @@ Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const
 	return prefix;
 }
 
-void Prefix::New(ART &art, reference<NodePtr> &ref, const ARTKey &key, const idx_t depth, idx_t count) {
+void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, ref, key.data, this_count, offset + depth);
+		auto prefix = NewInternal(art, node_ref, key.data, this_count, offset + depth);
 
-		ref = *prefix.child_slot;
+		node_ref = *prefix.child_slot;
 		offset += this_count;
 		count -= this_count;
 	}
@@ -119,10 +119,10 @@ void Prefix::Reduce(ART &art, NodePtr &node, const idx_t pos) {
 	prefix.Append(art, *prefix.child_slot);
 }
 
-GateStatus Prefix::Split(ART &art, reference<NodePtr> &node, NodePtr &child, const uint8_t pos) {
-	D_ASSERT(node.get().HasMetadata());
+GateStatus Prefix::Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child, const uint8_t pos) {
+	D_ASSERT(node_ref.get().HasMetadata());
 
-	Prefix prefix(art, node, true);
+	Prefix prefix(art, node_ref, true);
 
 	// The split is at the last prefix byte, and the prefix is full.
 	// We decrease the count and return.
@@ -132,7 +132,7 @@ GateStatus Prefix::Split(ART &art, reference<NodePtr> &node, NodePtr &child, con
 	// [child at split byte: prefix.child_slot].
 	if (pos + 1 == art.PrefixCount()) {
 		prefix.data[art.PrefixCount()]--;
-		node = *prefix.child_slot;
+		node_ref = *prefix.child_slot;
 		child = *prefix.child_slot;
 		return GateStatus::GATE_NOT_SET;
 	}
@@ -173,14 +173,14 @@ GateStatus Prefix::Split(ART &art, reference<NodePtr> &node, NodePtr &child, con
 
 	// No bytes left before the split, free this node.
 	if (pos == 0) {
-		auto old_status = node.get().GetGateStatus();
-		NodePtr::FreeNode(art, node);
+		auto old_status = node_ref.get().GetGateStatus();
+		NodePtr::FreeNode(art, node_ref);
 		return old_status;
 	}
 
 	// There are bytes left before the split.
 	// The subsequent node replaces the split byte.
-	node = *prefix.child_slot;
+	node_ref = *prefix.child_slot;
 	return GateStatus::GATE_NOT_SET;
 }
 

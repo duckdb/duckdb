@@ -42,7 +42,7 @@ public:
 
 public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
-	static void New(ART &art, reference<NodePtr> &ref, const ARTKey &key, const idx_t depth, idx_t count);
+	static void New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Concatenates parent -> prev_node4 -> child.
 	static void Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
@@ -52,12 +52,12 @@ public:
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
 	static void Reduce(ART &art, NodePtr &node, const idx_t pos);
 	//! Splits the prefix at pos.
-	//! node references the node that replaces the split byte.
+	//! node_ref references the node that replaces the split byte.
 	//! child references the remaining node after the split.
 	//! Returns GATE_SET, if a gate node was freed, else GATE_NOT_SET.
 	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
 	//! after its creation.
-	static GateStatus Split(ART &art, reference<NodePtr> &node, NodePtr &child, const uint8_t pos);
+	static GateStatus Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child, const uint8_t pos);
 
 private:
 	static Prefix NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
@@ -76,13 +76,13 @@ private:
 
 private:
 	template <class F, class NODE>
-	static void Iterator(ART &art, reference<NODE> &ref, const bool exit_gate, const bool is_mutable, F &&lambda) {
-		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
-			Prefix prefix(art, ref, is_mutable);
+	static void Iterator(ART &art, reference<NODE> &node_ref, const bool exit_gate, const bool is_mutable, F &&lambda) {
+		while (node_ref.get().HasMetadata() && node_ref.get().GetType() == PREFIX) {
+			Prefix prefix(art, node_ref, is_mutable);
 			lambda(prefix);
 
-			ref = *prefix.child_slot;
-			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
+			node_ref = *prefix.child_slot;
+			if (exit_gate && node_ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}
 		}
