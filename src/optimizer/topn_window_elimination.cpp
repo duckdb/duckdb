@@ -9,6 +9,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -864,22 +865,11 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	params.partition_count = window_expr.partitions.size();
 	params.order_type = window_expr.orders[0].type;
 
-	VisitExpression(&window_expr.orders[0].expression);
-	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
-		VisitExpression(&aggregate_payload[0]);
+	NotNullExpressionAnalyzer nullability(context);
+	params.can_be_null = !nullability.IsNotNull(*window.children[0], *window_expr.orders[0].expression);
+	if (!params.can_be_null && params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
+		params.can_be_null = !nullability.IsNotNull(*window.children[0], *aggregate_payload[0]);
 	}
-	if (column_references.empty()) {
-		params.can_be_null = true;
-	} else {
-		for (const auto &column_ref : column_references) {
-			const auto &column_stats = stats->find(column_ref.first);
-			if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-				params.can_be_null = true;
-				break;
-			}
-		}
-	}
-	column_references.clear();
 
 	return params;
 }

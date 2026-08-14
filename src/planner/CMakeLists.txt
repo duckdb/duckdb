@@ -13,6 +13,7 @@ add_library_unity(
   bound_parameter_map.cpp
   collation_binding.cpp
   expression_iterator.cpp
+  expression_nullability.cpp
   expression.cpp
   table_binding.cpp
   expression_binder.cpp
