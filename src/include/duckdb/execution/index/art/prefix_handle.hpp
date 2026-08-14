@@ -45,7 +45,7 @@ public:
 	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 private:
-	static NodeHandle TransformToDeprecatedAppend(NodeHandle handle, ART &art, FixedSizeAllocator &allocator,
+	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
 	                                              const uint8_t byte);
 };
 
