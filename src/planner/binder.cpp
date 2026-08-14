@@ -441,7 +441,7 @@ void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &ge
 	}
 }
 
-//! Helper: convert scan column mapping to projection expression mapping for MERGE INTO
+//! Helper: convert scan column mapping to expression mapping
 static void ConvertScanToProjectionMapping(TableCatalogEntry &table, const vector<idx_t> &scan_return_columns,
                                            vector<idx_t> &return_columns,
                                            vector<unique_ptr<Expression>> &projection_expressions,

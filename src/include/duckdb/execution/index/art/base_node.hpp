@@ -14,13 +14,15 @@
 
 namespace duckdb {
 
-template <uint8_t CAPACITY, NType TYPE>
+template <uint8_t CAPACITY, NType NODE_TYPE>
 class BaseNode {
 	friend class Node4;
 	friend class Node16;
 	friend class Node48;
 
 public:
+	static constexpr NType TYPE = NODE_TYPE;
+
 	BaseNode() = delete;
 	BaseNode(const BaseNode &) = delete;
 	BaseNode &operator=(const BaseNode &) = delete;
@@ -32,12 +34,12 @@ private:
 
 public:
 	//! Get a new BaseNode handle and initialize the base node.
-	static NodeHandle<BaseNode> New(ART &art, Node &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		NodeHandle<BaseNode> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<BaseNode>();
 
 		// Reset the node (count).
 		n.count = 0;
@@ -64,6 +66,34 @@ public:
 				return;
 			}
 		}
+	}
+
+	//! Get the child node at byte, if it exists.
+	static OptionalNode GetChildNode(const BaseNode &n, const uint8_t byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] == byte) {
+				if (!n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetChildNode", i, byte);
+				}
+				return n.children[i];
+			}
+		}
+		return OptionalNode();
+	}
+
+	//! Get the first child node >= byte, if it exists, and update byte.
+	static OptionalNode GetNextChildNode(const BaseNode &n, uint8_t &byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] >= byte) {
+				if (!n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetNextChildNode", i,
+					                        n.key[i]);
+				}
+				byte = n.key[i];
+				return n.children[i];
+			}
+		}
+		return OptionalNode();
 	}
 
 	//! Get the child at byte.
@@ -115,9 +145,16 @@ public:
 		}
 	}
 
+	template <class F>
+	static void Iterator(const BaseNode<CAPACITY, TYPE> &n, F &&lambda) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			lambda(n.children[i]);
+		}
+	}
+
 private:
 	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
-	static NodeHandle<BaseNode> DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node4 holds up to four children sorted by their key byte.
