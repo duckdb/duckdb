@@ -37,7 +37,7 @@ ORDER BY g
 6	70000	1
 
 statement ok
-RESET disabled_optimizers
+RESET disabled_optimizers;
 
 # nothing else needs metric, so the scan should not project it
 query II
@@ -92,4 +92,4 @@ SELECT d.g, count(b.metric) FROM de_b b JOIN de_dim d USING (k) GROUP BY d.g ORD
 6	700
 
 statement ok
-SET debug_verify_column_bindings=false;
+RESET debug_verify_column_bindings;

@@ -173,4 +173,3 @@ SELECT grp, count(maybe_null) FROM filtered WHERE maybe_null > 0 GROUP BY grp OR
 g0	8
 g1	8
 g2	8
-
