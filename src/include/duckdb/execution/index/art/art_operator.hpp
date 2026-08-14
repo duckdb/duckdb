@@ -61,14 +61,14 @@ public:
 	//! 1) If the leaf is an inlined leaf, check if the rowid matches.
 	//! 2) If the leaf is a gate node, perform a search in the nested ART for the rowid.
 	static bool LookupInLeaf(ART &art, const NodePtr &node, const ARTKey &rowid) {
-		reference<const NodePtr> ref(node);
+		reference<const NodePtr> current_ref(node);
 		idx_t depth = 0;
 
-		while (ref.get().HasMetadata()) {
-			const auto type = ref.get().GetType();
+		while (current_ref.get().HasMetadata()) {
+			const auto type = current_ref.get().GetType();
 			switch (type) {
 			case NType::LEAF_INLINED: {
-				return ref.get().GetRowId() == rowid.GetRowId();
+				return current_ref.get().GetRowId() == rowid.GetRowId();
 			}
 			case NType::LEAF: {
 				throw InternalException("Invalid node type (LEAF) for ARTOperator::NestedLookup.");
@@ -78,25 +78,25 @@ public:
 			case NType::NODE_256_LEAF: {
 				D_ASSERT(depth + 1 == Prefix::ROW_ID_SIZE);
 				const auto byte = rowid[Prefix::ROW_ID_COUNT];
-				return ref.get().HasByte(art, byte);
+				return current_ref.get().HasByte(art, byte);
 			}
 			case NType::NODE_4:
 			case NType::NODE_16:
 			case NType::NODE_48:
 			case NType::NODE_256: {
 				D_ASSERT(depth < Prefix::ROW_ID_SIZE);
-				auto child = ref.get().GetChild(art, rowid[depth]);
+				auto child = current_ref.get().GetChild(art, rowid[depth]);
 				if (child) {
 					// Continue in the child.
-					ref = *child;
+					current_ref = *child;
 					depth++;
-					D_ASSERT(ref.get().HasMetadata());
+					D_ASSERT(current_ref.get().HasMetadata());
 					continue;
 				}
 				return false;
 			}
 			case NType::PREFIX: {
-				Prefix prefix(art, ref.get());
+				Prefix prefix(art, current_ref.get());
 				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != rowid[depth]) {
 						// The key and the prefix don't match.
@@ -104,7 +104,7 @@ public:
 					}
 					depth++;
 				}
-				ref = *prefix.child_slot;
+				current_ref = *prefix.child_slot;
 			}
 			}
 		}

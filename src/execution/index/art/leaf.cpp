@@ -124,12 +124,12 @@ void Leaf::TransformToDeprecated(ART &art, NodePtr &node) {
 	// Create the deprecated leaves.
 	idx_t remaining = row_ids.size();
 	auto row_ids_it = row_ids.begin();
-	reference<NodePtr> ref(node);
+	reference<NodePtr> leaf_ref(node);
 	while (remaining) {
-		ref.get() = NodePtr::GetAllocator(art, LEAF).New();
-		ref.get().SetMetadata(static_cast<uint8_t>(LEAF));
+		leaf_ref.get() = NodePtr::GetAllocator(art, LEAF).New();
+		leaf_ref.get().SetMetadata(static_cast<uint8_t>(LEAF));
 
-		auto &leaf = NodePtr::Ref<Leaf>(art, ref, LEAF);
+		auto &leaf = NodePtr::Ref<Leaf>(art, leaf_ref, LEAF);
 		auto min = MinValue(UnsafeNumericCast<idx_t>(LEAF_SIZE), remaining);
 		leaf.count = UnsafeNumericCast<uint8_t>(min);
 
@@ -139,7 +139,7 @@ void Leaf::TransformToDeprecated(ART &art, NodePtr &node) {
 		}
 		remaining -= leaf.count;
 
-		ref = leaf.next_leaf;
+		leaf_ref = leaf.next_leaf;
 		leaf.next_leaf.Clear();
 	}
 }
@@ -201,16 +201,16 @@ string Leaf::DeprecatedToString(ART &art, const NodePtr &node, const ToStringOpt
 		return str;
 	}
 
-	reference<const NodePtr> ref(node);
+	reference<const NodePtr> leaf_ref(node);
 
-	while (ref.get().HasMetadata()) {
-		auto &leaf = NodePtr::Ref<const Leaf>(art, ref, LEAF);
+	while (leaf_ref.get().HasMetadata()) {
+		auto &leaf = NodePtr::Ref<const Leaf>(art, leaf_ref, LEAF);
 		str += options.tree_prefix + "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			str += to_string(leaf.row_ids[i]) + "-";
 		}
 		str += "]\n";
-		ref = leaf.next_leaf;
+		leaf_ref = leaf.next_leaf;
 	}
 
 	return str;

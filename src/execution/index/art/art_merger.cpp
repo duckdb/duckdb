@@ -279,16 +279,16 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
 
 		// Split and reduce.
-		reference<NodePtr> ref(entry.left);
+		reference<NodePtr> left_ref(entry.left);
 		NodePtr l_child;
-		const auto status = Prefix::Split(art, ref, l_child, cast_pos);
+		const auto status = Prefix::Split(art, left_ref, l_child, cast_pos);
 		Prefix::Reduce(art, entry.right, cast_pos);
 
-		Node4::New(art, ref);
-		ref.get().SetGateStatus(status);
+		Node4::New(art, left_ref);
+		left_ref.get().SetGateStatus(status);
 
-		Node4::InsertChild(art, ref, l_byte, l_child);
-		Node4::InsertChild(art, ref, r_byte, entry.right);
+		Node4::InsertChild(art, left_ref, l_byte, l_child);
+		Node4::InsertChild(art, left_ref, r_byte, entry.right);
 		entry.right.Clear();
 		return;
 	}
