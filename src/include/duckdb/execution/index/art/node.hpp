@@ -109,9 +109,9 @@ struct ToStringOptions {
 	}
 };
 
-//! The NodePointer is the pointer class of the ART index.
+//! The NodePtr is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
-class NodePointer : public IndexPointer {
+class NodePtr : public IndexPointer {
 	friend class Prefix;
 
 public:
@@ -121,11 +121,11 @@ public:
 
 public:
 	//! Get a new pointer to a node and initialize it.
-	static void New(ART &art, NodePointer &node, const NType type);
+	static void New(ART &art, NodePtr &node, const NType type);
 	//! Free the node.
-	static void FreeNode(ART &art, NodePointer &node);
+	static void FreeNode(ART &art, NodePtr &node);
 	//! Free the node and its children.
-	static void FreeTree(ART &art, NodePointer &node);
+	static void FreeTree(ART &art, NodePtr &node);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
@@ -134,17 +134,17 @@ public:
 
 	//! Get a reference to a node.
 	template <class NODE>
-	static inline NODE &Ref(const ART &art, const NodePointer ptr, const NType type) {
+	static inline NODE &Ref(const ART &art, const NodePtr ptr, const NType type) {
 		D_ASSERT(ptr.GetType() != NType::PREFIX);
 		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
 	}
 
 	//! Replace the child at byte.
-	void ReplaceChild(const ART &art, const uint8_t byte, const NodePointer child = NodePointer()) const;
+	void ReplaceChild(const ART &art, const uint8_t byte, const NodePtr child = NodePtr()) const;
 	//! Insert the child at byte.
-	static void InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child = NodePointer());
+	static void InsertChild(ART &art, NodePtr &node, const uint8_t byte, const NodePtr child = NodePtr());
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte, const GateStatus status,
+	static void DeleteChild(ART &art, NodePtr &node, NodePtr &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
 	//! Get the child node at byte, if it exists.
@@ -152,11 +152,11 @@ public:
 	//! Get the first child node >= byte, if it exists, and update byte.
 	OptionalNode GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
-	const unsafe_optional_ptr<NodePointer> GetChild(ART &art, const uint8_t byte) const;
+	const unsafe_optional_ptr<NodePtr> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<NodePointer> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
+	unsafe_optional_ptr<NodePtr> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
 	//! Get the first immutable child greater than or equal to the byte.
-	const unsafe_optional_ptr<NodePointer> GetNextChild(ART &art, uint8_t &byte) const;
+	const unsafe_optional_ptr<NodePtr> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(ART &art, const uint8_t byte) const;
 	//! Get the first byte greater than or equal to the byte.
@@ -171,7 +171,7 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state);
+	static void TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	//!
@@ -233,10 +233,10 @@ private:
 //! even if the original node has been freed.
 struct NodeChildren {
 	NodeChildren() = delete;
-	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<NodePointer> children) : bytes(bytes), children(children) {};
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<NodePtr> children) : bytes(bytes), children(children) {};
 
 	array_ptr<uint8_t> bytes;
-	array_ptr<NodePointer> children;
+	array_ptr<NodePtr> children;
 };
 
 //! OptionalNode either holds a valid node, or is empty.
@@ -244,7 +244,7 @@ struct NodeChildren {
 class OptionalNode {
 public:
 	OptionalNode() = default;
-	OptionalNode(const NodePointer node) : node(node) { // NOLINT: allow implicit conversion from NodePointer
+	OptionalNode(const NodePtr node) : node(node) { // NOLINT: allow implicit conversion from NodePtr
 	}
 
 	//! Returns true, if the OptionalNode holds a valid node.
@@ -253,13 +253,13 @@ public:
 	}
 
 	//! Returns the node. Must only be called if the OptionalNode holds a valid node.
-	NodePointer Get() const {
+	NodePtr Get() const {
 		D_ASSERT(node.HasMetadata());
 		return node;
 	}
 
 private:
-	NodePointer node;
+	NodePtr node;
 };
 
 } // namespace duckdb
