@@ -1148,8 +1148,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 
 				auto &projection_map = RefersToSameObject(op_child, *join.children[0]) ? join.left_projection_map
 				                                                                       : join.right_projection_map;
-				for (const auto rowid_idx : rhs_rowid_idxs) {
-					projection_map.push_back(rowid_idx);
+				// An empty map already projects every column, including the newly added row ID.
+				if (!projection_map.empty()) {
+					for (const auto rowid_idx : rhs_rowid_idxs) {
+						projection_map.push_back(rowid_idx);
+					}
 				}
 			}
 			break;
