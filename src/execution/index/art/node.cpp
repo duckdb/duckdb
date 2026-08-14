@@ -653,7 +653,7 @@ string NodePtr::ToString(ART &art, const ToStringOptions &options) const {
 	}
 
 	// For internal nodes: print header then children
-	auto str = options.tree_prefix + "NodePtr" + to_string(GetCapacity(type)) + "\n";
+	auto str = options.tree_prefix + "Node" + to_string(GetCapacity(type)) + "\n";
 	str += ToStringChildren(art, options);
 
 	if (is_gate && type != NType::PREFIX) {
