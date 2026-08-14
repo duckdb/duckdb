@@ -339,6 +339,10 @@ public:
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 		if (op.predicate) {
+			auto predicate_types = op.children[0].get().GetTypes();
+			auto &right_types = op.children[1].get().GetTypes();
+			predicate_types.insert(predicate_types.end(), right_types.begin(), right_types.end());
+			predicate_chunk.Initialize(allocator, predicate_types);
 			pred_executor.AddExpression(*op.predicate);
 			pred_matches.Initialize();
 		}
@@ -364,6 +368,7 @@ public:
 	//! Predicate
 	ExpressionExecutor pred_executor;
 	SelectionVector pred_matches;
+	DataChunk predicate_chunk;
 
 private:
 	void ResetState() {
@@ -378,6 +383,7 @@ private:
 		left_tuple = 0;
 		right_tuple = 0;
 		left_outer.Reset();
+		predicate_chunk.Reset();
 	}
 
 public:
@@ -443,8 +449,45 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
 	const bool track_unknown = join_type == JoinType::MARK && conditions.size() == 1 &&
 	                           conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE;
-	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
-	                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);
+
+	if (!predicate || join_type == JoinType::MARK) {
+		NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
+		                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);
+	} else {
+		D_ASSERT(join_type == JoinType::SEMI || join_type == JoinType::ANTI);
+		gstate.right_condition_data.InitializeScan(state.condition_scan_state);
+		gstate.right_payload_data.InitializeScan(state.payload_scan_state);
+		while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
+			if (!gstate.right_payload_data.Scan(state.payload_scan_state, state.right_payload) ||
+			    state.right_condition.size() != state.right_payload.size()) {
+				throw InternalException("Nested loop join: payload and conditions are unaligned!?");
+			}
+
+			state.left_tuple = 0;
+			state.right_tuple = 0;
+			while (state.right_tuple < state.right_condition.size()) {
+				SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
+				auto match_count =
+				    NestedLoopJoinInner::Perform(state.left_tuple, state.right_tuple, state.left_condition,
+				                                 state.right_condition, lvector, rvector, conditions);
+				if (match_count == 0) {
+					continue;
+				}
+
+				state.predicate_chunk.Reset();
+				state.predicate_chunk.Slice(input, lvector, match_count);
+				state.predicate_chunk.Slice(state.right_payload, rvector, match_count, input.ColumnCount());
+
+				auto predicate_count = state.pred_executor.SelectExpression(state.predicate_chunk, state.pred_matches);
+				for (idx_t i = 0; i < predicate_count; i++) {
+					auto candidate_index = state.pred_matches.get_index(i);
+					auto left_index = lvector.get_index(candidate_index);
+					found_match[left_index] = true;
+				}
+			}
+		}
+	}
+
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
