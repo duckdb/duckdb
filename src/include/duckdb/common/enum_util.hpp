@@ -598,6 +598,8 @@ enum class VariantStatsShreddingState : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
+enum class VectorPrepareState : uint8_t;
+
 enum class VectorType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
@@ -1465,6 +1467,9 @@ const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingS
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
+
+template<>
+const char* EnumUtil::ToChars<VectorPrepareState>(VectorPrepareState value);
 
 template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
@@ -2342,6 +2347,9 @@ VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(cons
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
+
+template<>
+VectorPrepareState EnumUtil::FromString<VectorPrepareState>(const char *value);
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
