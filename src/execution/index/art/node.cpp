@@ -177,8 +177,8 @@ void NodePointer::InsertChild(ART &art, NodePointer &node, const uint8_t byte, c
 // Delete
 //===--------------------------------------------------------------------===//
 
-void NodePointer::DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte,
-                              const GateStatus status, const ARTKey &row_id) {
+void NodePointer::DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte, const GateStatus status,
+                          const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	auto type = node.GetType();

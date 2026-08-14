@@ -38,8 +38,7 @@ uint8_t Prefix::GetByte(const ART &art, const NodePointer &node, const uint8_t p
 	return prefix.data[pos];
 }
 
-Prefix Prefix::NewInternal(ART &art, NodePointer &node, const data_ptr_t data, const uint8_t count,
-                           const idx_t offset) {
+Prefix Prefix::NewInternal(ART &art, NodePointer &node, const data_ptr_t data, const uint8_t count, const idx_t offset) {
 	node = NodePointer::GetAllocator(art, PREFIX).New();
 	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
@@ -315,8 +314,7 @@ void Prefix::ConcatNode4WasGate(ART &art, NodePointer &node4, const NodePointer 
 	node4.SetGateStatus(GateStatus::GATE_SET);
 }
 
-void Prefix::ConcatChildIsGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child,
-                               uint8_t byte) {
+void Prefix::ConcatChildIsGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte) {
 	if (parent.GetType() != PREFIX) {
 		// Create a new prefix at the former position of the Node4,
 		// and point it to the gate.

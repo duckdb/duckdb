@@ -36,7 +36,7 @@ public:
 private:
 	uint8_t count;            // Deprecated.
 	row_t row_ids[LEAF_SIZE]; // Deprecated.
-	NodePointer ptr;          // Deprecated.
+	NodePointer ptr;              // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.
@@ -64,8 +64,7 @@ public:
 	//! Traverses and verifies the linked list of leaves.
 	static void DeprecatedVerify(ART &art, const NodePointer &node);
 	//! Count the number of leaves.
-	static void DeprecatedVerifyAllocations(ART &art, const NodePointer &node,
-	                                        unordered_map<uint8_t, idx_t> &node_counts);
+	static void DeprecatedVerifyAllocations(ART &art, const NodePointer &node, unordered_map<uint8_t, idx_t> &node_counts);
 
 	//! Return string representation of the linked list of leaves.
 	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.

@@ -169,8 +169,7 @@ public:
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte,
-	                        const GateStatus status);
+	static void DeleteChild(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte, const GateStatus status);
 
 private:
 	static void ShrinkNode16(ART &art, NodePointer &node4, NodePointer &node16);

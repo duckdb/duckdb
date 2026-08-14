@@ -180,8 +180,8 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const NodePointer &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
-	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i);
+	void VerifyLeaf(const NodePointer &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
+	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
