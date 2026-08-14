@@ -778,10 +778,40 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
+static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string &table_name) {
+	const auto &columns = table.GetColumns();
+
+	if (columns.LogicalColumnCount() != T::ColumnCount) {
+		throw InvalidInputException(
+		    "TPC-H table \"%s\" has an incompatible schema: expected %llu columns but found %llu", table_name,
+		    (unsigned long long)T::ColumnCount, (unsigned long long)columns.LogicalColumnCount());
+	}
+
+	for (idx_t i = 0; i < T::ColumnCount; i++) {
+		const auto &column = columns.GetColumn(LogicalIndex(i));
+
+		if (column.Name() != Identifier(T::Columns[i])) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found \"%s\"",
+			    table_name, T::Columns[i], (unsigned long long)i, column.Name().GetIdentifierName());
+		}
+
+		if (column.Type() != T::Types[i]) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: column \"%s\" has type %s but expected %s",
+			    table_name, T::Columns[i], column.Type().ToString(), T::Types[i].ToString());
+		}
+	}
+}
+
+template <class T>
 static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                             string suffix) {
+	auto table_name = string(T::Name) + suffix;
+	auto qualified_name = QualifiedName(catalog_name, schema, Identifier(table_name));
+
 	auto info = make_uniq<CreateTableInfo>();
-	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
+	info->SetQualifiedName(qualified_name);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -790,6 +820,10 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	}
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
+
+	// Validate both newly created and pre-existing TPC-H tables before appending.
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, qualified_name);
+	ValidateTPCHTableSchema<T>(table, table_name);
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
