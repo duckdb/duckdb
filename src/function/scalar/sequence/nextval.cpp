@@ -164,6 +164,7 @@ ScalarFunction NextvalFun::GetFunction() {
 	next_val.SetInitStateCallback(NextValLocalFunction);
 	next_val.SetVolatile();
 	next_val.SetFallible();
+	next_val.SetRequiresOrderedExecution(true);
 	return next_val;
 }
 
@@ -189,6 +190,7 @@ ScalarFunctionSet SetvalFun::GetFunctions() {
 	set_val.SetInitStateCallback(NextValLocalFunction);
 	set_val.SetVolatile();
 	set_val.SetFallible();
+	set_val.SetRequiresOrderedExecution(true);
 
 	ScalarFunctionSet set_val_set;
 	set_val_set.AddFunction(set_val);
