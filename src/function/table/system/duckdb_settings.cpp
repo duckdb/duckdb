@@ -34,9 +34,6 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("value");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("typed_value");
-	return_types.emplace_back(LogicalType::VARIANT());
-
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -48,6 +45,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("typed_value");
+	return_types.emplace_back(LogicalType::VARIANT());
 
 	return nullptr;
 }
