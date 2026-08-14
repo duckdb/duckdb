@@ -54,8 +54,18 @@ public:
 	transaction_t LowestActiveStart() const {
 		return lowest_active_start;
 	}
+	//! The commit id of the last committed transaction, regardless of whether it modified any data.
+	//! Note that read-only transactions are committed as well, so this advances on reads: it cannot be
+	//! used as a "has anything changed" signal. Use GetLastWriteCommit for that.
 	transaction_t GetLastCommit() const {
 		return last_commit;
+	}
+	//! The commit id of the last committed transaction that actually modified data or catalog entries
+	//! (i.e. for which DuckTransaction::ChangesMade() held). This is stable across read-only
+	//! transactions, and can therefore be used to detect whether a database has been modified.
+	//! Returns 0 if no modifying transaction has been committed since this database was attached.
+	transaction_t GetLastWriteCommit() const {
+		return last_write_commit;
 	}
 	transaction_t GetActiveCheckpoint() const {
 		return active_checkpoint;
@@ -121,6 +131,8 @@ private:
 	atomic<transaction_t> lowest_active_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
+	//! The last commit timestamp of a transaction that made changes (see GetLastWriteCommit)
+	atomic<transaction_t> last_write_commit = {0};
 	//! The currently active checkpoint
 	atomic<transaction_t> active_checkpoint;
 	//! Set of currently running transactions

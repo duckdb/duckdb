@@ -379,6 +379,12 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	CommitInfo info;
 	info.commit_id = GetCommitTimestamp();
 
+	// Whether this transaction modified any data or catalog entries.
+	// This must be read *before* DuckTransaction::Commit below: committing moves the
+	// transaction-local storage out of the transaction (LocalStorage::Commit ->
+	// LocalTableManager::MoveEntries), so ChangesMade() can flip to false afterwards.
+	const bool changes_made = transaction.ChangesMade();
+
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
 		if (HasOtherTransactions(transaction)) {
@@ -405,6 +411,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	} else {
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
 		last_commit = info.commit_id;
+		if (changes_made) {
+			// only transactions that actually modified something advance the write commit id
+			last_write_commit = info.commit_id;
+		}
 
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
