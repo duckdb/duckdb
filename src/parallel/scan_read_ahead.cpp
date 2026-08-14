@@ -1,5 +1,7 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
@@ -23,6 +25,22 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 		return false;
 	}
 	return parked_scan.BlockTask(interrupt_state);
+}
+
+bool ReadAheadJobCompletion::TryPark(TableFunctionInput &data_p) {
+	if (data_p.results_execution_mode != AsyncResultsExecutionMode::TASK_EXECUTOR || !data_p.interrupt_state) {
+		return false;
+	}
+	if (!TryPark(*data_p.interrupt_state)) {
+		return false;
+	}
+	data_p.async_result = AsyncResultType::BLOCKED;
+	return true;
+}
+
+void ScanReadAheadYield(ClientContext &context) {
+	context.InterruptCheck();
+	TaskScheduler::YieldThread();
 }
 
 void ReadAheadJobCompletion::WaitForIO() {

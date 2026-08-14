@@ -36,11 +36,4 @@ MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_
 
 MultiFileGlobalState::~MultiFileGlobalState() = default;
 
-MultiFileLocalState::~MultiFileLocalState() {
-	// job reads might still be going, wait for them before destroying ze job
-	if (job_state == MultiFileJobState::WAIT_IO && job.io_completion) {
-		job.io_completion->WaitForIO();
-	}
-}
-
 } // namespace duckdb

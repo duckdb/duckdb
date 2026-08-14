@@ -22,9 +22,11 @@
 #include "duckdb/parallel/task_executor.hpp"
 
 #include <functional>
+#include <type_traits>
 
 namespace duckdb {
 class ClientContext;
+struct TableFunctionInput;
 
 class ReadAheadJobCompletion {
 public:
@@ -33,14 +35,12 @@ public:
 	}
 
 public:
-	//! Number of I/O tasks that have not completed yet
-	idx_t PendingIOTasks() const {
-		return pending_io_tasks.load();
-	}
 	//! Mark one I/O task as completed, waking the scan task when it was the last one
 	void FinishIOTask();
 	//! Try to park the calling scan task until the job's I/O completes, the last I/O task to finish wakes it.
 	bool TryPark(const InterruptState &interrupt_state);
+	//! Try to park the scan task through the table function's interrupt state, setting BLOCKED on success
+	bool TryPark(TableFunctionInput &data_p);
 	//! Block until the job's I/O completed, running scheduled I/O inline so progress does not depend on pool threads
 	void WaitForIO();
 
@@ -74,8 +74,41 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
+//! Base of the job types driven by ScanReadAhead, STATE is the recyclable scan state the job operates on
+template <class STATE>
+struct ScanReadAheadJob {
+	ScanReadAheadJob() = default;
+	ScanReadAheadJob(ScanReadAheadJob &&) noexcept = default;
+	ScanReadAheadJob &operator=(ScanReadAheadJob &&) noexcept = default;
+	~ScanReadAheadJob() {
+		// scheduled reads might still be in flight, wait for them before destroying the job
+		if (io_completion) {
+			io_completion->WaitForIO();
+		}
+	}
+
+	//! The scan state the job's I/O and decoding operate on
+	unique_ptr<STATE> scan_state;
+	//! Batch index of this job, drives ordered queue admission
+	idx_t batch_index = 0;
+	//! Completion of the job's scheduled I/O
+	shared_ptr<ReadAheadJobCompletion> io_completion;
+	//! Total bytes of scheduled I/O for this job
+	idx_t io_bytes = 0;
+};
+
+//! Outcome of ScanReadAhead::AcquireJob
+enum class ScanReadAheadAcquire : uint8_t {
+	ACQUIRED,  //! a job with settled I/O is now held
+	EXHAUSTED, //! every job has been produced and claimed, the scan is done
+	PARKED     //! the scan task parked until the claimed job's I/O completes, the caller must yield
+};
+
+//! Throw when the query was interrupted, otherwise yield the thread
+void ScanReadAheadYield(ClientContext &context);
+
 //! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
-//! JOB must expose batch_index, io_completion and io_bytes fields, STATE is the recyclable per-job scan state.
+//! JOB must derive from ScanReadAheadJob<STATE>.
 template <class JOB, class STATE>
 class ScanReadAhead {
 public:
@@ -96,6 +129,8 @@ public:
 
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
+		static_assert(std::is_base_of<ScanReadAheadJob<STATE>, JOB>::value,
+		              "JOB must derive from ScanReadAheadJob<STATE>");
 		ThrowIfError();
 		if (IsDone() || !TryReserveSlot()) {
 			return false;
@@ -103,6 +138,8 @@ public:
 		ProducerReservation reservation(*this);
 		try {
 			auto job = make_uniq<JOB>();
+			// prefer a finished job's scan state, so learned scan state carries over across jobs
+			job->scan_state = TryPopState();
 			vector<unique_ptr<AsyncTask>> io_tasks;
 			if (!claim_and_schedule(*job, io_tasks)) {
 				// there are no more jobs to produce, the scan is done
@@ -170,6 +207,44 @@ public:
 		pending_io_bytes -= job.io_bytes;
 		job.io_bytes = 0;
 		ThrowIfError();
+	}
+
+	//! Acquire the next job, producing and claiming as needed; on ACQUIRED the job's I/O has been settled.
+	//! On PARKED the caller must yield holding the claimed job, the next call settles its completed I/O.
+	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
+	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<JOB> &job) {
+		if (job) {
+			// resuming with an already claimed job, settle its completed I/O
+			WaitForJob(*job);
+			job->io_completion.reset();
+			return ScanReadAheadAcquire::ACQUIRED;
+		}
+		while (true) {
+			// keep the queue full before claiming
+			while (TryProduceJob(claim_and_schedule)) {
+			}
+			job = ClaimJob();
+			if (!job && IsDone() && !HasActiveProducers()) {
+				// re-check the queue, a job may have been pushed between the claim and the done check
+				job = ClaimJob();
+				if (!job) {
+					return ScanReadAheadAcquire::EXHAUSTED;
+				}
+			}
+			if (!job) {
+				// another thread is between claiming an assignment and pushing its job, wait for it
+				ScanReadAheadYield(context);
+				continue;
+			}
+			// park until the job's scheduled I/O completes, the last I/O task to finish wakes the scan task
+			if (job->io_completion->TryPark(data_p)) {
+				return ScanReadAheadAcquire::PARKED;
+			}
+			// parking is not available to this caller or the I/O has already completed
+			WaitForJob(*job);
+			job->io_completion.reset();
+			return ScanReadAheadAcquire::ACQUIRED;
+		}
 	}
 
 private:

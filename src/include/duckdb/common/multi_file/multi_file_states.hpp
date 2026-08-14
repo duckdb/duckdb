@@ -17,12 +17,12 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
 class MultiFileReadAhead;
-class ReadAheadJobCompletion;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -218,36 +218,20 @@ enum class MultiFileDecodeResult : uint8_t {
 	JOB_FINISHED      //! job is done
 };
 
-//! Outcome of acquiring the next scan job
-enum class MultiFileAcquireResult : uint8_t {
-	ACQUIRED,  //! a ready-to-decode job is now current
-	EXHAUSTED, //! the scan is exhausted, we have no more jobs
-	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
-};
-
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob {
+struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
 	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
 	//! Per-file data for the reader
 	optional_ptr<MultiFileReaderData> reader_data;
-	//! The reader-specific scan state that ScheduleIO/Scan operate on
-	unique_ptr<LocalTableFunctionState> reader_scan_state;
-	//! Batch index of this job
-	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Completion state of the read-ahead I/O tasks for this job.
-	shared_ptr<ReadAheadJobCompletion> io_completion;
-	//! Total bytes of scheduled read-ahead I/O for this job
-	idx_t io_bytes = 0;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
-	~MultiFileLocalState() override;
 
 public:
 	//! The job currently being scanned by this thread
