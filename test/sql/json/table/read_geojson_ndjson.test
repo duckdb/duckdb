@@ -1,0 +1,74 @@
+# name: test/sql/json/table/read_geojson_ndjson.test
+# description: Read newline-delimited GeoJSON Features and bare geometries
+# group: [table]
+
+require json
+
+# Newline-delimited Features: the geometry and the Feature's "id" stay top-level, properties become columns
+query III
+SELECT id, ST_AsText(geometry), name FROM read_json('data/json/geojson/features.geojsonl') ORDER BY id;
+----
+1	POINT (1 2)	alpha
+2	MULTIPOINT (3 4, 5 6)	beta
+3	NULL	gamma
+
+# The Feature's own members come first and claim their names
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/features.geojsonl'));
+----
+geometry	GEOMETRY
+id	BIGINT
+name	VARCHAR
+
+# Newline-delimited bare geometries produce a single GEOMETRY column
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/geometries.geojsonl'));
+----
+geometry	GEOMETRY
+
+query I
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/geometries.geojsonl');
+----
+POINT (1 2)
+LINESTRING (0 0, 1 1)
+GEOMETRYCOLLECTION (POINT (7 8))
+
+# A GEOMETRY column requested explicitly accepts GeoJSON with no option at all, because a JSON object is
+# never valid WKT
+query I
+SELECT ST_AsText(geometry) FROM read_json('data/json/geojson/geometries.geojsonl', geojson=false, records='false', columns={geometry: 'GEOMETRY'});
+----
+POINT (1 2)
+LINESTRING (0 0, 1 1)
+GEOMETRYCOLLECTION (POINT (7 8))
+
+query III
+SELECT id, ST_AsText(loc), tag FROM read_json('data/json/geojson/nested.ndjson', geojson=false, columns={id: 'INTEGER', loc: 'GEOMETRY', tag: 'VARCHAR'});
+----
+1	POINT (1 2)	x
+2	POLYGON ((0 0, 1 0, 1 1, 0 0))	y
+
+# The same file read as plain JSON is just a record of type/coordinates/geometries
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/geometries.geojsonl', geojson=false));
+----
+type	VARCHAR
+coordinates	JSON[]
+geometries	STRUCT("type" VARCHAR, coordinates DOUBLE[])[]
+
+# read_ndjson honors the option too
+query I
+SELECT ST_AsText(geometry) FROM read_ndjson('data/json/geojson/geometries.geojsonl', geojson=true);
+----
+POINT (1 2)
+LINESTRING (0 0, 1 1)
+GEOMETRYCOLLECTION (POINT (7 8))
+
+# Reading Features and bare geometries with a glob picks a consistent schema per file group
+query I
+SELECT count(*) FROM read_json('data/json/geojson/features.geojsonl');
+----
+3

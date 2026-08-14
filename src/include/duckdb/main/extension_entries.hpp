@@ -59,6 +59,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"__aws__cloudformation__quack_on_ec2__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__cloudformation__quack_on_ec2__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__cloudformation__quack_on_ec2__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"__internal_json_copy_to_geojson", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"__internal_json_copy_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"abs", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"acos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -782,7 +783,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_affine", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_area", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_area_spheroid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"st_asgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_asgeojson", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ashexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_asmvt", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_asmvtgeom", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -837,7 +838,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_force4d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_generatepoints", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
     {"st_geometrytype", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"st_geomfromgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_geomfromgeojson", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromhexewkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromhexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromtext", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1312,6 +1313,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"iceberg_use_metadata_log", "iceberg"},
     {"iceberg_use_server_side_scan_planning", "iceberg"},
     {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
+    {"json_geometry_format", "json"},
     {"merge_http_secret_into_s3_request", "httpfs"},
     {"mysql_adaptive_replan_enabled", "mysql_scanner"},
     {"mysql_aggregate_pushdown_enabled", "mysql_scanner"},
@@ -1411,6 +1413,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
+    {"geojson", "json"},
     {"avro", "avro"},
     {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
@@ -1463,8 +1466,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
-    {".parquet", "parquet"}, {".json", "json"},   {".jsonl", "json"}, {".ndjson", "json"}, {".shp", "spatial"},
-    {".gpkg", "spatial"},    {".fgb", "spatial"}, {".xlsx", "excel"}, {".avro", "avro"},
+    {".parquet", "parquet"}, {".json", "json"},     {".jsonl", "json"},  {".ndjson", "json"},
+    {".geojson", "json"},    {".geojsonl", "json"}, {".shp", "spatial"}, {".gpkg", "spatial"},
+    {".fgb", "spatial"},     {".xlsx", "excel"},    {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
