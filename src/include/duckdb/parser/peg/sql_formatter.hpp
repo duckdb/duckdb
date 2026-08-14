@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 //! Controls how SQL keywords are cased in the formatted output.
 enum class KeywordCase : uint8_t {
 	//! Uppercase structural keywords (SELECT, FROM, WHERE, …); preserve case
@@ -45,5 +47,6 @@ struct FormatterConfig {
 //! are placed on their own lines; short clauses are optionally inlined based on
 //! FormatterConfig::inline_threshold.
 string FormatSQL(const string &sql, const FormatterConfig &config = FormatterConfig {});
+string FormatSQL(ClientContext &context, const string &sql, const FormatterConfig &config = FormatterConfig {});
 
 } // namespace duckdb

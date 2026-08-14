@@ -23,9 +23,13 @@ namespace duckdb {
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
+class Tokenizer;
+class TokenizerBehavior;
 
 typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
+typedef std::function<unique_ptr<Tokenizer>(ClientContext &context, TokenizerBehavior &behavior)>
+    tokenizer_create_func_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
@@ -67,6 +71,8 @@ struct ClientConfig {
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
+	//! Callback to create a tokenizer
+	tokenizer_create_func_t tokenizer_create_func = nullptr;
 
 	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
 	//! types.

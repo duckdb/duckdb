@@ -2,8 +2,10 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/main/parse_iterator.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
@@ -32,6 +34,38 @@ static vector<unique_ptr<SQLStatement>> DrainParse(ParseIterator &it) {
 		result.push_back(std::move(stmt));
 	}
 	return result;
+}
+
+class TestTokenizer : public Tokenizer {
+public:
+	TestTokenizer(ClientContext &context, TokenizerBehavior &behavior, bool &tokenized)
+	    : Tokenizer(context, behavior), tokenized(tokenized) {
+	}
+
+	void TokenizeInput() override {
+		tokenized = true;
+		Tokenizer::TokenizeInput();
+	}
+
+private:
+	bool &tokenized;
+};
+
+TEST_CASE("ParseIterator: uses the configured tokenizer factory", "[api][parse_iterator]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &ctx = *con.context;
+	bool tokenized = false;
+
+	auto &config = ClientConfig::GetConfig(ctx);
+	config.tokenizer_create_func = [&](ClientContext &context, TokenizerBehavior &behavior) {
+		REQUIRE(&context == &ctx);
+		return make_uniq<TestTokenizer>(context, behavior, tokenized);
+	};
+
+	ParseIterator it(ctx, "SELECT 42;");
+	REQUIRE(it.Peek());
+	REQUIRE(tokenized);
 }
 
 TEST_CASE("ParseIterator: single statement", "[api][parse_iterator]") {
