@@ -6,14 +6,6 @@ require json
 
 require no_force_storage
 
-require vector_size 2048
-
-statement ok
-SET initial_column_segment_size = 2048
-
-statement ok
-SET wal_autocheckpoint = '1TB'
-
 statement ok
 CREATE TABLE nested_nulls AS
 SELECT CASE WHEN i >= 99999 THEN NULL ELSE {'v': i} END AS s,
