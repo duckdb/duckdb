@@ -333,6 +333,18 @@ public:
 	//! How TableScanFunc's loop proceeds after a persistent scan iteration
 	enum class PersistentScanResult { YIELD, NEXT_VECTOR, EXHAUSTED };
 
+	//! Emits a scanned chunk into the output, scanning into all_columns first when filter columns are removed
+	template <class FUNC>
+	void EmitChunk(TableScanLocalState &l_state, DataChunk &output, FUNC &&scan) {
+		if (!CanRemoveFilterColumns()) {
+			scan(output);
+			return;
+		}
+		l_state.all_columns.Reset();
+		scan(l_state.all_columns);
+		output.ReferenceColumns(l_state.all_columns, projection_ids);
+	}
+
 	//! Prepares the next vector, schedules its I/O and decodes it, draining local storage when exhausted
 	PersistentScanResult ScanPersistentStorage(ClientContext &context, TableFunctionInput &data_p,
 	                                           TableScanLocalState &l_state, DataChunk &output) {
@@ -341,13 +353,7 @@ public:
 		vector<unique_ptr<AsyncTask>> io_tasks;
 		if (!table_state.PrepareScanIO(tx, io_tasks)) {
 			// we are done, scan drains any claimed local storage rows
-			if (CanRemoveFilterColumns()) {
-				l_state.all_columns.Reset();
-				storage.Scan(tx, l_state.all_columns, l_state.scan_state);
-				output.ReferenceColumns(l_state.all_columns, projection_ids);
-			} else {
-				storage.Scan(tx, output, l_state.scan_state);
-			}
+			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, l_state.scan_state); });
 			return PersistentScanResult::EXHAUSTED;
 		}
 		auto io_result = AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
@@ -355,13 +361,7 @@ public:
 		if (io_result.GetResultType() == AsyncResultType::BLOCKED && data_p.HandleBlocked(io_result)) {
 			return PersistentScanResult::YIELD;
 		}
-		if (CanRemoveFilterColumns()) {
-			l_state.all_columns.Reset();
-			table_state.ProcessPreparedScan(tx, l_state.all_columns);
-			output.ReferenceColumns(l_state.all_columns, projection_ids);
-		} else {
-			table_state.ProcessPreparedScan(tx, output);
-		}
+		EmitChunk(l_state, output, [&](DataChunk &chunk) { table_state.ProcessPreparedScan(tx, chunk); });
 		if (output.size() > 0) {
 			return PersistentScanResult::YIELD;
 		}
