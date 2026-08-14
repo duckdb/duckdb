@@ -88,6 +88,7 @@ jobs:
       allow_failure_archs: ${{ inputs.allow_failure_archs }}
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
       skip_tests: ${{ inputs.skip_tests }}
+      save_cache: ${{ inputs.save_cache }}
       runners: ${{ inputs.runners }}
 
   deploy-repository:
