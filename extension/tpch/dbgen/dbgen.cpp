@@ -1083,9 +1083,24 @@ public:
 	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
 	                   const Identifier &schema, string suffix, int children, int current_step)
 	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
+		// NaN compares false against every scale factor check, and reaches an out-of-range cast below
+		if (Value::IsNan(flt_scale)) {
+			throw InvalidInputException("DBGen requires a valid scale factor.");
+		}
+
+		if (flt_scale <= 0) {
+			Finish();
+			return;
+		}
+
+		if (flt_scale > MAX_SCALE) {
+			throw InvalidInputException("DBGen does not support a scale factor exceeding %d.",
+			                            static_cast<int>(MAX_SCALE));
+		}
+
 		InitializeBaseContext();
 
-		if (flt_scale == 0 || current_step >= children) {
+		if (current_step >= children) {
 			Finish();
 			return;
 		}
