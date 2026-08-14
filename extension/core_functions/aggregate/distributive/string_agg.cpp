@@ -64,7 +64,7 @@ struct StringAggFunction {
 			if (new_size > NumericLimits<uint32_t>::Maximum()) {
 				throw InvalidInputException("string_agg string size exceeds maximum string size");
 			}
-			state.alloc_size = NextPowerOfTwo(new_size);
+			state.alloc_size = MinValue<idx_t>(NextPowerOfTwo(new_size), string_t::MAX_STRING_SIZE);
 			target_data = char_ptr_cast(allocator.Allocate(state.alloc_size));
 			if (current_size > 0) {
 				// copy over the current data

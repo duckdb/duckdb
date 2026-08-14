@@ -1,0 +1,232 @@
+# name: test/sql/prepared/prepared_statistics_optimization.test
+# description: Data-dependent optimizations are retained while prepared plans are rebound
+# group: [prepared]
+
+statement ok
+PRAGMA threads=1;
+
+# Plans without mutable database inputs remain cached.
+statement ok
+PREPARE cached_constant AS SELECT 42;
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'cached_constant';
+----
+false
+
+# Modifying statements without a database read can also retain their physical plan.
+statement ok
+CREATE TABLE insert_t(i INTEGER);
+
+statement ok
+PREPARE cached_insert AS INSERT INTO insert_t VALUES (42) RETURNING i;
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'cached_insert';
+----
+false
+
+query I
+EXECUTE cached_insert;
+----
+42
+
+query I
+SELECT count(*) FROM insert_t;
+----
+1
+
+# Temporary modification targets have a catalog read dependency but no data source.
+statement ok
+CREATE TEMP TABLE temp_insert_t(i INTEGER);
+
+statement ok
+PREPARE cached_temp_insert AS INSERT INTO temp_insert_t VALUES (84) RETURNING i;
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'cached_temp_insert';
+----
+false
+
+query I
+EXECUTE cached_temp_insert;
+----
+84
+
+statement ok
+CREATE TABLE filter_t(i INTEGER);
+
+statement ok
+INSERT INTO filter_t SELECT range FROM range(100);
+
+statement ok
+PREPARE cached_scan AS SELECT i FROM filter_t;
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'cached_scan';
+----
+true
+
+# Statistics can still eliminate a prepared query while the statistics are current.
+statement ok
+PREPARE stale_filter AS SELECT count(*) FROM filter_t WHERE i = 200;
+
+query II
+EXPLAIN EXECUTE stale_filter;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'stale_filter';
+----
+true
+
+statement ok
+INSERT INTO filter_t VALUES (200);
+
+query II
+EXPLAIN EXECUTE stale_filter;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+# Join-derived range filters are regenerated from the current build-side statistics.
+statement ok
+CREATE TABLE probe AS SELECT i::BIGINT AS k FROM range(0, 6144) t(i);
+
+statement ok
+CREATE TABLE build(k BIGINT);
+
+statement ok
+INSERT INTO build VALUES (3000), (5000);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PREPARE stale_join AS
+SELECT count(*)::BIGINT AS c, coalesce(sum(probe.k), 0)::BIGINT AS s
+FROM probe
+JOIN build USING (k);
+
+query II
+EXPLAIN EXECUTE stale_join;
+----
+physical_plan	<REGEX>:.*Filters: \(k >= 3000\) AND \(k <= 5000\).*
+
+query II
+EXPLAIN ANALYZE EXECUTE stale_join;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+statement ok
+DELETE FROM build;
+
+statement ok
+INSERT INTO build VALUES (1), (2);
+
+query II
+EXPLAIN EXECUTE stale_join;
+----
+physical_plan	<REGEX>:.*Filters: \(k >= 1\).*
+
+query II
+EXPLAIN EXECUTE stale_join;
+----
+physical_plan	<!REGEX>:.*Filters: \(k >= 3000\).*
+
+# Metadata aggregate execution remains available and also triggers rebinding.
+statement ok
+CREATE TABLE aggregate_t AS SELECT i::INTEGER AS i FROM range(100) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PREPARE stale_aggregate AS SELECT min(i), max(i), count(*) FROM aggregate_t;
+
+query I
+SELECT result_types IS NULL FROM duckdb_prepared_statements() WHERE name = 'stale_aggregate';
+----
+true
+
+# Statistics callbacks that populate aggregate bind data must also be refreshed.
+statement ok
+CREATE TABLE bitstring_t(i INTEGER);
+
+statement ok
+INSERT INTO bitstring_t VALUES (1), (2);
+
+statement ok
+PREPARE stale_bitstring AS SELECT bit_count(bitstring_agg(i)) FROM bitstring_t;
+
+query I
+EXECUTE stale_bitstring;
+----
+2
+
+statement ok
+INSERT INTO bitstring_t VALUES (4);
+
+query I
+EXECUTE stale_bitstring;
+----
+3
+
+# Scalar statistics callbacks can also materialize current statistics in bind data.
+statement ok
+CREATE TABLE stats_t(i INTEGER);
+
+statement ok
+INSERT INTO stats_t VALUES (1), (2);
+
+statement ok
+PREPARE stale_stats AS
+SELECT s.min, s.max, s.has_null
+FROM (SELECT stats(i) AS s FROM stats_t LIMIT 1);
+
+query III
+EXECUTE stale_stats;
+----
+1	2	false
+
+statement ok
+INSERT INTO stats_t VALUES (5), (NULL);
+
+query III
+EXECUTE stale_stats;
+----
+1	5	true
+
+# Other data-dependent optimizers must also trigger rebinding independently of statistics propagation.
+statement ok
+SET disabled_optimizers = 'statistics_propagation';
+
+statement ok
+CREATE TABLE row_group_t AS SELECT i::INTEGER AS i FROM range(245760) t(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PREPARE stale_row_group AS SELECT i FROM row_group_t ORDER BY i LIMIT 1 OFFSET 122880;
+
+query I
+EXECUTE stale_row_group;
+----
+122880
+
+statement ok
+INSERT INTO row_group_t VALUES (-1);
+
+query I
+EXECUTE stale_row_group;
+----
+122879
+
+query I
+SELECT i FROM row_group_t ORDER BY i LIMIT 1 OFFSET 122880;
+----
+122879
+
+statement ok
+SET disabled_optimizers = '';

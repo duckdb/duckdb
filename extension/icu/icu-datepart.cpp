@@ -15,6 +15,23 @@
 
 namespace duckdb {
 
+static string DatePartUnaryFunctionName(DatePartSpecifier part) {
+	switch (part) {
+	case DatePartSpecifier::DOW:
+		return "dayofweek";
+	case DatePartSpecifier::DOY:
+		return "dayofyear";
+	case DatePartSpecifier::JULIAN_DAY:
+		return "julian";
+	case DatePartSpecifier::MILLISECONDS:
+		return "millisecond";
+	case DatePartSpecifier::MICROSECONDS:
+		return "microsecond";
+	default:
+		return StringUtil::Lower(EnumUtil::ToChars(part));
+	}
+}
+
 struct ICUDatePart : public ICUDateFunc {
 	typedef int64_t (*part_bigint_t)(Calendar *calendar, const uint64_t micros);
 	typedef double (*part_double_t)(Calendar *calendar, const uint64_t micros);
@@ -297,7 +314,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static void BinaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-		using BIND_TYPE = BindAdapterData<int64_t>;
+		using BIND_TYPE = BindAdapterData<RESULT_TYPE>;
 		D_ASSERT(args.ColumnCount() == 2);
 		const auto &part_arg = args.data[0];
 		const auto &date_arg = args.data[1];
@@ -311,8 +328,14 @@ struct ICUDatePart : public ICUDateFunc {
 		    part_arg, date_arg, result, [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
 			    if (input.IsFinite()) {
 				    const auto micros = SetTime(calendar, input);
-				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
-				    return adapter(calendar, micros);
+				    const auto part_code = GetDatePartSpecifier(specifier.GetString());
+				    if (IsBigintDatepart(part_code)) {
+					    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
+					    return adapter(calendar, micros);
+				    } else {
+					    auto adapter = PartCodeDoubleFactory(GetDatePartSpecifier(specifier.GetString()));
+					    return adapter(calendar, micros);
+				    }
 			    } else {
 				    return nullopt;
 			    }
@@ -447,7 +470,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &context = input.GetClientContext();
 		auto &arguments = input.GetArguments();
 
-		//	If we are only looking for Julian Days, then patch in the unary function.
+		//	If we have a constant first argument, then patch in the unary function.
 		do {
 			auto part_constant = input.TryGetConstant(0);
 			if (!part_constant || part_constant->IsNull()) {
@@ -456,20 +479,22 @@ struct ICUDatePart : public ICUDateFunc {
 
 			const auto part_name = part_constant->ToString();
 			const auto part_code = GetDatePartSpecifier(part_name);
-			if (IsBigintDatepart(part_code)) {
-				break;
-			}
-
 			arguments.erase(arguments.begin());
 			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-			bound_function.SetName(Identifier(part_name));
-			bound_function.SetReturnType(LogicalType::DOUBLE);
-			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, double>);
+			bound_function.SetName(Identifier(DatePartUnaryFunctionName(part_code)));
+
+			if (IsBigintDatepart(part_code)) {
+				bound_function.SetReturnType(LogicalType::BIGINT);
+				bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, int64_t>);
+			} else {
+				bound_function.SetReturnType(LogicalType::DOUBLE);
+				bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, double>);
+			}
 
 			return BindUnaryDatePart(input);
 		} while (false);
 
-		using data_t = BindAdapterData<int64_t>;
+		using data_t = BindAdapterData<double>;
 		return BindAdapter<data_t>(context, bound_function, arguments, nullptr);
 	}
 
@@ -554,7 +579,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::BIGINT,
+		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::DOUBLE,
 		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, BindBinaryDatePart);
 	}
 
@@ -571,7 +596,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static void AddDatePartFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, int64_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, double>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		for (auto &func : set.functions) {
 			func.SetFallible();

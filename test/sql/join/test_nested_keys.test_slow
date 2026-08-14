@@ -144,24 +144,25 @@ query III
 SELECT i, pk, fk FROM structdim, structs WHERE pk = fk ORDER BY i
 ----
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
+2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
 query III
 SELECT i, pk, fk FROM structdim LEFT OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY i
 ----
-NULL	{'x': NULL, 'y': NULL}	NULL
 NULL	NULL	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
+2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
 query III
 SELECT i, pk, fk FROM structs RIGHT OUTER JOIN structdim ON structdim.pk=structs.fk ORDER BY i
 ----
-NULL	{'x': NULL, 'y': NULL}	NULL
 NULL	NULL	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
+2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
@@ -170,9 +171,8 @@ SELECT i, pk, fk FROM structdim FULL OUTER JOIN structs ON structdim.pk=structs.
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': 13, 'y': Somateria mollissima}
-NULL	{'x': NULL, 'y': NULL}	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
-2	NULL	{'x': NULL, 'y': NULL}
+2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 4	NULL	{'x': 2, 'y': c}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}

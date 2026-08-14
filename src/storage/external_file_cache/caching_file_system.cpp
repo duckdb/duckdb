@@ -342,9 +342,10 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		const annotated_lock_guard<annotated_mutex> meta_guard(current_cached_file->meta_lock);
 		if (!ExternalFileCache::IsValid(true, current_cached_file->version_tag, current_cached_file->last_modified,
 		                                current_version_tag, current_last_modified)) {
-			for (auto &block : blocks) {
-				block->Reinit();
-			}
+			// Do not reset blocks in place: another reader may already have pinned the same blocks and still need their
+			// byte counts. Removing only the matching map entries preserves those readers while forcing future reads
+			// to fetch fresh blocks.
+			external_file_cache.RetireBlocks(*current_cached_file, first_block, blocks);
 		}
 	}
 
@@ -364,7 +365,14 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		auto file_handle = GetFileHandle();
-		nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));
+		// Do positional read if handle can seek, otherwise have to fallback to sequential read.
+		if (file_handle->CanSeek()) {
+			const auto file_size = file_handle->GetFileSize();
+			nr_bytes = position >= file_size ? 0 : MinValue(nr_bytes, file_size - position);
+			file_handle->Read(context, buf.GetDataMutable(), nr_bytes, position);
+		} else {
+			nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));
+		}
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		position += nr_bytes;

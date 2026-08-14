@@ -196,6 +196,132 @@ select typeof(m(42::integer))
 ----
 BIGINT
 
+# Integer literal defaults can be implicitly narrowed when their value fits
+statement ok
+create or replace macro integral_defaults(
+    i tinyint := 1,
+    s smallint := 1,
+    ut utinyint := 1,
+    us usmallint := 1,
+    ui uinteger := 1,
+    ub ubigint := 1,
+    uh uhugeint := 1
+) as struct_pack(i := i, s := s, ut := ut, us := us, ui := ui, ub := ub, uh := uh)
+
+query IIIIIII
+select result.i, result.s, result.ut, result.us, result.ui, result.ub, result.uh
+from (select integral_defaults() result)
+----
+1	1	1	1	1	1	1
+
+query TTTTTTT
+select typeof(result.i), typeof(result.s), typeof(result.ut), typeof(result.us),
+       typeof(result.ui), typeof(result.ub), typeof(result.uh)
+from (select integral_defaults() result)
+----
+TINYINT	SMALLINT	UTINYINT	USMALLINT	UINTEGER	UBIGINT	UHUGEINT
+
+statement error
+create or replace macro bad_default(i tinyint := 128) as i
+----
+cannot be implicitly cast
+
+statement error
+create or replace macro bad_default(i utinyint := -1) as i
+----
+cannot be implicitly cast
+
+# Computed and explicitly typed constants retain their declared source type
+statement error
+create or replace macro typed_default(i tinyint := 1::integer) as i
+----
+cannot be implicitly cast
+
+statement error
+create or replace macro folded_default(i tinyint := 64 + 63) as i
+----
+cannot be implicitly cast
+
+statement ok
+create or replace macro null_default(i tinyint := NULL) as i
+
+query I
+select null_default() is null
+----
+true
+
+statement error
+create or replace macro typed_null_default(i tinyint := NULL::integer) as i
+----
+cannot be implicitly cast
+
+statement ok
+create or replace macro boundary_defaults(
+    min_i tinyint := -128,
+    max_ut utinyint := 255,
+    max_s smallint := 32767,
+    first_ui uinteger := 2147483648,
+    max_b bigint := 9223372036854775807,
+    first_ub ubigint := 9223372036854775808
+) as struct_pack(min_i := min_i, max_ut := max_ut, max_s := max_s,
+                 first_ui := first_ui, max_b := max_b, first_ub := first_ub)
+
+query TTTTTT
+select result.min_i::varchar, result.max_ut::varchar, result.max_s::varchar,
+       result.first_ui::varchar, result.max_b::varchar, result.first_ub::varchar
+from (select boundary_defaults() result)
+----
+-128	255	32767	2147483648	9223372036854775807	9223372036854775808
+
+statement error
+create or replace macro bad_default(i tinyint := -129) as i
+----
+cannot be implicitly cast
+
+statement error
+create or replace macro bad_default(i utinyint := 256) as i
+----
+cannot be implicitly cast
+
+statement ok
+create or replace macro table_integral_default(i tinyint := 1) as table select i
+
+query I
+from table_integral_default()
+----
+1
+
+# Narrowed defaults survive catalog serialization for scalar and table macros
+# Switch to a scratch in-memory catalog rather than assuming the default
+# catalog is named "memory": under persistent test configurations it is not.
+statement ok
+attach ':memory:' as switch_db
+
+statement ok
+use switch_db
+
+statement ok
+detach newerdb
+
+statement ok
+attach '{TEST_DIR}/test_macro_type_overloads_newerdb.db' AS newerdb
+
+statement ok
+use newerdb
+
+statement ok
+detach switch_db
+
+query I
+select integral_defaults().i
+----
+1
+
+query I
+from table_integral_default()
+----
+1
+
 # replicate tests above with table macro
 statement ok
 create or replace macro m(s varchar) as table (select s || 'c')

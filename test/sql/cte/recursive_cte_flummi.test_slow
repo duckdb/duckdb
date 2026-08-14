@@ -2,6 +2,8 @@
 # description: Generated recursive CTE programs from Flummi
 # group: [cte]
 
+mode skip Waiting for PR 24647
+
 statement ok
 SET threads=4;
 

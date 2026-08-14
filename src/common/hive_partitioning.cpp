@@ -150,11 +150,12 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 
 	// cast to the target type
 	Value value(Unescape(str_val));
-	if (!value.TryCastAs(context, type)) {
+	auto cast = value.TryCastAs(context, type);
+	if (!cast) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(key), type.ToString());
 	}
-	return value;
+	return std::move(*cast);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
@@ -231,15 +232,11 @@ static inline Value GetHiveKeyValue(const T &val) {
 
 template <class T>
 static inline Value GetHiveKeyValue(const T &val, const LogicalType &type) {
-	auto result = GetHiveKeyValue(val);
-	result.Reinterpret(type);
-	return result;
+	return GetHiveKeyValue(val).WithType(type);
 }
 
 static inline Value GetHiveKeyNullValue(const LogicalType &type) {
-	Value result;
-	result.Reinterpret(type);
-	return result;
+	return Value().WithType(type);
 }
 
 template <class T>
