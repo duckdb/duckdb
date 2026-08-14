@@ -26,11 +26,11 @@ static unique_ptr<FunctionData> DuckDBExtensionRepositoriesBind(ClientContext &c
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("key_fingerprint");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("key_fingerprints");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	names.emplace_back("public_key");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("public_keys");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	return nullptr;
 }
@@ -66,23 +66,29 @@ void DuckDBExtensionRepositoriesFunction(ClientContext &context, TableFunctionIn
 	auto &prefix = output.data[1];
 	// type, VARCHAR
 	auto &type = output.data[2];
-	// key_fingerprint, VARCHAR
-	auto &key_fingerprint = output.data[3];
-	// public_key, VARCHAR
-	auto &public_key = output.data[4];
+	// key_fingerprints, LIST(VARCHAR)
+	auto &key_fingerprints = output.data[3];
+	// public_keys, LIST(VARCHAR)
+	auto &public_keys = output.data[4];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 		name.Append(Value(entry.name));
 		prefix.Append(Value(entry.path));
 		type.Append(Value(EnumUtil::ToString(entry.type)));
-		// only user provided repositories have a key of their own - the core and community keys are built in
-		if (entry.public_key.empty()) {
-			key_fingerprint.Append(Value(LogicalType::VARCHAR));
-			public_key.Append(Value(LogicalType::VARCHAR));
+		// only user provided repositories have keys of their own - the core and community keys are built in
+		if (entry.public_keys.empty()) {
+			key_fingerprints.Append(Value(LogicalType::LIST(LogicalType::VARCHAR)));
+			public_keys.Append(Value(LogicalType::LIST(LogicalType::VARCHAR)));
 		} else {
-			key_fingerprint.Append(Value(ExtensionRepositoryManager::GetPublicKeyFingerprint(entry.public_key)));
-			public_key.Append(Value(entry.public_key));
+			vector<Value> fingerprint_values;
+			vector<Value> key_values;
+			for (auto &public_key : entry.public_keys) {
+				fingerprint_values.push_back(Value(ExtensionRepositoryManager::GetPublicKeyFingerprint(public_key)));
+				key_values.push_back(Value(public_key));
+			}
+			key_fingerprints.Append(Value::LIST(LogicalType::VARCHAR, std::move(fingerprint_values)));
+			public_keys.Append(Value::LIST(LogicalType::VARCHAR, std::move(key_values)));
 		}
 		count++;
 	}

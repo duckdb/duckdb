@@ -703,6 +703,7 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - RepositoryPublicKey
     - StarSymbolColumnList
     - StarQualifierList
     - PivotGroupByList
@@ -1008,7 +1009,6 @@ String:
     - ReservedKeyword
     - VersionNumber
     - RepositoryPrefix
-    - RepositoryPublicKey
     - LikeVariations
     - LikeToken
     - ILikeToken

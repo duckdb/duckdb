@@ -39,13 +39,17 @@ static void ExecuteRepositoryStatement(ClientContext &context, const LoadInfo &i
 	auto &fs = FileSystem::GetLocal(db);
 
 	if (info.load_type == LoadType::CREATE_REPOSITORY) {
-		ExtensionRepository repository(info.repository, info.repository_url, info.public_key);
+		ExtensionRepository repository(info.repository, info.repository_url, info.public_keys);
 		auto result = ExtensionRepositoryManager::CreateRepository(db, fs, context, repository, info.on_conflict);
 
-		// report the repository as it was stored, so that the key can be compared with the published fingerprint
+		// report the repository as it was stored, so that the keys can be compared with the published fingerprints
+		vector<Value> fingerprints;
+		for (auto &public_key : result.public_keys) {
+			fingerprints.push_back(Value(ExtensionRepositoryManager::GetPublicKeyFingerprint(public_key)));
+		}
 		chunk.data[0].Append(Value(result.name));
 		chunk.data[1].Append(Value(result.path));
-		chunk.data[2].Append(Value(ExtensionRepositoryManager::GetPublicKeyFingerprint(result.public_key)));
+		chunk.data[2].Append(Value::LIST(LogicalType::VARCHAR, std::move(fingerprints)));
 	} else {
 		auto on_entry_not_found = info.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 		ExtensionRepositoryManager::DropRepository(db, fs, info.repository, on_entry_not_found);

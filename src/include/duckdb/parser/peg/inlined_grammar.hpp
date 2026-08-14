@@ -1455,7 +1455,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ExtensionRepositoryStatement <- CreateExtensionRepositoryStmt / DropExtensionRepositoryStmt\n"
 	"CreateExtensionRepositoryStmt <- 'CREATE' OrReplace? 'EXTENSION' 'REPOSITORY' IfNotExists? ColIdOrString RepositoryPrefix RepositoryPublicKey?\n"
 	"RepositoryPrefix <- 'WITH'? 'PREFIX' StringLiteral\n"
-	"RepositoryPublicKey <- 'USING'? 'PUBLIC' 'KEY' StringLiteral\n"
+	"RepositoryPublicKey <- 'USING'? 'PUBLIC' ('KEYS' / 'KEY') List(StringLiteral)\n"
 	"DropExtensionRepositoryStmt <- 'DROP' 'EXTENSION' 'REPOSITORY' IfExists? ColIdOrString\n"
 	"MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?\n"
 	"MergeIntoUsingClause <- 'USING' TableRef\n"

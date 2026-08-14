@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -146,8 +147,17 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 // Allow Extension Repositories
 //===----------------------------------------------------------------------===//
 void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if (info.db && input.GetValue<bool>()) {
-		throw InvalidInputException("Cannot change allow_extension_repositories setting while database is running");
+	// validate the value
+	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
+	if (!info.db) {
+		// the value is set before the database is running - any value is allowed
+		return;
+	}
+	// forbidding external repositories is a one-way ratchet within a session: once forbidden, it cannot be re-enabled
+	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
+	if (current_access == ExtensionRepositoryAccess::FORBIDDEN && new_access != ExtensionRepositoryAccess::FORBIDDEN) {
+		throw InvalidInputException(
+		    "Adding extension repositories has been forbidden and cannot be re-enabled while the database is running");
 	}
 }
 

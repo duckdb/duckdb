@@ -192,7 +192,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_external_access",        // cant change this while db is running
 	    "allow_unsigned_extensions",     // cant change this while db is running
 	    "allow_community_extensions",    // cant change this while db is running
-	    "allow_extension_repositories",  // cant change this while db is running
+	    "allow_extension_repositories",  // ratchets to forbidden, cannot be freely reset
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
 	    "vacuum_rebuild_indexes",        // cant change this while db is running

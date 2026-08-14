@@ -7447,15 +7447,15 @@ public:
 	TransformCreateExtensionRepositoryStmt(PEGTransformer &transformer, const optional<bool> &or_replace,
 	                                       const optional<bool> &if_not_exists, const Identifier &col_id_or_string,
 	                                       const string &repository_prefix,
-	                                       const optional<string> &repository_public_key);
+	                                       const optional<vector<string>> &repository_public_key);
 	static unique_ptr<TransformResultValue> TransformRepositoryPrefixInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static string TransformRepositoryPrefix(PEGTransformer &transformer, const bool &has_result,
 	                                        const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformRepositoryPublicKeyInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
-	static string TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
-	                                           const string &string_literal);
+	static vector<string> TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
+	                                                   const vector<string> &string_literal);
 	static unique_ptr<TransformResultValue> TransformDropExtensionRepositoryStmtInternal(PEGTransformer &transformer,
 	                                                                                     ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDropExtensionRepositoryStmt(PEGTransformer &transformer,

@@ -5,12 +5,21 @@
 statement ok
 SET extension_repository_directory='{TEST_DIR}/extension_repositories'
 
-# creating a repository reports the name, prefix and key fingerprint, so that the pinned key can be compared
-# against the fingerprint published by the repository
+# adding repositories is undecided by default: it must be opted into explicitly
+statement error
+CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+----
+<REGEX>:Permission Error.*not enabled.*
+
+statement ok
+SET allow_extension_repositories='allowed'
+
+# creating a repository reports the name, prefix and key fingerprints, so that the pinned keys can be compared
+# against the fingerprints published by the repository
 query III
 CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
-acme	http://extensions.acme.com	sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b
+acme	http://extensions.acme.com	['sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b']
 
 query II
 SELECT repository_name, prefix FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
@@ -56,23 +65,51 @@ SELECT prefix FROM duckdb_extension_repositories() WHERE repository_name='acme'
 ----
 http://other.acme.com
 
-# when no key is provided, it is fetched from `<prefix>/public_key.pem` and pinned
+# a repository can trust more than one key, e.g. to allow key rotation. The keys are provided as a comma separated list
+query III
+CREATE EXTENSION REPOSITORY multi WITH PREFIX 'http://multi.com' USING PUBLIC KEYS 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB', 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyjug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoNPjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpAbYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9ZQIDAQAB'
+----
+multi	http://multi.com	['sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b', 'sha256:b3d2dd0d19994e066b714cabc1a1eb50547d5c7279fcf93bf761dc7abe321ec4']
+
+# both keys are pinned and stored alongside the repository
+query I
+SELECT public_keys FROM duckdb_extension_repositories() WHERE repository_name='multi'
+----
+[MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB, MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyjug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoNPjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpAbYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9ZQIDAQAB]
+
+statement ok
+DROP EXTENSION REPOSITORY multi
+
+# when no key is provided, it is fetched from `<prefix>/public_key.pem` and pinned. The file may contain more than
+# one key
 statement ok
 COPY (SELECT unnest(['-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdX','APV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTt','y9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0j','N0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6','AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGR','exqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxD','ZQIDAQAB','-----END PUBLIC KEY-----'])) TO '{TEST_DIR}/public_key.pem' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
 
 query III
 CREATE EXTENSION REPOSITORY fetched WITH PREFIX '{TEST_DIR}'
 ----
-fetched	{TEST_DIR}	sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b
+fetched	{TEST_DIR}	['sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b']
 
 # the fetched key is pinned: it is stored alongside the repository
 query I
-SELECT public_key FROM duckdb_extension_repositories() WHERE repository_name='fetched'
+SELECT public_keys FROM duckdb_extension_repositories() WHERE repository_name='fetched'
 ----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB
+[MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB]
 
 statement ok
 DROP EXTENSION REPOSITORY fetched
+
+# a public_key.pem file with two concatenated PEM blocks pins both keys
+statement ok
+COPY (SELECT unnest(['-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdX','APV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTt','y9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0j','N0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6','AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGR','exqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxD','ZQIDAQAB','-----END PUBLIC KEY-----','-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyj','ug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoN','PjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpA','bYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP','4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX','3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9','ZQIDAQAB','-----END PUBLIC KEY-----'])) TO '{TEST_DIR}/public_key.pem' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
+
+query III
+CREATE EXTENSION REPOSITORY fetched_multi WITH PREFIX '{TEST_DIR}'
+----
+fetched_multi	{TEST_DIR}	['sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba11a71d45ef0524fa3b', 'sha256:b3d2dd0d19994e066b714cabc1a1eb50547d5c7279fcf93bf761dc7abe321ec4']
+
+statement ok
+DROP EXTENSION REPOSITORY fetched_multi
 
 # a repository that does not serve a key has to provide it directly
 statement error
@@ -93,9 +130,9 @@ ZQIDAQAB
 -----END PUBLIC KEY-----'
 
 query I
-SELECT public_key FROM duckdb_extension_repositories() WHERE repository_name='pem_repo'
+SELECT public_keys FROM duckdb_extension_repositories() WHERE repository_name='pem_repo'
 ----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB
+[MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB]
 
 statement ok
 DROP EXTENSION REPOSITORY pem_repo
@@ -108,6 +145,12 @@ CREATE EXTENSION REPOSITORY invalid_key WITH PREFIX 'http://foo.com' USING PUBLI
 
 statement error
 CREATE EXTENSION REPOSITORY invalid_key WITH PREFIX 'http://foo.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdX'
+----
+<REGEX>:Invalid Input Error.*Invalid public key.*
+
+# if any of the keys in a list is invalid, the whole statement fails
+statement error
+CREATE EXTENSION REPOSITORY invalid_key WITH PREFIX 'http://foo.com' USING PUBLIC KEYS 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB', 'not a key'
 ----
 <REGEX>:Invalid Input Error.*Invalid public key.*
 
@@ -164,7 +207,7 @@ CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING 
 
 # the built-in repositories are always listed, but they have no key of their own
 query III
-SELECT repository_name, type, key_fingerprint FROM duckdb_extension_repositories() WHERE repository_name IN ('core', 'community')
+SELECT repository_name, type, key_fingerprints FROM duckdb_extension_repositories() WHERE repository_name IN ('core', 'community')
 ----
 core	CORE	NULL
 community	COMMUNITY	NULL
@@ -172,12 +215,12 @@ community	COMMUNITY	NULL
 # a repository file must not be able to shadow a built-in repository. Plant a 'core.json' by hand (as something with
 # write access to the trust store directory could) and verify it is ignored, not silently used as the 'core' repository
 statement ok
-COPY (SELECT '{"version":1,"name":"core","url":"http://evil.example.com","public_key":"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB"}') TO '{TEST_DIR}/extension_repositories/core.json' (FORMAT csv, HEADER false, QUOTE '')
+COPY (SELECT '{"version":1,"name":"core","url":"http://evil.example.com","public_keys":["MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB"]}') TO '{TEST_DIR}/extension_repositories/core.json' (FORMAT csv, HEADER false, QUOTE '')
 
 # the built-in 'core' repository is unaffected: it is still listed as CORE with no key, not as the planted repository.
 # the planted file (which claims prefix http://evil.example.com) is ignored entirely
 query III
-SELECT repository_name, type, key_fingerprint FROM duckdb_extension_repositories() WHERE repository_name='core'
+SELECT repository_name, type, key_fingerprints FROM duckdb_extension_repositories() WHERE repository_name='core'
 ----
 core	CORE	NULL
 
@@ -186,32 +229,35 @@ SELECT count(*) FROM duckdb_extension_repositories() WHERE prefix='http://evil.e
 ----
 0
 
-# trusted repositories can be disabled entirely - existing repositories are then ignored
+# adding new repositories can be forbidden. existing repositories keep working: they can still be listed, installed
+# from and dropped - only *adding* new ones is blocked
 statement ok
-SET allow_extension_repositories=false
+SET allow_extension_repositories='forbidden'
 
+# existing repositories are still listed
 query I
-SELECT count(*) FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
 ----
-0
+acme
 
+# adding a new repository is blocked
 statement error
 CREATE EXTENSION REPOSITORY foo WITH PREFIX 'http://foo.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
-<REGEX>:Permission Error.*disabled through configuration.*
+<REGEX>:Permission Error.*forbidden.*
 
-statement error
-DROP EXTENSION REPOSITORY acme
-----
-<REGEX>:Permission Error.*disabled through configuration.*
-
+# installing from an existing repository still resolves the repository (and then fails on the network, not on lookup)
 statement error
 INSTALL some_extension FROM acme
 ----
-<REGEX>:Binder Error.*not a known repository name.*
+<REGEX>:.*acme\.com.*
 
-# once disabled, repositories cannot be re-enabled while the database is running
+# dropping an existing repository is still allowed - it only removes trust
+statement ok
+DROP EXTENSION REPOSITORY acme
+
+# once forbidden, adding repositories cannot be re-enabled while the database is running
 statement error
-SET allow_extension_repositories=true
+SET allow_extension_repositories='allowed'
 ----
-<REGEX>:.*Cannot change allow_extension_repositories.*
+<REGEX>:.*forbidden and cannot be re-enabled.*

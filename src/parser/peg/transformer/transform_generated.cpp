@@ -7647,10 +7647,10 @@ PEGTransformerFactory::TransformCreateExtensionRepositoryStmtInternal(PEGTransfo
 	}
 	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(5));
 	auto repository_prefix = transformer.Transform<string>(list_pr.GetChild(6));
-	optional<string> repository_public_key {};
+	optional<vector<string>> repository_public_key {};
 	auto &repository_public_key_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
 	if (repository_public_key_opt.HasResult()) {
-		auto repository_public_key_value = transformer.Transform<string>(repository_public_key_opt.GetResult());
+		auto repository_public_key_value = transformer.Transform<vector<string>>(repository_public_key_opt.GetResult());
 		repository_public_key = repository_public_key_value;
 	}
 	auto result = TransformCreateExtensionRepositoryStmt(transformer, or_replace, if_not_exists, col_id_or_string,
@@ -7675,9 +7675,14 @@ PEGTransformerFactory::TransformRepositoryPublicKeyInternal(PEGTransformer &tran
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
-	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	vector<string> string_literal;
+	auto string_literal_items = ExtractParseResultsFromList(list_pr.GetChild(3));
+	for (auto &string_literal_item : string_literal_items) {
+		auto string_literal_value = transformer.Transform<string>(string_literal_item.get());
+		string_literal.push_back(string_literal_value);
+	}
 	auto result = TransformRepositoryPublicKey(transformer, has_result, string_literal);
-	return make_uniq<TypedTransformResult<string>>(result);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 unique_ptr<TransformResultValue>

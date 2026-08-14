@@ -884,11 +884,13 @@ vector<string> ExtensionHelper::GetTrustedPublicKeys(DatabaseInstance &db, Exten
 		}
 		return keys;
 	case ExtensionRepositoryType::USER_PROVIDED: {
-		// only the key of the repository the extension came from is trusted
+		// only the keys of the repository the extension came from are trusted
 		ExtensionRepository repository;
 		auto &fs = FileSystem::GetLocal(db);
 		if (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository)) {
-			keys.push_back(ExtensionRepositoryManager::ToPEMPublicKey(repository.public_key));
+			for (auto &public_key : repository.public_keys) {
+				keys.push_back(ExtensionRepositoryManager::ToPEMPublicKey(public_key));
+			}
 		}
 		return keys;
 	}

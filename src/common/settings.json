@@ -54,10 +54,10 @@
     },
     {
         "name": "allow_extension_repositories",
-        "description": "Allow creating and using custom trusted extension repositories",
-        "type": "BOOLEAN",
+        "description": "Whether adding custom trusted extension repositories is 'allowed', 'forbidden' or 'undecided' (the default, which blocks adding new repositories until the user opts in)",
+        "type": "VARCHAR",
         "scope": "global",
-        "default_value": "true",
+        "default_value": "undecided",
         "on_callbacks": [
             "set"
         ]

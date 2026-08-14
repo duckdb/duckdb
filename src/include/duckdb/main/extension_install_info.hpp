@@ -27,6 +27,18 @@ enum class ExtensionInstallMode : uint8_t {
 	NOT_INSTALLED = 4
 };
 
+//! Whether the user has opted in to adding external extension repositories. This is a one-way ratchet: once FORBIDDEN
+//! it cannot be moved back within a session. UNDECIDED (the default) blocks adding new repositories, but extensions
+//! from repositories that were already created can still be installed and loaded
+enum class ExtensionRepositoryAccess : uint8_t {
+	//! No decision has been made yet - adding repositories fails until the user opts in explicitly
+	UNDECIDED = 0,
+	//! Adding external repositories is allowed
+	ALLOWED = 1,
+	//! Adding external repositories is forbidden - this cannot be undone in the same session
+	FORBIDDEN = 2
+};
+
 //! The type of a repository determines which public keys are trusted to sign the extensions that it serves. Keys of
 //! different types are managed separately, so a leak of one of them must not affect the other types
 enum class ExtensionRepositoryType : uint8_t {
@@ -104,7 +116,7 @@ struct ExtensionRepository {
 	static ExtensionRepository GetRepositoryByUrl(const string &url);
 
 	ExtensionRepository();
-	ExtensionRepository(const string &name, const string &url, const string &public_key = string());
+	ExtensionRepository(const string &name, const string &url, vector<string> public_keys = {});
 
 	//! Print the name if it has one, or the full path if not
 	string ToReadableString();
@@ -113,8 +125,9 @@ struct ExtensionRepository {
 	string name;
 	//! Repository path/url
 	string path;
-	//! (optional) Compact public key that signs the extensions in this repository (user provided repositories only)
-	string public_key;
+	//! (optional) Compact public keys that are trusted to sign the extensions in this repository (user provided
+	//! repositories only). A repository can publish more than one key, e.g. to allow key rotation
+	vector<string> public_keys;
 	//! Which public keys are trusted to sign the extensions of this repository
 	ExtensionRepositoryType type = ExtensionRepositoryType::CORE;
 };

@@ -98,8 +98,8 @@ ExtensionRepository ExtensionRepository::GetRepositoryByUrl(const string &url) {
 
 ExtensionRepository::ExtensionRepository() : name("core"), path(CORE_REPOSITORY_URL) {
 }
-ExtensionRepository::ExtensionRepository(const string &name_p, const string &path_p, const string &public_key_p)
-    : name(name_p), path(path_p), public_key(public_key_p) {
+ExtensionRepository::ExtensionRepository(const string &name_p, const string &path_p, vector<string> public_keys_p)
+    : name(name_p), path(path_p), public_keys(std::move(public_keys_p)) {
 }
 
 string ExtensionRepository::ToReadableString() {

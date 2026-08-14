@@ -172,11 +172,13 @@ struct AllowCommunityExtensionsSetting {
 };
 
 struct AllowExtensionRepositoriesSetting {
-	using RETURN_TYPE = bool;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "allow_extension_repositories";
-	static constexpr const char *Description = "Allow creating and using custom trusted extension repositories";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *Description =
+	    "Whether adding custom trusted extension repositories is 'allowed', 'forbidden' or 'undecided' (the default, "
+	    "which blocks adding new repositories until the user opts in)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "undecided";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

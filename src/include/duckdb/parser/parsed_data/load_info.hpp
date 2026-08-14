@@ -32,8 +32,8 @@ public:
 	Identifier alias;
 	//! The url prefix of the repository (CREATE_REPOSITORY only)
 	string repository_url;
-	//! The public key that signs the extensions of the repository (CREATE_REPOSITORY only)
-	string public_key;
+	//! The public keys that are trusted to sign the extensions of the repository (CREATE_REPOSITORY only)
+	vector<string> public_keys;
 	//! What to do when the repository already exists (CREATE_REPOSITORY only)
 	OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	//! Whether or not to throw if the repository does not exist (DROP_REPOSITORY only)

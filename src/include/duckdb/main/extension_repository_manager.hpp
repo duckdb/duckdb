@@ -19,23 +19,23 @@ class FileSystem;
 
 //! Manages the trusted extension repositories of a DuckDB installation. Trusted repositories are stored as json files
 //! in the extension repository directory (by default `~/.duckdb/extension_repositories`). Every repository has a
-//! locally unique name, a url prefix from which extensions are downloaded and a public key that is trusted to sign
-//! the extensions that are served by the repository. Note that the public key of a trusted repository is trusted for
-//! any extension, not only for the extensions that are installed from that repository.
+//! locally unique name, a url prefix from which extensions are downloaded and one or more public keys that are trusted
+//! to sign the extensions that are served by the repository. The keys of a trusted repository are only trusted for the
+//! extensions that are installed from that repository.
 class ExtensionRepositoryManager {
 public:
 	//! The file extension used for the stored repository definitions
 	static constexpr const char *FILE_EXTENSION = ".json";
 	//! The version of the repository file format
 	static constexpr const idx_t FORMAT_VERSION = 1;
-	//! The file that serves the public key of a repository, relative to the repository prefix
+	//! The file that serves the public key(s) of a repository, relative to the repository prefix
 	static constexpr const char *PUBLIC_KEY_FILE = "public_key.pem";
 
 public:
 	//! The directory in which the trusted extension repositories are stored
 	static string GetRepositoryDirectory(DatabaseInstance &db, FileSystem &fs);
 
-	//! Store a new trusted repository on disk. If the repository has no public key, the key is fetched from the
+	//! Store a new trusted repository on disk. If the repository has no public keys, they are fetched from the
 	//! repository prefix and pinned. Returns the repository as it was stored
 	static ExtensionRepository CreateRepository(DatabaseInstance &db, FileSystem &fs,
 	                                            optional_ptr<ClientContext> context,
@@ -44,7 +44,7 @@ public:
 	static void DropRepository(DatabaseInstance &db, FileSystem &fs, const string &name,
 	                           OnEntryNotFound on_entry_not_found);
 
-	//! Get all trusted repositories - returns an empty list if custom repositories are disabled
+	//! Get all trusted repositories that were added by the user
 	static vector<ExtensionRepository> GetRepositories(DatabaseInstance &db, FileSystem &fs);
 	//! Try to look up a trusted repository by name
 	static bool TryGetRepository(DatabaseInstance &db, FileSystem &fs, const string &name, ExtensionRepository &result);
@@ -53,19 +53,34 @@ public:
 	static string NormalizeRepositoryName(const string &name);
 	static bool TryNormalizeRepositoryName(const string &name, string &result);
 
-	//! Fetch the public key that a repository serves at its prefix
-	static string FetchPublicKey(DatabaseInstance &db, optional_ptr<ClientContext> context, const string &prefix);
+	//! Whether the user has opted in to adding external extension repositories
+	static ExtensionRepositoryAccess GetAccess(DatabaseInstance &db);
+	//! Parse the access value of the allow_extension_repositories setting (throws on an invalid value)
+	static ExtensionRepositoryAccess ParseAccess(const string &value);
+	//! The string representation of an access value, as used by the allow_extension_repositories setting
+	static string AccessToString(ExtensionRepositoryAccess access);
+
+	//! Fetch the public keys that a repository serves at its prefix. The file may contain more than one PEM key
+	static vector<string> FetchPublicKeys(DatabaseInstance &db, optional_ptr<ClientContext> context,
+	                                      const string &prefix);
 
 	//! The sha256 fingerprint of a public key, used to compare a key against the fingerprint published by a repository
 	static string GetPublicKeyFingerprint(const string &compact_key);
 
+	//! Extract all public keys from a blob that may contain one or more keys in PEM or compact form
+	static vector<string> ToCompactPublicKeys(const string &public_keys);
+	//! Flatten a list of provided key blobs (each of which may contain multiple keys) into compact keys
+	static vector<string> NormalizePublicKeys(const vector<string> &public_keys);
 	//! Convert a public key in PEM or compact form into the compact single-line representation
 	static string ToCompactPublicKey(const string &public_key);
 	//! Convert a compact public key back into the PEM representation used for signature verification
 	static string ToPEMPublicKey(const string &compact_key);
 
 private:
-	static void ThrowIfDisabled(DatabaseInstance &db);
+	//! Throws unless adding a repository is currently allowed (opt-in and configuration lock)
+	static void CheckCanCreate(DatabaseInstance &db);
+	//! Throws if the configuration is locked, freezing the trust store
+	static void CheckNotLocked(DatabaseInstance &db);
 	static string GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name);
 	static ExtensionRepository ReadRepository(FileSystem &fs, const string &path);
 };

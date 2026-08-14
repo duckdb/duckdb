@@ -33,6 +33,7 @@ TEST_CASE("Test that the public key of a trusted extension repository is trusted
 
 	DBConfig config;
 	config.SetOptionByName("extension_repository_directory", repository_directory);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -61,6 +62,24 @@ TEST_CASE("Test that the public key of a trusted extension repository is trusted
 	REQUIRE(!KeyIsTrusted(instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
 }
 
+TEST_CASE("Test that a repository can trust multiple keys", "[api]") {
+	auto repository_directory = TestCreatePath("extension_repositories_multi");
+
+	DBConfig config;
+	config.SetOptionByName("extension_repository_directory", repository_directory);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	auto &instance = *db.instance;
+	// both keys can be provided as a comma separated list, and both of them are trusted
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
+	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEYS '%s', '%s'", TEST_PUBLIC_KEY,
+	    OTHER_PUBLIC_KEY)));
+	REQUIRE(KeyIsTrusted(instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+	REQUIRE(KeyIsTrusted(instance, ExtensionRepositoryType::USER_PROVIDED, "acme", OTHER_PUBLIC_KEY));
+}
+
 TEST_CASE("Test that the core and community signing keys are separate", "[api]") {
 	DuckDB db(nullptr);
 
@@ -77,11 +96,12 @@ TEST_CASE("Test that the core and community signing keys are separate", "[api]")
 	}
 }
 
-TEST_CASE("Test that trusted extension repositories can be disabled", "[api]") {
-	auto repository_directory = TestCreatePath("extension_repositories_disabled");
+TEST_CASE("Test that adding trusted extension repositories can be forbidden", "[api]") {
+	auto repository_directory = TestCreatePath("extension_repositories_forbidden");
 
 	DBConfig config;
 	config.SetOptionByName("extension_repository_directory", repository_directory);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -89,7 +109,32 @@ TEST_CASE("Test that trusted extension repositories can be disabled", "[api]") {
 	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
 	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
 
-	// after disabling trusted repositories the key of the repository is no longer trusted
-	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories=false"));
-	REQUIRE(!KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+	// forbidding repositories only blocks adding new ones - existing repositories keep working
+	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='forbidden'"));
+	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+
+	// adding a new repository is blocked
+	REQUIRE_FAIL(con.Query(StringUtil::Format(
+	    "CREATE EXTENSION REPOSITORY other WITH PREFIX 'http://other.com' USING PUBLIC KEY '%s'", OTHER_PUBLIC_KEY)));
+
+	// once forbidden, it cannot be re-enabled while the database is running
+	REQUIRE_FAIL(con.Query("SET allow_extension_repositories='allowed'"));
+}
+
+TEST_CASE("Test that adding trusted extension repositories must be opted into", "[api]") {
+	auto repository_directory = TestCreatePath("extension_repositories_undecided");
+
+	DBConfig config;
+	config.SetOptionByName("extension_repository_directory", repository_directory);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	// the default is undecided - adding a repository fails until the user opts in explicitly
+	REQUIRE_FAIL(con.Query(StringUtil::Format(
+	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
+
+	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='allowed'"));
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
+	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
+	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
 }

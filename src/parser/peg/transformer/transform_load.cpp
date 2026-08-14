@@ -82,7 +82,7 @@ string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExtensionRepositoryStmt(
     PEGTransformer &transformer, const optional<bool> &or_replace, const optional<bool> &if_not_exists,
     const Identifier &col_id_or_string, const string &repository_prefix,
-    const optional<string> &repository_public_key) {
+    const optional<vector<string>> &repository_public_key) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = LoadType::CREATE_REPOSITORY;
@@ -90,7 +90,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateExtensionReposito
 	info->repository = col_id_or_string.GetIdentifierName();
 	info->repository_url = repository_prefix;
 	if (repository_public_key) {
-		info->public_key = *repository_public_key;
+		info->public_keys = *repository_public_key;
 	}
 	if (or_replace && if_not_exists) {
 		throw ParserException("Cannot combine OR REPLACE with IF NOT EXISTS");
@@ -109,8 +109,8 @@ string PEGTransformerFactory::TransformRepositoryPrefix(PEGTransformer &transfor
 	return string_literal;
 }
 
-string PEGTransformerFactory::TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
-                                                           const string &string_literal) {
+vector<string> PEGTransformerFactory::TransformRepositoryPublicKey(PEGTransformer &transformer, const bool &has_result,
+                                                                   const vector<string> &string_literal) {
 	return string_literal;
 }
 

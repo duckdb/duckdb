@@ -7,14 +7,14 @@ namespace duckdb {
 
 vector<LogicalType> LoadInfo::GetResultTypes(LoadType load_type) {
 	if (load_type == LoadType::CREATE_REPOSITORY) {
-		return {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+		return {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)};
 	}
 	return {LogicalType::BOOLEAN};
 }
 
 vector<Identifier> LoadInfo::GetResultNames(LoadType load_type) {
 	if (load_type == LoadType::CREATE_REPOSITORY) {
-		return {Identifier("repository_name"), Identifier("prefix"), Identifier("key_fingerprint")};
+		return {Identifier("repository_name"), Identifier("prefix"), Identifier("key_fingerprints")};
 	}
 	return {Identifier("Success")};
 }
@@ -28,7 +28,7 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	result->version = version;
 	result->alias = alias;
 	result->repository_url = repository_url;
-	result->public_key = public_key;
+	result->public_keys = public_keys;
 	result->on_conflict = on_conflict;
 	result->missing_ok = missing_ok;
 	return result;
@@ -62,7 +62,12 @@ static string RepositoryToString(const LoadInfo &info) {
 		}
 		result += SQLIdentifier(info.repository);
 		result += " WITH PREFIX " + SQLString(info.repository_url);
-		result += " USING PUBLIC KEY " + SQLString(info.public_key);
+		if (!info.public_keys.empty()) {
+			result += info.public_keys.size() > 1 ? " USING PUBLIC KEYS " : " USING PUBLIC KEY ";
+			for (idx_t i = 0; i < info.public_keys.size(); i++) {
+				result += (i == 0 ? "" : ", ") + SQLString(info.public_keys[i]);
+			}
+		}
 	} else {
 		result = "DROP EXTENSION REPOSITORY ";
 		if (info.missing_ok) {

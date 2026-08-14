@@ -72,6 +72,37 @@ string ExtensionRepositoryManager::ToCompactPublicKey(const string &public_key) 
 	return result;
 }
 
+vector<string> ExtensionRepositoryManager::ToCompactPublicKeys(const string &public_keys) {
+	vector<string> result;
+	auto header_pos = public_keys.find(PEM_HEADER);
+	if (header_pos == string::npos) {
+		// no PEM header - treat the entire blob as a single compact key
+		result.push_back(ToCompactPublicKey(public_keys));
+		return result;
+	}
+	// the blob contains one or more concatenated PEM blocks - extract each of them
+	while (header_pos != string::npos) {
+		auto footer_pos = public_keys.find(PEM_FOOTER, header_pos);
+		if (footer_pos == string::npos) {
+			throw InvalidInputException("Invalid public key: found '%s' but no matching '%s'", PEM_HEADER, PEM_FOOTER);
+		}
+		auto block_end = footer_pos + strlen(PEM_FOOTER);
+		result.push_back(ToCompactPublicKey(public_keys.substr(header_pos, block_end - header_pos)));
+		header_pos = public_keys.find(PEM_HEADER, block_end);
+	}
+	return result;
+}
+
+vector<string> ExtensionRepositoryManager::NormalizePublicKeys(const vector<string> &public_keys) {
+	vector<string> result;
+	for (auto &blob : public_keys) {
+		for (auto &key : ToCompactPublicKeys(blob)) {
+			result.push_back(key);
+		}
+	}
+	return result;
+}
+
 string ExtensionRepositoryManager::GetPublicKeyFingerprint(const string &compact_key) {
 	auto der_key = Blob::FromBase64(string_t(compact_key));
 
@@ -87,10 +118,10 @@ string ExtensionRepositoryManager::GetPublicKeyFingerprint(const string &compact
 //===--------------------------------------------------------------------===//
 // Repository storage
 //===--------------------------------------------------------------------===//
-//! Fetch the public key that the repository publishes at its prefix. Note that the key is pinned when the repository
-//! is created: the fingerprint that is reported back is what identifies the key from there on
-string ExtensionRepositoryManager::FetchPublicKey(DatabaseInstance &db, optional_ptr<ClientContext> context,
-                                                  const string &prefix) {
+//! Fetch the public keys that the repository publishes at its prefix. Note that the keys are pinned when the repository
+//! is created: the fingerprints that are reported back are what identify the keys from there on
+vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                           const string &prefix) {
 	auto key_path = prefix;
 	StringUtil::RTrim(key_path, "/");
 	key_path += "/" + string(PUBLIC_KEY_FILE);
@@ -119,16 +150,58 @@ string ExtensionRepositoryManager::FetchPublicKey(DatabaseInstance &db, optional
 		                  "directly using `USING PUBLIC KEY '<key>'` if the repository does not serve it",
 		                  key_path, error.RawMessage());
 	}
-	return contents;
+	return ToCompactPublicKeys(contents);
 }
 
-void ExtensionRepositoryManager::ThrowIfDisabled(DatabaseInstance &db) {
-	if (!Settings::Get<AllowExtensionRepositoriesSetting>(db)) {
-		throw PermissionException("Custom extension repositories are disabled through configuration");
+ExtensionRepositoryAccess ExtensionRepositoryManager::ParseAccess(const string &value) {
+	auto lower = StringUtil::Lower(value);
+	if (lower == "undecided") {
+		return ExtensionRepositoryAccess::UNDECIDED;
 	}
+	if (lower == "allowed") {
+		return ExtensionRepositoryAccess::ALLOWED;
+	}
+	if (lower == "forbidden") {
+		return ExtensionRepositoryAccess::FORBIDDEN;
+	}
+	throw InvalidInputException("Invalid value '%s' for allow_extension_repositories: expected 'undecided', 'allowed' "
+	                            "or 'forbidden'",
+	                            value);
+}
+
+string ExtensionRepositoryManager::AccessToString(ExtensionRepositoryAccess access) {
+	switch (access) {
+	case ExtensionRepositoryAccess::ALLOWED:
+		return "allowed";
+	case ExtensionRepositoryAccess::FORBIDDEN:
+		return "forbidden";
+	default:
+		return "undecided";
+	}
+}
+
+ExtensionRepositoryAccess ExtensionRepositoryManager::GetAccess(DatabaseInstance &db) {
+	return ParseAccess(Settings::Get<AllowExtensionRepositoriesSetting>(db));
+}
+
+void ExtensionRepositoryManager::CheckNotLocked(DatabaseInstance &db) {
 	// modifying the trusted repositories changes the set of keys that are trusted to sign extensions, so it is gated
-	// by the same lock as the setting that governs the feature: a locked configuration freezes the trust store
+	// by the configuration lock: a locked configuration freezes the trust store
 	db.config.CheckLock(AllowExtensionRepositoriesSetting::Name);
+}
+
+void ExtensionRepositoryManager::CheckCanCreate(DatabaseInstance &db) {
+	CheckNotLocked(db);
+	// adding a repository adds a new trusted signing key, so the user must explicitly opt in first
+	switch (GetAccess(db)) {
+	case ExtensionRepositoryAccess::ALLOWED:
+		return;
+	case ExtensionRepositoryAccess::FORBIDDEN:
+		throw PermissionException("Adding extension repositories has been forbidden through configuration");
+	default:
+		throw PermissionException("Adding extension repositories is not enabled: set "
+		                          "allow_extension_repositories='allowed' to opt in");
+	}
 }
 
 bool ExtensionRepositoryManager::TryNormalizeRepositoryName(const string &name, string &result) {
@@ -194,6 +267,30 @@ static string ReadJSONString(yyjson_val *root, const char *field, const string &
 	return string(yyjson_get_str(val), yyjson_get_len(val));
 }
 
+//! Read the trusted public keys of a repository. Keys are stored in the "public_keys" array
+static vector<string> ReadJSONKeys(yyjson_val *root, const string &path) {
+	vector<string> result;
+	auto keys = yyjson_obj_get(root, "public_keys");
+	if (!keys || !yyjson_is_arr(keys)) {
+		throw IOException("Failed to read extension repository file '%s': missing or invalid field 'public_keys'",
+		                  path);
+	}
+	size_t idx, max;
+	yyjson_val *key;
+	yyjson_arr_foreach(keys, idx, max, key) {
+		if (!yyjson_is_str(key)) {
+			throw IOException("Failed to read extension repository file '%s': 'public_keys' must be a list of strings",
+			                  path);
+		}
+		result.push_back(
+		    ExtensionRepositoryManager::ToCompactPublicKey(string(yyjson_get_str(key), yyjson_get_len(key))));
+	}
+	if (result.empty()) {
+		throw IOException("Failed to read extension repository file '%s': 'public_keys' cannot be empty", path);
+	}
+	return result;
+}
+
 ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, const string &path) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	auto file_size = handle->GetFileSize();
@@ -213,7 +310,7 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	ExtensionRepository result;
 	result.name = ReadJSONString(root, "name", path);
 	result.path = ReadJSONString(root, "url", path);
-	result.public_key = ToCompactPublicKey(ReadJSONString(root, "public_key", path));
+	result.public_keys = ReadJSONKeys(root, path);
 	result.type = ExtensionRepositoryType::USER_PROVIDED;
 
 	auto expected_name = fs.ExtractBaseName(path);
@@ -235,7 +332,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
                                                                  optional_ptr<ClientContext> context,
                                                                  const ExtensionRepository &repository,
                                                                  OnCreateConflict on_conflict) {
-	ThrowIfDisabled(db);
+	CheckCanCreate(db);
 
 	auto name = NormalizeRepositoryName(repository.name);
 	if (!ExtensionRepository::TryGetRepositoryUrl(name).empty()) {
@@ -259,12 +356,14 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		}
 	}
 
-	// if no key was provided, the repository is expected to serve it at its prefix. The key is pinned here: it is
+	// if no key was provided, the repository is expected to serve it at its prefix. The keys are pinned here: they are
 	// stored alongside the repository and never fetched again
-	auto public_key =
-	    repository.public_key.empty() ? FetchPublicKey(db, context, repository.path) : repository.public_key;
-	// this validates the public key
-	public_key = ToCompactPublicKey(public_key);
+	auto public_keys = repository.public_keys.empty() ? FetchPublicKeys(db, context, repository.path)
+	                                                  : NormalizePublicKeys(repository.public_keys);
+	if (public_keys.empty()) {
+		throw InvalidInputException("Cannot create extension repository '%s': no public key was provided or served",
+		                            name);
+	}
 
 	if (!fs.DirectoryExists(directory)) {
 		fs.CreateDirectoriesRecursive(directory);
@@ -276,7 +375,11 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	yyjson_mut_obj_add_uint(document.doc, root, "version", FORMAT_VERSION);
 	yyjson_mut_obj_add_strcpy(document.doc, root, "name", name.c_str());
 	yyjson_mut_obj_add_strcpy(document.doc, root, "url", repository.path.c_str());
-	yyjson_mut_obj_add_strcpy(document.doc, root, "public_key", public_key.c_str());
+	auto keys_array = yyjson_mut_arr(document.doc);
+	yyjson_mut_obj_add_val(document.doc, root, "public_keys", keys_array);
+	for (auto &public_key : public_keys) {
+		yyjson_mut_arr_add_strcpy(document.doc, keys_array, public_key.c_str());
+	}
 
 	size_t json_size;
 	auto json = yyjson_mut_write(document.doc, YYJSON_WRITE_PRETTY, &json_size);
@@ -298,14 +401,16 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	fs.TryRemoveFile(file_path);
 	fs.MoveFile(temp_path, file_path);
 
-	ExtensionRepository result(name, repository.path, public_key);
+	ExtensionRepository result(name, repository.path, std::move(public_keys));
 	result.type = ExtensionRepositoryType::USER_PROVIDED;
 	return result;
 }
 
 void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem &fs, const string &name_p,
                                                 OnEntryNotFound on_entry_not_found) {
-	ThrowIfDisabled(db);
+	// dropping a repository only removes a trusted key, so it is not gated by the opt-in; it is still frozen by a
+	// locked configuration
+	CheckNotLocked(db);
 
 	auto name = NormalizeRepositoryName(name_p);
 	auto file_path = GetRepositoryPath(db, fs, name);
@@ -319,10 +424,9 @@ void ExtensionRepositoryManager::DropRepository(DatabaseInstance &db, FileSystem
 }
 
 vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(DatabaseInstance &db, FileSystem &fs) {
+	// note that existing repositories are always readable, even when adding new ones is not allowed: extensions from
+	// repositories that were created earlier can still be installed and loaded
 	vector<ExtensionRepository> result;
-	if (!Settings::Get<AllowExtensionRepositoriesSetting>(db)) {
-		return result;
-	}
 	auto directory = GetRepositoryDirectory(db, fs);
 	if (!fs.DirectoryExists(directory)) {
 		return result;
@@ -350,9 +454,7 @@ vector<ExtensionRepository> ExtensionRepositoryManager::GetRepositories(Database
 
 bool ExtensionRepositoryManager::TryGetRepository(DatabaseInstance &db, FileSystem &fs, const string &name_p,
                                                   ExtensionRepository &result) {
-	if (!Settings::Get<AllowExtensionRepositoriesSetting>(db)) {
-		return false;
-	}
+	// existing repositories are always resolvable, even when adding new ones is not allowed
 	string name;
 	if (!TryNormalizeRepositoryName(name_p, name)) {
 		// this is not a valid repository name - it might still be a url

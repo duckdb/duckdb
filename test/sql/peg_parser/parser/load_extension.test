@@ -38,6 +38,9 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme PREFIX 'http://acme.com' PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEYS 'key1', 'key2';$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$DROP EXTENSION REPOSITORY acme;$TEST_PEG_PARSER$);
 
 statement ok

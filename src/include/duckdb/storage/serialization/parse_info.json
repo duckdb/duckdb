@@ -760,8 +760,8 @@
       },
       {
         "id": 207,
-        "name": "public_key",
-        "type": "string"
+        "name": "public_keys",
+        "type": "vector<string>"
       },
       {
         "id": 208,
