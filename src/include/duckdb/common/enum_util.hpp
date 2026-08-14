@@ -34,9 +34,7 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTHandlingResult : uint8_t;
-
-enum class ARTScanHandling : uint8_t;
+enum class ARTScanNodeResult : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
@@ -627,10 +625,7 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
@@ -1513,10 +1508,7 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
-
-template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
