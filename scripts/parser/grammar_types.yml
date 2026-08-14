@@ -713,6 +713,7 @@ GenericCopyOptionList:
   rules:
     - AttachOptions
     - GenericCopyOptionList
+    - CopyGenericOptionList
     - CopyOptions
     - CopyOptionList
     - SpecializedOptionList
@@ -883,7 +884,11 @@ GenericCopyOption:
   by_value: false
   rules:
     - GenericCopyOption
+    - CopyGenericOption
+    - OrderByCopyOption
+    - PartitionedByCopyOption
     - SpecializedOption
+    - SpecializedOptionTail
     - SingleOption
     - EncodingOption
     - ForceQuoteOption
@@ -899,6 +904,15 @@ GenericCopyOption:
     - OidsOption
     - CsvOption
     - HeaderOption
+
+PartitionByColumnList:
+  type: "vector<string>"
+  by_value: false
+  rules:
+    - PartitionByColumnList
+    - StarPartitionByColumnList
+    - ParenthesizedPartitionByColumnList
+    - SinglePartitionByColumnList
 
 GenericCopyOptionValue:
   type: "GenericCopyOptionValue"
