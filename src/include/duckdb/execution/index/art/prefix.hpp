@@ -34,7 +34,7 @@ public:
 	Prefix(FixedSizeAllocator &allocator, const NodePtr ptr_p, const idx_t count);
 
 	data_ptr_t data;
-	NodePtr *ptr;
+	NodePtr *child_slot;
 	bool in_memory;
 
 public:
@@ -81,7 +81,7 @@ private:
 			Prefix prefix(art, ref, is_mutable);
 			lambda(prefix);
 
-			ref = *prefix.ptr;
+			ref = *prefix.child_slot;
 			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}

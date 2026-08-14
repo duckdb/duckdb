@@ -104,7 +104,7 @@ public:
 					}
 					depth++;
 				}
-				ref = *prefix.ptr;
+				ref = *prefix.child_slot;
 			}
 			}
 		}
@@ -205,7 +205,7 @@ public:
 					}
 					depth++;
 				}
-				active_node_ref = *prefix.ptr;
+				active_node_ref = *prefix.child_slot;
 				D_ASSERT(active_node_ref.get().HasMetadata());
 				continue;
 			}
@@ -287,7 +287,7 @@ public:
 						}
 						depth++;
 					}
-					current = *prefix.ptr;
+					current = *prefix.child_slot;
 					if (current.get().GetGateStatus() == GateStatus::GATE_SET) {
 						break;
 					}

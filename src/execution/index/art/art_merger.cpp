@@ -297,12 +297,12 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// The prefixes match.
 		// Free the right prefix, but keep the reference to its child alive.
 		// Then, iterate on the left and right (reduced) child.
-		auto r_child = *r_prefix.ptr;
+		auto r_child = *r_prefix.child_slot;
 		NodePtr::FreeNode(art, entry.right);
 		entry.right = r_child;
 
 		auto depth = entry.depth + l_prefix.data[count];
-		Emplace(*l_prefix.ptr, entry.right, entry.status, depth);
+		Emplace(*l_prefix.child_slot, entry.right, entry.status, depth);
 		return;
 	}
 
@@ -311,12 +311,12 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// We exhausted the right prefix.
 		// Ensure that we continue merging into left.
 		swap(entry.left, entry.right);
-		MergeNodeAndPrefix(*r_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
+		MergeNodeAndPrefix(*r_prefix.child_slot, entry.right, entry.status, entry.depth + max_count, max_count);
 		return;
 	}
 
 	// We exhausted the left prefix.
-	MergeNodeAndPrefix(*l_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
+	MergeNodeAndPrefix(*l_prefix.child_slot, entry.right, entry.status, entry.depth + max_count, max_count);
 }
 
 } // namespace duckdb
