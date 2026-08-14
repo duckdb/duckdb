@@ -420,7 +420,9 @@ void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_st
 	FinalizeAppend(finalize_state, state);
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                               optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	checked_segment = nullptr;
 	if (state.segment_checked) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -431,13 +433,13 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
 	state.segment_checked = !is_dynamic;
+	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+	                      ? state.child_states[0].current
+	                      : state.current;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		auto &segment_stats =
-		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().GetStatsMutable()
-		        : state.current->GetNode().GetStatsMutable();
+		auto &segment_stats = checked_segment->GetNode().GetStatsMutable();
 		auto context = state.context.GetClientContext();
 		prune_result =
 		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);

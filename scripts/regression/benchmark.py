@@ -28,6 +28,7 @@ class BenchmarkRunner:
         memory_limit: Optional[str] = None,
         verbose: bool = False,
         disable_timeout: bool = False,
+        benchmark_arguments: Optional[List[Tuple[str, str]]] = None,
     ):
         self.path = path
         self.label = label
@@ -35,6 +36,7 @@ class BenchmarkRunner:
         self.memory_limit = memory_limit
         self.verbose = verbose
         self.disable_timeout = disable_timeout
+        self.benchmark_arguments = benchmark_arguments or []
 
     def run(self, benchmark: str, timed_runs: int) -> Tuple[Optional[List[float]], Optional[str]]:
         arguments = [self.path, benchmark]
@@ -44,6 +46,8 @@ class BenchmarkRunner:
             arguments.append(f"--memory_limit={self.memory_limit}")
         if self.disable_timeout:
             arguments.append("--disable-timeout")
+        for name, value in self.benchmark_arguments:
+            arguments.extend([f"--{name}", value])
         arguments.extend(["--timed-runs", str(timed_runs)])
 
         process_timeout = DISABLED_RUNNER_TIMEOUT if self.disable_timeout else DEFAULT_PROCESS_TIMEOUT

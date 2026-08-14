@@ -80,7 +80,7 @@ public:
 
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
 
 	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil(bool read_only = false);
 	shared_ptr<EncryptionUtil> GetMbedTLSUtil(bool force_mbedtls) const;

@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -137,9 +138,17 @@ static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) 
 static unique_ptr<FunctionData> StringExtractBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto index = input.TryGetConstant(1);
-	Value index_value;
-	if (!index || !index->DefaultTryCastAs(LogicalType::BIGINT, index_value, nullptr) || index_value.IsNull() ||
-	    !SubstringInSupportedRange(BigIntValue::Get(index_value), 1)) {
+	if (!index) {
+		bound_function.SetFallible();
+		return nullptr;
+	}
+	string error;
+	auto index_value = index->DefaultTryCastAs(LogicalType::BIGINT, &error);
+	if (!index_value) {
+		// the index is a constant that cannot be converted to an integer at all - report that directly
+		throw ConversionException(error);
+	}
+	if (index_value->IsNull() || !SubstringInSupportedRange(BigIntValue::Get(*index_value), 1)) {
 		bound_function.SetFallible();
 	}
 	return nullptr;

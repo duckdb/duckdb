@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 
+#include "duckdb/common/sql_identifier.hpp"
+
 namespace duckdb {
 
 PrepareStatement::PrepareStatement() : SQLStatement(StatementType::PREPARE_STATEMENT), statement(nullptr), name("") {
@@ -17,7 +19,7 @@ string PrepareStatement::ToString() const {
 	string result = "";
 	result += "PREPARE";
 	result += " ";
-	result += name;
+	result += SQLIdentifier(name);
 	result += " ";
 	result += "AS";
 	result += " ";

@@ -32,6 +32,24 @@ SELECT histogram(2) FROM range(100);
 ----
 {2=100}
 
+# floating-point buckets use SQL equality, including NaN equality
+query T
+WITH d(v) AS (
+	VALUES (1.0), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0)
+)
+SELECT histogram(v)::VARCHAR FROM d;
+----
+{1.0=2, nan=2}
+
+# window histograms keep the legacy state but use the same equality
+query T
+WITH d(v) AS (
+	VALUES (1.0), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0)
+)
+SELECT histogram(v) OVER ()::VARCHAR FROM d LIMIT 1;
+----
+{1.0=2, nan=2}
+
 statement ok
 CREATE TABLE hist_data (g INTEGER, e INTEGER)
 
@@ -48,6 +66,12 @@ query T
 SELECT histogram(e) from hist_data
 ----
 {1=1, 2=1, 3=1, 4=1, 5=1, 6=1}
+
+# frequency-based aggregates over the same value share their count stage
+query TII
+SELECT histogram(g)::VARCHAR, mode(g), round(entropy(g), 6) FROM hist_data;
+----
+{1=2, 2=3, 3=1, 5=1}	2	1.842371
 
 query I
 select histogram(g)
@@ -141,3 +165,40 @@ query I
 SELECT histogram(e) FROM enums
 ----
 {ok=1, happy=1}
+
+# nested keys use the same relational rewrite
+query TT
+SELECT histogram([g])::VARCHAR, histogram({'g': g})::VARCHAR FROM hist_data;
+----
+{[1]=2, [2]=3, [3]=1, [5]=1}	{{'g': 1}=2, {'g': 2}=3, {'g': 3}=1, {'g': 5}=1}
+
+# DISTINCT and FILTER are preserved by the frequency rewrite
+query T
+SELECT histogram(DISTINCT e) FILTER (WHERE g < 3)::VARCHAR FROM hist_data;
+----
+{1=1, 2=1, 3=1, 4=1, 5=1}
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# exact histograms use visible aggregate stages and reconstruct the map in a projection
+query II
+EXPLAIN (FORMAT JSON)
+SELECT histogram(g), mode(g), entropy(g) FROM hist_data;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"g".*count_star\(\).*row.*arg_max.*sum\(.*map_from_entries.*list_sort.*
+
+statement ok
+SET enable_optimizer=false;
+
+# mandatory histogram lowering uses SQL equality without optional optimization
+query T
+WITH d(v) AS (
+	VALUES (1.0), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0)
+)
+SELECT histogram(v)::VARCHAR FROM d;
+----
+{1.0=2, nan=2}
+
+statement ok
+SET enable_optimizer=true;

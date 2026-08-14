@@ -81,7 +81,8 @@ public:
 	LogicalType type;
 
 public:
-	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment);
 
 	BlockManager &GetBlockManager() const {
 		return block_manager;
