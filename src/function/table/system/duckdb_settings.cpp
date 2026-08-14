@@ -34,6 +34,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("value");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("typed_value");
+	return_types.emplace_back(LogicalType::VARIANT());
+
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -125,20 +128,23 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	auto &name = output.data[0];
 	// value, LogicalType::VARCHAR
 	auto &value = output.data[1];
+	// value, LogicalType::VARIANT
+	auto &typed_value = output.data[2];
 	// description, LogicalType::VARCHAR
-	auto &description = output.data[2];
+	auto &description = output.data[3];
 	// input_type, LogicalType::VARCHAR
-	auto &input_type = output.data[3];
+	auto &input_type = output.data[4];
 	// scope, LogicalType::VARCHAR
-	auto &scope = output.data[4];
+	auto &scope = output.data[5];
 	// aliases, LogicalType::VARCHAR[]
-	auto &aliases = output.data[5];
+	auto &aliases = output.data[6];
 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
 
 		name.Append(Value(entry.name));
 		value.Append(entry.value.CastAs(context, LogicalType::VARCHAR));
+		typed_value.Append(entry.value.CastAs(context, LogicalType::VARIANT()));
 		description.Append(Value(entry.description));
 		input_type.Append(Value(entry.input_type));
 		scope.Append(Value(entry.scope));
