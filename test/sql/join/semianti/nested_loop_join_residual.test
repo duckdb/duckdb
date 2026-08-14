@@ -1,0 +1,55 @@
+# name: test/sql/join/semianti/nested_loop_join_residual.test
+# description: Test residual predicates in nested loop semi and anti joins
+# group: [semianti]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY';
+
+statement ok
+CREATE TABLE nl_left(x INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO nl_left VALUES (1, 1), (2, 2), (3, 3), (5, 5);
+
+statement ok
+CREATE TABLE nl_right(y INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO nl_right VALUES (1, 2), (2, 2), (4, 4);
+
+query II
+EXPLAIN SELECT * FROM nl_left SEMI JOIN nl_right ON nl_left.x <= nl_right.y AND nl_left.x + nl_right.v = 3;
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+query II rowsort
+SELECT * FROM nl_left SEMI JOIN nl_right ON nl_left.x <= nl_right.y AND nl_left.x + nl_right.v = 3;
+----
+1	1
+
+query II rowsort
+SELECT * FROM nl_left ANTI JOIN nl_right ON nl_left.x <= nl_right.y AND nl_left.x + nl_right.v = 3;
+----
+2	2
+3	3
+5	5
+
+# Scan more than one right-hand chunk and find the match in the final chunk
+statement ok
+CREATE TABLE nl_large_left AS SELECT i::INTEGER AS x FROM range(2) t(i);
+
+statement ok
+CREATE TABLE nl_large_right AS
+SELECT i::INTEGER AS y FROM range(current_setting('standard_vector_size')::BIGINT + 2) t(i);
+
+query I rowsort
+SELECT * FROM nl_large_left
+SEMI JOIN nl_large_right
+ON nl_large_left.x <= nl_large_right.y
+AND nl_large_left.x + nl_large_right.y = current_setting('standard_vector_size')::BIGINT + 1;
+----
+0
+1
