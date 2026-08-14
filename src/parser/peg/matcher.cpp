@@ -1138,7 +1138,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name) {
 }
 
 struct MatcherListEntry {
-	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher) {
+	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher), function_name(string_t("")) {
 	}
 	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
 	}
