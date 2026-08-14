@@ -32,6 +32,9 @@ public:
 	//! Writes a string that is optionally quoted + escaped so it can be used as an identifier
 	static string WriteOptionallyQuoted(const string &text, char quote = '"', bool allow_caps = true,
 	                                    KeywordCategory category = KeywordCategory::KEYWORD_NONE);
+
+	//! Wraps the text in `quote` and escapes any occurrence of `quote` within it by doubling it
+	static string WriteQuotedAndEscaped(const string &text, char quote);
 };
 
 } // namespace duckdb

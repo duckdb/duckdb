@@ -1,6 +1,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,21 @@ string KeywordHelper::EscapeQuotes(const string &text, char quote) {
 	return StringUtil::Replace(text, string(1, quote), string(2, quote));
 }
 
+string KeywordHelper::WriteQuotedAndEscaped(const string &text, char quote) {
+	string result;
+	result.reserve(text.size() + 2);
+	result += quote;
+	for (auto c : text) {
+		if (c == quote) {
+			// character matches quote - escape by adding the quote again
+			result += quote;
+		}
+		result += c;
+	}
+	result += quote;
+	return result;
+}
+
 string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	// 1. Escapes all occurences of 'quote' by doubling them (escape in SQL)
 	// 2. Adds quotes around the string
@@ -48,6 +64,27 @@ string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool
 		return text;
 	}
 	return WriteQuoted(text, quote);
+}
+
+SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
+}
+
+string SQLIdentifier::ToString(const string &identifier) {
+	if (!KeywordHelper::RequiresQuotes(identifier)) {
+		return identifier;
+	}
+	return SQLQuotedIdentifier::ToString(identifier);
+}
+
+SQLQuotedIdentifier::SQLQuotedIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
+}
+
+string SQLQuotedIdentifier::ToString(const string &identifier) {
+	return KeywordHelper::WriteQuotedAndEscaped(identifier, '"');
+}
+
+string SQLString::ToString(const string &literal) {
+	return KeywordHelper::WriteQuotedAndEscaped(literal, '\'');
 }
 
 } // namespace duckdb

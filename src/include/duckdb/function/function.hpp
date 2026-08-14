@@ -113,6 +113,30 @@ public:
 	string schema_name;
 
 public:
+	void SetName(string name_p) {
+		name = std::move(name_p);
+	}
+	void SetSchemaName(string schema_name_p) {
+		schema_name = std::move(schema_name_p);
+	}
+	void SetCatalogName(string catalog_name_p) {
+		catalog_name = std::move(catalog_name_p);
+	}
+
+	const string &GetName() const {
+		return name;
+	}
+	const string &GetSchemaName() const {
+		return schema_name;
+	}
+	const string &GetCatalogName() const {
+		return catalog_name;
+	}
+
+	const string &GetExtraInfo() const {
+		return extra_info;
+	}
+
 	//! Returns the formatted string name(arg1, arg2, ...)
 	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
 	                                      const vector<LogicalType> &arguments,
@@ -150,6 +174,30 @@ public:
 	DUCKDB_API virtual string ToString() const;
 
 	DUCKDB_API bool HasVarArgs() const;
+
+	vector<LogicalType> &GetArguments() {
+		return arguments;
+	}
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<LogicalType> &GetOriginalArguments() {
+		return original_arguments;
+	}
+	const vector<LogicalType> &GetOriginalArguments() const {
+		return original_arguments;
+	}
+
+	LogicalType &GetVarArgs() {
+		return varargs;
+	}
+	const LogicalType &GetVarArgs() const {
+		return varargs;
+	}
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
+	}
 };
 
 class SimpleNamedParameterFunction : public SimpleFunction {

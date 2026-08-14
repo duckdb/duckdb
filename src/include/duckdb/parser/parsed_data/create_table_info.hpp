@@ -23,6 +23,22 @@ struct CreateTableInfo : public CreateInfo {
 
 	//! Table name to insert to
 	string table;
+
+	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
+	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
+	//! spelled exactly as they are on the 2.0 branch.
+	const string &GetTableName() const {
+		return table;
+	}
+	void SetTableName(string name_p) {
+		table = std::move(name_p);
+	}
+	const string &GetEntryName() const override {
+		return table;
+	}
+	void SetEntryName(string name_p) override {
+		table = std::move(name_p);
+	}
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

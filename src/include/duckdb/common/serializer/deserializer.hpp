@@ -487,6 +487,12 @@ private:
 		return ReadString();
 	}
 
+	// Deserialize an Identifier (stored identically to a plain string)
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type Read() {
+		return Identifier(ReadString());
+	}
+
 	// Deserialize a Enum
 	template <typename T = void>
 	inline typename std::enable_if<std::is_enum<T>::value, T>::type Read() {
