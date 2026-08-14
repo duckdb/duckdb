@@ -1,18 +1,22 @@
 #include "duckdb/parser/peg/peg_parser.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/inlined_grammar.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
-void PEGParser::AddRule(string_t rule_name, PEGRule rule) {
-	auto entry = rules.find(rule_name.GetString());
+void PEGParser::AddRule(const string &rule_name, PEGRule rule) {
+	auto entry = rules.find(rule_name);
 	if (entry != rules.end()) {
-		throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name.GetString());
+		throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name);
 	}
 	rules.insert(make_pair(rule_name, std::move(rule)));
 }
 
 void PEGParser::ParseRules(const char *grammar) {
-	string_t rule_name;
+	string rule_name;
 	PEGRule rule;
 	PEGParseState parse_state = PEGParseState::RULE_NAME;
 	idx_t bracket_count = 0;
@@ -32,7 +36,7 @@ void PEGParser::ParseRules(const char *grammar) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
 			AddRule(rule_name, std::move(rule));
 			rule = PEGRule();
-			rule_name = string_t();
+			rule_name.clear();
 			// look for the subsequent rule
 			parse_state = PEGParseState::RULE_NAME;
 			c++;
@@ -57,7 +61,7 @@ void PEGParser::ParseRules(const char *grammar) {
 			if (c == start_pos) {
 				throw InternalException("Failed to parse grammar - expected an alpha-numeric rule name (pos %d)", c);
 			}
-			rule_name = string_t(grammar + start_pos, UnsafeNumericCast<uint32_t>(c - start_pos));
+			rule_name = string(grammar + start_pos, c - start_pos);
 			rule.Clear();
 			parse_state = PEGParseState::RULE_SEPARATOR;
 			break;
@@ -77,8 +81,7 @@ void PEGParser::ParseRules(const char *grammar) {
 					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
 				}
 				rule.parameters.insert(
-				    make_pair(string_t(grammar + parameter_start, UnsafeNumericCast<uint32_t>(c - parameter_start)),
-				              rule.parameters.size()));
+				    make_pair(string(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
 				if (grammar[c] != ')') {
 					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
 				}
@@ -113,13 +116,13 @@ void PEGParser::ParseRules(const char *grammar) {
 					throw InternalException("Failed to parse grammar - did not find closing ' (pos %d)", c);
 				}
 				PEGToken token;
-				token.text = string_t(grammar + literal_start, UnsafeNumericCast<uint32_t>(c - literal_start));
+				token.text = string(grammar + literal_start, c - literal_start);
 				token.type = PEGTokenType::LITERAL;
 				rule.tokens.push_back(token);
 				c++;
 				if (grammar[c] == 'i') {
 					throw InternalException("Failed to parse grammar - unexpected \"i\" found in grammar near rule %s",
-					                        rule_name.GetString());
+					                        rule_name);
 				}
 			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				// alphanumeric character - this is a rule reference
@@ -128,7 +131,7 @@ void PEGParser::ParseRules(const char *grammar) {
 					c++;
 				}
 				PEGToken token;
-				token.text = string_t(grammar + rule_start, UnsafeNumericCast<uint32_t>(c - rule_start));
+				token.text = string(grammar + rule_start, c - rule_start);
 				if (grammar[c] == '(') {
 					// this is a function call
 					c++;
@@ -153,7 +156,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				}
 				c++;
 				PEGToken token;
-				token.text = string_t(grammar + rule_start, UnsafeNumericCast<uint32_t>(c - rule_start));
+				token.text = string(grammar + rule_start, c - rule_start);
 				token.type = PEGTokenType::REGEX;
 				rule.tokens.push_back(token);
 			} else if (IsPEGOperator(grammar[c])) {
@@ -162,7 +165,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				} else if (grammar[c] == ')') {
 					if (bracket_count == 0) {
 						throw InternalException("Failed to parse grammar - unclosed bracket at position %d in rule %s",
-						                        c, rule_name.GetString());
+						                        c, rule_name);
 					}
 					bracket_count--;
 				} else if (grammar[c] == '/') {
@@ -170,12 +173,12 @@ void PEGParser::ParseRules(const char *grammar) {
 				}
 				// operator - operators are always length 1
 				PEGToken token;
-				token.text = string_t(grammar + c, 1);
+				token.text = string(1, grammar[c]);
 				token.type = PEGTokenType::OPERATOR;
 				rule.tokens.push_back(token);
 				c++;
 			} else {
-				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(),
+				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name,
 				                        string(1, grammar[c]));
 			}
 			break;
@@ -188,14 +191,106 @@ void PEGParser::ParseRules(const char *grammar) {
 		}
 	}
 	if (parse_state == PEGParseState::RULE_SEPARATOR) {
-		throw InternalException("Failed to parse grammar - rule %s does not have a definition", rule_name.GetString());
+		throw InternalException("Failed to parse grammar - rule %s does not have a definition", rule_name);
 	}
 	if (parse_state == PEGParseState::RULE_DEFINITION) {
 		if (rule.tokens.empty()) {
-			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
+			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name);
 		}
 		AddRule(rule_name, std::move(rule));
 	}
+}
+
+ParsedGrammar ParsedGrammar::Parse(const string &grammar) {
+	PEGParser parser;
+	parser.ParseRules(grammar.c_str());
+	ParsedGrammar result;
+	for (auto &entry : parser.rules) {
+		result.AddParsedRule(ParsedGrammarRule(entry.first, std::move(entry.second)));
+	}
+	return result;
+}
+
+ParsedGrammar ParsedGrammar::CreateDefault() {
+	auto result = Parse(INLINED_PEG_GRAMMAR);
+	if (!result.HasRule("EndOfInput")) {
+		result.AddParsedRule(ParsedGrammarRule("EndOfInput", PEGRule()));
+	}
+	PEGTransformerFactory::RegisterDefaultTransforms(result);
+	return result;
+}
+
+bool ParsedGrammar::HasRule(const string &rule_name) const {
+	return rules.find(rule_name) != rules.end();
+}
+
+const ParsedGrammarRule &ParsedGrammar::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
+	}
+	return *entry->second;
+}
+
+ParsedGrammarRule &ParsedGrammar::GetMutableRule(const string &rule_name) {
+	return const_cast<ParsedGrammarRule &>(GetRule(rule_name));
+}
+
+ParsedGrammarRule ParsedGrammar::ParseSingleRule(const string &rule_definition) {
+	auto parsed = Parse(rule_definition);
+	if (parsed.rules.size() != 1) {
+		throw InvalidInputException("Expected exactly one PEG rule definition");
+	}
+	auto &entry = *parsed.rules.begin();
+	return ParsedGrammarRule(entry.second->name, std::move(entry.second->recipe));
+}
+
+void ParsedGrammar::AddParsedRule(ParsedGrammarRule rule) {
+	if (HasRule(rule.name)) {
+		throw InvalidInputException("Grammar rule '%s' already exists", rule.name);
+	}
+	auto name = rule.name;
+	rules.emplace(std::move(name), make_uniq<ParsedGrammarRule>(std::move(rule)));
+}
+
+void ParsedGrammar::AddRule(const string &rule_definition, grammar_transform_function_t transform,
+                            grammar_transform_function_t trampoline_transform) {
+	auto rule = ParseSingleRule(rule_definition);
+	rule.transform = std::move(transform);
+	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
+	rule.semantic = bool(rule.transform);
+	AddParsedRule(std::move(rule));
+}
+
+void ParsedGrammar::ReplaceRule(const string &rule_definition, grammar_transform_function_t transform,
+                                grammar_transform_function_t trampoline_transform) {
+	auto rule = ParseSingleRule(rule_definition);
+	auto entry = rules.find(rule.name);
+	if (entry == rules.end()) {
+		throw InvalidInputException("Grammar rule '%s' does not exist", rule.name);
+	}
+	rule.transform = std::move(transform);
+	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
+	rule.semantic = bool(rule.transform);
+	entry->second = make_uniq<ParsedGrammarRule>(std::move(rule));
+}
+
+void ParsedGrammar::RemoveRule(const string &rule_name) {
+	if (rules.erase(rule_name) == 0) {
+		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
+	}
+}
+
+void ParsedGrammar::SetTransform(const string &rule_name, grammar_transform_function_t transform,
+                                 grammar_transform_function_t trampoline_transform) {
+	auto &rule = GetMutableRule(rule_name);
+	rule.transform = std::move(transform);
+	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
+	rule.semantic = true;
+}
+
+void ParsedGrammar::SetTrampolineOps(const string &rule_name, const TransformFrameOps &ops) {
+	GetMutableRule(rule_name).trampoline_ops = make_shared_ptr<TransformFrameOps>(ops);
 }
 
 } // namespace duckdb

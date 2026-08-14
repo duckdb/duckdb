@@ -1168,7 +1168,7 @@ def generate_table_and_register(all_registrations):
         + entries
         + "\t};\n"
         + "\tfor (const auto &rule : builtin_transform_rules) {\n"
-        + "\t\tsql_transform_functions[rule.name] = rule.transform;\n"
+        + "\t\tgrammar.SetTransform(rule.name, rule.transform);\n"
         + "\t}\n"
         + "}\n"
     )

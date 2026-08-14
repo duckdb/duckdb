@@ -354,10 +354,8 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &to
 	}
 	auto &cache = GetCache();
 	auto peg_matcher = cache.GetMatcher();
-	auto peg_factory = cache.GetTransformerFactory();
-
-	return peg_factory->TransformTopLevelStatement(tokens, options, peg_matcher->TopLevelStatementMatcher(),
-	                                               token_cursor);
+	return PEGTransformerFactory::TransformTopLevelStatement(tokens, options, peg_matcher->TopLevelStatementMatcher(),
+	                                                         token_cursor);
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {

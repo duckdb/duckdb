@@ -2,9 +2,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
-// uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
-// #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
-
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -12,21 +9,22 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
-#include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#ifdef PEG_PARSER_SOURCE_FILE
-#include <fstream>
-#else
-#include "duckdb/parser/peg/inlined_grammar.hpp"
-#endif
 
 namespace duckdb {
 
 optional_ptr<ParseResult> Matcher::MatchParseResult(MatchState &state) const {
+	optional_ptr<ParseResult> result;
 	if (state.packrat_cache && IsPackratMemoized()) {
-		return state.packrat_cache->Match(*this, state);
+		result = state.packrat_cache->Match(*this, state);
+	} else {
+		result = MatchParseResultInternal(state);
 	}
-	return MatchParseResultInternal(state);
+	if (result && rule) {
+		result->SetRule(*rule);
+		result->name = rule->name;
+	}
+	return result;
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
@@ -1063,11 +1061,12 @@ class MatcherFactory {
 	friend struct MatcherList;
 
 public:
-	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
+	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, PEGMatcher &compiled_p)
+	    : allocator(allocator), grammar(grammar_p), compiled(compiled_p) {
 	}
 
-	//! Create a matcher from a PEG grammar
-	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
+	Matcher &CreateMatcher(const string &root_rule);
+	Matcher &CreateRootMatcher(const string &root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
 	//! CreateMatcher call). Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
@@ -1085,15 +1084,16 @@ private:
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(const string &rule_name, vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;
-	string_map_t<reference<Matcher>> matchers;
+	const ParsedGrammar &grammar;
+	PEGMatcher &compiled;
+	unordered_map<string, reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
-	string_set_t no_suggestion_rules;
-	string_set_t packrat_memoized_rules;
+	unordered_set<string> no_suggestion_rules;
+	unordered_set<string> packrat_memoized_rules;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -1132,24 +1132,25 @@ Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
 	return entry->second.get();
 }
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
+Matcher &MatcherFactory::CreateMatcher(const string &rule_name) {
 	vector<reference<Matcher>> parameters;
-	return CreateMatcher(parser, rule_name, parameters);
+	return CreateMatcher(rule_name, parameters);
 }
 
 struct MatcherListEntry {
-	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher), function_name(0U) {
+	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher) {
 	}
-	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
+	MatcherListEntry(Matcher &matcher, string function_name_p)
+	    : matcher(matcher), function_name(std::move(function_name_p)) {
 	}
 
 	Matcher &matcher;
-	string_t function_name;
+	string function_name;
 };
 
 struct MatcherList {
 public:
-	explicit MatcherList(PEGParser &parser, MatcherFactory &factory) : parser(parser), factory(factory) {
+	explicit MatcherList(MatcherFactory &factory) : factory(factory) {
 	}
 
 	void AddMatcher(Matcher &matcher) {
@@ -1183,7 +1184,7 @@ public:
 	MatcherListEntry &GetLastRootMatcher() {
 		return matchers.back();
 	}
-	void BeginFunction(string_t function_name) {
+	void BeginFunction(const string &function_name) {
 		auto &parameter_list = factory.List();
 		matchers.emplace_back(parameter_list, function_name);
 	}
@@ -1192,7 +1193,7 @@ public:
 			throw InternalException("PEG matcher create error - found too many close brackets");
 		}
 		auto &root_bracket_matcher = matchers.back();
-		if (root_bracket_matcher.function_name.GetSize() == 0) {
+		if (root_bracket_matcher.function_name.empty()) {
 			// not a function
 			auto &bracket_matcher = root_bracket_matcher.matcher;
 			// remove the last matcher from the stack
@@ -1210,7 +1211,7 @@ public:
 			vector<reference<Matcher>> parameters;
 			parameters.push_back(parameter);
 			// do the substitution of the function call
-			auto &function_call = factory.CreateMatcher(parser, function_name, parameters);
+			auto &function_call = factory.CreateMatcher(function_name, parameters);
 			// remove the last matcher from the stack
 			matchers.pop_back();
 			// push it into the last matcher
@@ -1219,12 +1220,11 @@ public:
 	}
 
 private:
-	PEGParser &parser;
 	MatcherFactory &factory;
 	vector<MatcherListEntry> matchers;
 };
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters) {
+Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	if (!is_function_call) {
 		// check if the matcher has already been created first
@@ -1235,9 +1235,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 	}
 	// look up the rule
-	auto entry = parser.rules.find(rule_name.GetString());
-	if (entry == parser.rules.end()) {
-		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
+	auto entry = grammar.rules.find(rule_name);
+	if (entry == grammar.rules.end()) {
+		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name);
 	}
 	// create a matcher and cache it
 	// since matchers can be recursive we need to cache it prior to recursively constructing the other rules
@@ -1246,23 +1246,23 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		matchers.insert(make_pair(rule_name, reference<Matcher>(matcher)));
 	}
 
-	MatcherList list(parser, *this);
+	MatcherList list(*this);
 	list.AddRootMatcher(matcher);
 	// fill the matcher from the given set of rules
-	auto &rule = entry->second;
+	auto &rule = entry->second->recipe;
 	if (rule.parameters.size() > 1) {
 		throw InternalException("Only functions with a single parameter are supported");
 	}
 	if (parameters.size() != rule.parameters.size()) {
-		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)",
-		                        rule_name.GetString(), rule.parameters.size(), parameters.size());
+		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)", rule_name,
+		                        rule.parameters.size(), parameters.size());
 	}
 	for (idx_t token_idx = 0; token_idx < rule.tokens.size(); token_idx++) {
 		auto &token = rule.tokens[token_idx];
 		switch (token.type) {
 		case PEGTokenType::LITERAL:
 			// literal - push the keyword
-			list.AddMatcher(Keyword(token.text.GetString()));
+			list.AddMatcher(Keyword(token.text));
 			break;
 		case PEGTokenType::REFERENCE: {
 			// check if we are referring to a keyword
@@ -1272,7 +1272,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list.AddMatcher(parameters[param_entry->second].get());
 			} else {
 				// refers to a different rule - create the matcher for that rule
-				list.AddMatcher(CreateMatcher(parser, token.text));
+				list.AddMatcher(CreateMatcher(token.text));
 			}
 			break;
 		}
@@ -1283,7 +1283,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 		case PEGTokenType::OPERATOR: {
 			// tokens need to be one byte
-			auto op_type = token.text.GetData()[0];
+			auto op_type = token.text[0];
 			switch (op_type) {
 			case '?':
 			case '*': {
@@ -1376,8 +1376,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 			break;
 		}
 		case PEGTokenType::REGEX:
-			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)",
-			                        rule_name.GetString());
+			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)", rule_name);
 		default:
 			throw InternalException("unrecognized peg token type");
 		}
@@ -1385,11 +1384,11 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	if (list.GetRootMatcherCount() != 1) {
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
-	matcher.SetName(rule_name.GetString());
-	if (packrat_memoized_rules.count(rule_name.GetString())) {
+	matcher.SetRule(compiled.GetRule(rule_name));
+	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (no_suggestion_rules.count(rule_name.GetString())) {
+	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
 	return matcher;
@@ -1404,6 +1403,9 @@ void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	if (packrat_memoized_rules.count(name)) {
 		matcher.SetPackratMemoized();
 	}
+	if (grammar.HasRule(name)) {
+		matcher.SetRule(compiled.GetRule(name));
+	}
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
 }
 
@@ -1415,11 +1417,7 @@ void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
 
-Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
-	// parse the grammar into a set of rules
-	PEGParser parser;
-	parser.ParseRules(grammar);
-
+Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// keyword overrides
 	AddKeywordOverride("TABLE", 1, ' ');
 	AddKeywordOverride(".", 0, '\0');
@@ -1510,7 +1508,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	SuppressSuggestions("ExpressionStatement");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
-	return CreateMatcher(parser, root_rule);
+	return CreateMatcher(root_rule);
 }
 
 shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
@@ -1523,53 +1521,59 @@ shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
 	return parser_cache.GetMatcher();
 }
 
+const CompiledGrammarRule &PEGMatcher::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		throw InternalException("Compiled grammar rule '%s' does not exist", rule_name);
+	}
+	return *entry->second;
+}
+
+static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
+	if (!grammar.HasRule("Program")) {
+		throw InvalidInputException("Grammar is missing required root rule 'Program'");
+	}
+	if (!grammar.HasRule("TopLevelStatement")) {
+		throw InvalidInputException("Grammar is missing required root rule 'TopLevelStatement'");
+	}
+}
+
+ParserCache::ParserCache() : ParserCache(ParsedGrammar::CreateDefault()) {
+}
+
+ParserCache::ParserCache(ParsedGrammar &&grammar) {
+	ValidateParsedGrammarRoots(grammar);
+	for (auto &entry : grammar.rules) {
+		auto &rule = *entry.second;
+		if (rule.semantic && !rule.transform) {
+			throw InvalidInputException("Semantic grammar rule '%s' has no transform function", rule.name);
+		}
+		for (auto &token : rule.recipe.tokens) {
+			if (token.type != PEGTokenType::REFERENCE && token.type != PEGTokenType::FUNCTION_CALL) {
+				continue;
+			}
+			if (token.type == PEGTokenType::REFERENCE && rule.recipe.parameters.count(token.text)) {
+				continue;
+			}
+			if (!grammar.HasRule(token.text)) {
+				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", rule.name, token.text);
+			}
+		}
+	}
+	matcher = make_shared_ptr<PEGMatcher>();
+	for (auto &entry : grammar.rules) {
+		auto &rule = *entry.second;
+		matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform),
+		                                                                 std::move(rule.trampoline_transform),
+		                                                                 std::move(rule.trampoline_ops)));
+	}
+	MatcherFactory factory(matcher->allocator, grammar, *matcher);
+	matcher->program_matcher = factory.CreateRootMatcher("Program");
+	matcher->top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+}
+
 shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
-	{
-		std::unique_lock<std::mutex> lock(mutex);
-		if (matcher) {
-			return matcher;
-		}
-	}
-	auto new_matcher = make_shared_ptr<PEGMatcher>();
-	MatcherFactory factory(new_matcher->allocator);
-#ifdef PEG_PARSER_SOURCE_FILE
-	std::ifstream t(PEG_PARSER_SOURCE_FILE);
-	std::stringstream buffer;
-	buffer << t.rdbuf();
-	auto grammar_string = buffer.str();
-
-	new_matcher->program_matcher = factory.CreateMatcher(grammar_string.c_str(), "Program");
-#else
-	new_matcher->program_matcher = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
-#endif
-	// TopLevelStatement is referenced by Program, so it has already been built and cached.
-	new_matcher->top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!matcher) {
-		matcher = std::move(new_matcher);
-	}
 	return matcher;
-}
-
-shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
-	{
-		std::unique_lock<std::mutex> lock(mutex);
-		if (transformer_factory) {
-			return transformer_factory;
-		}
-	}
-	auto new_factory = make_shared_ptr<PEGTransformerFactory>();
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!transformer_factory) {
-		transformer_factory = std::move(new_factory);
-	}
-	return transformer_factory;
-}
-
-void ParserCache::Invalidate() {
-	std::unique_lock<std::mutex> lock(mutex);
-	matcher = nullptr;
-	transformer_factory = nullptr;
 }
 
 } // namespace duckdb

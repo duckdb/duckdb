@@ -35,6 +35,7 @@ set(TEST_API_OBJECTS
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
+    test_parsed_grammar.cpp
     test_parse_statement_iterator.cpp
     test_progress_bar.cpp
     test_uuid.cpp

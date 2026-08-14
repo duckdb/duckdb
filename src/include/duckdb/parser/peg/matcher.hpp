@@ -14,8 +14,8 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -191,6 +191,13 @@ public:
 	void SetName(string name_p) {
 		name = std::move(name_p);
 	}
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+		name = rule_p.name;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
 	bool HasName() const {
 		return !name.empty();
 	}
@@ -228,6 +235,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	optional_ptr<const CompiledGrammarRule> rule;
 };
 
 class MatcherAllocator {
@@ -255,6 +263,7 @@ struct PEGMatcher {
 	Matcher &TopLevelStatementMatcher() {
 		return *top_level_statement_matcher;
 	}
+	const CompiledGrammarRule &GetRule(const string &rule_name) const;
 
 	static shared_ptr<PEGMatcher> Get(ClientContext &context);
 	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
@@ -263,19 +272,20 @@ private:
 	friend struct ParserCache;
 	optional_ptr<Matcher> program_matcher;
 	optional_ptr<Matcher> top_level_statement_matcher;
+	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+//! Per-database holder for an immutable compiled PEG grammar.
 struct ParserCache {
+	DUCKDB_API ParserCache();
+	DUCKDB_API explicit ParserCache(ParsedGrammar &&grammar);
+	ParserCache(const ParserCache &) = delete;
+	ParserCache &operator=(const ParserCache &) = delete;
+
 	shared_ptr<PEGMatcher> GetMatcher();
-	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	void Invalidate();
 
 private:
-	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
-	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
 } // namespace duckdb
