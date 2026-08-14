@@ -249,6 +249,7 @@ public:
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
 	//! Returns the parser options for this client context
+	DUCKDB_API ParserOptions GetParserOptions();
 	DUCKDB_API ParserOptions GetParserOptions() const;
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active

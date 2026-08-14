@@ -1,4 +1,5 @@
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 
@@ -9,7 +10,25 @@ TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &to
 }
 
 Tokenizer::Tokenizer(TokenizerBehavior &behavior)
-    : sql(behavior.sql), tokens(behavior.tokens), keyword_helper(PEGKeywordHelper::Instance()), behavior(behavior) {
+    : context(nullptr), sql(behavior.sql), tokens(behavior.tokens), keyword_helper(PEGKeywordHelper::Instance()),
+      behavior(behavior) {
+}
+
+Tokenizer::Tokenizer(ClientContext &context_p, TokenizerBehavior &behavior)
+    : context(context_p), sql(behavior.sql), tokens(behavior.tokens), keyword_helper(PEGKeywordHelper::Instance()),
+      behavior(behavior) {
+}
+
+unique_ptr<Tokenizer> Tokenizer::Create(TokenizerBehavior &behavior) {
+	return make_uniq<Tokenizer>(behavior);
+}
+
+unique_ptr<Tokenizer> Tokenizer::Create(ClientContext &context, TokenizerBehavior &behavior) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (config.tokenizer_create_func) {
+		return config.tokenizer_create_func(context, behavior);
+	}
+	return make_uniq<Tokenizer>(context, behavior);
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {

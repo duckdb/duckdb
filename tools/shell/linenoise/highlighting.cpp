@@ -43,8 +43,8 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	vector<highlightToken> tokens;
 	vector<MatcherToken> matcher_tokens;
 	HighlightTokenizerBehavior behavior(sql, matcher_tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto tokenizer = Tokenizer::Create(behavior);
+	tokenizer->TokenizeInput();
 	vector<SimplifiedToken> result;
 	result.reserve(matcher_tokens.size());
 	for (auto &token : matcher_tokens) {

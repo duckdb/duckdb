@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 enum class TokenizeState {
 	STANDARD = 0,
 	SINGLE_LINE_COMMENT,
@@ -54,10 +56,16 @@ protected:
 
 class Tokenizer {
 public:
-	explicit Tokenizer(TokenizerBehavior &behavior);
+	DUCKDB_API explicit Tokenizer(TokenizerBehavior &behavior);
+	DUCKDB_API Tokenizer(ClientContext &context, TokenizerBehavior &behavior);
 	virtual ~Tokenizer() = default;
 
 public:
+	//! Create the default tokenizer for context-free parser utilities.
+	DUCKDB_API static unique_ptr<Tokenizer> Create(TokenizerBehavior &behavior);
+	//! Create a tokenizer using the factory configured for this client context, if any.
+	DUCKDB_API static unique_ptr<Tokenizer> Create(ClientContext &context, TokenizerBehavior &behavior);
+
 	virtual void TokenizeInput();
 
 	//! True iff `TokenizeInput()` finished in a state where autocomplete could be offered (the
@@ -89,6 +97,7 @@ public:
 	static bool IsUnterminatedState(TokenizeState state);
 
 protected:
+	optional_ptr<ClientContext> context;
 	const string &sql;
 	vector<MatcherToken> &tokens;
 	PEGKeywordHelper keyword_helper;

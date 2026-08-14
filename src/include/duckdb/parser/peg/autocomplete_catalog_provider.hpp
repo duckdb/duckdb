@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 //! Parameters for autocomplete suggestion generation.
 struct AutoCompleteParameters {
 	idx_t max_suggestion_count = 20;
@@ -26,6 +28,9 @@ struct AutoCompleteParameters {
 class AutoCompleteCatalogProvider {
 public:
 	virtual ~AutoCompleteCatalogProvider() = default;
+	virtual optional_ptr<ClientContext> GetClientContext() {
+		return nullptr;
+	}
 
 	virtual vector<AutoCompleteCandidate> SuggestCatalogName() = 0;
 	virtual vector<AutoCompleteCandidate> SuggestSchemaName() = 0;

@@ -23,11 +23,12 @@ namespace duckdb {
 
 class SQLFormatter {
 public:
-	explicit SQLFormatter(const FormatterConfig &config);
+	explicit SQLFormatter(const FormatterConfig &config, optional_ptr<ClientContext> context = nullptr);
 	string Format(const string &sql);
 
 private:
 	const FormatterConfig &config;
+	optional_ptr<ClientContext> context;
 
 	// Keyword classification helpers
 	static bool IsClauseKeyword(const string &kw);
@@ -83,14 +84,15 @@ private:
 // Constructor and top-level Format
 // ─────────────────────────────────────────────────────────────────────────────
 
-SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
+SQLFormatter::SQLFormatter(const FormatterConfig &config, optional_ptr<ClientContext> context_p)
+    : config(config), context(context_p) {
 }
 
 string SQLFormatter::Format(const string &sql) {
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto tokenizer = context ? Tokenizer::Create(*context, behavior) : Tokenizer::Create(behavior);
+	tokenizer->TokenizeInput();
 	if (!tokens.empty()) {
 		auto back_type = tokens.back().type;
 		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
@@ -1637,6 +1639,10 @@ string SQLFormatter::ExpandLongParenLists(const string &formatted) const {
 
 string FormatSQL(const string &sql, const FormatterConfig &config) {
 	return SQLFormatter(config).Format(sql);
+}
+
+string FormatSQL(ClientContext &context, const string &sql, const FormatterConfig &config) {
+	return SQLFormatter(config, context).Format(sql);
 }
 
 } // namespace duckdb

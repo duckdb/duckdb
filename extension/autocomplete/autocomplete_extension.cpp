@@ -369,6 +369,9 @@ public:
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
 		return PEGMatcher::Get(context);
 	}
+	optional_ptr<ClientContext> GetClientContext() override {
+		return context;
+	}
 
 private:
 	ClientContext &context;
@@ -459,8 +462,8 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto tokenizer = Tokenizer::Create(context, behavior);
+	tokenizer->TokenizeInput();
 
 	// use the parser to annotate any tokens
 	vector<MatcherSuggestion> suggestions;
@@ -543,10 +546,10 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
-	Tokenizer tokenizer(behavior);
+	auto tokenizer = Tokenizer::Create(context, behavior);
 
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	tokenizer->TokenizeInput();
+	if (!tokenizer->CanAutocomplete()) {
 		return nullptr;
 	}
 
@@ -653,7 +656,7 @@ static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<FormatSQLBindData>();
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
-		return heap.AddString(FormatSQL(input.GetString(), info.config));
+		return heap.AddString(FormatSQL(state.GetContext(), input.GetString(), info.config));
 	});
 }
 

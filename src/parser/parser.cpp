@@ -268,8 +268,8 @@ void Parser::ParseQuery(const string &query_p) {
 	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
 	ParserTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto tokenizer = options.context ? Tokenizer::Create(*options.context, behavior) : Tokenizer::Create(behavior);
+	tokenizer->TokenizeInput();
 	idx_t token_cursor = 0;
 	while (token_cursor < tokens.size()) {
 		try {
@@ -364,8 +364,8 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &to
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto tokenizer = Tokenizer::Create(behavior);
+	tokenizer->TokenizeInput();
 
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
