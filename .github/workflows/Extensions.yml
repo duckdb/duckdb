@@ -46,155 +46,41 @@ env:
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
-  # This first step loads the various extension configs from the ~/.github/config directory storing them to drive the build jobs
-  load-extension-configs:
-    name: Load Extension Configs
-    runs-on: ubuntu-slim
-    outputs:
-      # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
-      main_extensions_core_config: ${{ steps.set-main-extensions.outputs.core_config }}
-      main_extensions_cloud_config: ${{ steps.set-main-extensions.outputs.cloud_config }}
-      main_extensions_search_config: ${{ steps.set-main-extensions.outputs.search_config }}
-      main_extensions_scanner_config: ${{ steps.set-main-extensions.outputs.scanner_config }}
-      main_extensions_exclude_archs: ${{ steps.set-main-extensions.outputs.exclude_archs }}
-      main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
-      rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
-      rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
-      external_extensions_config: ${{ steps.set-external-extensions.outputs.extension_config }}
-      external_extensions_exclude_archs: ${{ steps.set-external-extensions.outputs.exclude_archs }}
-
-    env:
-      EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
-      OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.git_ref }}
-
-      - id: set-main-extensions
-        name: Configure main extensions
-        env:
-          CORE_CONFIG_FILE: .github/config/main_core.cmake
-          CLOUD_CONFIG_FILE: .github/config/main_cloud.cmake
-          SEARCH_CONFIG_FILE: .github/config/main_search.cmake
-          SCANNER_CONFIG_FILE: .github/config/main_scanner.cmake
-          DEFAULT_EXCLUDE_ARCHS: ''
-        run: |
-          # Set config
-          echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
-          echo "opt_in_archs=$OPT_IN_ARCHS" >> "$GITHUB_OUTPUT"
-          core_extensions="$(<"$CORE_CONFIG_FILE")"
-          cloud_extensions="$(<"$CLOUD_CONFIG_FILE")"
-          search_extensions="$(<"$SEARCH_CONFIG_FILE")"
-          scanner_extensions="$(<"$SCANNER_CONFIG_FILE")"
-          {
-            echo "core_config<<EOF"
-            echo "$core_extensions"
-            echo "EOF"
-            echo "cloud_config<<EOF"
-            echo "$cloud_extensions"
-            echo "EOF"
-            echo "search_config<<EOF"
-            echo "$search_extensions"
-            echo "EOF"
-            echo "scanner_config<<EOF"
-            echo "$scanner_extensions"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
-
-      - id: set-rust-based-extensions
-        name: Configure Rust-based extensions
-        env:
-          CONFIG_FILE: .github/config/rust_based_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl'
-        run: |
-          echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
-          rust_based_extensions="$(<"$CONFIG_FILE")"
-          {
-            echo "extension_config<<EOF"
-            echo "$rust_based_extensions"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
-
-      - id: set-external-extensions
-        name: Configure External extensions
-        env:
-          CONFIG_FILE: .github/config/external_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
-        run: |
-          echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
-          external_extensions="$(<"$CONFIG_FILE")"
-          {
-            echo "extension_config<<EOF"
-            echo "$external_extensions"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
-
-  # Build the extensions from the main extension shards and the rust-based/external configs
+  # Build the extensions from the main extension shards and the Rust-based config
   extensions-build:
-    name: ${{ matrix.name }}
-    needs:
-      - load-extension-configs
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Main (core)
-            artifact_prefix: main-extensions-core
-            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
-            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_core_config }}
-            extra_toolchains: unixodbc;parser_tools
-          - name: Main (cloud)
-            artifact_prefix: main-extensions-cloud
-            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
-            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_cloud_config }}
-            extra_toolchains: unixodbc;parser_tools
-          - name: Main (search)
-            artifact_prefix: main-extensions-search
-            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
-            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_search_config }}
-            extra_toolchains: unixodbc;parser_tools
-          - name: Main (scanner)
-            artifact_prefix: main-extensions-scanner
-            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
-            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_scanner_config }}
-            extra_toolchains: unixodbc;parser_tools
-          - name: Rust-based Extensions
-            artifact_prefix: rust-based-extensions
-            exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
-            opt_in_archs: ''
-            extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
-            extra_toolchains: rust
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    name: Build extensions
+    uses: smvv/extension-ci-tools/.github/workflows/build.yml@group-matrix
     with:
-      # We piggy-back extension-template to build the extensions in extension_config
-      override_repository: duckdb/extension-template
-      override_ref: main
-      upload_all_extensions: true
-      extension_name: ${{ matrix.artifact_prefix }}
-      # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
-      set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
-      exclude_archs: ${{ matrix.exclude_archs }}
-      opt_in_archs: ${{ matrix.opt_in_archs }}
-      extra_toolchains: ${{ matrix.extra_toolchains }}
-      use_merged_vcpkg_manifest: '1'
-      duckdb_tag: ${{ inputs.override_git_describe }}
+      ci_tools_version: group-matrix
+      groups: |
+        main-core:
+          config: duckdb/.github/config/main_core.cmake
+          opt_in_archs: '${{ inputs.opt_in_archs }}'
+          toolchain: main
+        main-cloud:
+          config: duckdb/.github/config/main_cloud.cmake
+          opt_in_archs: '${{ inputs.opt_in_archs }}'
+          toolchain: main
+        main-search:
+          config: duckdb/.github/config/main_search.cmake
+          opt_in_archs: '${{ inputs.opt_in_archs }}'
+          toolchain: main
+        main-scanner:
+          config: duckdb/.github/config/main_scanner.cmake
+          opt_in_archs: '${{ inputs.opt_in_archs }}'
+          toolchain: main
+        rust-based:
+          config: duckdb/.github/config/rust_based_extensions.cmake
+          default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
+          toolchain: rust
+      extension_repository: duckdb/extension-template
+      extension_ref: main
+      duckdb_repository: ${{ format('{0}/{1}.git', github.server_url, github.repository) }}
+      ci_tools_repository: smvv/extension-ci-tools
+      exclude_archs: ${{ inputs.extra_exclude_archs }}
+      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
       skip_tests: ${{ inputs.skip_tests }}
-      save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
-      extensions_test_selection: 'complete'
-      extra_extension_config: ${{ matrix.extension_config }}
       runners: ${{ inputs.runners }}
 
   deploy-repository:
@@ -215,7 +101,7 @@ jobs:
       - uses: actions/download-artifact@v8
         name: Download all extensions
         with:
-          pattern: '{main-extensions*,rust-based-extensions*,external-extensions*}'
+          pattern: '*-extensions-*'
           path: /tmp/repository_generation
           # When multiple artifacts are matched:
           # - if true: the downloaded artifacts will be in the same directory
