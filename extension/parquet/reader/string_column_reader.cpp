@@ -99,6 +99,8 @@ string_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 		}
 		return string_t(str_data, str_len);
 	}
+	case StringColumnType::OTHER:
+		return string_t(str_data, str_len);
 	default:
 		throw InternalException("Unimplemented StringColumnType");
 	}

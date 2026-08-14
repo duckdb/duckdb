@@ -1,0 +1,97 @@
+# name: test/parquet/utf8_validation_plain_dlba.test
+# description: Test UTF8 validation of strings in parquet files encoded as PLAIN or DELTA LENGTH BYTE ARRAY
+# group: [parquet]
+
+require parquet
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet');
+----
+Invalid Input Error
+
+query T 
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='ignore');
+----
+TREL
+
+query T
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid.parquet', utf8_validation='replace');
+----
+TREL?
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+query T
+SELECT * FROM parquet_scan(
+             'data/parquet-testing/binary_string.parquet',
+             binary_as_string=false
+         );
+----
+foo
+bar
+baz
+
+statement ok
+SET debug_verify_serializer=true
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='replace'
+)
+----
+TREL?
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='ignore'
+)
+----
+TREL
+
+statement ok
+SET debug_verify_serializer=false
+
+query T
+SELECT * FROM read_parquet(
+    'data/parquet-testing/invalid.parquet',
+    utf8_validation='iGnOrE'
+)
+----
+TREL

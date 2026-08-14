@@ -591,6 +591,34 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 }
 
 template <>
+const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value) {
+	switch (value) {
+	case StringColumnReader::Utf8ValidationOption::STRICT:
+		return "STRICT";
+	case StringColumnReader::Utf8ValidationOption::REPLACE:
+		return "REPLACE";
+	case StringColumnReader::Utf8ValidationOption::IGNORE:
+		return "IGNORE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+StringColumnReader::Utf8ValidationOption EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value) {
+	if (StringUtil::Equals(value, "STRICT")) {
+		return StringColumnReader::Utf8ValidationOption::STRICT;
+	}
+	if (StringUtil::Equals(value, "REPLACE")) {
+		return StringColumnReader::Utf8ValidationOption::REPLACE;
+	}
+	if (StringUtil::Equals(value, "IGNORE")) {
+		return StringColumnReader::Utf8ValidationOption::IGNORE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *EnumUtil::ToChars<ParquetReaderProjectionExpressionType>(ParquetReaderProjectionExpressionType value) {
 	switch (value) {
 	case ParquetReaderProjectionExpressionType::BYTE_LENGTH:
