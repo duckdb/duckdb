@@ -1065,7 +1065,7 @@ public:
 	    : allocator(allocator), grammar(grammar_p), compiled(compiled_p) {
 	}
 
-	Matcher &CreateMatcher(const string &root_rule);
+	Matcher &CreateMatcher(string_t root_rule);
 	Matcher &CreateRootMatcher(const string &root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
 	//! CreateMatcher call). Throws if the rule has not been built.
@@ -1084,16 +1084,16 @@ private:
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
-	Matcher &CreateMatcher(const string &rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;
 	const ParsedGrammar &grammar;
 	PEGMatcher &compiled;
-	unordered_map<string, reference<Matcher>> matchers;
+	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
-	unordered_set<string> no_suggestion_rules;
-	unordered_set<string> packrat_memoized_rules;
+	string_set_t no_suggestion_rules;
+	string_set_t packrat_memoized_rules;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -1132,7 +1132,7 @@ Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
 	return entry->second.get();
 }
 
-Matcher &MatcherFactory::CreateMatcher(const string &rule_name) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name) {
 	vector<reference<Matcher>> parameters;
 	return CreateMatcher(rule_name, parameters);
 }
@@ -1140,12 +1140,11 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name) {
 struct MatcherListEntry {
 	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher) {
 	}
-	MatcherListEntry(Matcher &matcher, string function_name_p)
-	    : matcher(matcher), function_name(std::move(function_name_p)) {
+	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
 	}
 
 	Matcher &matcher;
-	string function_name;
+	string_t function_name;
 };
 
 struct MatcherList {
@@ -1184,7 +1183,7 @@ public:
 	MatcherListEntry &GetLastRootMatcher() {
 		return matchers.back();
 	}
-	void BeginFunction(const string &function_name) {
+	void BeginFunction(string_t function_name) {
 		auto &parameter_list = factory.List();
 		matchers.emplace_back(parameter_list, function_name);
 	}
@@ -1193,7 +1192,7 @@ public:
 			throw InternalException("PEG matcher create error - found too many close brackets");
 		}
 		auto &root_bracket_matcher = matchers.back();
-		if (root_bracket_matcher.function_name.empty()) {
+		if (root_bracket_matcher.function_name.GetSize() == 0) {
 			// not a function
 			auto &bracket_matcher = root_bracket_matcher.matcher;
 			// remove the last matcher from the stack
@@ -1224,7 +1223,7 @@ private:
 	vector<MatcherListEntry> matchers;
 };
 
-Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference<Matcher>> &parameters) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	if (!is_function_call) {
 		// check if the matcher has already been created first
@@ -1235,15 +1234,15 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference
 		}
 	}
 	// look up the rule
-	auto entry = grammar.rules.find(rule_name);
+	auto entry = grammar.rules.find(rule_name.GetString());
 	if (entry == grammar.rules.end()) {
-		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name);
+		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
 	}
 	// create a matcher and cache it
 	// since matchers can be recursive we need to cache it prior to recursively constructing the other rules
 	auto &matcher = List();
 	if (!is_function_call) {
-		matchers.insert(make_pair(rule_name, reference<Matcher>(matcher)));
+		matchers.insert(make_pair(string_t(entry->second->name), reference<Matcher>(matcher)));
 	}
 
 	MatcherList list(*this);
@@ -1254,15 +1253,15 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference
 		throw InternalException("Only functions with a single parameter are supported");
 	}
 	if (parameters.size() != rule.parameters.size()) {
-		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)", rule_name,
-		                        rule.parameters.size(), parameters.size());
+		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)",
+		                        rule_name.GetString(), rule.parameters.size(), parameters.size());
 	}
 	for (idx_t token_idx = 0; token_idx < rule.tokens.size(); token_idx++) {
 		auto &token = rule.tokens[token_idx];
 		switch (token.type) {
 		case PEGTokenType::LITERAL:
 			// literal - push the keyword
-			list.AddMatcher(Keyword(token.text));
+			list.AddMatcher(Keyword(token.text.GetString()));
 			break;
 		case PEGTokenType::REFERENCE: {
 			// check if we are referring to a keyword
@@ -1283,7 +1282,7 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference
 		}
 		case PEGTokenType::OPERATOR: {
 			// tokens need to be one byte
-			auto op_type = token.text[0];
+			auto op_type = token.text.GetData()[0];
 			switch (op_type) {
 			case '?':
 			case '*': {
@@ -1376,7 +1375,8 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference
 			break;
 		}
 		case PEGTokenType::REGEX:
-			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)", rule_name);
+			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)",
+			                        rule_name.GetString());
 		default:
 			throw InternalException("unrecognized peg token type");
 		}
@@ -1384,7 +1384,7 @@ Matcher &MatcherFactory::CreateMatcher(const string &rule_name, vector<reference
 	if (list.GetRootMatcherCount() != 1) {
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
-	matcher.SetRule(compiled.GetRule(rule_name));
+	matcher.SetRule(compiled.GetRule(rule_name.GetString()));
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
@@ -1508,7 +1508,7 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	SuppressSuggestions("ExpressionStatement");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
-	return CreateMatcher(root_rule);
+	return CreateMatcher(string_t(root_rule));
 }
 
 shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
@@ -1555,8 +1555,9 @@ ParserCache::ParserCache(ParsedGrammar &&grammar) {
 			if (token.type == PEGTokenType::REFERENCE && rule.recipe.parameters.count(token.text)) {
 				continue;
 			}
-			if (!grammar.HasRule(token.text)) {
-				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", rule.name, token.text);
+			if (!grammar.HasRule(token.text.GetString())) {
+				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", rule.name,
+				                            token.text.GetString());
 			}
 		}
 	}

@@ -21,11 +21,11 @@ enum class PEGTokenType {
 
 struct PEGToken {
 	PEGTokenType type;
-	string text;
+	string_t text;
 };
 
 struct PEGRule {
-	unordered_map<string, idx_t> parameters;
+	string_map_t<idx_t> parameters;
 	vector<PEGToken> tokens;
 
 	void Clear() {
@@ -37,7 +37,7 @@ struct PEGRule {
 struct PEGParser {
 public:
 	void ParseRules(const char *grammar);
-	void AddRule(const string &rule_name, PEGRule rule);
+	void AddRule(string_t rule_name, PEGRule rule);
 
 	case_insensitive_map_t<PEGRule> rules;
 };

@@ -9,6 +9,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/transform_result.hpp"
 
@@ -38,8 +39,8 @@ struct ParsedGrammarRule {
 class ParsedGrammar {
 public:
 	ParsedGrammar() = default;
-	ParsedGrammar(ParsedGrammar &&) = default;
-	ParsedGrammar &operator=(ParsedGrammar &&) = default;
+	DUCKDB_API ParsedGrammar(ParsedGrammar &&other);
+	DUCKDB_API ParsedGrammar &operator=(ParsedGrammar &&other);
 	ParsedGrammar(const ParsedGrammar &) = delete;
 	ParsedGrammar &operator=(const ParsedGrammar &) = delete;
 
@@ -63,9 +64,11 @@ private:
 	friend class PEGTransformerFactory;
 
 	void AddParsedRule(ParsedGrammarRule rule);
+	void RegisterStrings(PEGRule &rule);
 	ParsedGrammarRule &GetMutableRule(const string &rule_name);
 	static ParsedGrammarRule ParseSingleRule(const string &rule_definition);
 
+	StringHeap string_heap;
 	case_insensitive_map_t<unique_ptr<ParsedGrammarRule>> rules;
 };
 
