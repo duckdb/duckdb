@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-import gzip
+import io
 import os
 import platform
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import urllib.error
@@ -34,9 +35,9 @@ def cli_asset_name(system: str | None = None, machine: str | None = None) -> str
     arch = normalize_arch(machine or platform.machine())
 
     if system == "linux" and arch in {"amd64", "arm64"}:
-        return f"duckdb_cli-linux-{arch}.gz"
+        return f"duckdb-cli-linux-{arch}.tar.gz"
     if system == "darwin" and arch in {"amd64", "arm64"}:
-        return f"duckdb_cli-osx-{arch}.gz"
+        return f"duckdb-cli-osx-{arch}.tar.gz"
 
     raise RuntimeError(f"unsupported staged CLI platform: {system}/{arch}")
 
@@ -63,6 +64,21 @@ def cli_asset_url(asset_base_url: str, git_sha: str, version: str) -> str:
     return f"{base}/{short_sha}/duckdb/duckdb/github_release/{asset_name}"
 
 
+def extract_cli(archive_bytes: bytes, target: Path) -> None:
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
+        members = archive.getmembers()
+        if len(members) != 1 or members[0].name != "duckdb" or not members[0].isfile():
+            raise ValueError("staged CLI archive must contain only a top-level duckdb file")
+
+        source = archive.extractfile(members[0])
+        if source is None:
+            raise ValueError("failed to read duckdb from staged CLI archive")
+        with source, target.open("wb") as destination:
+            destination.write(source.read())
+
+    target.chmod(0o755)
+
+
 def download_cli(url: str, target: Path) -> None:
     last_error: Exception | None = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
@@ -70,11 +86,10 @@ def download_cli(url: str, target: Path) -> None:
             print(f"Downloading staged CLI ({attempt}/{DOWNLOAD_RETRIES}): {url}", flush=True)
             request = urllib.request.Request(url, headers={"User-Agent": DOWNLOAD_USER_AGENT})
             with urllib.request.urlopen(request, timeout=60) as response:
-                compressed = response.read()
-            target.write_bytes(gzip.decompress(compressed))
-            target.chmod(0o755)
+                archive_bytes = response.read()
+            extract_cli(archive_bytes, target)
             return
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError) as error:
+        except (OSError, ValueError, tarfile.TarError, urllib.error.URLError, urllib.error.HTTPError) as error:
             last_error = error
             if attempt == DOWNLOAD_RETRIES:
                 break
