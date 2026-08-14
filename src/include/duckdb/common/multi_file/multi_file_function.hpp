@@ -789,6 +789,7 @@ public:
 	                          MultiFileGlobalState &gstate) {
 		return gstate.read_ahead->TryProduceJob([&](MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
 			// jobs recycle finished scan states, create a fresh one when none was available
+			job.reader_scan_state = gstate.read_ahead->TryPopState();
 			if (!job.reader_scan_state) {
 				job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 			}
