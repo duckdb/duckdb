@@ -54,23 +54,23 @@ jobs:
       duckdb_version: ${{ inputs.git_ref }}
       ci_tools_version: group-matrix
       groups: |
-        main-core:
-          config: duckdb/.github/config/main_core.cmake
+        core:
+          config: duckdb/.github/config/core.cmake
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
-        main-cloud:
-          config: duckdb/.github/config/main_cloud.cmake
+        cloud:
+          config: duckdb/.github/config/cloud.cmake
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
-        main-search:
-          config: duckdb/.github/config/main_search.cmake
+        search:
+          config: duckdb/.github/config/search.cmake
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
-        main-scanner:
-          config: duckdb/.github/config/main_scanner.cmake
+        scanner:
+          config: duckdb/.github/config/scanner.cmake
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
-        rust-based:
+        rust:
           config: duckdb/.github/config/rust_based_extensions.cmake
           default_exclude_archs: wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl
           toolchain: rust
