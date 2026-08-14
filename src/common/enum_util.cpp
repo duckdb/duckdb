@@ -230,6 +230,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_order_options.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
@@ -6698,6 +6699,25 @@ const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value) {
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value) {
 	return static_cast<VectorBufferType>(StringUtil::StringToEnum(GetVectorBufferTypeValues(), 9, "VectorBufferType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVectorPrepareStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VectorPrepareState::NONE), "NONE" },
+		{ static_cast<uint32_t>(VectorPrepareState::PREPARED), "PREPARED" },
+		{ static_cast<uint32_t>(VectorPrepareState::IO_REGISTERED), "IO_REGISTERED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VectorPrepareState>(VectorPrepareState value) {
+	return StringUtil::EnumToString(GetVectorPrepareStateValues(), 3, "VectorPrepareState", static_cast<uint32_t>(value));
+}
+
+template<>
+VectorPrepareState EnumUtil::FromString<VectorPrepareState>(const char *value) {
+	return static_cast<VectorPrepareState>(StringUtil::StringToEnum(GetVectorPrepareStateValues(), 3, "VectorPrepareState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorTypeValues() {
