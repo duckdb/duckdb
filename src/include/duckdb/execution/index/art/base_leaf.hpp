@@ -33,8 +33,8 @@ private:
 
 public:
 	//! Get a new BaseLeaf and initialize it.
-	static NodeHandle New(ART &art, NodePtr &node) {
-		node = NodePtr::GetAllocator(art, TYPE).New();
+	static NodeHandle New(ART &art, NodePointer &node) {
+		node = NodePointer::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
 		NodeHandle handle(art, node);
@@ -74,7 +74,7 @@ public:
 
 private:
 	static void InsertByteInternal(BaseLeaf &n, const uint8_t byte);
-	static NodeHandle DeleteByteInternal(ART &art, NodePtr &node, const uint8_t byte);
+	static NodeHandle DeleteByteInternal(ART &art, NodePointer &node, const uint8_t byte);
 };
 
 //! Node7Leaf holds up to seven sorted bytes.
@@ -88,12 +88,12 @@ public:
 
 public:
 	//! Insert a byte.
-	static void InsertByte(ART &art, NodePtr &node, const uint8_t byte);
+	static void InsertByte(ART &art, NodePointer &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, NodePtr &node, NodePtr &prefix, const uint8_t byte, const ARTKey &row_id);
+	static void DeleteByte(ART &art, NodePointer &node, NodePointer &prefix, const uint8_t byte, const ARTKey &row_id);
 
 private:
-	static void ShrinkNode15Leaf(ART &art, NodePtr &node7_leaf, NodePtr &node15_leaf);
+	static void ShrinkNode15Leaf(ART &art, NodePointer &node7_leaf, NodePointer &node15_leaf);
 };
 
 //! Node15Leaf holds up to 15 sorted bytes.
@@ -107,14 +107,14 @@ public:
 
 public:
 	//! Insert a byte.
-	static void InsertByte(ART &art, NodePtr &node, const uint8_t byte);
+	static void InsertByte(ART &art, NodePointer &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, NodePtr &node, const uint8_t byte);
+	static void DeleteByte(ART &art, NodePointer &node, const uint8_t byte);
 
 private:
-	static void GrowNode7Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node7_leaf);
+	static void GrowNode7Leaf(ART &art, NodePointer &node15_leaf, NodePointer &node7_leaf);
 	//! We shrink at <= Node48::SHRINK_THRESHOLD.
-	static void ShrinkNode256Leaf(ART &art, NodePtr &node15_leaf, NodePtr &node256_leaf);
+	static void ShrinkNode256Leaf(ART &art, NodePointer &node15_leaf, NodePointer &node256_leaf);
 };
 
 } // namespace duckdb

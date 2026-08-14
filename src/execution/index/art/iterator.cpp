@@ -131,7 +131,7 @@ ARTScanResult Iterator::Scan(const ARTKey &upper_bound, Output &output, bool equ
 template ARTScanResult Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, bool);
 template ARTScanResult Iterator::Scan<KeyRowIdOutput>(const ARTKey &, KeyRowIdOutput &, bool);
 
-void Iterator::FindMinimum(NodePtr current) {
+void Iterator::FindMinimum(NodePointer current) {
 	while (current.HasMetadata()) {
 		// Found the minimum.
 		if (current.IsAnyLeaf()) {
@@ -149,7 +149,7 @@ void Iterator::FindMinimum(NodePtr current) {
 
 		// Traverse the prefix.
 		if (current.GetType() == NType::PREFIX) {
-			NodePtr child;
+			NodePointer child;
 			{
 				ConstNodeHandle handle(art, current);
 				auto data = handle.GetPtr();
@@ -190,7 +190,7 @@ void Iterator::FindMinimum(NodePtr current) {
 	throw InternalException("ART Iterator::FindMinimum: Reached node without metadata");
 }
 
-bool Iterator::LowerBound(NodePtr current, const ARTKey &key, const bool equal) {
+bool Iterator::LowerBound(NodePointer current, const ARTKey &key, const bool equal) {
 	idx_t depth = 0;
 
 	while (current.HasMetadata()) {
@@ -237,7 +237,7 @@ bool Iterator::LowerBound(NodePtr current, const ARTKey &key, const bool equal) 
 
 		// Copy the prefix bytes and child while the prefix is pinned.
 		uint8_t prefix_count;
-		NodePtr prefix_child;
+		NodePointer prefix_child;
 		const auto prefix_offset = current_key.Size();
 		{
 			ConstNodeHandle handle(art, current);

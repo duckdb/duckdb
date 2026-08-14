@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void Node48::InsertChild(ART &art, NodePtr &node, const uint8_t byte, const NodePtr child) {
+void Node48::InsertChild(ART &art, NodePointer &node, const uint8_t byte, const NodePointer child) {
 	{
 		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node48>();
@@ -35,13 +35,13 @@ void Node48::InsertChild(ART &art, NodePtr &node, const uint8_t byte, const Node
 	Node256::InsertChild(art, node, byte, child);
 }
 
-void Node48::DeleteChild(ART &art, NodePtr &node, const uint8_t byte) {
+void Node48::DeleteChild(ART &art, NodePointer &node, const uint8_t byte) {
 	{
 		NodeHandle handle(art, node);
 		auto &n = handle.Get<Node48>();
 
 		// Free the child and decrease the count.
-		NodePtr::FreeTree(art, n.children[n.child_index[byte]]);
+		NodePointer::FreeTree(art, n.children[n.child_index[byte]]);
 		n.child_index[byte] = EMPTY_MARKER;
 		n.count--;
 
@@ -55,7 +55,7 @@ void Node48::DeleteChild(ART &art, NodePtr &node, const uint8_t byte) {
 	Node16::ShrinkNode48(art, node, node48);
 }
 
-void Node48::GrowNode16(ART &art, NodePtr &node48, NodePtr &node16) {
+void Node48::GrowNode16(ART &art, NodePointer &node48, NodePointer &node16) {
 	{
 		NodeHandle n16_handle(art, node16);
 		auto &n16 = n16_handle.Get<Node16>();
@@ -70,10 +70,10 @@ void Node48::GrowNode16(ART &art, NodePtr &node48, NodePtr &node16) {
 			n48.children[i] = n16.children[i];
 		}
 	}
-	NodePtr::FreeNode(art, node16);
+	NodePointer::FreeNode(art, node16);
 }
 
-void Node48::ShrinkNode256(ART &art, NodePtr &node48, NodePtr &node256) {
+void Node48::ShrinkNode256(ART &art, NodePointer &node48, NodePointer &node256) {
 	{
 		auto n48_handle = New(art, node48);
 		auto &n48 = n48_handle.Get<Node48>();
@@ -92,7 +92,7 @@ void Node48::ShrinkNode256(ART &art, NodePtr &node48, NodePtr &node256) {
 			n48.count++;
 		}
 	}
-	NodePtr::FreeNode(art, node256);
+	NodePointer::FreeNode(art, node256);
 }
 
 } // namespace duckdb
