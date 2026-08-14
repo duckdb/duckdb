@@ -288,8 +288,6 @@ bool RowVersionManager::HasUnserializedChanges() {
 	return uncheckpointed_delete_commit.IsValid();
 }
 
-
-
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
 	D_ASSERT(!uncheckpointed_delete_commit.IsValid());

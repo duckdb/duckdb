@@ -687,7 +687,6 @@ bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
 	}
 }
 
-
 bool ChunkVectorInfo::AnyDeleted() const {
 	switch (delete_state) {
 	case DeleteIdState::CONSTANT:
