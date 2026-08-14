@@ -19,6 +19,11 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
+	//	Don't use segment trees for custom windowing
+	if (wexpr.AggregateFunction()->CanWindow()) {
+		return false;
+	}
+
 	//	We can't handle DISTINCT, ORDER BY args or () args (COUNT(*))
 	return !wexpr.Distinct() && wexpr.ArgOrders().empty() && !wexpr.GetChildren().empty();
 }

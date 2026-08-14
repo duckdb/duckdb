@@ -999,9 +999,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
-	auto res = LogicalType::STRUCT(std::move(children));
-	res.SetAlias("PARQUET_VARIANT");
-	return res;
+	return LogicalType::STRUCT(std::move(children)).WithAlias("PARQUET_VARIANT");
 }
 
 static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {

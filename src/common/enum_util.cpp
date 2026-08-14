@@ -133,7 +133,9 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/aggregate_state_serialization.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -162,6 +164,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
@@ -416,6 +419,43 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value) {
 	return static_cast<AggregateOrderDependent>(StringUtil::StringToEnum(GetAggregateOrderDependentValues(), 2, "AggregateOrderDependent", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAggregateRewritePolicyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateRewritePolicy::MANDATORY), "MANDATORY" },
+		{ static_cast<uint32_t>(AggregateRewritePolicy::UNCONDITIONAL), "UNCONDITIONAL" },
+		{ static_cast<uint32_t>(AggregateRewritePolicy::COST_BASED), "COST_BASED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewritePolicy>(AggregateRewritePolicy value) {
+	return StringUtil::EnumToString(GetAggregateRewritePolicyValues(), 3, "AggregateRewritePolicy", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateRewritePolicy EnumUtil::FromString<AggregateRewritePolicy>(const char *value) {
+	return static_cast<AggregateRewritePolicy>(StringUtil::StringToEnum(GetAggregateRewritePolicyValues(), 3, "AggregateRewritePolicy", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAggregateRewriteSourceTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateRewriteSourceType::INPUT), "INPUT" },
+		{ static_cast<uint32_t>(AggregateRewriteSourceType::STAGE), "STAGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewriteSourceType>(AggregateRewriteSourceType value) {
+	return StringUtil::EnumToString(GetAggregateRewriteSourceTypeValues(), 2, "AggregateRewriteSourceType", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateRewriteSourceType EnumUtil::FromString<AggregateRewriteSourceType>(const char *value) {
+	return static_cast<AggregateRewriteSourceType>(StringUtil::StringToEnum(GetAggregateRewriteSourceTypeValues(), 2, "AggregateRewriteSourceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateStateExportModeValues() {
@@ -5616,6 +5656,24 @@ const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value) {
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value) {
 	return static_cast<StarExpressionType>(StringUtil::StringToEnum(GetStarExpressionTypeValues(), 4, "StarExpressionType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStateMemoryOwnershipValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StateMemoryOwnership::BORROWED), "BORROWED" },
+		{ static_cast<uint32_t>(StateMemoryOwnership::OWNED), "OWNED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StateMemoryOwnership>(StateMemoryOwnership value) {
+	return StringUtil::EnumToString(GetStateMemoryOwnershipValues(), 2, "StateMemoryOwnership", static_cast<uint32_t>(value));
+}
+
+template<>
+StateMemoryOwnership EnumUtil::FromString<StateMemoryOwnership>(const char *value) {
+	return static_cast<StateMemoryOwnership>(StringUtil::StringToEnum(GetStateMemoryOwnershipValues(), 2, "StateMemoryOwnership", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
