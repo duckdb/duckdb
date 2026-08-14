@@ -585,7 +585,7 @@ string NodePtr::ToStringChildren(ART &art, const ToStringOptions &options) const
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child_entry = children[child_idx];
 			auto child_byte = child_entry.first;
-			auto &child_ptr = child_entry.second;
+			auto &child_slot = child_entry.second;
 			auto is_last = (child_idx == children.size() - 1);
 			auto on_path = !has_expected_byte || (has_expected_byte && child_byte == expected_byte);
 
@@ -605,17 +605,17 @@ string NodePtr::ToStringChildren(ART &art, const ToStringOptions &options) const
 				child_options.expand_after_n_levels =
 				    (options.expand_after_n_levels > 0) ? options.expand_after_n_levels - 1 : 0;
 
-				auto child_type = child_ptr->GetType();
+				auto child_type = child_slot->GetType();
 				auto is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
 				                    child_type == NType::NODE_48 || child_type == NType::NODE_256);
 				if (is_internal) {
 					str += StringUtil::Format("%s%sNode%s\n", child_prefix, NODE_BRANCH_END,
 					                          to_string(GetCapacity(child_type)));
 					child_options.tree_prefix = StringUtil::Format("%s%s", child_prefix, NODE_SPACE);
-					str += child_ptr->ToStringChildren(art, child_options);
+					str += child_slot->ToStringChildren(art, child_options);
 				} else {
 					child_options.tree_prefix = child_prefix;
-					str += child_ptr->ToString(art, child_options);
+					str += child_slot->ToString(art, child_options);
 				}
 			} else {
 				if (!options.structure_only) {

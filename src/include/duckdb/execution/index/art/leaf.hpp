@@ -36,7 +36,7 @@ public:
 private:
 	uint8_t count;            // Deprecated.
 	row_t row_ids[LEAF_SIZE]; // Deprecated.
-	NodePtr ptr;              // Deprecated.
+	NodePtr next_leaf;              // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.

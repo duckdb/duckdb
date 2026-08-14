@@ -95,7 +95,7 @@ void Leaf::TransformToNested(ART &art, NodePtr &node) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}
 		}
-		leaf_ref = leaf.ptr;
+		leaf_ref = leaf.next_leaf;
 	}
 
 	root.SetGateStatus(GateStatus::GATE_SET);
@@ -139,8 +139,8 @@ void Leaf::TransformToDeprecated(ART &art, NodePtr &node) {
 		}
 		remaining -= leaf.count;
 
-		ref = leaf.ptr;
-		leaf.ptr.Clear();
+		ref = leaf.next_leaf;
+		leaf.next_leaf.Clear();
 	}
 }
 
@@ -152,7 +152,7 @@ void Leaf::DeprecatedFree(ART &art, NodePtr &node) {
 	D_ASSERT(node.GetType() == LEAF);
 	NodePtr next;
 	while (node.HasMetadata()) {
-		next = NodePtr::Ref<Leaf>(art, node, LEAF).ptr;
+		next = NodePtr::Ref<Leaf>(art, node, LEAF).next_leaf;
 		NodePtr::FreeNode(art, node);
 		node = next;
 	}
@@ -172,7 +172,7 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const NodePtr &node, set<row_t> &row_id
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			row_ids.insert(leaf.row_ids[i]);
 		}
-		current = leaf.ptr;
+		current = leaf.next_leaf;
 	}
 	return true;
 }
@@ -185,11 +185,11 @@ void Leaf::DeprecatedVacuum(ART &art, NodePtr node) {
 	while (node.HasMetadata()) {
 		NodeHandle handle(art, node);
 		auto &leaf = handle.Get<Leaf>();
-		if (leaf.ptr.HasMetadata() && allocator.NeedsVacuum(leaf.ptr)) {
-			leaf.ptr = allocator.VacuumPointer(leaf.ptr);
-			leaf.ptr.SetMetadata(static_cast<uint8_t>(LEAF));
+		if (leaf.next_leaf.HasMetadata() && allocator.NeedsVacuum(leaf.next_leaf)) {
+			leaf.next_leaf = allocator.VacuumPointer(leaf.next_leaf);
+			leaf.next_leaf.SetMetadata(static_cast<uint8_t>(LEAF));
 		}
-		node = leaf.ptr;
+		node = leaf.next_leaf;
 	}
 }
 
@@ -210,7 +210,7 @@ string Leaf::DeprecatedToString(ART &art, const NodePtr &node, const ToStringOpt
 			str += to_string(leaf.row_ids[i]) + "-";
 		}
 		str += "]\n";
-		ref = leaf.ptr;
+		ref = leaf.next_leaf;
 	}
 
 	return str;
@@ -224,7 +224,7 @@ void Leaf::DeprecatedVerify(ART &art, const NodePtr &node) {
 		ConstNodeHandle handle(art, current);
 		auto &leaf = handle.Get<Leaf>();
 		D_ASSERT(leaf.count <= LEAF_SIZE);
-		current = leaf.ptr;
+		current = leaf.next_leaf;
 	}
 }
 
@@ -239,7 +239,7 @@ void Leaf::DeprecatedVerifyAllocations(ART &art, const NodePtr &node, unordered_
 
 		ConstNodeHandle handle(art, current);
 		auto &leaf = handle.Get<Leaf>();
-		current = leaf.ptr;
+		current = leaf.next_leaf;
 	}
 }
 
