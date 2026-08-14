@@ -71,9 +71,10 @@ private:
 	//! pos determines up to which position we need to reduce the prefix.
 	//! If we call into this function via MergePrefixes (case: one prefix contains the other),
 	//! then pos is the length of the shorter prefix.
-	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status, const idx_t parent_depth,
-	                        const uint8_t pos);
-	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status, const idx_t parent_depth);
+	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
+	                        const idx_t parent_depth, const uint8_t pos);
+	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
+	                        const idx_t parent_depth);
 	void MergePrefixes(NodeEntry &entry);
 };
 

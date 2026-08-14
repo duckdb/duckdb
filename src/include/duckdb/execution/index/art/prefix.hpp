@@ -60,15 +60,18 @@ public:
 	static GateStatus Split(ART &art, reference<NodePointer> &node, NodePointer &child, const uint8_t pos);
 
 private:
-	static Prefix NewInternal(ART &art, NodePointer &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
+	static Prefix NewInternal(ART &art, NodePointer &node, const data_ptr_t data, const uint8_t count,
+	                          const idx_t offset);
 
 	static Prefix GetTail(ART &art, const NodePointer &node);
 
 	static void ConcatInternal(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte,
 	                           const GateStatus status);
 	static void ConcatNode4WasGate(ART &art, NodePointer &node4, const NodePointer child, uint8_t byte);
-	static void ConcatChildIsGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte);
-	static void ConcatOutsideGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte);
+	static void ConcatChildIsGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child,
+	                              uint8_t byte);
+	static void ConcatOutsideGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child,
+	                              uint8_t byte);
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, NodePointer other);
