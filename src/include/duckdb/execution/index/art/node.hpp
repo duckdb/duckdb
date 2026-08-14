@@ -134,9 +134,9 @@ public:
 
 	//! Get a reference to a node.
 	template <class NODE>
-	static inline NODE &Ref(const ART &art, const NodePtr ptr, const NType type) {
-		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
+	static inline NODE &Ref(const ART &art, const NodePtr node, const NType type) {
+		D_ASSERT(node.GetType() != NType::PREFIX);
+		return *(GetAllocator(art, type).Get<NODE>(node, !std::is_const<NODE>::value));
 	}
 
 	//! Replace the child at byte.
