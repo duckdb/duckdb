@@ -288,26 +288,37 @@ private:
 	DuckTransaction &tx;
 	DataTable &storage;
 	const idx_t total_rows;
+	//! Scan initialization info retained for creating scan states
+	vector<StorageIndex> storage_ids;
+	optional_ptr<TableFilterSet> filters;
+	optional_ptr<SampleOptions> sample_options;
 
 public:
-	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
-	                                                   TableFunctionInitInput &input) override {
-		auto l_state = make_uniq<TableScanLocalState>();
-
-		vector<StorageIndex> storage_ids;
+	//! Retains the scan initialization info shared by all scan states of this scan
+	void InitializeScanInfo(TableFunctionInitInput &input) {
 		for (auto &col : input.column_indexes) {
 			storage_ids.push_back(bind_data.table.GetStorageIndex(col));
 		}
+		filters = input.filters;
+		sample_options = input.sample_options;
+	}
 
+	//! Shared scan-state setup for this table scan
+	void InitializeScanState(ClientContext &context, TableScanState &scan_state) const {
 		if (bind_data.order_options) {
-			l_state->scan_state.table_state.reorderer =
+			scan_state.table_state.reorderer =
 			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
-			l_state->scan_state.local_state.reorderer =
+			scan_state.local_state.reorderer =
 			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 		}
+		scan_state.Initialize(storage_ids, context, filters, sample_options, total_rows);
+		scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
+	}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options,
-		                               total_rows);
+	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
+	                                                   TableFunctionInitInput &input) override {
+		auto l_state = make_uniq<TableScanLocalState>();
+		InitializeScanState(context.client, l_state->scan_state);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (l_state->rows_in_current_row_group > 0) {
@@ -316,8 +327,6 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
-
-		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 		return std::move(l_state);
 	}
 
@@ -481,6 +490,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		}
 	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
+	g_state->InitializeScanInfo(input);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
