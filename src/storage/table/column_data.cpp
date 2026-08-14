@@ -438,7 +438,6 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &current_segment = state.current->GetNode();
 	// for dynamic filters we never consider the segment being "checked" as it can always change
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
@@ -457,7 +456,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	}
-	auto update_stats = GetUpdateStatisticsIfUpdatesInRange(state.current->GetRowStart(), current_segment.count);
+	auto update_stats =
+	    GetUpdateStatisticsIfUpdatesInRange(checked_segment->GetRowStart(), checked_segment->GetNode().count);
 	if (!update_stats) {
 		// no updates - return original result
 		return prune_result;
