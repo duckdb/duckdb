@@ -222,11 +222,11 @@ public:
 		// If we need to compress a Node4 into a one-way node,
 		// then we need the previous prefix before the Node4.
 		NodePtr empty;
-		reference<NodePtr> greatgrandparent(empty);
-		reference<NodePtr> grandparent(empty);
-		reference<NodePtr> parent(node);
-		reference<NodePtr> current(node);
-		reference<const ARTKey> current_key(key);
+		reference<NodePtr> great_grandparent_ref(empty);
+		reference<NodePtr> grandparent_ref(empty);
+		reference<NodePtr> parent_ref(node);
+		reference<NodePtr> current_ref(node);
+		reference<const ARTKey> current_key_ref(key);
 
 		idx_t grandparent_depth = 0;
 		idx_t parent_depth = 0;
@@ -234,61 +234,63 @@ public:
 		auto status = GateStatus::GATE_NOT_SET;
 		auto passed_node = false;
 
-		while (current.get().HasMetadata()) {
+		while (current_ref.get().HasMetadata()) {
 			// Enter gate.
-			if (status == GateStatus::GATE_NOT_SET && current.get().GetGateStatus() == GateStatus::GATE_SET) {
+			if (status == GateStatus::GATE_NOT_SET && current_ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				status = GateStatus::GATE_SET;
-				current_key = row_id;
+				current_key_ref = row_id;
 				depth = 0;
 				continue;
 			}
 
-			const auto type = current.get().GetType();
+			const auto type = current_ref.get().GetType();
 			switch (type) {
 			case NType::LEAF_INLINED: {
-				if (current.get().GetRowId() != row_id.GetRowId()) {
+				if (current_ref.get().GetRowId() != row_id.GetRowId()) {
 					return false;
 				}
-				if (!passed_node && parent.get().GetType() == NType::PREFIX) {
+				if (!passed_node && parent_ref.get().GetType() == NType::PREFIX) {
 					// The tree contains exactly one element with a prefix.
-					NodePtr::FreeTree(art, parent);
+					NodePtr::FreeTree(art, parent_ref);
 					return true;
 				}
-				if (parent.get().GetType() == NType::PREFIX) {
+				if (parent_ref.get().GetType() == NType::PREFIX) {
 					// We might have to compress:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
 					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
 					// Then, when we delete that child, we also free it.
-					NodePtr::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth],
+					NodePtr::DeleteChild(art, grandparent_ref, great_grandparent_ref,
+					                     current_key_ref.get()[grandparent_depth],
 					                     status, row_id);
 					return true;
 				}
-				NodePtr::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);
+				NodePtr::DeleteChild(art, parent_ref, grandparent_ref, current_key_ref.get()[parent_depth], status,
+				                     row_id);
 				return true;
 			}
 			case NType::LEAF: {
 				D_ASSERT(status == GateStatus::GATE_NOT_SET);
-				Leaf::TransformToNested(art, current);
+				Leaf::TransformToNested(art, current_ref);
 				break;
 			}
 			case NType::PREFIX: {
-				greatgrandparent = grandparent;
-				grandparent = parent;
-				parent = current;
+				great_grandparent_ref = grandparent_ref;
+				grandparent_ref = parent_ref;
+				parent_ref = current_ref;
 				grandparent_depth = parent_depth;
 				parent_depth = depth;
 
 				// Traverse a prefix chain until the next non-prefix node or gate.
-				while (current.get().GetType() == NType::PREFIX) {
-					Prefix prefix(art, current, true);
+				while (current_ref.get().GetType() == NType::PREFIX) {
+					Prefix prefix(art, current_ref, true);
 					for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-						if (prefix.data[i] != current_key.get()[depth]) {
+						if (prefix.data[i] != current_key_ref.get()[depth]) {
 							return false;
 						}
 						depth++;
 					}
-					current = *prefix.child_slot;
-					if (current.get().GetGateStatus() == GateStatus::GATE_SET) {
+					current_ref = *prefix.child_slot;
+					if (current_ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 						break;
 					}
 				}
@@ -299,28 +301,28 @@ public:
 			case NType::NODE_48:
 			case NType::NODE_256: {
 				passed_node = true;
-				greatgrandparent = grandparent;
-				grandparent = parent;
-				parent = current;
+				great_grandparent_ref = grandparent_ref;
+				grandparent_ref = parent_ref;
+				parent_ref = current_ref;
 				grandparent_depth = parent_depth;
 				parent_depth = depth;
 
-				auto child = current.get().GetChildMutable(art, current_key.get()[depth]);
+				auto child = current_ref.get().GetChildMutable(art, current_key_ref.get()[depth]);
 				if (!child) {
 					// No child at the byte: nothing to erase.
 					return false;
 				}
 
-				current = *child;
+				current_ref = *child;
 				depth++;
 				break;
 			}
 			case NType::NODE_7_LEAF:
 			case NType::NODE_15_LEAF:
 			case NType::NODE_256_LEAF: {
-				const auto byte = current_key.get()[depth];
-				if (current.get().HasByte(art, byte)) {
-					NodePtr::DeleteChild(art, current, parent, byte, status, row_id);
+				const auto byte = current_key_ref.get()[depth];
+				if (current_ref.get().HasByte(art, byte)) {
+					NodePtr::DeleteChild(art, current_ref, parent_ref, byte, status, row_id);
 					return true;
 				}
 				return false;
