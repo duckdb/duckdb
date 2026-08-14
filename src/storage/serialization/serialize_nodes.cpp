@@ -25,6 +25,7 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -527,6 +528,18 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &
 	return std::move(result);
 }
 
+void RowGroupExpressionFilter::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(100, "column_indexes", column_indexes);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(101, "expression", expression);
+}
+
+RowGroupExpressionFilter RowGroupExpressionFilter::Deserialize(Deserializer &deserializer) {
+	RowGroupExpressionFilter result;
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(100, "column_indexes", result.column_indexes);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "expression", result.expression);
+	return result;
+}
+
 void RowGroupOrderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<StorageIndex>(100, "column_idx", column_idx);
 	serializer.WriteProperty<OrderByStatistics>(101, "order_by", order_by);
@@ -779,11 +792,13 @@ TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", GetTableFiltersForSerialization(serializer));
+	serializer.WritePropertyWithDefault<vector<RowGroupExpressionFilter>>(101, "row_group_filters", row_group_filters, vector<RowGroupExpressionFilter>());
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
 	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", result.GetTableFiltersForDeserialization(deserializer));
+	deserializer.ReadPropertyWithExplicitDefault<vector<RowGroupExpressionFilter>>(101, "row_group_filters", result.row_group_filters, vector<RowGroupExpressionFilter>());
 	return result;
 }
 
