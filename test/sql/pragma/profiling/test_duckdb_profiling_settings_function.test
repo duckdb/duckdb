@@ -3,7 +3,7 @@
 # group: [profiling]
 
 query I
-SELECT * EXCLUDE(value, description) FROM duckdb_profiling_settings();
+SELECT * EXCLUDE(value, typed_value, description) FROM duckdb_profiling_settings();
 ----
 enable_profiling
 profiling_coverage
