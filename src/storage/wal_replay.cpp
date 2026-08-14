@@ -1165,7 +1165,14 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 					continue;
 				}
 				auto &bound_index = index.Cast<BoundIndex>();
-				bound_index.Append(chunk, row_id_vector);
+				// Deleted index entries are removed when the replay transaction commits. Duplicates can temporarily
+				// exist, similar to tuple WAL replay.
+				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				auto error = bound_index.Append(chunk, row_id_vector, append_info);
+				if (error.HasError()) {
+					throw InternalException("Failed to append to index '%s' during ROW_GROUP_DATA WAL replay: %s",
+					                        bound_index.GetIndexName(), error.Message());
+				}
 			}
 		}
 	}
