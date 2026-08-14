@@ -2,6 +2,7 @@
 #include "core_functions/scalar/array_functions.hpp"
 #include "core_functions/array_kernels.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
 
 namespace duckdb {
 
@@ -208,7 +209,23 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 	const auto &lhs_stats = input.child_stats[0];
 	const auto &rhs_stats = input.child_stats[1];
 	auto new_stats = NumericStats::CreateUnknown(input.expr.GetReturnType());
+
+	auto &lhs_child_stats = ArrayStats::GetChildStats(lhs_stats);
+	auto &rhs_child_stats = ArrayStats::GetChildStats(rhs_stats);
+
+	const auto has_any_nulls = lhs_child_stats.CanHaveNull() || rhs_child_stats.CanHaveNull();
+
+	if (has_any_nulls) {
+		// We will throw an error if the child arrays have nulls, so don't propagate any stats
+		return new_stats.ToUnique();
+	}
+
+	// If the child has no nulls, we won't throw.
+	input.expr.FunctionMutable().GetProperties().SetErrorMode(FunctionErrors::CANNOT_ERROR);
+
+	// Forward the validity
 	new_stats.CombineValidity(lhs_stats, rhs_stats);
+
 	return new_stats.ToUnique();
 }
 
