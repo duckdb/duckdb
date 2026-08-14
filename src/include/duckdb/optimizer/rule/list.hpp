@@ -10,6 +10,7 @@
 #include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 #include "duckdb/optimizer/rule/string_prefix.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
+#include "duckdb/optimizer/rule/least_greatest_simplification.hpp"
 #include "duckdb/optimizer/rule/list_comprehension_rewrite.hpp"
 #include "duckdb/optimizer/rule/move_constants.hpp"
 #include "duckdb/optimizer/rule/not_comparison_simplification.hpp"
