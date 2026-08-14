@@ -30,8 +30,8 @@ public:
 
 public:
 	Prefix() = delete;
-	Prefix(const ART &art, const NodePtr ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
-	Prefix(FixedSizeAllocator &allocator, const NodePtr ptr_p, const idx_t count);
+	Prefix(const ART &art, const NodePtr node, const bool is_mutable = false, const bool set_in_memory = false);
+	Prefix(FixedSizeAllocator &allocator, const NodePtr node, const idx_t count);
 
 	data_ptr_t data;
 	NodePtr *child_slot;

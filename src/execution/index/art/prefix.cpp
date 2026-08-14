@@ -11,11 +11,11 @@
 
 namespace duckdb {
 
-Prefix::Prefix(const ART &art, const NodePtr ptr_p, const bool is_mutable, const bool set_in_memory) {
+Prefix::Prefix(const ART &art, const NodePtr node, const bool is_mutable, const bool set_in_memory) {
 	if (!set_in_memory) {
-		data = NodePtr::GetAllocator(art, PREFIX).Get(ptr_p, is_mutable);
+		data = NodePtr::GetAllocator(art, PREFIX).Get(node, is_mutable);
 	} else {
-		data = NodePtr::GetAllocator(art, PREFIX).GetIfLoaded(ptr_p);
+		data = NodePtr::GetAllocator(art, PREFIX).GetIfLoaded(node);
 		if (!data) {
 			child_slot = nullptr;
 			in_memory = false;
@@ -26,8 +26,8 @@ Prefix::Prefix(const ART &art, const NodePtr ptr_p, const bool is_mutable, const
 	in_memory = true;
 }
 
-Prefix::Prefix(FixedSizeAllocator &allocator, const NodePtr ptr_p, const idx_t count) {
-	data = allocator.Get(ptr_p, true);
+Prefix::Prefix(FixedSizeAllocator &allocator, const NodePtr node, const idx_t count) {
+	data = allocator.Get(node, true);
 	child_slot = &PrefixHandle::ChildRefWithCount(data, count);
 	in_memory = true;
 }
