@@ -56,6 +56,7 @@
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
@@ -158,6 +159,18 @@ static bool ContainsDML(const LogicalOperator &op) {
 	}
 	for (auto &child : op.children) {
 		if (ContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ContainsDataSource(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDataSource(*child)) {
 			return true;
 		}
 	}
@@ -409,10 +422,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
-	// Skip when the plan contains a DML CTE: statistics are captured at plan time
-	// and do not reflect the table state after the DML executes.  Propagating them
-	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
-	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
+	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
 	if (!CTEContainsDML(*plan)) {
@@ -506,6 +516,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
+	if (plan->type == LogicalOperatorType::LOGICAL_PREPARE) {
+		auto &prepared = plan->Cast<LogicalPrepare>().prepared;
+		// Optimizers can embed the current database state in the executable plan.
+		if (!prepared->properties.read_databases.empty() && ContainsDataSource(*plan)) {
+			prepared->properties.always_require_rebind = true;
+		}
+	}
 
 	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
