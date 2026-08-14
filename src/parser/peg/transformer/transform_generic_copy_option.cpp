@@ -104,7 +104,7 @@ static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_o
 		if (copy_option.name == "ORDER_BY") {
 			copy_option.expression = CreateOrderByRowFunction(orders);
 		} else if (has_order_modifier) {
-			throw ParserException("ORDER BY modifiers are only supported in the ORDER_BY option");
+			throw ParserException("ORDER BY modifiers are only supported in the ORDER BY option");
 		} else if (orders.size() == 1) {
 			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
