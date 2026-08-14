@@ -826,7 +826,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CopyGenericOptionList <- Parens(List(CopyGenericOption))\n"
 	"CopyGenericOption <- OrderByCopyOption / PartitionedByCopyOption / GenericCopyOption\n"
 	"OrderByCopyOption <- 'ORDER' 'BY' GenericCopyOptionValue?\n"
-	"PartitionedByCopyOption <- 'PARTITIONED' 'BY' GenericCopyOptionValue?\n"
+	"PartitionedByCopyOption <- ('PARTITION' / 'PARTITIONED') 'BY' GenericCopyOptionValue?\n"
 	"GenericCopyOptionList <- Parens(List(GenericCopyOption))\n"
 	"GenericCopyOption <- CopyOptionName GenericCopyOptionValue?\n"
 	"GenericCopyOptionValue <- GenericCopyOptionOrderList / GenericCopyOptionExpression\n"

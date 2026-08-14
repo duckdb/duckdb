@@ -16,6 +16,14 @@ Parser Error: syntax error at or near "b"
 statement ok
 COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/partitioned_by' PARTITIONED BY a, HEADER;
 
+statement ok
+COPY (SELECT 1 AS a, 'hello' AS payload) TO '{TEST_DIR}/parenthesized_partition_by' (FORMAT CSV, PARTITION BY a, HEADER, OVERWRITE);
+
+query I
+SELECT payload FROM read_csv('{TEST_DIR}/parenthesized_partition_by/a=1/*.csv', HEADER = true)
+----
+hello
+
 statement error
 COPY (SELECT 1 AS a, 2 AS b) TO '{TEST_DIR}/partitioned_by_order_modifier' (FORMAT CSV, PARTITIONED BY (a DESC));
 ----

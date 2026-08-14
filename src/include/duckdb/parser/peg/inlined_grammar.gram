@@ -869,7 +869,7 @@ StarSymbol <- '*'
 CopyGenericOptionList <- Parens(List(CopyGenericOption))
 CopyGenericOption <- OrderByCopyOption / PartitionedByCopyOption / GenericCopyOption
 OrderByCopyOption <- 'ORDER' 'BY' GenericCopyOptionValue?
-PartitionedByCopyOption <- 'PARTITIONED' 'BY' GenericCopyOptionValue?
+PartitionedByCopyOption <- ('PARTITION' / 'PARTITIONED') 'BY' GenericCopyOptionValue?
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName GenericCopyOptionValue?
 GenericCopyOptionValue <- GenericCopyOptionOrderList / GenericCopyOptionExpression
