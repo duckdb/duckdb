@@ -50,8 +50,7 @@ ARTConflictType ARTBuilder::Build() {
 			// because row IDs are not sorted.
 			for (idx_t i = entry.start; i < entry.start + row_id_count; i++) {
 				ARTOperator::Insert(arena, art, node_ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET,
-				                    DeleteIndexInfo(),
-				                    IndexAppendMode::DEFAULT);
+				                    DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 			}
 			node_ref.get().SetGateStatus(GateStatus::GATE_SET);
 			continue;
@@ -71,7 +70,7 @@ ARTConflictType ARTBuilder::Build() {
 		}
 
 		// Create a new node containing the children.
-		NodePtr::New(art, node_ref, NodePtr::GetNodeType(child_offsets.size()));
+		NodePtr::New(art, node_ref, NodePtr::GetInternalNodeType(child_offsets.size()));
 		auto start_offset = child_offsets[0];
 		for (idx_t i = 1; i <= child_offsets.size(); i++) {
 			auto child_byte = keys[start_offset].data[entry.depth];

@@ -232,7 +232,7 @@ public:
 		idx_t parent_depth = 0;
 		idx_t depth = 0;
 		auto status = GateStatus::GATE_NOT_SET;
-		auto passed_node = false;
+		auto passed_internal_node = false;
 
 		while (current_ref.get().HasMetadata()) {
 			// Enter gate.
@@ -249,7 +249,7 @@ public:
 				if (current_ref.get().GetRowId() != row_id.GetRowId()) {
 					return false;
 				}
-				if (!passed_node && parent_ref.get().GetType() == NType::PREFIX) {
+				if (!passed_internal_node && parent_ref.get().GetType() == NType::PREFIX) {
 					// The tree contains exactly one element with a prefix.
 					NodePtr::FreeTree(art, parent_ref);
 					return true;
@@ -260,8 +260,7 @@ public:
 					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
 					// Then, when we delete that child, we also free it.
 					NodePtr::DeleteChild(art, grandparent_ref, great_grandparent_ref,
-					                     current_key_ref.get()[grandparent_depth],
-					                     status, row_id);
+					                     current_key_ref.get()[grandparent_depth], status, row_id);
 					return true;
 				}
 				NodePtr::DeleteChild(art, parent_ref, grandparent_ref, current_key_ref.get()[parent_depth], status,
@@ -300,7 +299,7 @@ public:
 			case NType::NODE_16:
 			case NType::NODE_48:
 			case NType::NODE_256: {
-				passed_node = true;
+				passed_internal_node = true;
 				great_grandparent_ref = grandparent_ref;
 				grandparent_ref = parent_ref;
 				parent_ref = current_ref;

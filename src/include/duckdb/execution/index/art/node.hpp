@@ -167,8 +167,8 @@ public:
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
-	//! Returns the node type for a count.
-	static NType GetNodeType(const idx_t count);
+	//! Returns the internal node type for a count.
+	static NType GetInternalNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
@@ -186,9 +186,9 @@ public:
 	}
 
 	//! True, if the node is a Node4, Node16, Node48, or Node256.
-	bool IsNode() const;
+	bool IsInternalNode() const;
 	//! True, if the node is a Node7Leaf, Node15Leaf, or Node256Leaf.
-	bool IsLeafNode() const;
+	bool IsNestedLeaf() const;
 	//! True, if the node is any leaf.
 	bool IsAnyLeaf() const;
 

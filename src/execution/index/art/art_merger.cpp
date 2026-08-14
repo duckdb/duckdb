@@ -49,15 +49,15 @@ ARTConflictType ARTMerger::Merge() {
 			continue;
 		}
 
-		if (entry.right.IsLeafNode()) {
-			// Both left and right are leaf nodes.
-			D_ASSERT(entry.left.IsLeafNode());
+		if (entry.right.IsNestedLeaf()) {
+			// Both left and right are nested leaves.
+			D_ASSERT(entry.left.IsNestedLeaf());
 			MergeLeaves(entry);
 			continue;
 		}
 
-		if (entry.left.IsNode() && entry.right.IsNode()) {
-			// Both left and right are nodes.
+		if (entry.left.IsInternalNode() && entry.right.IsInternalNode()) {
+			// Both left and right are internal nodes.
 			MergeNodes(entry);
 			continue;
 		}
@@ -125,8 +125,8 @@ array_ptr<uint8_t> ARTMerger::GetBytes(NodePtr &leaf) {
 }
 
 void ARTMerger::MergeLeaves(NodeEntry &entry) {
-	D_ASSERT(entry.left.IsLeafNode());
-	D_ASSERT(entry.right.IsLeafNode());
+	D_ASSERT(entry.left.IsNestedLeaf());
+	D_ASSERT(entry.right.IsNestedLeaf());
 	D_ASSERT(entry.left.GetGateStatus() == GateStatus::GATE_NOT_SET);
 	D_ASSERT(entry.right.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
@@ -164,8 +164,8 @@ NodeChildren ARTMerger::ExtractChildren(NodePtr &node) {
 }
 
 void ARTMerger::MergeNodes(NodeEntry &entry) {
-	D_ASSERT(entry.left.IsNode());
-	D_ASSERT(entry.right.IsNode());
+	D_ASSERT(entry.left.IsInternalNode());
+	D_ASSERT(entry.right.IsInternalNode());
 
 	// Merge the smaller node into the bigger node.
 	if (entry.left.GetType() < entry.right.GetType()) {
@@ -209,7 +209,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 
 void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
                                    const idx_t parent_depth, const uint8_t pos) {
-	D_ASSERT(node.IsNode());
+	D_ASSERT(node.IsInternalNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
 	// Get the child at the prefix byte, or nullptr, if there is no child.
@@ -233,7 +233,7 @@ void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateSta
 
 void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
                                    const idx_t parent_depth) {
-	D_ASSERT(node.IsNode());
+	D_ASSERT(node.IsInternalNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
 	MergeNodeAndPrefix(node, prefix, parent_status, parent_depth, 0);

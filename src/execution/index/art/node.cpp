@@ -350,7 +350,7 @@ idx_t GetCapacity(NType type) {
 	}
 }
 
-NType NodePtr::GetNodeType(idx_t count) {
+NType NodePtr::GetInternalNodeType(idx_t count) {
 	if (count <= Node4::CAPACITY) {
 		return NType::NODE_4;
 	} else if (count <= Node16::CAPACITY) {
@@ -361,7 +361,7 @@ NType NodePtr::GetNodeType(idx_t count) {
 	return NType::NODE_256;
 }
 
-bool NodePtr::IsNode() const {
+bool NodePtr::IsInternalNode() const {
 	switch (GetType()) {
 	case NType::NODE_4:
 	case NType::NODE_16:
@@ -373,7 +373,7 @@ bool NodePtr::IsNode() const {
 	}
 }
 
-bool NodePtr::IsLeafNode() const {
+bool NodePtr::IsNestedLeaf() const {
 	switch (GetType()) {
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
@@ -385,7 +385,7 @@ bool NodePtr::IsLeafNode() const {
 }
 
 bool NodePtr::IsAnyLeaf() const {
-	if (IsLeafNode()) {
+	if (IsNestedLeaf()) {
 		return true;
 	}
 
@@ -466,7 +466,7 @@ void NodePtr::Verify(ART &art) const {
 		break;
 	}
 
-	if (!IsLeafNode()) {
+	if (!IsNestedLeaf()) {
 		uint8_t byte = 0;
 		auto child = GetNextChild(art, byte);
 		while (child) {
@@ -548,7 +548,7 @@ string NodePtr::ToStringChildren(ART &art, const ToStringOptions &options) const
 
 	string str;
 
-	if (IsLeafNode()) {
+	if (IsNestedLeaf()) {
 		str += StringUtil::Format("%s%sLeaf |", options.tree_prefix, NODE_BRANCH_END);
 		uint8_t byte = 0;
 		auto has_byte = GetNextByte(art, byte);
@@ -561,7 +561,7 @@ string NodePtr::ToStringChildren(ART &art, const ToStringOptions &options) const
 			has_byte = GetNextByte(art, byte);
 		}
 		str += "\n";
-	} else if (IsNode()) {
+	} else if (IsInternalNode()) {
 		// Collect all children first to know which is last
 		vector<pair<uint8_t, const NodePtr *>> children;
 		uint8_t byte = 0;
