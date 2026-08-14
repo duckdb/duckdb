@@ -8,6 +8,18 @@
 namespace duckdb {
 
 struct ICUCalendarSub : public ICUDateFunc {
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto part_value = input.TryGetConstant(0);
+		if (part_value && !part_value->IsNull()) {
+			DatePartSpecifier part;
+			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) && part == DatePartSpecifier::ERA) {
+				// date_sub is not monotone for eras because era boundaries can occur partway through a year
+				input.GetBoundFunction().SetArgProperties({});
+			}
+		}
+		return ICUDateFunc::Bind(input);
+	}
+
 	//	ICU only has 32 bit precision for date parts, so it can overflow a high resolution.
 	//	Since there is no difference between ICU and the obvious calculations,
 	//	we make these using the DuckDB internal type.
