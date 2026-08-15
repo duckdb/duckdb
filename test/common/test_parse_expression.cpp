@@ -82,3 +82,28 @@ TEST_CASE("Parse Expression List rejects invalid clauses", "[parse_expression]")
 	REQUIRE_THROWS_AS(Parser::ParseExpressionList("first(x) AS x ORDER BY x"), ParserException);
 	REQUIRE_THROWS_AS(Parser::ParseExpressionList("x LIMIT 1"), ParserException);
 }
+
+TEST_CASE("Parser::Tokenize does not emit trailing token beyond input", "[parse_expression]") {
+	std::vector<string> test_queries = {"select 1", "select 1;", "create table zebra (bar varchar);", "", "  "};
+	for (const auto &sql : test_queries) {
+		auto tokens = Parser::Tokenize(sql);
+		for (const auto &token : tokens) {
+			REQUIRE(token.start < sql.size());
+		}
+	}
+	// "select 1" has 8 chars -> 2 tokens: "select" (start index 0) and "1" (start index 7)
+	auto tokens = Parser::Tokenize("select 1");
+	REQUIRE(tokens.size() == 2);
+	REQUIRE(tokens[0].start == 0);
+	REQUIRE(tokens[0].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD);
+	REQUIRE(tokens[1].start == 7);
+	REQUIRE(tokens[1].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT);
+
+	// empty input produces 0 tokens
+	tokens = Parser::Tokenize("");
+	REQUIRE(tokens.empty());
+
+	// whitespace-only input produces 0 tokens
+	tokens = Parser::Tokenize("  ");
+	REQUIRE(tokens.empty());
+}
