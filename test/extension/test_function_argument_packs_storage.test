@@ -13,9 +13,10 @@ load {TEST_DIR}/argument_packs.db
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
-# A generated column and a CHECK constraint both store a bound expression in the catalog, so these
-# calls are serialized with their argument packs built and have to be re-bound on load without the
-# packs being packed a second time.
+# Generated columns and CHECK constraints store the expression as written, so reopening the database
+# re-binds these calls from scratch. That covers the binding side of the round-trip; serialization of
+# the *bound* call, including how it is written for storage versions that predate argument packs, is
+# covered by the "Argument packs survive plan serialization" test in test/api.
 
 statement ok
 CREATE TABLE tt(

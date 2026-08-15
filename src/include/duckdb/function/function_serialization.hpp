@@ -14,6 +14,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -21,10 +22,12 @@ class ClientContext;
 class FunctionSerializer {
 public:
 	template <class FUNC>
-	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
+	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info,
+	                      optional_ptr<const vector<LogicalType>> arguments_override = nullptr) {
 		D_ASSERT(!function.GetName().empty());
 		serializer.WriteProperty(500, "name", function.GetName());
-		serializer.WriteProperty(501, "arguments", function.GetArguments());
+		// storage versions that predate argument packs get the unrolled argument list (see ArgumentPack::Unroll)
+		serializer.WriteProperty(501, "arguments", arguments_override ? *arguments_override : function.GetArguments());
 		serializer.WriteProperty(502, "original_arguments", function.GetOriginalArguments());
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if

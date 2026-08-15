@@ -36,6 +36,15 @@ struct ArgumentPack {
 	//! child per packed expression. A pack is never NULL itself: NULLs among the packed arguments stay visible as
 	//! NULL members, and it is up to the function to decide what they mean.
 	static unique_ptr<Expression> Create(vector<unique_ptr<Expression>> children, LogicalType pack_type);
+
+	//! Flatten a bound call's argument packs back into the plain argument list the call was written with, which is
+	//! how a call to the same function looked before it took *args/**kwargs. Used when serializing to a storage
+	//! format that predates argument packs - reading such a call back simply binds the trailing arguments into
+	//! packs again. Only a call shaped like a pre-pack variadic one (leading positional arguments followed by the
+	//! "*args" pack) can be put back together that way, so anything else throws. Returns false if the call has no
+	//! packs, leaving the outputs untouched.
+	static bool Unroll(const vector<unique_ptr<Expression>> &children, const vector<LogicalType> &arguments,
+	                   vector<unique_ptr<Expression>> &flat_children, vector<LogicalType> &flat_arguments);
 };
 
 } // namespace duckdb
