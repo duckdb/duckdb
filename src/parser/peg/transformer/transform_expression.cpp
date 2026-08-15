@@ -496,10 +496,10 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 		for (auto &order : aggr->OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant_expr = order.expression->Cast<ConstantExpression>();
-				Value bigint_value;
 				string error;
-				if (constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
-					int64_t order_index = BigIntValue::Get(bigint_value);
+				auto bigint_value = constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, &error);
+				if (bigint_value) {
+					int64_t order_index = BigIntValue::Get(*bigint_value);
 					idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
 					order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
 				}

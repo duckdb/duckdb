@@ -144,11 +144,11 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			options.filename = true;
 			options.filename_column = StringValue::Get(val);
 		} else {
-			Value boolean_value;
 			string error_message;
-			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+			auto boolean_value = val.DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+			if (boolean_value) {
 				// If the argument can be cast to boolean, we just interpret it as a boolean
-				options.filename = BooleanValue::Get(boolean_value);
+				options.filename = BooleanValue::Get(*boolean_value);
 			}
 		}
 	} else if (key == "hive_partitioning") {
@@ -789,7 +789,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 			LogicalType detected_type = LogicalType::VARCHAR;
 			Value value(part.second);
 			for (auto &candidate : candidates) {
-				const bool success = value.TryCastAs(context, candidate, true);
+				const bool success = value.TryCastAs(context, candidate, nullptr, true).has_value();
 				if (success) {
 					detected_type = candidate;
 					break;

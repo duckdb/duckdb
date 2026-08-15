@@ -333,6 +333,7 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
 	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
 	fun.SetBindLambdaCallback(ListReduceBindLambda);
+	fun.SetFallible();
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

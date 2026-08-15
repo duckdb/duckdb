@@ -294,3 +294,39 @@ SELECT * FROM t WHERE j = 30;
 # cleanup
 statement ok
 DROP TABLE source;
+
+# DELETE USING with an indexed table
+
+statement ok
+CREATE TABLE delete_using_indexed(id INTEGER PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO delete_using_indexed SELECT range, range::VARCHAR FROM range(10);
+
+query I
+DELETE FROM delete_using_indexed USING range(100) source(i) WHERE source.i = 0;
+----
+10
+
+query I
+SELECT count(*) FROM delete_using_indexed;
+----
+0
+
+# Verify deleted keys can be inserted again
+statement ok
+INSERT INTO delete_using_indexed SELECT range, range::VARCHAR FROM range(10);
+
+query I rowsort
+DELETE FROM delete_using_indexed USING range(100) source(i) WHERE source.i = 0 RETURNING id;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
