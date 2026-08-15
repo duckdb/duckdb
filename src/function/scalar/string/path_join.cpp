@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
@@ -47,11 +48,12 @@ static bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &in
 
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
-	auto col_count = args.ColumnCount();
 	vector<VectorIterator<string_t>> inputs;
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		inputs.emplace_back(args.data[col_idx].Values<string_t>());
+	inputs.emplace_back(args.data[0].Values<string_t>());
+	for (auto &path : StructVector::GetEntries(args.data[1])) {
+		inputs.emplace_back(path.Values<string_t>());
 	}
+	auto col_count = inputs.size();
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
@@ -67,8 +69,11 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 ScalarFunction PathJoinFun::GetFunction() {
-	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
-	path_join.SetVarArgs(LogicalType::VARCHAR);
+	FunctionSignature signature;
+	signature.AddParameter("path", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("paths", LogicalType::VARCHAR);
+	signature.SetReturnType(LogicalType::VARCHAR);
+	ScalarFunction path_join(PathJoinFun::Name, std::move(signature), PathJoinFunction);
 	path_join.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	// throws if the paths that are joined are incompatible
 	path_join.SetFallible();

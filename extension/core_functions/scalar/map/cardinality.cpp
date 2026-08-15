@@ -25,7 +25,8 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments.size() != 1) {
+	D_ASSERT(arguments.size() == 2);
+	if (StructType::GetChildCount(arguments[1]->GetReturnType()) != 0) {
 		throw BinderException("Cardinality must have exactly one arguments");
 	}
 
@@ -38,8 +39,13 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 }
 
 ScalarFunction CardinalityFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
-	fun.SetVarArgs(LogicalType::ANY);
+	FunctionSignature signature;
+	signature.AddParameter("map", LogicalType::ANY);
+	// only declared so that a call with too many arguments is rejected by the bind rather than by overload resolution
+	signature.AddVarPositionalParameter("extra", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::UBIGINT);
+	ScalarFunction fun("cardinality", std::move(signature), CardinalityFunction);
+	fun.SetBindCallback(CardinalityBind);
 	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return fun;
 }

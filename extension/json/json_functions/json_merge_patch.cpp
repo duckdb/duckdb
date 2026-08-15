@@ -1,6 +1,8 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
+#include "duckdb/common/vector/struct_vector.hpp"
+
 namespace duckdb {
 
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
@@ -43,8 +45,8 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// Read the next json args one by one and merge them into the first json arg
 	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
-	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		ReadObjects(doc, args.data[arg_idx], patches);
+	for (auto &patch : StructVector::GetEntries(args.data[1])) {
+		ReadObjects(doc, patch, patches);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				// Next json arg is NULL, obj becomes NULL
@@ -72,9 +74,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergePatchFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::JSON());
+	FunctionSignature signature;
+	signature.AddParameter("json", LogicalType::JSON());
+	signature.AddVarPositionalParameter("patches", LogicalType::JSON());
+	signature.SetReturnType(LogicalType::JSON());
+	ScalarFunction fun("json_merge_patch", std::move(signature), MergePatchFunction);
+	fun.SetInitStateCallback(JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

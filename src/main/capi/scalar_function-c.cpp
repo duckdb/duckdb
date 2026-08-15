@@ -6,6 +6,9 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -153,6 +156,91 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 }
 
 //===--------------------------------------------------------------------===//
+// Argument packs
+//===--------------------------------------------------------------------===//
+// duckdb_scalar_function_set_varargs maps onto a "*args" parameter, which hands the function a single TUPLE of the
+// trailing arguments. The C API predates argument packs and is documented to pass one argument per value, so the
+// pack is spread back out before anything C-facing sees it.
+
+bool HasArgumentPack(const vector<unique_ptr<Expression>> &arguments) {
+	for (auto &argument : arguments) {
+		if (ArgumentPack::IsPackType(argument->GetReturnType())) {
+			return true;
+		}
+	}
+	return false;
+}
+
+vector<unique_ptr<Expression>> &UnpackArguments(const BoundScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments,
+                                                vector<unique_ptr<Expression>> &unpacked) {
+	if (!HasArgumentPack(arguments)) {
+		return arguments;
+	}
+	for (auto &argument : arguments) {
+		if (!ArgumentPack::IsPackType(argument->GetReturnType())) {
+			unpacked.push_back(argument->Copy());
+			continue;
+		}
+		if (argument->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			// the pack collected only constants and was folded into a single struct value
+			auto &value = argument->Cast<BoundConstantExpression>().GetValue();
+			for (auto &packed_value : StructValue::GetChildren(value)) {
+				unpacked.push_back(make_uniq<BoundConstantExpression>(packed_value));
+			}
+			continue;
+		}
+		if (argument->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+			throw BinderException("Cannot pass the arguments of %s to a C scalar function individually - its "
+			                      "argument pack was replaced by a %s expression",
+			                      bound_function.GetName(), ExpressionTypeToString(argument->GetExpressionType()));
+		}
+		for (auto &packed : argument->Cast<BoundOperatorExpression>().GetChildren()) {
+			unpacked.push_back(packed->Copy());
+		}
+	}
+	return unpacked;
+}
+
+DataChunk &UnpackChunk(DataChunk &input, DataChunk &unpacked) {
+	bool has_pack = false;
+	for (auto &column : input.data) {
+		if (ArgumentPack::IsPackType(column.GetType())) {
+			has_pack = true;
+			break;
+		}
+	}
+	if (!has_pack) {
+		return input;
+	}
+
+	vector<LogicalType> types;
+	for (auto &column : input.data) {
+		if (!ArgumentPack::IsPackType(column.GetType())) {
+			types.push_back(column.GetType());
+			continue;
+		}
+		for (auto &member : StructType::GetChildTypes(column.GetType())) {
+			types.push_back(member.second);
+		}
+	}
+
+	unpacked.InitializeEmpty(types);
+	idx_t index = 0;
+	for (auto &column : input.data) {
+		if (!ArgumentPack::IsPackType(column.GetType())) {
+			unpacked.data[index++].Reference(column);
+			continue;
+		}
+		for (auto &member : StructVector::GetEntries(column)) {
+			unpacked.data[index++].Reference(member);
+		}
+	}
+	unpacked.SetChildCardinality(input.size());
+	return unpacked;
+}
+
+//===--------------------------------------------------------------------===//
 // Scalar Function Callbacks
 //===--------------------------------------------------------------------===//
 
@@ -163,9 +251,14 @@ unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
 	auto &info = bound_function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
+	// a variadic C function is documented to receive one argument per value the call was written with, so the
+	// "*args" parameter its varargs map to is spread back out before the C bind callback sees it
+	vector<unique_ptr<Expression>> unpacked_arguments;
+	auto &bind_arguments = UnpackArguments(bound_function, arguments, unpacked_arguments);
+
 	auto result = make_uniq<CScalarFunctionBindData>(info);
 	if (info.bind) {
-		CScalarFunctionInternalBindInfo bind_info(context, bound_function, arguments, *result);
+		CScalarFunctionInternalBindInfo bind_info(context, bound_function, bind_arguments, *result);
 		info.bind(ToCScalarFunctionBindInfo(bind_info));
 		if (!bind_info.success) {
 			throw BinderException(bind_info.error);
@@ -201,7 +294,11 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	auto &c_local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CScalarFunctionLocalState>();
 
 	input.Flatten();
-	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
+
+	// as in CScalarFunctionBind, the members of the "*args" pack are presented as columns of their own
+	DataChunk unpacked_input;
+	auto &c_chunk = UnpackChunk(input, unpacked_input);
+	auto c_input = reinterpret_cast<duckdb_data_chunk>(&c_chunk);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
 
 	CScalarFunctionInternalFunctionInfo function_info(c_bind_info, c_local_state);
@@ -251,7 +348,7 @@ void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.SetVarArgs(*logical_type);
+	scalar_function.GetSignature().AddVarPositionalParameter("varargs", *logical_type);
 }
 
 void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function) {
