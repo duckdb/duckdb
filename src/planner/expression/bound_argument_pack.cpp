@@ -2,11 +2,6 @@
 
 namespace duckdb {
 
-bool ArgumentPack::IsPack(const Expression &expr) {
-	return expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
-	       expr.GetExpressionType() == ExpressionType::ARGUMENT_PACK;
-}
-
 bool ArgumentPack::IsPackType(const LogicalType &type) {
 	return StructType::IsStruct(type) && type.GetAlias() == TYPE_ALIAS;
 }

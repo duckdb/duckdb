@@ -1249,6 +1249,20 @@ static void RegisterArgumentPackFunctions(ExtensionLoader &loader) {
 		loader.RegisterFunction(std::move(fn));
 	}
 
+	// test_pack_required_kw(a INTEGER, *args INTEGER, b INTEGER) -> VARCHAR
+	// A keyword-only parameter without a default: it can only be supplied by name, and omitting it
+	// is an error even though *args happily collects any number of positional arguments.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddVarPositionalParameter("args", LogicalType::INTEGER);
+		sig.AddKeywordOnlyParameter("b", LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_pack_required_kw", std::move(sig), TestFunctionArgs<26>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
 	// test_pack_overload: a "**kwargs" overload next to one that takes a plain STRUCT, to pin down
 	// that a struct passed as an ordinary argument is not mistaken for a pack.
 	//   <23> (a INTEGER, s STRUCT(v INTEGER))

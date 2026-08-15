@@ -139,6 +139,34 @@ SELECT test_pack_both(1, 2, z := 4);
 <REGEX>:Binder Error:.*No function matches.*
 
 #===--------------------------------------------------------------------===#
+# A keyword-only parameter without a default is required
+# test_pack_required_kw(a INTEGER, *args INTEGER, b INTEGER)
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_pack_required_kw(1, b := 2);
+----
+<26>|1|()|2|
+
+query I
+SELECT test_pack_required_kw(1, 2, 3, b := 4);
+----
+<26>|1|(2, 3)|4|
+
+# omitting it is an error - *args collects the extra positional arguments instead of filling it
+statement error
+SELECT test_pack_required_kw(1, 2);
+----
+<REGEX>:Binder Error:.*Missing value for parameter 'b'.*
+
+# with too few arguments to cover it at all, the overload is ruled out on arity before its
+# parameters are matched up
+statement error
+SELECT test_pack_required_kw(1);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+#===--------------------------------------------------------------------===#
 # Overload resolution: a plain STRUCT argument is not a **kwargs pack
 #   <23> (a INTEGER, s STRUCT(v INTEGER))
 #   <24> (a INTEGER, **opts ANY)

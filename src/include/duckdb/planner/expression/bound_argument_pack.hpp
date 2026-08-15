@@ -24,8 +24,6 @@ struct ArgumentPack {
 	//! packed a second time.
 	static constexpr const char *TYPE_ALIAS = "__argument_pack";
 
-	//! Whether the given expression is an argument pack
-	static bool IsPack(const Expression &expr);
 	//! Whether the given type is the type of an argument pack
 	static bool IsPackType(const LogicalType &type);
 
