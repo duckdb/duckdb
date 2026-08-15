@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,17 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 			all_have_stats = false;
 		}
 		child_stats.push_back(std::move(stats));
+	}
+	if (expr.GetExpressionType() == ExpressionType::ARGUMENT_PACK) {
+		// an argument pack is a struct of the arguments it collects, so its statistics are theirs
+		auto result = StructStats::CreateUnknown(expr.GetReturnType());
+		for (idx_t i = 0; i < child_stats.size(); i++) {
+			if (child_stats[i]) {
+				StructStats::SetChildStats(result, i, *child_stats[i]);
+			}
+		}
+		result.SetHasNoNullFast();
+		return result.ToUnique();
 	}
 	if (!all_have_stats) {
 		return nullptr;

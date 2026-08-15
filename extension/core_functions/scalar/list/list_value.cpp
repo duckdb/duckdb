@@ -8,7 +8,9 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -211,8 +213,52 @@ bool StructFunction(DataChunk &args, Vector &result) {
 	return true;
 }
 
-void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+//! The trailing list elements are collected by a "*values" parameter, i.e. they arrive as the members of a single
+//! pack. The helpers below all walk a DataChunk of individual values, so reference them into one.
+void UnpackValues(DataChunk &args, DataChunk &values) {
+	vector<reference<Vector>> unpacked;
+	for (auto &column : args.data) {
+		if (!ArgumentPack::IsPackType(column.GetType())) {
+			unpacked.push_back(column);
+			continue;
+		}
+		for (auto &value : StructVector::GetEntries(column)) {
+			unpacked.push_back(value);
+		}
+	}
+
+	vector<LogicalType> types;
+	types.reserve(unpacked.size());
+	for (auto &value : unpacked) {
+		types.push_back(value.get().GetType());
+	}
+	values.InitializeEmpty(types);
+	for (idx_t i = 0; i < unpacked.size(); i++) {
+		values.data[i].Reference(unpacked[i].get());
+	}
+	values.SetChildCardinality(args.size());
+}
+
+//! The same, for the argument expressions a bind callback sees
+vector<reference<Expression>> UnpackValueExpressions(vector<unique_ptr<Expression>> &arguments) {
+	vector<reference<Expression>> result;
+	for (auto &argument : arguments) {
+		if (!ArgumentPack::IsPackType(argument->GetReturnType())) {
+			result.push_back(*argument);
+			continue;
+		}
+		for (auto &value : ArgumentPack::GetPackedChildren(*argument)) {
+			result.push_back(*value);
+		}
+	}
+	return result;
+}
+
+void ListValueFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	DataChunk args;
+	UnpackValues(input, args);
 
 	if (args.ColumnCount() == 0) {
 		// Early out because the result is a constant empty list.
@@ -241,27 +287,27 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+	auto packed = UnpackValueExpressions(input.GetArguments());
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
-	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
-	for (idx_t i = 1; i < arguments.size(); i++) {
-		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
+	    packed.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(packed[0]);
+	for (idx_t i = 1; i < packed.size(); i++) {
+		auto arg_type = ExpressionBinder::GetExpressionReturnType(packed[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
 			string list_arguments = "Full list: ";
 			idx_t error_index = list_arguments.size();
-			for (idx_t k = 0; k < arguments.size(); k++) {
+			for (idx_t k = 0; k < packed.size(); k++) {
 				if (k > 0) {
 					list_arguments += ", ";
 				}
 				if (k == i) {
 					error_index = list_arguments.size();
 				}
-				list_arguments += arguments[k]->ToString() + " " + arguments[k]->GetReturnType().ToString();
+				list_arguments += packed[k].get().ToString() + " " + packed[k].get().GetReturnType().ToString();
 			}
 			auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
 			                                child_type.ToString(), arg_type.ToString());
-			throw BinderException(arguments[i]->GetQueryLocation(),
+			throw BinderException(packed[i].get().GetQueryLocation(),
 			                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 		}
 	}
@@ -277,7 +323,15 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 	auto list_stats = ListStats::CreateEmpty(expr.GetReturnType());
 	auto &list_child_stats = ListStats::GetChildStats(list_stats);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
-		list_child_stats.Merge(child_stats[i]);
+		auto &child_type = expr.GetChildren()[i]->GetReturnType();
+		if (!ArgumentPack::IsPackType(child_type)) {
+			list_child_stats.Merge(child_stats[i]);
+			continue;
+		}
+		const auto member_count = StructType::GetChildCount(child_type);
+		for (idx_t member = 0; member < member_count; member++) {
+			list_child_stats.Merge(StructStats::GetChildStats(child_stats[i], member));
+		}
 	}
 	list_stats.SetHasNoNullFast();
 	return list_stats.ToUnique();
@@ -290,8 +344,8 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 unique_ptr<FunctionData> ListValueBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &child_type = ListType::GetChildType(bound_function.GetReturnType());
-	for (auto &argument : input.GetArguments()) {
-		auto argument_type = ExpressionBinder::GetExpressionReturnType(*argument);
+	for (auto &argument : UnpackValueExpressions(input.GetArguments())) {
+		auto argument_type = ExpressionBinder::GetExpressionReturnType(argument);
 		if (BoundCastExpression::CastCanThrow(argument_type, child_type, false)) {
 			bound_function.SetFallible();
 			break;
@@ -309,9 +363,13 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.
 	auto element_type = LogicalType::TEMPLATE("T");
-	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind,
-	                         ListValueStats);
-	value_fun.SetVarArgs(element_type);
+	FunctionSignature value_signature;
+	value_signature.AddParameter("value", element_type);
+	value_signature.AddVarPositionalParameter("values", element_type);
+	value_signature.SetReturnType(LogicalType::LIST(element_type));
+	ScalarFunction value_fun("list_value", std::move(value_signature), ListValueFunction);
+	value_fun.SetBindCallback(ListValueBind);
+	value_fun.SetStatisticsCallback(ListValueStats);
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);
 
@@ -319,8 +377,12 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
-	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, ListValueStats);
-	fun.SetVarArgs(LogicalTypeId::ANY);
+	FunctionSignature signature;
+	signature.AddVarPositionalParameter("values", LogicalTypeId::ANY);
+	signature.SetReturnType(LogicalTypeId::LIST);
+	ScalarFunction fun("unpivot_list", std::move(signature), ListValueFunction);
+	fun.SetBindCallback(UnpivotBind);
+	fun.SetStatisticsCallback(ListValueStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

@@ -45,6 +45,12 @@ struct ArgumentPack {
 	//! packs, leaving the outputs untouched.
 	static bool Unroll(const vector<unique_ptr<Expression>> &children, const vector<LogicalType> &arguments,
 	                   vector<unique_ptr<Expression>> &flat_children, vector<LogicalType> &flat_arguments);
+
+	//! The collected arguments, in place. A pack is built by the binder and only replaced afterwards, by the
+	//! optimizer, which the binder undoes before re-binding a call - so this is always reachable from a bind
+	//! callback.
+	static vector<unique_ptr<Expression>> &GetPackedChildren(Expression &pack);
+
 };
 
 } // namespace duckdb

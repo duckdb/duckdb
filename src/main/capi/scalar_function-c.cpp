@@ -64,13 +64,13 @@ struct CScalarFunctionBindData : public FunctionData {
 
 struct CScalarFunctionInternalBindInfo {
 	CScalarFunctionInternalBindInfo(ClientContext &context, BoundScalarFunction &bound_function,
-	                                vector<unique_ptr<Expression>> &arguments, CScalarFunctionBindData &bind_data)
+	                                vector<reference<Expression>> &arguments, CScalarFunctionBindData &bind_data)
 	    : context(context), bound_function(bound_function), arguments(arguments), bind_data(bind_data) {
 	}
 
 	ClientContext &context;
 	BoundScalarFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
+	vector<reference<Expression>> &arguments;
 	CScalarFunctionBindData &bind_data;
 
 	bool success = true;
@@ -162,41 +162,15 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 // trailing arguments. The C API predates argument packs and is documented to pass one argument per value, so the
 // pack is spread back out before anything C-facing sees it.
 
-bool HasArgumentPack(const vector<unique_ptr<Expression>> &arguments) {
-	for (auto &argument : arguments) {
-		if (ArgumentPack::IsPackType(argument->GetReturnType())) {
-			return true;
-		}
-	}
-	return false;
-}
-
-vector<unique_ptr<Expression>> &UnpackArguments(const BoundScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments,
-                                                vector<unique_ptr<Expression>> &unpacked) {
-	if (!HasArgumentPack(arguments)) {
-		return arguments;
-	}
+vector<reference<Expression>> UnpackArguments(vector<unique_ptr<Expression>> &arguments) {
+	vector<reference<Expression>> unpacked;
 	for (auto &argument : arguments) {
 		if (!ArgumentPack::IsPackType(argument->GetReturnType())) {
-			unpacked.push_back(argument->Copy());
+			unpacked.push_back(*argument);
 			continue;
 		}
-		if (argument->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			// the pack collected only constants and was folded into a single struct value
-			auto &value = argument->Cast<BoundConstantExpression>().GetValue();
-			for (auto &packed_value : StructValue::GetChildren(value)) {
-				unpacked.push_back(make_uniq<BoundConstantExpression>(packed_value));
-			}
-			continue;
-		}
-		if (argument->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
-			throw BinderException("Cannot pass the arguments of %s to a C scalar function individually - its "
-			                      "argument pack was replaced by a %s expression",
-			                      bound_function.GetName(), ExpressionTypeToString(argument->GetExpressionType()));
-		}
-		for (auto &packed : argument->Cast<BoundOperatorExpression>().GetChildren()) {
-			unpacked.push_back(packed->Copy());
+		for (auto &member : ArgumentPack::GetPackedChildren(*argument)) {
+			unpacked.push_back(*member);
 		}
 	}
 	return unpacked;
@@ -253,8 +227,7 @@ unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
 
 	// a variadic C function is documented to receive one argument per value the call was written with, so the
 	// "*args" parameter its varargs map to is spread back out before the C bind callback sees it
-	vector<unique_ptr<Expression>> unpacked_arguments;
-	auto &bind_arguments = UnpackArguments(bound_function, arguments, unpacked_arguments);
+	auto bind_arguments = UnpackArguments(arguments);
 
 	auto result = make_uniq<CScalarFunctionBindData>(info);
 	if (info.bind) {
@@ -451,7 +424,7 @@ duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info
 	auto &bind_info = GetCScalarFunctionBindInfo(info);
 	try {
 		auto wrapper = duckdb::make_uniq<ExpressionWrapper>();
-		wrapper->expr = bind_info.arguments[index]->Copy();
+		wrapper->expr = bind_info.arguments[index].get().Copy();
 		return reinterpret_cast<duckdb_expression>(wrapper.release());
 	} catch (std::exception &e) {
 		duckdb_scalar_function_bind_set_error(info, e.what());

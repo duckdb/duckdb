@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
+
 namespace duckdb {
 
 bool ArgumentPack::IsPackType(const LogicalType &type) {
@@ -22,6 +23,12 @@ unique_ptr<Expression> ArgumentPack::Create(vector<unique_ptr<Expression>> child
 	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::ARGUMENT_PACK, std::move(pack_type));
 	result->GetChildrenMutable() = std::move(children);
 	return std::move(result);
+}
+
+vector<unique_ptr<Expression>> &ArgumentPack::GetPackedChildren(Expression &pack) {
+	D_ASSERT(IsPackType(pack.GetReturnType()));
+	D_ASSERT(pack.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR);
+	return pack.Cast<BoundOperatorExpression>().GetChildrenMutable();
 }
 
 bool ArgumentPack::Unroll(const vector<unique_ptr<Expression>> &children, const vector<LogicalType> &arguments,

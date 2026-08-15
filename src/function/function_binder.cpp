@@ -540,6 +540,36 @@ static void PrepareTypeForCast(LogicalType &type) {
 	type = PrepareTypeForCastRecursive(type);
 }
 
+//! Cast the arguments a "*args"/"**kwargs" parameter collected to the types the function settled on, and describe
+//! the pack by what it ends up holding: RequiresCast leaves some differences alone - an array of a different size,
+//! say - so the members keep the types they really have.
+void FunctionBinder::CastArgumentPack(Expression &pack, LogicalType &pack_type) {
+	auto &packed = ArgumentPack::GetPackedChildren(pack);
+	D_ASSERT(packed.size() == StructType::GetChildCount(pack_type));
+
+	child_list_t<LogicalType> members;
+	members.reserve(packed.size());
+	for (idx_t i = 0; i < packed.size(); i++) {
+		auto &member_type = StructType::GetChildType(pack_type, i);
+		if (RequiresCast(packed[i]->GetReturnType(), member_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+			packed[i] = BoundCastExpression::AddCastToType(context, std::move(packed[i]), member_type);
+		}
+		members.emplace_back(StructType::GetChildName(pack_type, i), packed[i]->GetReturnType());
+	}
+
+	if (pack_type.id() == LogicalTypeId::TUPLE) {
+		vector<LogicalType> member_types;
+		member_types.reserve(members.size());
+		for (auto &member : members) {
+			member_types.push_back(member.second);
+		}
+		pack_type = ArgumentPack::PositionalType(std::move(member_types));
+	} else {
+		pack_type = ArgumentPack::KeywordType(std::move(members));
+	}
+	pack.SetReturnType(pack_type);
+}
+
 void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children) {
 	for (auto &arg : function.GetArguments()) {
 		PrepareTypeForCast(arg);
@@ -568,9 +598,16 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 		auto cast_result = RequiresCast(children[i]->GetReturnType(), target_type);
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
-		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
+		if (cast_result != LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+			continue;
 		}
+		if (ArgumentPack::IsPackType(target_type)) {
+			// cast the collected arguments individually - wrapping the pack itself in a cast would leave the slot
+			// holding something that is no longer recognisable as the pack it was built for
+			CastArgumentPack(*children[i], target_type);
+			continue;
+		}
+		children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
 	}
 }
 
@@ -927,7 +964,7 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 	});
 }
 
-void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
+void FunctionBinder::ResolveTemplateTypes(const FunctionSignature &sig, BoundSimpleFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
 	case_insensitive_map_t<vector<LogicalType>> bindings;
 	vector<reference<LogicalType>> to_substitute;
@@ -937,12 +974,24 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 		auto &param = bound_function.GetArguments()[i];
 
 		// If the parameter is not templated, we can skip it.
-		if (param.IsTemplated()) {
-			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, param, actual, bindings, *children[i], bound_function);
-
-			to_substitute.emplace_back(param);
+		if (!param.IsTemplated()) {
+			continue;
 		}
+
+		if (i < sig.GetParameterCount() && sig.GetParameter(i).IsArgumentPack()) {
+			// the declared type constrains every argument the pack collected, so they all have to agree on it
+			for (auto &member : ArgumentPack::GetPackedChildren(*children[i])) {
+				auto actual = ExpressionBinder::GetExpressionReturnType(*member);
+				InferTemplateType(context, param, actual, bindings, *member, bound_function);
+			}
+			to_substitute.emplace_back(param);
+			continue;
+		}
+
+		auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
+		InferTemplateType(context, param, actual, bindings, *children[i], bound_function);
+
+		to_substitute.emplace_back(param);
 	}
 
 	// If the return type is templated, we need to substitute it as well
@@ -973,6 +1022,22 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 		VerifyTemplateType(arg, bound_function.GetName());
 	}
 	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName());
+}
+
+// The optimizer may fold a pack built entirely from constants into a single struct value. A bound call is
+// re-bound when it is deserialized, and the bind callback expects one expression per collected argument, so the
+// binder builds the pack back out of that value.
+static void UnpackFoldedArgumentPack(unique_ptr<Expression> &pack) {
+	if (pack->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		return;
+	}
+	auto &value = pack->Cast<BoundConstantExpression>().GetValue();
+	D_ASSERT(!value.IsNull());
+	vector<unique_ptr<Expression>> packed;
+	for (auto &packed_value : StructValue::GetChildren(value)) {
+		packed.push_back(make_uniq<BoundConstantExpression>(packed_value));
+	}
+	pack = ArgumentPack::Create(std::move(packed), pack->GetReturnType());
 }
 
 // Whether the argument list has already been resolved into its packed form. A bound function call is serialized
@@ -1139,9 +1204,30 @@ static void ApplyArgumentPackTypes(const FunctionSignature &sig, BoundSimpleFunc
 	}
 	auto &bound_arguments = bound_function.GetArguments();
 	for (idx_t i = 0; i < MinValue<idx_t>(arguments.size(), bound_arguments.size()); i++) {
-		if (sig.GetParameter(i).IsArgumentPack() && arguments[i]) {
-			bound_arguments[i] = arguments[i]->GetReturnType();
+		if (!sig.GetParameter(i).IsArgumentPack() || !arguments[i]) {
+			continue;
 		}
+		auto &pack_type = arguments[i]->GetReturnType();
+		auto &element_type = bound_arguments[i];
+
+		// the declared element type is the concrete type every collected argument has to have - unless it accepts
+		// anything, in which case they keep the types they were passed with. It is only concrete here once the
+		// template types have been resolved, which is why that happens first.
+		if (element_type.id() == LogicalTypeId::ANY || element_type.id() == LogicalTypeId::INVALID) {
+			bound_arguments[i] = pack_type;
+			continue;
+		}
+		const auto member_count = StructType::GetChildCount(pack_type);
+		if (sig.GetParameter(i).GetKind() == FunctionParameterKind::VAR_POSITIONAL) {
+			bound_arguments[i] = ArgumentPack::PositionalType(vector<LogicalType>(member_count, element_type));
+			continue;
+		}
+		child_list_t<LogicalType> members;
+		members.reserve(member_count);
+		for (idx_t member = 0; member < member_count; member++) {
+			members.emplace_back(StructType::GetChildName(pack_type, member), element_type);
+		}
+		bound_arguments[i] = ArgumentPack::KeywordType(std::move(members));
 	}
 }
 
@@ -1159,6 +1245,9 @@ static vector<Identifier> ResolveArguments(ClientContext &context, const SimpleF
 			vector<Identifier> argument_names(arguments.size());
 			for (idx_t i = 0; i < arguments.size(); i++) {
 				argument_names[i] = sig.GetParameter(i).GetName();
+				if (sig.GetParameter(i).IsArgumentPack()) {
+					UnpackFoldedArgumentPack(arguments[i]);
+				}
 			}
 			return argument_names;
 		}
@@ -1286,10 +1375,10 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.
-	ApplyArgumentPackTypes(function.GetSignature(), bound_function, arguments);
-
 	// Attempt to resolve template types, before we call the "Bind" callback.
-	ResolveTemplateTypes(bound_function, arguments);
+	ResolveTemplateTypes(function.GetSignature(), bound_function, arguments);
+
+	ApplyArgumentPackTypes(function.GetSignature(), bound_function, arguments);
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -1365,9 +1454,9 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.
-	ApplyArgumentPackTypes(function.GetSignature(), bound_function, children);
+	ResolveTemplateTypes(function.GetSignature(), bound_function, children);
 
-	ResolveTemplateTypes(bound_function, children);
+	ApplyArgumentPackTypes(function.GetSignature(), bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -1445,9 +1534,9 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.
-	ApplyArgumentPackTypes(function.GetSignature(), bound_function, children);
+	ResolveTemplateTypes(function.GetSignature(), bound_function, children);
 
-	ResolveTemplateTypes(bound_function, children);
+	ApplyArgumentPackTypes(function.GetSignature(), bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
 

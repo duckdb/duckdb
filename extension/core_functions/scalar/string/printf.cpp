@@ -1,4 +1,6 @@
 #include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
@@ -22,53 +24,51 @@ struct FMTFormat {
 	}
 };
 
+//! The type printf formats a value of the given type as
+static LogicalType PrintfArgumentType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return LogicalType::BOOLEAN;
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+		return LogicalType::BIGINT;
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		return LogicalType::UBIGINT;
+	case LogicalTypeId::HUGEINT:
+		return LogicalType::HUGEINT;
+	case LogicalTypeId::UHUGEINT:
+		return LogicalType::UHUGEINT;
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		// decimal type: add cast to double
+		return LogicalType::DOUBLE;
+	case LogicalTypeId::VARCHAR:
+		return LogicalType::VARCHAR;
+	case LogicalTypeId::UNKNOWN:
+		// parameter: accept any input and rebind later
+		return LogicalType::ANY;
+	default:
+		// all other types: add cast to string
+		return LogicalType::VARCHAR;
+	}
+}
+
 static unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	for (idx_t i = 1; i < arguments.size(); i++) {
-		switch (arguments[i]->GetReturnType().id()) {
-		case LogicalTypeId::BOOLEAN:
-			bound_function.GetArguments()[i] = LogicalType::BOOLEAN;
-			break;
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-			bound_function.GetArguments()[i] = LogicalType::BIGINT;
-			break;
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-			bound_function.GetArguments()[i] = LogicalType::UBIGINT;
-			break;
-		case LogicalTypeId::HUGEINT:
-			bound_function.GetArguments()[i] = LogicalType::HUGEINT;
-			break;
-		case LogicalTypeId::UHUGEINT:
-			bound_function.GetArguments()[i] = LogicalType::UHUGEINT;
-			break;
-		case LogicalTypeId::FLOAT:
-		case LogicalTypeId::DOUBLE:
-			bound_function.GetArguments()[i] = LogicalType::DOUBLE;
-			break;
-		case LogicalTypeId::VARCHAR:
-			bound_function.GetArguments()[i] = LogicalType::VARCHAR;
-			break;
-		case LogicalTypeId::DECIMAL:
-			// decimal type: add cast to double
-			bound_function.GetArguments()[i] = LogicalType::DOUBLE;
-			break;
-		case LogicalTypeId::UNKNOWN:
-			// parameter: accept any input and rebind later
-			bound_function.GetArguments()[i] = LogicalType::ANY;
-			break;
-		default:
-			// all other types: add cast to string
-			bound_function.GetArguments()[i] = LogicalType::VARCHAR;
-			break;
-		}
+	D_ASSERT(arguments.size() == 2);
+
+	vector<LogicalType> value_types;
+	for (auto &value : StructType::GetChildTypes(arguments[1]->GetReturnType())) {
+		value_types.push_back(PrintfArgumentType(value.second));
 	}
+	bound_function.GetArguments()[1] = ArgumentPack::PositionalType(std::move(value_types));
 	return nullptr;
 }
 
@@ -116,8 +116,10 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 	auto format_data = args.data[0].Values<string_t>();
 
-	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		const auto &col = args.data[i];
+	auto &values = StructVector::GetEntries(args.data[1]);
+	for (idx_t value_idx = 0; value_idx < values.size(); value_idx++) {
+		const auto &col = values[value_idx];
+		const auto i = value_idx + 1;
 		switch (col.GetType().id()) {
 		case LogicalTypeId::BOOLEAN:
 			ConvertArguments<bool>(col, i, format_args);
@@ -162,7 +164,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t idx = 0; idx < count; idx++) {
 		auto entry = format_data[idx];
 		auto &current_args = format_args[idx];
-		if (!entry.IsValid() || current_args.size() != args.ColumnCount() - 1) {
+		if (!entry.IsValid() || current_args.size() != values.size()) {
 			// either format string or one of the input arguments is NULL
 			result_data.WriteNull();
 			continue;
@@ -178,18 +180,24 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
-	ScalarFunction printf_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                          PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
-	printf_fun.SetVarArgs(LogicalType::ANY);
+	FunctionSignature signature;
+	signature.AddParameter("format", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("values", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::VARCHAR);
+	ScalarFunction printf_fun("printf", std::move(signature), PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>);
+	printf_fun.SetBindCallback(BindPrintfFunction);
 	printf_fun.SetFallible();
 	return printf_fun;
 }
 
 ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
-	ScalarFunction format_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                          PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
-	format_fun.SetVarArgs(LogicalType::ANY);
+	FunctionSignature signature;
+	signature.AddParameter("format", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("values", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::VARCHAR);
+	ScalarFunction format_fun("format", std::move(signature), PrintfFunction<FMTFormat, duckdb_fmt::format_context>);
+	format_fun.SetBindCallback(BindPrintfFunction);
 	format_fun.SetFallible();
 	return format_fun;
 }
