@@ -215,8 +215,9 @@ bool NotNullExpressionAnalyzer::IsNotNull(LogicalOperator &op, const Expression 
 			return false;
 		}
 		seen_ctes.push_back(cte_ref.cte_index);
-		auto source_expr = BoundColumnRefExpression(cte_source.types[column_index], source_bindings[column_index]);
-		auto result = IsNotNull(cte_source, source_expr, seen_ctes);
+		auto source_expr =
+		    make_uniq<BoundColumnRefExpression>(cte_source.types[column_index], source_bindings[column_index]);
+		auto result = IsNotNull(cte_source, *source_expr, seen_ctes);
 		seen_ctes.pop_back();
 		return result;
 	}
