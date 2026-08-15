@@ -23,10 +23,6 @@ bool StatisticsPropagator::HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<
 		return true;
 	case JoinType::RIGHT_ANTI:
 	case JoinType::ANTI: {
-		if (join.HasProjectionMap()) {
-			// returning the left child would emit the columns the projection map removes
-			return false;
-		}
 		if (join.join_type == JoinType::RIGHT_ANTI) {
 			std::swap(join.children[0], join.children[1]);
 		}
@@ -54,10 +50,6 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 	switch (join.join_type) {
 	case JoinType::RIGHT_SEMI:
 	case JoinType::SEMI: {
-		if (join.HasProjectionMap()) {
-			// a cross product emits every column of both children
-			return false;
-		}
 		if (join.join_type == JoinType::RIGHT_SEMI) {
 			std::swap(join.children[0], join.children[1]);
 		}
@@ -75,9 +67,6 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 		return true;
 	}
 	case JoinType::INNER: {
-		if (join.HasProjectionMap()) {
-			return false;
-		}
 		// inner, replace with cross product
 		auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
 		cross_product->SetEstimatedCardinality(join.estimated_cardinality);
