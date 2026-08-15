@@ -103,11 +103,12 @@ static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		return DBConfig::ParseMemoryLimit(arg.ToString());
 	}
-	if (!arg.DefaultTryCastAs(LogicalType::UBIGINT)) {
+	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (!cast_arg) {
 		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
 		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	return arg.GetValue<idx_t>();
+	return cast_arg->GetValue<idx_t>();
 }
 
 struct CopyToParsedOptions {
@@ -771,14 +772,14 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					}
 				}
 
-				Value new_value;
-				if (!can_cast || !original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
+				auto new_value = can_cast ? original_value.TryCastAs(context, copy_option.type) : nullopt;
+				if (!new_value) {
 					throw InvalidInputException("Copy option %s expected an argument of type %s - the argument "
 					                            "\"%s\" of type %s could not be cast as this type",
 					                            provided_option, copy_option.type, original_value.ToString(),
 					                            original_value.type());
 				}
-				original_value = std::move(new_value);
+				original_value = std::move(*new_value);
 			}
 		}
 	}

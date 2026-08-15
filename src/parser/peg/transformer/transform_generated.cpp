@@ -7214,13 +7214,15 @@ PEGTransformerFactory::TransformCreateExternalResourceStmtInternal(PEGTransforme
 		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
 		attach_alias = attach_alias_value;
 	}
-	optional<vector<GenericCopyOption>> attach_options {};
-	auto &attach_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
-	if (attach_options_opt.HasResult()) {
-		auto attach_options_value = transformer.Transform<vector<GenericCopyOption>>(attach_options_opt.GetResult());
-		attach_options = attach_options_value;
+	optional<vector<GenericCopyOption>> external_resource_creation_options {};
+	auto &external_resource_creation_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (external_resource_creation_options_opt.HasResult()) {
+		auto external_resource_creation_options_value =
+		    transformer.Transform<vector<GenericCopyOption>>(external_resource_creation_options_opt.GetResult());
+		external_resource_creation_options = external_resource_creation_options_value;
 	}
-	auto result = TransformCreateExternalResourceStmt(transformer, string_literal, attach_alias, attach_options);
+	auto result = TransformCreateExternalResourceStmt(transformer, string_literal, attach_alias,
+	                                                  external_resource_creation_options);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -7268,6 +7270,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowAllModifier
                                                                                          ParseResult &parse_result) {
 	auto result = TransformShowAllModifier(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExternalResourceCreationOptionsInternal(PEGTransformer &transformer,
+                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.GetChild(0));
+	auto result = generic_copy_option_list;
+	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertStatementInternal(PEGTransformer &transformer,
@@ -11295,6 +11306,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DestroyExternalResourceStmt", &PEGTransformerFactory::TransformDestroyExternalResourceStmtInternal},
 	    {"ShowExternalResourcesStmt", &PEGTransformerFactory::TransformShowExternalResourcesStmtInternal},
 	    {"ShowAllModifier", &PEGTransformerFactory::TransformShowAllModifierInternal},
+	    {"ExternalResourceCreationOptions", &PEGTransformerFactory::TransformExternalResourceCreationOptionsInternal},
 	    {"InsertStatement", &PEGTransformerFactory::TransformInsertStatementInternal},
 	    {"OrAction", &PEGTransformerFactory::TransformOrActionInternal},
 	    {"InsertOrReplace", &PEGTransformerFactory::TransformInsertOrReplaceInternal},

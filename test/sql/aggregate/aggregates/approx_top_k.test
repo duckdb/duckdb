@@ -74,3 +74,33 @@ query I
 SELECT g FROM (SELECT g, approx_top_k(v, 3 ORDER BY v DESC) k FROM ordered_groups GROUP BY g)
 WHERE len(k) <> 3;
 ----
+
+statement error
+SELECT approx_top_k(x, k) actual
+FROM (VALUES
+  (1, 100, 1),
+  (2,   1, 2),
+  (3,  50, 3),
+  (4,   2, 1),
+  (5,  49, 2)
+) AS t(id, x, k)
+----
+Binder Error: The 'col1' argument in function 'approx_top_k' must be a constant expression
+
+statement error
+SELECT id,
+       approx_top_k(x, k) OVER (
+         ORDER BY id
+         ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+         EXCLUDE CURRENT ROW
+       ) AS actual
+FROM (VALUES
+  (1, 100, 1),
+  (2,   1, 2),
+  (3,  50, 3),
+  (4,   2, 1),
+  (5,  49, 2)
+) AS t(id, x, k)
+ORDER BY id;
+----
+Binder Error: The 'col1' argument in function 'approx_top_k' must be a constant expression
