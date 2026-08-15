@@ -222,7 +222,7 @@ BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 }
 
 bool Binder::TryBindShowSetting(ShowRef &ref, BoundStatement &result) {
-	auto setting_name = StringUtil::Lower(ref.GetTableName().GetIdentifierName());
+	auto setting_name = ref.GetTableName();
 	Value setting_value;
 	if (!context.TryGetCurrentSetting(setting_name, setting_value)) {
 		// The setting might be provided by an extension that has not been loaded yet (e.g. "timezone" -> icu).
@@ -237,7 +237,7 @@ bool Binder::TryBindShowSetting(ShowRef &ref, BoundStatement &result) {
 	}
 
 	vector<LogicalType> types {setting_value.type()};
-	vector<Identifier> names {Identifier(setting_name)};
+	vector<Identifier> names {setting_name};
 
 	DataChunk output;
 	output.Initialize(Allocator::Get(context), types);
