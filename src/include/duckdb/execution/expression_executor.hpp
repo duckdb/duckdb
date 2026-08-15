@@ -122,6 +122,8 @@ protected:
 	             Vector &result);
 	void Execute(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
+	void ExecuteArgumentPack(const BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel,
+	                         idx_t count, Vector &result);
 	void Execute(const BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundParameterExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,

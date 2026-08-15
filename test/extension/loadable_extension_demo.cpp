@@ -1117,6 +1117,7 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	}
 
 	// test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+	// (see below RegisterArgumentPackFunctions for the "*args"/"**kwargs" counterparts)
 	// Aggregate counterpart of test_named_inspect. AggregateFunction has no FunctionSignature
 	// constructor, so we build it from positional types and then set parameter names + defaults on
 	// the signature. Exercises named-argument binding for aggregates (shared resolution path).
@@ -1138,6 +1139,171 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 }
 
 //===--------------------------------------------------------------------===//
+// Test extension functions with python-style "*args" / "**kwargs" parameters
+//===--------------------------------------------------------------------===//
+// These reuse TestFunctionArgs above, so a call prints "<idx>|arg|arg|...". A "*args" parameter
+// shows up as a single TUPLE argument and a "**kwargs" parameter as a single STRUCT argument, which
+// makes both the packing itself and the resulting member names/types visible in the query result.
+
+// Aggregate counterpart: sums the values collected by its "*args" parameter and reports how many
+// there were, as count * 1000 + sum, so a test can see the pack arrive with the right arity.
+struct PackAggState {
+	int64_t sum;
+	idx_t arg_count;
+	bool initialized;
+};
+
+struct PackAggOp {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.sum = 0;
+		state.arg_count = 0;
+		state.initialized = false;
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.sum += source.sum;
+		if (source.initialized && !target.initialized) {
+			target.arg_count = source.arg_count;
+			target.initialized = true;
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &) {
+		target = NumericCast<int64_t>(state.arg_count) * 1000 + state.sum;
+	}
+
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+static void PackAggUpdate(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
+	D_ASSERT(input_count == 1);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(sdata);
+	auto states = UnifiedVectorFormat::GetData<PackAggState *>(sdata);
+
+	// the single argument is the "*args" pack - its members are the values the call was written with
+	auto &packed = StructVector::GetEntries(inputs[0]);
+	vector<UnifiedVectorFormat> pdata(packed.size());
+	for (idx_t c = 0; c < packed.size(); c++) {
+		packed[c].ToUnifiedFormat(pdata[c]);
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[sdata.sel->get_index(i)];
+		state.arg_count = packed.size();
+		state.initialized = true;
+		for (idx_t c = 0; c < packed.size(); c++) {
+			const auto idx = pdata[c].sel->get_index(i);
+			if (pdata[c].validity.RowIsValid(idx)) {
+				state.sum += UnifiedVectorFormat::GetData<int32_t>(pdata[c])[idx];
+			}
+		}
+	}
+}
+
+static void RegisterArgumentPackFunctions(ExtensionLoader &loader) {
+	using NH = FunctionNullHandling;
+	using PK = FunctionParameterKind;
+
+	// test_pack_args(a INTEGER, *rest ANY) -> VARCHAR
+	// The trailing positional arguments are collected into a TUPLE, whatever their types.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddVarPositionalParameter("rest", LogicalType::ANY);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_pack_args", std::move(sig), TestFunctionArgs<20>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_pack_kwargs(a INTEGER, **opts ANY) -> VARCHAR
+	// The named arguments that match no parameter are collected into a STRUCT keyed by their names.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddVarKeywordParameter("opts", LogicalType::ANY);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_pack_kwargs", std::move(sig), TestFunctionArgs<21>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_pack_both(a INTEGER, *args INTEGER, b INTEGER := 7, **kwargs VARCHAR) -> VARCHAR
+	// Both packs at once, with a keyword-only parameter in between and element types that the
+	// collected arguments have to be cast to.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddVarPositionalParameter("args", LogicalType::INTEGER);
+		sig.AddKeywordOnlyParameter("b", LogicalType::INTEGER, Value::INTEGER(7));
+		sig.AddVarKeywordParameter("kwargs", LogicalType::VARCHAR);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_pack_both", std::move(sig), TestFunctionArgs<22>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_pack_overload: a "**kwargs" overload next to one that takes a plain STRUCT, to pin down
+	// that a struct passed as an ordinary argument is not mistaken for a pack.
+	//   <23> (a INTEGER, s STRUCT(v INTEGER))
+	//   <24> (a INTEGER, **opts ANY)
+	{
+		ScalarFunctionSet set("test_pack_overload");
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("s", LogicalType::STRUCT({{"v", LogicalType::INTEGER}}));
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<23>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddVarKeywordParameter("opts", LogicalType::ANY);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<24>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		loader.RegisterFunction(set);
+	}
+
+	// test_pack_nullshort(a INTEGER, *rest ANY) -> VARCHAR
+	// DEFAULT_NULL_HANDLING: a constant NULL anywhere - including one destined for the pack - still
+	// short-circuits the whole call to NULL.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddVarPositionalParameter("rest", LogicalType::ANY);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		loader.RegisterFunction(ScalarFunction("test_pack_nullshort", std::move(sig), TestFunctionArgs<25>));
+	}
+
+	// test_pack_agg(*args INTEGER) -> BIGINT
+	// AggregateFunction has no FunctionSignature constructor, so build it positionally and then mark
+	// the parameter as a "*args" one.
+	{
+		AggregateFunction agg("test_pack_agg", {LogicalType::INTEGER}, LogicalType::BIGINT,
+		                      AggregateFunction::StateSize<PackAggState>,
+		                      AggregateFunction::StateInitialize<PackAggState, PackAggOp>, PackAggUpdate,
+		                      AggregateFunction::StateCombine<PackAggState, PackAggOp>,
+		                      AggregateFunction::StateFinalize<PackAggState, int64_t, PackAggOp>, NH::SPECIAL_HANDLING);
+		auto &sig = agg.GetSignature();
+		sig.GetParameter(0).SetName("args");
+		sig.GetParameter(0).SetKind(PK::VAR_POSITIONAL);
+		loader.RegisterFunction(std::move(agg));
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
@@ -1146,6 +1312,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
 	RegisterNamedArgumentFunction(loader);
+	RegisterArgumentPackFunctions(loader);
 	AggregateFunction volatile_aggregate(
 	    "test_volatile_aggregate", {LogicalType::INTEGER}, LogicalType::BIGINT,
 	    AggregateFunction::StateSize<VolatileAggregateState>,

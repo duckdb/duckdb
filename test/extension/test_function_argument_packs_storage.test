@@ -1,0 +1,54 @@
+# name: test/extension/test_function_argument_packs_storage.test
+# description: *args / **kwargs function calls survive a round-trip through storage
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+load {TEST_DIR}/argument_packs.db
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# A generated column and a CHECK constraint both store a bound expression in the catalog, so these
+# calls are serialized with their argument packs built and have to be re-bound on load without the
+# packs being packed a second time.
+
+statement ok
+CREATE TABLE tt(
+    x INTEGER CHECK (test_pack_args(x, 1, 2) IS NOT NULL),
+    g VARCHAR GENERATED ALWAYS AS (test_pack_both(x, 1, 2, b := 9, z := 'q')),
+    h VARCHAR GENERATED ALWAYS AS (test_pack_kwargs(x, k := 'a', j := 5))
+);
+
+statement ok
+INSERT INTO tt(x) VALUES (5);
+
+query III
+SELECT x, g, h FROM tt;
+----
+5	<22>|5|(1, 2)|9|{'z': 'q'}|	<21>|5|{'k': 'a', 'j': 5}|
+
+restart
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# the stored expressions still evaluate to the same thing after being read back
+query III
+SELECT x, g, h FROM tt;
+----
+5	<22>|5|(1, 2)|9|{'z': 'q'}|	<21>|5|{'k': 'a', 'j': 5}|
+
+# ... and are still usable for new rows, which means they were re-bound into a working plan
+statement ok
+INSERT INTO tt(x) VALUES (6);
+
+query III
+SELECT x, g, h FROM tt ORDER BY x;
+----
+5	<22>|5|(1, 2)|9|{'z': 'q'}|	<21>|5|{'k': 'a', 'j': 5}|
+6	<22>|6|(1, 2)|9|{'z': 'q'}|	<21>|6|{'k': 'a', 'j': 5}|

@@ -93,6 +93,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COALESCE";
 	case ExpressionType::OPERATOR_TRY:
 		return "TRY";
+	case ExpressionType::ARGUMENT_PACK:
+		return "ARGUMENT_PACK";
 	case ExpressionType::ARRAY_EXTRACT:
 		return "ARRAY_EXTRACT";
 	case ExpressionType::ARRAY_SLICE:

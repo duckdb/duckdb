@@ -5,6 +5,7 @@ namespace duckdb {
 CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunction function)
     : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(function.name) {
 	SetFunctionName(function.name);
+	function.GetSignature().VerifyArgumentPacks();
 	functions.AddFunction(std::move(function));
 	internal = true;
 }
@@ -14,6 +15,7 @@ CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunctionSet se
 	SetFunctionName(functions.name);
 	for (auto &func : functions.functions) {
 		func.name = functions.name;
+		func.GetSignature().VerifyArgumentPacks();
 	}
 	internal = true;
 }

@@ -1,0 +1,276 @@
+# name: test/extension/test_function_argument_packs.test
+# description: Python-style *args / **kwargs function parameters - packing, overload resolution and errors
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# The inspection functions return a string "<overload_idx>|arg|arg|..." that shows the final argument
+# list the function was called with. A "*args" parameter shows up as a single TUPLE argument and a
+# "**kwargs" parameter as a single STRUCT argument, so both the packing and the resulting member
+# names/types are visible in the result.
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1), (2)) v(x);
+
+#===--------------------------------------------------------------------===#
+# *args - test_pack_args(a INTEGER, *rest ANY)
+#===--------------------------------------------------------------------===#
+
+# no trailing arguments at all - the pack is an empty tuple, not an error
+query I
+SELECT test_pack_args(1);
+----
+<20>|1|()|
+
+query I
+SELECT test_pack_args(1, 2);
+----
+<20>|1|(2,)|
+
+# the element type is ANY, so the collected arguments keep their own types
+query I
+SELECT test_pack_args(1, 2, 'a', 3.5);
+----
+<20>|1|(2, 'a', 3.5)|
+
+# a NULL is a value inside the pack, not a NULL argument (this overload has SPECIAL_HANDLING)
+query I
+SELECT test_pack_args(1, NULL, 2);
+----
+<20>|1|(NULL, 2)|
+
+# the pack is rebuilt per row - here from a mix of a column and constants
+query I
+SELECT test_pack_args(x, 1, 2) FROM t ORDER BY x;
+----
+<20>|1|(1, 2)|
+<20>|2|(1, 2)|
+
+# a fully constant call: the whole expression folds, and the packed arguments survive it
+query I
+SELECT test_pack_args(1, 2, 3) FROM t ORDER BY x;
+----
+<20>|1|(2, 3)|
+<20>|1|(2, 3)|
+
+#===--------------------------------------------------------------------===#
+# **kwargs - test_pack_kwargs(a INTEGER, **opts ANY)
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_pack_kwargs(1);
+----
+<21>|1|{}|
+
+# the caller's names become the struct field names, in call order
+query I
+SELECT test_pack_kwargs(1, k := 'a', j := 5);
+----
+<21>|1|{'k': 'a', 'j': 5}|
+
+query I
+SELECT test_pack_kwargs(1, j := 5, k := 'a');
+----
+<21>|1|{'j': 5, 'k': 'a'}|
+
+# => works as well as :=
+query I
+SELECT test_pack_kwargs(1, k => 'a');
+----
+<21>|1|{'k': 'a'}|
+
+# the name of the **kwargs parameter itself is not reserved - it is just another keyword
+query I
+SELECT test_pack_kwargs(1, opts := 'a');
+----
+<21>|1|{'opts': 'a'}|
+
+#===--------------------------------------------------------------------===#
+# Both packs at once, with a keyword-only parameter in between
+# test_pack_both(a INTEGER, *args INTEGER, b INTEGER := 7, **kwargs VARCHAR)
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_pack_both(1);
+----
+<22>|1|()|7|{}|
+
+query I
+SELECT test_pack_both(1, 2, 3);
+----
+<22>|1|(2, 3)|7|{}|
+
+# the keyword-only parameter can only be supplied by name - a fourth positional argument is
+# collected by *args and 'b' keeps its default
+query I
+SELECT test_pack_both(1, 2, 3, 9);
+----
+<22>|1|(2, 3, 9)|7|{}|
+
+query I
+SELECT test_pack_both(1, 2, 3, b := 9);
+----
+<22>|1|(2, 3)|9|{}|
+
+query I
+SELECT test_pack_both(1, 2, 3, b := 9, z := 'q', y := 'r');
+----
+<22>|1|(2, 3)|9|{'z': 'q', 'y': 'r'}|
+
+# the collected arguments are cast to the element type the parameter declares: here the string
+# literal '2' is cast to the INTEGER that *args collects
+query I
+SELECT test_pack_both(1, '2', 3, z := 'q');
+----
+<22>|1|(2, 3)|7|{'z': 'q'}|
+
+# ... and an argument that cannot be implicitly cast to it rules the overload out, exactly as it
+# would for a regular parameter (INTEGER does not implicitly cast to the VARCHAR **kwargs collects)
+statement error
+SELECT test_pack_both(1, 2, z := 4);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+#===--------------------------------------------------------------------===#
+# Overload resolution: a plain STRUCT argument is not a **kwargs pack
+#   <23> (a INTEGER, s STRUCT(v INTEGER))
+#   <24> (a INTEGER, **opts ANY)
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_pack_overload(1, {'v': 1});
+----
+<23>|1|{'v': 1}|
+
+query I
+SELECT test_pack_overload(1, s := {'v': 1});
+----
+<23>|1|{'v': 1}|
+
+query I
+SELECT test_pack_overload(1, k := 'v');
+----
+<24>|1|{'k': 'v'}|
+
+query I
+SELECT test_pack_overload(1);
+----
+<24>|1|{}|
+
+#===--------------------------------------------------------------------===#
+# NULL handling - test_pack_nullshort(a INTEGER, *rest ANY) has DEFAULT_NULL_HANDLING
+#===--------------------------------------------------------------------===#
+
+# a constant NULL destined for the pack short-circuits the whole call, exactly as a constant NULL
+# passed to a regular argument does
+query I
+SELECT test_pack_nullshort(1, NULL, 2);
+----
+NULL
+
+query I
+SELECT test_pack_nullshort(NULL, 1, 2);
+----
+NULL
+
+query I
+SELECT test_pack_nullshort(1, 2);
+----
+<25>|1|(2,)|
+
+#===--------------------------------------------------------------------===#
+# Two call sites sharing an identical pack (the common subexpression optimizer may merge them)
+#===--------------------------------------------------------------------===#
+
+query II
+SELECT test_pack_args(x, 1, 2), test_pack_nullshort(x, 1, 2) FROM t ORDER BY x;
+----
+<20>|1|(1, 2)|	<25>|1|(1, 2)|
+<20>|2|(1, 2)|	<25>|2|(1, 2)|
+
+query II
+SELECT test_pack_args(x, 1, 2) AS a, test_pack_args(x, 1, 2) AS b FROM t ORDER BY x;
+----
+<20>|1|(1, 2)|	<20>|1|(1, 2)|
+<20>|2|(1, 2)|	<20>|2|(1, 2)|
+
+#===--------------------------------------------------------------------===#
+# Aggregates share the same resolution path - test_pack_agg(*args INTEGER)
+# returns <number of packed arguments> * 1000 + <sum of their values>
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_pack_agg(x, 10) FROM t;
+----
+2023
+
+query I
+SELECT test_pack_agg(x) FROM t;
+----
+1003
+
+query I
+SELECT test_pack_agg() FROM t;
+----
+0
+
+#===--------------------------------------------------------------------===#
+# Errors
+#===--------------------------------------------------------------------===#
+
+# more positional arguments than a function without *args can take
+statement error
+SELECT test_named_inspect(1, 2, 3, 4);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# only **kwargs, so there is nothing to collect a second positional argument
+statement error
+SELECT test_pack_kwargs(1, 2);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# an argument pack parameter cannot be supplied by name - it is built from what it collects
+statement error
+SELECT test_pack_args(1, rest := 2);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# a named argument that matches no parameter, with no **kwargs to collect it
+statement error
+SELECT test_named_inspect(1, nosuch := 2);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+statement error
+SELECT test_pack_kwargs(1, k := 1, k := 2);
+----
+<REGEX>:Binder Error:.*Duplicate named argument 'k'.*
+
+statement error
+SELECT test_pack_kwargs(1, a := 5);
+----
+<REGEX>:Binder Error:.*already been provided as a positional argument.*
+
+statement error
+SELECT test_pack_kwargs();
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# the collected arguments still have to be castable to the element type the parameter declares
+statement error
+SELECT test_pack_both(1, 'notanint');
+----
+<REGEX>:(Binder|Conversion) Error:.*
+
+statement error
+SELECT test_pack_both(1, 2, b := 'notanint');
+----
+<REGEX>:Conversion Error:.*

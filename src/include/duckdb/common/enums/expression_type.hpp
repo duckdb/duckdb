@@ -123,6 +123,9 @@ enum class ExpressionType : uint8_t {
 	ARRAY_CONSTRUCTOR = 156,
 	ARROW = 157,
 	OPERATOR_TRY = 158,
+	//! Packs its children into a TUPLE/STRUCT to fill a "*args"/"**kwargs" parameter of a function call.
+	//! Only ever produced by the FunctionBinder - it is not reachable from SQL.
+	ARGUMENT_PACK = 159,
 
 	// -----------------------------
 	// Subquery IN/EXISTS
