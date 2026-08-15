@@ -712,6 +712,7 @@ GenericCopyOptionList:
   by_value: false
   rules:
     - AttachOptions
+    - ExternalResourceCreationOptions
     - GenericCopyOptionList
     - CopyOptions
     - CopyOptionList

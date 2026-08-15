@@ -389,9 +389,7 @@ Value NumericValueUnionToValueInternal(const LogicalType &type, const NumericVal
 }
 
 Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion &val) {
-	Value result = NumericValueUnionToValueInternal(type, val);
-	result.GetTypeMutable() = type;
-	return result;
+	return NumericValueUnionToValueInternal(type, val).WithType(type);
 }
 
 bool NumericStats::HasMinMax(const BaseStatistics &stats) {

@@ -145,11 +145,18 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->Copy());
 
-		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
+		bool all_converted = true;
+		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) -> optional<DST> {
 			using NAIVE = timestamp_base_t<DST::PRECISION, false>;
-			return Operation(calendar.get(), Cast::Operation<SRC, NAIVE>(input));
+			NAIVE naive;
+			if (!TryCast::Operation(input, naive)) {
+				HandleCastError::AssignError(CastExceptionText<SRC, NAIVE>(input), parameters);
+				all_converted = false;
+				return nullopt;
+			}
+			return Operation(calendar.get(), naive);
 		});
-		return true;
+		return all_converted;
 	}
 
 	template <typename SRC>
@@ -260,11 +267,19 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->Copy());
 
-		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
+		bool all_converted = true;
+		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) -> optional<DST> {
 			using NAIVE = timestamp_base_t<SRC::PRECISION, false>;
-			return Cast::Operation<NAIVE, DST>(Operation(calendar.get(), input));
+			const NAIVE naive(Operation(calendar.get(), input));
+			DST output;
+			if (!TryCast::Operation(naive, output)) {
+				HandleCastError::AssignError("Could not convert Timestamp to higher precision.", parameters);
+				all_converted = false;
+				return nullopt;
+			}
+			return output;
 		});
-		return true;
+		return all_converted;
 	}
 
 	static BoundCastInfo BindCastToNaive(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

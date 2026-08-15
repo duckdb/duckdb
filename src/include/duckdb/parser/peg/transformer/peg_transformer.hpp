@@ -3447,6 +3447,11 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExternalResourceCreationOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceCreationOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
 	static void InitializeInsertStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7284,7 +7289,7 @@ public:
 	static unique_ptr<SQLStatement>
 	TransformCreateExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
 	                                    const optional<Identifier> &attach_alias,
-	                                    const optional<vector<GenericCopyOption>> &attach_options);
+	                                    const optional<vector<GenericCopyOption>> &external_resource_creation_options);
 	static unique_ptr<TransformResultValue> TransformRegisterExternalResourceStmtInternal(PEGTransformer &transformer,
 	                                                                                      ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformRegisterExternalResourceStmt(PEGTransformer &transformer,
@@ -7302,6 +7307,8 @@ public:
 	static unique_ptr<TransformResultValue> TransformShowAllModifierInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static bool TransformShowAllModifier(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue>
+	TransformExternalResourceCreationOptionsInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformInsertStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
