@@ -201,12 +201,23 @@ SELECT regexp_matches(s, p) FROM regex
 ----
 <REGEX>:.*Invalid Input Error.*missing.*
 
+statement error
+SELECT regexp_full_match(s, p) FROM regex
+----
+<REGEX>:.*Invalid Input Error.*missing.*
+
+statement error
+SELECT regexp_full_match(s, p, 'c') FROM regex
+----
+<REGEX>:.*Invalid Input Error.*missing.*
+
 # test regexp_full_match literal optimizations
 statement ok
 CREATE TABLE test_full_match_opt (s VARCHAR);
 
 statement ok
-INSERT INTO test_full_match_opt VALUES (''), ('a'), ('.'), ('100%'), ('a_b'), ('abc'), ('ba'), ('100x'), ('axb');
+INSERT INTO test_full_match_opt VALUES
+    (''), ('a'), ('.'), ('100%'), ('a_b'), ('abc'), ('ba'), ('100x'), ('axb');
 
 query I
 SELECT regexp_full_match(s, '') FROM test_full_match_opt WHERE s IN ('', 'a') ORDER BY s
