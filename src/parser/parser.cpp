@@ -370,6 +370,9 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
 	for (auto &token : tokens) {
+		if (token.type == TokenType::END_OF_INPUT || token.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			continue;
+		}
 		SimplifiedToken simplified;
 		simplified.start = token.offset;
 		switch (token.type) {
