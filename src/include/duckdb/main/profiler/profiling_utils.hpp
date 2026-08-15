@@ -23,6 +23,15 @@ namespace duckdb {
 
 struct MetricsTimer;
 
+struct TimingBounds {
+	idx_t start_ns = DConstants::INVALID_INDEX;
+	idx_t end_ns = 0;
+
+	bool IsSet() const {
+		return start_ns != DConstants::INVALID_INDEX;
+	}
+};
+
 // Top level query metrics
 struct QueryMetrics {
 public:
@@ -44,6 +53,18 @@ public:
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
 		string_timings[key] += addition;
+	}
+	void UpdateTimingBounds(const string &key, idx_t start_ns, idx_t end_ns) {
+		auto &bounds = timing_bounds[key];
+		bounds.start_ns = bounds.IsSet() ? MinValue(bounds.start_ns, start_ns) : start_ns;
+		bounds.end_ns = MaxValue(bounds.end_ns, end_ns);
+	}
+	idx_t GetElapsedNanos() const {
+		if (query_start_tick_ns == 0) {
+			return 0;
+		}
+		auto now = TimePoint::GetTickNanos();
+		return static_cast<idx_t>(now >= query_start_tick_ns ? now - query_start_tick_ns : 0);
 	}
 
 	void UpdateMetricCounter(const string &key, idx_t addition) {
@@ -97,10 +118,18 @@ public:
 	const unordered_map<string, idx_t> &GetMetricCounters() const {
 		return string_counters;
 	}
+	const unordered_map<string, TimingBounds> &GetTimingBounds() const {
+		return timing_bounds;
+	}
+	idx_t GetMetricTimingNanos(const string &key) const {
+		auto entry = string_timings.find(key);
+		return entry == string_timings.end() ? 0 : entry->second;
+	}
 
 	void Reset() {
 		string_timings.clear();
 		string_counters.clear();
+		timing_bounds.clear();
 		bytes_read = 0;
 		bytes_written = 0;
 		total_memory_allocated = 0;
@@ -110,6 +139,8 @@ public:
 		system_peak_buffer_memory = 0;
 		system_peak_temp_dir_size = 0;
 		blocked_thread_time = 0;
+		query_start_tick_ns = 0;
+		query_start_unix_ns = 0;
 	}
 
 	//! Write all query-level metrics into the given GatheredMetrics.
@@ -130,23 +161,27 @@ public:
 private:
 	// String-keyed timings for optimizer, storage and phase timing metrics
 	unordered_map<string, idx_t> string_timings;
+	unordered_map<string, TimingBounds> timing_bounds;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
 
 public:
+	int64_t query_start_tick_ns = 0;
+	uint64_t query_start_unix_ns = 0;
 	// Declared after string_timings so it is destroyed first; its destructor writes to string_timings.
 	unique_ptr<MetricsTimer> latency_timer;
 };
 
 struct MetricsTimer {
 public:
-	MetricsTimer() : metric_name(""), is_active(false) {
+	MetricsTimer() : metric_name(""), start_ns(0), is_active(false) {
 	}
 	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
-	    : query_metrics(query_metrics), metric_name(std::move(key)), is_active(is_active) {
+	    : query_metrics(query_metrics), metric_name(std::move(key)), start_ns(0), is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
+		start_ns = query_metrics.GetElapsedNanos();
 		profiler.Start();
 	}
 	~MetricsTimer() {
@@ -158,16 +193,18 @@ public:
 	MetricsTimer(const MetricsTimer &other) = delete;
 	MetricsTimer &operator=(const MetricsTimer &) = delete;
 	//! enable move constructors
-	MetricsTimer(MetricsTimer &&other) noexcept : is_active(false) {
+	MetricsTimer(MetricsTimer &&other) noexcept : start_ns(0), is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_ns, other.start_ns);
 		std::swap(is_active, other.is_active);
 	}
 	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
+		std::swap(start_ns, other.start_ns);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -179,7 +216,9 @@ public:
 		}
 		is_active = false;
 		profiler.End();
+		auto end_ns = query_metrics->GetElapsedNanos();
 		query_metrics->UpdateMetric(metric_name, profiler.ElapsedNanos());
+		query_metrics->UpdateTimingBounds(metric_name, start_ns, end_ns);
 	}
 
 	void Reset() {
@@ -194,6 +233,7 @@ private:
 	optional_ptr<QueryMetrics> query_metrics;
 	string metric_name;
 	Profiler profiler;
+	idx_t start_ns;
 	bool is_active;
 };
 

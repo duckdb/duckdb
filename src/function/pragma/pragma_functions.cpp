@@ -103,7 +103,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
 

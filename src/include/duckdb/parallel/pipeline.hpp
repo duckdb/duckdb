@@ -136,7 +136,6 @@ public:
 	vector<reference<PhysicalOperator>> GetOperators();
 	vector<const_reference<PhysicalOperator>> GetOperators() const;
 	const vector<reference<PhysicalOperator>> &GetIntermediateOperators() const;
-
 	optional_ptr<PhysicalOperator> GetSink() {
 		return sink;
 	}
@@ -171,7 +170,6 @@ public:
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
 
-private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
 	//! Whether or not the pipeline has been initialized
@@ -182,7 +180,6 @@ private:
 	vector<reference<PhysicalOperator>> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
 	optional_ptr<PhysicalOperator> sink;
-
 	//! The global source state
 	shared_ptr<GlobalSourceState> source_state DUCKDB_GUARDED_BY(source_state_lock);
 	//! Lock for resetting or inspecting the global source state pointer

@@ -3,7 +3,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_context.hpp"
-
 #include "duckdb/main/settings.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE

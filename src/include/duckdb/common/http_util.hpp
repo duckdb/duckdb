@@ -326,6 +326,8 @@ public:
 
 	//! Whether replaying this request is safe. POST is the only method we cannot assume is idempotent.
 	DUCKDB_API static bool IsIdempotent(RequestType type);
+	DUCKDB_API static idx_t GetTotalBytesReceived();
+	DUCKDB_API static idx_t GetTotalBytesSent();
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
