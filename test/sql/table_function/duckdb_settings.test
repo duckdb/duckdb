@@ -25,3 +25,23 @@ query I
 SELECT COUNT(DISTINCT variant_typeof(typed_value)) > 1 FROM duckdb_settings();
 ----
 true
+
+query III
+SELECT
+    typeof(value),
+    typeof(typed_value),
+    variant_typeof(typed_value)
+FROM duckdb_settings()
+WHERE name = 'standard_vector_size';
+----
+VARCHAR	VARIANT	UINT64
+
+query III
+SELECT
+    typeof(value),
+    typeof(typed_value),
+    variant_typeof(typed_value)
+FROM duckdb_settings()
+WHERE name = 'logging_level';
+----
+VARCHAR	VARIANT	VARCHAR
