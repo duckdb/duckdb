@@ -160,7 +160,34 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 		} else if (struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
 		} else if (struct_key == "column_keys") {
-			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
+			auto &ck_val = children[i];
+			if (ck_val.type().id() != LogicalTypeId::STRUCT) {
+				throw BinderException("column_keys must be a STRUCT of {key_name: [column_names]}");
+			}
+			auto &ck_child_types = StructType::GetChildTypes(ck_val.type());
+			auto &ck_children = StructValue::GetChildren(ck_val);
+			for (idx_t j = 0; j < StructType::GetChildCount(ck_val.type()); j++) {
+				auto key_name = ck_child_types[j].first.GetIdentifierName();
+				if (!keys.HasKey(key_name)) {
+					throw BinderException(
+					    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
+					    key_name);
+				}
+				auto &key_bytes = keys.GetKey(key_name);
+
+				auto &col_list = ck_children[j];
+				if (col_list.type().id() != LogicalTypeId::LIST) {
+					throw BinderException("column_keys values must be lists of column names");
+				}
+				auto &list_children = ListValue::GetChildren(col_list);
+				for (auto &col_val : list_children) {
+					auto col_name = StringValue::Get(col_val.DefaultCastAs(LogicalType::VARCHAR));
+					if (column_keys.count(col_name)) {
+						throw BinderException("Column \"%s\" is assigned to multiple keys", col_name);
+					}
+					column_keys[col_name] = key_bytes;
+				}
+			}
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);
 		}
@@ -173,6 +200,33 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 
 const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return footer_key;
+}
+
+const string &ParquetEncryptionConfig::GetColumnKey(const string &column_name) const {
+	auto it = column_keys.find(column_name);
+	if (it != column_keys.end()) {
+		return it->second;
+	}
+	return footer_key;
+}
+
+bool ParquetEncryptionConfig::HasColumnKey(const string &column_name) const {
+	return column_keys.count(column_name) > 0;
+}
+
+void ParquetEncryptionConfig::ValidateColumnNames(const vector<string> &column_names) const {
+	for (auto &entry : column_keys) {
+		bool found = false;
+		for (auto &name : column_names) {
+			if (StringUtil::CIEquals(entry.first, name)) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw BinderException("Column \"%s\" in column_keys does not exist in the table", entry.first);
+		}
+	}
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;

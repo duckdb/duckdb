@@ -115,6 +115,9 @@ public:
 public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
 	const string &GetFooterKey() const;
+	const string &GetColumnKey(const string &column_name) const;
+	bool HasColumnKey(const string &column_name) const;
+	void ValidateColumnNames(const vector<string> &column_names) const;
 
 public:
 	void Serialize(Serializer &serializer) const;

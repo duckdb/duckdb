@@ -373,6 +373,10 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = IdentifiersToStrings(names);
 
+	if (bind_data->encryption_config) {
+		bind_data->encryption_config->ValidateColumnNames(bind_data->column_names);
+	}
+
 	return std::move(bind_data);
 }
 

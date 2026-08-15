@@ -271,6 +271,18 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	}
 	ValidateColumnMetadata(row_group_num_rows, *chunk);
 	group_rows_available = NumericCast<idx_t>(chunk->meta_data.num_values);
+
+	// Determine per-column decryption key
+	if (reader.parquet_options.encryption_config) {
+		auto &enc_config = *reader.parquet_options.encryption_config;
+		if (chunk->__isset.crypto_metadata && chunk->crypto_metadata.__isset.ENCRYPTION_WITH_COLUMN_KEY) {
+			auto &path = chunk->crypto_metadata.ENCRYPTION_WITH_COLUMN_KEY.path_in_schema;
+			string col_name = path.empty() ? column_schema.name : path[0];
+			column_encryption_key = enc_config.GetColumnKey(col_name);
+		} else {
+			column_encryption_key = enc_config.GetFooterKey();
+		}
+	}
 }
 
 bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter) {
@@ -324,14 +336,22 @@ void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
 	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
 	aad_crypto_metadata.page_ordinal =
 	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
-	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
+	if (!column_encryption_key.empty()) {
+		reader.ReadEncrypted(object, *protocol, aad_crypto_metadata, column_encryption_key);
+	} else {
+		reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
+	}
 }
 
 void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
 	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type, aad_crypto_metadata.page_ordinal);
 	aad_crypto_metadata.page_ordinal =
 	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
-	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
+	if (!column_encryption_key.empty()) {
+		reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata, column_encryption_key);
+	} else {
+		reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
+	}
 }
 
 void ColumnReader::Read(PageHeader &page_hdr) {

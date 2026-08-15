@@ -271,6 +271,12 @@ public:
 	unique_ptr<AsyncWriteBuffer> PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer);
 	uint32_t WriteData(unique_ptr<AsyncWriteBuffer> buffer);
 
+	unique_ptr<AsyncWriteBuffer> PrepareWrite(const duckdb_apache::thrift::TBase &object, const string &key);
+	unique_ptr<AsyncWriteBuffer> PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer, const string &key);
+
+	bool HasEncryption() const;
+	const ParquetEncryptionConfig &GetEncryptionConfig() const;
+
 	GeoParquetFileMetadata &GetGeoParquetData();
 
 	static bool TryGetParquetType(const LogicalType &duckdb_type,
