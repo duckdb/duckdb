@@ -105,3 +105,16 @@ query I
 SELECT is_histogram_other_bin({'i': NULL::INT[][]})
 ----
 true
+
+# Row-dependent bins in a singleton window frame should not be combined outside the frame
+query III
+SELECT count(*), sum(window_result[0]), sum(window_result[2147483647])
+FROM (
+  SELECT histogram_exact(0, CASE WHEN i < 16 THEN [0] ELSE [1] END) OVER (
+    ORDER BY i
+    ROWS BETWEEN CURRENT ROW AND CURRENT ROW
+  ) AS window_result
+  FROM range(17) AS t(i)
+) windowed
+----
+17	16	1
