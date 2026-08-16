@@ -761,7 +761,12 @@ public:
 		return argument_names;
 	}
 
-	//! Get the constant value of an argument.
+	//! The arguments as the call was written, with the arguments collected by a "*args"/"**kwargs" parameter
+	//! spread back out. Use this to walk the arguments of a function that has such a parameter positionally.
+	DUCKDB_API vector<reference<Expression>> GetUnpackedArguments() const;
+
+	//! Get the constant value of an argument, indexed by parameter. A function with a "*args"/"**kwargs" parameter
+	//! gets the pack itself here - reach into it with ArgumentPack if its individual arguments are wanted.
 	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
 	//! When 'accept_null' is false, also throws if the (constant) value is NULL.
 	DUCKDB_API Value GetConstant(idx_t arg_idx, bool accept_null = true) const;

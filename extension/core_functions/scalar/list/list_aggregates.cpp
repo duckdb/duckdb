@@ -15,6 +15,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -389,10 +391,10 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
 	children.push_back(std::move(expr));
-	// push any extra arguments into the list aggregate bind
+	// push the extra arguments the "*args" parameter collected into the list aggregate bind
 	if (arguments.size() > 2) {
-		for (idx_t i = 2; i < arguments.size(); i++) {
-			children.push_back(std::move(arguments[i]));
+		for (auto &extra : ArgumentPack::GetPackedChildren(*arguments[2])) {
+			children.push_back(std::move(extra));
 		}
 		arguments.resize(2);
 	}
@@ -458,9 +460,12 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	ErrorData error;
 	vector<LogicalType> types;
 	types.push_back(child_type);
-	// push any extra arguments into the type list
-	for (idx_t i = 2; i < arguments.size(); i++) {
-		types.push_back(arguments[i]->GetReturnType());
+	// push the extra arguments the "*args" parameter collected into the type list
+	if (arguments.size() > 2) {
+		auto &extra_type = arguments[2]->GetReturnType();
+		for (idx_t i = 0; i < StructType::GetChildCount(extra_type); i++) {
+			types.push_back(StructType::GetChildType(extra_type, i));
+		}
 	}
 
 	FunctionBinder function_binder(context);
@@ -498,11 +503,16 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
+	FunctionSignature signature;
+	signature.AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	signature.AddParameter("name", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("args", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::ANY);
+	auto result = ScalarFunction("list_aggregate", std::move(signature), ListAggregateFunction);
+	result.SetBindCallback(ListAggregateBind);
+	result.SetInitStateCallback(ListAggregatesInitLocalState);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.SetVarArgs(LogicalType::ANY);
 	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
 	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;

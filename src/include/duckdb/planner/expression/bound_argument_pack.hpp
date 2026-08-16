@@ -51,6 +51,9 @@ struct ArgumentPack {
 	//! callback.
 	static vector<unique_ptr<Expression>> &GetPackedChildren(Expression &pack);
 
+	//! Recompute the pack's type from the arguments it currently holds. A bind callback that rewrites them - by
+	//! casting one, say - has to call this so that the pack still describes what it holds.
+	static void RefreshType(Expression &pack);
 };
 
 } // namespace duckdb

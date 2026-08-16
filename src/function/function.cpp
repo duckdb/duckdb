@@ -288,6 +288,20 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
+vector<reference<Expression>> BindFunctionInput::GetUnpackedArguments() const {
+	vector<reference<Expression>> result;
+	for (auto &argument : arguments) {
+		if (!ArgumentPack::IsPackType(argument->GetReturnType())) {
+			result.push_back(*argument);
+			continue;
+		}
+		for (auto &packed : ArgumentPack::GetPackedChildren(*argument)) {
+			result.push_back(*packed);
+		}
+	}
+	return result;
+}
+
 Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	if (arg_idx >= arguments.size()) {
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);

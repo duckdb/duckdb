@@ -1061,35 +1061,26 @@ static bool ArgumentsAlreadyPacked(const FunctionSignature &sig, const vector<un
 	return true;
 }
 
-// Build the TUPLE/STRUCT value that fills a "*args"/"**kwargs" parameter. The parameter's declared type constrains
-// the individual arguments it collects, so they are cast to it here - the pack itself is then already of the exact
-// type the function expects and CastToFunctionArguments leaves it alone.
-static unique_ptr<Expression> BuildArgumentPack(ClientContext &context, const FunctionParameter &param,
-                                                vector<unique_ptr<Expression>> children,
+// Build the TUPLE/STRUCT value that fills a "*args"/"**kwargs" parameter. The pack describes the arguments as they
+// were passed - settling them on the type the parameter declares is left to CastToFunctionArguments, which runs
+// after the "bind" callback has had a chance to narrow that type down to a concrete one.
+static unique_ptr<Expression> BuildArgumentPack(const FunctionParameter &param, vector<unique_ptr<Expression>> children,
                                                 optional_ptr<const vector<Identifier>> names) {
-	auto element_type = param.GetType();
-	PrepareTypeForCast(element_type);
-	const auto cast_elements = element_type.id() != LogicalTypeId::ANY && element_type.id() != LogicalTypeId::TEMPLATE;
-
-	child_list_t<LogicalType> pack_children;
-	pack_children.reserve(children.size());
-	for (idx_t i = 0; i < children.size(); i++) {
-		if (cast_elements &&
-		    RequiresCast(children[i]->GetReturnType(), element_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), element_type);
-		}
-		pack_children.emplace_back(names ? (*names)[i] : Identifier(), children[i]->GetReturnType());
-	}
-
 	if (!names) {
 		vector<LogicalType> element_types;
-		element_types.reserve(pack_children.size());
-		for (auto &pack_child : pack_children) {
-			element_types.push_back(std::move(pack_child.second));
+		element_types.reserve(children.size());
+		for (auto &child : children) {
+			element_types.push_back(child->GetReturnType());
 		}
 		return ArgumentPack::Create(std::move(children), ArgumentPack::PositionalType(std::move(element_types)));
 	}
-	return ArgumentPack::Create(std::move(children), ArgumentPack::KeywordType(std::move(pack_children)));
+
+	child_list_t<LogicalType> value_types;
+	value_types.reserve(children.size());
+	for (idx_t i = 0; i < children.size(); i++) {
+		value_types.emplace_back((*names)[i], children[i]->GetReturnType());
+	}
+	return ArgumentPack::Create(std::move(children), ArgumentPack::KeywordType(std::move(value_types)));
 }
 
 // Resolve the arguments of a function whose signature declares a "*args" and/or "**kwargs" parameter. The trailing
@@ -1167,7 +1158,7 @@ static vector<Identifier> ResolveArgumentsWithPacks(ClientContext &context, cons
 		}
 		switch (param.GetKind()) {
 		case FunctionParameterKind::VAR_POSITIONAL:
-			arguments[i] = BuildArgumentPack(context, param, std::move(var_positional_args), nullptr);
+			arguments[i] = BuildArgumentPack(param, std::move(var_positional_args), nullptr);
 			break;
 		case FunctionParameterKind::VAR_KEYWORD: {
 			vector<Identifier> keyword_names;
@@ -1178,7 +1169,7 @@ static vector<Identifier> ResolveArgumentsWithPacks(ClientContext &context, cons
 				keyword_names.push_back(keyword_arg.first);
 				keyword_children.push_back(std::move(keyword_arg.second));
 			}
-			arguments[i] = BuildArgumentPack(context, param, std::move(keyword_children), &keyword_names);
+			arguments[i] = BuildArgumentPack(param, std::move(keyword_children), &keyword_names);
 			break;
 		}
 		default:

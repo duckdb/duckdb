@@ -7,6 +7,8 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -15,13 +17,14 @@ namespace duckdb {
 
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t count = args.size();
+	auto &lists = StructVector::GetEntries(args.data[0]);
 	vector<optional<VectorIterator<list_entry_t>>> input_lists;
 	optional<VectorIterator<bool>> truncate_flag;
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (i + 1 == args.ColumnCount() && args.data[i].GetType().id() == LogicalTypeId::BOOLEAN) {
-			truncate_flag = args.data[i].Values<bool>();
-		} else if (args.data[i].GetType().id() == LogicalTypeId::LIST) {
-			input_lists.emplace_back(args.data[i].Values<list_entry_t>());
+	for (idx_t i = 0; i < lists.size(); i++) {
+		if (i + 1 == lists.size() && lists[i].GetType().id() == LogicalTypeId::BOOLEAN) {
+			truncate_flag = lists[i].Values<bool>();
+		} else if (lists[i].GetType().id() == LogicalTypeId::LIST) {
+			input_lists.emplace_back(lists[i].Values<list_entry_t>());
 		} else {
 			// SQLNULL — no list iterator possible; treated as always-null input
 			input_lists.emplace_back(nullopt);
@@ -46,7 +49,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		idx_t len = truncate_to_shortest ? NumericLimits<idx_t>::Maximum() : 0;
 		for (idx_t i = 0; i < args_size; i++) {
 			idx_t curr_size = 0;
-			if (input_lists[i].has_value() && ListVector::GetListSize(args.data[i]) > 0) {
+			if (input_lists[i].has_value() && ListVector::GetListSize(lists[i]) > 0) {
 				auto list_entry = (*input_lists[i])[row_idx];
 				if (list_entry.IsValid()) {
 					curr_size = list_entry.GetValue().length;
@@ -76,8 +79,8 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// Ensure list children are flat so FlatVector::Validity can be used below
 	for (idx_t i = 0; i < args_size; i++) {
-		if (input_lists[i].has_value() && ListVector::GetListSize(args.data[i]) > 0) {
-			ListVector::GetChildMutable(args.data[i]).Flatten();
+		if (input_lists[i].has_value() && ListVector::GetListSize(lists[i]) > 0) {
+			ListVector::GetChildMutable(lists[i]).Flatten();
 		}
 	}
 
@@ -98,7 +101,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 					auto copy_len = len < curr_len ? len : curr_len;
 					idx_t entry = offset;
 					for (idx_t k = 0; k < copy_len; k++) {
-						if (!FlatVector::Validity(ListVector::GetChild(args.data[i])).RowIsValid(curr_off + k)) {
+						if (!FlatVector::Validity(ListVector::GetChild(lists[i])).RowIsValid(curr_off + k)) {
 							masks[i].SetInvalid(entry + k);
 						}
 						selections[i].set_index(entry + k, curr_off + k);
@@ -121,13 +124,11 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		offset += len;
 	}
 	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
-		if (args.data[child_idx].GetType() == LogicalType::SQLNULL ||
-		    ListVector::GetListSize(args.data[child_idx]) == 0) {
+		if (lists[child_idx].GetType() == LogicalType::SQLNULL || ListVector::GetListSize(lists[child_idx]) == 0) {
 			struct_entries[child_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(struct_entries[child_idx], true);
 		} else {
-			struct_entries[child_idx].Slice(ListVector::GetChild(args.data[child_idx]), selections[child_idx],
-			                                result_size);
+			struct_entries[child_idx].Slice(ListVector::GetChild(lists[child_idx]), selections[child_idx], result_size);
 		}
 		struct_entries[child_idx].Flatten();
 		FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
@@ -137,7 +138,8 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+	auto &pack = *input.GetArguments()[0];
+	auto &arguments = ArgumentPack::GetPackedChildren(pack);
 	child_list_t<LogicalType> struct_children;
 
 	// The last argument could be a flag to be set if we want a minimal list or a maximal list
@@ -169,13 +171,20 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 			throw BinderException("Parameter type needs to be List");
 		}
 	}
+	// the loop above may have cast some of the collected arguments, so the pack has to describe them again
+	ArgumentPack::RefreshType(pack);
+	bound_function.GetArguments()[0] = pack.GetReturnType();
+
 	bound_function.SetReturnType(LogicalType::LIST(LogicalType::TUPLE(struct_children)));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 ScalarFunction ListZipFun::GetFunction() {
-	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind);
-	fun.SetVarArgs(LogicalType::ANY);
+	FunctionSignature signature;
+	signature.AddVarPositionalParameter("lists", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::LIST(LogicalTypeId::STRUCT));
+	auto fun = ScalarFunction("list_zip", std::move(signature), ListZipFunction);
+	fun.SetBindCallback(ListZipBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

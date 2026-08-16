@@ -17,6 +17,9 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -36,8 +39,27 @@ struct SortKeyBindData : public FunctionData {
 	}
 };
 
+//! The sort specifiers a create_sort_key/decode_sort_key call collected have to be constants, but the keys they
+//! alternate with are ordinary data - so they are read out of the pack one by one rather than by parameter.
+static Value GetSortSpecifier(BindScalarFunctionInput &input, const Expression &expr, const char *what) {
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
+	if (!expr.IsFoldable()) {
+		throw BinderException(expr, "The %s in function '%s' must be a constant expression", what,
+		                      input.GetBoundFunction().GetName());
+	}
+	auto value = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), expr);
+	if (value.IsNull()) {
+		throw BinderException(expr, "The %s in function '%s' must not be NULL", what,
+		                      input.GetBoundFunction().GetName());
+	}
+	return value;
+}
+
 unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
-	auto &arguments = input.GetArguments();
+	// the keys and sort specifiers alternate, and all but the first are collected by a "*args" parameter
+	auto arguments = input.GetUnpackedArguments();
 	auto &function = input.GetBoundFunction();
 
 	if (arguments.size() % 2 != 0) {
@@ -46,7 +68,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		auto sort_specifier = input.GetNonNullConstant(i);
+		auto sort_specifier = GetSortSpecifier(input, arguments[i], "sort specifier");
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
@@ -54,7 +76,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	bool all_constant = true;
 	idx_t constant_size = 0;
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		auto physical_type = arguments[i]->GetReturnType().InternalType();
+		auto physical_type = arguments[i].get().GetReturnType().InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
 		} else {
@@ -1027,9 +1049,20 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
 	// prepare the sort key data
+	vector<reference<Vector>> inputs;
+	for (auto &column : args.data) {
+		if (!ArgumentPack::IsPackType(column.GetType())) {
+			inputs.push_back(column);
+			continue;
+		}
+		for (auto &packed : StructVector::GetEntries(column)) {
+			inputs.push_back(packed);
+		}
+	}
+
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
-	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
-		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
+	for (idx_t c = 0; c < inputs.size(); c += 2) {
+		sort_key_data.push_back(make_uniq<SortKeyVectorData>(inputs[c].get(), args.size(), bind_data.modifiers[c / 2]));
 	}
 	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
 #ifdef DEBUG
@@ -1044,7 +1077,9 @@ namespace {
 
 unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
+	// the column definitions and sort specifiers alternate after the sort key, with the trailing ones collected by
+	// a "*args" parameter
+	auto arguments = input.GetUnpackedArguments();
 	auto &function = input.GetBoundFunction();
 
 	if ((arguments.size() - 1) % 2 != 0) {
@@ -1057,7 +1092,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		Value col = input.GetConstant(i);
+		Value col = GetSortSpecifier(input, arguments[i], "column definition");
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -1079,12 +1114,12 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		auto sort_specifier = input.GetNonNullConstant(i + 1);
+		auto sort_specifier = GetSortSpecifier(input, arguments[i + 1], "sort specifier");
 		const auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 
-	const auto &sort_key_arg = *arguments[0];
+	const auto &sort_key_arg = arguments[0].get();
 	if (sort_key_arg.GetReturnType() == LogicalType::BIGINT) {
 		if (!all_constant || constant_size > sizeof(int64_t)) {
 			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
@@ -1512,19 +1547,25 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 // Get Functions
 //===--------------------------------------------------------------------===//
 ScalarFunction CreateSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
-	                                 CreateSortKeyBind);
-	sort_key_function.SetVarArgs(LogicalType::ANY);
+	FunctionSignature signature;
+	signature.AddParameter("key", LogicalType::ANY);
+	signature.AddVarPositionalParameter("args", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::BLOB);
+	ScalarFunction sort_key_function("create_sort_key", std::move(signature), CreateSortKeyFunction);
+	sort_key_function.SetBindCallback(CreateSortKeyBind);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return sort_key_function;
 }
 
 ScalarFunction DecodeSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function(
-	    "decode_sort_key",
-	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
-	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
-	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
+	FunctionSignature signature;
+	signature.AddParameter("sort_key", LogicalType::ANY);
+	signature.AddParameter("col", LogicalType::VARCHAR);
+	signature.AddParameter("sort_specifier", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("args", LogicalType::VARCHAR);
+	signature.SetReturnType(LogicalType::STRUCT({{"any", LogicalType::ANY}}));
+	ScalarFunction sort_key_function("decode_sort_key", std::move(signature), DecodeSortKeyFunction);
+	sort_key_function.SetBindCallback(DecodeSortKeyBind);
 	return sort_key_function;
 }
 
