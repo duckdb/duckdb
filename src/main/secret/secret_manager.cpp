@@ -455,7 +455,8 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 	// or when they were never persisted and so are missing entirely. The derived values live in
 	// state shared with the catalog entry, so deriving here is visible to every other copy.
 	auto kv_secret = dynamic_cast<const KeyValueSecret *>(best_match->secret.get());
-	if (kv_secret && (kv_secret->MustRefresh() || kv_secret->NeedsDerivation())) {
+	if (kv_secret && (kv_secret->MustRefresh() || kv_secret->NeedsDerivation() ||
+	                  kv_secret->RefreshInFlightElsewhere())) {
 		// The create function needs a client context. A lookup made without one, for example from a
 		// background operation, hands the secret out as it is rather than failing.
 		if (transaction.context) {

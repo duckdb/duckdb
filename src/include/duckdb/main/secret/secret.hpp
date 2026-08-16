@@ -12,6 +12,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -222,7 +223,13 @@ public:
 	//! Enters a refresh. Only called while holding refresh_lock, having established that the values
 	//! do need re-deriving
 	void EnterRefresh() {
+		refreshing_thread = ThreadUtil::GetThreadId();
 		refresh_state = SecretRefreshState::IN_REFRESH;
+	}
+	//! Whether a refresh is in flight on another thread. A lookup made by the thread that is
+	//! deriving is the recipe looking up the secret it is refreshing, and must not wait for itself
+	bool RefreshInFlightElsewhere() const {
+		return refresh_state == SecretRefreshState::IN_REFRESH && refreshing_thread != ThreadUtil::GetThreadId();
 	}
 	//! Leaves a refresh that produced new values. A request to refresh that arrived while we were
 	//! deriving supersedes the values we just produced, so it is left standing
@@ -245,6 +252,8 @@ public:
 	mutex refresh_lock;
 	//! Whether the derived values can still be handed out
 	atomic<SecretRefreshState> refresh_state;
+	//! The thread that is re-deriving, meaningful only while the state is IN_REFRESH
+	atomic<thread_id> refreshing_thread;
 
 private:
 	//! Guards `current`: C++17 has no atomic shared_ptr
@@ -355,6 +364,11 @@ public:
 	//! snapshot is not persisted, so a secret read back from storage is missing them
 	bool NeedsDerivation() const {
 		return HasRefreshRecipe() && !HasDerivedValues();
+	}
+	//! Whether a lookup should wait for a re-derivation that another thread is already running,
+	//! rather than being handed the values that thread is in the middle of replacing
+	bool RefreshInFlightElsewhere() const {
+		return derived_state->RefreshInFlightElsewhere();
 	}
 	//! Moves the values the create function declared transient out of the secret map and into the
 	//! snapshot. They are then held only in the state shared between copies, which is never
