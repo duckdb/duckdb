@@ -282,7 +282,12 @@ CreateSecretInput SecretManager::GenerateRefreshInput(const KeyValueSecret &secr
 	result.provider = secret.GetProvider();
 	result.scope = secret.GetScope();
 
-	// the recipe is stored as a STRUCT of the named parameters the secret was created with
+	// the recipe is stored as a STRUCT of the named parameters the secret was created with. It is
+	// set by the user, so it cannot be assumed to have the right shape
+	if (refresh_info.type().id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Secret '%s' has a 'refresh_info' of type %s, expected a STRUCT", secret.GetName(),
+		                            refresh_info.type().ToString());
+	}
 	auto child_count = StructType::GetChildCount(refresh_info.type());
 	auto children = StructValue::GetChildren(refresh_info);
 	D_ASSERT(children.size() == child_count);
@@ -443,11 +448,23 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 		}
 	}
 
-	if (best_match) {
-		return SecretMatch(*best_match, best_match_score);
+	if (!best_match) {
+		return SecretMatch();
 	}
 
-	return SecretMatch();
+	// A secret is re-derived before it is handed out when a consumer rejected its transient values,
+	// or when they were never persisted and so are missing entirely. The derived values live in
+	// state shared with the catalog entry, so deriving here is visible to every other copy.
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(best_match->secret.get());
+	if (kv_secret && (kv_secret->MustRefresh() || kv_secret->NeedsDerivation())) {
+		// The create function needs a client context. A lookup made without one, for example from a
+		// background operation, hands the secret out as it is rather than failing.
+		if (transaction.context) {
+			TryRefreshSecret(*transaction.context, *kv_secret);
+		}
+	}
+
+	return SecretMatch(*best_match, best_match_score);
 }
 
 unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,
