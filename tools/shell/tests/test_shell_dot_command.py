@@ -62,3 +62,19 @@ def test_help_lists_plugin_macro(shell):
     )
     result = test.run()
     result.check_stdout(".hello")
+
+
+def test_dot_commands_do_not_abort_after_failed_transaction(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".bail off")
+        .statement("BEGIN")
+        .statement("SELECT * FROM this_table_does_not_exist")
+        .statement(".version")
+        .statement(".not_a_real_dot_command")
+        .statement(".help")
+    )
+    result = test.run()
+    assert "Exited due to error" not in result.stderr
+    result.check_stderr("Unrecognized command")
+    assert "Show help text for PATTERN" in result.stdout

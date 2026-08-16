@@ -1053,10 +1053,15 @@ static vector<CatalogDotCommandInfo> ListCatalogDotCommands(const ShellState &st
 			});
 		}
 	};
-	context.RunFunctionInTransaction([&]() {
-		collect(duckdb::CatalogType::TABLE_FUNCTION_ENTRY);
-		collect(duckdb::CatalogType::TABLE_MACRO_ENTRY);
-	});
+	try {
+		context.RunFunctionInTransaction([&]() {
+			collect(duckdb::CatalogType::TABLE_FUNCTION_ENTRY);
+			collect(duckdb::CatalogType::TABLE_MACRO_ENTRY);
+		});
+	} catch (std::exception &) {
+		// Listing must not abort the CLI (e.g. an invalidated transaction).
+		return {};
+	}
 	return result;
 }
 
@@ -1093,8 +1098,15 @@ static bool ResolveCatalogDotCommand(const ShellState &state, const string &opti
 	return false;
 }
 
-static MetadataResult ExecuteCatalogDotCommand(ShellState &state, const string &function_name,
-                                               const vector<string> &args) {
+enum class CatalogDotExecuteResult : uint8_t { SUCCESS = 0, FAIL = 1, NOT_FOUND = 2 };
+
+static bool CatalogFunctionMissingError(const string &error, const string &function_name) {
+	return StringUtil::Contains(error, function_name) &&
+	       (StringUtil::Contains(error, "is not in the catalog") || StringUtil::Contains(error, "does not exist"));
+}
+
+static CatalogDotExecuteResult ExecuteCatalogDotCommand(ShellState &state, const string &function_name,
+                                                        const vector<string> &args) {
 	string user_input;
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
@@ -1107,18 +1119,21 @@ static MetadataResult ExecuteCatalogDotCommand(ShellState &state, const string &
 	    StringUtil::Format("CALL %s(%s, %s)", SQLIdentifier(function_name), SQLString(user_input), SQLString(""));
 	auto result = state.conn->Query(sql);
 	if (result->HasError()) {
+		if (CatalogFunctionMissingError(result->GetError(), function_name)) {
+			return CatalogDotExecuteResult::NOT_FOUND;
+		}
 		state.PrintDatabaseError(result->GetError());
-		return MetadataResult::FAIL;
+		return CatalogDotExecuteResult::FAIL;
 	}
 	if (result->ColumnCount() < 2) {
 		state.PrintDatabaseError("Catalog dot-command must return columns \"command\" and \"input\"");
-		return MetadataResult::FAIL;
+		return CatalogDotExecuteResult::FAIL;
 	}
 	try {
 		for (auto &row : *result) {
 			if (row.IsNull(0)) {
 				state.PrintDatabaseError("Catalog dot-command returned a NULL command");
-				return MetadataResult::FAIL;
+				return CatalogDotExecuteResult::FAIL;
 			}
 			auto command = row.GetValue<string>(0);
 			string input;
@@ -1130,31 +1145,49 @@ static MetadataResult ExecuteCatalogDotCommand(ShellState &state, const string &
 				state.Print("\n");
 			} else {
 				state.PrintDatabaseError(StringUtil::Format("Unsupported catalog dot-command \"%s\"", command));
-				return MetadataResult::FAIL;
+				return CatalogDotExecuteResult::FAIL;
 			}
 		}
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
 		state.PrintDatabaseError(error.Message());
-		return MetadataResult::FAIL;
+		return CatalogDotExecuteResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return CatalogDotExecuteResult::SUCCESS;
 }
 
 int ShellState::TryCatalogDotCommand(const vector<string> &args) {
 	if (!conn || !conn->context) {
 		return -1;
 	}
-	string function_name;
-	string resolve_error;
-	if (!ResolveCatalogDotCommand(*this, args[0], function_name, resolve_error)) {
+	try {
+		string function_name;
+		string resolve_error;
+		if (ResolveCatalogDotCommand(*this, args[0], function_name, resolve_error)) {
+			auto executed = ExecuteCatalogDotCommand(*this, function_name, args);
+			if (executed == CatalogDotExecuteResult::NOT_FOUND) {
+				return -1;
+			}
+			return int(executed);
+		}
 		if (!resolve_error.empty()) {
 			PrintDatabaseError(resolve_error);
 			return int(MetadataResult::FAIL);
 		}
-		return -1;
+		// Listing can fail (invalidated transaction) or miss prefixes. Still try the exact name
+		// so .version reports a query error instead of looking unrecognized, and so the CLI
+		// does not unwind to "Exited due to error".
+		function_name = string(SHELL_DOT_COMMAND_PREFIX) + args[0];
+		auto executed = ExecuteCatalogDotCommand(*this, function_name, args);
+		if (executed == CatalogDotExecuteResult::NOT_FOUND) {
+			return -1;
+		}
+		return int(executed);
+	} catch (std::exception &ex) {
+		duckdb::ErrorData error(ex);
+		PrintDatabaseError(error.Message());
+		return int(MetadataResult::FAIL);
 	}
-	return int(ExecuteCatalogDotCommand(*this, function_name, args));
 }
 
 bool ShouldPrintCommand(const MetadataCommand &command, const string &glob_pattern) {
