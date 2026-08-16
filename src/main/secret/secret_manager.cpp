@@ -270,6 +270,13 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 		                        input.type, input.provider);
 	}
 
+	// Whatever the function declared transient is held outside the secret map from here on, so that
+	// registering the secret does not write it to the secret storage
+	auto kv_secret = dynamic_cast<KeyValueSecret *>(secret.get());
+	if (kv_secret) {
+		kv_secret->InstallDeclaredTransientValues();
+	}
+
 	// Register the secret at the secret_manager
 	return RegisterSecretInternal(transaction, std::move(secret), input.on_conflict, input.persist_type,
 	                              input.storage_type);
@@ -344,16 +351,8 @@ bool SecretManager::TryRefreshSecret(ClientContext &context, const KeyValueSecre
 		// Only the keys the secret declared transient are installed: the rest of the re-created
 		// secret is discarded, since the catalog entry it would belong to is not being replaced.
 		auto &refreshed_kv = refreshed->Cast<KeyValueSecret>();
-		if (!refreshed_kv.transient_keys.empty()) {
-			auto values = make_shared_ptr<SecretDerivedValues>();
-			for (const auto &key : refreshed_kv.transient_keys) {
-				auto lookup = refreshed_kv.secret_map.find(key);
-				if (lookup != refreshed_kv.secret_map.end()) {
-					values->values[key] = lookup->second;
-				}
-			}
-			snapshot = std::move(values);
-		}
+		refreshed_kv.InstallDeclaredTransientValues();
+		snapshot = refreshed_kv.GetDerivedState().GetSnapshot();
 	} catch (...) {
 		derived_state.AbortRefresh();
 		throw;

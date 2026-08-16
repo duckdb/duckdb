@@ -91,10 +91,6 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 
 	vector<Value> map_values;
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
-		// transient values are re-derived by running the secret's recipe, never persisted
-		if (transient_keys.find(it->first) != transient_keys.end()) {
-			continue;
-		}
 		child_list_t<Value> map_struct;
 		map_struct.emplace_back(make_pair("key", Value(it->first)));
 		map_struct.emplace_back(make_pair("value", Value(it->second)));
@@ -112,14 +108,6 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	}
 	auto list = Value::LIST(LogicalType::VARCHAR, redact_key_values);
 	serializer.WriteProperty(202, "redact_keys", list);
-
-	vector<Value> transient_key_values;
-	for (auto it = transient_keys.begin(); it != transient_keys.end(); it++) {
-		transient_key_values.push_back(*it);
-	}
-	auto transient_list =
-	    transient_key_values.empty() ? Value() : Value::LIST(LogicalType::VARCHAR, transient_key_values);
-	serializer.WritePropertyWithDefault(203, "transient_keys", transient_list, Value());
 }
 
 Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) const {

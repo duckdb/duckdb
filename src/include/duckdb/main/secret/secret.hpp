@@ -311,16 +311,6 @@ public:
 			result->redact_keys.insert(Identifier(entry.ToString()));
 		}
 
-		// only written when the secret has transient keys, so that secrets without them stay
-		// readable by versions that predate them
-		Value transient_set_value;
-		deserializer.ReadPropertyWithExplicitDefault(203, "transient_keys", transient_set_value, Value());
-		if (!transient_set_value.IsNull()) {
-			for (const auto &entry : ListValue::GetChildren(transient_set_value)) {
-				result->transient_keys.insert(Identifier(entry.ToString()));
-			}
-		}
-
 		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
 	}
 
@@ -360,24 +350,28 @@ public:
 	bool HasRefreshRecipe() const {
 		return secret_map.find("refresh_info") != secret_map.end();
 	}
-	//! Whether a transient value is missing and has to be derived before the secret can be used.
-	//! True for a secret read back from storage, where the transient values were not persisted, and
-	//! false for one that was just created, where they are still in the secret map
+	//! Whether the transient values have to be derived before the secret can be used. A secret that
+	//! declared transient values had them moved into the snapshot when it was created, and the
+	//! snapshot is not persisted, so a secret read back from storage is missing them
 	bool NeedsDerivation() const {
+		return HasRefreshRecipe() && !HasDerivedValues();
+	}
+	//! Moves the values the create function declared transient out of the secret map and into the
+	//! snapshot. They are then held only in the state shared between copies, which is never
+	//! serialized, so they are re-derived rather than persisted
+	void InstallDeclaredTransientValues() {
 		if (transient_keys.empty()) {
-			return false;
+			return;
 		}
-		auto snapshot = derived_state->GetSnapshot();
+		auto snapshot = make_shared_ptr<SecretDerivedValues>();
 		for (const auto &key : transient_keys) {
-			if (snapshot && snapshot->values.find(key) != snapshot->values.end()) {
-				continue;
+			auto lookup = secret_map.find(key);
+			if (lookup != secret_map.end()) {
+				snapshot->values[key] = lookup->second;
+				secret_map.erase(lookup);
 			}
-			if (secret_map.find(key) != secret_map.end()) {
-				continue;
-			}
-			return true;
 		}
-		return false;
+		derived_state->SetSnapshot(std::move(snapshot));
 	}
 	//! Flag the derived values as rejected, forcing a re-derivation on the next lookup
 	void MarkMustRefresh() const {
