@@ -18,6 +18,9 @@ namespace {
 atomic<int64_t> derivation_count {0};
 //! When set, the provider throws instead of producing a token
 atomic<bool> derivation_fails {false};
+//! When cleared, the provider does not declare its token transient, which is what a secret written
+//! by a version that predates transient values looks like
+atomic<bool> declares_transient {true};
 
 constexpr const char *SECRET_TYPE = "refresh_demo";
 constexpr const char *SECRET_PROVIDER = "counter";
@@ -48,7 +51,9 @@ unique_ptr<BaseSecret> CreateRefreshDemoSecret(ClientContext &context, CreateSec
 	// transient, so it is never written to the secret storage and is re-derived instead.
 	auto token = StringUtil::Format("token_%d", ++derivation_count);
 	secret->secret_map["token"] = Value(token);
-	secret->transient_keys = {"token"};
+	if (declares_transient) {
+		secret->transient_keys = {"token"};
+	}
 
 	return std::move(secret);
 }
@@ -58,11 +63,29 @@ void DerivationCountFun(DataChunk &args, ExpressionState &state, Vector &result)
 	result.Reference(Value::BIGINT(derivation_count), count_t(args.size()));
 }
 
+//! Puts the provider back to its initial state. The counters are process-wide and a restart only
+//! reopens the database, so a test that asserts on them has to start from a known point
+void ResetFun(DataChunk &args, ExpressionState &state, Vector &result) {
+	derivation_count = 0;
+	derivation_fails = false;
+	declares_transient = true;
+	result.Reference(Value::BOOLEAN(true), count_t(args.size()));
+}
+
 //! Makes the provider throw on the next derivation, so that a failing refresh can be tested
 void SetDerivationFailsFun(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<bool, bool>(args.data[0], result, args.size(), [&](bool fails) {
 		derivation_fails = fails;
 		return fails;
+	});
+}
+
+//! Controls whether the provider declares its token transient, to emulate a secret written before
+//! transient values existed
+void SetDeclaresTransientFun(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<bool, bool>(args.data[0], result, args.size(), [&](bool declares) {
+		declares_transient = declares;
+		return declares;
 	});
 }
 
@@ -103,9 +126,12 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_secret_refresh_demo, loader) {
 
 	loader.RegisterFunction(
 	    ScalarFunction("refresh_demo_derivations", {}, LogicalType::BIGINT, DerivationCountFun));
+	loader.RegisterFunction(ScalarFunction("refresh_demo_reset", {}, LogicalType::BOOLEAN, ResetFun));
 	loader.RegisterFunction(
 	    ScalarFunction("refresh_demo_set_fails", {LogicalType::BOOLEAN}, LogicalType::BOOLEAN, SetDerivationFailsFun));
 	loader.RegisterFunction(
 	    ScalarFunction("refresh_demo_invalidate", {LogicalType::VARCHAR}, LogicalType::BOOLEAN, InvalidateSecretFun));
+	loader.RegisterFunction(ScalarFunction("refresh_demo_set_declares_transient", {LogicalType::BOOLEAN},
+	                                       LogicalType::BOOLEAN, SetDeclaresTransientFun));
 }
 }
