@@ -2673,9 +2673,13 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	string error_msg;
 	auto metadata_command = FindMetadataCommand(args[0], error_msg);
 	if (!metadata_command) {
-		// command not found
-		PrintDatabaseError(error_msg);
-		rc = 1;
+		int catalog_rc = TryCatalogDotCommand(args);
+		if (catalog_rc >= 0) {
+			rc = catalog_rc;
+		} else {
+			PrintDatabaseError(error_msg);
+			rc = 1;
+		}
 	} else {
 		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
