@@ -60,7 +60,16 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	}
 	result = result.substr(0, result.size() - 1);
 	result += ";";
-	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
+	// derived values shadow the secret's own values
+	auto merged_map = secret_map;
+	auto snapshot = GetDerivedState().GetSnapshot();
+	if (snapshot) {
+		for (const auto &derived : snapshot->values) {
+			merged_map[derived.first] = derived.second;
+		}
+	}
+
+	for (auto it = merged_map.begin(); it != merged_map.end(); it++) {
 		result.append(it->first.GetIdentifierName());
 		result.append("=");
 		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
@@ -68,7 +77,7 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 		} else {
 			result.append(it->second.ToString());
 		}
-		if (it != --secret_map.end()) {
+		if (it != --merged_map.end()) {
 			result.append(";");
 		}
 	}
@@ -82,6 +91,10 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 
 	vector<Value> map_values;
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
+		// transient values are re-derived by running the secret's recipe, never persisted
+		if (transient_keys.find(it->first) != transient_keys.end()) {
+			continue;
+		}
 		child_list_t<Value> map_struct;
 		map_struct.emplace_back(make_pair("key", Value(it->first)));
 		map_struct.emplace_back(make_pair("value", Value(it->second)));
@@ -99,18 +112,26 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	}
 	auto list = Value::LIST(LogicalType::VARCHAR, redact_key_values);
 	serializer.WriteProperty(202, "redact_keys", list);
+
+	vector<Value> transient_key_values;
+	for (auto it = transient_keys.begin(); it != transient_keys.end(); it++) {
+		transient_key_values.push_back(*it);
+	}
+	auto transient_list =
+	    transient_key_values.empty() ? Value() : Value::LIST(LogicalType::VARCHAR, transient_key_values);
+	serializer.WritePropertyWithDefault(203, "transient_keys", transient_list, Value());
 }
 
 Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) const {
-	auto lookup = secret_map.find(key);
-	if (lookup == secret_map.end()) {
+	Value result;
+	if (!TryGetValue(key, result)) {
 		if (error_on_missing) {
 			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
 		}
 		return Value();
 	}
 
-	return lookup->second;
+	return result;
 }
 
 KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char **secret_types, idx_t secret_types_len,
