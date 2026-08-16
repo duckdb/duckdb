@@ -10,7 +10,7 @@ const vector<Vector> &ArgumentPack::GetInput(const Vector &pack) {
 	return StructVector::GetEntries(pack);
 }
 
-const child_list_t<LogicalType>& ArgumentPack::GetTypes(const LogicalType &pack) {
+const child_list_t<LogicalType> &ArgumentPack::GetTypes(const LogicalType &pack) {
 	D_ASSERT(IsPackType(pack));
 	return StructType::GetChildTypes(pack);
 }

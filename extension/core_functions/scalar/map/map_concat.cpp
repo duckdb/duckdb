@@ -36,7 +36,6 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 }
 
 void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-
 	const auto &head = input.data[0];
 	const auto &tail = ArgumentPack::GetInput(input.data[1]);
 
@@ -45,7 +44,6 @@ void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result)
 	for (auto &arg : tail) {
 		args.emplace_back(arg);
 	}
-
 
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
@@ -131,21 +129,20 @@ void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result)
 } // namespace
 
 ScalarFunction MapConcatFun::GetFunction() {
-
 	const auto key_type = LogicalType::TEMPLATE("K");
 	const auto val_type = LogicalType::TEMPLATE("V");
 	const auto map_type = LogicalType::MAP(key_type, val_type);
 
 	// TODO: this should take a single map arg + varargs
 	auto sig = FunctionSignature()
-		.AddParameter("arg", map_type)
-		.AddVarPositionalParameter("args", map_type)
-		.SetReturnType(map_type);
+	               .AddParameter("arg", map_type)
+	               .AddVarPositionalParameter("args", map_type)
+	               .SetReturnType(map_type);
 
 	auto fun = ScalarFunction("map_concat", std::move(sig))
-		.SetFunctionCallback(MapConcatFunction)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
-		.SetFallible();
+	               .SetFunctionCallback(MapConcatFunction)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetFallible();
 
 	return fun;
 }

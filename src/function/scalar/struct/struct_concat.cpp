@@ -123,15 +123,15 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 
 ScalarFunction StructConcatFun::GetFunction() {
 	auto sig = FunctionSignature()
-		.AddParameter("arg", LogicalTypeId::STRUCT)
-		.AddVarPositionalParameter("args", LogicalType::ANY)
-		.SetReturnType(LogicalTypeId::STRUCT);
+	               .AddParameter("arg", LogicalTypeId::STRUCT)
+	               .AddVarPositionalParameter("args", LogicalType::ANY)
+	               .SetReturnType(LogicalTypeId::STRUCT);
 
 	auto fun = ScalarFunction("struct_concat", std::move(sig))
-		.SetFunctionCallback(StructConcatFunction)
-		.SetBindCallback(StructConcatBind)
-		.SetStatisticsCallback(StructConcatStats)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	               .SetFunctionCallback(StructConcatFunction)
+	               .SetBindCallback(StructConcatBind)
+	               .SetStatisticsCallback(StructConcatStats)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return fun;
 }

@@ -11,7 +11,6 @@ namespace duckdb {
 namespace {
 
 void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	const auto &head = args.data[0];
 	const auto &tail = ArgumentPack::GetInput(args.data[1]);
 
@@ -51,7 +50,6 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 }
 
 unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &, FunctionStatisticsInput &input) {
-
 	const auto &head_stats = input.child_stats[0];
 	const auto &tail_stats = input.child_stats[1];
 	const auto tail_length = ArgumentPack::GetSize(tail_stats.GetType());
@@ -74,15 +72,15 @@ ScalarFunction ArrayValueFun::GetFunction() {
 	const auto element_type = LogicalType::TEMPLATE("T");
 
 	auto sig = FunctionSignature()
-		.AddParameter("head", element_type)
-		.AddVarPositionalParameter("tail", element_type)
-		.SetReturnType(LogicalType::ARRAY(element_type, optional_idx()));
+	               .AddParameter("head", element_type)
+	               .AddVarPositionalParameter("tail", element_type)
+	               .SetReturnType(LogicalType::ARRAY(element_type, optional_idx()));
 
 	auto fun = ScalarFunction("array_value", std::move(sig))
-		.SetFunctionCallback(ArrayValueFunction)
-		.SetBindCallback(ArrayValueBind)
-		.SetStatisticsCallback(ArrayValueStats)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	               .SetFunctionCallback(ArrayValueFunction)
+	               .SetBindCallback(ArrayValueBind)
+	               .SetStatisticsCallback(ArrayValueStats)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return fun;
 }

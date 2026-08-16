@@ -14,13 +14,12 @@ static void HashFunction(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 ScalarFunction HashFun::GetFunction() {
-	return ScalarFunction("hash",
-		FunctionSignature()
-			.AddParameter("arg", LogicalType::ANY)
-			.AddVarPositionalParameter("args", LogicalType::ANY)
-			.SetReturnType(LogicalType::HASH))
-		.SetFunctionCallback(HashFunction)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	return ScalarFunction("hash", FunctionSignature()
+	                                  .AddParameter("arg", LogicalType::ANY)
+	                                  .AddVarPositionalParameter("args", LogicalType::ANY)
+	                                  .SetReturnType(LogicalType::HASH))
+	    .SetFunctionCallback(HashFunction)
+	    .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 } // namespace duckdb

@@ -32,7 +32,6 @@ FunctionLocalState::~FunctionLocalState() {
 ScalarFunctionInfo::~ScalarFunctionInfo() {
 }
 
-
 ScalarFunction::ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function)
     : SimpleFunction(std::move(name), std::move(sig)) {
 	callbacks.function = std::move(function);

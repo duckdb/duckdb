@@ -26,8 +26,7 @@ public:
 };
 
 // Process one output row; returns false if any input is NULL.
-bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &inputs, idx_t col_count,
-                       string &out_result) {
+bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &inputs, idx_t col_count, string &out_result) {
 	Path out_path;
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		auto &vdata = inputs[col_idx];
@@ -70,14 +69,14 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 ScalarFunction PathJoinFun::GetFunction() {
 	auto sig = FunctionSignature()
-		.AddParameter("path", LogicalType::VARCHAR)
-		.AddVarPositionalParameter("paths", LogicalType::VARCHAR)
-		.SetReturnType(LogicalType::VARCHAR);
+	               .AddParameter("path", LogicalType::VARCHAR)
+	               .AddVarPositionalParameter("paths", LogicalType::VARCHAR)
+	               .SetReturnType(LogicalType::VARCHAR);
 
 	auto fun = ScalarFunction(PathJoinFun::Name, std::move(sig))
-		.SetFunctionCallback(PathJoinFunction)
-		.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING)
-		.SetFallible(); // throws if the paths that are joined are incompatible
+	               .SetFunctionCallback(PathJoinFunction)
+	               .SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING)
+	               .SetFallible(); // throws if the paths that are joined are incompatible
 
 	return fun;
 }

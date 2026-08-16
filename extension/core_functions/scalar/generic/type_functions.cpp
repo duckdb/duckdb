@@ -80,7 +80,6 @@ static void MakeTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpressionInput &input) {
-
 	auto &name_arg = input.children[0];
 	auto &pack_arg = input.children[1];
 
@@ -124,14 +123,14 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 ScalarFunction MakeTypeFun::GetFunction() {
 	auto sig = FunctionSignature()
-		.AddParameter("type_name", LogicalType::VARCHAR)
-		.AddVarKeywordParameter("kwargs", LogicalTypeId::ANY)
-		.SetReturnType(LogicalType::TYPE());
+	               .AddParameter("type_name", LogicalType::VARCHAR)
+	               .AddVarKeywordParameter("kwargs", LogicalTypeId::ANY)
+	               .SetReturnType(LogicalType::TYPE());
 
 	auto fun = ScalarFunction("make_type", std::move(sig))
-		.SetFunctionCallback(MakeTypeFunction)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
-		.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
+	               .SetFunctionCallback(MakeTypeFunction)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetBindExpressionCallback(BindMakeTypeFunctionExpression);
 
 	return fun;
 }

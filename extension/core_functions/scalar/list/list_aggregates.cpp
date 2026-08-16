@@ -502,19 +502,18 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	return ScalarFunction("list_aggregate",
-		FunctionSignature()
-				.AddParameter("list", LogicalType::LIST(LogicalType::ANY))
-				.AddParameter("name", LogicalType::VARCHAR)
-				.AddVarPositionalParameter("args", LogicalType::ANY)
-				.SetReturnType(LogicalType::ANY))
-		.SetFunctionCallback(ListAggregateFunction)
-		.SetBindCallback(ListAggregateBind)
-		.SetInitStateCallback(ListAggregatesInitLocalState)
-		.SetFallible()
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
-		.SetSerializeCallback(ListAggregatesBindData::SerializeFunction)
-		.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
+	return ScalarFunction("list_aggregate", FunctionSignature()
+	                                            .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	                                            .AddParameter("name", LogicalType::VARCHAR)
+	                                            .AddVarPositionalParameter("args", LogicalType::ANY)
+	                                            .SetReturnType(LogicalType::ANY))
+	    .SetFunctionCallback(ListAggregateFunction)
+	    .SetBindCallback(ListAggregateBind)
+	    .SetInitStateCallback(ListAggregatesInitLocalState)
+	    .SetFallible()
+	    .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	    .SetSerializeCallback(ListAggregatesBindData::SerializeFunction)
+	    .SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {

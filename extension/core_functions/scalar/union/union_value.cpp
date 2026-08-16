@@ -40,16 +40,15 @@ unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction UnionValueFun::GetFunction() {
-	auto sig = FunctionSignature()
-		.AddVarKeywordParameter("kwargs", LogicalType::ANY)
-		.SetReturnType(LogicalTypeId::UNION);
+	auto sig =
+	    FunctionSignature().AddVarKeywordParameter("kwargs", LogicalType::ANY).SetReturnType(LogicalTypeId::UNION);
 
 	auto fun = ScalarFunction("union_value", std::move(sig))
-		.SetFunctionCallback(UnionValueFunction)
-		.SetBindCallback(UnionValueBind)
-		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
-		.SetSerializeCallback(VariableReturnBindData::Serialize)
-		.SetDeserializeCallback(VariableReturnBindData::Deserialize);
+	               .SetFunctionCallback(UnionValueFunction)
+	               .SetBindCallback(UnionValueBind)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetSerializeCallback(VariableReturnBindData::Serialize)
+	               .SetDeserializeCallback(VariableReturnBindData::Deserialize);
 
 	return fun;
 }

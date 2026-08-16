@@ -180,14 +180,14 @@ ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 
 	auto sig = FunctionSignature()
-		.AddParameter("format", LogicalType::VARCHAR)
-		.AddVarPositionalParameter("args", LogicalType::ANY)
-		.SetReturnType(LogicalType::VARCHAR);
+	               .AddParameter("format", LogicalType::VARCHAR)
+	               .AddVarPositionalParameter("args", LogicalType::ANY)
+	               .SetReturnType(LogicalType::VARCHAR);
 
 	auto fun = ScalarFunction("printf", std::move(sig))
-		.SetFunctionCallback(PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>)
-		.SetBindCallback(BindPrintfFunction)
-		.SetFallible();
+	               .SetFunctionCallback(PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>)
+	               .SetBindCallback(BindPrintfFunction)
+	               .SetFallible();
 
 	return fun;
 }
@@ -196,14 +196,14 @@ ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 
 	auto sig = FunctionSignature()
-		.AddParameter("format", LogicalType::VARCHAR)
-		.AddVarPositionalParameter("args", LogicalType::ANY)
-		.SetReturnType(LogicalType::VARCHAR);
+	               .AddParameter("format", LogicalType::VARCHAR)
+	               .AddVarPositionalParameter("args", LogicalType::ANY)
+	               .SetReturnType(LogicalType::VARCHAR);
 
 	auto fun = ScalarFunction("format", std::move(sig))
-		.SetFunctionCallback(PrintfFunction<FMTFormat, duckdb_fmt::format_context>)
-		.SetBindCallback(BindPrintfFunction)
-		.SetFallible();
+	               .SetFunctionCallback(PrintfFunction<FMTFormat, duckdb_fmt::format_context>)
+	               .SetBindCallback(BindPrintfFunction)
+	               .SetFallible();
 
 	return fun;
 }
