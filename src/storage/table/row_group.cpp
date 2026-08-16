@@ -13,6 +13,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -714,6 +716,47 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
+	const auto table_filters = filters.GetTableFilters();
+	const auto column_ids = filters.GetColumnIds();
+	if (table_filters && column_ids) {
+		for (const auto &filter : table_filters->GetRowGroupFilters()) {
+			if (filter.column_indexes.size() != 2 || !filter.expression ||
+			    !BoundComparisonExpression::IsComparison(*filter.expression)) {
+				continue;
+			}
+			const auto &comparison = filter.expression->Cast<BoundFunctionExpression>();
+			const auto &left = BoundComparisonExpression::Left(comparison);
+			const auto &right = BoundComparisonExpression::Right(comparison);
+			if (left.GetExpressionClass() != ExpressionClass::BOUND_REF ||
+			    right.GetExpressionClass() != ExpressionClass::BOUND_REF) {
+				continue;
+			}
+			const auto left_index = left.Cast<BoundReferenceExpression>().Index();
+			const auto right_index = right.Cast<BoundReferenceExpression>().Index();
+			if (left_index >= filter.column_indexes.size() || right_index >= filter.column_indexes.size()) {
+				continue;
+			}
+			const auto left_column_index = filter.column_indexes[left_index].GetIndex();
+			const auto right_column_index = filter.column_indexes[right_index].GetIndex();
+			if (left_column_index >= column_ids->size() || right_column_index >= column_ids->size()) {
+				throw InternalException("Row-group filter column index out of range");
+			}
+			const auto &left_storage_index = (*column_ids)[left_column_index];
+			const auto &right_storage_index = (*column_ids)[right_column_index];
+			if (left_storage_index.IsRowIdColumn() || left_storage_index.IsRowNumberColumn() ||
+			    right_storage_index.IsRowIdColumn() || right_storage_index.IsRowNumberColumn()) {
+				continue;
+			}
+			auto left_stats = GetStatistics(left_storage_index);
+			auto right_stats = GetStatistics(right_storage_index);
+			const auto prune_result =
+			    StatisticsPropagator::PropagateComparison(*left_stats, *right_stats, comparison.GetExpressionType());
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				return false;
+			}
+		}
+	}
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();

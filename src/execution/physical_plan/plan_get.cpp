@@ -20,6 +20,9 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 	for (auto &entry : table_filters) {
 		table_filter_set->SetFilterByColumnIndex(entry.GetIndex(), entry.TakeFilter());
 	}
+	for (const auto &filter : table_filters.GetRowGroupFilters()) {
+		table_filter_set->PushRowGroupFilter(filter.Copy());
+	}
 	return table_filter_set;
 }
 
@@ -76,7 +79,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	}
 
 	unique_ptr<TableFilterSet> table_filters;
-	if (op.table_filters.HasFilters()) {
+	if (op.table_filters.HasFilters() || op.table_filters.HasRowGroupFilters()) {
 		table_filters = MoveTableFilters(op.table_filters);
 	}
 

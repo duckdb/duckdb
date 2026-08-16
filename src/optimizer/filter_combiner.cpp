@@ -402,6 +402,41 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	if (bindings.size() == 2 && bindings[0] != bindings[1] &&
+	    get.function.GetName().GetIdentifierName() == "seq_scan" && BoundComparisonExpression::IsComparison(expr)) {
+		const auto &comparison = expr.Cast<BoundFunctionExpression>();
+		const auto &left = BoundComparisonExpression::Left(comparison);
+		const auto &right = BoundComparisonExpression::Right(comparison);
+		const auto comparison_type = comparison.GetExpressionType();
+		const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
+		                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		if (!supported_comparison || left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsNumeric() ||
+		    !right.GetReturnType().IsNumeric()) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+		const auto &left_ref = left.Cast<BoundColumnRefExpression>();
+		const auto &right_ref = right.Cast<BoundColumnRefExpression>();
+		if (left_ref.Binding().table_index != get.table_index || right_ref.Binding().table_index != get.table_index ||
+		    left_ref.Binding().column_index >= get.GetColumnIds().size() ||
+		    right_ref.Binding().column_index >= get.GetColumnIds().size() ||
+		    get.GetColumnIds()[left_ref.Binding().column_index].IsVirtualColumn() ||
+		    get.GetColumnIds()[right_ref.Binding().column_index].IsVirtualColumn()) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+
+		auto left_bound_ref = make_uniq<BoundReferenceExpression>(left_ref.GetAlias(), left_ref.GetReturnType(), 0);
+		auto right_bound_ref = make_uniq<BoundReferenceExpression>(right_ref.GetAlias(), right_ref.GetReturnType(), 1);
+		auto filter_expr =
+		    BoundComparisonExpression::Create(comparison_type, std::move(left_bound_ref), std::move(right_bound_ref));
+		vector<ProjectionIndex> column_indexes {left_ref.Binding().column_index, right_ref.Binding().column_index};
+		get.table_filters.PushRowGroupFilter(
+		    RowGroupExpressionFilter(std::move(column_indexes), std::move(filter_expr)));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+	}
 	// we can only pushdown expressions that refer to exactly one column
 	for (idx_t i = 1; i < bindings.size(); i++) {
 		if (bindings[i] != bindings[0]) {

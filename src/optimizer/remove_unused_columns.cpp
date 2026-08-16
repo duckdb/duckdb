@@ -1020,6 +1020,16 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		//! Now visit the filter to add to the 'column_references'
 		VisitExpression(&filter_expressions.back());
 	}
+	for (const auto &filter : get.table_filters.GetRowGroupFilters()) {
+		for (const auto &filter_idx : filter.column_indexes) {
+			const auto &col_id = get.GetColumnIndex(filter_idx);
+			auto column_type = get.GetColumnType(col_id);
+			ColumnBinding filter_binding(get.table_index, filter_idx);
+			unique_ptr<Expression> column_ref =
+			    make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
+			VisitExpression(&column_ref);
+		}
+	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported
 	CheckPushdownExtract(get);
@@ -1084,7 +1094,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	get.SetColumnIds(std::move(new_column_ids));
 
 	// remap table filters so they point towards the new set of ids
-	if (get.table_filters.HasFilters()) {
+	if (get.table_filters.HasFilters() || get.table_filters.HasRowGroupFilters()) {
 		// Build a mapping from old ProjectionIndex -> new ProjectionIndex using original_ids
 		unordered_map<ProjectionIndex, ProjectionIndex> old_to_new_pos;
 		old_to_new_pos.reserve(original_ids.size());
@@ -1098,6 +1108,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 				throw InternalException("RemoveUnusedColumns: removed a filter column");
 			}
 			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		for (const auto &filter : get.table_filters.GetRowGroupFilters()) {
+			auto remapped_filter = filter.Copy();
+			for (auto &column_index : remapped_filter.column_indexes) {
+				auto it = old_to_new_pos.find(column_index);
+				if (it == old_to_new_pos.end()) {
+					throw InternalException("RemoveUnusedColumns: removed a row-group filter column");
+				}
+				column_index = it->second;
+			}
+			remapped_filters.PushRowGroupFilter(std::move(remapped_filter));
 		}
 		get.table_filters = std::move(remapped_filters);
 	}
