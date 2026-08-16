@@ -124,8 +124,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_secret_refresh_demo, loader) {
 	secret_function.named_parameters["account"] = LogicalType::VARCHAR;
 	loader.RegisterFunction(secret_function);
 
-	loader.RegisterFunction(
-	    ScalarFunction("refresh_demo_derivations", {}, LogicalType::BIGINT, DerivationCountFun));
+	loader.RegisterFunction(ScalarFunction("refresh_demo_derivations", {}, LogicalType::BIGINT, DerivationCountFun));
 	loader.RegisterFunction(ScalarFunction("refresh_demo_reset", {}, LogicalType::BOOLEAN, ResetFun));
 	loader.RegisterFunction(
 	    ScalarFunction("refresh_demo_set_fails", {LogicalType::BOOLEAN}, LogicalType::BOOLEAN, SetDerivationFailsFun));
