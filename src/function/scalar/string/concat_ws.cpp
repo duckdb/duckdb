@@ -89,9 +89,10 @@ ScalarFunction ConcatWsFun::GetFunction() {
 
 	FunctionSignature signature;
 	signature.AddParameter("separator", LogicalType::VARCHAR);
-	signature.AddParameter("value", LogicalType::ANY);
-	signature.AddVarPositionalParameter("values", LogicalType::ANY);
+	signature.AddParameter("arg", LogicalType::ANY);
+	signature.AddVarPositionalParameter("args", LogicalType::ANY);
 	signature.SetReturnType(LogicalType::VARCHAR);
+
 	ScalarFunction concat_ws("concat_ws", std::move(signature), ConcatWSFunction);
 	concat_ws.SetBindCallback(BindConcatWSFunction);
 	concat_ws.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

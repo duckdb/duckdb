@@ -25,7 +25,7 @@ SELECT struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'});
 statement error
 SELECT struct_insert();
 ----
-<REGEX>:Invalid Input Error.*Missing required arguments for struct_insert function.*
+<REGEX>:Binder Error:.*No function matches the given name and argument types 'struct_insert\(\)'.*
 
 statement error
 SELECT struct_insert({a: 1, b: 2});
@@ -35,7 +35,7 @@ SELECT struct_insert({a: 1, b: 2});
 statement error
 SELECT struct_insert(123, a := 1);
 ----
-<REGEX>:Invalid Input Error.*The first argument to struct_insert must be a STRUCT.*
+<REGEX>:Binder Error:.*No function matches the given name and argument types 'struct_insert\(INTEGER_LITERAL, a := INTEGER_LITERAL\)'.*
 
 statement error
 SELECT struct_insert({a: 1, b: 2}, a := 2);

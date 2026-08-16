@@ -235,8 +235,9 @@ public:
 	auto GetReturnType() const -> const LogicalType & {
 		return return_type;
 	}
-	auto SetReturnType(LogicalType return_type_p) -> void {
+	auto SetReturnType(LogicalType return_type_p) -> FunctionSignature & {
 		return_type = std::move(return_type_p);
+		return *this;
 	}
 
 	auto HasVarArgs() const -> bool {

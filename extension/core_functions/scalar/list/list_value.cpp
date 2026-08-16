@@ -367,6 +367,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	value_signature.AddParameter("value", element_type);
 	value_signature.AddVarPositionalParameter("values", element_type);
 	value_signature.SetReturnType(LogicalType::LIST(element_type));
+
 	ScalarFunction value_fun("list_value", std::move(value_signature), ListValueFunction);
 	value_fun.SetBindCallback(ListValueBind);
 	value_fun.SetStatisticsCallback(ListValueStats);

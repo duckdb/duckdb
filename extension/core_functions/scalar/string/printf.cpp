@@ -1,7 +1,5 @@
 #include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/planner/expression/bound_argument_pack.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
@@ -65,7 +63,7 @@ static unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &inpu
 	D_ASSERT(arguments.size() == 2);
 
 	vector<LogicalType> value_types;
-	for (auto &value : StructType::GetChildTypes(arguments[1]->GetReturnType())) {
+	for (auto &value : ArgumentPack::GetTypes(arguments[1]->GetReturnType())) {
 		value_types.push_back(PrintfArgumentType(value.second));
 	}
 	bound_function.GetArguments()[1] = ArgumentPack::PositionalType(std::move(value_types));
@@ -116,7 +114,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 	auto format_data = args.data[0].Values<string_t>();
 
-	auto &values = StructVector::GetEntries(args.data[1]);
+	auto &values = ArgumentPack::GetInput(args.data[1]);
 	for (idx_t value_idx = 0; value_idx < values.size(); value_idx++) {
 		const auto &col = values[value_idx];
 		const auto i = value_idx + 1;
@@ -180,26 +178,34 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
-	FunctionSignature signature;
-	signature.AddParameter("format", LogicalType::VARCHAR);
-	signature.AddVarPositionalParameter("values", LogicalType::ANY);
-	signature.SetReturnType(LogicalType::VARCHAR);
-	ScalarFunction printf_fun("printf", std::move(signature), PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>);
-	printf_fun.SetBindCallback(BindPrintfFunction);
-	printf_fun.SetFallible();
-	return printf_fun;
+
+	auto sig = FunctionSignature()
+		.AddParameter("format", LogicalType::VARCHAR)
+		.AddVarPositionalParameter("args", LogicalType::ANY)
+		.SetReturnType(LogicalType::VARCHAR);
+
+	auto fun = ScalarFunction("printf", std::move(sig))
+		.SetFunctionCallback(PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>)
+		.SetBindCallback(BindPrintfFunction)
+		.SetFallible();
+
+	return fun;
 }
 
 ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
-	FunctionSignature signature;
-	signature.AddParameter("format", LogicalType::VARCHAR);
-	signature.AddVarPositionalParameter("values", LogicalType::ANY);
-	signature.SetReturnType(LogicalType::VARCHAR);
-	ScalarFunction format_fun("format", std::move(signature), PrintfFunction<FMTFormat, duckdb_fmt::format_context>);
-	format_fun.SetBindCallback(BindPrintfFunction);
-	format_fun.SetFallible();
-	return format_fun;
+
+	auto sig = FunctionSignature()
+		.AddParameter("format", LogicalType::VARCHAR)
+		.AddVarPositionalParameter("args", LogicalType::ANY)
+		.SetReturnType(LogicalType::VARCHAR);
+
+	auto fun = ScalarFunction("format", std::move(sig))
+		.SetFunctionCallback(PrintfFunction<FMTFormat, duckdb_fmt::format_context>)
+		.SetBindCallback(BindPrintfFunction)
+		.SetFallible();
+
+	return fun;
 }
 
 } // namespace duckdb

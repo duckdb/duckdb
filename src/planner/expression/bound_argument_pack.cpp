@@ -1,8 +1,24 @@
 #include "duckdb/planner/expression/bound_argument_pack.hpp"
 
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
+
+const vector<Vector> &ArgumentPack::GetInput(const Vector &pack) {
+	D_ASSERT(IsPackType(pack.GetType()));
+	return StructVector::GetEntries(pack);
+}
+
+const child_list_t<LogicalType>& ArgumentPack::GetTypes(const LogicalType &pack) {
+	D_ASSERT(IsPackType(pack));
+	return StructType::GetChildTypes(pack);
+}
+
+idx_t ArgumentPack::GetSize(const LogicalType &pack) {
+	D_ASSERT(IsPackType(pack));
+	return StructType::GetChildCount(pack);
+}
 
 bool ArgumentPack::IsPackType(const LogicalType &type) {
 	return StructType::IsStruct(type) && type.GetAlias() == TYPE_ALIAS;

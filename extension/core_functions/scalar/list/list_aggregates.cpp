@@ -14,7 +14,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-
 #include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
@@ -503,19 +502,19 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	FunctionSignature signature;
-	signature.AddParameter("list", LogicalType::LIST(LogicalType::ANY));
-	signature.AddParameter("name", LogicalType::VARCHAR);
-	signature.AddVarPositionalParameter("args", LogicalType::ANY);
-	signature.SetReturnType(LogicalType::ANY);
-	auto result = ScalarFunction("list_aggregate", std::move(signature), ListAggregateFunction);
-	result.SetBindCallback(ListAggregateBind);
-	result.SetInitStateCallback(ListAggregatesInitLocalState);
-	result.SetFallible();
-	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
-	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
-	return result;
+	return ScalarFunction("list_aggregate",
+		FunctionSignature()
+				.AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+				.AddParameter("name", LogicalType::VARCHAR)
+				.AddVarPositionalParameter("args", LogicalType::ANY)
+				.SetReturnType(LogicalType::ANY))
+		.SetFunctionCallback(ListAggregateFunction)
+		.SetBindCallback(ListAggregateBind)
+		.SetInitStateCallback(ListAggregatesInitLocalState)
+		.SetFallible()
+		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+		.SetSerializeCallback(ListAggregatesBindData::SerializeFunction)
+		.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {

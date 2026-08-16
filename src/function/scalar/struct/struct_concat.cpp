@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 
@@ -11,22 +12,36 @@ namespace duckdb {
 
 static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &result_cols = StructVector::GetEntries(result);
+
+	const auto &head = args.data[0];
+	const auto &tail = ArgumentPack::GetInput(args.data[1]);
+
 	idx_t offset = 0;
-	for (const auto &arg : args.data) {
-		const auto &child_cols = StructVector::GetEntries(arg);
-		for (auto &child_col : child_cols) {
+
+	for (auto &child_col : StructVector::GetEntries(head)) {
+		result_cols[offset++].Reference(child_col);
+	}
+
+	for (const auto &arg : tail) {
+		for (auto &child_col : StructVector::GetEntries(arg)) {
 			result_cols[offset++].Reference(child_col);
 		}
 	}
+
 	D_ASSERT(offset == result_cols.size());
 }
 
 static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	// collect names and deconflict, construct return type
-	if (arguments.empty()) {
-		throw InvalidInputException("struct_concat: At least one argument is required");
+
+	auto &raw_args = input.GetArguments();
+
+	bound_function.GetArguments()[0] = raw_args[0]->GetReturnType();
+
+	vector<reference<unique_ptr<Expression>>> arguments;
+	arguments.emplace_back(raw_args[0]);
+	for (auto &arg : ArgumentPack::GetPackedChildren(*raw_args[1])) {
+		arguments.emplace_back(arg);
 	}
 
 	child_list_t<LogicalType> combined_children;
@@ -37,15 +52,15 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		const auto &arg = arguments[arg_idx];
 
-		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		if (arg.get()->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 
-		if (!StructType::IsStruct(arg->GetReturnType())) {
+		if (!StructType::IsStruct(arg.get()->GetReturnType())) {
 			throw InvalidInputException("struct_concat: Argument at position \"%d\" is not a STRUCT", arg_idx + 1);
 		}
 
-		const auto &child_types = StructType::GetChildTypes(arg->GetReturnType());
+		const auto &child_types = StructType::GetChildTypes(arg.get()->GetReturnType());
 		for (const auto &child : child_types) {
 			if (!child.first.empty()) {
 				auto it = name_set.find(child.first);
@@ -82,28 +97,42 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	const auto &expr = input.expr;
 
-	auto &arg_stats = input.child_stats;
-	auto &arg_exprs = input.expr.GetChildren();
+	const auto &head_stats = input.child_stats[0];
+	const auto &tail_stats = input.child_stats[1];
 
 	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
-	idx_t struct_index = 0;
 
-	for (idx_t arg_idx = 0; arg_idx < arg_exprs.size(); arg_idx++) {
-		auto &arg_stat = arg_stats[arg_idx];
-		auto &arg_type = arg_exprs[arg_idx]->GetReturnType();
-		for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(arg_type); child_idx++) {
-			auto &child_stat = StructStats::GetChildStats(arg_stat, child_idx);
-			StructStats::SetChildStats(struct_stats, struct_index++, child_stat);
+	idx_t offset = 0;
+
+	for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(head_stats.GetType()); child_idx++) {
+		auto &child_stat = StructStats::GetChildStats(head_stats, child_idx);
+		StructStats::SetChildStats(struct_stats, offset++, child_stat);
+	}
+
+	for (idx_t tail_idx = 0; tail_idx < StructType::GetChildCount(tail_stats.GetType()); tail_idx++) {
+		auto &tail_stat = StructStats::GetChildStats(tail_stats, tail_idx);
+
+		for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(tail_stat.GetType()); child_idx++) {
+			auto &child_stat = StructStats::GetChildStats(tail_stat, child_idx);
+			StructStats::SetChildStats(struct_stats, offset++, child_stat);
 		}
 	}
+
 	return struct_stats.ToUnique();
 }
 
 ScalarFunction StructConcatFun::GetFunction() {
-	ScalarFunction fun("struct_concat", {}, LogicalTypeId::STRUCT, StructConcatFunction, StructConcatBind,
-	                   StructConcatStats);
-	fun.SetVarArgs(LogicalType::ANY);
-	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	auto sig = FunctionSignature()
+		.AddParameter("arg", LogicalTypeId::STRUCT)
+		.AddVarPositionalParameter("args", LogicalType::ANY)
+		.SetReturnType(LogicalTypeId::STRUCT);
+
+	auto fun = ScalarFunction("struct_concat", std::move(sig))
+		.SetFunctionCallback(StructConcatFunction)
+		.SetBindCallback(StructConcatBind)
+		.SetStatisticsCallback(StructConcatStats)
+		.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+
 	return fun;
 }
 
