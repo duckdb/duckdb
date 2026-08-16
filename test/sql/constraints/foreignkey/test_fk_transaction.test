@@ -53,13 +53,32 @@ DELETE FROM pkt WHERE i = 1
 statement ok
 ROLLBACK
 
-# Delete a tuple in the referencing table and then delete that tuple in the main table.
+# Delete a tuple in the main table, then reference it from the referencing table.
 
 statement ok
 BEGIN TRANSACTION
 
 statement ok
 DELETE FROM pkt WHERE i = 1
+
+statement error
+INSERT INTO fkt VALUES (1)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
+
+statement ok
+ROLLBACK
+
+# Re-inserting the tuple in the main table makes the reference valid again.
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM pkt WHERE i = 1
+
+statement ok
+INSERT INTO pkt VALUES (1)
 
 statement ok
 INSERT INTO fkt VALUES (1)
@@ -108,8 +127,10 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM pkt WHERE i = 3
 
-statement ok
+statement error
 INSERT INTO fkt VALUES (3)
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
