@@ -64,10 +64,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		}
 		AttachInfo attach_info;
 		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
-		// Any attach options supplied after the verb flow through as attach options.
-		for (auto &opt : info->options) {
-			attach_info.options[opt.first] = opt.second;
-		}
+		// The grammar gives this form no options of its own, so everything comes from the resource.
 		try {
 			ApplyLaunchedResource(launched, attach_info);
 		} catch (...) {

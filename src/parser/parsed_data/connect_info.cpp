@@ -23,22 +23,9 @@ unique_ptr<ConnectInfo> ConnectInfo::Copy() const {
 
 string ConnectInfo::ToString() const {
 	if (external_resource) {
-		// `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [(create opts)] [(connect opts)]`
-		string result = "CONNECT TO " + external_resource->ToString();
-		if (!parsed_options.empty() || !options.empty()) {
-			vector<string> stringified;
-			for (auto &opt : parsed_options) {
-				stringified.push_back(
-				    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second->ToString()));
-			}
-			for (auto &opt : options) {
-				stringified.push_back(
-				    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second.ToSQLString()));
-			}
-			result += " (" + StringUtil::Join(stringified, ", ") + ")";
-		}
-		result += ";";
-		return result;
+		// `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [(create opts)]` -- this form carries
+		// no options of its own, so there is nothing else to render.
+		return "CONNECT TO " + external_resource->ToString() + ";";
 	}
 	if (target_is_local) {
 		return "CONNECT LOCAL;";

@@ -48,12 +48,20 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachToExternalResourc
 	return std::move(result);
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformConnectToExternalResource(PEGTransformer &transformer,
-                                                          unique_ptr<ExternalResourceOptions> external_resource_source,
-                                                          const optional<vector<GenericCopyOption>> &attach_options) {
+//! CONNECT has no alias to separate its own options from the recipe's create params. Borrowing a
+//! registered resource takes no create params, so a list there is unambiguously the connection's.
+//! Provisioning does take them -- the create clause has already claimed the first list -- so a second
+//! one could only be told apart by position, and is refused instead.
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformConnectToExternalResource(
+    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
+    const optional<vector<GenericCopyOption>> &attach_options) {
 	auto result = make_uniq<ConnectStatement>();
 	auto info = make_uniq<ConnectInfo>();
+	if (attach_options && external_resource_source->reference_name.empty()) {
+		throw ParserException("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE: the option list belongs to the resource, so "
+		                      "the connection cannot take one of its own. Use `ATTACH TO NEW TEMPORARY EXTERNAL "
+		                      "RESOURCE ... AS <name> (options); CONNECT <name>;` instead");
+	}
 	info->external_resource = std::move(external_resource_source);
 	if (attach_options) {
 		SplitGenericOptions(*attach_options, info->parsed_options, info->options, "CONNECT");

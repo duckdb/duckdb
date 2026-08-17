@@ -75,7 +75,7 @@ TEST_CASE("Parse ATTACH TO EXTERNAL RESOURCE (reference) + ToString roundtrip", 
 
 TEST_CASE("Parse CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE + ToString roundtrip", "[parse_external_resource]") {
 	Parser parser;
-	parser.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (region 'eu-west-1') (token 'abc')");
+	parser.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (region 'eu-west-1')");
 	REQUIRE(parser.statements.size() == 1);
 	REQUIRE(parser.statements[0]->type == StatementType::CONNECT_STATEMENT);
 
@@ -126,4 +126,30 @@ TEST_CASE("ATTACH TO EXTERNAL RESOURCE ToString stays reparseable", "[parse_exte
 	Parser replace_parser;
 	replace_parser.ParseQuery(replace_str);
 	REQUIRE(replace_parser.statements.size() == 1);
+}
+
+TEST_CASE("CONNECT TO EXTERNAL RESOURCE option lists", "[parse_external_resource]") {
+	// Provisioning: the create clause claims the list, so it is the recipe's.
+	Parser provision;
+	provision.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (region 'eu-west-1')");
+	REQUIRE(provision.statements.size() == 1);
+	auto &connect = provision.statements[0]->Cast<ConnectStatement>();
+	REQUIRE(connect.info->external_resource->parsed_params.size() == 1);
+	REQUIRE(connect.info->parsed_options.empty());
+	REQUIRE(connect.info->options.empty());
+
+	// Borrowing: a registered resource takes no create params, so the list is unambiguously the
+	// connection's and is accepted.
+	Parser borrow;
+	borrow.ParseQuery("CONNECT TO EXTERNAL RESOURCE beefy (token 'abc')");
+	REQUIRE(borrow.statements.size() == 1);
+	auto &borrowed = borrow.statements[0]->Cast<ConnectStatement>();
+	REQUIRE(borrowed.info->external_resource->reference_name == "beefy");
+	REQUIRE(borrowed.info->parsed_options.size() + borrowed.info->options.size() == 1);
+
+	// Only the genuinely ambiguous spelling is refused: a second list while provisioning could be told
+	// apart from the first by position alone.
+	Parser rejected;
+	REQUIRE_THROWS(
+	    rejected.ParseQuery("CONNECT TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (region 'x') (token 'abc')"));
 }
