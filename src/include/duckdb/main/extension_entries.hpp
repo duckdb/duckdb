@@ -1376,7 +1376,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_session_token", "httpfs"},
     {"s3_uploader_max_filesize", "httpfs"},
     {"s3_uploader_max_parts_per_file", "httpfs"},
-    {"s3_uploader_thread_limit", "httpfs"},
     {"s3_url_compatibility_mode", "httpfs"},
     {"s3_url_style", "httpfs"},
     {"s3_use_ssl", "httpfs"},
