@@ -1,13 +1,13 @@
 #pragma once
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
 struct MatcherToken;
 
-class ParserTokenizer : public BaseTokenizer {
+class ParserTokenizerBehavior : public TokenizerBehavior {
 public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens);
-	~ParserTokenizer() override = default;
+	ParserTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens);
+	~ParserTokenizerBehavior() override = default;
 
 	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false) override;
 	void OnStatementEnd(idx_t pos) override;
