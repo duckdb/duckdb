@@ -1,0 +1,29 @@
+# name: test/sql/merge/merge_into_explain_analyze.test
+# description: Test EXPLAIN ANALYZE of MERGE INTO
+# group: [merge]
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE target(i INTEGER);
+
+statement ok
+CREATE TABLE source AS SELECT i::INTEGER AS i FROM range(200000) t(i);
+
+# small merge - single-threaded insert path
+query II
+EXPLAIN ANALYZE MERGE INTO target USING (SELECT 1 i) s ON target.i = s.i WHEN NOT MATCHED THEN INSERT VALUES (s.i);
+----
+analyzed_plan	<REGEX>:.*Insert.*
+
+# large merge - inserts run through the parallel sink and merge collections in Finalize
+query II
+EXPLAIN ANALYZE MERGE INTO target USING source AS s ON target.i = s.i WHEN NOT MATCHED THEN INSERT VALUES (s.i);
+----
+analyzed_plan	<REGEX>:.*Insert.*
+
+query I
+SELECT count(*) FROM target
+----
+200000
