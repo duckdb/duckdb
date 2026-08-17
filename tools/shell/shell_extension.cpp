@@ -157,7 +157,7 @@ static unique_ptr<GlobalTableFunctionState> ShellDotCommandVersionInit(ClientCon
 	if (!compiler.empty()) {
 		result->lines.push_back(std::move(compiler));
 	}
-	return result;
+	return std::move(result);
 }
 
 static void ShellDotCommandVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
