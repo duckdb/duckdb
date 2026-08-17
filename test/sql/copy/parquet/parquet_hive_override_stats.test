@@ -61,7 +61,9 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.par
 ----
 1
 
-query I
-SELECT count(*) FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet') WHERE part = 999
+# the value stored in the file is only visible with hive partitioning turned off
+query II
+SELECT typeof(part), part
+FROM read_parquet('{TEST_DIR}/hive_mismatch/part=7/disagrees.parquet', hive_partitioning=false)
 ----
-0
+UBIGINT	999
