@@ -4,8 +4,11 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
+#include "duckdb/common/autovec.hpp"
 
 namespace duckdb {
+
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
@@ -51,7 +54,8 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 }
 
 void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR ||
+	         vector_type == VectorType::FOR_VECTOR);
 	if (type_size != GetTypeIdSize(type.InternalType())) {
 		throw InternalException("Type size mismatch in flat vector buffer");
 	}
@@ -114,6 +118,11 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 		// Incremental selection (rows 0..count-1): produce a flat offset-based sub-view
 		// to avoid creating a DictionaryBuffer with a null selection vector.
 		return SliceInternal(type, idx_t(0), count);
+	}
+	// Sparse selection on narrow payload: gather-widen survivors iso building a dictionary on the whole child
+	if (vector_type == VectorType::FOR_VECTOR && !DenseAutoVecPaysOff(count, Size(), GetTypeIdSize(for_stored_type))) {
+		for_cooldown = 0; // the gather exploited the narrow payload: keep the scan producing FOR
+		return FlattenSliceInternal(type, sel, count);
 	}
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
@@ -197,12 +206,36 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
                                                                     idx_t count) const {
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
+	if (vector_type == VectorType::FOR_VECTOR && count <= STANDARD_VECTOR_SIZE) {
+		// gather straight out of the narrow payload: only the selected rows get widened. The gather runs once per
+		// vector, so its target is a slot reused across chunks rather than a fresh allocation.
+		for (idx_t k = 0; k < 2; k++) {
+			auto &slot = widen_slots[widen_slot];
+			widen_slot ^= 1;
+			if (slot && slot.use_count() != 1) {
+				continue; // a downstream vector still reads this slot
+			}
+			if (!slot) {
+				slot = make_buffer<StandardVectorBuffer>(capacity_t(STANDARD_VECTOR_SIZE),
+				                                         GetTypeIdSize(type.InternalType()));
+			}
+			ForVector::WidenGather(data_ptr, for_stored_type, slot->GetData(), type.InternalType(), sel, count);
+			slot->SetVectorSizeOnly(count);
+			slot->GetValidityMask().Reset(STANDARD_VECTOR_SIZE);
+			slot->GetValidityMask().CopySel(validity, sel, 0, 0, count);
+			return slot;
+		}
+	}
 	auto target_byte_count = allocated_count * type_size;
 	auto stored_allocator = GetAllocator();
 	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 	auto new_data = allocator.Allocate(target_byte_count);
 	// copy data using sel
-	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
+	if (vector_type == VectorType::FOR_VECTOR) {
+		ForVector::WidenGather(data_ptr, for_stored_type, new_data.get(), type.InternalType(), sel, count);
+	} else {
+		FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
+	}
 
 	auto result = CreateBuffer(std::move(new_data), count_t(count));
 	// copy validity using sel
@@ -265,6 +298,15 @@ void CopyVectorBuffer(data_ptr_t target_data, const_data_ptr_t source_data, cons
 
 void StandardVectorBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
                                         idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	if (source.GetVectorType() == VectorType::FOR_VECTOR) {
+		// gather-widen only the copied values: the narrow source stays narrow
+		auto &src_buf = *source.GetBufferRef();
+		const auto target_pt =
+		    type_size == 2 ? PhysicalType::UINT16 : (type_size == 4 ? PhysicalType::UINT32 : PhysicalType::UINT64);
+		ForVector::WidenGather(src_buf.GetData(), src_buf.for_stored_type, data_ptr + target_offset * type_size,
+		                       target_pt, source_sel, copy_count, source_offset);
+		return;
+	}
 	// now copy over the data
 	const_data_ptr_t source_data;
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {

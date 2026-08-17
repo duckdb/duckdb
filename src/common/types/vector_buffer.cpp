@@ -7,6 +7,7 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -41,6 +42,7 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 	switch (vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		break;
+	case VectorType::FOR_VECTOR: // a narrow payload lives in a flat allocation and resizes the same way
 	case VectorType::FLAT_VECTOR:
 		if (new_size > Capacity()) {
 			throw InternalException(
@@ -177,6 +179,9 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &t
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
+	if (vector_type == VectorType::FOR_VECTOR) {
+		ForVector::WidenInPlace(type, *this); // offset slices points at the logical stride, must widen
+	}
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant vectors do not need to get sliced - but we do need to update the count
 		return ConstantSlice(type, count_t(end - offset));
@@ -191,6 +196,9 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
+	if (vector_type == VectorType::FOR_VECTOR && !sel.IsSet()) {
+		ForVector::WidenInPlace(type, *this); // but selection-slices do keep FOR alive
+	}
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant vectors do not need to get sliced - but we do need to update the count
 		return ConstantSlice(type, count_t(count));
@@ -316,6 +324,9 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
+		case VectorType::FOR_VECTOR:
+			finished = true; // CopyInternal gather-widens only the copied values: the source stays narrow
+			break;
 		default: {
 			// for exotic types we flatten followed by copying
 			Vector flattened_vector(Vector::Ref(source));
@@ -331,7 +342,8 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 	auto &source = source_ref.get();
 	auto &sel = sel_ref.get();
 	auto source_type = source_ref.get().GetVectorType();
-	D_ASSERT(source_type == VectorType::CONSTANT_VECTOR || source_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(source_type == VectorType::CONSTANT_VECTOR || source_type == VectorType::FLAT_VECTOR ||
+	         source_type == VectorType::FOR_VECTOR);
 	auto &validity = GetValidityMask();
 	if (source_type == VectorType::CONSTANT_VECTOR) {
 		const bool valid = !ConstantVector::IsNull(source);
@@ -339,7 +351,7 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			validity.Set(target_offset + i, valid);
 		}
 	} else {
-		auto &smask = FlatVector::Validity(source);
+		auto &smask = source.Buffer().GetValidityMask();
 		validity.CopySel(smask, sel, source_offset, target_offset, copy_count);
 	}
 

@@ -7,6 +7,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -86,6 +87,152 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 		break;
 	}
 	return function;
+}
+
+//===--------------------------------------------------------------------===//
+// FOR arithmetic - run +,-,* on the narrow payload
+//===--------------------------------------------------------------------===//
+//! Each side loads at its stored width and the operation runs at the result width, so mixed input
+//! widths and a wide result need no separate handling. Dense and mask-free: NULLs take the normal path.
+template <class L, class R, class RES, class OP, bool LC, bool RC>
+DUCKDB_AUTOVEC_TARGET static void ForArithLoop(const L *DUCKDB_BITPACKING_RESTRICT lhs,
+                                               const R *DUCKDB_BITPACKING_RESTRICT rhs,
+                                               RES *DUCKDB_BITPACKING_RESTRICT res, idx_t count) {
+	DUCKDB_UNROLL_LOOP
+	for (idx_t i = 0; i < count; i++) {
+		res[i] =
+		    OP::template Operation<RES, RES, RES>(static_cast<RES>(lhs[LC ? 0 : i]), static_cast<RES>(rhs[RC ? 0 : i]));
+	}
+}
+
+struct ForArithOperand {
+	const_data_ptr_t data;
+	idx_t width; // payload width in bytes; constants are materialized at 4
+	uint64_t max;
+	uint32_t constant;
+	bool is_for;
+};
+
+static bool ClassifyForArithOperand(Vector &vector, ForArithOperand &op) {
+	if (ForVector::IsFor(vector)) {
+		if (vector.Buffer().GetValidityMask().CanHaveNull()) {
+			return false;
+		}
+		op.data = FlatVector::GetDataUnsafe(vector);
+		op.width = GetTypeIdSize(ForVector::StoredType(vector));
+		op.max = ForVector::MaxStored(vector);
+		op.is_for = true;
+		return true;
+	}
+	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR && !ConstantVector::IsNull(vector)) {
+		const auto value = *ConstantVector::GetData<int64_t>(vector);
+		if (value < 0 || value > int64_t(NumericLimits<uint32_t>::Maximum())) {
+			return false;
+		}
+		op.constant = static_cast<uint32_t>(value);
+		op.data = const_data_ptr_cast(&op.constant);
+		op.width = 4;
+		op.max = op.constant;
+		op.is_for = false;
+		return true;
+	}
+	return false;
+}
+
+//! Upper bound of the result, and whether it is also a lower bound of zero (the narrow result is unsigned)
+template <class OP>
+static bool ForArithBound(const ForArithOperand &l, const ForArithOperand &r, uint64_t &bound) {
+	if (std::is_same<OP, SubtractOperator>::value) {
+		bound = l.max;
+		return !l.is_for && l.max >= r.max; // only a constant minuend proves the result non-negative
+	}
+	if (std::is_same<OP, MultiplyOperator>::value) {
+		return TryMultiplyOperator::Operation<uint64_t, uint64_t, uint64_t>(l.max, r.max, bound);
+	}
+	return TryAddOperator::Operation<uint64_t, uint64_t, uint64_t>(l.max, r.max, bound);
+}
+
+template <class FUNC>
+static void DispatchForArithWidth(idx_t width, FUNC &&fun) {
+	return width == 1 ? fun(uint8_t(0)) : width == 2 ? fun(uint16_t(0)) : fun(uint32_t(0));
+}
+
+template <class OP, class RES>
+static void DispatchForArith(const ForArithOperand &l, const ForArithOperand &r, RES *res, idx_t count) {
+	if (!l.is_for) {
+		DispatchForArithWidth(r.width, [&](auto rt) {
+			using R = decltype(rt);
+			ForArithLoop<uint32_t, R, RES, OP, true, false>(reinterpret_cast<const uint32_t *>(l.data),
+			                                                reinterpret_cast<const R *>(r.data), res, count);
+		});
+	} else if (!r.is_for) {
+		DispatchForArithWidth(l.width, [&](auto lt) {
+			using L = decltype(lt);
+			ForArithLoop<L, uint32_t, RES, OP, false, true>(reinterpret_cast<const L *>(l.data),
+			                                                reinterpret_cast<const uint32_t *>(r.data), res, count);
+		});
+	} else {
+		DispatchForArithWidth(l.width, [&](auto lt) {
+			DispatchForArithWidth(r.width, [&](auto rt) {
+				using L = decltype(lt);
+				using R = decltype(rt);
+				ForArithLoop<L, R, RES, OP, false, false>(reinterpret_cast<const L *>(l.data),
+				                                          reinterpret_cast<const R *>(r.data), res, count);
+			});
+		});
+	}
+}
+
+template <class OP>
+static bool TryForArithmetic(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ForArithOperand l, r;
+	if (count == 0 || !ClassifyForArithOperand(left, l) || !ClassifyForArithOperand(right, r) ||
+	    !(l.is_for || r.is_for)) {
+		return false;
+	}
+	auto &buffer = result.GetBufferRef();
+	if (!buffer || buffer->Capacity() < count) {
+		return false;
+	}
+	uint64_t bound; // a narrow result needs a proven bound and a buffer we may re-widen in place
+	const bool bounded = ForArithBound<OP>(l, r, bound) && buffer->cache_owned;
+	const bool narrow = bounded && bound <= NumericLimits<uint32_t>::Maximum();
+	ForVector::Discard(result); // the payload is rewritten wholesale below
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	if (result.size() != count) {
+		FlatVector::SetSize(result, count);
+	}
+	FlatVector::SetValidity(result, (l.is_for ? left : right).Buffer().GetValidityMask());
+	auto data = FlatVector::GetDataMutableUnsafe(result);
+	if (narrow) {
+		DispatchForArithWidth(bound > 65535 ? 4 : (bound > 255 ? 2 : 1), [&](auto st) {
+			using RES = decltype(st);
+			DispatchForArith<OP, RES>(l, r, reinterpret_cast<RES *>(data), count);
+			ForVector::Create(result,
+			                  sizeof(RES) == 1 ? PhysicalType::UINT8
+			                                   : (sizeof(RES) == 2 ? PhysicalType::UINT16 : PhysicalType::UINT32),
+			                  bound, count);
+		});
+	} else {
+		DispatchForArith<OP, int64_t>(l, r, reinterpret_cast<int64_t *>(data), count);
+		if (bounded) { // a full-width payload with a known max: widening is a no-op
+			ForVector::Create(result, PhysicalType::UINT64, bound, count);
+		}
+	}
+	if (l.is_for) {
+		ForVector::MarkExploited(left);
+	}
+	if (r.is_for) {
+		ForVector::MarkExploited(right);
+	}
+	return true; // no keepalive token here: the narrow result is cheaper to write, so there is nothing to regret
+}
+
+template <class OP>
+static void ForAwareFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	if (!TryForArithmetic<OP>(input.data[0], input.data[1], result, input.size())) {
+		ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>(input, state, result);
+	}
 }
 
 template <class T>
@@ -181,18 +328,15 @@ struct SubtractPropagateStatistics {
 struct DecimalArithmeticBindData : public FunctionData {
 	DecimalArithmeticBindData() : check_overflow(false) {
 	}
-
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_uniq<DecimalArithmeticBindData>();
 		res->check_overflow = check_overflow;
 		return std::move(res);
 	}
-
 	bool Equals(const FunctionData &other_p) const override {
 		const auto &other = other_p.Cast<DecimalArithmeticBindData>();
 		return other.check_overflow == check_overflow;
 	}
-
 	bool check_overflow;
 };
 
@@ -241,8 +385,13 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		auto &func = expr.FunctionMutable();
+		// both arguments are bound to the same physical type, so a single-width kernel suffices
+		D_ASSERT(lstats.GetType().InternalType() == rstats.GetType().InternalType());
+		const auto ret = expr.GetReturnType().InternalType();
+		func.SetFunctionCallback(ret == PhysicalType::INT64 ? scalar_function_t(ForAwareFunction<BASEOP>)
+		                                                    : GetScalarIntegerFunction<BASEOP>(ret));
+		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);

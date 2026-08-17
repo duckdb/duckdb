@@ -88,7 +88,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 		}
 	}
 
-	template <class STATE_TYPE, class INPUT_TYPE>
+	template <class STATE_TYPE, class INPUT_TYPE, bool CHECKED = true>
 	static void ExecuteFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const SelectionVector *isel, const sel_t *cluster_iter) {
 		idx_t pos = 0;
@@ -103,7 +103,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 			int64_t local64 = 0;
 			auto add_row = [&](idx_t idx) {
 				const int64_t v = static_cast<int64_t>(vals[idx]);
-				if (DUCKDB_UNLIKELY(!I64VectorSumSafe(v))) {
+				if (CHECKED && DUCKDB_UNLIKELY(!I64VectorSumSafe(v))) {
 					state.value = Hugeint::Add(state.value, v);
 				} else {
 					local64 += v;

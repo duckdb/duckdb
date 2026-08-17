@@ -1,0 +1,138 @@
+# name: test/sql/filter/autovec_friendly_filters.test
+# description: Test bitmap-backed scan filters on thin integer columns
+# group: [filter]
+
+# Every bitmap/autovec path is gated on AutoVecCountPaysOff(count) - i.e. count >= STANDARD_VECTOR_SIZE / 4 -
+# so all tables here are >= 512 rows. The row counts are deliberately not multiples of 64 (and cross a vector
+# boundary) so the scalar tail word in CmpMaskToBitmap and the (row_span + 63) / 64 word loops are exercised.
+
+# ---- Every supported width x every comparison operator ----
+# <numeric> also covers HUGEINT/UHUGEINT, which the bitmap kernels do not support: those must decline and
+# fall back, and must still produce identical results.
+foreach type <numeric>
+
+statement ok
+CREATE OR REPLACE TABLE av AS SELECT (i % 101)::{type} v, (i % 7)::{type} w FROM range(3000) tbl(i);
+
+statement ok
+INSERT INTO av VALUES (NULL, NULL);
+
+# =, <>, >, >=, constant on the left, <=, empty selection, full selection, col-col >, col-col =,
+# IS [NOT] DISTINCT FROM a non-null constant (takes the bitmap path as plain equality),
+# IS [NOT] DISTINCT FROM NULL and col-col IS NOT DISTINCT FROM (both must decline and fall back)
+query IIIIIIIIIIIIIII
+SELECT (SELECT count(*) FROM av WHERE v = 50),   (SELECT count(*) FROM av WHERE v <> 50),
+       (SELECT count(*) FROM av WHERE v > 50),   (SELECT count(*) FROM av WHERE v >= 50),
+       (SELECT count(*) FROM av WHERE 50 > v),   (SELECT count(*) FROM av WHERE v <= 50),
+       (SELECT count(*) FROM av WHERE v > 100),  (SELECT count(*) FROM av WHERE v >= 0),
+       (SELECT count(*) FROM av WHERE v > w),    (SELECT count(*) FROM av WHERE v = w),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM 50),
+       (SELECT count(*) FROM av WHERE v IS DISTINCT FROM 50),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM NULL),
+       (SELECT count(*) FROM av WHERE v IS DISTINCT FROM NULL),
+       (SELECT count(*) FROM av WHERE v IS NOT DISTINCT FROM w)
+----
+30	2970	1470	1500	1500	1530	0	3000	2877	35	30	2971	1	3000	36
+
+endloop
+
+# ---- Negative values: the compare lanes must stay signed (an unsigned compare would order these wrongly) ----
+foreach type <signed> FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE sv AS SELECT ((i % 101) - 50)::{type} v FROM range(3000) tbl(i);
+
+query IIIIII
+SELECT (SELECT count(*) FROM sv WHERE v < 0),   (SELECT count(*) FROM sv WHERE v > 0),
+       (SELECT count(*) FROM sv WHERE v = -50), (SELECT count(*) FROM sv WHERE v >= -50),
+       (SELECT count(*) FROM sv WHERE v <= -1), (SELECT count(*) FROM sv WHERE -50 < v)
+----
+1500	1470	30	3000	1500	2970
+
+endloop
+
+# ---- float/double bitmap comparisons, incl. DuckDB's NaN total order (NaN == NaN, NaN > everything) ----
+# These branches live only in CmpEq::Apply / CmpGt::Apply, so they need a table big enough to reach the kernel.
+foreach type FLOAT DOUBLE
+
+statement ok
+CREATE OR REPLACE TABLE fl AS SELECT CASE i % 8
+	WHEN 0 THEN '-inf' WHEN 1 THEN '-1' WHEN 2 THEN '-0.0' WHEN 3 THEN '0'
+	WHEN 4 THEN '1' WHEN 5 THEN 'inf' WHEN 6 THEN 'nan' END::{type} f
+FROM range(3000) tbl(i);
+
+# f = 0 also pins -0.0 == 0.0; only NaN matches = / >= against a NaN literal, and nothing is > NaN
+query IIIIIIIIIII
+SELECT (SELECT count(*) FROM fl WHERE f > 1),  (SELECT count(*) FROM fl WHERE f >= 1),
+       (SELECT count(*) FROM fl WHERE f < 1),  (SELECT count(*) FROM fl WHERE f = 0),
+       (SELECT count(*) FROM fl WHERE f <> 0),
+       (SELECT count(*) FROM fl WHERE f > 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f = 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f < 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f >= 'nan'::{type}),
+       (SELECT count(*) FROM fl WHERE f IS NOT DISTINCT FROM 1),
+       (SELECT count(*) FROM fl WHERE f IS DISTINCT FROM 1)
+----
+750	1125	1500	750	1875	0	375	2250	375	375	2625
+
+endloop
+
+# ---- Conjunctions in the executor bitmap path ----
+# A range() source keeps a real Filter-operator conjunction (nothing to push into a scan). Covers both
+# early-exit branches: an AND that empties out, and an OR that saturates at the full vector.
+query IIII
+SELECT (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE a < 100 AND b > 19000),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE a < 5000 OR b >= 0),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE (a < 100 OR a >= 9990) AND b > 100),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, (i * 2)::INTEGER b FROM range(10000) t(i)) WHERE (a > 0 AND a < 300) OR b >= 19000)
+----
+0	10000	59	799
+
+# Mixed filter chain: a non-bitmap-capable predicate (VARCHAR LIKE) combined with a bitmap-capable comparison.
+# The scan's adaptive reordering can run either first, so the comparison may receive a sel_t input (promoted to
+# a bitmap when dense) or an identity input - the result must be identical either way. The a >= 9990 case is the
+# low-selectivity DenseAutoVecPaysOff bail-out, and the nested OR AND-ed with a LIKE exercises the scalar
+# fallback of a nested conjunction.
+statement ok
+CREATE TABLE autovec_mixed_t AS SELECT i a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i);
+
+query IIII
+SELECT (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a < 5000),
+       (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%y%' AND a < 5000),
+       (SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a >= 9990),
+       (SELECT count(*) FROM autovec_mixed_t WHERE (a < 100 OR a >= 9990) AND b LIKE '%b%')
+----
+4000	1000	8	88
+
+# Mixed executor conjunction: one child produces an index selection, the other can produce a bitmap. Both
+# orders pick a different initial adaptive-filter permutation and must evaluate each child exactly once.
+query II
+SELECT (SELECT count(*) FROM (SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)) t WHERE b LIKE '%b%' AND a < 5000),
+       (SELECT count(*) FROM (SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)) t WHERE a < 5000 AND b LIKE '%b%')
+----
+4000	4000
+
+# Mixed scan filters should also slice nullable payload columns with the same selected rows.
+load {TEST_DIR}/autovec_payload_null.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+CREATE TABLE autovec_payload_null_t AS
+SELECT i::INTEGER a,
+       CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b,
+       CASE WHEN i % 7 = 0 THEN NULL ELSE 'name_' || i::VARCHAR END name
+FROM range(5000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT count(*), sum(a), count(*) FILTER (WHERE name IS NULL)
+FROM autovec_payload_null_t
+WHERE b LIKE '%b%' AND a < 5000
+----
+4000	10000000	572

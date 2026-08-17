@@ -1,5 +1,7 @@
 #include "duckdb/common/types/vector_cache.hpp"
 
+#include "duckdb/common/vector/for_vector.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
@@ -54,7 +56,10 @@ public:
 		buffer->ClearAuxiliaryData();
 		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
 		result.BufferMutable().ResetCapacity(capacity);
+		// reset drops the payload: size goes to 0; the next producer overwrites its bytes, so no widening needed
+		result.BufferMutable().for_stored_type = PhysicalType::INVALID;
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		result.BufferMutable().cache_owned = false;
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer
@@ -128,7 +133,8 @@ void VectorCache::ResetFromCache(Vector &result) const {
 	if (!cache_entry) {
 		return;
 	}
-	cache_entry->ResetFromCache(result);
+	cache_entry->ResetFromCache(result);       // leaves cache_owned unset on the children
+	result.BufferMutable().cache_owned = true; // only the top-level vector may carry a FOR payload
 }
 
 const LogicalType &VectorCache::GetType() const {

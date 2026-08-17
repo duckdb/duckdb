@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/filter/table_filter_function_helpers.hpp"
 
@@ -134,9 +135,52 @@ public:
 		return bit & in_range;
 	}
 
+	//! FOR keys probe the bitmap straight from the narrow payload: the widen is a register zero-extend on load
+	template <typename T, typename CONVERTER, typename S>
+	idx_t LookupKeysStored(const S *data, const SelectionVector *sel, SelectionVector &result_sel, idx_t count) const {
+		idx_t found_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = sel ? sel->get_index_unsafe(i) : i;
+			const U y = CONVERTER::Convert(static_cast<T>(data[idx])) - min;
+			const U bit_idx = y >> shift;
+			const uint8_t in_range = y <= span;
+			const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+			const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
+			result_sel.set_index(found_count, i);
+			found_count += bit & in_range;
+		}
+		return found_count;
+	}
+
+	template <typename T, typename CONVERTER>
+	bool TryLookupKeysFor(Vector &keys, const SelectionVector *sel, SelectionVector &result_sel, idx_t count,
+	                      idx_t &found) const {
+		if constexpr (std::is_integral<T>::value) {
+			if (!ForVector::IsFor(keys) || keys.Buffer().GetValidityMask().CanHaveNull()) {
+				return false;
+			}
+			ForVector::MarkExploited(keys);
+			const auto data = FlatVector::GetDataUnsafe(keys);
+			auto probe = [&](auto s) {
+				return LookupKeysStored<T, CONVERTER>(reinterpret_cast<const decltype(s) *>(data), sel, result_sel,
+				                                      count);
+			};
+			const auto width = GetTypeIdSize(ForVector::StoredType(keys));
+			found = width == 1   ? probe(uint8_t(0))
+			        : width == 2 ? probe(uint16_t(0))
+			        : width == 4 ? probe(uint32_t(0))
+			                     : probe(uint64_t(0));
+			return true;
+		}
+		return false;
+	}
+
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
 		idx_t found_count = 0;
+		if (TryLookupKeysFor<T, CONVERTER>(keys, nullptr, result_sel, count, found_count)) {
+			return found_count;
+		}
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U comparable = CONVERTER::Convert(entry.GetValue());
 			const U y = comparable - min;
@@ -153,6 +197,10 @@ public:
 
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel, idx_t count) const {
+		idx_t found_count_for = 0;
+		if (TryLookupKeysFor<T, CONVERTER>(keys, &sel, result_sel, count, found_count_for)) {
+			return found_count_for;
+		}
 		UnifiedVectorFormat key_data;
 		keys.ToUnifiedFormat(key_data);
 

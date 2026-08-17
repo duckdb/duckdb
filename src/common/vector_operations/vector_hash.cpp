@@ -16,6 +16,8 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+#include "duckdb/common/vector/for_vector.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -295,9 +297,56 @@ void ArrayLoopHash(const Vector &input, Vector &hashes, const SelectionVector *r
 	}
 }
 
+//! Hash a narrow payload directly: Hash() funnels every integer width thru MurmurHash64 after 0-extending cast
+template <bool HAS_RSEL>
+bool TryHashFor(const Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
+	const Vector *payload = &input;
+	const SelectionVector *sel = nullptr;
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		payload = &DictionaryVector::Child(input);
+		sel = &DictionaryVector::SelVector(input);
+	}
+	if (!ForVector::IsFor(*payload)) {
+		return false;
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result, count_t(count));
+	const auto ldata = FlatVector::GetDataUnsafe(*payload);
+	const auto &mask = payload->Buffer().GetValidityMask();
+	auto result_data = FlatVector::GetDataMutable<hash_t>(result);
+	const bool has_sel = sel && sel->IsSet();
+	auto hash_at = [&](auto t) {
+		using T = decltype(t);
+		auto data = reinterpret_cast<const T *>(ldata);
+		if (has_sel) {
+			TightLoopHash<HAS_RSEL, true, T, false>(data, result_data, rsel, count, sel, mask);
+		} else {
+			TightLoopHash<HAS_RSEL, false, T, false>(data, result_data, rsel, count, sel, mask);
+		}
+	};
+	switch (GetTypeIdSize(ForVector::StoredType(*payload))) {
+	case 1:
+		hash_at(uint8_t(0));
+		break;
+	case 2:
+		hash_at(uint16_t(0));
+		break;
+	case 4:
+		hash_at(uint32_t(0));
+		break;
+	default:
+		hash_at(uint64_t(0));
+		break;
+	}
+	return true; // hashing doesn't count as FOR success (it's just as fast) -- but at least we don't widen
+}
+
 template <bool HAS_RSEL>
 void HashTypeSwitch(const Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
+	if (TryHashFor<HAS_RSEL>(input, result, rsel, count)) {
+		return;
+	}
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

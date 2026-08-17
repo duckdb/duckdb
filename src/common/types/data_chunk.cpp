@@ -159,7 +159,8 @@ void DataChunk::SetChildCardinality(idx_t count_p) {
 			continue;
 		}
 		auto vtype = v.GetVectorType();
-		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
+		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR ||
+		    vtype == VectorType::FOR_VECTOR) {
 			FlatVector::SetSize(v, count_p);
 		} else if (v.size() != count_p) {
 			throw InternalException("DataChunk::SetChildCardinality - vector has size %d but expected size %d - and "
