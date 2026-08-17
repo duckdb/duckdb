@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/expression.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
@@ -17,32 +16,13 @@
 
 namespace duckdb {
 
-struct RowGroupExpressionFilter {
-	RowGroupExpressionFilter();
-	RowGroupExpressionFilter(vector<ProjectionIndex> column_indexes, unique_ptr<Expression> expression);
-
-	vector<ProjectionIndex> column_indexes;
-	unique_ptr<Expression> expression;
-
-	bool Equals(const RowGroupExpressionFilter &other) const;
-	bool operator==(const RowGroupExpressionFilter &other) const {
-		return Equals(other);
-	}
-	RowGroupExpressionFilter Copy() const;
-
-	void Serialize(Serializer &serializer) const;
-	static RowGroupExpressionFilter Deserialize(Deserializer &deserializer);
-};
-
-//! The regular filters in here only need a single column to be evaluated.
-//! Composite filters can be stored separately for row-group pruning.
 class TableFilterSet {
 public:
 	void PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
-	void PushRowGroupFilter(RowGroupExpressionFilter filter);
+	void PushMultiColumnFilter(unique_ptr<TableFilter> filter);
 	bool HasFilters() const;
 	idx_t FilterCount() const;
-	bool HasRowGroupFilters() const;
+	bool HasMultiColumnFilters() const;
 	bool HasFilter(ProjectionIndex col_idx) const;
 	TableFilter &GetFilterByColumnIndexMutable(ProjectionIndex col_idx);
 	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(ProjectionIndex col_idx);
@@ -51,7 +31,7 @@ public:
 	void SetFilterByColumnIndex(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
 	void RemoveFilterByColumnIndex(ProjectionIndex col_idx);
 	void ClearFilters();
-	const vector<RowGroupExpressionFilter> &GetRowGroupFilters() const;
+	const vector<unique_ptr<TableFilter>> &GetMultiColumnFilters() const;
 
 	bool Equals(TableFilterSet &other);
 	static bool Equals(TableFilterSet *left, TableFilterSet *right);
@@ -130,7 +110,7 @@ public:
 
 private:
 	map<ProjectionIndex, unique_ptr<TableFilter>> filters;
-	vector<RowGroupExpressionFilter> row_group_filters;
+	vector<unique_ptr<TableFilter>> multi_column_filters;
 };
 
 class DynamicTableFilterSet {

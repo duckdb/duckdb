@@ -433,8 +433,8 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		auto filter_expr =
 		    BoundComparisonExpression::Create(comparison_type, std::move(left_bound_ref), std::move(right_bound_ref));
 		vector<ProjectionIndex> column_indexes {left_ref.Binding().column_index, right_ref.Binding().column_index};
-		get.table_filters.PushRowGroupFilter(
-		    RowGroupExpressionFilter(std::move(column_indexes), std::move(filter_expr)));
+		get.table_filters.PushMultiColumnFilter(
+		    make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes)));
 		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	// we can only pushdown expressions that refer to exactly one column

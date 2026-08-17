@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
@@ -20,8 +21,9 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 	for (auto &entry : table_filters) {
 		table_filter_set->SetFilterByColumnIndex(entry.GetIndex(), entry.TakeFilter());
 	}
-	for (const auto &filter : table_filters.GetRowGroupFilters()) {
-		table_filter_set->PushRowGroupFilter(filter.Copy());
+	for (const auto &filter : table_filters.GetMultiColumnFilters()) {
+		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "MoveTableFilters");
+		table_filter_set->PushMultiColumnFilter(expression_filter.Copy());
 	}
 	return table_filter_set;
 }
@@ -79,7 +81,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	}
 
 	unique_ptr<TableFilterSet> table_filters;
-	if (op.table_filters.HasFilters() || op.table_filters.HasRowGroupFilters()) {
+	if (op.table_filters.HasFilters() || op.table_filters.HasMultiColumnFilters()) {
 		table_filters = MoveTableFilters(op.table_filters);
 	}
 

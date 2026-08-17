@@ -282,8 +282,10 @@ private:
 						return false;
 					}
 				}
-				for (const auto &filter : get.table_filters.GetRowGroupFilters()) {
-					for (const auto &column_index : filter.column_indexes) {
+				for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+					const auto &expression_filter =
+					    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex");
+					for (const auto &column_index : expression_filter.column_indexes) {
 						if (!register_filter_index(column_index)) {
 							restore_original_table_filter_index.clear();
 							return false;
@@ -297,12 +299,14 @@ private:
 						    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
 						remapped_filters.PushFilter(canonical_index, entry.TakeFilter());
 					}
-					for (const auto &filter : get.table_filters.GetRowGroupFilters()) {
-						auto remapped_filter = filter.Copy();
-						for (auto &column_index : remapped_filter.column_indexes) {
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
 							column_index = ProjectionIndex(column_ids[column_index.GetIndex()].GetPrimaryIndex());
 						}
-						remapped_filters.PushRowGroupFilter(std::move(remapped_filter));
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}
@@ -333,12 +337,14 @@ private:
 						remapped_filters.PushFilter(restore_original_table_filter_index.at(entry.GetIndex()),
 						                            entry.TakeFilter());
 					}
-					for (const auto &filter : get.table_filters.GetRowGroupFilters()) {
-						auto remapped_filter = filter.Copy();
-						for (auto &column_index : remapped_filter.column_indexes) {
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
 							column_index = restore_original_table_filter_index.at(column_index);
 						}
-						remapped_filters.PushRowGroupFilter(std::move(remapped_filter));
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}

@@ -40,7 +40,7 @@ SELECT count(*) FROM xy WHERE i > j;
 ----
 0
 
-# Row-group filters survive common-subplan canonicalization alongside regular filters
+# Multi-column filters survive common-subplan canonicalization alongside regular filters
 statement ok
 PRAGMA explain_output='optimized_only';
 

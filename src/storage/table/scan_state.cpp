@@ -81,7 +81,7 @@ ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vect
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(filters.HasFilters() || filters.HasRowGroupFilters());
+	D_ASSERT(filters.HasFilters() || filters.HasMultiColumnFilters());
 	table_filters = &filters;
 	this->column_ids = &column_ids;
 	if (filters.HasFilters()) {

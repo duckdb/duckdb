@@ -632,25 +632,6 @@
     "pointer_type": "none"
   },
   {
-    "class": "RowGroupExpressionFilter",
-    "includes": [
-      "duckdb/planner/table_filter_set.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "column_indexes",
-        "type": "vector<ProjectionIndex>"
-      },
-      {
-        "id": 101,
-        "name": "expression",
-        "type": "Expression*"
-      }
-    ],
-    "pointer_type": "none"
-  },
-  {
     "class": "TableFilterSet",
     "includes": [
       "duckdb/planner/table_filter.hpp",
@@ -666,9 +647,9 @@
       },
       {
         "id": 101,
-        "name": "row_group_filters",
-        "type": "vector<RowGroupExpressionFilter>",
-        "default": "vector<RowGroupExpressionFilter>()"
+        "name": "multi_column_filters",
+        "type": "vector<TableFilter*>",
+        "default": "vector<unique_ptr<TableFilter>>()"
       }
     ],
     "pointer_type": "none"

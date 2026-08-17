@@ -47,7 +47,7 @@ public:
 	                                                          const BoundFunctionExpression &func,
 	                                                          const vector<BaseStatistics> &child_stats);
 	//! Compare two sets of statistics and return whether the comparison is always true or false
-	static FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right,
+	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
 	                                                 ExpressionType comparison);
 
 private:
