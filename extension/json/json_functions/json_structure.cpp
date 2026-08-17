@@ -314,9 +314,6 @@ static void UpdateTimestampOffsetState(JSONStructureDescription &description, co
 		if (res != TimestampCastResult::SUCCESS && res != TimestampCastResult::STRICT_UTC) {
 			continue; // not a timestamp string — other candidates handle it
 		}
-		if (!ts.IsFinite()) {
-			continue; // infinite timestamps are valid for both timestamp types and provide no offset evidence
-		}
 		description.timestamp_offset_state = MergeTimestampOffsetState(
 		    description.timestamp_offset_state,
 		    has_offset ? TimestampOffsetState::WITH_OFFSET : TimestampOffsetState::WITHOUT_OFFSET);
