@@ -8,7 +8,8 @@
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
+#include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 
 namespace duckdb {
@@ -505,10 +506,10 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
-		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+		if (Tokenizer::CharacterIsInitialNumber(text[0])) {
 			return false;
 		}
-		return BaseTokenizer::CharacterIsKeyword(text[0]);
+		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -856,7 +857,7 @@ private:
 			return false;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.empty() || !BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+		if (token_text.empty() || !Tokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
 		// A lone '.' is a dot operator, not a number literal (e.g., '?.method()' should not consume '.')
@@ -865,7 +866,7 @@ private:
 		}
 		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
-			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
+			if (Tokenizer::CharacterIsScientific(token_text[i])) {
 				if (scientific_notation) {
 					throw ParserException("Already found scientific notation");
 				}
@@ -874,7 +875,7 @@ private:
 			if (scientific_notation && (token_text[i] == '+' || token_text[i] == '-')) {
 				continue;
 			}
-			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
+			if (!Tokenizer::CharacterIsNumber(token_text[i])) {
 				return false;
 			}
 		}

@@ -258,6 +258,11 @@ protected:
 
 	idx_t GetVectorCount(idx_t vector_index) const;
 
+	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+	                                           ColumnData &validity_column);
+
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 

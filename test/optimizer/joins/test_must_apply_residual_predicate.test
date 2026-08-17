@@ -1,0 +1,67 @@
+# name: test/optimizer/joins/test_must_apply_residual_predicate.test
+# description: Residual predicate belonging to a must-apply join operator must not be consumed as an unused residual (issue 24690)
+# group: [joins]
+
+statement ok
+CREATE TABLE e1(x INTEGER)
+
+statement ok
+CREATE TABLE e2(x INTEGER)
+
+statement ok
+CREATE TABLE e3(x INTEGER)
+
+statement ok
+CREATE TABLE e4(x INTEGER)
+
+query I
+SELECT count(*)
+FROM e1 LEFT JOIN e2 ON (e1.x = e2.x)
+        RIGHT JOIN e3 ON (e1.x = e3.x AND e3.x > 0), e4
+WHERE e4.x = e1.x
+----
+0
+
+query I
+SELECT count(*)
+FROM e1 LEFT JOIN e2 ON (e1.x = e2.x)
+        RIGHT JOIN e3 ON (e1.x = e3.x AND e3.x IS NOT NULL), e4
+WHERE e4.x = e1.x
+----
+0
+
+query I
+SELECT count(*)
+FROM e4, e1 LEFT JOIN e2 ON (e1.x = e2.x)
+        RIGHT JOIN e3 ON (e1.x = e3.x AND e3.x > 0)
+WHERE e4.x = e1.x
+----
+0
+
+query I
+SELECT count(*)
+FROM e1 LEFT JOIN e2 ON (e1.x = e2.x)
+        RIGHT JOIN e3 ON (e1.x = e3.x AND e3.x > 0), e4
+WHERE e4.x < e1.x
+----
+0
+
+statement ok
+CREATE TABLE t1 AS SELECT i AS x FROM range(4) s(i)
+
+statement ok
+CREATE TABLE t2 AS SELECT i AS x FROM range(9) s(i)
+
+statement ok
+CREATE TABLE t3 AS SELECT i AS x FROM range(7) s(i)
+
+statement ok
+CREATE TABLE t4 AS SELECT i AS x FROM range(3) s(i)
+
+query I
+SELECT count(*)
+FROM t1 LEFT JOIN t2 ON (t1.x = t2.x)
+        RIGHT JOIN t3 ON (t1.x = t3.x AND t3.x > 1), t4
+WHERE t4.x = t1.x
+----
+1

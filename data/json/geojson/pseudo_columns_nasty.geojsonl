@@ -1,0 +1,1 @@
+{"type":"Feature","id":"FEATURE","bbox":[0.0,0.0,1.0,1.0],"geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"id":"P-collides","id_1":"P-collides-again","name":"P-plain","geometry":"P-geom"}}
