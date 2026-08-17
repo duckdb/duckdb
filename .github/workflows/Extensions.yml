@@ -76,7 +76,6 @@ jobs:
           toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
-      duckdb_repository: ${{ format('{0}/{1}.git', github.server_url, github.repository) }}
       ci_tools_repository: smvv/extension-ci-tools
       exclude_archs: ${{ inputs.extra_exclude_archs }}
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
