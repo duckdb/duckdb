@@ -56,18 +56,17 @@ SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScop
 	return variable_scope;
 }
 
-void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetScope scope, const Value &value) {
+void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, SetScope scope, const Value &value) {
 	auto &config = DBConfig::GetConfig(context);
 	// check if we are allowed to change the configuration option
-	Identifier option_name(name.ToStdString());
-	config.CheckLock(option_name);
-	auto option = DBConfig::GetOptionByName(option_name);
+	config.CheckLock(name);
+	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		ExtensionOption extension_option;
 		// check if this is an extra extension variable
-		if (!config.TryGetExtensionOption(option_name, extension_option)) {
-			auto extension_name = Catalog::AutoloadExtensionByConfigName(context, option_name);
-			if (!config.TryGetExtensionOption(option_name, extension_option)) {
+		if (!config.TryGetExtensionOption(name, extension_option)) {
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context, name);
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
@@ -108,7 +107,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetSco
 
 SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                               OperatorSourceInput &input) const {
-	SetVariable(context.client, name, scope, value);
+	SetVariable(context.client, Identifier(std::string_view(name.data(), name.size())), scope, value);
 	return SourceResultType::FINISHED;
 }
 

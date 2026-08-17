@@ -272,7 +272,7 @@ static DUCKDB_V2_OPTION_TARGET_SCOPE MapScopeTarget(SettingScopeTarget s) {
 
 // Scan setting_aliases[] for entries pointing at the same canonical
 // option (matched by name) and append their alias names.
-static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const char *canonical_name) {
+static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const Identifier &canonical_name) {
 	auto alias_count = DBConfig::GetAliasCount();
 	for (idx_t i = 0; i < alias_count; i++) {
 		auto alias = DBConfig::GetAliasByIndex(i);
@@ -280,7 +280,7 @@ static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const char *
 			continue;
 		}
 		auto aliased = DBConfig::GetOptionByIndex(alias->option_index);
-		if (aliased && std::strcmp(aliased->name, canonical_name) == 0) {
+		if (aliased && canonical_name == aliased->name) {
 			out->aliases.emplace_back(alias->alias);
 		}
 	}
@@ -290,7 +290,7 @@ static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const char *
 // For a databases internal connection (no LOCAL overrides) this returns GLOBAL -> static default;
 // For a client connection it returns LOCAL -> GLOBAL -> static default.
 // Falls back to `fallback_default` if the cascade returned NULL.
-static std::string ReadEffectiveSetting(ClientContext &client, const std::string &name,
+static std::string ReadEffectiveSetting(ClientContext &client, const Identifier &name,
                                         const std::string &fallback_default) {
 	if (Value result; client.TryGetCurrentSetting(name, result) && !result.IsNull()) {
 		return result.ToString();
@@ -306,7 +306,7 @@ static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &o
 	out->target_scope = MapScopeTarget(option.scope);
 	out->default_setting = option.default_value ? option.default_value : "";
 	out->aliases.clear();
-	PopulateOptionAliases(out, out->name.c_str());
+	PopulateOptionAliases(out, out->name);
 	out->setting = ReadEffectiveSetting(client, out->name, out->default_setting);
 
 	return out;
@@ -314,7 +314,7 @@ static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &o
 
 // Populate `out` from an extension option. Extension options carry no
 // SettingScopeTarget (the V2 enum reports UNKNOWN) and no aliases.
-static unique_ptr<CV2Option> PopulateOptionFromExtension(const std::string &name, const ExtensionOption &ext_option,
+static unique_ptr<CV2Option> PopulateOptionFromExtension(const Identifier &name, const ExtensionOption &ext_option,
                                                          ClientContext &client) {
 	auto out = make_uniq<CV2Option>();
 
@@ -354,14 +354,14 @@ unique_ptr<CV2Option> CV2Option::FromIndex(ClientContext &context, DBConfig &con
 }
 
 unique_ptr<CV2Option> CV2Option::FromName(ClientContext &context, DBConfig &config, std::string_view name) {
-	string name_str(name);
-	if (auto option = DBConfig::GetOptionByName(name_str)) {
+	Identifier name_id(name);
+	if (auto option = DBConfig::GetOptionByName(name_id)) {
 		return PopulateOptionFromCore(*option, context);
 	}
-	if (ExtensionOption ext_option; config.TryGetExtensionOption(name_str, ext_option)) {
-		return PopulateOptionFromExtension(name_str, ext_option, context);
+	if (ExtensionOption ext_option; config.TryGetExtensionOption(name_id, ext_option)) {
+		return PopulateOptionFromExtension(name_id, ext_option, context);
 	}
-	throw InvalidInputException("unknown configuration option: %s", name_str);
+	throw InvalidInputException("unknown configuration option: %s", name_id.GetIdentifierName());
 }
 
 } // namespace capiv2

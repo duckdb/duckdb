@@ -74,13 +74,13 @@ T ReadAs(duckdb_v2_value_handle value, LogicalTypeId expected) {
 	if (v.type().id() == expected) {
 		return v.GetValueUnsafe<T>();
 	}
-	Value converted;
 	string error;
-	if (!v.DefaultTryCastAs(LogicalType(expected), converted, &error)) {
+	auto converted = v.DefaultTryCastAs(LogicalType(expected), &error);
+	if (!converted) {
 		throw InvalidInputException("cannot read a " + v.type().ToString() + " value as " +
 		                            LogicalType(expected).ToString() + ": " + error);
 	}
-	return converted.GetValueUnsafe<T>();
+	return converted->GetValueUnsafe<T>();
 }
 
 // Hands a freshly built value to the caller.

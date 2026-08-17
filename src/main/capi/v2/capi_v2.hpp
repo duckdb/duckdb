@@ -165,7 +165,7 @@ inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
 
 class CV2Option {
 public:
-	string name;
+	Identifier name;
 	string setting;
 	string default_setting;
 	string description;

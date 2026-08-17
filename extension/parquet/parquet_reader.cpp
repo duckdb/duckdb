@@ -1231,10 +1231,12 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	result.name = StringValue::Get(children[0]);
 	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
 	string error_message;
-	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+	auto default_value = children[2].TryCastAs(context, result.type, &error_message);
+	if (!default_value) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
 		                      result.type.ToString());
 	}
+	result.default_value = std::move(*default_value);
 
 	return result;
 }

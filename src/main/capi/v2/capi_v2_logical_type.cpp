@@ -484,9 +484,7 @@ duckdb::LogicalType AliasOf(duckdb_v2_logical_type_handle base_type, duckdb_v2_i
 	if (alias_name.len == 0) {
 		throw duckdb::InvalidInputException("alias name cannot be empty");
 	}
-	auto copy = *Convert(base_type);
-	copy.SetAlias(std::string(Convert(alias_name)));
-	return copy;
+	return Convert(base_type)->WithAlias(std::string(Convert(alias_name)));
 }
 
 } // namespace

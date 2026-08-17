@@ -10,7 +10,7 @@ DUCKDB_V2_ERROR duckdb_v2_option_create(duckdb_v2_identifier_t name, duckdb_v2_s
 		}
 		*out_option = nullptr;
 		auto wrapper = duckdb::make_uniq<CV2Option>();
-		wrapper->name = Convert(name);
+		wrapper->name = duckdb::Identifier(Convert(name));
 		wrapper->setting = Convert(setting);
 		*out_option = Convert(wrapper.release());
 	});
