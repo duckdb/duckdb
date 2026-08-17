@@ -339,10 +339,10 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 }
 
 BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, const string &path, idx_t nr_bytes) {
-	const bool can_destroy = !FileSystem::IsRemoteFile(path) || nr_bytes < buffer_manager.GetBlockAllocSize() ||
-	                         !buffer_manager.HasTemporaryDirectory() ||
-	                         !Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase());
-	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, can_destroy);
+	const bool spill = Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase()) &&
+	                   FileSystem::IsRemoteFile(path) && buffer_manager.HasTemporaryDirectory() &&
+	                   nr_bytes >= buffer_manager.GetBlockAllocSize();
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, !spill);
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
