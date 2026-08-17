@@ -7,12 +7,16 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer,
+                                                                       const optional<Identifier> &extension_namespace,
                                                                        const Identifier &col_id_or_string,
                                                                        const optional<Identifier> &extension_alias) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->repo_is_alias = false;
 	info->filename = col_id_or_string.GetIdentifierName();
+	if (extension_namespace) {
+		info->repository = extension_namespace->GetIdentifierName();
+	}
 	if (extension_alias) {
 		info->alias = *extension_alias;
 		info->load_type = LoadType::LOAD_AS;
@@ -27,14 +31,27 @@ Identifier PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transf
 	return identifier;
 }
 
+Identifier PEGTransformerFactory::TransformExtensionNamespace(PEGTransformer &transformer,
+                                                              const Identifier &identifier) {
+	return identifier;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
-    PEGTransformer &transformer, const bool &has_result, const QualifiedName &identifier_or_string_literal,
-    const optional<ExtensionRepositoryInfo> &from_source, const optional<string> &version_number) {
+    PEGTransformer &transformer, const bool &has_result, const optional<Identifier> &extension_namespace,
+    const QualifiedName &identifier_or_string_literal, const optional<ExtensionRepositoryInfo> &from_source,
+    const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = has_result ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
 	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
+	if (extension_namespace && from_source) {
+		throw ParserException("Cannot combine a repository namespace with a FROM clause");
+	}
+	if (extension_namespace) {
+		info->repository = extension_namespace->GetIdentifierName();
+		info->repo_is_alias = true;
+	}
 	if (from_source) {
 		info->repository = from_source->name.GetIdentifierName();
 		info->repo_is_alias = from_source->repository_is_alias;

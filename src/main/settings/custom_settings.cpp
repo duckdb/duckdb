@@ -146,18 +146,50 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 //===----------------------------------------------------------------------===//
 // Allow Extension Repositories
 //===----------------------------------------------------------------------===//
+// How permissive an access level is, independent of the enum's numeric values. Higher is more permissive
+static int ExtensionRepositoryPermissiveness(ExtensionRepositoryAccess access) {
+	switch (access) {
+	case ExtensionRepositoryAccess::ALLOWED:
+		return 2;
+	case ExtensionRepositoryAccess::UNDECIDED:
+		return 1;
+	default: // FORBIDDEN
+		return 0;
+	}
+}
+
 void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	// validate the value
 	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
 	if (!info.db) {
-		// the value is set before the database is running - any value is allowed
+		// the value is set before the database is running (startup) - any value is allowed
 		return;
 	}
-	// forbidding external repositories is a one-way ratchet within a session: once forbidden, it cannot be re-enabled
+	// while the database is running the setting can only be tightened, never loosened. Trusting a new signing key is at
+	// least as consequential as re-enabling unsigned or community extensions, so - mirroring allow_unsigned_extensions
+	// and allow_community_extensions - extension repositories can only be enabled at startup. This also makes the
+	// 'forbidden' state a one-way ratchet within a session
 	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
-	if (current_access == ExtensionRepositoryAccess::FORBIDDEN && new_access != ExtensionRepositoryAccess::FORBIDDEN) {
+	if (ExtensionRepositoryPermissiveness(new_access) > ExtensionRepositoryPermissiveness(current_access)) {
 		throw InvalidInputException(
-		    "Adding extension repositories has been forbidden and cannot be re-enabled while the database is running");
+		    "allow_extension_repositories can only be made more restrictive while the database is running; enabling "
+		    "extension repositories is only possible at startup");
+	}
+}
+
+void ExtensionRepositoryDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		// set before the database is running (startup) - always allowed
+		return;
+	}
+	// The repository directory is the trust anchor for user-provided repositories: it determines which signing keys
+	// are trusted. While signature checking is enabled it must be fixed at startup, so that a runtime connection
+	// cannot point it at a directory of attacker-controlled keys and thereby bypass the opt-in. When unsigned
+	// extensions are already allowed the signature-trust model is off, so there is nothing to protect
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(*info.db)) {
+		throw InvalidInputException(
+		    "extension_repository_directory can only be set at startup while signature checking "
+		    "is enabled (allow_unsigned_extensions=false)");
 	}
 }
 

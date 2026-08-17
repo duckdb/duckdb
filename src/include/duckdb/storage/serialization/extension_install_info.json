@@ -40,6 +40,11 @@
         "id": 106,
         "name": "repository_name",
         "type": "string"
+      },
+      {
+        "id": 107,
+        "name": "signature_key_fingerprint",
+        "type": "string"
       }
     ]
   }

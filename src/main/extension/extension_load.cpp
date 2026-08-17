@@ -8,6 +8,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
@@ -348,9 +349,15 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 }
 
 static bool CheckKnownSignatures(DatabaseInstance &db, const string &two_level_hash, const string &signature,
-                                 ExtensionRepositoryType repository_type, const string &repository_name) {
+                                 ExtensionRepositoryType repository_type, const string &repository_name,
+                                 optional_ptr<string> signature_key_fingerprint = nullptr) {
 	for (auto &key : ExtensionHelper::GetTrustedPublicKeys(db, repository_type, repository_name)) {
 		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
+			if (signature_key_fingerprint) {
+				// report the fingerprint of the matching key in the same format as CREATE EXTENSION REPOSITORY
+				auto compact_key = ExtensionRepositoryManager::ToCompactPublicKey(key);
+				*signature_key_fingerprint = ExtensionRepositoryManager::GetPublicKeyFingerprint(compact_key);
+			}
 			return true;
 		}
 	}
@@ -379,7 +386,8 @@ bool ExtensionHelper::CheckExtensionSignature(DatabaseInstance &db, FileHandle &
 
 bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
                                                     const string &signature, ExtensionRepositoryType repository_type,
-                                                    const string &repository_name) {
+                                                    const string &repository_name,
+                                                    optional_ptr<string> signature_key_fingerprint) {
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
 	InitializeAncillaryData(hash_chunks, splits, buffer_length);
@@ -388,20 +396,23 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
-	return CheckKnownSignatures(db, resulting_hash, signature, repository_type, repository_name);
+	return CheckKnownSignatures(db, resulting_hash, signature, repository_type, repository_name,
+	                            signature_key_fingerprint);
 }
 
 bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
                                                     ExtensionRepositoryType repository_type,
-                                                    const string &repository_name) {
+                                                    const string &repository_name,
+                                                    optional_ptr<string> signature_key_fingerprint) {
 	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
 	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
 
-	return CheckExtensionBufferSignature(db, buffer, signature_offset, signature, repository_type, repository_name);
+	return CheckExtensionBufferSignature(db, buffer, signature_offset, signature, repository_type, repository_name,
+	                                     signature_key_fingerprint);
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                     ExtensionInitResult &result, string &error) {
+                                     const string &repository_namespace, ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -411,6 +422,28 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	auto filename = fs.ConvertSeparators(extension);
 
 	bool direct_load;
+
+	// resolve the repository namespace (LOAD core/httpfs, LOAD community/x, LOAD myrepo/x). A bare LOAD keeps the flat
+	// top-level layout and only resolves core and community extensions; user-provided repositories live in a
+	// per-repository subfolder
+	bool expect_user_repo = false;
+	ExtensionRepositoryType expected_repository_type = ExtensionRepositoryType::CORE;
+	if (!repository_namespace.empty()) {
+		if (ExtensionHelper::IsFullPath(extension)) {
+			error = "Cannot combine a repository namespace with a file path";
+			return false;
+		}
+		ExtensionRepository repository;
+		if (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_namespace, repository)) {
+			expected_repository_type = repository.type;
+			expect_user_repo = repository.type == ExtensionRepositoryType::USER_PROVIDED;
+		} else if (ExtensionRepository::TryGetKnownRepository(repository_namespace, repository)) {
+			expected_repository_type = repository.type;
+		} else {
+			error = StringUtil::Format("'%s' is not a known extension repository", repository_namespace);
+			return false;
+		}
+	}
 
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
@@ -441,7 +474,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #else
 
 		// Local function to process local path
-		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const string &extension_name) -> string {
+		auto ComputeLocalExtensionPath = [&](const string &base_path, const string &extension_name) -> string {
 			// convert random separators to platform-canonic
 			string local_path = fs.ConvertSeparators(base_path);
 			// expand ~ in extension directory
@@ -449,6 +482,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 			auto path_components = PathComponents();
 			for (auto &path_ele : path_components) {
 				local_path = fs.JoinPath(local_path, path_ele);
+			}
+			if (expect_user_repo) {
+				local_path = fs.JoinPath(fs.JoinPath(local_path, "repositories"), repository_namespace);
 			}
 			return fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 		};
@@ -528,6 +564,20 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	unique_ptr<ExtensionInstallInfo> install_info;
 	if (!direct_load) {
 		install_info = ExtensionInstallInfo::TryReadInfoFile(fs, filename + ".info", lowercase_extension_name);
+	}
+
+	// a namespaced load (LOAD core/x, LOAD myrepo/x) asserts that the extension really came from that repository. This
+	// prevents loading an extension under a repository whose signing keys the user did not intend to trust
+	if (!repository_namespace.empty() && install_info) {
+		bool origin_matches = expect_user_repo
+		                          ? (install_info->repository_type == ExtensionRepositoryType::USER_PROVIDED &&
+		                             install_info->repository_name == repository_namespace)
+		                          : (install_info->repository_type == expected_repository_type);
+		if (!origin_matches) {
+			error = StringUtil::Format("Extension '%s' was not installed from repository '%s'", extension,
+			                           repository_namespace);
+			return false;
+		}
 	}
 
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
@@ -613,18 +663,25 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                                 const string &repository_namespace) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(db, fs, extension, result, error)) {
+	if (!TryInitialLoad(db, fs, extension, repository_namespace, result, error)) {
 		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) || !ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
-		// the extension load failed - try installing the extension
+		// the extension load failed - try installing the extension, from the requested repository if one was given
 		ExtensionInstallOptions options;
+		ExtensionRepository repository;
+		if (!repository_namespace.empty() &&
+		    (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_namespace, repository) ||
+		     ExtensionRepository::TryGetKnownRepository(repository_namespace, repository))) {
+			options.repository = repository;
+		}
 		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
-		if (!TryInitialLoad(db, fs, extension, result, error)) {
+		if (!TryInitialLoad(db, fs, extension, repository_namespace, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -659,7 +716,10 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// This avoids loading a second copy from disk (ASan ODR violation) while
 	// keeping externally installed/autoloaded extensions on the normal path.
 	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
-	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
+	// statically linked extensions are compiled in and inherently core-trusted, so only take this shortcut for a bare
+	// load or an explicit core namespace - never let community/x or myrepo/x resolve to a linked core extension
+	bool allow_static_shortcut = options.repository.empty() || StringUtil::Lower(options.repository) == "core";
+	if (allow_static_shortcut && !ExtensionHelper::IsFullPath(options.extension_name)) {
 		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
 			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
 			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
@@ -680,7 +740,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
+		LoadExternalExtensionInternal(db, fs, options.extension_name, options.repository, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -689,11 +749,11 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                    ExtensionActiveLoad &info) {
+                                                    const string &repository_namespace, ExtensionActiveLoad &info) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto extension_init_result = InitialLoad(db, fs, extension);
+	auto extension_init_result = InitialLoad(db, fs, extension, repository_namespace);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {

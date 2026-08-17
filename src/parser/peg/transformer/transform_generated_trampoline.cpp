@@ -2057,6 +2057,9 @@ static const TransformFrameOps LOAD_STATEMENT_OPS = {"LoadStatement",
 static const TransformFrameOps EXTENSION_ALIAS_OPS = {"ExtensionAlias",
                                                       &PEGTransformerFactory::InitializeExtensionAliasTrampoline,
                                                       &PEGTransformerFactory::FinalizeExtensionAliasTrampoline};
+static const TransformFrameOps EXTENSION_NAMESPACE_OPS = {
+    "ExtensionNamespace", &PEGTransformerFactory::InitializeExtensionNamespaceTrampoline,
+    &PEGTransformerFactory::FinalizeExtensionNamespaceTrampoline};
 static const TransformFrameOps INSTALL_STATEMENT_OPS = {"InstallStatement",
                                                         &PEGTransformerFactory::InitializeInstallStatementTrampoline,
                                                         &PEGTransformerFactory::FinalizeInstallStatementTrampoline};
@@ -3593,6 +3596,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ReturningClause", &RETURNING_CLAUSE_OPS},
 	    {"LoadStatement", &LOAD_STATEMENT_OPS},
 	    {"ExtensionAlias", &EXTENSION_ALIAS_OPS},
+	    {"ExtensionNamespace", &EXTENSION_NAMESPACE_OPS},
 	    {"InstallStatement", &INSTALL_STATEMENT_OPS},
 	    {"UpdateExtensionsStatement", &UPDATE_EXTENSIONS_STATEMENT_OPS},
 	    {"FromSource", &FROM_SOURCE_OPS},
@@ -18694,24 +18698,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeReturningClauseT
 void PEGTransformerFactory::InitializeLoadStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                               TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(2);
-	auto &extension_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &extension_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (extension_alias_opt.HasResult()) {
 		stack.PushFrame(extension_alias_opt.GetResult(), EXTENSION_ALIAS_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 1));
+		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	stack.PushFrame(list_pr.GetChild(1), COL_ID_OR_STRING_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(list_pr.GetChild(2), COL_ID_OR_STRING_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &extension_namespace_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (extension_namespace_opt.HasResult()) {
+		stack.PushFrame(extension_namespace_opt.GetResult(), EXTENSION_NAMESPACE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeLoadStatementTrampoline(PEGTransformer &transformer,
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
-	auto col_id_or_string = frame.TakeResult<Identifier>(0);
-	optional<Identifier> extension_alias {};
-	if (frame.child_results[1]) {
-		extension_alias = frame.TakeResult<Identifier>(1);
+	optional<Identifier> extension_namespace {};
+	if (frame.child_results[0]) {
+		extension_namespace = frame.TakeResult<Identifier>(0);
 	}
-	auto result = TransformLoadStatement(transformer, col_id_or_string, extension_alias);
+	auto col_id_or_string = frame.TakeResult<Identifier>(1);
+	optional<Identifier> extension_alias {};
+	if (frame.child_results[2]) {
+		extension_alias = frame.TakeResult<Identifier>(2);
+	}
+	auto result = TransformLoadStatement(transformer, extension_namespace, col_id_or_string, extension_alias);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -18729,21 +18742,40 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExtensionAliasTr
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
+void PEGTransformerFactory::InitializeExtensionNamespaceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExtensionNamespaceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformExtensionNamespace(transformer, identifier);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
 void PEGTransformerFactory::InitializeInstallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(3);
-	auto &version_number_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	frame.ReserveChildSlots(4);
+	auto &version_number_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (version_number_opt.HasResult()) {
 		stack.PushFrame(version_number_opt.GetResult(), VERSION_NUMBER_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 2));
+		                TransformFrameResultTarget(frame.frame_index, 3));
 	}
-	auto &from_source_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	auto &from_source_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (from_source_opt.HasResult()) {
-		stack.PushFrame(from_source_opt.GetResult(), FROM_SOURCE_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+		stack.PushFrame(from_source_opt.GetResult(), FROM_SOURCE_OPS, TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	stack.PushFrame(list_pr.GetChild(2), IDENTIFIER_OR_STRING_LITERAL_OPS,
-	                TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(list_pr.GetChild(3), IDENTIFIER_OR_STRING_LITERAL_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 1));
+	auto &extension_namespace_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (extension_namespace_opt.HasResult()) {
+		stack.PushFrame(extension_namespace_opt.GetResult(), EXTENSION_NAMESPACE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeInstallStatementTrampoline(PEGTransformer &transformer,
@@ -18753,17 +18785,21 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeInstallStatement
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
-	auto identifier_or_string_literal = frame.TakeResult<QualifiedName>(0);
+	optional<Identifier> extension_namespace {};
+	if (frame.child_results[0]) {
+		extension_namespace = frame.TakeResult<Identifier>(0);
+	}
+	auto identifier_or_string_literal = frame.TakeResult<QualifiedName>(1);
 	optional<ExtensionRepositoryInfo> from_source {};
-	if (frame.child_results[1]) {
-		from_source = frame.TakeResult<ExtensionRepositoryInfo>(1);
+	if (frame.child_results[2]) {
+		from_source = frame.TakeResult<ExtensionRepositoryInfo>(2);
 	}
 	optional<string> version_number {};
-	if (frame.child_results[2]) {
-		version_number = frame.TakeResult<string>(2);
+	if (frame.child_results[3]) {
+		version_number = frame.TakeResult<string>(3);
 	}
-	auto result =
-	    TransformInstallStatement(transformer, has_result, identifier_or_string_literal, from_source, version_number);
+	auto result = TransformInstallStatement(transformer, has_result, extension_namespace, identifier_or_string_literal,
+	                                        from_source, version_number);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

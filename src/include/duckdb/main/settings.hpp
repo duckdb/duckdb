@@ -176,7 +176,8 @@ struct AllowExtensionRepositoriesSetting {
 	static constexpr const char *Name = "allow_extension_repositories";
 	static constexpr const char *Description =
 	    "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing "
-	    "repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones)";
+	    "repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). "
+	    "Can only be enabled at startup; while the database is running it can only be made more restrictive";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "undecided";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
@@ -1174,11 +1175,15 @@ struct ExtensionDirectorySetting {
 struct ExtensionRepositoryDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "extension_repository_directory";
-	static constexpr const char *Description = "Set the directory in which trusted extension repositories are stored";
+	static constexpr const char *Description =
+	    "Set the directory in which trusted extension repositories are stored. This is the trust anchor for "
+	    "user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can "
+	    "only be set at startup, not while the database is running";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ExternalFileCacheLocalBlockSizeSetting {

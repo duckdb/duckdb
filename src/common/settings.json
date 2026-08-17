@@ -54,7 +54,7 @@
     },
     {
         "name": "allow_extension_repositories",
-        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones)",
+        "description": "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). Can only be enabled at startup; while the database is running it can only be made more restrictive",
         "type": "VARCHAR",
         "scope": "global",
         "default_value": "undecided",
@@ -767,10 +767,13 @@
     },
     {
         "name": "extension_repository_directory",
-        "description": "Set the directory in which trusted extension repositories are stored",
+        "description": "Set the directory in which trusted extension repositories are stored. This is the trust anchor for user-provided repositories, so while signature checking is enabled (allow_unsigned_extensions=false) it can only be set at startup, not while the database is running",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": ""
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "external_file_cache_local_block_size",

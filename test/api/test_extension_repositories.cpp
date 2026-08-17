@@ -137,20 +137,60 @@ TEST_CASE("Test that forbidding repositories distrusts their keys", "[api]") {
 	REQUIRE_FAIL(con.Query("SET allow_extension_repositories='allowed'"));
 }
 
-TEST_CASE("Test that adding trusted extension repositories must be opted into", "[api]") {
+TEST_CASE("Test that adding trusted extension repositories must be opted into at startup", "[api]") {
 	auto repository_directory = TestCreatePath("extension_repositories_undecided");
 
-	DBConfig config;
-	config.SetOptionByName("extension_repository_directory", repository_directory);
-	DuckDB db(nullptr, &config);
-	Connection con(db);
+	// the default is 'undecided': adding a repository fails, and - mirroring allow_unsigned_extensions - it cannot be
+	// enabled at runtime, only at startup. This keeps allow_unsigned_extensions=false a real guarantee: a SQL
+	// connection cannot escalate to 'allowed' and register an attacker-controlled signing key
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_repository_directory", repository_directory);
+		DuckDB db(nullptr, &config);
+		Connection con(db);
 
-	// the default is undecided - adding a repository fails until the user opts in explicitly
-	REQUIRE_FAIL(con.Query(StringUtil::Format(
-	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
+		REQUIRE_FAIL(con.Query(StringUtil::Format(
+		    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
 
-	REQUIRE_NO_FAIL(con.Query("SET allow_extension_repositories='allowed'"));
-	REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
-	    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
-	REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+		// enabling repositories at runtime is refused
+		REQUIRE_FAIL(con.Query("SET allow_extension_repositories='allowed'"));
+		REQUIRE_FAIL(con.Query(StringUtil::Format(
+		    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
+	}
+
+	// opting in at startup through the config allows adding repositories
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_repository_directory", repository_directory);
+		config.SetOptionByName("allow_extension_repositories", "allowed");
+		DuckDB db(nullptr, &config);
+		Connection con(db);
+
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
+		    "CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY '%s'", TEST_PUBLIC_KEY)));
+		REQUIRE(KeyIsTrusted(*db.instance, ExtensionRepositoryType::USER_PROVIDED, "acme", TEST_PUBLIC_KEY));
+	}
+}
+
+TEST_CASE("Test that the extension repository directory is a startup-only trust anchor", "[api]") {
+	auto repository_directory = TestCreatePath("extension_repositories_anchor");
+
+	// with signature checking enabled (the default), the repository directory determines which keys are trusted, so it
+	// cannot be repointed at runtime - this stops a connection from pointing it at a directory of attacker keys
+	{
+		DBConfig config;
+		config.SetOptionByName("extension_repository_directory", repository_directory);
+		DuckDB db(nullptr, &config);
+		Connection con(db);
+		REQUIRE_FAIL(con.Query("SET extension_repository_directory='/tmp/some_other_directory'"));
+	}
+
+	// when unsigned extensions are allowed the signature-trust model is off, so the directory can be changed freely
+	{
+		DBConfig config;
+		config.SetOptionByName("allow_unsigned_extensions", true);
+		DuckDB db(nullptr, &config);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET extension_repository_directory='" + repository_directory + "'"));
+	}
 }

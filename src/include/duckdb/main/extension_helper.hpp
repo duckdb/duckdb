@@ -137,13 +137,16 @@ public:
 	static bool CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
 	                                    ParsedExtensionMetaData &parsed_metadata,
 	                                    ExtensionRepositoryType repository_type, const string &repository_name);
-	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added.
+	// When a key matches, its fingerprint is written to signature_key_fingerprint (if provided)
 	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
 	                                          const string &signature, ExtensionRepositoryType repository_type,
-	                                          const string &repository_name);
+	                                          const string &repository_name,
+	                                          optional_ptr<string> signature_key_fingerprint = nullptr);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length
 	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
-	                                          ExtensionRepositoryType repository_type, const string &repository_name);
+	                                          ExtensionRepositoryType repository_type, const string &repository_name,
+	                                          optional_ptr<string> signature_key_fingerprint = nullptr);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -262,13 +265,14 @@ private:
 	static const vector<string> PathComponents();
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                       const string &repository_namespace = string());
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                           ExtensionInitResult &result, string &error);
+	                           const string &repository_namespace, ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          ExtensionActiveLoad &info);
+	                                          const string &repository_namespace, ExtensionActiveLoad &info);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

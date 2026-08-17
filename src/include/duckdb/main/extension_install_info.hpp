@@ -73,6 +73,9 @@ public:
 	ExtensionRepositoryType repository_type = ExtensionRepositoryType::CORE;
 	//! (optional) Name of the repository the extension came from
 	string repository_name;
+	//! (optional) Fingerprint of the public key that signed this extension, as verified at install time. Empty when
+	//! the extension is unsigned. Matches the key_fingerprints reported by CREATE EXTENSION REPOSITORY
+	string signature_key_fingerprint;
 
 	void Serialize(Serializer &serializer) const;
 

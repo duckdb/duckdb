@@ -9,6 +9,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/settings.hpp"
@@ -221,15 +222,18 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 }
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
-                                     idx_t data_size, DatabaseInstance &db, ExtensionRepositoryType repository_type,
-                                     const string &repository_name) {
+                                     idx_t data_size, DatabaseInstance &db, ExtensionInstallInfo &info) {
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
+		string signature_key_fingerprint;
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    db, static_cast<char *>(data), data_size, repository_type, repository_name);
+		    db, static_cast<char *>(data), data_size, info.repository_type, info.repository_name,
+		    &signature_key_fingerprint);
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
 		}
+		// record which trusted key signed the extension, so it can be surfaced through duckdb_extensions()
+		info.signature_key_fingerprint = signature_key_fingerprint;
 	}
 
 	// Now signature has been checked (if signature checking is enabled)
@@ -315,9 +319,8 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	}
 
 	// Write extension to tmp file - the repository the extension comes from determines which keys are trusted to
-	// sign it
-	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, db, info.repository_type,
-	                         info.repository_name);
+	// sign it. This also records the fingerprint of the key that signed the extension in the install info
+	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, db, info);
 	// When this exit, signature has already being checked (if enabled by config)
 
 	// Write metadata to tmp file
@@ -571,7 +574,34 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 #else
 
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
-	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+
+	if (ExtensionHelper::IsFullPath(extension) && options.repository) {
+		throw InvalidInputException("Cannot pass both a repository and a full path url");
+	}
+
+	// Resolve default repository if there is none set
+	ExtensionRepository resolved_repository;
+	if (!ExtensionHelper::IsFullPath(extension) && !options.repository) {
+		resolved_repository = ExtensionRepository::GetDefaultRepository(db.config);
+		options.repository = resolved_repository;
+	}
+
+	// User-provided repositories install into a per-repository subfolder to avoid on-disk name collisions between
+	// repositories. Core and community extensions keep the flat top-level layout for backwards compatibility
+	string install_path = local_path;
+	if (options.repository && options.repository->type == ExtensionRepositoryType::USER_PROVIDED) {
+		// installing native code from a user-provided repository trusts that repository's signing keys, so it requires
+		// the same explicit opt-in as adding one. Without this, pointing extension_repository_directory at an
+		// attacker-controlled directory and installing from it would bypass the opt-in entirely
+		if (ExtensionRepositoryManager::GetAccess(db) != ExtensionRepositoryAccess::ALLOWED) {
+			throw PermissionException("Installing extensions from a user-provided repository requires "
+			                          "allow_extension_repositories='allowed'");
+		}
+		install_path = fs.JoinPath(fs.JoinPath(local_path, "repositories"), options.repository->name);
+		FileSystem::GetLocal(db).CreateDirectoriesRecursive(install_path);
+	}
+
+	string local_extension_path = fs.JoinPath(install_path, extension_name + ".duckdb_extension");
 	string temp_path =
 	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + ".duckdb_extension";
 
@@ -588,17 +618,6 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	}
 
 	fs.TryRemoveFile(temp_path);
-
-	if (ExtensionHelper::IsFullPath(extension) && options.repository) {
-		throw InvalidInputException("Cannot pass both a repository and a full path url");
-	}
-
-	// Resolve default repository if there is none set
-	ExtensionRepository resolved_repository;
-	if (!ExtensionHelper::IsFullPath(extension) && !options.repository) {
-		resolved_repository = ExtensionRepository::GetDefaultRepository(db.config);
-		options.repository = resolved_repository;
-	}
 
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {

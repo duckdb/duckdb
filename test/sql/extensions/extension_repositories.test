@@ -5,17 +5,10 @@
 statement ok
 SET extension_repository_directory='{TEST_DIR}/extension_repositories'
 
-# adding repositories is undecided by default: it must be opted into explicitly
-statement error
-CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
-----
-<REGEX>:Permission Error.*not enabled.*
-
-statement ok
-SET allow_extension_repositories='allowed'
-
-# creating a repository reports the name, prefix and key fingerprints, so that the pinned keys can be compared
-# against the fingerprints published by the repository
+# the test runner enables custom repositories at startup (allow_extension_repositories='allowed'), because they can no
+# longer be enabled at runtime. The opt-in default and the runtime ratchet are covered in the api tests and further
+# down in this file. Creating a repository reports the name, prefix and key fingerprints, so that the pinned keys can
+# be compared against the fingerprints published by the repository
 query III
 CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
@@ -212,6 +205,31 @@ SELECT repository_name, type, key_fingerprints FROM duckdb_extension_repositorie
 core	CORE	NULL
 community	COMMUNITY	NULL
 
+# GitHub-style namespaced install: 'acme/some_extension' resolves the same repository as 'FROM acme', so it fails on
+# the network (the acme prefix) rather than on repository lookup
+statement error
+INSTALL acme/some_extension
+----
+<REGEX>:.*extensions\.acme\.com.*
+
+# combining a namespace with a FROM clause is contradictory
+statement error
+INSTALL acme/some_extension FROM core
+----
+<REGEX>:Parser Error.*Cannot combine a repository namespace with a FROM clause.*
+
+# loading from an unknown repository namespace fails on the namespace, before touching disk
+statement error
+LOAD not_a_repo/some_extension
+----
+<REGEX>:.*not a known extension repository.*
+
+# a namespaced load looks for the extension in the repository's subfolder; nothing is installed there yet
+statement error
+LOAD acme/some_extension
+----
+<REGEX>:.*not found.*
+
 # a repository file must not be able to shadow a built-in repository. Plant a 'core.json' by hand (as something with
 # write access to the trust store directory could) and verify it is ignored, not silently used as the 'core' repository
 statement ok
@@ -228,6 +246,28 @@ query I
 SELECT count(*) FROM duckdb_extension_repositories() WHERE prefix='http://evil.example.com'
 ----
 0
+
+# the setting can only be tightened at runtime, never loosened - repositories can only be enabled at startup. Tighten
+# to 'undecided': existing repositories stay trusted, but adding new ones is now blocked
+statement ok
+SET allow_extension_repositories='undecided'
+
+statement error
+CREATE EXTENSION REPOSITORY blocked WITH PREFIX 'http://blocked.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+----
+<REGEX>:Permission Error.*not enabled.*
+
+# once tightened, it cannot be loosened back to 'allowed' while the database is running
+statement error
+SET allow_extension_repositories='allowed'
+----
+<REGEX>:.*more restrictive.*
+
+# existing repositories are still listed and trusted while undecided
+query I
+SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+acme
 
 # repositories can be forbidden. this distrusts the keys of existing repositories (so extensions installed from them
 # can no longer be loaded), but the repositories can still be listed and dropped. the 'undecided' default is weaker:
@@ -247,11 +287,12 @@ CREATE EXTENSION REPOSITORY foo WITH PREFIX 'http://foo.com' USING PUBLIC KEY 'M
 ----
 <REGEX>:Permission Error.*forbidden.*
 
-# installing from an existing repository still resolves the repository (and then fails on the network, not on lookup)
+# installing from a user-provided repository requires the opt-in, so it is blocked when not allowed - this prevents
+# pointing extension_repository_directory at an attacker-controlled directory and installing from it
 statement error
 INSTALL some_extension FROM acme
 ----
-<REGEX>:.*acme\.com.*
+<REGEX>:Permission Error.*user-provided repository.*
 
 # dropping an existing repository is still allowed - it only removes trust
 statement ok
@@ -261,4 +302,4 @@ DROP EXTENSION REPOSITORY acme
 statement error
 SET allow_extension_repositories='allowed'
 ----
-<REGEX>:.*forbidden and cannot be re-enabled.*
+<REGEX>:.*more restrictive.*

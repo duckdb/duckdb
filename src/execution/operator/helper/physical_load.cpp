@@ -75,6 +75,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		ExtensionLoadOptions options;
 		options.extension_name = info->filename;
 		options.alias = info->alias;
+		options.repository = info->repository;
 		ExtensionHelper::LoadExternalExtension(context.client, options);
 		// adds an explicitly set extension schema to the search path
 		ExtensionLoader::RefreshSearchPath(context.client);

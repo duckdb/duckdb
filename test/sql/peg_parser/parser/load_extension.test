@@ -22,6 +22,22 @@ CALL check_peg_parser($TEST_PEG_PARSER$LOAD tpch;$TEST_PEG_PARSER$);
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD '{SPATIAL_EXTENSION}'$TEST_PEG_PARSER$);
 
+# GitHub-style namespaced install/load
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL core/tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL my_repo/my_package;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$LOAD core/tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$LOAD community/shellfs;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$LOAD my_repo/my_package AS mp;$TEST_PEG_PARSER$);
+
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://acme.com' USING PUBLIC KEY 'mykey';$TEST_PEG_PARSER$);
 

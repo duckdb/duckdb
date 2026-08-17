@@ -17,6 +17,7 @@ void ExtensionInstallInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(104, "etag", etag);
 	serializer.WritePropertyWithDefault<ExtensionRepositoryType>(105, "repository_type", repository_type, ExtensionRepositoryType::CORE);
 	serializer.WritePropertyWithDefault<string>(106, "repository_name", repository_name);
+	serializer.WritePropertyWithDefault<string>(107, "signature_key_fingerprint", signature_key_fingerprint);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::Deserialize(Deserializer &deserializer) {
@@ -28,6 +29,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithDefault<string>(104, "etag", result->etag);
 	deserializer.ReadPropertyWithExplicitDefault<ExtensionRepositoryType>(105, "repository_type", result->repository_type, ExtensionRepositoryType::CORE);
 	deserializer.ReadPropertyWithDefault<string>(106, "repository_name", result->repository_name);
+	deserializer.ReadPropertyWithDefault<string>(107, "signature_key_fingerprint", result->signature_key_fingerprint);
 	return result;
 }
 

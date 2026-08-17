@@ -163,7 +163,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
     DUCKDB_SETTING(ExtensionDirectorySetting),
-    DUCKDB_SETTING(ExtensionRepositoryDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
