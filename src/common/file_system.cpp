@@ -455,6 +455,12 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
+bool FileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+                              AsyncIOCallback callback) { // NOLINT: sink parameter, ignored by the default impl
+	// by default a file system has no asynchronous read path, callers fall back to the synchronous Read
+	return false;
+}
+
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
@@ -842,6 +848,10 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+bool FileHandle::TryStartRead(void *buffer, idx_t nr_bytes, idx_t location, AsyncIOCallback callback) {
+	return file_system.TryStartRead(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location, std::move(callback));
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {

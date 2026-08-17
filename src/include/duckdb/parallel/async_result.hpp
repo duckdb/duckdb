@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/async_io_callback.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -26,10 +27,31 @@ enum class AsyncResultsExecutionMode : uint8_t {
 	TASK_EXECUTOR //! BLOCKED is allowed
 };
 
+//! Outcome of AsyncTask::TryExecuteAsync
+enum class AsyncTaskExecutionResult : uint8_t {
+	//! The task did all of its work, no completion callback will be made
+	FINISHED,
+	//! The task handed its work off, the completion callback fires exactly once when the work lands,
+	//! after which FinishAsync() must be called to consume the result
+	PENDING
+};
+
 class AsyncTask {
 public:
 	virtual ~AsyncTask() {};
+	//! Do all of the task's work, blocking the calling thread until it is done
 	virtual void Execute() = 0;
+	//! Try to hand the task's work off so the calling thread is released while it is in flight.
+	//! A task blocks AT MOST ONCE: TryExecuteAsync is never called twice, and a PENDING result is always followed
+	//! by exactly one [on_complete] and then one FinishAsync().
+	//! The default implementation just does the work synchronously, so overriding this is opt-in.
+	virtual AsyncTaskExecutionResult TryExecuteAsync(AsyncIOCallback on_complete) { // NOLINT
+		Execute();
+		return AsyncTaskExecutionResult::FINISHED;
+	}
+	//! Consume the result of the work started by TryExecuteAsync, only called after it returned PENDING
+	virtual void FinishAsync() {
+	}
 	//! The number of bytes this task reads, when known (used to budget I/O scheduled ahead by the read-ahead)
 	virtual idx_t GetIOSize() const {
 		return 0;

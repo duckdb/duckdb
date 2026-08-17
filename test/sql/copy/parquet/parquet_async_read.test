@@ -1,0 +1,87 @@
+# name: test/sql/copy/parquet/parquet_async_read.test
+# description: Parquet read heads are fetched through the file system's asynchronous read path when it has one
+# group: [parquet]
+
+require parquet
+
+# Keep row-group I/O on the per-scan async path, where a BLOCKED result parks the scan task.
+statement ok
+SET read_ahead_depth=0
+
+# No I/O threads at all: any overlap between reads can only come from the asynchronous file system.
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=0
+
+statement ok
+SET GLOBAL debug_fs_random_seed=424242
+
+# Five columns, of which we project three non-adjacent ones, so each row group needs several
+# separate read heads rather than one merged range.
+statement ok
+COPY (
+    SELECT i AS c0, i * 2 AS c1, i * 3 AS c2, i * 4 AS c3, i * 5 AS c4
+    FROM range(100000) t(i)
+) TO '{TEST_DIR}/parquet_async_read.parquet'
+(FORMAT PARQUET, ROW_GROUP_SIZE 50000)
+
+# Make each read take long enough that overlapping reads are clearly distinguishable.
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=20
+
+statement ok
+SET GLOBAL debug_fs_delay_stddev_ms=0
+
+statement ok
+SELECT debug_fs_reset_read_stats()
+
+# Synchronous file system: unchanged behaviour, every read blocks its caller.
+statement ok
+SET GLOBAL debug_fs_async_reads=false
+
+query I
+SELECT sum(c0) + sum(c2) + sum(c4) FROM '{TEST_DIR}/parquet_async_read.parquet'
+----
+44999550000
+
+query I
+SELECT debug_fs_async_read_count()
+----
+0
+
+# With a single thread and no asynchronous reads, only one read can ever be in flight.
+query I
+SELECT debug_fs_max_concurrent_reads()
+----
+1
+
+statement ok
+SELECT debug_fs_reset_read_stats()
+
+# Asynchronous file system: the read heads are handed off, so the scan task parks instead of blocking.
+statement ok
+SET GLOBAL debug_fs_async_reads=true
+
+query I
+SELECT sum(c0) + sum(c2) + sum(c4) FROM '{TEST_DIR}/parquet_async_read.parquet'
+----
+44999550000
+
+query I
+SELECT debug_fs_async_read_count() > 0
+----
+true
+
+# Several reads were in flight at once even though there is not a single I/O thread to hold them.
+query I
+SELECT debug_fs_max_concurrent_reads() > 1
+----
+true
+
+statement ok
+SET GLOBAL debug_fs_delay_mean_ms=0
+
+statement ok
+SET GLOBAL debug_fs_async_reads=false

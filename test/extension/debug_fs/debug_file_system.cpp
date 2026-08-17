@@ -5,6 +5,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/database.hpp"
@@ -32,9 +33,98 @@ FileCompressionType DebugFileHandle::GetFileCompressionType() {
 	return inner->GetFileCompressionType();
 }
 
+#ifndef DUCKDB_NO_THREADS
+//! One read that was started asynchronously and has not been completed yet
+struct PendingDebugRead {
+	FileHandle *handle;
+	void *buffer;
+	int64_t nr_bytes;
+	idx_t location;
+	AsyncIOCallback callback;
+	//! When this read should be completed, in milliseconds since the queue was created
+	double due_ms;
+};
+
+//! Completes asynchronously started reads on a dedicated thread, standing in for a platform whose I/O genuinely
+//! completes out-of-band (e.g. a browser handing a fetch response back to the event loop).
+class DebugAsyncReadQueue {
+public:
+	DebugAsyncReadQueue() : start(TimePoint::Tick()), thread([this] { Run(); }) {
+	}
+	~DebugAsyncReadQueue() {
+		{
+			unique_lock<std::mutex> lock(queue_lock);
+			shutdown = true;
+		}
+		queue_cv.notify_all();
+		thread.join();
+	}
+
+	void Push(PendingDebugRead read) {
+		{
+			unique_lock<std::mutex> lock(queue_lock);
+			pending.push_back(std::move(read));
+		}
+		queue_cv.notify_one();
+	}
+
+	double ElapsedMs() const {
+		return static_cast<double>(TimePoint::ElapsedMicros(start, TimePoint::Tick())) / 1000.0;
+	}
+
+private:
+	void Run() {
+		while (true) {
+			PendingDebugRead read;
+			{
+				unique_lock<std::mutex> lock(queue_lock);
+				queue_cv.wait(lock, [this] { return shutdown || !pending.empty(); });
+				if (pending.empty()) {
+					// only wake up for shutdown once everything that was started has been completed
+					return;
+				}
+				// complete whichever read is due first, so injected latencies overlap instead of serializing
+				auto earliest = pending.begin();
+				for (auto it = pending.begin(); it != pending.end(); it++) {
+					if (it->due_ms < earliest->due_ms) {
+						earliest = it;
+					}
+				}
+				read = std::move(*earliest);
+				pending.erase(earliest);
+			}
+			auto remaining_ms = read.due_ms - ElapsedMs();
+			if (remaining_ms > 0) {
+				ThreadUtil::SleepMs(LossyNumericCast<idx_t>(remaining_ms));
+			}
+			try {
+				read.handle->file_system.Read(*read.handle, read.buffer, read.nr_bytes, read.location);
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				read.callback(&error);
+				continue;
+			}
+			read.callback(nullptr);
+		}
+	}
+
+	TimePoint start;
+	std::mutex queue_lock;
+	std::condition_variable queue_cv;
+	vector<PendingDebugRead> pending;
+	bool shutdown = false;
+	//! Declared last so the thread only starts once every member it touches is initialized
+	std::thread thread;
+};
+#else
+class DebugAsyncReadQueue {};
+#endif
+
 DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db)
     : inner_fs(std::move(inner_fs)), db(db) {
 }
+
+DebugFileSystem::~DebugFileSystem() = default;
 
 void DebugFileSystem::SetDelayMeanMs(double v) {
 	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
@@ -73,8 +163,7 @@ void DebugFileSystem::EnsureRandomEngineInitialized() {
 	DUCKDB_LOG_INFO(db, "DebugFileSystem initialized with random seed: %llu", seed);
 }
 
-void DebugFileSystem::ApplyDelay() {
-#ifndef DUCKDB_NO_THREADS
+double DebugFileSystem::SampleDelayMs() {
 	double mean_ms = 0;
 	double stddev_ms = 0;
 	{
@@ -84,23 +173,54 @@ void DebugFileSystem::ApplyDelay() {
 	}
 
 	if (mean_ms == 0.0) {
-		return;
+		return 0.0;
 	}
 
 	// Lazy initialize the random engine on first IO operation, so user-set random seed could be applied.
 	EnsureRandomEngineInitialized();
 
-	double delay_ms = 0;
 	if (stddev_ms == 0.0) {
-		delay_ms = mean_ms;
-	} else {
-		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
-		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(*random_engine);
+		return mean_ms;
 	}
+	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+	return IoLatencyModel(mean_ms, stddev_ms).SampleLatency(*random_engine);
+}
+
+void DebugFileSystem::ApplyDelay() {
+#ifndef DUCKDB_NO_THREADS
+	auto delay_ms = SampleDelayMs();
 	if (delay_ms > 0.0) {
 		ThreadUtil::SleepMs(LossyNumericCast<idx_t>(delay_ms));
 	}
 #endif
+}
+
+void DebugFileSystem::SetAsyncReads(bool async_reads_p) {
+	async_reads = async_reads_p;
+}
+
+idx_t DebugFileSystem::GetMaxConcurrentReads() const {
+	return max_concurrent_reads.load();
+}
+
+idx_t DebugFileSystem::GetAsyncReadCount() const {
+	return async_read_count.load();
+}
+
+void DebugFileSystem::ResetReadStats() {
+	max_concurrent_reads = 0;
+	async_read_count = 0;
+}
+
+void DebugFileSystem::ReadStarted() {
+	const auto in_flight = ++reads_in_flight;
+	auto observed = max_concurrent_reads.load();
+	while (in_flight > observed && !max_concurrent_reads.compare_exchange_weak(observed, in_flight)) {
+	}
+}
+
+void DebugFileSystem::ReadFinished() {
+	--reads_in_flight;
 }
 
 unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
@@ -114,9 +234,40 @@ unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(const OpenFileInfo &fil
 }
 
 void DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	ReadStarted();
 	ApplyDelay();
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Read(inner, buffer, nr_bytes, location);
+	ReadFinished();
+}
+
+bool DebugFileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+                                   AsyncIOCallback callback) {
+#ifdef DUCKDB_NO_THREADS
+	return false;
+#else
+	if (!async_reads) {
+		return false;
+	}
+	if (!async_queue) {
+		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+		if (!async_queue) {
+			async_queue = make_uniq<DebugAsyncReadQueue>();
+		}
+	}
+	auto delay_ms = SampleDelayMs();
+	ReadStarted();
+	async_read_count++;
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	// the injected latency is served by the completion thread, so the caller is free while it elapses
+	async_queue->Push(PendingDebugRead {&inner, buffer, nr_bytes, location,
+	                                    [this, callback](optional_ptr<ErrorData> error) {
+		                                    ReadFinished();
+		                                    callback(error);
+	                                    },
+	                                    async_queue->ElapsedMs() + delay_ms});
+	return true;
+#endif
 }
 
 int64_t DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
