@@ -206,9 +206,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	AutoCompleteTokenizerBehavior behavior(sql_ref, state);
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	if (!parser_cache.GetTokenizer().TokenizeInput(behavior)) {
 		return {};
 	}
 	if (state.suggestions.empty()) {

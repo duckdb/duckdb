@@ -460,8 +460,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
-	tokenizer.TokenizeInput();
+	parser_cache.GetTokenizer().TokenizeInput(behavior);
 
 	// use the parser to annotate any tokens
 	vector<MatcherSuggestion> suggestions;
@@ -545,10 +544,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
 	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
-
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	if (!parser_cache.GetTokenizer().TokenizeInput(behavior)) {
 		return nullptr;
 	}
 

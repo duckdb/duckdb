@@ -9,9 +9,25 @@
 #pragma once
 
 #include "duckdb/parser/peg/keyword_helper.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/token_type.hpp"
 
 namespace duckdb {
+
+struct ParserCache;
+
+struct MatcherToken {
+	// NOLINTNEXTLINE: allow implicit conversion from text
+	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
+	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
+		length = text.length();
+	}
+
+	TokenType type;
+	string text;
+	idx_t offset = 0;
+	idx_t length = 0;
+	bool unterminated = false;
+};
 
 enum class TokenizeState {
 	STANDARD = 0,
@@ -54,28 +70,24 @@ protected:
 
 class Tokenizer {
 public:
-	Tokenizer(TokenizerBehavior &behavior, const PEGKeywordHelper &keyword_helper);
 	virtual ~Tokenizer() = default;
 
 public:
-	virtual void TokenizeInput();
-
-	//! True iff `TokenizeInput()` finished in a state where autocomplete could be offered (the
-	//! input wasn't truncated mid-comment / mid-dollar-quoted-string). Derived by inspecting the
-	//! trailing sentinel: the clean-exit paths append `GetTerminator()` (which becomes
-	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete behavior); the dirty-exit paths always append
-	//! `END_OF_INPUT`.
-	bool CanAutocomplete() const;
+	//! Tokenize the behavior's input and return whether autocomplete can be offered.
+	virtual bool TokenizeInput(TokenizerBehavior &behavior) const;
 
 private:
+	friend struct ParserCache;
+	explicit Tokenizer(const PEGKeywordHelper &keyword_helper);
+
 	//! Core tokenization loop. Returns true on a clean exit, false if the input ended inside an
 	//! unterminated comment / dollar-quoted string. Does NOT append the trailing sentinel —
 	//! `TokenizeInput()` is the one that appends `GetTerminator()` (clean) or `END_OF_INPUT`
 	//! (dirty) based on the return value.
-	bool TokenizeInputInternal();
+	bool TokenizeInputInternal(TokenizerBehavior &behavior) const;
 
 public:
-	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
+	bool IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
 	static bool CharacterIsNumber(char c);
@@ -84,15 +96,12 @@ public:
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
 	static bool CharacterIsSpecialStringCharacter(char c);
-	bool IsValidDollarTagCharacter(char c);
+	static bool IsValidDollarTagCharacter(char c);
 	static TokenType TokenizeStateToType(TokenizeState state);
 	static bool IsUnterminatedState(TokenizeState state);
 
 protected:
-	const string &sql;
-	vector<MatcherToken> &tokens;
 	reference<const PEGKeywordHelper> keyword_helper;
-	TokenizerBehavior &behavior;
 };
 
 } // namespace duckdb

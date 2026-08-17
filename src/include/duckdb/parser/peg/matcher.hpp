@@ -15,6 +15,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
@@ -92,20 +93,6 @@ struct AutoCompleteSuggestion {
 enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
-
-struct MatcherToken {
-	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
-	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
-		length = text.length();
-	}
-
-	TokenType type;
-	string text;
-	idx_t offset = 0;
-	idx_t length = 0;
-	bool unterminated = false;
-};
 
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
@@ -266,14 +253,22 @@ private:
 	optional_ptr<Matcher> top_level_statement_matcher;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+//! Per-database cache holder for the PEG tokenizer, matcher and transformer factory.
 struct ParserCache {
+	ParserCache() : tokenizer(keyword_helper) {
+	}
+
 	PEGKeywordHelper &GetKeywordHelper() {
 		return keyword_helper;
 	}
 	const PEGKeywordHelper &GetKeywordHelper() const {
 		return keyword_helper;
+	}
+	Tokenizer &GetTokenizer() {
+		return tokenizer;
+	}
+	const Tokenizer &GetTokenizer() const {
+		return tokenizer;
 	}
 	shared_ptr<PEGMatcher> GetMatcher();
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
@@ -281,6 +276,7 @@ struct ParserCache {
 
 private:
 	PEGKeywordHelper keyword_helper;
+	Tokenizer tokenizer;
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;

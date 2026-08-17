@@ -90,8 +90,7 @@ string SQLFormatter::Format(const string &sql) {
 	ParserCache cache;
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior, cache.GetKeywordHelper());
-	tokenizer.TokenizeInput();
+	cache.GetTokenizer().TokenizeInput(behavior);
 	if (!tokens.empty()) {
 		auto back_type = tokens.back().type;
 		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {

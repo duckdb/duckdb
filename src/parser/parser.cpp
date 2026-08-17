@@ -268,8 +268,7 @@ void Parser::ParseQuery(const string &query_p) {
 	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
 	ParserTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior, GetCache().GetKeywordHelper());
-	tokenizer.TokenizeInput();
+	GetCache().GetTokenizer().TokenizeInput(behavior);
 	idx_t token_cursor = 0;
 	while (token_cursor < tokens.size()) {
 		try {
@@ -365,8 +364,7 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	ParserCache cache;
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior, cache.GetKeywordHelper());
-	tokenizer.TokenizeInput();
+	cache.GetTokenizer().TokenizeInput(behavior);
 
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
