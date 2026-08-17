@@ -20,7 +20,7 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
-
+#include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "re2/re2.h"
 
@@ -116,6 +116,10 @@ void ExtensionLoader::FinalizeLoad() {
 		auto info = make_uniq<ExtensionLoadedInfo>();
 		info->description = loader_info.extension_description;
 		extension_info->load_info = std::move(info);
+	}
+
+	if (!parser_keywords.empty()) {
+		DBConfig::GetConfig(db).GetCallbackManager().Register(parser_keywords);
 	}
 }
 
@@ -387,6 +391,10 @@ void ExtensionLoader::RegisterCombineTypesRule(CombineTypesRule rule) {
 
 void ExtensionLoader::RegisterMetric(MetricInfo info) {
 	MetricsManager::Get(db).RegisterMetric(std::move(info));
+}
+
+void ExtensionLoader::RegisterKeyword(const string &keyword, ExtensionKeywordCategory category) {
+	parser_keywords.push_back({keyword, category});
 }
 
 } // namespace duckdb

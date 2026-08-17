@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/parser/peg/token_type.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
 struct DBConfig;

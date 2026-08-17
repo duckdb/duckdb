@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/keyword_extension.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,7 @@ public:
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
 
 	void Register(ParserExtension extension);
+	void Register(const vector<ExtensionKeyword> &keywords);
 	void Register(PlannerExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
@@ -57,6 +59,8 @@ public:
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
 	bool HasParserExtensions() const;
+	shared_ptr<const vector<ParserExtension>> GetParserExtensions() const;
+	shared_ptr<const KeywordExtension> GetKeywordExtension() const;
 
 private:
 	mutex registry_lock;

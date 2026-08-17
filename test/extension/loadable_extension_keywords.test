@@ -1,0 +1,43 @@
+# name: test/extension/loadable_extension_keywords.test
+# description: Test parser keyword registration from loadable extensions
+# group: [extension]
+
+require skip_reload
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query II
+SELECT keyword_name, keyword_category
+FROM duckdb_keywords()
+WHERE keyword_name IN (
+	'quack_reserved_keyword',
+	'quack_unreserved_keyword',
+	'quack_column_name_keyword',
+	'quack_function_name_keyword',
+	'quack_type_name_keyword'
+)
+ORDER BY keyword_name;
+----
+quack_column_name_keyword	column_name
+quack_function_name_keyword	type_function
+quack_reserved_keyword	reserved
+quack_type_name_keyword	type_function
+quack_unreserved_keyword	unreserved
+
+query I
+SELECT keyword_category
+FROM duckdb_keywords()
+WHERE keyword_name = 'select';
+----
+reserved
+
+statement error
+SELECT NULL::quack_type_name_keyword;
+----
+<REGEX>:Catalog Error: Type with name quack_type_name_keyword does not exist.*
+
+statement error
+SELECT NULL::quack_function_name_keyword;
+----
+<REGEX>:Parser Error: syntax error at or near "quack_function_name_keyword".*

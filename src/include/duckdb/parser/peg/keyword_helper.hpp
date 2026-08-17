@@ -29,7 +29,7 @@ public:
 
 private:
 	PEGKeywordHelper();
-	bool initialized;
+	bool initialized = false;
 	case_insensitive_set_t reserved_keyword_map;
 	case_insensitive_set_t unreserved_keyword_map;
 	case_insensitive_set_t colname_keyword_map;

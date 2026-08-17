@@ -2310,6 +2310,27 @@ ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *valu
 	return static_cast<ExtensionInstallMode>(StringUtil::StringToEnum(GetExtensionInstallModeValues(), 5, "ExtensionInstallMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetExtensionKeywordCategoryValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExtensionKeywordCategory::RESERVED), "RESERVED" },
+		{ static_cast<uint32_t>(ExtensionKeywordCategory::UNRESERVED), "UNRESERVED" },
+		{ static_cast<uint32_t>(ExtensionKeywordCategory::COLUMN_NAME), "COLUMN_NAME" },
+		{ static_cast<uint32_t>(ExtensionKeywordCategory::FUNCTION_NAME), "FUNCTION_NAME" },
+		{ static_cast<uint32_t>(ExtensionKeywordCategory::TYPE_NAME), "TYPE_NAME" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionKeywordCategory>(ExtensionKeywordCategory value) {
+	return StringUtil::EnumToString(GetExtensionKeywordCategoryValues(), 5, "ExtensionKeywordCategory", static_cast<uint32_t>(value));
+}
+
+template<>
+ExtensionKeywordCategory EnumUtil::FromString<ExtensionKeywordCategory>(const char *value) {
+	return static_cast<ExtensionKeywordCategory>(StringUtil::StringToEnum(GetExtensionKeywordCategoryValues(), 5, "ExtensionKeywordCategory", value));
+}
+
 const StringUtil::EnumStringLiteral *GetExtensionLoadResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtensionLoadResult::LOADED_EXTENSION), "LOADED_EXTENSION" },

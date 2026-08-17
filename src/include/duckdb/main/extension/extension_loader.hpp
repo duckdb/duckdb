@@ -14,6 +14,7 @@
 #include "duckdb/main/profiler/metric_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_manager.hpp"
 
@@ -137,6 +138,9 @@ public:
 	//! Registers a custom metric so it appears in duckdb_available_metrics.
 	DUCKDB_API void RegisterMetric(MetricInfo info);
 
+	//! Registers an extension-owned parser keyword.
+	DUCKDB_API void RegisterKeyword(const string &keyword, ExtensionKeywordCategory category);
+
 private:
 	void FinalizeLoad();
 
@@ -144,6 +148,7 @@ private:
 	DatabaseInstance &db;
 	ExtensionLoaderInfo loader_info;
 	optional_ptr<ExtensionInfo> extension_info;
+	vector<ExtensionKeyword> parser_keywords;
 };
 
 } // namespace duckdb

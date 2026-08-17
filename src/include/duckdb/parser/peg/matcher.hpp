@@ -12,17 +12,19 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {
 class ClientContext;
+class KeywordExtension;
 class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+struct ParserCache;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -123,16 +125,18 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	           idx_t &max_token_index, optional_ptr<const KeywordExtension> keyword_extension_p = nullptr,
+	           bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
 	           ParserPackratCache *packrat_cache_p = nullptr)
 	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
-	      packrat_cache(packrat_cache_p) {
+	      packrat_cache(packrat_cache_p), keyword_extension(keyword_extension_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
 	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
+	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache),
+	      keyword_extension(state.keyword_extension) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -143,6 +147,7 @@ struct MatchState {
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
 	ParserPackratCache *packrat_cache;
+	optional_ptr<const KeywordExtension> keyword_extension;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {
@@ -273,7 +278,7 @@ struct ParserCache {
 	void Invalidate();
 
 private:
-	std::mutex mutex;
+	mutable std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;
 };

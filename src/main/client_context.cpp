@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -1604,7 +1605,9 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
-	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
+	auto &extension_manager = DBConfig::GetConfig(*this).GetCallbackManager();
+	options.parser_extensions = extension_manager.GetParserExtensions();
+	options.keyword_extension = extension_manager.GetKeywordExtension();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.parser_cache = &db->GetParserCache();
 	return options;

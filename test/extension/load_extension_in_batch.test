@@ -1,0 +1,16 @@
+# name: test/extension/load_extension_in_batch.test
+# description: Use parser callbacks and keywords immediately after loading an extension
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+QUACK QUACK QUACK;
+SELECT quack_reserved_keyword;
+----
+<REGEX>:Parser Error: syntax error at or near "quack_reserved_keyword".*

@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens)
-    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens,
+                             optional_ptr<const KeywordExtension> keyword_extension_p)
+    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()), keyword_extension(keyword_extension_p) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -126,7 +127,17 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsKeyword(char c) {
+bool BaseTokenizer::CharacterIsIdentifierStart(char c) {
+	if (CharacterIsInitialNumber(c) || c == '$') {
+		return false;
+	}
+	return CharacterIsIdentifierContinuation(c);
+}
+
+bool BaseTokenizer::CharacterIsIdentifierContinuation(char c) {
+	if (c == '$') {
+		return true;
+	}
 	if (IsSingleByteOperator(c)) {
 		return false;
 	}
@@ -138,6 +149,18 @@ bool BaseTokenizer::CharacterIsKeyword(char c) {
 	}
 	if (CharacterIsControlFlow(c)) {
 		return false;
+	}
+	return true;
+}
+
+bool BaseTokenizer::IsValidUnquotedIdentifier(const string &text) {
+	if (text.empty() || !CharacterIsIdentifierStart(text[0])) {
+		return false;
+	}
+	for (idx_t i = 1; i < text.size(); i++) {
+		if (!CharacterIsIdentifierContinuation(text[i])) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -431,11 +454,13 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			break;
 		case TokenizeState::KEYWORD:
 			// keyword - check if this is still a keyword
-			// '$' is valid as a non-initial identifier character in PostgreSQL
-			if (c != '$' && !CharacterIsKeyword(c)) {
+			if (!CharacterIsIdentifierContinuation(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
-				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+				auto token_type =
+				    (keyword_extension ? keyword_extension->IsKeyword(word) : keyword_helper.IsKeyword(word))
+				        ? TokenType::KEYWORD
+				        : TokenType::IDENTIFIER;
 				PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
@@ -562,7 +587,9 @@ void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t las
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+		state = (keyword_extension ? keyword_extension->IsKeyword(last_word) : keyword_helper.IsKeyword(last_word))
+		            ? TokenizeState::KEYWORD
+		            : TokenizeState::STANDARD;
 	}
 
 	bool is_unterminated = IsUnterminatedState(state);

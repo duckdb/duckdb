@@ -369,6 +369,9 @@ public:
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
 		return PEGMatcher::Get(context);
 	}
+	shared_ptr<const KeywordExtension> GetKeywordExtension() override {
+		return context.GetParserOptions().keyword_extension;
+	}
 
 private:
 	ClientContext &context;
@@ -457,14 +460,15 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
-	HighlightTokenizer tokenizer(sql);
+	auto keyword_extension = context.GetParserOptions().keyword_extension;
+	HighlightTokenizer tokenizer(sql, keyword_extension.get());
 	tokenizer.TokenizeInput();
 
 	// use the parser to annotate any tokens
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
+	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index, keyword_extension.get());
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->ProgramMatcher().Match(state);
@@ -540,7 +544,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	ParserTokenizer tokenizer(sql_ref, root_tokens);
+	auto keyword_extension = context.GetParserOptions().keyword_extension;
+	ParserTokenizer tokenizer(sql_ref, root_tokens, keyword_extension.get());
 
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
@@ -554,7 +559,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index, keyword_extension.get());
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->ProgramMatcher().Match(state);
@@ -649,8 +654,9 @@ static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &info = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<FormatSQLBindData>();
 	auto &heap = StringVector::GetStringHeap(result);
+	auto keyword_extension = state.GetContext().GetParserOptions().keyword_extension;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
-		return heap.AddString(FormatSQL(input.GetString(), info.config));
+		return heap.AddString(FormatSQL(input.GetString(), info.config, keyword_extension.get()));
 	});
 }
 

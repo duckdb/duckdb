@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parser/keyword_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
@@ -27,7 +28,8 @@ enum class TokenizeState {
 
 class BaseTokenizer {
 public:
-	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens);
+	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens,
+	              optional_ptr<const KeywordExtension> keyword_extension = nullptr);
 	virtual ~BaseTokenizer() = default;
 
 public:
@@ -65,7 +67,9 @@ public:
 	static bool CharacterIsNumber(char c);
 	static bool CharacterIsScientific(char c);
 	static bool CharacterIsControlFlow(char c);
-	static bool CharacterIsKeyword(char c);
+	static bool CharacterIsIdentifierStart(char c);
+	static bool CharacterIsIdentifierContinuation(char c);
+	static bool IsValidUnquotedIdentifier(const string &text);
 	static bool CharacterIsOperator(char c);
 	static bool CharacterIsSpecialStringCharacter(char c);
 	bool IsValidDollarTagCharacter(char c);
@@ -75,7 +79,8 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	PEGKeywordHelper keyword_helper;
+	PEGKeywordHelper &keyword_helper;
+	optional_ptr<const KeywordExtension> keyword_extension;
 };
 
 } // namespace duckdb

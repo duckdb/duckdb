@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/keyword_extension.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
@@ -507,10 +508,7 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
-		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
-			return false;
-		}
-		return BaseTokenizer::CharacterIsKeyword(text[0]);
+		return BaseTokenizer::CharacterIsIdentifierStart(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -635,15 +633,19 @@ private:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		auto keyword_category_type = [&](PEGKeywordCategory category) {
+			return state.keyword_extension ? state.keyword_extension->KeywordCategoryType(token_text, category)
+			                               : keyword_helper.KeywordCategoryType(token_text, category);
+		};
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
+			if (keyword_category_type(PEGKeywordCategory::KEYWORD_UNRESERVED) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
 				break;
 			}
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+			if (keyword_category_type(PEGKeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
+			    keyword_category_type(PEGKeywordCategory::KEYWORD_COL_NAME)) {
 				return false;
 			}
 			break;
@@ -653,14 +655,12 @@ private:
 			                                           ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
 			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
 
-			const bool is_reserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool is_reserved = keyword_category_type(PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_category_type(banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
-			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			const bool is_unreserved = keyword_category_type(PEGKeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_category_type(allowed_override_category);
 			const bool has_allowed_flag = is_unreserved || has_override_flag;
 
 			if (has_banned_flag && !has_allowed_flag) {
