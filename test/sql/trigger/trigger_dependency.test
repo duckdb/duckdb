@@ -214,7 +214,6 @@ statement ok
 DROP TABLE temp.log6;
 
 # --- Renaming the table a trigger is defined on is rejected ---
-# FIXME - this is a known limitation of the current implementation of trigger dependency tracking
 statement ok
 CREATE TABLE t7(i INT);
 
@@ -265,7 +264,6 @@ DROP TABLE log8;
 
 # --- Altering a column that the trigger body reads from its own table is rejected ---
 statement ok
-
 CREATE TABLE t9(i INTEGER, j INTEGER);
 
 statement ok
