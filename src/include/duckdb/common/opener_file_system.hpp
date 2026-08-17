@@ -46,6 +46,11 @@ public:
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
 	}
 
+	bool TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+	                  AsyncIOCallback callback) override {
+		return GetFileSystem().TryStartRead(handle, buffer, nr_bytes, location, std::move(callback));
+	}
+
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		throw InternalException("writing on the OpenerFileSystem is undefined");
 	}

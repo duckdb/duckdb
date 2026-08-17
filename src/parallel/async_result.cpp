@@ -1,3 +1,4 @@
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -36,6 +37,15 @@ private:
 
 class AsyncExecutionTask : public ExecutorTask {
 	enum class CompletionSignal { BATCH_FINISHED, BATCH_ERRORED };
+	//! An async task blocks at most once, so three states are enough to describe its whole life
+	enum class AsyncState : uint8_t {
+		//! TryExecuteAsync has not returned yet, the completion may still land inline
+		RUNNING,
+		//! we returned TASK_BLOCKED, the completion must reschedule us
+		BLOCKED,
+		//! the completion has landed
+		COMPLETED
+	};
 
 public:
 	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state,
@@ -44,8 +54,27 @@ public:
 	      completion(std::move(completion)) {
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		if (!started) {
+			started = true;
+			if (StartAsyncWork() == AsyncTaskExecutionResult::PENDING) {
+				// the work is in flight - park unless the completion already landed inline
+				auto expected = AsyncState::RUNNING;
+				if (async_state.compare_exchange_strong(expected, AsyncState::BLOCKED)) {
+					return TaskExecutionResult::TASK_BLOCKED;
+				}
+			} else {
+				// the task did all of its work synchronously
+				SignalCompletion(CompletionSignal::BATCH_FINISHED);
+				return TaskExecutionResult::TASK_FINISHED;
+			}
+		}
+		// the asynchronous work has landed - consume its result
+		if (async_error.HasError()) {
+			SignalCompletion(CompletionSignal::BATCH_ERRORED);
+			async_error.Throw();
+		}
 		try {
-			async_task->Execute();
+			async_task->FinishAsync();
 		} catch (...) {
 			SignalCompletion(CompletionSignal::BATCH_ERRORED);
 			throw;
@@ -56,6 +85,32 @@ public:
 
 	string TaskType() const override {
 		return "AsyncTask";
+	}
+
+private:
+	//! Start the task's work, routing an early failure through the batch completion like Execute() does
+	AsyncTaskExecutionResult StartAsyncWork() {
+		// keep ourselves alive for as long as the work is in flight, the completion may outlive the scheduler's
+		// reference to us
+		auto self = shared_from_this();
+		try {
+			return async_task->TryExecuteAsync([this, self](optional_ptr<ErrorData> error) { OnAsyncDone(error); });
+		} catch (...) {
+			SignalCompletion(CompletionSignal::BATCH_ERRORED);
+			throw;
+		}
+	}
+
+	//! Invoked (on any thread) when the asynchronous work started by TryExecuteAsync has landed
+	void OnAsyncDone(optional_ptr<ErrorData> error) {
+		if (error) {
+			async_error = *error;
+		}
+		if (async_state.exchange(AsyncState::COMPLETED) == AsyncState::BLOCKED) {
+			// we already parked, so the completion is the one that has to wake us up again
+			Reschedule();
+		}
+		// otherwise ExecuteTask has not returned yet and will pick the result up itself
 	}
 
 private:
@@ -75,6 +130,11 @@ private:
 	unique_ptr<AsyncTask> async_task;
 	InterruptState interrupt_state;
 	shared_ptr<AsyncBatchCompletion> completion;
+	//! Whether TryExecuteAsync has been called, a task only ever blocks once
+	bool started = false;
+	atomic<AsyncState> async_state {AsyncState::RUNNING};
+	//! Error reported by the asynchronous work, only read after async_state became COMPLETED
+	ErrorData async_error;
 };
 
 AsyncResult::AsyncResult(SourceResultType t) : AsyncResult(GetAsyncResultType(t)) {

@@ -1982,6 +1982,40 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
+// Fetches one read head's bytes, handing the read off to the file system when it can read asynchronously.
+// A read head is one contiguous byte range, i.e. exactly one read, so this blocks at most once.
+class ReadHeadIOTask : public AsyncTask {
+public:
+	ReadHeadIOTask(shared_ptr<ReadHead> read_head_p, shared_ptr<CachingFileHandle> file_handle_p)
+	    : read_head(std::move(read_head_p)), file_handle(std::move(file_handle_p)) {
+	}
+
+	void Execute() override {
+		read_head->Fetch(*file_handle);
+	}
+
+	AsyncTaskExecutionResult TryExecuteAsync(AsyncIOCallback on_complete) override {
+		if (!read_head->TryStartFetch(*file_handle, std::move(on_complete))) {
+			// this file system reads synchronously - do the read here, holding the calling thread
+			read_head->Fetch(*file_handle);
+			return AsyncTaskExecutionResult::FINISHED;
+		}
+		return AsyncTaskExecutionResult::PENDING;
+	}
+
+	void FinishAsync() override {
+		read_head->FinishFetch(*file_handle);
+	}
+
+	idx_t GetIOSize() const override {
+		return read_head->size;
+	}
+
+private:
+	shared_ptr<ReadHead> read_head;
+	shared_ptr<CachingFileHandle> file_handle;
+};
+
 // Async I/O tasks for the read heads in the index range [from, to), skipping any that are already fetched.
 static vector<unique_ptr<AsyncTask>>
 CollectIOTasks(ThriftFileTransport &trans, const shared_ptr<CachingFileHandle> &file_handle, idx_t from, idx_t to) {
@@ -1991,8 +2025,7 @@ CollectIOTasks(ThriftFileTransport &trans, const shared_ptr<CachingFileHandle> &
 		auto &read_head = read_heads[i];
 		if (!read_head->data_isset) {
 			// fetch the read head's bytes on the async pool
-			io_tasks.push_back(make_uniq<CallbackAsyncTask>(
-			    [read_head, file_handle] { read_head->Fetch(*file_handle); }, read_head->size));
+			io_tasks.push_back(make_uniq<ReadHeadIOTask>(read_head, file_handle));
 		}
 	}
 	return io_tasks;

@@ -231,6 +231,11 @@ void VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes,
 	handle.file_system.Read(handle, buffer, nr_bytes, location);
 }
 
+bool VirtualFileSystem::TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+                                     AsyncIOCallback callback) {
+	return handle.file_system.TryStartRead(handle, buffer, nr_bytes, location, std::move(callback));
+}
+
 void VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	handle.file_system.Write(handle, buffer, nr_bytes, location);
 }

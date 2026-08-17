@@ -339,12 +339,41 @@ Allocator &CachingFileHandle::GetBufferAllocator() const {
 	return external_file_cache.GetBufferManager().GetBufferAllocator();
 }
 
+bool CachingFileHandle::UsesUncachedReadPath() {
+	return !external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache();
+}
+
+bool CachingFileHandle::TryStartRead(const idx_t nr_bytes, const idx_t location, FileBufferHandleGroup &out_group,
+                                     AsyncIOCallback callback) {
+	if (nr_bytes == 0) {
+		// nothing to read, the (trivial) synchronous path handles this
+		return false;
+	}
+	if (!UsesUncachedReadPath()) {
+		// a cached read fans out over several cache blocks, which has no asynchronous path yet
+		return false;
+	}
+	auto file_handle = GetFileHandle();
+	auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
+	// the buffer stays pinned in out_group, so this pointer survives the move below
+	auto destination = buf.GetDataMutable();
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(buf), 0, nr_bytes});
+	// publish the destination before starting the read - the callback may fire inline
+	out_group = FileBufferHandleGroup(std::move(mem_handles));
+	if (!file_handle->TryStartRead(destination, nr_bytes, location, std::move(callback))) {
+		out_group = FileBufferHandleGroup();
+		return false;
+	}
+	return true;
+}
+
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
 	if (nr_bytes == 0) {
 		return FileBufferHandleGroup();
 	}
 
-	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
+	if (UsesUncachedReadPath()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;

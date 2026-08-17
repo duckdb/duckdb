@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/async_io_callback.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -128,6 +129,8 @@ public:
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	//! Try to start an asynchronous read, see FileSystem::TryStartRead
+	DUCKDB_API bool TryStartRead(void *buffer, idx_t nr_bytes, idx_t location, AsyncIOCallback callback);
 	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
@@ -211,6 +214,12 @@ public:
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	DUCKDB_API virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
+	//! Try to start an asynchronous read of exactly nr_bytes from [location] into [buffer], releasing the calling
+	//! thread while the read is in flight. Returns false when this file system cannot read asynchronously, in which
+	//! case the caller must fall back to Read(). When it returns true [callback] is invoked exactly once, and
+	//! [handle] and [buffer] must stay alive until it fires.
+	DUCKDB_API virtual bool TryStartRead(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location,
+	                                     AsyncIOCallback callback);
 	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be written. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Write().
 	DUCKDB_API virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
