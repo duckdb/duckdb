@@ -41,6 +41,18 @@ enum class TemporaryBufferSize : uint64_t {
 	DEFAULT = DEFAULT_BLOCK_ALLOC_SIZE,
 };
 
+//! "duckdb_temp_<slot>_", the start of every temporary file name. The slot keeps instances
+//! sharing a temp_directory off each other's paths; taking its lock is what makes it unique.
+DUCKDB_API string TemporaryFilePrefix(const string &slot);
+//! Name of the lock file that leases a slot in a temporary directory.
+DUCKDB_API string TemporaryLockFileName(const string &slot);
+//! Renders a slot number in the alphabet used for slot codes: base 32 without i, l, o and u, so a
+//! code is unambiguous when read off a directory listing and cannot spell much.
+DUCKDB_API string TemporarySlotCode(idx_t slot);
+//! Extracts the owning slot, if the name carries one. Names from a version that did not use slots
+//! do not, and are left alone: a running instance of that version may still own them.
+DUCKDB_API bool TryParseTemporaryFileOwner(const string &file_name, string &slot);
+
 //===--------------------------------------------------------------------===//
 // TemporaryFileIdentifier/TemporaryFileIndex
 //===--------------------------------------------------------------------===//
@@ -263,7 +275,8 @@ class TemporaryFileManager {
 	friend class TemporaryFileHandle;
 
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, atomic<idx_t> &size_on_disk);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, atomic<idx_t> &size_on_disk,
+	                     string file_prefix);
 	~TemporaryFileManager();
 
 private:
@@ -323,6 +336,8 @@ private:
 
 private:
 	//! Reference to the DB instance
+	//! Prefix shared by every file this manager creates
+	string file_prefix;
 	DatabaseInstance &db;
 	//! The temporary directory
 	string temp_directory;
@@ -360,11 +375,29 @@ private:
 	//! Removes this instance's temporary files and, if it created it, the directory. May throw; the
 	//! destructor is what guarantees nothing escapes.
 	void CleanupTemporaryDirectory();
+	//! Removes files of instances that are gone, proven by claiming their lock. Never throws.
+	void SweepAbandonedInstances();
+	//! Files in the directory that belong to this instance.
+	vector<string> ListOwnFiles();
+	//! Takes the lowest slot in the directory whose lock is free, and reaps whatever a dead
+	//! predecessor holding that slot left behind. Sets slot and instance_lock.
+	void LeaseSlot();
+
+public:
+	//! Prefix every temporary file of this instance carries.
+	const string &GetFilePrefix() const {
+		return file_prefix;
+	}
 
 private:
 	DatabaseInstance &db;
 	string temp_directory;
 	bool created_directory = false;
+	//! Slot leased in this directory, and the prefix built from it
+	string slot;
+	string file_prefix;
+	//! Held for as long as this instance uses the directory; how other instances tell it is running
+	unique_ptr<FileHandle> instance_lock;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 

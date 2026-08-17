@@ -1,6 +1,11 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include <algorithm>
+#include <cstring>
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -488,8 +493,9 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
-                                           atomic<idx_t> &size_on_disk_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
+                                           atomic<idx_t> &size_on_disk_p, string file_prefix_p)
+    : file_prefix(std::move(file_prefix_p)), db(db), temp_directory(temp_directory_p), files(*this),
+      size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -705,9 +711,102 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 	}
 }
 
+//! an array rather than a pointer, so the length below is derived from it and cannot drift
+static constexpr const char TEMPORARY_FILE_PREFIX[] = "duckdb_temp_";
+static constexpr idx_t TEMPORARY_FILE_PREFIX_LENGTH = sizeof(TEMPORARY_FILE_PREFIX) - 1;
+//! base 32 without i, l, o and u, so a code is not misread. One case only: macOS and Windows match
+//! names case-insensitively, so mixing cases would hand two slots the same file.
+static constexpr const char *SLOT_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+static constexpr idx_t SLOT_ALPHABET_SIZE = 32;
+
+string TemporarySlotCode(idx_t slot) {
+	string result;
+	do {
+		result += SLOT_ALPHABET[slot % SLOT_ALPHABET_SIZE];
+		slot /= SLOT_ALPHABET_SIZE;
+	} while (slot > 0);
+	std::reverse(result.begin(), result.end());
+	return result;
+}
+
+string TemporaryFilePrefix(const string &slot) {
+	return TEMPORARY_FILE_PREFIX + slot + "_";
+}
+
+string TemporaryLockFileName(const string &slot) {
+	return TemporaryFilePrefix(slot) + "instance.lock";
+}
+
+static bool LooksLikeSlotCode(const string &candidate) {
+	if (candidate.empty()) {
+		return false;
+	}
+	for (const auto c : candidate) {
+		if (!strchr(SLOT_ALPHABET, c) || c == '\0') {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool TryParseTemporaryFileOwner(const string &file_name, string &slot) {
+	if (!StringUtil::StartsWith(file_name, TEMPORARY_FILE_PREFIX)) {
+		return false;
+	}
+	auto separator = file_name.find('_', TEMPORARY_FILE_PREFIX_LENGTH);
+	if (separator == string::npos) {
+		return false;
+	}
+	auto candidate = file_name.substr(TEMPORARY_FILE_PREFIX_LENGTH, separator - TEMPORARY_FILE_PREFIX_LENGTH);
+	if (!LooksLikeSlotCode(candidate)) {
+		// written by a version that did not name its files after a slot - a UUID carries '-', which
+		// is not in the alphabet, so those land here too
+		return false;
+	}
+	slot = std::move(candidate);
+	return true;
+}
+
+//! Slots leased in this process. fcntl locks belong to the process, so they cannot separate two
+//! instances inside one; the lock file only ever has to answer for other processes.
+struct LiveInstanceRegistry {
+	mutex lock;
+	unordered_set<string> instances;
+};
+
+//! Leaked, mutex included: a DatabaseInstance can be destroyed during static destruction, and
+//! locking a destroyed mutex throws from a path a destructor reaches.
+static LiveInstanceRegistry &GetLiveInstanceRegistry() {
+	static auto &registry = *new LiveInstanceRegistry();
+	return registry;
+}
+
+//! Slots are unique per directory, not globally, so the registry is keyed by both
+static string LiveSlotKey(const string &temp_directory, const string &slot) {
+	return temp_directory + "\n" + slot;
+}
+
+static bool TryRegisterLiveSlot(const string &temp_directory, const string &slot) {
+	auto &registry = GetLiveInstanceRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	return registry.instances.insert(LiveSlotKey(temp_directory, slot)).second;
+}
+
+static void UnregisterLiveSlot(const string &temp_directory, const string &slot) {
+	auto &registry = GetLiveInstanceRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	registry.instances.erase(LiveSlotKey(temp_directory, slot));
+}
+
+static bool SlotIsLiveInThisProcess(const string &temp_directory, const string &slot) {
+	auto &registry = GetLiveInstanceRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	return registry.instances.find(LiveSlotKey(temp_directory, slot)) != registry.instances.end();
+}
+
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
+	    temp_directory, StringUtil::Format("%sstorage_%s-%llu.tmp", file_prefix, EnumUtil::ToString(identifier.size),
 	                                       identifier.file_index.GetIndex()));
 }
 
@@ -733,68 +832,149 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
                                                    optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)),
-      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
+    : db(db), temp_directory(std::move(path_p)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
 	}
+	LeaseSlot();
+	// reap whatever earlier instances left behind - a crash never reaches the teardown sweep
+	SweepAbandonedInstances();
+	temp_file = make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk, file_prefix);
 	temp_file->SetMaxSwapSpace(max_swap_space);
+}
+
+void TemporaryDirectoryHandle::LeaseSlot() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	// Take the lowest free slot. Nothing here assumes the code is unique: the lock is what
+	// establishes that, so a code only has to be short enough to keep the search cheap.
+	for (idx_t candidate = 0;; candidate++) {
+		auto code = TemporarySlotCode(candidate);
+		// ask the registry first: opening a sibling's lock file, even briefly, would drop its lock
+		if (!TryRegisterLiveSlot(temp_directory, code)) {
+			continue;
+		}
+		auto lock_path = fs.JoinPath(temp_directory, TemporaryLockFileName(code));
+		try {
+			// DISABLE_LOGGING: this handle outlives the log manager, which DatabaseInstance destroys
+			// before the buffer manager that owns us - logging its close would touch a destroyed mutex
+			instance_lock =
+			    fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
+			                               FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_DISABLE_LOGGING |
+			                               FileLockType::WRITE_LOCK);
+		} catch (std::exception &) {
+			// another process holds this slot
+			UnregisterLiveSlot(temp_directory, code);
+			continue;
+		}
+		slot = std::move(code);
+		file_prefix = TemporaryFilePrefix(slot);
+		break;
+	}
+	// slots are reused, so a dead predecessor's files may carry ours - we hold the lock, so they are
+	// abandoned, and FILE_CREATE would otherwise adopt them
+	fs.RemoveFiles(ListOwnFiles());
+}
+
+vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	auto lock_name = TemporaryLockFileName(slot);
+	vector<string> result;
+	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+		string owner;
+		if (is_dir || !TryParseTemporaryFileOwner(name, owner) || owner != slot) {
+			return;
+		}
+		if (name == lock_name) {
+			// the lease itself: it is what tells everyone else this slot is taken, so it is released
+			// and removed on its own, after everything it protects is gone
+			return;
+		}
+		result.push_back(fs.JoinPath(temp_directory, name));
+	});
+	return result;
+}
+
+void TemporaryDirectoryHandle::SweepAbandonedInstances() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	try {
+		unordered_map<string, vector<string>> by_owner;
+		fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+			string owner;
+			if (is_dir || !TryParseTemporaryFileOwner(name, owner)) {
+				return;
+			}
+			by_owner[owner].push_back(name);
+		});
+		for (auto &entry : by_owner) {
+			auto &owner = entry.first;
+			if (owner == slot || SlotIsLiveInThisProcess(temp_directory, owner)) {
+				continue;
+			}
+			auto lock_name = TemporaryLockFileName(owner);
+			auto lock_path = fs.JoinPath(temp_directory, lock_name);
+			unique_ptr<FileHandle> claimed;
+			try {
+				claimed = fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
+				                                     FileFlags::FILE_FLAGS_FILE_CREATE |
+				                                     FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileLockType::WRITE_LOCK);
+			} catch (std::exception &) {
+				// the lock is held: that instance is still running, its files are not ours to remove
+				continue;
+			}
+			vector<string> files_to_delete;
+			for (auto &name : entry.second) {
+				if (name != lock_name) {
+					files_to_delete.push_back(fs.JoinPath(temp_directory, name));
+				}
+			}
+			fs.RemoveFiles(files_to_delete);
+			// release before removing, so the descriptor is not what keeps it alive on Windows
+			claimed.reset();
+			fs.TryRemoveFile(lock_path);
+		}
+	} catch (...) { // NOLINT
+		            // nothing to do: this also runs from teardown, where the log manager is already gone
+	}
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// first release any temporary files
 	temp_file.reset();
-	// Cleaning up runs from a destructor, so nothing here may throw. It reaches RemoveFile, which
-	// does throw: TryRemoveFile is "try" only in the sense of skipping a file that is absent, and it
-	// checks existence and removes in two steps, so a file another instance sharing this directory
-	// removes in between raises ENOENT. On Windows removing a file another instance still holds open
-	// fails outright. Neither is actionable at this point - whatever is left behind is reaped by a
-	// later instance - and letting it escape would be std::terminate.
+	// Nothing here may throw - this is a destructor - but it reaches RemoveFile, which does: another
+	// instance removing a file between TryRemoveFile's existence check and its removal raises ENOENT,
+	// and Windows refuses to remove a file another instance holds open. A later instance reaps
+	// whatever is left, so there is nothing to do but log.
 	try {
 		CleanupTemporaryDirectory();
-	} catch (std::exception &ex) {
-		ErrorData data(ex);
-		try {
-			DUCKDB_LOG_ERROR(db, "TemporaryDirectoryHandle::~TemporaryDirectoryHandle()\t\t" + data.Message());
-		} catch (...) { // NOLINT
-		}
 	} catch (...) { // NOLINT
+		            // ~DatabaseInstance resets the log manager before the buffer manager that owns us, so there is
+		            // nowhere to report this; a later instance reaps whatever was left behind
 	}
 }
 
 void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
+	if (temp_directory.empty()) {
+		return;
+	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		bool delete_directory = created_directory;
-		vector<string> files_to_delete;
-		if (!created_directory) {
-			bool deleted_everything = true;
-			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-				if (isdir) {
-					deleted_everything = false;
-					return;
-				}
-				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-					deleted_everything = false;
-					return;
-				}
-				files_to_delete.push_back(path);
-			});
-		}
-		if (delete_directory) {
-			// we want to remove all files in the directory
-			fs.RemoveDirectory(temp_directory);
-		} else {
-			vector<string> full_path_files_to_delete;
-			full_path_files_to_delete.reserve(files_to_delete.size());
-			for (auto &file : files_to_delete) {
-				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
-			}
-			fs.RemoveFiles(full_path_files_to_delete);
-		}
+	// our own files first - no probing needed, we are their owner
+	fs.RemoveFiles(ListOwnFiles());
+	// then whatever earlier instances left behind, so that the last instance out leaves the
+	// directory clean even if some of its predecessors crashed
+	SweepAbandonedInstances();
+	if (instance_lock) {
+		auto lock_path = fs.JoinPath(temp_directory, TemporaryLockFileName(slot));
+		instance_lock.reset();
+		fs.TryRemoveFile(lock_path);
+	}
+	UnregisterLiveSlot(temp_directory, slot);
+	if (created_directory) {
+		// only if nothing else is in it: another instance may have joined us here, and removing the
+		// directory is recursive - it would take their files with it
+		fs.RemoveDirectoryIfEmpty(temp_directory);
 	}
 }
 
