@@ -1982,33 +1982,25 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
-// Fetches one read head's bytes, handing the read off to the file system when it can read asynchronously.
-// A read head is one contiguous byte range, i.e. exactly one read, so this blocks at most once.
-class ReadHeadIOTask : public AsyncTask {
+// Fetches one read head's bytes. A read head is one contiguous byte range, i.e. exactly one read, so whether that
+// read blocks or is handed to the file system is left to AsyncFileReadTask.
+class ReadHeadIOTask : public AsyncFileReadTask {
 public:
 	ReadHeadIOTask(shared_ptr<ReadHead> read_head_p, shared_ptr<CachingFileHandle> file_handle_p)
 	    : read_head(std::move(read_head_p)), file_handle(std::move(file_handle_p)) {
 	}
 
-	void Execute() override {
-		read_head->Fetch(*file_handle);
-	}
-
-	AsyncTaskExecutionResult TryExecuteAsync(AsyncIOCallback on_complete) override {
-		if (!read_head->TryStartFetch(*file_handle, std::move(on_complete))) {
-			// this file system reads synchronously - do the read here, holding the calling thread
-			read_head->Fetch(*file_handle);
-			return AsyncTaskExecutionResult::FINISHED;
-		}
-		return AsyncTaskExecutionResult::PENDING;
-	}
-
-	void FinishAsync() override {
-		read_head->FinishFetch(*file_handle);
-	}
-
 	idx_t GetIOSize() const override {
 		return read_head->size;
+	}
+
+protected:
+	AsyncReadRequest PrepareRead() override {
+		return read_head->PrepareFetch(*file_handle);
+	}
+
+	void FinishRead() override {
+		read_head->FinishFetch(*file_handle);
 	}
 
 private:

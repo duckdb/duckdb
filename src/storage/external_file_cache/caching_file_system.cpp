@@ -46,6 +46,17 @@ void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestam
 	}
 }
 
+// Allocate an uncached read buffer and wrap it in a handle group, setting [destination] to where the bytes go.
+// The buffer stays pinned by the group, so [destination] stays valid for as long as the group is held.
+FileBufferHandleGroup AllocateUncachedReadGroup(BufferManager &buffer_manager, idx_t nr_bytes,
+                                                data_ptr_t &destination) {
+	auto buffer = AllocateUncachedReadBuffer(buffer_manager, nr_bytes);
+	destination = buffer.GetDataMutable();
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(buffer), 0, nr_bytes});
+	return FileBufferHandleGroup(std::move(mem_handles));
+}
+
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -354,13 +365,9 @@ bool CachingFileHandle::TryStartRead(const idx_t nr_bytes, const idx_t location,
 		return false;
 	}
 	auto file_handle = GetFileHandle();
-	auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
-	// the buffer stays pinned in out_group, so this pointer survives the move below
-	auto destination = buf.GetDataMutable();
-	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
-	mem_handles.push_back({std::move(buf), 0, nr_bytes});
+	data_ptr_t destination;
 	// publish the destination before starting the read - the callback may fire inline
-	out_group = FileBufferHandleGroup(std::move(mem_handles));
+	out_group = AllocateUncachedReadGroup(external_file_cache.GetBufferManager(), nr_bytes, destination);
 	if (!file_handle->TryStartRead(destination, nr_bytes, location, std::move(callback))) {
 		out_group = FileBufferHandleGroup();
 		return false;
@@ -374,11 +381,10 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	if (UsesUncachedReadPath()) {
-		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
-		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
-		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
-		mem_handles.push_back({std::move(buf), 0, nr_bytes});
-		return FileBufferHandleGroup(std::move(mem_handles));
+		data_ptr_t destination;
+		auto group = AllocateUncachedReadGroup(external_file_cache.GetBufferManager(), nr_bytes, destination);
+		ReadAndRecord(context, destination, nr_bytes, location);
+		return group;
 	}
 
 	auto current_cached_file = EnsureCachedFileCurrent();
