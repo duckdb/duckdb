@@ -90,7 +90,7 @@ struct ScanReadAheadJob {
 
 	//! The scan state the job's I/O and decoding operate on
 	unique_ptr<STATE> scan_state;
-	//! Batch index of this job, drives ordered queue admission
+	//! Batch index of this job, drives ordered queue admission unless production is serialized
 	idx_t batch_index = 0;
 	//! Completion of the job's scheduled I/O
 	shared_ptr<ReadAheadJobCompletion> io_completion;
@@ -118,8 +118,9 @@ template <class JOB, class STATE>
 class ScanReadAhead {
 public:
 	ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
-	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-	    : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
+	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p, bool serialize_production_p)
+	    : read_ahead_depth(read_ahead_depth_p), serialize_production(serialize_production_p),
+	      memory_governor(std::move(memory_governor_p)) {
 		D_ASSERT(read_ahead_depth_p > 0);
 		backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 		executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
@@ -146,6 +147,12 @@ public:
 			// prefer a finished job's scan state, so learned scan state carries over across jobs
 			job->scan_state = TryPopState();
 			vector<unique_ptr<AsyncTask>> io_tasks;
+			// claiming and pushing under one lock keeps queue order equal to claim order, used when
+			// job batch indexes are not gapless and cannot drive ordered admission
+			unique_lock<mutex> produce_guard;
+			if (serialize_production) {
+				produce_guard = unique_lock<mutex>(produce_lock);
+			}
 			if (!claim_and_schedule(*job, io_tasks)) {
 				// there are no more jobs to produce, the scan is done
 				SetDone();
@@ -305,6 +312,11 @@ private:
 			memory_governor->UpdateReservation(pending_io_bytes.load());
 			backlog_budget = memory_governor->BackpressureBudget();
 		}
+		if (serialize_production) {
+			// production is serialized, jobs already arrive in claim order
+			ready_queue.push_back(std::move(job));
+			return;
+		}
 		// producers push concurrently, so admit jobs to the queue in batch-index order
 		pending_jobs.emplace(job->batch_index, std::move(job));
 		while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {
@@ -335,11 +347,15 @@ private:
 private:
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
+	//! Whether claim and push are serialized instead of relying on ordered admission
+	const bool serialize_production;
 	//! Async memory governor
 	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
 	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
 	atomic<idx_t> backlog_budget {0};
 
+	//! Serializes claim and push when serialize_production is set
+	mutex produce_lock;
 	mutable mutex lock;
 	deque<unique_ptr<JOB>> ready_queue;
 	//! Jobs pushed out of order, held back until all earlier batch indexes are admitted to the queue

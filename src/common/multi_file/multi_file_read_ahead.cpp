@@ -7,7 +7,7 @@ namespace duckdb {
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                                        unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-    : ScanReadAhead(context, read_ahead_depth_p, std::move(memory_governor_p)) {
+    : ScanReadAhead(context, read_ahead_depth_p, std::move(memory_governor_p), false) {
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
