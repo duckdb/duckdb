@@ -45,7 +45,7 @@ SELECT count(*) FROM duckdb_databases() WHERE database_name = 'qk';
 # Arbitrary params are accepted and passed through to the create callback (which ignores them here),
 # including a bare flag (no value), which binds to boolean true like ATTACH/CONNECT options.
 statement ok
-ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1', SPOT, ANYTHING 'else') AS qk2;
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (INSTANCE 'r7i.16xlarge', REGION 'eu-west-1', SPOT, ANYTHING 'else') AS qk2;
 
 query I
 SELECT count(*) FROM duckdb_databases() WHERE database_name = 'qk2';
@@ -75,9 +75,27 @@ DESTROY EXTERNAL RESOURCE shared_res;
 
 # Create params go through the same validation as any other option list, on this path too.
 statement error
-ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' WITH (REGION NULL) AS qknull;
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (REGION NULL) AS qknull;
 ----
 <REGEX>:.*NULL is not supported as a valid option for EXTERNAL RESOURCE option "region".*
+
+# The attach alias is mandatory, and that is what disambiguates the two option lists: everything in
+# parens before `AS` is a create param for the recipe, everything after belongs to the attachment.
+# Without the alias a lone option list could silently land in the wrong one, so it is a syntax error.
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local';
+----
+<REGEX>:.*(syntax error|Parser).*
+
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'quack@local' (READ_ONLY);
+----
+<REGEX>:.*(syntax error|Parser).*
+
+statement error
+ATTACH TO EXTERNAL RESOURCE shared_res;
+----
+<REGEX>:.*(syntax error|Parser).*
 
 # An unknown resource type errors.
 statement error

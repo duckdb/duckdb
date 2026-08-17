@@ -24,7 +24,7 @@ string ExternalResourceOptions::ToString() const {
 	if (!reference_name.empty()) {
 		return "EXTERNAL RESOURCE " + SQLIdentifier(reference_name);
 	}
-	// Create form: NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (create opts)].
+	// Create form: NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)].
 	string result = "NEW TEMPORARY EXTERNAL RESOURCE " + SQLString(provider);
 	vector<string> stringified;
 	for (auto &entry : parsed_params) {
@@ -36,7 +36,7 @@ string ExternalResourceOptions::ToString() const {
 		    StringUtil::Format("%s %s", SQLIdentifier::ToString(entry.first), entry.second.ToSQLString()));
 	}
 	if (!stringified.empty()) {
-		result += " WITH (" + StringUtil::Join(stringified, ", ") + ")";
+		result += " (" + StringUtil::Join(stringified, ", ") + ")";
 	}
 	return result;
 }

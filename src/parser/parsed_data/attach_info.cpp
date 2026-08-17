@@ -26,7 +26,7 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 
 string AttachInfo::ToString() const {
 	string result = "";
-	// `ATTACH TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (create opts)] [AS name] [(attach opts)]`
+	// `ATTACH TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [(create opts)] AS name [(attach opts)]`
 	if (external_resource) {
 		// No IF NOT EXISTS / OR REPLACE: AttachToExternalResource has no slot for either, so rendering
 		// one would produce SQL that cannot be parsed back.

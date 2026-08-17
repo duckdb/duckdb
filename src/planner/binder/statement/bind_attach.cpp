@@ -15,7 +15,7 @@ void Binder::BindExternalResource(ExternalResourceOptions &external_resource) {
 		return;
 	}
 
-	// Create form (`NEW TEMPORARY EXTERNAL RESOURCE '<type>' WITH (opts)`): the type is a string literal set by the
+	// Create form (`NEW TEMPORARY EXTERNAL RESOURCE '<type>' (opts)`): the type is a string literal set by the
 	// parser, so only the create params need resolving.
 	BindExternalResourceParams(external_resource.parsed_params, external_resource.params);
 	external_resource.parsed_params.clear();

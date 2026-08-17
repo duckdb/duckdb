@@ -7,19 +7,19 @@
 
 namespace duckdb {
 
-// `(ATTACH|CONNECT) TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [WITH (opts)] ...` produces a normal
-// ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY '<type>' WITH (opts)` provisions a fresh
-// resource this attachment owns (deleter bound, DETACH/DISCONNECT reaps it); a bare `<name>` references
-// an already-registered resource it only borrows.
+// `(ATTACH|CONNECT) TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> (create opts)? ...` produces a
+// normal ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY '<type>' (opts)` provisions
+// a fresh resource this attachment owns (deleter bound, DETACH/DISCONNECT reaps it); a bare `<name>`
+// references an already-registered resource it only borrows.
 
-//! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (create opts)] — provision a fresh resource.
+//! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)] — provision a fresh resource.
 unique_ptr<ExternalResourceOptions> PEGTransformerFactory::TransformExternalResourceCreateClause(
     PEGTransformer &transformer, const string &string_literal,
-    const optional<vector<GenericCopyOption>> &external_resource_options) {
+    const optional<vector<GenericCopyOption>> &external_resource_creation_options) {
 	auto result = make_uniq<ExternalResourceOptions>();
 	result->provider = string_literal;
-	if (external_resource_options) {
-		CollectGenericOptions(*external_resource_options, result->parsed_params, "EXTERNAL RESOURCE");
+	if (external_resource_creation_options) {
+		CollectGenericOptions(*external_resource_creation_options, result->parsed_params, "EXTERNAL RESOURCE");
 	}
 	return result;
 }
@@ -34,13 +34,12 @@ PEGTransformerFactory::TransformExternalResourceReferenceClause(PEGTransformer &
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachToExternalResource(
     PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
-    const optional<Identifier> &attach_alias, const optional<vector<GenericCopyOption>> &attach_options) {
+    const Identifier &attach_alias, const optional<vector<GenericCopyOption>> &attach_options) {
 	auto result = make_uniq<AttachStatement>();
 	auto info = make_uniq<AttachInfo>();
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	if (attach_alias) {
-		info->name = Identifier(*attach_alias);
-	}
+	// The alias is mandatory in the grammar: it separates the create params from the attach options.
+	info->name = Identifier(attach_alias);
 	info->external_resource = std::move(external_resource_source);
 	if (attach_options) {
 		SplitGenericOptions(*attach_options, info->parsed_options, info->options, "ATTACH");

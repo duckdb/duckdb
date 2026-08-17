@@ -1,5 +1,7 @@
-AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias? AttachOptions?
+# The attach alias is mandatory: it separates the recipe's create params, which precede it, from the
+# attachment's own options, which follow. Without it a single option list would be ambiguous.
+AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
 ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
 ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
-ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceOptions?
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceCreationOptions?
 ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId

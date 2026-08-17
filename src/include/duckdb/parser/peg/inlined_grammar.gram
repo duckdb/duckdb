@@ -4,6 +4,8 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
+	AttachToExternalResource /
+	ConnectToExternalResource /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -1546,6 +1548,14 @@ ShowAllModifier <- 'ALL'
 # The recipe's create params. Its own rule rather than AttachOptions: the two option bags are
 # distinct, and a statement can carry both.
 ExternalResourceCreationOptions <- GenericCopyOptionList
+
+# The attach alias is mandatory: it separates the recipe's create params, which precede it, from the
+# attachment's own options, which follow. Without it a single option list would be ambiguous.
+AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias AttachOptions?
+ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
+ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceCreationOptions?
+ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId
 
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 

@@ -65,7 +65,7 @@ CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS "select" (REGION 'eu-west-1')
 # Create params are validated like any other option list: a NULL value is rejected rather than
 # silently dropped on the way to the recipe, and with the same wording ATTACH uses.
 statement error
-CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x WITH (REGION NULL)
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x (REGION NULL)
 ----
 <REGEX>:.*NULL is not supported as a valid option for EXTERNAL RESOURCE option "region".*
 
