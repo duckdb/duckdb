@@ -7429,7 +7429,8 @@ PEGTransformerFactory::TransformExternalResourceCreateClauseInternal(PEGTransfor
 		    transformer.Transform<vector<GenericCopyOption>>(external_resource_creation_options_opt.GetResult());
 		external_resource_creation_options = external_resource_creation_options_value;
 	}
-	auto result = TransformExternalResourceCreateClause(transformer, string_literal, external_resource_creation_options);
+	auto result =
+	    TransformExternalResourceCreateClause(transformer, string_literal, external_resource_creation_options);
 	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
 }
 

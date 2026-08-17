@@ -18551,7 +18551,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExternalResource
 	if (frame.child_results[0]) {
 		external_resource_creation_options = frame.TakeResult<vector<GenericCopyOption>>(0);
 	}
-	auto result = TransformExternalResourceCreateClause(transformer, string_literal, external_resource_creation_options);
+	auto result =
+	    TransformExternalResourceCreateClause(transformer, string_literal, external_resource_creation_options);
 	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
 }
 

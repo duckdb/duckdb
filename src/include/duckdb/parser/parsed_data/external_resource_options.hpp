@@ -19,8 +19,9 @@ class Serializer;
 class Deserializer;
 
 //! The `[NEW TEMPORARY] EXTERNAL RESOURCE '<type>' [WITH (params)]` clause of an
-//! `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` statement. Owned by AttachInfo/ConnectInfo. Separates the resource TYPE (the recipe/registry key)
-//! from its create PARAMS, which is why provider is its own field rather than a magic key inside the params.
+//! `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` statement. Owned by AttachInfo/ConnectInfo. Separates the resource TYPE
+//! (the recipe/registry key) from its create PARAMS, which is why provider is its own field rather than a magic key
+//! inside the params.
 struct ExternalResourceOptions {
 	//! Create params (key -> expression); transient — consumed at bind, then `params` holds them.
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_params;

@@ -7429,9 +7429,9 @@ public:
 	                                                                                ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformExternalResourceCreateClauseInternal(PEGTransformer &transformer,
 	                                                                                      ParseResult &parse_result);
-	static unique_ptr<ExternalResourceOptions>
-	TransformExternalResourceCreateClause(PEGTransformer &transformer, const string &string_literal,
-	                                      const optional<vector<GenericCopyOption>> &external_resource_creation_options);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceCreateClause(
+	    PEGTransformer &transformer, const string &string_literal,
+	    const optional<vector<GenericCopyOption>> &external_resource_creation_options);
 	static unique_ptr<TransformResultValue>
 	TransformExternalResourceReferenceClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ExternalResourceOptions> TransformExternalResourceReferenceClause(PEGTransformer &transformer,

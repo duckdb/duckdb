@@ -52,8 +52,7 @@ static void DestroyExternalResource(ClientContext &client, const BoundExternalRe
 	// by the default database, an in-flight query, or another connection. A stranded resource costs money
 	// indefinitely and is invisible; a dangling attachment costs nothing.
 	auto &db = DatabaseInstance::GetDatabase(client);
-	ResourceDeleter(db, instance->deleter_function, instance->deleter_payload, instance->type, instance->name)
-	    .Delete();
+	ResourceDeleter(db, instance->deleter_function, instance->deleter_payload, instance->type, instance->name).Delete();
 	manager.Remove(data.name);
 	// Then clean up after it: the borrowing attachments now point at nothing, so detach them best-effort.
 	// Runs only after a successful teardown, so the scan never sits in front of the remote call.

@@ -52,9 +52,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachToExternalResourc
 //! registered resource takes no create params, so a list there is unambiguously the connection's.
 //! Provisioning does take them -- the create clause has already claimed the first list -- so a second
 //! one could only be told apart by position, and is refused instead.
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformConnectToExternalResource(
-    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
-    const optional<vector<GenericCopyOption>> &attach_options) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformConnectToExternalResource(PEGTransformer &transformer,
+                                                          unique_ptr<ExternalResourceOptions> external_resource_source,
+                                                          const optional<vector<GenericCopyOption>> &attach_options) {
 	auto result = make_uniq<ConnectStatement>();
 	auto info = make_uniq<ConnectInfo>();
 	if (attach_options && external_resource_source->reference_name.empty()) {
