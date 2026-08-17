@@ -12,6 +12,7 @@
 #include "thrift/transport/TBufferTransports.h"
 
 #include "duckdb.hpp"
+#include "duckdb/storage/external_file_cache/async_file_read_task.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -48,17 +49,12 @@ struct ReadHead {
 		}
 	}
 
-	void Fetch(CachingFileHandle &file_handle) {
-		VerifyWithinFile(file_handle);
-		handle_group = file_handle.Read(size, location);
-		FinishFetch(file_handle);
-	}
-
-	//! Try to fetch this read head's bytes asynchronously, returns false when the caller must use Fetch() instead.
-	//! On success FinishFetch must be called once the callback has fired.
-	bool TryStartFetch(CachingFileHandle &file_handle, AsyncIOCallback callback) {
-		VerifyWithinFile(file_handle);
-		return file_handle.TryStartRead(size, location, handle_group, std::move(callback));
+	//! Describe the read this head needs, validating the requested range
+	AsyncReadRequest PrepareFetch(CachingFileHandle &file_handle) {
+		if (GetEnd() > file_handle.GetFileSize()) {
+			throw std::runtime_error("Prefetch registered requested for bytes outside file");
+		}
+		return AsyncReadRequest(file_handle, size, location, handle_group);
 	}
 
 	//! Make the fetched bytes available through buffer_ptr
@@ -67,11 +63,11 @@ struct ReadHead {
 		data_isset = true;
 	}
 
-private:
-	void VerifyWithinFile(CachingFileHandle &file_handle) {
-		if (GetEnd() > file_handle.GetFileSize()) {
-			throw std::runtime_error("Prefetch registered requested for bytes outside file");
-		}
+	//! Fetch this read head's bytes, blocking until they have landed
+	void Fetch(CachingFileHandle &file_handle) {
+		auto request = PrepareFetch(file_handle);
+		handle_group = file_handle.Read(request.nr_bytes, request.location);
+		FinishFetch(file_handle);
 	}
 };
 
