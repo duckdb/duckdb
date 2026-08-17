@@ -78,6 +78,7 @@ public:
 
 	DUCKDB_API bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	DUCKDB_API bool TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API bool TryRemoveEmptyDirectory(const string &directory,

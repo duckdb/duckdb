@@ -15,7 +15,31 @@
 #include "duckdb/common/windows.hpp"
 #endif
 
+#include <thread>
+
 using namespace duckdb;
+
+namespace {
+
+class ExistingDirectoryFileSystem : public FileSystem {
+public:
+	string GetName() const override {
+		return "ExistingDirectoryFileSystem";
+	}
+
+	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+		return true;
+	}
+
+	void CreateDirectory(const string &, optional_ptr<FileOpener>) override {
+		create_called = true;
+	}
+
+public:
+	bool create_called = false;
+};
+
+} // namespace
 
 static void create_dummy_file(string fname) {
 	string normalized_string;
@@ -167,6 +191,46 @@ TEST_CASE("TryRemoveEmptyDirectory never removes directory contents", "[file_sys
 	REQUIRE(fs.TryRemoveEmptyDirectory(directory));
 	REQUIRE(!fs.DirectoryExists(directory));
 	REQUIRE(!fs.TryRemoveEmptyDirectory(directory));
+}
+
+TEST_CASE("TryCreateDirectory reports directory ownership", "[file_system]") {
+	ExistingDirectoryFileSystem existing_directory_fs;
+	REQUIRE(!existing_directory_fs.TryCreateDirectory("virtual_directory"));
+	REQUIRE(!existing_directory_fs.create_called);
+
+	auto fs = FileSystem::CreateLocal();
+	auto directory = TestCreatePath("try_create_directory");
+	if (fs->DirectoryExists(directory)) {
+		fs->RemoveDirectory(directory);
+	}
+
+	atomic<bool> start {false};
+	atomic<idx_t> created {0};
+	atomic<idx_t> errors {0};
+	vector<std::thread> threads;
+	for (idx_t i = 0; i < 8; i++) {
+		threads.emplace_back([&]() {
+			while (!start) {
+				std::this_thread::yield();
+			}
+			try {
+				if (fs->TryCreateDirectory(directory)) {
+					created++;
+				}
+			} catch (...) {
+				errors++;
+			}
+		});
+	}
+	start = true;
+	for (auto &thread : threads) {
+		thread.join();
+	}
+
+	REQUIRE(errors == 0);
+	REQUIRE(created == 1);
+	REQUIRE(!fs->TryCreateDirectory(directory));
+	REQUIRE(fs->TryRemoveEmptyDirectory(directory));
 }
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file

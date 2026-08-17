@@ -57,6 +57,8 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	//! Create a directory if it does not exist. Returns whether this call created the directory.
+	bool TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Remove a directory only if it is empty

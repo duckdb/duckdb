@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
+#include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -40,6 +41,10 @@ PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, ve
 		throw InternalException("PhysicalFixedBatchCopy created for copy function that does not have "
 		                        "prepare_batch/flush_batch defined");
 	}
+}
+
+PhysicalBatchCopyToFile::~PhysicalBatchCopyToFile() {
+	sink_state.reset();
 }
 
 InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() const {
@@ -85,11 +90,12 @@ public:
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : memory_manager(context_p, minimum_memory_per_thread), initialized(false), rows_copied(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), initialized(false),
+	      rows_copied(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
+	CopyOutputLifecycle output_lifecycle;
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
@@ -99,7 +105,7 @@ public:
 	//! The total number of rows copied to the file
 	atomic<idx_t> rows_copied;
 	//! Global copy state
-	unique_ptr<GlobalFunctionData> global_state;
+	unique_ptr<GlobalFileState> global_state;
 	//! Unpartitioned batches
 	map<idx_t, unique_ptr<FixedRawBatchData>> raw_batches;
 	//! The prepared batch data by batch index - ready to flush
@@ -126,14 +132,17 @@ public:
 			return;
 		}
 		// initialize writing to the file
-		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		auto lifecycle_file_index = output_lifecycle.RegisterFile(op.file_path);
+		auto data = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		global_state = make_uniq<GlobalFileState>(std::move(data), op.file_path, context, *op.bind_data,
+		                                          op.function.copy_to_abort, output_lifecycle, lifecycle_file_index);
 		if (op.function.initialize_operator) {
-			op.function.initialize_operator(*global_state, op);
+			op.function.initialize_operator(*global_state->data, op);
 		}
 		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
-			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state->data,
 			                                           *written_file_info->file_stats);
 		}
 		initialized = true;
@@ -334,11 +343,16 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
-	if (function.copy_to_finalize && gstate.global_state) {
-		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
+	if (gstate.global_state) {
+		if (function.copy_to_finalize) {
+			function.copy_to_finalize(context, *bind_data, *gstate.global_state->data);
+		}
+		gstate.global_state->MarkFinalized();
 
 		if (use_tmp_file) {
+			auto target_path = PhysicalCopyToFile::GetNonTmpFile(context, file_path);
 			PhysicalCopyToFile::MoveTmpFile(context, file_path);
+			gstate.output_lifecycle.ReplaceCommittedFile(file_path, std::move(target_path));
 		}
 	}
 	gstate.memory_manager.FinalCheck();
@@ -390,8 +404,8 @@ public:
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 		auto memory_usage = batch_data->memory_usage;
 		const CopyFunctionBatchAnalyzer batch_analyzer(*batch_data->collection, op.batch_size, op.batch_size_bytes);
-		auto prepared_batch =
-		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(batch_data->collection));
+		auto prepared_batch = op.function.prepare_batch(context, *op.bind_data, *gstate.global_state->data,
+		                                                std::move(batch_data->collection));
 		gstate.AddBatchData(batch_index, std::move(prepared_batch), memory_usage, batch_analyzer);
 		if (batch_index == gstate.flushed_batch_index) {
 			gstate.task_manager.AddTask(make_uniq<RepartitionedFlushTask>());
@@ -593,7 +607,7 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 		            {"rows", to_string(batch_data->batch_analyzer.current_batch_size)},
 		            {"size", to_string(batch_data->batch_analyzer.current_batch_size_bytes)},
 		            {"reason", EnumUtil::ToString(batch_data->batch_analyzer.ToReason())}});
-		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
+		function.flush_batch(context, *bind_data, *gstate.global_state->data, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
 		memory_manager.ReduceUnflushedMemory(batch_data->memory_usage);
 		gstate.flushed_batch_index++;
@@ -725,6 +739,7 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	g.output_lifecycle.MarkSuccessful();
 	return SourceResultType::FINISHED;
 }
 

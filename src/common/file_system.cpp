@@ -500,6 +500,14 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
+bool FileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	if (DirectoryExists(directory, opener)) {
+		return false;
+	}
+	CreateDirectory(directory, opener);
+	return false;
+}
+
 void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
 	// To avoid hitting directories we have no permission for when using allowed_directories + enable_external_access,
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent

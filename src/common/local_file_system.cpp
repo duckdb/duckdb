@@ -714,19 +714,23 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	struct stat st;
+	TryCreateDirectory(directory, opener);
+}
 
+bool LocalFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	auto normalized_dir = ExpandPath(directory, opener);
-	if (stat(normalized_dir.c_str(), &st) != 0) {
-		/* Directory does not exist. EEXIST for race condition */
-		if (mkdir(normalized_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException({{"errno", std::to_string(errno)}}, "Failed to create directory \"%s\": %s", directory,
-			                  strerror(errno));
-		}
-	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException({{"errno", std::to_string(errno)}},
-		                  "Failed to create directory \"%s\": path exists but is not a directory!", directory);
+	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
+		return true;
 	}
+	auto error = errno;
+	if (error == EEXIST) {
+		struct stat st;
+		if (stat(normalized_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+			return false;
+		}
+	}
+	throw IOException({{"errno", std::to_string(error)}}, "Failed to create directory \"%s\": %s", directory,
+	                  strerror(error));
 }
 
 int RemoveDirectoryRecursive(const char *path) {
@@ -1471,15 +1475,25 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	if (DirectoryExists(directory)) {
-		return;
-	}
+	TryCreateDirectory(directory, opener);
+}
+
+bool LocalFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
-	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
-		throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
+	if (!directory.empty() && CreateDirectoryW(unicode_path.c_str(), NULL)) {
+		return true;
 	}
+	auto error_code = GetLastError();
+	if (error_code == ERROR_ALREADY_EXISTS) {
+		auto attributes = GetFileAttributesW(unicode_path.c_str());
+		if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			return false;
+		}
+	}
+	SetLastError(error_code);
+	auto error = LocalFileSystem::GetLastErrorAsString();
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 }
 
 static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_ptr<FileOpener> opener) {

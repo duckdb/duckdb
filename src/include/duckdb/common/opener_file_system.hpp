@@ -85,6 +85,11 @@ public:
 		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().CreateDirectory(directory, GetOpener());
 	}
+	bool TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
+		return GetFileSystem().TryCreateDirectory(directory, GetOpener());
+	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
@@ -116,6 +121,9 @@ public:
 	}
 	void CreateDirectory(const string &directory) {
 		CreateDirectory(directory, nullptr);
+	}
+	bool TryCreateDirectory(const string &directory) {
+		return TryCreateDirectory(directory, nullptr);
 	}
 	void RemoveDirectory(const string &directory) {
 		RemoveDirectory(directory, nullptr);

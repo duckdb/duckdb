@@ -243,6 +243,10 @@ void VirtualFileSystem::CreateDirectory(const string &directory, optional_ptr<Fi
 	FindFileSystem(directory, opener).CreateDirectory(directory, opener);
 }
 
+bool VirtualFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory, opener).TryCreateDirectory(directory, opener);
+}
+
 void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	FindFileSystem(directory, opener).RemoveDirectory(directory, opener);
 }
