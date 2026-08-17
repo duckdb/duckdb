@@ -159,8 +159,6 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 				    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
 				    footer_key_name);
 			}
-			// footer key name provided - read the key from the config
-			const auto &keys = ParquetKeys::Get(context);
 			footer_key = keys.GetKey(footer_key_name);
 		} else if (normalized_struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
@@ -198,6 +196,9 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);
 		}
+	}
+	if (!column_keys.empty() && footer_key.empty()) {
+		throw BinderException("encryption_config specifies column_keys but no footer_key");
 	}
 }
 

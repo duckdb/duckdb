@@ -132,6 +132,12 @@ PRAGMA add_parquet_key('ck1', 'aabbccddeeff00112233445566778899');
 statement ok
 PRAGMA add_parquet_key('ck2', '99887766554433221100ffeeddccbbaa');
 
+# column_keys without footer_key should fail
+statement error
+COPY (SELECT 42 i) to '{TEST_DIR}/no_footer.parquet' (ENCRYPTION_CONFIG {column_keys: {ck1: [i]}});
+----
+Binder Error: encryption_config specifies column_keys but no footer_key
+
 # Create test table
 statement ok
 CREATE TABLE t1 AS SELECT i AS id, 'name_' || i AS name, i * 100 AS secret FROM range(100) t(i);

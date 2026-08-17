@@ -430,7 +430,7 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	string top_level_name = schema_path.empty() ? string() : schema_path[0].GetIdentifierName();
 	bool use_column_key =
 	    writer.HasEncryption() && !top_level_name.empty() && writer.GetEncryptionConfig().HasColumnKey(top_level_name);
-	const string *column_key = nullptr;
+	optional_ptr<const string> column_key;
 	if (use_column_key) {
 		column_key = &writer.GetEncryptionConfig().GetColumnKey(top_level_name);
 	}
