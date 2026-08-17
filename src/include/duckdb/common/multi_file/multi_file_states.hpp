@@ -220,6 +220,17 @@ enum class MultiFileDecodeResult : uint8_t {
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
 struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
+	MultiFileScanJob() = default;
+	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
+	MultiFileScanJob &operator=(MultiFileScanJob &&) noexcept = default;
+	~MultiFileScanJob() {
+		if (io_completion) {
+			io_completion->WaitForIO();
+			io_completion.reset();
+		}
+		scan_state.reset();
+	}
+
 	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
 	//! Per-file data for the reader
