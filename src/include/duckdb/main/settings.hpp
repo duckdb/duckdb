@@ -427,8 +427,9 @@ struct CheckpointOnDetachSetting {
 	using RETURN_TYPE = CheckpointOnDetach;
 	static constexpr const char *Name = "checkpoint_on_detach";
 	static constexpr const char *Description =
-	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
-	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	    "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint "
+	    "does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT "
+	    "defers to the global checkpoint_on_shutdown setting.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
