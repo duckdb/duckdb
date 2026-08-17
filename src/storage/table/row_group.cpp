@@ -392,6 +392,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	}
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
+	state.assignment_io_registered = false;
 	state.row_group = node;
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();

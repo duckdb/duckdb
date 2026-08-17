@@ -281,6 +281,8 @@ public:
 	SelectionVector valid_sel;
 	//! The currently prepared vector (see RowGroup::PrepareScan)
 	PreparedScanVector prepared_vector;
+	//! Whether scan I/O for the current row group assignment has been registered
+	bool assignment_io_registered = false;
 
 	RandomEngine random;
 
@@ -301,8 +303,10 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
-	//! Prepares the next eligible vector of the assignment and collects its I/O tasks
+	//! Prepares the next eligible vector, collecting the remaining assignment's I/O tasks on first call
 	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks);
+	//! Registers the remaining assignment's scan I/O, returning the async tasks that execute it
+	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
 

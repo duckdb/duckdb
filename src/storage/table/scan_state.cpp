@@ -316,13 +316,24 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 		return true;
 	}
 	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
-	tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
+	if (!assignment_io_registered) {
+		tasks = RegisterAssignmentIO();
+	}
 	return true;
+}
+
+vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
+	D_ASSERT(row_group);
+	D_ASSERT(!assignment_io_registered);
+	assignment_io_registered = true;
+	// register the entire remaining assignment
+	return row_group->GetNode().CollectScanIOTasks(*this, max_row_group_row - vector_index * STANDARD_VECTOR_SIZE);
 }
 
 void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {
 	D_ASSERT(row_group);
 	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
+	D_ASSERT(assignment_io_registered);
 	ScanOptions options {TransactionData(transaction)};
 	row_group->GetNode().ProcessPreparedScan(options, *this, result);
 }
