@@ -741,6 +741,11 @@ void CatalogSet::ScanWithReturn(CatalogTransaction transaction, const std::funct
 	}
 }
 
+optional_ptr<CatalogEntry> CatalogSet::GetHeadEntry(const Identifier &name) {
+	lock_guard<mutex> lock(catalog_lock);
+	return map.GetEntry(name);
+}
+
 void CatalogSet::ScanWithConflictDetection(CatalogTransaction transaction,
                                            const std::function<void(CatalogEntry &)> &scan_callback,
                                            const std::function<void(CatalogEntry &)> &conflict_callback) {

@@ -112,6 +112,9 @@ public:
 	DUCKDB_API void ScanWithConflictDetection(CatalogTransaction transaction,
 	                                          const std::function<void(CatalogEntry &)> &scan_callback,
 	                                          const std::function<void(CatalogEntry &)> &conflict_callback);
+	//! Returns the raw head of the chain for the given name (may be an uncommitted entry).
+	//! Used for conflict detection — do NOT use for query result production.
+	DUCKDB_API optional_ptr<CatalogEntry> GetHeadEntry(const Identifier &name);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback);
 
