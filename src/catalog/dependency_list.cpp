@@ -79,7 +79,16 @@ void LogicalDependencyList::AddDependency(CatalogEntry &entry, DependencyDepende
 }
 
 void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
-	set.insert(entry);
+	auto it = set.find(entry);
+	if (it == set.end()) {
+		set.insert(entry);
+		return;
+	}
+	// Merge flags instead of discarding the new ones - the same subject can be depended on for multiple reasons
+	auto merged = *it;
+	merged.flags.Apply(entry.flags);
+	set.erase(it);
+	set.insert(std::move(merged));
 }
 
 bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {

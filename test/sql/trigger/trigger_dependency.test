@@ -262,3 +262,45 @@ DROP TABLE t8 CASCADE;
 
 statement ok
 DROP TABLE log8;
+
+# --- Altering a column that the trigger body reads from its own table is rejected ---
+statement ok
+
+CREATE TABLE t9(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE audit9(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr9 AFTER INSERT ON t9 FOR EACH STATEMENT INSERT INTO audit9 SELECT j FROM t9;
+
+statement error
+ALTER TABLE t9 RENAME COLUMN j TO k;
+----
+<REGEX>:.*Cannot alter entry "t9" because there are entries that depend on it.*
+
+# dropping the table (and its trigger) needs no CASCADE - the trigger cannot outlive its own table either way
+statement ok
+DROP TABLE t9;
+
+statement ok
+DROP TABLE audit9;
+
+# --- A trigger that does not reference its own table's body is unaffected: column alters remain allowed ---
+statement ok
+CREATE TABLE t10(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE log10(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr10 AFTER INSERT ON t10 FOR EACH STATEMENT INSERT INTO log10 VALUES (1);
+
+statement ok
+ALTER TABLE t10 RENAME COLUMN j TO k;
+
+statement ok
+DROP TABLE t10;
+
+statement ok
+DROP TABLE log10;

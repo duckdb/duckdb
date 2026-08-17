@@ -633,9 +633,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("CREATE TRIGGER requires a base table");
 	}
 	auto &table = *table_ptr;
-	// Dropping/altering the trigger's own table must not require CASCADE, so this dependency is non-blocking. If the
-	// trigger body also references this same table, the body-reference dependency below is added as blocking. since a
-	// duplicate entry is a no-op, adding the non-blocking one first is what makes it win.
+	// Dropping the trigger's own table must not require CASCADE.
+	// If the trigger body also references this table, the body-reference dependency below merges in ALTER-blocking flags.
 	create_trigger_info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// Trigger inherits the catalog and the (possibly nested) schema from the base table
@@ -722,9 +721,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.GetTriggerName();
-	// Track every catalog entry resolved while binding the trigger body as a dependency,
-	// so DROP of a table/view/function referenced by the body is blocked.
-	validation_binder->SetCatalogLookupCallback([&create_trigger_info, &catalog](CatalogEntry &entry) {
+	// Track every catalog entry resolved while binding the trigger body as a dependency, so an ALTER that could
+	// invalidate the body is blocked, and DROP of a table/view/function referenced by the body is blocked too -
+	// except for the trigger's own base table, which can never outlive it regardless of what the body reads.
+	validation_binder->SetCatalogLookupCallback([&create_trigger_info, &catalog, &table](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			if (entry.internal) {
 				return;
@@ -732,7 +732,12 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			throw BinderException("Trigger \"%s\" cannot reference \"%s\" from a different catalog (\"%s\")",
 			                      create_trigger_info.GetTriggerName(), entry.name, entry.ParentCatalog().GetName());
 		}
-		create_trigger_info.dependencies.AddDependency(entry);
+		DependencyDependentFlags flags;
+		flags.SetAlterBlocking();
+		if (&entry != &table) {
+			flags.SetBlocking();
+		}
+		create_trigger_info.dependencies.AddDependency(entry, flags);
 	});
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
