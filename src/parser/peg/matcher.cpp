@@ -1061,12 +1061,15 @@ optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult>
 
 //! Class for building matchers
 class MatcherFactory {
+public:
 	friend struct MatcherList;
 
 public:
 	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
 	}
+	virtual ~MatcherFactory() = default;
 
+public:
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
