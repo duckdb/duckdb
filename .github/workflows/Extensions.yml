@@ -78,7 +78,8 @@ jobs:
       extension_ref: main
       ci_tools_repository: smvv/extension-ci-tools
       exclude_archs: ${{ inputs.extra_exclude_archs }}
-      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
+      # reduced_ci_mode: ${{ (github.event_name == 'pull_request' || !inputs.run_all) && 'enabled' || 'disabled' }}
+      reduced_ci_mode: disabled
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ inputs.save_cache }}
       runners: ${{ inputs.runners }}
