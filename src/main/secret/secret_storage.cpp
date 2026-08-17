@@ -18,6 +18,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -336,13 +337,53 @@ constexpr const char *CONNECTION_SECRET_STATE_KEY = "connection_secret_storage";
 
 //! Per-connection secret container. Lives on the ClientContext's RegisteredStateManager, so it is destroyed exactly
 //! when the connection (its ClientContext) goes away - giving automatic, crash-robust cleanup with no cooperation.
-//! The secrets are held in a CatalogSet so that they follow the transaction they were created in: an aborted
-//! transaction undoes the CREATE/DROP, exactly like the global storages. No mutex is needed, CatalogSet locks itself.
+//! Rollback is implemented here rather than by storing the secrets in a CatalogSet: the container is private to a
+//! single connection, and a connection runs one transaction at a time, so there is never a second snapshot to serve.
+//! All that is needed is undo - the pre-image of every secret the active transaction touched, replayed if it aborts.
 struct ConnectionSecretState : public ClientContextState {
-	explicit ConnectionSecretState(Catalog &catalog) : secrets(make_uniq<CatalogSet>(catalog)) {
+	mutex lock;
+	//! The secrets of this connection: the last committed state, plus the changes of the active transaction
+	identifier_map_t<unique_ptr<SecretEntry>> secrets;
+
+	//! Records the pre-image of `name` before the active transaction modifies it, so that a rollback can restore it.
+	//! Only the first change per name is recorded, making the undo replay order-independent.
+	void StageChange(MetaTransaction &transaction, const Identifier &name) {
+		if (undo_transaction_id != transaction.global_transaction_id) {
+			// First change of a new transaction: any leftover pre-images belong to a transaction that already ended
+			undo_log.clear();
+			undo_transaction_id = transaction.global_transaction_id;
+		}
+		if (undo_log.find(name) != undo_log.end()) {
+			return;
+		}
+		auto entry = secrets.find(name);
+		auto pre_image = entry == secrets.end() ? nullptr : make_uniq<SecretEntry>(*entry->second);
+		undo_log.emplace(name, std::move(pre_image));
 	}
 
-	unique_ptr<CatalogSet> secrets;
+	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		lock_guard<mutex> guard(lock);
+		undo_log.clear();
+	}
+
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		lock_guard<mutex> guard(lock);
+		for (auto &entry : undo_log) {
+			if (entry.second) {
+				secrets[entry.first] = std::move(entry.second);
+			} else {
+				// The secret did not exist before the transaction
+				secrets.erase(entry.first);
+			}
+		}
+		undo_log.clear();
+	}
+
+private:
+	//! Pre-images of the secrets modified by the active transaction, a null entry meaning "did not exist"
+	identifier_map_t<unique_ptr<SecretEntry>> undo_log;
+	//! The transaction the pre-images belong to
+	transaction_t undo_transaction_id = 0;
 };
 
 //! Fetch the calling connection's secret container. With create=false returns nullptr when there is no context or no
@@ -353,8 +394,7 @@ optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTrans
 	}
 	auto &context = transaction->GetContext();
 	if (create) {
-		auto &catalog = Catalog::GetSystemCatalog(*context.db);
-		return context.registered_state->GetOrCreate<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY, catalog).get();
+		return context.registered_state->GetOrCreate<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
 	}
 	return context.registered_state->Get<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
 }
@@ -368,33 +408,30 @@ unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const Ba
 	if (!state) {
 		throw InvalidInputException("Cannot create a connection-scoped secret without an active client context");
 	}
-	auto &secrets = *state->secrets;
-	// Copy the name: we std::move(secret) below, after which a reference into it would dangle.
+	lock_guard<mutex> guard(state->lock);
+	// Copy the name: we std::move(secret) below, after which a reference into it would dangle and the entry would be
+	// inserted under a garbage key (breaking later name-keyed lookups like DROP / GetSecretByName).
 	auto name = secret->GetName();
 
-	if (secrets.GetEntry(*transaction, name)) {
+	auto existing = state->secrets.find(name);
+	if (existing != state->secrets.end()) {
 		switch (on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
 			throw InvalidInputException("Connection secret with name '%s' already exists", name.GetIdentifierName());
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
-			return nullptr;
-		case OnCreateConflict::REPLACE_ON_CONFLICT:
-			secrets.DropEntry(*transaction, name, true, true);
+			return make_uniq<SecretEntry>(*existing->second);
+		default: // REPLACE_ON_CONFLICT
 			break;
-		default:
-			throw InternalException("unknown OnCreateConflict found while registering connection secret");
 		}
 	}
 
-	auto secret_entry = make_uniq<SecretCatalogEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction->db));
-	secret_entry->temporary = true;
-	secret_entry->secret->storage_mode = storage_name;
-	secret_entry->secret->persist_type = SecretPersistType::TEMPORARY;
-	LogicalDependencyList dependencies;
-	secrets.CreateEntry(*transaction, name, std::move(secret_entry), dependencies);
-
-	auto &stored = secrets.GetEntry(*transaction, name)->Cast<SecretCatalogEntry>();
-	return make_uniq<SecretEntry>(*stored.secret);
+	auto entry = make_uniq<SecretEntry>(std::move(secret));
+	entry->persist_type = SecretPersistType::TEMPORARY;
+	entry->storage_mode = storage_name;
+	auto result = make_uniq<SecretEntry>(*entry);
+	state->StageChange(MetaTransaction::Get(transaction->GetContext()), name);
+	state->secrets[name] = std::move(entry);
+	return result;
 }
 
 SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const string &type,
@@ -404,14 +441,13 @@ SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const stri
 		// No connection context (or nothing stored yet) - decline, so the global storages serve this lookup.
 		return SecretMatch();
 	}
+	lock_guard<mutex> guard(state->lock);
 	auto best_match = SecretMatch();
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
-		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
-		if (cast_entry.secret->secret->GetType() == type) {
-			best_match = SelectBestMatch(*cast_entry.secret, path, tie_break_offset, best_match);
+	for (auto &entry : state->secrets) {
+		if (entry.second->secret->GetType() == type) {
+			best_match = SelectBestMatch(*entry.second, path, tie_break_offset, best_match);
 		}
-	};
-	state->secrets->Scan(*transaction, callback);
+	}
 	return best_match;
 }
 
@@ -421,21 +457,26 @@ unique_ptr<SecretEntry> ConnectionSecretStorage::GetSecretByName(const string &n
 	if (!state) {
 		return nullptr;
 	}
-	auto entry = state->secrets->GetEntry(*transaction, Identifier(name));
-	if (!entry) {
+	lock_guard<mutex> guard(state->lock);
+	auto entry = state->secrets.find(Identifier(name));
+	if (entry == state->secrets.end()) {
 		return nullptr;
 	}
-	return make_uniq<SecretEntry>(*entry->Cast<SecretCatalogEntry>().secret);
+	return make_uniq<SecretEntry>(*entry->second);
 }
 
 void ConnectionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
 	auto state = GetConnectionState(transaction, false);
-	if (state && state->secrets->GetEntry(*transaction, name)) {
-		state->secrets->DropEntry(*transaction, name, true, true);
-		return;
+	idx_t erased = 0;
+	if (state) {
+		lock_guard<mutex> guard(state->lock);
+		if (state->secrets.find(name) != state->secrets.end()) {
+			state->StageChange(MetaTransaction::Get(transaction->GetContext()), name);
+			erased = state->secrets.erase(name);
+		}
 	}
-	if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+	if (erased == 0 && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 		throw InvalidInputException("Connection secret with name '%s' not found", name.GetIdentifierName());
 	}
 }
@@ -446,10 +487,10 @@ vector<SecretEntry> ConnectionSecretStorage::AllSecrets(optional_ptr<CatalogTran
 	if (!state) {
 		return result;
 	}
-	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
-		result.push_back(*entry.Cast<SecretCatalogEntry>().secret);
-	};
-	state->secrets->Scan(*transaction, callback);
+	lock_guard<mutex> guard(state->lock);
+	for (auto &entry : state->secrets) {
+		result.push_back(*entry.second);
+	}
 	return result;
 }
 
