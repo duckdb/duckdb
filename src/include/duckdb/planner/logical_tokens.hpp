@@ -53,6 +53,7 @@ class LogicalSample;
 class LogicalAlter;
 class LogicalAttach;
 class LogicalConnect;
+class LogicalExternalResource;
 class LogicalDetach;
 class LogicalDisconnect;
 class LogicalDrop;

@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
@@ -72,6 +73,7 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
+	case ExceptionType::DATA_CORRUPTION:
 	case ExceptionType::FATAL:
 		return true;
 	default:
@@ -153,7 +155,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::HTTP, "HTTP"},
                                                    {ExceptionType::AUTOLOAD, "Extension Autoloading"},
                                                    {ExceptionType::SEQUENCE, "Sequence"},
-                                                   {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"}};
+                                                   {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"},
+                                                   {ExceptionType::DATA_CORRUPTION, "Data Corruption"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -189,7 +192,7 @@ unordered_map<string, string> Exception::InitializeExtraInfo(const TableRef &ref
 	return InitializeExtraInfo(ref.query_location);
 }
 
-unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_location) {
+unordered_map<string, string> Exception::InitializeExtraInfo(QueryLocation error_location) {
 	unordered_map<string, string> result;
 	SetQueryLocation(error_location, result);
 	return result;
@@ -206,16 +209,19 @@ bool Exception::IsExecutionError(ExceptionType type) {
 	}
 }
 
-unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
+unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, QueryLocation error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;
 	SetQueryLocation(error_location, result);
 	return result;
 }
 
-void Exception::SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info) {
+void Exception::SetQueryLocation(QueryLocation error_location, unordered_map<string, string> &extra_info) {
 	if (error_location.IsValid()) {
-		extra_info["position"] = to_string(error_location.GetIndex());
+		// "position" is the start offset (kept for backwards compatibility with existing consumers)
+		extra_info["position"] = to_string(error_location.offset);
+		// "location" is the structured [start, length] source range
+		extra_info["location"] = "[" + to_string(error_location.offset) + "," + to_string(error_location.length) + "]";
 	}
 }
 
@@ -236,10 +242,10 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
 }
 
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
-    : TypeMismatchException(optional_idx(), type_1, type_2, msg) {
+    : TypeMismatchException(QueryLocation(), type_1, type_2, msg) {
 }
 
-TypeMismatchException::TypeMismatchException(optional_idx error_location, const LogicalType &type_1,
+TypeMismatchException::TypeMismatchException(QueryLocation error_location, const LogicalType &type_1,
                                              const LogicalType &type_2, const string &msg)
     : Exception(Exception::InitializeExtraInfo(error_location), ExceptionType::MISMATCH_TYPE,
                 "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
@@ -308,6 +314,9 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 
 IOException::IOException(const unordered_map<string, string> &extra_info, const string &msg)
     : Exception(extra_info, ExceptionType::IO, msg) {
+}
+
+DataCorruptionException::DataCorruptionException(const string &msg) : Exception(ExceptionType::DATA_CORRUPTION, msg) {
 }
 
 NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)

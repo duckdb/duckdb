@@ -29,11 +29,16 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
+	// values that were supplied pre-typed do not go through the literal binding below
+	identifier_map_t<BoundParameterData> bind_values = stmt.bound_values;
+	if (stmt.bound_values.empty()) {
+		PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
+	} else {
+		PreparedStatement::VerifyParameters(stmt.bound_values, named_param_map, &context);
+	}
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	identifier_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {

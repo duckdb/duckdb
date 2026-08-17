@@ -183,15 +183,26 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	const auto thread_count = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-			if (dataflow_mode == DataflowDependencyMode::SKIP && pipeline->HasDataflowDependencies()) {
-				continue;
-			}
 			if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
 			    !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
+				if (dataflow_mode == DataflowDependencyMode::SKIP_CONFLICTING) {
+					bool conflicts_with_dataflow = false;
+					for (auto &dataflow_dependency : pipeline->GetDataflowDependencies()) {
+						auto dependency = dataflow_dependency.lock();
+						D_ASSERT(dependency);
+						if (RefersToSameObject(*dependency, *new_dependency)) {
+							conflicts_with_dataflow = true;
+							break;
+						}
+					}
+					if (conflicts_with_dataflow) {
+						continue;
+					}
+				}
 				if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
 				    !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;

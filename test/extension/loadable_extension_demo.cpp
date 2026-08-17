@@ -29,6 +29,7 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -153,7 +154,7 @@ public:
 	};
 
 	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
 		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));
@@ -519,18 +520,13 @@ struct BoundedType {
 	}
 
 	static LogicalType Get(int32_t max_val) {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("BOUNDED");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("BOUNDED").WithExtensionInfo(std::move(info));
 	}
 
 	static LogicalType GetDefault() {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("BOUNDED");
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("BOUNDED");
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
@@ -694,13 +690,10 @@ struct MinMaxType {
 			throw BinderException("MINMAX type min value must be less than max value");
 		}
 
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(min_val));
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX").WithExtensionInfo(std::move(info));
 	}
 
 	static int32_t GetMinValue(const LogicalType &type) {
@@ -716,19 +709,14 @@ struct MinMaxType {
 	}
 
 	static LogicalType Get(int32_t min_val, int32_t max_val) {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(min_val));
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX").WithExtensionInfo(std::move(info));
 	}
 
 	static LogicalType GetDefault() {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX");
 	}
 };
 
@@ -921,6 +909,44 @@ struct InspectAggState {
 	idx_t arg_count;
 	bool initialized;
 };
+
+static atomic<idx_t> volatile_aggregate_calls {0};
+
+struct VolatileAggregateState {
+	bool initialized;
+};
+
+struct VolatileAggregateOp {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.initialized = true;
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &, STATE &, AggregateInputData &) {
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &, T &target, AggregateFinalizeData &) {
+		target = NumericCast<int64_t>(volatile_aggregate_calls.fetch_add(1) + 1);
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+static void VolatileAggregateUpdate(Vector[], AggregateInputData &, idx_t, Vector &, idx_t) {
+}
+
+static void ResetVolatileAggregate(DataChunk &args, ExpressionState &, Vector &result) {
+	volatile_aggregate_calls.store(0);
+	result.Reference(Value::BIGINT(0), count_t(args.size()));
+}
+
+static void GetVolatileAggregateCalls(DataChunk &args, ExpressionState &, Vector &result) {
+	result.Reference(Value::BIGINT(NumericCast<int64_t>(volatile_aggregate_calls.load())), count_t(args.size()));
+}
 
 struct InspectAggOp {
 	template <class STATE>
@@ -1120,6 +1146,23 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
 	RegisterNamedArgumentFunction(loader);
+	AggregateFunction volatile_aggregate(
+	    "test_volatile_aggregate", {LogicalType::INTEGER}, LogicalType::BIGINT,
+	    AggregateFunction::StateSize<VolatileAggregateState>,
+	    AggregateFunction::StateInitialize<VolatileAggregateState, VolatileAggregateOp>, VolatileAggregateUpdate,
+	    AggregateFunction::StateCombine<VolatileAggregateState, VolatileAggregateOp>,
+	    AggregateFunction::StateFinalize<VolatileAggregateState, int64_t, VolatileAggregateOp>,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	volatile_aggregate.SetVolatile();
+	loader.RegisterFunction(std::move(volatile_aggregate));
+	auto reset_volatile_aggregate =
+	    ScalarFunction("test_reset_volatile_aggregate", {}, LogicalType::BIGINT, ResetVolatileAggregate);
+	reset_volatile_aggregate.SetVolatile();
+	loader.RegisterFunction(std::move(reset_volatile_aggregate));
+	auto get_volatile_aggregate_calls =
+	    ScalarFunction("test_volatile_aggregate_calls", {}, LogicalType::BIGINT, GetVolatileAggregateCalls);
+	get_volatile_aggregate_calls.SetVolatile();
+	loader.RegisterFunction(std::move(get_volatile_aggregate_calls));
 
 	auto &db = loader.GetDatabaseInstance();
 	// create a scalar function
@@ -1137,8 +1180,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
 	alias_info->SetTypeName(Identifier(alias_name));
-	LogicalType target_type = LogicalType::STRUCT(child_types);
-	target_type.SetAlias(alias_name);
+	LogicalType target_type = LogicalType::STRUCT(child_types).WithAlias(alias_name);
 	alias_info->type = target_type;
 
 	auto type_entry = catalog.CreateType(client_context, *alias_info);

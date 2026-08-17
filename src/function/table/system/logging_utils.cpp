@@ -45,7 +45,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 }
 
 static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.inputs.size() > 1) {
 		throw InvalidInputException("EnableLogging: expected 0 or 1 parameter");
 	}
@@ -140,7 +140,7 @@ static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataC
 }
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
@@ -148,7 +148,7 @@ static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, Table
 }
 
 static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 

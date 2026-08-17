@@ -70,6 +70,14 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalBufferedBatchCollector::UpdateMinBatchIndex(ExecutionContext &,
+                                                                      OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
+	auto min_batch_index = input.local_state.partition_info.min_batch_index.GetIndex();
+	gstate.buffered_data->Cast<BatchedBufferedData>().UpdateMinBatchIndex(min_batch_index);
+	return SinkNextBatchType::READY;
+}
+
 SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &context,
                                                               OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
@@ -100,8 +108,8 @@ unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(C
 unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
 	auto cc = gstate.context.lock();
-	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, IdentifiersToStrings(names),
-	                                           cc->GetClientProperties(), gstate.buffered_data);
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
+	                                           gstate.buffered_data);
 	return std::move(result);
 }
 

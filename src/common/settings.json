@@ -667,6 +667,13 @@
         "default_value": "false"
     },
     {
+        "name": "enable_optimistic_write",
+        "description": "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk appends in memory (e.g. for in-memory benchmarks).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "enable_optimizer",
         "description": "Whether or not query optimization is enabled",
         "type": "BOOLEAN",

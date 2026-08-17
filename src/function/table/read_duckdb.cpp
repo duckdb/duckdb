@@ -19,10 +19,10 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
-	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
 	                     BaseFileReaderOptions &options, vector<string> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
-	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
 	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options, const vector<string> &expected_names,
 	                      const vector<LogicalType> &expected_types) override;
@@ -321,25 +321,14 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 		input.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 		scan_function.function(context, input, chunk);
 
-		switch (input.async_result.GetResultType()) {
-		case AsyncResultType::BLOCKED:
+		if (input.async_result.GetResultType() == AsyncResultType::BLOCKED) {
 			return std::move(input.async_result);
-		case AsyncResultType::HAVE_MORE_OUTPUT:
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		case AsyncResultType::IMPLICIT:
-			if (chunk.size() > 0) {
-				return SourceResultType::HAVE_MORE_OUTPUT;
-			}
-			finished = true;
-			return SourceResultType::FINISHED;
-		case AsyncResultType::FINISHED:
-			finished = true;
-			return SourceResultType::FINISHED;
-		default:
-			throw InternalException("DuckDBReader call of scan_function.function returned unexpected return '%'",
-			                        EnumUtil::ToChars(input.async_result.GetResultType()));
 		}
-		throw InternalException("DuckDBReader hasn't handled a scan_function.function return");
+		auto source_result = AsyncResult::GetSourceResultType(input.async_result.GetResultType(), chunk.size());
+		if (source_result == SourceResultType::FINISHED) {
+			finished = true;
+		}
+		return source_result;
 	}
 }
 
@@ -385,13 +374,13 @@ unique_ptr<BaseFileReaderOptions> DuckDBMultiFileInfo::InitializeOptions(ClientC
 	return make_uniq<DuckDBFileReaderOptions>();
 }
 
-bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                           BaseFileReaderOptions &options, vector<string> &expected_names,
                                           vector<LogicalType> &expected_types) {
 	return false;
 }
 
-bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
 	if (key == "schema_name") {

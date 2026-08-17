@@ -104,6 +104,16 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	REQUIRE_FALSE(nut != nut);
 }
 
+TEST_CASE("Test common prefix size", "[string_util]") {
+	REQUIRE(StringUtil::GetCommonPrefixSize("", "") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "xyz") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "abc") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "abcdef") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abcdef", "abcxyz") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("🦆ab", "🦆ac") == 5);
+}
+
 TEST_CASE("Test join vector items", "[string_util]") {
 	SECTION("Three string items") {
 		duckdb::vector<std::string> str_items = {"abc", "def", "ghi"};
@@ -307,6 +317,26 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\" \"y\""), ParserException);
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("x y"), ParserException);
 	}
+}
+
+TEST_CASE("Test RTrim preserves trailing UTF-8", "[string_util]") {
+	string value = u8"abcé";
+	StringUtil::RTrim(value);
+	REQUIRE(value == u8"abcé");
+
+	value = u8"abcé   ";
+	StringUtil::RTrim(value);
+	REQUIRE(value == u8"abcé");
+}
+
+TEST_CASE("Test custom RTrim preserves UTF-8 paths", "[string_util]") {
+	string path = u8"/tmp/café";
+	StringUtil::RTrim(path, "/");
+	REQUIRE(path == u8"/tmp/café");
+
+	path = u8"/tmp/café///";
+	StringUtil::RTrim(path, "/");
+	REQUIRE(path == u8"/tmp/café");
 }
 
 TEST_CASE("Test path utilities", "[string_util]") {

@@ -157,7 +157,7 @@ def get_git_describe():
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
     versioning_tag_match = 'v*.*.*'
     if MAIN_BRANCH_VERSIONING:
-        versioning_tag_match = 'v*.*.0'
+        versioning_tag_match = 'v*.*.0*'
     # empty override_git_describe, either since env was empty string or not existing
     # -> ask git (that can fail, so except in place)
     if len(override_git_describe) == 0:
@@ -173,7 +173,7 @@ def get_git_describe():
             return "v0.0.0-0-gdeadbeeff"
     if is_explicit_prerelease_version(override_git_describe):
         return override_git_describe
-    if len(override_git_describe.split('-')) == 3:
+    if parse_git_describe(override_git_describe):
         return override_git_describe
     if len(override_git_describe.split('-')) == 1:
         override_git_describe += "-0"
@@ -192,6 +192,20 @@ def is_explicit_prerelease_version(version):
     return re.match(r"^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|rc)[0-9]+$", version) is not None
 
 
+def parse_git_describe(version):
+    match = re.match(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)(-(alpha|rc)[0-9]+)?-([0-9]+)-g([a-f0-9]+)$", version)
+    if match is None:
+        return None
+    return {
+        'major': match.group(1),
+        'minor': match.group(2),
+        'patch': match.group(3),
+        'prerelease': match.group(4) or '',
+        'dev': match.group(6),
+        'hash': match.group(7),
+    }
+
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
@@ -199,8 +213,7 @@ def git_commit_hash():
         git_describe = get_git_describe()
         if is_explicit_prerelease_version(git_describe):
             return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        hash = git_describe.split('-')[2].lstrip('g')
-        return hash
+        return parse_git_describe(git_describe)['hash']
     except:
         return "deadbeeff"
 
@@ -219,18 +232,19 @@ def git_dev_version():
         long_version = get_git_describe()
         if is_explicit_prerelease_version(long_version):
             return long_version
-        version_splits = long_version.split('-')[0].lstrip('v').split('.')
-        dev_version = long_version.split('-')[1]
+        version = parse_git_describe(long_version)
+        version_splits = [version['major'], version['minor'], version['patch']]
+        dev_version = version['dev']
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
-            return "v" + '.'.join(version_splits)
+            return "v" + '.'.join(version_splits) + version['prerelease']
         else:
-            # not on a tag: increment the version by one and add a -devX suffix
+            # not on a tag: add a -devX suffix and bump non-prerelease tags
             # this needs to keep in sync with changes to CMakeLists.txt
-            if MAIN_BRANCH_VERSIONING == True:
+            if not version['prerelease'] and MAIN_BRANCH_VERSIONING == True:
                 # increment minor version
                 version_splits[1] = str(int(version_splits[1]) + 1)
-            else:
+            elif not version['prerelease']:
                 # increment patch version
                 version_splits[2] = str(int(version_splits[2]) + 1)
             return "v" + '.'.join(version_splits) + "-dev" + dev_version

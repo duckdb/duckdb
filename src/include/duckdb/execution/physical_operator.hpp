@@ -138,6 +138,8 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                           const OperatorPartitionInfo &partition_info) const;
 
 protected:
 	virtual SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -155,6 +157,11 @@ public:
 	}
 
 	virtual bool ParallelSource() const {
+		return false;
+	}
+
+	//! Whether this source creates partitioned work that is not bounded by its input chunks
+	virtual bool HasSourceTasks() const {
 		return false;
 	}
 
@@ -205,6 +212,8 @@ public:
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk)
 	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
+	//! Called after NextBatch when the pipeline minimum advances without subsequent input for this local sink state
+	virtual SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

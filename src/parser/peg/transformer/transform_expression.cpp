@@ -159,7 +159,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
     MethodArguments function_expression_arguments, optional<vector<OrderByNode>> within_group_clause,
     optional<unique_ptr<ParsedExpression>> filter_clause, const bool &has_result,
     optional<unique_ptr<WindowExpression>> over_clause) {
-	auto qualified_function = function_identifier;
+	const auto &qualified_function = function_identifier;
 	bool export_clause = has_result;
 	auto distinct = function_expression_arguments.distinct;
 	auto function_children = std::move(function_expression_arguments.arguments);
@@ -496,10 +496,10 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 		for (auto &order : aggr->OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant_expr = order.expression->Cast<ConstantExpression>();
-				Value bigint_value;
 				string error;
-				if (constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
-					int64_t order_index = BigIntValue::Get(bigint_value);
+				auto bigint_value = constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, &error);
+				if (bigint_value) {
+					int64_t order_index = BigIntValue::Get(*bigint_value);
 					idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
 					order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
 				}
@@ -2679,17 +2679,10 @@ CaseCheck PEGTransformerFactory::TransformCaseWhenThen(PEGTransformer &transform
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTransformer &transformer,
-                                                                         const Identifier &col_id,
+                                                                         const LogicalType &type,
                                                                          const string &string_literal) {
-	auto colid = col_id.GetIdentifierName();
-	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
-	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::STRUCT) {
-		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
-		                      EnumUtil::ToString(type.id()));
-	}
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
-	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
-	auto result = make_uniq<CastExpression>(unbound_type, std::move(child));
+	auto result = make_uniq<CastExpression>(type, std::move(child));
 	return std::move(result);
 }
 

@@ -1,0 +1,122 @@
+# name: test/optimizer/partitioned_execution_coverage.test
+# description: Fast coverage tests for the PartitionedExecution optimizer
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+SET explain_output = 'optimized_only';
+
+# The optimizer's split size depends on the number of active threads.
+statement ok
+SET threads = 1;
+
+# This is large enough to produce two useful partitions with one thread.
+statement ok
+CREATE TABLE test AS
+SELECT
+	i::INTEGER AS i,
+	(i % 10)::TINYINT AS recurring,
+	42::DOUBLE AS constant_col,
+	CASE WHEN i = 0 THEN NULL ELSE i::INTEGER END AS nullable_i,
+	'a'::VARCHAR AS constant_varchar,
+	CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END AS recurring_varchar,
+	'a'::BLOB AS constant_blob
+FROM range(5_000_000) t(i);
+
+query II
+EXPLAIN SELECT i FROM test ORDER BY i ASC;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query II
+EXPLAIN SELECT i FROM test ORDER BY i DESC;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY i) FROM test;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# Multiple grouping columns keep the estimated result above the optimizer gate.
+query II
+EXPLAIN SELECT i, recurring, count(*) FROM test GROUP BY i, recurring;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# Grouping functions are not eligible for partitioned execution.
+query II
+EXPLAIN SELECT i, recurring, grouping(i), count(*)
+FROM test
+GROUP BY GROUPING SETS ((i, recurring));
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Equivalent window expressions can be split together.
+query II
+EXPLAIN SELECT
+	row_number() OVER (PARTITION BY i),
+	rank() OVER (PARTITION BY i)
+FROM test;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# Nullable statistics make a column ineligible.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY nullable_i) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Constant columns are removed before ranges are computed.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY constant_col) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Exercise constant, overlapping, and unsupported string statistics.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY constant_varchar) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY recurring_varchar) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY constant_blob) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Virtual columns do not have a storage index to obtain statistics from.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY rowid) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Fully overlapping row-group ranges do not produce a useful split.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY recurring) FROM test;
+----
+logical_opt	<!REGEX>:.*UNION.*
+
+# Select the column producing the most ranges.
+query II
+EXPLAIN SELECT row_number() OVER (PARTITION BY recurring, i) FROM test;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# ORDER BY can only split on its first remaining column.
+query II
+EXPLAIN SELECT i, recurring FROM test ORDER BY i, recurring;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# Expressions are not eligible partition columns.
+query II
+EXPLAIN SELECT i FROM test ORDER BY i + 1;
+----
+logical_opt	<!REGEX>:.*UNION.*

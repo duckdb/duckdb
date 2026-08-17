@@ -1,17 +1,19 @@
-#include "core_functions/scalar/list_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
+#include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/types/sql_value_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/create_sort_key.hpp"
-#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -129,13 +131,13 @@ struct FinalizeGenericValueFunctor {
 };
 
 struct AggregateFunctor {
-	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 	}
 };
 
 struct DistinctFunctor {
-	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
@@ -178,7 +180,7 @@ struct DistinctFunctor {
 };
 
 struct UniqueFunctor {
-	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = sql_value_map_t<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
@@ -303,7 +305,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		auto key_type = aggr.Function().GetArguments()[0];
 
 		switch (key_type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(list_aggregate_types)
 		case PhysicalType::BOOL:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, bool>(
 			    result, state_vector.state_vector, count);
@@ -470,7 +472,10 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	// found a matching function, bind it as an aggregate
 	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
-		bound_function.SetErrorMode(best_function.GetErrorMode());
+		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
+			bound_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
+		}
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 

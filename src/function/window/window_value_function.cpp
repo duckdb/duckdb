@@ -357,11 +357,11 @@ public:
 			if (offset_value.IsNull()) {
 				return false;
 			}
-			Value bigint_value;
-			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			auto bigint_value = offset_value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (!bigint_value) {
 				return false;
 			}
-			offset = bigint_value.GetValue<int64_t>();
+			offset = bigint_value->GetValue<int64_t>();
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -382,7 +382,12 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		return dflt_value.DefaultTryCastAs(wexpr.GetReturnType(), result, nullptr, false);
+		auto cast_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
+		if (!cast_value) {
+			return false;
+		}
+		result = std::move(*cast_value);
+		return true;
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
@@ -784,7 +789,12 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
-		return true;
+		// We can stream first values if the frame start is fixed at the partition start
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       (wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_RANGE ||
+		        wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_GROUPS ||
+		        wexpr.WindowEnd() == WindowBoundary::UNBOUNDED_FOLLOWING);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state);
@@ -863,11 +873,11 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 
 			if (frame_width) {
 				const auto first_idx = gvstate.value_tree->SelectNth(frames, 0);
-				D_ASSERT(first_idx.second == 0);
-				if (first_idx.first < cursor.Count()) {
-					cursor.CopyCell(0, first_idx.first, result, i);
-				} else {
+				if (first_idx.second || first_idx.first >= cursor.Count()) {
+					//	No first value - give up.
 					FlatVector::SetNull(result, i, true);
+				} else {
+					cursor.CopyCell(0, first_idx.first, result, i);
 				}
 			} else {
 				FlatVector::SetNull(result, i, true);
@@ -1036,13 +1046,13 @@ public:
 		if (nth_value.IsNull()) {
 			return false;
 		}
-		Value bigint_value;
-		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+		auto bigint_value = nth_value.DefaultTryCastAs(LogicalType::BIGINT);
+		if (!bigint_value) {
 			return false;
 		}
 		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
 		//	Streaming this will have the same behaviour if we use a 0 index.
-		const auto bigint = bigint_value.GetValue<int64_t>();
+		const auto bigint = bigint_value->GetValue<int64_t>();
 		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
 		return true;
 	}
@@ -1249,12 +1259,17 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
 	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto den = (x1 - x0);
+	auto den = (x1 - x0);
 	if (den == 0) {
 		// Duplicate X values, so pick the first.
 		return 0;
 	}
-	const auto num = (x - x0);
+	auto num = x - x0;
+	if (!std::isfinite(den)) {
+		const auto scale = MaxValue(std::abs(x0), std::abs(x1));
+		num = x / scale - x0 / scale;
+		den = x1 / scale - x0 / scale;
+	}
 	return num / den;
 }
 

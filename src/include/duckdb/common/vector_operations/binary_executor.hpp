@@ -16,6 +16,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+#include "duckdb/common/smaller_binary.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -92,7 +93,7 @@ struct BinaryLambdaWrapper {
 };
 
 struct BinaryExecutor {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -167,7 +168,7 @@ struct BinaryExecutor {
 		    fun, *ldata, *rdata, ConstantVector::Validity(result), 0);
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlat(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
@@ -269,7 +270,7 @@ struct BinaryExecutor {
 		auto right_vector_type = right.GetVectorType();
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
 			                                                                                  count, fun);
@@ -364,7 +365,7 @@ public:
 
 // NOTE: the flat path is intentionally NOT covered by the ComparisonSelectComplement fold (unlike
 // the generic and constant paths above). It is null-unified — there is no NO_NULL template split;
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
 	static inline idx_t SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -602,7 +603,7 @@ public:
 	}
 #endif
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 #else
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
@@ -613,7 +614,7 @@ public:
 	                                      idx_t count, const ValidityMask &lvalidity, const ValidityMask &rvalidity,
 	                                      SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
 		const bool HAS_TRUE_SEL = true_sel;
 		const bool HAS_FALSE_SEL = false_sel;
 		const bool NO_NULL = false;
@@ -641,7 +642,7 @@ public:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 	static inline idx_t
 	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -682,7 +683,7 @@ public:
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                        const SelectionVector &result_sel, idx_t count, const ValidityMask &lvalidity,
 	                        const ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flags)
 		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
@@ -718,7 +719,7 @@ public:
 		if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			return SelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, *sel, count, true_sel, false_sel);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(binary_executor_select_flat)
 		} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, *sel, count, true_sel, false_sel);

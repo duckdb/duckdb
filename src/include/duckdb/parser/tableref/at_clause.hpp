@@ -15,10 +15,10 @@ namespace duckdb {
 //! The AT clause specifies which version of a table to read
 class AtClause {
 public:
-	AtClause(string unit, unique_ptr<ParsedExpression> expr);
+	AtClause(Identifier unit, unique_ptr<ParsedExpression> expr);
 
 public:
-	const string &Unit() {
+	const Identifier &Unit() {
 		return unit;
 	}
 	unique_ptr<ParsedExpression> &ExpressionMutable() {
@@ -35,7 +35,7 @@ public:
 
 private:
 	//! The unit (e.g. TIMESTAMP or VERSION)
-	string unit;
+	Identifier unit;
 	//! The expression that determines which value of the unit we want to read
 	unique_ptr<ParsedExpression> expr;
 };
