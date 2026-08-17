@@ -49,6 +49,13 @@ class BufferPool;
 class CastFunctionSet;
 class CollationBinding;
 class ClientContext;
+class DuckDB;
+
+//! An extension linked into the binary, and how to load it into a database.
+struct LinkedExtension {
+	string name;
+	std::function<void(DuckDB &)> load;
+};
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
@@ -266,6 +273,14 @@ public:
 	DUCKDB_API bool HasArrowExtension(const LogicalType &type) const;
 	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
+
+	//! Extensions compiled into the binary that produced this config, published as callables rather
+	//! than as generated code. Code carrying its own copy of DuckDB - a statically built extension -
+	//! cannot see the generated loader, but it can read this; and copying it into a child config
+	//! hands a database the same capability set as the one that created it.
+	//! A vector, not a map: extensions load in registration order, and that order has to be stable
+	//! across runs and platforms.
+	vector<LinkedExtension> linked_extensions;
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
