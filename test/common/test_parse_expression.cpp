@@ -99,6 +99,16 @@ TEST_CASE("Parser::Tokenize does not emit trailing token beyond input", "[parse_
 	REQUIRE(tokens[1].start == 7);
 	REQUIRE(tokens[1].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT);
 
+	// "select 1;" has 9 chars -> 3 tokens: "select" (start index 0), "1" (start index 7), ";" (start index 8)
+	tokens = Parser::Tokenize("select 1;");
+	REQUIRE(tokens.size() == 3);
+	REQUIRE(tokens[0].start == 0);
+	REQUIRE(tokens[0].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD);
+	REQUIRE(tokens[1].start == 7);
+	REQUIRE(tokens[1].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT);
+	REQUIRE(tokens[2].start == 8);
+	REQUIRE(tokens[2].type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR);
+
 	// empty input produces 0 tokens
 	tokens = Parser::Tokenize("");
 	REQUIRE(tokens.empty());
