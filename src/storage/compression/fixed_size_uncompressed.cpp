@@ -3,6 +3,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -141,14 +142,19 @@ void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct FixedSizeScanState : public SegmentScanState {
+	explicit FixedSizeScanState(BufferHandle handle_p, const ColumnSegment &segment)
+	    : handle(std::move(handle_p)),
+	      reader(CompressionSegmentReader::FromSegment(handle, segment, "fixed-size segment")) {
+	}
+
 	BufferHandle handle;
+	CompressionSegmentReader reader;
 };
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	result->handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	return std::move(result);
+	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
+	return make_uniq<FixedSizeScanState>(std::move(handle), segment);
 }
 
 //===--------------------------------------------------------------------===//
@@ -160,12 +166,12 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto data = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto source_data = data + start * sizeof(T);
+	auto source_data = scan_state.reader.GetArraySlice<T>(0, start, scan_count);
 
 	// copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	memcpy(FlatVector::GetDataMutable(result) + result_offset * sizeof(T), source_data, scan_count * sizeof(T));
+	auto result_data = FlatVector::GetDataMutable<T>(result);
+	memcpy(result_data + result_offset, source_data, scan_count * sizeof(T));
 }
 
 template <class T>
@@ -173,11 +179,10 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto data = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	auto source_data = data + start * sizeof(T);
+	auto source_data = scan_state.reader.GetArraySlice<T>(0, start, scan_count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, source_data, count_t(scan_count));
+	FlatVector::SetData(result, data_ptr_cast(const_cast<T *>(source_data)), count_t(scan_count));
 }
 
 //===--------------------------------------------------------------------===//
@@ -186,13 +191,13 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 template <class T>
 void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                        idx_t result_idx) {
+	auto row_index = NumericCast<idx_t>(row_id);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "fixed-size segment");
 
 	// first fetch the data from the base table
-	auto data_ptr = handle.GetDataMutable() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
-
-	memcpy(FlatVector::GetDataMutable(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
+	FlatVector::GetDataMutable<T>(result)[result_idx] = reader.GetArrayElement<T>(0, segment.count, row_index);
 }
 
 //===--------------------------------------------------------------------===//
