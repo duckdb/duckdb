@@ -88,11 +88,13 @@ string HivePartitioning::Escape(const string &input) {
 
 string HivePartitioning::EscapeValue(const string &input) {
 	auto result = Escape(input);
-	if (result != DEFAULT_PARTITION_NAME) {
+	// the comparison is case-insensitive because on a case-insensitive file system a value that differs only in
+	// case still lands in the directory that is reserved for NULL values
+	if (!StringUtil::CIEquals(result, DEFAULT_PARTITION_NAME)) {
 		return result;
 	}
-	// this value escapes to the directory name that is reserved for NULL values - percent-encode the first
-	// character so the value gets its own directory while still unescaping back to the original value
+	// percent-encode the first character so the value gets its own directory while still unescaping back to the
+	// original value
 	static constexpr const char *HEX_DIGIT = "0123456789ABCDEF";
 	const auto first = static_cast<unsigned char>(result[0]);
 	string escaped = "%";
