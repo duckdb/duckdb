@@ -2,6 +2,8 @@
 # description: Concurrent trigger creation and column rename must not produce an inconsistent catalog
 # group: [trigger]
 
+require noforcestorage
+
 statement ok
 CREATE TABLE t(i INTEGER, j INTEGER);
 
