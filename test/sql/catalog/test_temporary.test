@@ -11,8 +11,10 @@ statement ok
 CREATE TEMPORARY TABLE integersx(i INTEGER)
 
 # we don't support temporary schemas (yet?)
-#statement error
-#CREATE TEMPORARY SCHEMA asdf
+statement error
+CREATE TEMPORARY SCHEMA asdf
+----
+<REGEX>:.*Temporary schemas are not supported.*
 
 # we can prefix temp tables with a schema that is not "temp"
 statement ok

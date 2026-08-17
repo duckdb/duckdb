@@ -271,6 +271,10 @@ QualifiedName Binder::BindTableName(const QualifiedName &name) {
 }
 
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	if (info.temporary) {
+		// unsupported - otherwise the schema silently lands in (and is persisted to) the default catalog
+		throw BinderException("Temporary schemas are not supported");
+	}
 	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
