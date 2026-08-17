@@ -1137,7 +1137,7 @@ KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {
 	} else {
 		info.emplace(0, ' ');
 	}
-	auto result = allocator.Allocate(CreateKeyword(keyword, *info)).Cast<KeywordMatcher>();
+	auto &result = allocator.Allocate(CreateKeyword(keyword, *info)).Cast<KeywordMatcher>();
 	keywords.emplace(keyword, result);
 	return result;
 }
