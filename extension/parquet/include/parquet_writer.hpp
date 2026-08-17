@@ -199,6 +199,7 @@ public:
 	void FlushRowGroup(PreparedRowGroup &row_group);
 	void Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data);
 	void Finalize();
+	void AbortWrite();
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type,
 	                                                          bool write_timestamp_as_int96);

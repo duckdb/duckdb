@@ -66,11 +66,9 @@ unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context,
 	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type;
-	auto handle = fs.OpenFile(file_path, flags);
-
 	auto result = make_uniq<WriteBlobGlobalState>();
-	result->handle = std::move(handle);
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type;
+	result->handle = fs.OpenFile(file_path, flags);
 
 	return std::move(result);
 }
@@ -173,6 +171,16 @@ void WriteBlobFinalize(ClientContext &context, FunctionData &bind_data, GlobalFu
 	lock_guard<mutex> glock(state.lock);
 
 	state.handle->Close();
+	state.handle.reset();
+}
+
+void WriteBlobAbort(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+	auto &state = gstate.Cast<WriteBlobGlobalState>();
+	lock_guard<mutex> glock(state.lock);
+	if (state.handle) {
+		auto handle = std::move(state.handle);
+		handle->AbortWrite();
+	}
 }
 
 } // namespace
@@ -188,6 +196,7 @@ void BuiltinFunctions::RegisterCopyFunctions() {
 	info.copy_to_sink = WriteBlobSink;
 	info.copy_to_combine = WriteBlobCombine;
 	info.copy_to_finalize = WriteBlobFinalize;
+	info.copy_to_abort = WriteBlobAbort;
 	info.prepare_batch = WriteBlobPrepareBatch;
 	info.flush_batch = WriteBlobFlushBatch;
 	info.extension = "blob";

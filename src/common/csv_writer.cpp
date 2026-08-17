@@ -77,6 +77,13 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &
 	}
 }
 
+CSVWriter::~CSVWriter() {
+	try {
+		AbortWrite();
+	} catch (...) { // NOLINT
+	}
+}
+
 void CSVWriter::Initialize(bool force) {
 	if (!force && !should_initialize) {
 		return;
@@ -168,6 +175,17 @@ void CSVWriter::Close() {
 		if (file_writer) {
 			file_writer->Close();
 		}
+	}
+}
+
+void CSVWriter::AbortWrite() {
+	if (shared) {
+		lock_guard<mutex> flock(lock);
+		if (file_writer) {
+			file_writer->AbortWrite();
+		}
+	} else if (file_writer) {
+		file_writer->AbortWrite();
 	}
 }
 

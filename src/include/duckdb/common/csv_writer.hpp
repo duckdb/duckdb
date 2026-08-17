@@ -65,6 +65,7 @@ public:
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,
 	          QueryContext context = QueryContext(), bool shared = true);
+	~CSVWriter();
 
 	//! Writes header and prefix if necessary
 	void Initialize(bool force = false);
@@ -90,6 +91,8 @@ public:
 
 	//! Closes the writer, optionally writes a postfix
 	void Close();
+	//! Abandons an incomplete owned file write
+	void AbortWrite();
 
 	vector<unique_ptr<Expression>> string_casts;
 

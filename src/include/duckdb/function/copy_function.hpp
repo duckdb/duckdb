@@ -147,6 +147,7 @@ typedef void (*copy_to_sink_t)(ExecutionContext &context, FunctionData &bind_dat
 typedef void (*copy_to_combine_t)(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
+typedef void (*copy_to_abort_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
 
 typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &bind_data,
                                     const CopyFunction &function);
@@ -249,6 +250,7 @@ public:
 	copy_to_sink_t copy_to_sink;
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
+	copy_to_abort_t copy_to_abort;
 	copy_to_execution_mode_t execution_mode;
 	copy_to_initialize_operator_t initialize_operator;
 	copy_to_propagate_statistics_t copy_to_propagate_statistics = nullptr;

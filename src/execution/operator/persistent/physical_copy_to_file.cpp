@@ -85,14 +85,33 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 //===--------------------------------------------------------------------===//
 struct GlobalFileState {
 public:
-	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p)
-	    : data(std::move(data_p)), path(path_p), num_batches(0) {
+	GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p, ClientContext &context_p,
+	                FunctionData &bind_data_p, copy_to_abort_t abort_p)
+	    : data(std::move(data_p)), path(path_p), context(context_p), bind_data(bind_data_p), abort(abort_p),
+	      num_batches(0) {
+	}
+
+	~GlobalFileState() {
+		if (!data || !abort) {
+			return;
+		}
+		try {
+			abort(context, bind_data, *data);
+		} catch (...) { // NOLINT
+		}
+	}
+
+	void MarkFinalized() {
+		data.reset();
 	}
 
 public:
 	annotated_mutex lock;
 	unique_ptr<GlobalFunctionData> data;
 	const string path;
+	ClientContext &context;
+	FunctionData &bind_data;
+	copy_to_abort_t abort;
 	idx_t num_batches DUCKDB_GUARDED_BY(lock);
 };
 
@@ -1511,6 +1530,7 @@ static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_
 		throw InternalException("COPY file lifecycle finalize reached an empty file state");
 	}
 	finalize(context, bind_data, *state->data);
+	state->MarkFinalized();
 }
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
@@ -3335,15 +3355,17 @@ void CopyToFileGlobalState::RegisterPendingFileStatePathLocked(PendingFileState 
 
 unique_ptr<GlobalFileState> CopyToFileGlobalState::InitializeFileState(PendingFileState pending_file_state) {
 	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, pending_file_state.output_path);
+	auto result = make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path, context, *op.bind_data,
+	                                         op.function.copy_to_abort);
 	if (pending_file_state.written_file_info && pending_file_state.written_file_info->file_stats) {
-		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data,
+		op.function.copy_to_get_written_statistics(context, *op.bind_data, *result->data,
 		                                           *pending_file_state.written_file_info->file_stats);
 	}
 	if (op.function.initialize_operator) {
-		op.function.initialize_operator(*data, op);
+		op.function.initialize_operator(*result->data, op);
 	}
 
-	return make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path);
+	return result;
 }
 
 void CopyToFileGlobalState::RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) {
