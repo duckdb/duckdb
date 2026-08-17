@@ -196,6 +196,7 @@ public:
 vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatalogProvider &provider, const string &sql,
                                                                AutoCompleteParameters &parameters) {
 	// tokenize the input
+	auto &parser_cache = provider.GetParserCache();
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
@@ -205,7 +206,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	AutoCompleteTokenizerBehavior behavior(sql_ref, state);
-	Tokenizer tokenizer(behavior);
+	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
 		return {};
@@ -213,7 +214,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto peg_matcher = provider.GetPEGMatcher();
+		auto peg_matcher = parser_cache.GetMatcher();
 		peg_matcher->ProgramMatcher().Match(state);
 	}
 	if (state.suggestions.empty()) {

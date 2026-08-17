@@ -47,14 +47,14 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	PEGKeywordHelper keyword_helper;
+	optional_ptr<const PEGKeywordHelper> keyword_helper;
 
 	friend class Tokenizer;
 };
 
 class Tokenizer {
 public:
-	explicit Tokenizer(TokenizerBehavior &behavior);
+	Tokenizer(TokenizerBehavior &behavior, const PEGKeywordHelper &keyword_helper);
 	virtual ~Tokenizer() = default;
 
 public:
@@ -91,7 +91,7 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	PEGKeywordHelper keyword_helper;
+	reference<const PEGKeywordHelper> keyword_helper;
 	TokenizerBehavior &behavior;
 };
 

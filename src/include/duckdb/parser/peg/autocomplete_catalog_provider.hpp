@@ -38,8 +38,8 @@ public:
 	virtual vector<AutoCompleteCandidate> SuggestPragmaName() = 0;
 	virtual vector<AutoCompleteCandidate> SuggestSettingName() = 0;
 
-	//! Get the PEG matcher for syntax-level autocomplete.
-	virtual shared_ptr<PEGMatcher> GetPEGMatcher() = 0;
+	//! Get the parser cache for syntax-level autocomplete.
+	virtual ParserCache &GetParserCache() = 0;
 };
 
 //! Empty provider — returns no catalog suggestions.
@@ -76,8 +76,8 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return {};
 	}
-	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return cache.GetMatcher();
+	ParserCache &GetParserCache() override {
+		return cache;
 	}
 
 private:

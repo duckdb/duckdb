@@ -2,12 +2,7 @@
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
-PEGKeywordHelper &PEGKeywordHelper::Instance() {
-	static PEGKeywordHelper instance;
-	return instance;
-}
-
-PEGKeywordHelper::PEGKeywordHelper() {
+PEGKeywordHelper::PEGKeywordHelper() : initialized(false) {
 	InitializeKeywordMaps();
 }
 
@@ -38,7 +33,7 @@ bool PEGKeywordHelper::KeywordCategoryType(const std::string &text, const PEGKey
 	}
 }
 
-vector<ParserKeyword> PEGKeywordHelper::KeywordList() {
+vector<ParserKeyword> PEGKeywordHelper::KeywordList() const {
 	vector<ParserKeyword> result;
 	for (auto &kw : reserved_keyword_map) {
 		result.push_back({kw, KeywordCategory::KEYWORD_RESERVED});

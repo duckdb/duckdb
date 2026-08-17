@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
@@ -268,11 +269,18 @@ private:
 //! Per-database cache holder for the compiled PEG root matcher and transformer factory.
 //! Both are always invalidated together, so they share one mutex and one Invalidate() call.
 struct ParserCache {
+	PEGKeywordHelper &GetKeywordHelper() {
+		return keyword_helper;
+	}
+	const PEGKeywordHelper &GetKeywordHelper() const {
+		return keyword_helper;
+	}
 	shared_ptr<PEGMatcher> GetMatcher();
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();
 
 private:
+	PEGKeywordHelper keyword_helper;
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;

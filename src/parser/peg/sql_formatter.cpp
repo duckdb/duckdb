@@ -87,9 +87,10 @@ SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 }
 
 string SQLFormatter::Format(const string &sql) {
+	ParserCache cache;
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior);
+	Tokenizer tokenizer(behavior, cache.GetKeywordHelper());
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		auto back_type = tokens.back().type;

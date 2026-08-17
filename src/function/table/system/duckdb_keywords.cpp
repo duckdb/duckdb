@@ -2,7 +2,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,8 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, Table
 
 unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBKeywordsData>();
-	result->entries = Parser::KeywordList();
+	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
+	result->entries = parser_cache.GetKeywordHelper().KeywordList();
 	return std::move(result);
 }
 

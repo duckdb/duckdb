@@ -4,6 +4,8 @@
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
+struct ParserCache;
+
 enum class PEGKeywordCategory : uint8_t {
 	KEYWORD_NONE,
 	KEYWORD_UNRESERVED,
@@ -15,19 +17,19 @@ enum class PEGKeywordCategory : uint8_t {
 
 class PEGKeywordHelper {
 public:
-	static PEGKeywordHelper &Instance();
 	bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const;
 	void InitializeKeywordMaps();
-	bool IsKeyword(const string &text) {
+	bool IsKeyword(const string &text) const {
 		if (reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
 		    colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0) {
 			return true;
 		}
 		return false;
 	};
-	vector<ParserKeyword> KeywordList();
+	vector<ParserKeyword> KeywordList() const;
 
 private:
+	friend struct ParserCache;
 	PEGKeywordHelper();
 	bool initialized;
 	case_insensitive_set_t reserved_keyword_map;

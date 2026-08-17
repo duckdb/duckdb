@@ -366,8 +366,8 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return ::duckdb::SuggestSettingName(context);
 	}
-	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return PEGMatcher::Get(context);
+	ParserCache &GetParserCache() override {
+		return DatabaseInstance::GetDatabase(context).GetParserCache();
 	}
 
 private:
@@ -457,9 +457,10 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
+	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior);
+	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
 	tokenizer.TokenizeInput();
 
 	// use the parser to annotate any tokens
@@ -468,7 +469,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = PEGMatcher::Get(context);
+	auto peg_matcher = parser_cache.GetMatcher();
 	peg_matcher->ProgramMatcher().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
@@ -543,7 +544,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
-	Tokenizer tokenizer(behavior);
+	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
+	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
 
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
@@ -559,7 +561,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = PEGMatcher::Get(context);
+	auto peg_matcher = parser_cache.GetMatcher();
 	auto match_result = peg_matcher->ProgramMatcher().Match(state);
 	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
 	// consuming it.

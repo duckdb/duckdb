@@ -1,12 +1,13 @@
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
 static KeywordCategory GetPEGKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	ParserCache cache;
+	auto &helper = cache.GetKeywordHelper();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}

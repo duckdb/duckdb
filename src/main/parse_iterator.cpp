@@ -142,7 +142,8 @@ void ParseIterator::EnsureTokenized() {
 		// `token_cursor`; we never re-tokenize. Tokenization is grammar-free.
 		tokens = make_uniq<vector<MatcherToken>>();
 		ParserTokenizerBehavior behavior(sql, *tokens);
-		Tokenizer tokenizer(behavior);
+		auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
+		Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
 		tokenizer.TokenizeInput();
 	}
 }

@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens)
-    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
+TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
 }
 
-Tokenizer::Tokenizer(TokenizerBehavior &behavior)
-    : sql(behavior.sql), tokens(behavior.tokens), keyword_helper(PEGKeywordHelper::Instance()), behavior(behavior) {
+Tokenizer::Tokenizer(TokenizerBehavior &behavior, const PEGKeywordHelper &keyword_helper_p)
+    : sql(behavior.sql), tokens(behavior.tokens), keyword_helper(keyword_helper_p), behavior(behavior) {
+	behavior.keyword_helper = keyword_helper_p;
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -439,7 +439,7 @@ bool Tokenizer::TokenizeInputInternal() {
 			if (c != '$' && !CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
-				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+				auto token_type = keyword_helper.get().IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
 				behavior.PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
@@ -566,7 +566,8 @@ void TokenizerBehavior::OnLastToken(TokenizeState state, string last_word, idx_t
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+		D_ASSERT(keyword_helper);
+		state = keyword_helper->IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
 	}
 
 	bool is_unterminated = Tokenizer::IsUnterminatedState(state);

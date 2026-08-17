@@ -480,7 +480,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
+	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
+	    : Matcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -634,16 +635,16 @@ private:
 		}
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		const auto &keyword_helper_ref = keyword_helper.get();
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
+			if (keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
+			    keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
 				break;
 			}
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+			if (keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
+			    keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
 				return false;
 			}
 			break;
@@ -654,13 +655,14 @@ private:
 			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
 
 			const bool is_reserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			    keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_helper_ref.KeywordCategoryType(token_text, banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
 			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			    keyword_helper_ref.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag =
+			    keyword_helper_ref.KeywordCategoryType(token_text, allowed_override_category);
 			const bool has_allowed_flag = is_unreserved || has_override_flag;
 
 			if (has_banned_flag && !has_allowed_flag) {
@@ -678,6 +680,7 @@ private:
 	}
 
 	SuggestionState suggestion_type;
+	reference<const PEGKeywordHelper> keyword_helper;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {
@@ -685,7 +688,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit ReservedIdentifierMatcher(SuggestionState suggestion_type) : IdentifierMatcher(suggestion_type) {
+	ReservedIdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper)
+	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -1063,7 +1067,8 @@ class MatcherFactory {
 	friend struct MatcherList;
 
 public:
-	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
+	MatcherFactory(MatcherAllocator &allocator, const PEGKeywordHelper &keyword_helper)
+	    : allocator(allocator), keyword_helper(keyword_helper) {
 	}
 
 	//! Create a matcher from a PEG grammar
@@ -1090,6 +1095,7 @@ private:
 
 private:
 	MatcherAllocator &allocator;
+	reference<const PEGKeywordHelper> keyword_helper;
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
 	string_set_t no_suggestion_rules;
@@ -1458,44 +1464,48 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
-	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("ReservedIdentifier",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("CatalogName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME)));
-	AddRuleOverride("SchemaName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
-	AddRuleOverride("ReservedSchemaName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
-	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
-	AddRuleOverride("ReservedTableName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
-	AddRuleOverride("ColumnName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
-	AddRuleOverride("ReservedColumnName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
-	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("ReservedIndexName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("SequenceName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("FunctionName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
+	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                              keyword_helper.get())));
+	AddRuleOverride("ReservedIdentifier", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_VARIABLE, keyword_helper.get())));
+	AddRuleOverride("CatalogName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                   SuggestionState::SUGGEST_CATALOG_NAME, keyword_helper.get())));
+	AddRuleOverride("SchemaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME,
+	                                                                              keyword_helper.get())));
+	AddRuleOverride("ReservedSchemaName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_SCHEMA_NAME, keyword_helper.get())));
+	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME,
+	                                                                             keyword_helper.get())));
+	AddRuleOverride("ReservedTableName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_TABLE_NAME, keyword_helper.get())));
+	AddRuleOverride("ColumnName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME,
+	                                                                              keyword_helper.get())));
+	AddRuleOverride("ReservedColumnName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_COLUMN_NAME, keyword_helper.get())));
+	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                             keyword_helper.get())));
+	AddRuleOverride("ReservedIndexName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_VARIABLE, keyword_helper.get())));
+	AddRuleOverride("SequenceName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                                keyword_helper.get())));
+	AddRuleOverride("FunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper.get())));
 	AddRuleOverride("ReservedFunctionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
-	AddRuleOverride("ReservedKeyword",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("TableFunctionName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME)));
-	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
-	AddRuleOverride("ReservedTypeName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
-	AddRuleOverride("PragmaName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME)));
-	AddRuleOverride("SettingName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME)));
-	AddRuleOverride("CopyOptionName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper.get())));
+	AddRuleOverride("ReservedKeyword", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                       SuggestionState::SUGGEST_VARIABLE, keyword_helper.get())));
+	AddRuleOverride("TableFunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, keyword_helper.get())));
+	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME,
+	                                                                            keyword_helper.get())));
+	AddRuleOverride("ReservedTypeName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                        SuggestionState::SUGGEST_TYPE_NAME, keyword_helper.get())));
+	AddRuleOverride("PragmaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME,
+	                                                                              keyword_helper.get())));
+	AddRuleOverride("SettingName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                   SuggestionState::SUGGEST_SETTING_NAME, keyword_helper.get())));
+	AddRuleOverride("CopyOptionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                      SuggestionState::SUGGEST_VARIABLE, keyword_helper.get())));
 	AddRuleOverride("NumberLiteral", allocator.Allocate(make_uniq<NumberLiteralMatcher>()));
 	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
 	AddRuleOverride("OperatorLiteral", allocator.Allocate(make_uniq<OperatorMatcher>()));
@@ -1531,7 +1541,7 @@ shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 		}
 	}
 	auto new_matcher = make_shared_ptr<PEGMatcher>();
-	MatcherFactory factory(new_matcher->allocator);
+	MatcherFactory factory(new_matcher->allocator, keyword_helper);
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;

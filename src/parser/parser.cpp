@@ -268,7 +268,7 @@ void Parser::ParseQuery(const string &query_p) {
 	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
 	ParserTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
+	Tokenizer tokenizer(behavior, GetCache().GetKeywordHelper());
 	tokenizer.TokenizeInput();
 	idx_t token_cursor = 0;
 	while (token_cursor < tokens.size()) {
@@ -362,9 +362,10 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &to
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
+	ParserCache cache;
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
+	Tokenizer tokenizer(behavior, cache.GetKeywordHelper());
 	tokenizer.TokenizeInput();
 
 	vector<SimplifiedToken> result;
@@ -541,7 +542,8 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	ParserCache cache;
+	auto &helper = cache.GetKeywordHelper();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -562,7 +564,8 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
-	return PEGKeywordHelper::Instance().KeywordList();
+	ParserCache cache;
+	return cache.GetKeywordHelper().KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {
