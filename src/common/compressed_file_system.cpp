@@ -169,7 +169,7 @@ void CompressedFile::Close() {
 	}
 }
 
-void CompressedFile::AbortWrite() {
+void CompressedFile::AbortCompressedWrite() {
 	std::exception_ptr error;
 	auto wrapper = std::move(stream_wrapper);
 	if (wrapper) {
@@ -227,7 +227,7 @@ bool CompressedFileSystem::CanSeek() {
 }
 
 void CompressedFileSystem::AbortFileWrite(FileHandle &handle) {
-	handle.Cast<CompressedFile>().AbortWrite();
+	handle.Cast<CompressedFile>().AbortCompressedWrite();
 }
 
 } // namespace duckdb

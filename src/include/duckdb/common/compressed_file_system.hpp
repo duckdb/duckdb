@@ -79,7 +79,7 @@ public:
 	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 	DUCKDB_API void Close() override;
-	DUCKDB_API void AbortWrite();
+	DUCKDB_API void AbortCompressedWrite();
 
 private:
 	void Clear(); // for Initialize re-use to support FS.Reset()
