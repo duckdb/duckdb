@@ -141,7 +141,8 @@ void ParseIterator::EnsureTokenized() {
 		// Tokenize the full input once. Subsequent Peek/HasMore calls walk through the iterator;
 		// we never re-tokenize. Tokenization is grammar-free.
 		auto owned_tokens = make_uniq<vector<MatcherToken>>();
-		ParserTokenizer tokenizer(sql, *owned_tokens);
+		ParserTokenizerBehavior behavior(sql, *owned_tokens);
+		Tokenizer tokenizer(behavior);
 		tokenizer.TokenizeInput();
 		token_iterator = make_uniq<TokenIterator>(std::move(owned_tokens));
 	}

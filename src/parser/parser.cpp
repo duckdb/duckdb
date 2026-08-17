@@ -268,7 +268,8 @@ void Parser::ParseQuery(const string &query_p) {
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
 	auto owned_tokens = make_uniq<vector<MatcherToken>>();
-	ParserTokenizer tokenizer(query, *owned_tokens);
+	ParserTokenizerBehavior behavior(query, *owned_tokens);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
 	TokenIterator token_iterator(std::move(owned_tokens));
 	while (token_iterator.Current()) {
@@ -359,12 +360,14 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
-	HighlightTokenizer tokenizer(query);
+	vector<MatcherToken> tokens;
+	HighlightTokenizerBehavior behavior(query, tokens);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
 
 	vector<SimplifiedToken> result;
-	result.reserve(tokenizer.tokens.size());
-	for (auto &token : tokenizer.tokens) {
+	result.reserve(tokens.size());
+	for (auto &token : tokens) {
 		SimplifiedToken simplified;
 		simplified.start = token.offset;
 		switch (token.type) {
