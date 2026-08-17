@@ -1,0 +1,50 @@
+# name: test/sql/storage/prefetch/prefetch_run_size_cap.test
+# description: A large contiguous assignment splits into size-capped prefetch runs instead of one giant read
+# group: [prefetch]
+
+statement ok
+ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (ROW_GROUP_SIZE 8388608)
+
+# a single 8M row double column makes one row group hold ~64MB of contiguous blocks
+statement ok
+CREATE TABLE cap_db.t AS SELECT random() AS d FROM range(8388608)
+
+statement ok
+CHECKPOINT cap_db
+
+# re-attach so the payload blocks begin cold
+statement ok
+DETACH cap_db
+
+statement ok
+ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (READ_ONLY)
+
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=4
+
+# the per-thread path schedules its I/O through AsyncResult, which logs one event per assignment
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+SET storage_block_prefetch='debug_force_always'
+
+statement ok
+CALL enable_logging('AsyncTaskSchedule')
+
+query I
+SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+# the ~64MB assignment must split into multiple capped runs, one task each
+query I
+SELECT max(task_count) BETWEEN 2 AND 4 FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()

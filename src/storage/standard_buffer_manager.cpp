@@ -289,11 +289,18 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 			to_be_loaded.insert(make_pair(handle->BlockId(), handle));
 		}
 	}
+	// each run is read with a single pread into one intermediate buffer, cap its size
+	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
 	vector<PrefetchRun> plan;
 	for (auto &entry : to_be_loaded) {
-		if (plan.empty() ||
-		    plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first) {
-			// this block is not adjacent to the previous block, start a new run
+		bool new_run = plan.empty() ||
+		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
+		if (!new_run) {
+			auto run_size = (plan.back().handles.size() + 1) * entry.second->GetBlockAllocSize();
+			new_run = run_size > MAX_PREFETCH_RUN_SIZE;
+		}
+		if (new_run) {
+			// the block is not adjacent to the previous block or the run is full, start a new run
 			plan.push_back(PrefetchRun {entry.first, {}});
 		}
 		plan.back().handles.push_back(std::move(entry.second));
