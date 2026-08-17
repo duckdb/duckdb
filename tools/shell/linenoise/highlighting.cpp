@@ -41,11 +41,13 @@ static tokenType convertToken(TokenType token_type) {
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	vector<highlightToken> tokens;
-	HighlightTokenizer tokenizer(sql);
+	vector<MatcherToken> matcher_tokens;
+	HighlightTokenizerBehavior behavior(sql, matcher_tokens);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
-	result.reserve(tokenizer.tokens.size());
-	for (auto &token : tokenizer.tokens) {
+	result.reserve(matcher_tokens.size());
+	for (auto &token : matcher_tokens) {
 		highlightToken new_token;
 		if (token.unterminated) {
 			new_token.type = tokenType::TOKEN_ERROR;

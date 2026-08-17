@@ -800,6 +800,7 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
+    {"geojson", "json"},
     {"avro", "avro"},
     {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
@@ -858,6 +859,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".json", "json"},
     {".jsonl", "json"},
     {".ndjson", "json"},
+    {".geojson", "json"},
+    {".geojsonl", "json"},
     {".shp", "spatial"},
     {".gpkg", "spatial"},
     {".fgb", "spatial"},

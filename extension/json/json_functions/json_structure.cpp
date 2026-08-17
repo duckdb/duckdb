@@ -3,6 +3,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "json_executors.hpp"
+#include "json_geojson.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 
@@ -36,9 +37,10 @@ JSONStructureNode::JSONStructureNode(const char *key_ptr, const size_t key_len) 
 	key = make_uniq<string>(key_ptr, key_len);
 }
 
-JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors)
+JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors,
+                                     const bool detect_geojson)
     : JSONStructureNode(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p)) {
-	JSONStructure::ExtractStructure(val_p, *this, ignore_errors);
+	JSONStructure::ExtractStructure(val_p, *this, ignore_errors, detect_geojson);
 }
 
 static void SwapJSONStructureNode(JSONStructureNode &a, JSONStructureNode &b) noexcept {
@@ -389,14 +391,15 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
-                                                              const bool ignore_errors) {
+                                                              const bool ignore_errors, const bool detect_geojson) {
 	D_ASSERT(yyjson_is_str(key));
 	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-	JSONStructure::ExtractStructure(val, child, ignore_errors);
+	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
 	return child;
 }
 
-static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors) {
+static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors,
+                                  const bool detect_geojson) {
 	D_ASSERT(yyjson_is_arr(arr));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::LIST);
 	auto &child = description.GetOrCreateChild();
@@ -404,11 +407,12 @@ static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, cons
 	size_t idx, max;
 	yyjson_val *val;
 	yyjson_arr_foreach(arr, idx, max, val) {
-		JSONStructure::ExtractStructure(val, child, ignore_errors);
+		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
 	}
 }
 
-static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, const bool ignore_errors) {
+static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, const bool ignore_errors,
+                                   const bool detect_geojson) {
 	D_ASSERT(yyjson_is_obj(obj));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
@@ -430,7 +434,7 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
 		}
-		description.GetOrCreateChild(key, val, ignore_errors);
+		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson);
 	}
 }
 
@@ -444,7 +448,8 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	}
 }
 
-void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors) {
+void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
+                                     const bool detect_geojson) {
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
 	if (tag == (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE)) {
@@ -453,9 +458,15 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 	switch (tag) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return ExtractStructureArray(val, node, ignore_errors);
+		return ExtractStructureArray(val, node, ignore_errors, detect_geojson);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		return ExtractStructureObject(val, node, ignore_errors);
+		// A GeoJSON geometry is a leaf: it becomes GEOMETRY rather than a struct of type/coordinates. Detecting it
+		// here (rather than on the finished tree) means geometries of different kinds still merge into one type.
+		if (detect_geojson && JSONGeometry::IsGeoJSONGeometry(val)) {
+			node.GetOrCreateDescription(LogicalTypeId::GEOMETRY);
+			return;
+		}
+		return ExtractStructureObject(val, node, ignore_errors, detect_geojson);
 	default:
 		return ExtractStructureVal(val, node);
 	}
@@ -463,7 +474,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 JSONStructureNode ExtractStructureInternal(yyjson_val *val, const bool ignore_errors) {
 	JSONStructureNode node;
-	JSONStructure::ExtractStructure(val, node, ignore_errors);
+	JSONStructure::ExtractStructure(val, node, ignore_errors, false);
 	return node;
 }
 
@@ -828,6 +839,8 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 		return LogicalTypeId::BIGINT;
 	case LogicalTypeId::SQLNULL:
 		return LogicalType::SQLNULL;
+	case LogicalTypeId::GEOMETRY:
+		return LogicalType::GEOMETRY();
 	default:
 		return desc.type;
 	}
