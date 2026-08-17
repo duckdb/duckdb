@@ -118,6 +118,16 @@
         "test/optimizer/partition_stats_exactness.test",
         "test/optimizer/partition_stats_prepared.test"
       ]
+    },
+    {
+      "reason": "External resource TYPES are registered in an instance-scoped in-memory registry, which a restart between statements discards, so the recipe is gone before it is used.",
+      "paths": [
+        "test/sql/attach/external_resource_lifecycle.test",
+        "test/sql/attach/attach_to_external_resource.test",
+        "test/sql/attach/external_resource_logging.test",
+        "test/sql/attach/external_resource_option_collision.test",
+        "test/sql/attach/external_resource_attach_failure.test"
+      ]
     }
   ]
 }

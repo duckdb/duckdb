@@ -103,6 +103,14 @@
       "paths": [
         "test/sql/optimizer/nested_null_segment_pruning.test"
       ]
+    },
+    {
+      "reason": "Recipe callbacks reference objects by unqualified name: the internal connection running them uses the default catalog, not this config's attached one.",
+      "paths": [
+        "test/sql/attach/attach_to_external_resource.test",
+        "test/sql/attach/external_resource_option_collision.test",
+        "test/sql/attach/external_resource_attach_failure.test"
+      ]
     }
   ]
 }

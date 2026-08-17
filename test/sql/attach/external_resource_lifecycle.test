@@ -213,9 +213,13 @@ SELECT count(*) FROM duckdb_databases() WHERE database_name = 'in_use';
 ----
 1
 
-# The connection is not wedged: USE and DETACH both still work, so the user can clean up.
+# The connection is not wedged: USE and DETACH both still work, so the user can clean up. Switch to a
+# scratch database rather than a named one -- the default database differs between test configs.
 statement ok
-USE memory;
+ATTACH ':memory:' AS scratch;
+
+statement ok
+USE scratch;
 
 statement ok
 DETACH in_use;
