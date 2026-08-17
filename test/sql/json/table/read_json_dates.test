@@ -284,6 +284,89 @@ select typeof(ts), count(*) filter (where ts is not null) from read_json_auto('{
 ----
 TIMESTAMP WITH TIME ZONE	2048
 
+# Date specials (±infinity, epoch) are not timezone-offset evidence.
+# TryConvertTimestampTZ reuses has_offset as Date::TryConvertDate's "special" flag.
+
+# Reviewer repro: naive timestamp + ±infinity must stay TIMESTAMP, not VARCHAR
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}'),
+	('{"ts":"-infinity"}')
+)) to '{TEMP_DIR}/iso8601_plain_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_plain_infinity.json') limit 1
+----
+TIMESTAMP
+
+query I
+select ts from read_json_auto('{TEMP_DIR}/iso8601_plain_infinity.json')
+where ts = TIMESTAMP '2024-01-01 00:00:00'
+----
+2024-01-01 00:00:00
+
+# Offset/Z + ±infinity stays TIMESTAMPTZ
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":"infinity"}'),
+	('{"ts":"-infinity"}')
+)) to '{TEMP_DIR}/iso8601_offset_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_offset_infinity.json') limit 1
+----
+TIMESTAMP WITH TIME ZONE
+
+# True mix: offset + plain + infinity still falls back to VARCHAR
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}')
+)) to '{TEMP_DIR}/iso8601_mixed_infinity.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_mixed_infinity.json') limit 1
+----
+VARCHAR
+
+# epoch hits the same special flag and must not vote
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00"}')
+)) to '{TEMP_DIR}/iso8601_epoch_plain.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_epoch_plain.json') limit 1
+----
+TIMESTAMP
+
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00Z"}')
+)) to '{TEMP_DIR}/iso8601_epoch_offset.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_epoch_offset.json') limit 1
+----
+TIMESTAMP WITH TIME ZONE
+
+# Specials across a vector boundary must not stick WITH_OFFSET onto a later plain timestamp
+statement ok
+copy (
+	select json_object('ts', CASE WHEN i <= 2048 THEN 'infinity' ELSE '2024-01-01T00:00:00' END)
+	from generate_series(1, 2049) t(i)
+) to '{TEMP_DIR}/iso8601_vector_boundary_infinity_then_plain.json' (format csv, quote '', header 0);
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/iso8601_vector_boundary_infinity_then_plain.json') limit 1
+----
+TIMESTAMP
+
 # -----------------------------------------------------------------------------
 # Named timestamp_format produces a single-format list: only matching values
 # are typed as TIMESTAMP; others remain VARCHAR. options.timestamp_format is

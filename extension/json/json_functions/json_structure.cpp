@@ -295,6 +295,33 @@ static TimestampOffsetState MergeTimestampOffsetState(const TimestampOffsetState
 	return a;
 }
 
+// Date::TryConvertDate reuses has_offset for specials; only Z / ±HH[:MM] is a real offset.
+static bool TimestampStringHasUtcOffset(const string_t &value) {
+	const auto str = value.GetData();
+	const auto len = value.GetSize();
+	idx_t time_start = 0;
+	for (idx_t i = 0; i < len; i++) {
+		if (str[i] == 'T' || str[i] == ' ') {
+			time_start = i + 1;
+			break;
+		}
+	}
+	if (time_start == 0 || time_start >= len) {
+		return false;
+	}
+	for (idx_t i = time_start; i < len; i++) {
+		if (str[i] == 'Z') {
+			return true;
+		}
+		if (str[i] == '+' || str[i] == '-') {
+			idx_t pos = i;
+			int hh, mm, ss;
+			return Timestamp::TryParseUTCOffset(str, pos, len, hh, mm, ss);
+		}
+	}
+	return false;
+}
+
 // Update the sticky offset state from this vector's non-null strings.
 // MIXED → VARCHAR: neither TIMESTAMPTZ (would invent session TZ for naive values)
 // nor TIMESTAMP (would drop offsets) is safe.
@@ -313,6 +340,12 @@ static void UpdateTimestampOffsetState(JSONStructureDescription &description, co
 		    Timestamp::TryConvertTimestampTZ(strings[i].GetData(), strings[i].GetSize(), ts, true, has_offset, tz);
 		if (res != TimestampCastResult::SUCCESS && res != TimestampCastResult::STRICT_UTC) {
 			continue; // not a timestamp string — other candidates handle it
+		}
+		if (!ts.IsFinite()) {
+			continue; // ±infinity is valid for TIMESTAMP and TIMESTAMPTZ
+		}
+		if (has_offset && !TimestampStringHasUtcOffset(strings[i])) {
+			continue; // date special such as epoch, not a real offset
 		}
 		description.timestamp_offset_state = MergeTimestampOffsetState(
 		    description.timestamp_offset_state,
