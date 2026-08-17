@@ -148,18 +148,18 @@ SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {f
 1	name_1	100
 2	name_2	200
 
-# Read with wrong column key — should fail with tag mismatch
+# Read with swapped column mapping - should fail before decrypting pages
 statement error
 SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck2: [name], ck1: [secret]}});
 ----
-Computed AES tag differs from read AES tag
+requires key "ck1", but encryption_config assigns key "ck2"
 
 # Read with only footer key (no column_keys) — columns using footer key work,
 # but columns with dedicated keys should fail
 statement error
 SELECT * FROM read_parquet('{TEST_DIR}/col_keys.parquet', encryption_config = {footer_key: 'fk'});
 ----
-Computed AES tag differs from read AES tag
+No column key was provided for encrypted Parquet column "name"
 
 # Read only footer-keyed column — should work (projection pushdown skips column-keyed pages)
 query I
@@ -174,6 +174,23 @@ statement error
 COPY t1 TO '{TEST_DIR}/dup.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [name], ck2: [name]}});
 ----
 assigned to multiple keys
+
+# Duplicate column in column_keys with different casing should fail
+statement error
+COPY t1 TO '{TEST_DIR}/dup_case.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [name], ck2: [NAME]}});
+----
+assigned to multiple keys
+
+# Column names in column_keys are matched case-insensitively, but still use the column key
+statement ok
+COPY t1 TO '{TEST_DIR}/col_keys_case.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [NAME]}});
+
+query II
+SELECT id, name FROM read_parquet('{TEST_DIR}/col_keys_case.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck1: [name]}}) ORDER BY id LIMIT 3;
+----
+0	name_0
+1	name_1
+2	name_2
 
 # Non-existent column in column_keys — should fail
 statement error
@@ -192,3 +209,29 @@ query I
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted256.parquet', encryption_config={footer_key: 'key256'})
 ----
 42
+
+# Nested top-level columns use full Parquet paths in crypto metadata
+statement ok
+CREATE TABLE t_nested AS SELECT i AS id, {'name': 'nested_' || i, 'secret': i * 10}::STRUCT(name VARCHAR, secret BIGINT) AS info FROM range(3) t(i);
+
+statement ok
+COPY t_nested TO '{TEST_DIR}/col_keys_nested.parquet' (ENCRYPTION_CONFIG {footer_key: 'fk', column_keys: {ck1: [info]}});
+
+query II
+SELECT id, info.name FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk', column_keys: {ck1: [info]}}) ORDER BY id;
+----
+0	nested_0
+1	nested_1
+2	nested_2
+
+query I
+SELECT id FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk'}) ORDER BY id;
+----
+0
+1
+2
+
+statement error
+SELECT info.name FROM read_parquet('{TEST_DIR}/col_keys_nested.parquet', encryption_config = {footer_key: 'fk'});
+----
+No column key was provided for encrypted Parquet column "info.name"
