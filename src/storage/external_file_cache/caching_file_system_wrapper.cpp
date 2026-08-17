@@ -239,6 +239,10 @@ void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional
 	underlying_file_system.RemoveDirectory(directory, opener);
 }
 
+bool CachingFileSystemWrapper::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return underlying_file_system.TryRemoveEmptyDirectory(directory, opener);
+}
+
 bool CachingFileSystemWrapper::ListFiles(const string &directory,
                                          const std::function<void(const string &, bool)> &callback,
                                          FileOpener *opener) {

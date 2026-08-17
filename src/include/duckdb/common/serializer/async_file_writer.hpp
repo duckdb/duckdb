@@ -73,6 +73,8 @@ public:
 	DUCKDB_API void ApplyBackpressure();
 	//! Wait for all writes, then close the file handle.
 	DUCKDB_API void Close();
+	//! Discard pending writes, wait for running writes, and abandon the incomplete file write.
+	DUCKDB_API void AbortWrite();
 	//! Wait for all writes, then fsync the file handle.
 	DUCKDB_API void Sync();
 	//! Wait for all writes, then truncate the file to the requested logical size.
@@ -135,7 +137,7 @@ private:
 	//! Logical stream position, including copied/staged/pending bytes. Updated by the registering thread.
 	idx_t total_written = 0;
 	//! Set once the handle has been closed or detached.
-	bool closed = false;
+	bool finished = false;
 };
 
 } // namespace duckdb

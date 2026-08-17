@@ -247,6 +247,10 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 	FindFileSystem(directory, opener).RemoveDirectory(directory, opener);
 }
 
+bool VirtualFileSystem::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory, opener).TryRemoveEmptyDirectory(directory, opener);
+}
+
 bool VirtualFileSystem::ListFilesExtended(const string &directory,
                                           const std::function<void(OpenFileInfo &info)> &callback,
                                           optional_ptr<FileOpener> opener) {

@@ -8,6 +8,10 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
+void StreamWrapper::AbortWrite() {
+	Close();
+}
+
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
     : FileHandle(fs, path, child_handle_p->GetFlags()), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
 	// The real on-disk I/O happens on the (compressed) child handle; attribute the bytes there instead of
@@ -138,7 +142,10 @@ void CompressedFile::Clear() {
 		stream_wrapper->Close();
 		stream_wrapper.reset();
 	}
+	ResetStreamData();
+}
 
+void CompressedFile::ResetStreamData() {
 	stream_data.in_buff.reset();
 	stream_data.out_buff.reset();
 	stream_data.out_buff_start = nullptr;
@@ -159,6 +166,32 @@ void CompressedFile::Close() {
 	if (child_handle) {
 		child_handle->Close();
 		child_handle.reset();
+	}
+}
+
+void CompressedFile::AbortWrite() {
+	std::exception_ptr error;
+	auto wrapper = std::move(stream_wrapper);
+	if (wrapper) {
+		try {
+			wrapper->AbortWrite();
+		} catch (...) {
+			error = std::current_exception();
+		}
+	}
+	ResetStreamData();
+	auto child = std::move(child_handle);
+	if (child) {
+		try {
+			child->AbortWrite();
+		} catch (...) {
+			if (!error) {
+				error = std::current_exception();
+			}
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
 	}
 }
 
@@ -191,6 +224,10 @@ bool CompressedFileSystem::OnDiskFile(FileHandle &handle) {
 
 bool CompressedFileSystem::CanSeek() {
 	return false;
+}
+
+void CompressedFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<CompressedFile>().AbortWrite();
 }
 
 } // namespace duckdb

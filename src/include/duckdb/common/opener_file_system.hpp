@@ -91,6 +91,11 @@ public:
 		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
+	bool TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
+		return GetFileSystem().TryRemoveEmptyDirectory(directory, GetOpener());
+	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
@@ -114,6 +119,9 @@ public:
 	}
 	void RemoveDirectory(const string &directory) {
 		RemoveDirectory(directory, nullptr);
+	}
+	bool TryRemoveEmptyDirectory(const string &directory) {
+		return TryRemoveEmptyDirectory(directory, nullptr);
 	}
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);

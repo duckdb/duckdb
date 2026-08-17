@@ -774,6 +774,18 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 	RemoveDirectoryRecursive(normalized_dir.c_str());
 }
 
+bool LocalFileSystem::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	auto normalized_dir = ExpandPath(directory, opener);
+	if (rmdir(normalized_dir.c_str()) == 0) {
+		return true;
+	}
+	if (errno == ENOENT || errno == ENOTEMPTY || errno == EEXIST) {
+		return false;
+	}
+	throw IOException({{"errno", std::to_string(errno)}}, "Failed to remove empty directory \"%s\": %s", directory,
+	                  strerror(errno));
+}
+
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto normalized_file = ExpandPath(filename, opener);
 	if (std::remove(normalized_file.c_str()) != 0) {
@@ -1496,6 +1508,19 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 	DeleteDirectoryRecursive(*this, directory, opener);
 }
 
+bool LocalFileSystem::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	if (RemoveDirectoryW(unicode_path.c_str())) {
+		return true;
+	}
+	auto error = GetLastError();
+	if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_DIR_NOT_EMPTY) {
+		return false;
+	}
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to remove empty directory \"%s\": %s", abs_path, GetLastErrorAsString());
+}
+
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	if (!DeleteFileW(unicode_path.c_str())) {
@@ -1843,6 +1868,12 @@ unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &
 }
 
 #endif
+
+void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
+	auto path = handle.GetPath();
+	handle.Close();
+	TryRemoveFile(path);
+}
 
 bool LocalFileSystem::CanSeek() {
 	return true;

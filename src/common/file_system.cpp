@@ -599,6 +599,10 @@ bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> 
 	return false;
 }
 
+bool FileSystem::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return false;
+}
+
 void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
 	for (const auto &filename : filenames) {
 		TryRemoveFile(filename, opener);
@@ -607,6 +611,10 @@ void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileO
 
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
+}
+
+void FileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Close();
 }
 
 bool FileSystem::HasGlob(const string &str) {
@@ -882,6 +890,10 @@ void FileHandle::Sync() {
 
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
+}
+
+void FileHandle::AbortWrite() {
+	file_system.AbortFileWrite(*this);
 }
 
 FileType FileHandle::GetType() {
