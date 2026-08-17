@@ -478,6 +478,8 @@ enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
 
+enum class SecretRefreshState : uint8_t;
+
 enum class SecretSerializationType : uint8_t;
 
 enum class SegmentTreeVerifyMode : uint8_t;
@@ -1291,6 +1293,9 @@ const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
+
+template<>
+const char* EnumUtil::ToChars<SecretRefreshState>(SecretRefreshState value);
 
 template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
@@ -2177,6 +2182,9 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
+
+template<>
+SecretRefreshState EnumUtil::FromString<SecretRefreshState>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);

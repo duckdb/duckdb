@@ -5234,6 +5234,25 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
 	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 4, "SecretPersistType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSecretRefreshStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SecretRefreshState::VALID), "VALID" },
+		{ static_cast<uint32_t>(SecretRefreshState::MUST_REFRESH), "MUST_REFRESH" },
+		{ static_cast<uint32_t>(SecretRefreshState::IN_REFRESH), "IN_REFRESH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretRefreshState>(SecretRefreshState value) {
+	return StringUtil::EnumToString(GetSecretRefreshStateValues(), 3, "SecretRefreshState", static_cast<uint32_t>(value));
+}
+
+template<>
+SecretRefreshState EnumUtil::FromString<SecretRefreshState>(const char *value) {
+	return static_cast<SecretRefreshState>(StringUtil::StringToEnum(GetSecretRefreshStateValues(), 3, "SecretRefreshState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetSecretSerializationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SecretSerializationType::CUSTOM), "CUSTOM" },
