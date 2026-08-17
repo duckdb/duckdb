@@ -8,6 +8,7 @@ os.chdir(os.path.dirname(__file__))
 
 # Dont generate serialization for these enums
 blacklist = [
+    "LaneOp",
     "RegexOptions",
     "Flags",
     "ContainerType",

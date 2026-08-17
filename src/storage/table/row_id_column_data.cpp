@@ -63,11 +63,11 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 }
 
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                             SelectionResult &sel, idx_t &count, const TableFilter &filter,
                              TableFilterState &filter_state) {
 	auto row_start = GetRowStart(state);
+	auto max_count = GetVectorCount(vector_index); // bitmap filters read the full vector domain
 	auto current_row = row_start + state.offset_in_column;
-	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
@@ -83,12 +83,9 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	// Create sequence for row ids
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<row_t>(result);
-	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
+	for (idx_t i = 0; i < max_count; i++) {
+		result_data[i] = UnsafeNumericCast<row_t>(current_row + i);
 	}
-	// the writes above scatter into positions sel[0..count) which can be anywhere in [0, max_count),
-	// so the vector's logical size must cover the full max_count - using `count` would leave any
-	// sel index >= count looking out-of-bounds when later slices read through sel
 	FlatVector::SetSize(result, count_t(max_count));
 
 	// Was this filter always true? If so, we dont need to apply it
@@ -97,7 +94,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	}
 
 	// Now apply the filter
-	ColumnSegment::FilterSelection(sel, result, filter_state, count, count);
+	ColumnSegment::FilterSelection(sel, result, filter_state, max_count, count);
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

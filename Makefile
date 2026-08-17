@@ -509,13 +509,13 @@ unittest: debug
 	build/debug/test/run $(T)
 
 unittest_reldebug:
-	build/reldebug/test/run $(UNITTEST_SLOW_FLAGS) $(T)
+	 build/reldebug/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 ifneq ($(SKIP_BUILD),1)
 unittest_release: release
 endif
 unittest_release:
-	build/release/test/run $(T)
+	 build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/verify_statement_copy.json \

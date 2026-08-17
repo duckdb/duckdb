@@ -8,12 +8,202 @@
 
 #pragma once
 
-#include "bitpackinghelpers.h"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+
+namespace duckdb_bitpacking {
+namespace internal {
+static constexpr const uint32_t BITPACKING_GROUP_SIZE = 32;
+template <class T>
+static inline T LoadWord(const T *DUCKDB_BITPACKING_RESTRICT p) {
+	T v;
+	std::memcpy(&v, static_cast<const void *>(p), sizeof(T)); // unaligned-safe word load
+	return v;
+}
+template <class T>
+static inline void StoreWord(T *DUCKDB_BITPACKING_RESTRICT p, T v) {
+	std::memcpy(static_cast<void *>(p), &v, sizeof(T));
+}
+template <uint32_t WIDTH>
+static constexpr uint64_t Mask() {
+	if constexpr (WIDTH == 64) {
+		return ~uint64_t(0);
+	} else if constexpr (WIDTH == 0) {
+		return 0;
+	} else {
+		return (uint64_t(1) << WIDTH) - 1;
+	}
+}
+template <uint32_t WIDTH, class OUT_T, std::size_t INDEX>
+static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
+                               OUT_T frame) {
+	static_assert(WIDTH <= sizeof(OUT_T) * 8, "Bitpacking width exceeds output type width");
+	if constexpr (sizeof(OUT_T) <= 4) {
+		constexpr std::size_t bits = 8 * sizeof(OUT_T);
+		constexpr std::size_t bit_position = INDEX * WIDTH;
+		constexpr std::size_t word_index = bit_position / bits;
+		constexpr uint32_t shift = bit_position % bits;
+		constexpr uint32_t mask = uint32_t(Mask<WIDTH>());
+		const OUT_T *DUCKDB_BITPACKING_RESTRICT r = reinterpret_cast<const OUT_T *>(in);
+		if constexpr (shift + WIDTH <= bits) {
+			out[INDEX] = OUT_T(OUT_T((uint32_t(LoadWord(r + word_index)) >> shift) & mask) + frame);
+		} else {
+			out[INDEX] = OUT_T(OUT_T(((uint32_t(LoadWord(r + word_index)) >> shift) |
+			                          (uint32_t(LoadWord(r + word_index + 1)) << (bits - shift))) &
+			                         mask) +
+			                   frame);
+		}
+	} else {
+		constexpr std::size_t bit_position = INDEX * WIDTH;
+		constexpr std::size_t word_index = bit_position / 32;
+		constexpr uint32_t shift = bit_position % 32;
+		constexpr uint64_t mask = Mask<WIDTH>();
+		uint64_t value = uint64_t(LoadWord(in + word_index)) >> shift;
+		if constexpr (shift + WIDTH > 32) { // guard, or the last value of a group reads past the packed buffer
+			value |= uint64_t(LoadWord(in + word_index + 1)) << (32 - shift);
+		}
+		if constexpr (shift + WIDTH > 64) {
+			value |= uint64_t(LoadWord(in + word_index + 2)) << (64 - shift);
+		}
+		out[INDEX] = OUT_T(OUT_T(value & mask) + frame);
+	}
+}
+template <uint32_t WIDTH, class OUT_T, std::size_t... I>
+static inline void UnpackBlockUnrolled(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
+                                       OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame, std::index_sequence<I...>) {
+	// in/out stay restrict parameters: a [&] closure would lose that and reload the words per value
+	(UnpackValue<WIDTH, OUT_T, I>(in, out, frame), ...);
+}
+template <uint32_t WIDTH, class OUT_T>
+static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
+                               OUT_T frame = 0) {
+	if constexpr (WIDTH == 0) {
+		for (uint32_t i = 0; i < BITPACKING_GROUP_SIZE; i++) {
+			out[i] = frame;
+		}
+	} else if constexpr (WIDTH == 8 * sizeof(OUT_T)) {
+		// void casts: the word pointers carry no alignment guarantee at narrow-type offsets
+		std::memcpy(static_cast<void *>(out), static_cast<const void *>(in), BITPACKING_GROUP_SIZE * sizeof(OUT_T));
+		if (frame) {
+			for (uint32_t i = 0; i < BITPACKING_GROUP_SIZE; i++) {
+				out[i] = OUT_T(out[i] + frame);
+			}
+		}
+	} else {
+		UnpackBlockUnrolled<WIDTH, OUT_T>(in, out, frame, std::make_index_sequence<BITPACKING_GROUP_SIZE> {});
+	}
+}
+template <uint32_t WIDTH, class OUT_T>
+static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
+                                std::size_t groups, OUT_T frame = 0) {
+	std::size_t start = 0; // groups already handled by the shuffle path
+#if DUCKDB_AUTOVEC
+	if constexpr (::duckdb::UseShuffleUnpack<WIDTH, OUT_T>()) {
+		if (::duckdb::CpuBenefitsFromAutoVec()) {
+			start = ::duckdb::ShuffleUnpack<WIDTH, OUT_T>(in, out, groups, frame);
+		}
+	}
+#endif
+	for (std::size_t group = start; group < groups; group++) {
+		UnpackBlock<WIDTH, OUT_T>(in + group * WIDTH, out + group * BITPACKING_GROUP_SIZE, frame);
+	}
+}
+template <uint32_t WIDTH, class IN_T, std::size_t INDEX>
+static inline void PackValue(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
+	static_assert(WIDTH <= sizeof(IN_T) * 8, "Bitpacking width exceeds input type width");
+	if constexpr (WIDTH > 0) {
+		constexpr std::size_t bit_position = INDEX * WIDTH;
+		constexpr std::size_t word_index = bit_position / 32;
+		constexpr uint32_t shift = bit_position % 32;
+		const uint64_t value = uint64_t(in[INDEX]) & Mask<WIDTH>();
+		StoreWord(out + word_index, LoadWord(out + word_index) | uint32_t(value << shift));
+		if constexpr (shift + WIDTH > 32) {
+			StoreWord(out + word_index + 1, LoadWord(out + word_index + 1) | uint32_t(value >> (32 - shift)));
+		}
+		if constexpr (shift + WIDTH > 64) {
+			StoreWord(out + word_index + 2, LoadWord(out + word_index + 2) | uint32_t(value >> (64 - shift)));
+		}
+	}
+}
+template <uint32_t WIDTH, class IN_T, std::size_t... I>
+static inline void PackBlockUnrolled(const IN_T *DUCKDB_BITPACKING_RESTRICT in,
+                                     uint32_t *DUCKDB_BITPACKING_RESTRICT out, std::index_sequence<I...>) {
+	// expanded like UnpackBlockUnrolled, for the same reason: a [&] closure would drop the restrict
+	(PackValue<WIDTH, IN_T, I>(in, out), ...);
+}
+template <uint32_t WIDTH, class IN_T>
+static inline void PackBlock(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
+	if constexpr (WIDTH == 0) {
+		return;
+	} else if constexpr (WIDTH == 8 * sizeof(IN_T)) {
+		// void casts: the word pointers carry no alignment guarantee at narrow-type offsets
+		std::memcpy(static_cast<void *>(out), static_cast<const void *>(in), BITPACKING_GROUP_SIZE * sizeof(IN_T));
+	} else {
+		std::memset(out, 0, WIDTH * sizeof(uint32_t));
+		PackBlockUnrolled<WIDTH, IN_T>(in, out, std::make_index_sequence<BITPACKING_GROUP_SIZE> {});
+	}
+}
+template <uint32_t WIDTH, class IN_T>
+static inline void PackBuffer(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out,
+                              std::size_t groups) {
+	for (std::size_t group = 0; group < groups; group++) {
+		PackBlock<WIDTH, IN_T>(in + group * BITPACKING_GROUP_SIZE, out + group * WIDTH);
+	}
+}
+template <class FUNC, std::size_t... W>
+static inline bool DispatchWidthImpl(uint32_t width, FUNC &&func, std::index_sequence<W...>) { // width -> template
+	return ((width == W && (func(std::integral_constant<uint32_t, uint32_t(W)> {}), true)) || ...);
+}
+template <uint32_t MAX_WIDTH, class FUNC>
+static inline void DispatchWidth(uint32_t width, FUNC &&func) {
+	if (!DispatchWidthImpl(width, std::forward<FUNC>(func), std::make_index_sequence<MAX_WIDTH + 1> {})) {
+		// std, not InternalException: this namespace stays header-only/link-free so it can be benchmarked standalone
+		throw std::logic_error("Invalid bit width for bitpacking");
+	}
+}
+
+} // namespace internal
+//! Route a runtime width to T's compile-time kernel; false for types with no fast path (hugeint).
+template <class T, class FUNC>
+static inline bool DispatchIntegral(const uint32_t bit, FUNC &&func) {
+	if constexpr (std::is_integral<T>::value && !std::is_same<T, bool>::value) {
+		using U = typename std::make_unsigned<T>::type;
+		internal::DispatchWidth<sizeof(T) * 8>(bit, [&](auto width) { func(width, U {}); });
+		return true;
+	} else {
+		return false;
+	}
+}
+template <class T>
+inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BITPACKING_RESTRICT out,
+                        const uint32_t bit, const std::size_t groups) {
+	return DispatchIntegral<T>(bit, [&](auto width, auto u) {
+		internal::PackBuffer<decltype(width)::value>(reinterpret_cast<const decltype(u) *>(in),
+		                                             reinterpret_cast<uint32_t *>(out), groups);
+	});
+}
+template <class T>
+inline bool TryFastUnpack(const void *DUCKDB_BITPACKING_RESTRICT in, T *DUCKDB_BITPACKING_RESTRICT out,
+                          const uint32_t bit, const std::size_t groups, const T frame = 0) {
+	return DispatchIntegral<T>(bit, [&](auto width, auto u) {
+		using U = decltype(u);
+		internal::UnpackBuffer<decltype(width)::value>(reinterpret_cast<const uint32_t *>(in),
+		                                               reinterpret_cast<U *>(out), groups, static_cast<U>(frame));
+	});
+}
+
+} // namespace duckdb_bitpacking
 
 namespace duckdb {
 
@@ -30,52 +220,71 @@ public:
 	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
 	static constexpr const bool BYTE_ALIGNED = false;
 
+	// Adds the frame of reference to count values, wrapping through the unsigned type
+	template <class T, class T_U = typename MakeUnsigned<T>::type>
+	inline static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t count) {
+		if (!frame_of_reference) {
+			return;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
+		}
+	}
 	// To ensure enough data is available, use GetRequiredSize() to determine the correct size for dst buffer
-	// Note: input should be aligned to BITPACKING_ALGORITHM_GROUP_SIZE for good performance.
 	template <class T, bool ASSUME_INPUT_ALIGNED = false>
 	inline static void PackBuffer(data_ptr_t dst, T *src, idx_t count, bitpacking_width_t width) {
-		if (ASSUME_INPUT_ALIGNED) {
-			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
-				PackGroup<T>(dst + (i * width) / 8, src + i, width);
-			}
-		} else {
-			idx_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
+		idx_t misaligned_count = 0;
+		if (!ASSUME_INPUT_ALIGNED) { // input should be aligned to BITPACKING_ALGORITHM_GROUP_SIZE for good performance.
+			misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
 			count -= misaligned_count;
-			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
-				PackGroup<T>(dst + (i * width) / 8, src + i, width);
+		}
+		const auto groups = static_cast<std::size_t>(count / BITPACKING_ALGORITHM_GROUP_SIZE);
+		if (!duckdb_bitpacking::TryFastPack<T>(src, dst, static_cast<uint32_t>(width), groups)) {
+			if (!std::is_same<T, hugeint_t>::value && !std::is_same<T, uhugeint_t>::value) {
+				throw InternalException("Unsupported type for bitpacking");
 			}
-
-			// The input is not aligned to BITPACKING_ALGORITHM_GROUP_SIZE.
-			// Copy the unaligned count into a zero-initialized temporary group, and pack it.
-			if (misaligned_count) {
-				T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE] = {0};
-				memcpy(tmp_buffer, src + count, misaligned_count * sizeof(T));
-				PackGroup<T>(dst + (count * width) / 8, tmp_buffer, width);
+			for (std::size_t group = 0; group < groups; group++) {
+				HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(src) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
+				                    reinterpret_cast<uint32_t *>(dst) + group * width, width);
 			}
+		}
+		// If the input was not aligned, pack the leftover values via a zero-padded group.
+		if (misaligned_count) {
+			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE] = {0};
+			memcpy(tmp_buffer, src + count, misaligned_count * sizeof(T));
+			PackBuffer<T, true>(dst + (count * width) / 8, tmp_buffer, BITPACKING_ALGORITHM_GROUP_SIZE, width);
 		}
 	}
 
-	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	// Assumes both src and dst to be of the correct size
 	template <class T>
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
-	                                bool skip_sign_extension = false) {
-		for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
-			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
+	                                bool skip_sign_extension = false, T frame_of_reference = 0) { // adds frame inline
+		const auto rounded_count = RoundUpToAlgorithmGroupSize(count); // partial tail uses a full scratch group
+		const auto groups = static_cast<std::size_t>(rounded_count / BITPACKING_ALGORITHM_GROUP_SIZE);
+		if (!duckdb_bitpacking::TryFastUnpack<T>(src, reinterpret_cast<T *>(dst), static_cast<uint32_t>(width), groups,
+		                                         frame_of_reference)) {
+			if constexpr (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+				for (std::size_t group = 0; group < groups; group++) {
+					HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src) + group * width,
+					                      reinterpret_cast<uhugeint_t *>(dst) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
+					                      width);
+				}
+				ApplyFrameOfReference<T>(reinterpret_cast<T *>(dst), frame_of_reference, rounded_count);
+			} else {
+				throw InternalException("Unsupported type for bitpacking");
+			}
 		}
-	}
 
-	// Packs a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	template <class T>
-	inline static void PackBlock(data_ptr_t dst, T *src, bitpacking_width_t width) {
-		return PackGroup<T>(dst, src, width);
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
+			SignExtend<T>(dst, width, rounded_count);
+		}
 	}
 
 	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
 	template <class T>
 	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
 	                               bool skip_sign_extension = false) {
-		return UnPackGroup<T>(dst, src, width, skip_sign_extension);
+		return UnPackBuffer<T>(dst, src, BITPACKING_ALGORITHM_GROUP_SIZE, width, skip_sign_extension);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
@@ -185,9 +394,9 @@ private:
 
 	// Sign bit extension
 	template <class T, class T_U = typename MakeUnsigned<T>::type>
-	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
+	static void SignExtend(data_ptr_t dst, bitpacking_width_t width, idx_t count) {
 		T const mask = UnsafeNumericCast<T>(T_U(1) << (width - 1));
-		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
+		for (idx_t i = 0; i < count; ++i) {
 			T value = Load<T>(dst + i * sizeof(T));
 			value = UnsafeNumericCast<T>(T_U(value) & ((T_U(1) << width) - T_U(1)));
 			T result = (value ^ mask) - mask;
@@ -204,53 +413,6 @@ private:
 			return bits_of_type;
 		}
 		return width;
-	}
-
-	template <class T>
-	static inline void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
-			HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
-		} else {
-			throw InternalException("Unsupported type for bitpacking");
-		}
-	}
-
-	template <class T>
-	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                               bool skip_sign_extension = false) {
-		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
-			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uhugeint_t *>(dst), width);
-		} else {
-			throw InternalException("Unsupported type for bitpacking");
-		}
-
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
-		}
 	}
 };
 

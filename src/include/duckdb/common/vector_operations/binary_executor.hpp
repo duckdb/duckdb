@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
@@ -96,8 +97,9 @@ struct BinaryExecutor {
 #if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
+	DUCKDB_AUTOVEC_TARGET static void
+	ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
@@ -113,6 +115,7 @@ struct BinaryExecutor {
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
+					DUCKDB_UNROLL_FLAT_LOOP
 					for (; base_idx < next; base_idx++) {
 						auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 						auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
@@ -139,6 +142,7 @@ struct BinaryExecutor {
 				}
 			}
 		} else {
+			DUCKDB_UNROLL_FLAT_LOOP
 			for (idx_t i = 0; i < count; i++) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
@@ -213,6 +217,7 @@ struct BinaryExecutor {
 				result_validity.Combine(FlatVector::Validity(right), count);
 			}
 		}
+		// ExecuteFlatLoop carries the widened ISA target: only reachable behind CpuBenefitsFromAutoVec()
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
 		    ldata, rdata, result_data, count, result_validity, fun);
 	}
@@ -268,16 +273,24 @@ struct BinaryExecutor {
 	static void ExecuteSwitch(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+		const bool flat_ok = CpuBenefitsFromAutoVec(); // the flat loop carries the widened ISA target
+#else
+		const bool flat_ok = true;
+#endif
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 #if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
-		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
+		} else if (flat_ok && left_vector_type == VectorType::FLAT_VECTOR &&
+		           right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
 			                                                                                  count, fun);
-		} else if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
+		} else if (flat_ok && left_vector_type == VectorType::CONSTANT_VECTOR &&
+		           right_vector_type == VectorType::FLAT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(left, right, result,
 			                                                                                  count, fun);
-		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
+		} else if (flat_ok && left_vector_type == VectorType::FLAT_VECTOR &&
+		           right_vector_type == VectorType::FLAT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(left, right, result,
 			                                                                                   count, fun);
 #endif

@@ -541,22 +541,28 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 template <class T>
-static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
-	using T_U = typename MakeUnsigned<T>::type;
-	if (!frame_of_reference) {
-		return;
-	}
-
-	for (idx_t i = 0; i < size; i++) {
-		reinterpret_cast<T_U *>(dst)[i] += static_cast<T_U>(frame_of_reference);
-	}
-}
-
-// Based on https://github.com/lemire/FastPFor (Apache License 2.0)
-template <class T>
 static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	D_ASSERT(size >= 1);
-
+#if DUCKDB_AUTOVEC_X86
+	// 4-lane prefix sum: one add+splat per 4 values instead of per value (1.6x on x86; a loss on NEON)
+	if constexpr (sizeof(T) == 4) {
+		auto lanes = reinterpret_cast<uint32_t *>(data);
+		duckdb_av_u32x4 run = duckdb_av_u32x4 {} + static_cast<uint32_t>(previous_value);
+		size_t k = 0;
+		for (; k + 4 <= size; k += 4) {
+			duckdb_av_u32x4 v;
+			memcpy(&v, lanes + k, 16);
+			v = PrefixSum(v) + run;
+			memcpy(lanes + k, &v, 16);
+			run = duckdb_av_u32x4 {} + v[3];
+		}
+		uint32_t prev = run[0];
+		for (; k < size; k++) {
+			prev = lanes[k] += prev;
+		}
+		return static_cast<T>(prev);
+	}
+#endif
 	data[0] += previous_value;
 
 	const size_t UnrollQty = 4;
@@ -716,8 +722,9 @@ public:
 				                                     skip_sign_extend);
 
 				T *decompression_ptr = decompression_buffer + offset_in_compression_group;
-				ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
-				                           static_cast<T_S>(current_frame_of_reference), skipping_this_algorithm_group);
+				BitpackingPrimitives::ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
+				                                                 static_cast<T_S>(current_frame_of_reference),
+				                                                 skipping_this_algorithm_group);
 				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr), static_cast<T_S>(current_delta_offset),
 				                 skipping_this_algorithm_group);
 				current_delta_offset = decompression_ptr[skipping_this_algorithm_group - 1];
@@ -797,38 +804,35 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
-		                                                          offset_in_compression_group);
-		// Calculate start of compression algorithm group
-		data_ptr_t current_position_ptr =
-		    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
-		data_ptr_t decompression_group_start_pointer =
-		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
-
 		T *current_result_ptr = result_data + result_offset + scanned;
-
-		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
-			// Decompress directly into result vector
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(current_result_ptr), decompression_group_start_pointer,
-			                                     scan_state.current_width, skip_sign_extend);
+		auto remaining =
+		    MinValue<idx_t>(scan_count - scanned, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+		idx_t to_scan = remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		if (offset_in_compression_group == 0 && to_scan > 0) {
+			// Decompress whole algorithm groups straight into the result, adding the frame inline
+			BitpackingPrimitives::UnPackBuffer<T>(
+			    data_ptr_cast(current_result_ptr),
+			    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8, to_scan,
+			    scan_state.current_width, skip_sign_extend, scan_state.current_frame_of_reference);
 		} else {
-			// Decompress compression algorithm to buffer
+			// Decompress one algorithm group to buffer, copy out the requested slice
+			to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
+			                                                    offset_in_compression_group);
 			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
-			                                     decompression_group_start_pointer, scan_state.current_width,
-			                                     skip_sign_extend);
-
+			                                     scan_state.current_group_ptr +
+			                                         (scan_state.current_group_offset - offset_in_compression_group) *
+			                                             scan_state.current_width / 8,
+			                                     scan_state.current_width, skip_sign_extend);
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
+			BitpackingPrimitives::ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference,
+			                                               to_scan);
 		}
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
-			                           static_cast<T_S>(scan_state.current_frame_of_reference), to_scan);
 			DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
 			                 static_cast<T_S>(scan_state.current_delta_offset), to_scan);
 			scan_state.current_delta_offset = current_result_ptr[to_scan - 1];
-		} else {
-			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		}
 
 		scanned += to_scan;

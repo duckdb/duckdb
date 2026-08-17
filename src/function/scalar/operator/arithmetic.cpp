@@ -241,8 +241,11 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		auto &func = expr.FunctionMutable();
+		// both arguments are bound to the same physical type, so a single-width kernel suffices
+		D_ASSERT(lstats.GetType().InternalType() == rstats.GetType().InternalType());
+		func.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);

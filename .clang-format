@@ -10,6 +10,9 @@ UseTab: ForIndentation
 DerivePointerAlignment: false
 PointerAlignment: Right
 AlignConsecutiveMacros: true
+StatementMacros:
+  - DUCKDB_AUTOVEC_TARGET_BEGIN
+  - DUCKDB_AUTOVEC_TARGET_END
 AlignTrailingComments: true
 AllowAllArgumentsOnNextLine: true
 AllowAllConstructorInitializersOnNextLine: true
