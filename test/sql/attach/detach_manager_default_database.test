@@ -1,0 +1,22 @@
+# name: test/sql/attach/detach_manager_default_database.test
+# description: Test detaching the database manager's default database
+# group: [attach]
+
+require skip_reload
+
+require noforcestorage
+
+statement ok con1
+ATTACH ':memory:' AS other;
+
+statement ok con1
+USE other;
+
+statement ok con1
+DETACH memory;
+
+# Connections without an explicit search path should use a remaining database
+query T con2
+SELECT database_name FROM duckdb_databases() WHERE database_name = 'other';
+----
+other
