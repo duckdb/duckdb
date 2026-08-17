@@ -1,0 +1,56 @@
+# name: test/sql/copy/partitioned/hive_early_directory_pruning_listings.test
+# description: Test that hive partition filters keep directories from being listed at all
+# group: [partitioned]
+
+# Every other test here would also pass if the directories were listed first and their files discarded afterwards.
+# Counting the listings in the log is what shows that the I/O is avoided rather than wasted.
+# The counts of a filtered and an unfiltered scan are compared, so this needs the filter pushdown of the optimizer
+# and it needs the log to survive for the whole test
+
+require parquet
+
+statement ok
+SET hive_directory_pruning=true;
+
+statement ok
+COPY (SELECT i AS k, i AS val FROM range(0,256) tbl(i)) TO '{TEST_DIR}/hive_early_pruning' (FORMAT PARQUET, PARTITION_BY (k));
+
+# without a filter, every partition directory is crawled and globbed
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('FileSystem')
+
+statement ok
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1);
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CREATE OR REPLACE TABLE listings_unfiltered AS SELECT COUNT(*) AS c FROM duckdb_logs_parsed('FileSystem') WHERE op='LIST';
+
+# with the filter, only the files sampled while binding and the matching partition are listed
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('FileSystem')
+
+statement ok
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_early_pruning/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=200;
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CREATE OR REPLACE TABLE listings_filtered AS SELECT COUNT(*) AS c FROM duckdb_logs_parsed('FileSystem') WHERE op='LIST';
+
+# the filter at least halves the number of directories that are listed
+# both counts are affected the same way when a config runs every statement more than once, so they are compared
+# against each other instead of against a fixed number
+query I
+SELECT (SELECT c FROM listings_filtered) * 2 < (SELECT c FROM listings_unfiltered)
+----
+true

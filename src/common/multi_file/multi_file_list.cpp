@@ -32,19 +32,12 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vecto
 
 // Helper method to do Filter Pushdown into a MultiFileList
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, MultiFilePushdownInfo &info,
-                      vector<unique_ptr<Expression>> &filters, vector<OpenFileInfo> &expanded_files) {
-	HivePartitioningFilterInfo filter_info;
-	for (idx_t i = 0; i < info.column_ids.size(); i++) {
-		if (IsVirtualColumn(info.column_ids[i])) {
-			continue;
-		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
-	}
-	filter_info.hive_enabled = options.hive_partitioning;
-	filter_info.filename_enabled = options.filename;
+                      vector<unique_ptr<Expression>> &filters, vector<OpenFileInfo> &expanded_files,
+                      optional_ptr<HivePathFilter> path_filter) {
+	auto filter_info = HivePartitioning::GetFilterInfo(options, info);
 
 	auto start_files = expanded_files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info);
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info, path_filter);
 
 	if (expanded_files.size() != start_files) {
 		return true;
@@ -53,9 +46,30 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	return false;
 }
 
-bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
-                      const vector<LogicalType> &types, const vector<ColumnIndex> &column_indexes,
-                      const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
+// Installs a filter that prunes paths using the hive partition keys they contain, so that directories that can never
+// contain a matching file are never listed while the file list is expanded
+shared_ptr<HivePathFilter> InstallPathFilter(const MultiFileList &file_list, ClientContext &context,
+                                             const MultiFileOptions &options, const MultiFilePushdownInfo &info,
+                                             const vector<unique_ptr<Expression>> &filters) {
+	if (!options.hive_partitioning || !options.hive_directory_pruning) {
+		return nullptr;
+	}
+	if (file_list.GetFileCount().type == FileExpansionType::ALL_FILES_EXPANDED) {
+		// there is nothing left to expand - a path filter can no longer skip anything
+		return nullptr;
+	}
+	auto path_filter = make_shared_ptr<HivePathFilter>(context, filters, HivePartitioning::GetFilterInfo(options, info),
+	                                                   info.table_index);
+	file_list.SetPathFilter(path_filter);
+	return path_filter;
+}
+
+// Helper method to do dynamic Filter Pushdown into a MultiFileList - this expands the list itself, so that the path
+// filter is installed before any directory is listed
+bool PushdownInternal(const MultiFileList &file_list, ClientContext &context, const MultiFileOptions &options,
+                      const vector<Identifier> &names, const vector<LogicalType> &types,
+                      const vector<ColumnIndex> &column_indexes, const TableFilterSet &filters,
+                      vector<OpenFileInfo> &expanded_files) {
 	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
@@ -77,29 +91,39 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
+	if (filter_expressions.empty()) {
+		// nothing to push down - expanding here would only prevent a later pushdown from pruning paths
+		return false;
+	}
+	// install the path filter before expanding - this way directories that can never match are never listed
+	auto path_filter = InstallPathFilter(file_list, context, options, info, filter_expressions);
 
-	// call the original PushdownInternal method
-	return PushdownInternal(context, options, info, filter_expressions, expanded_files);
+	// FIXME: don't copy list until first file is filtered
+	expanded_files = file_list.GetAllFiles();
+	return PushdownInternal(context, options, info, filter_expressions, expanded_files, path_filter);
 }
 
 //===--------------------------------------------------------------------===//
 // MultiFileListIterator
 //===--------------------------------------------------------------------===//
-MultiFileListIterationHelper MultiFileList::Files() const {
-	return MultiFileListIterationHelper(*this);
+MultiFileListIterationHelper MultiFileList::Files(MultiFileListScanType scan_type) const {
+	return MultiFileListIterationHelper(*this, scan_type);
 }
 
-MultiFileListIterationHelper::MultiFileListIterationHelper(const MultiFileList &file_list_p) : file_list(file_list_p) {
+MultiFileListIterationHelper::MultiFileListIterationHelper(const MultiFileList &file_list_p,
+                                                           MultiFileListScanType scan_type)
+    : file_list(file_list_p), scan_type(scan_type) {
 }
 
 MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(
-    optional_ptr<const MultiFileList> file_list_p)
+    optional_ptr<const MultiFileList> file_list_p, MultiFileListScanType scan_type)
     : file_list(file_list_p) {
 	if (!file_list) {
 		return;
 	}
 
 	file_list->InitializeScan(file_scan_data);
+	file_scan_data.scan_type = scan_type;
 	if (!file_list->Scan(file_scan_data, current_file)) {
 		// There is no first file: move iterator to nop state
 		file_list = nullptr;
@@ -121,10 +145,10 @@ void MultiFileListIterationHelper::MultiFileListIterator::Next() {
 
 MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::begin() { // NOLINT: match stl API
 	return MultiFileListIterationHelper::MultiFileListIterator(
-	    file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list);
+	    file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list, scan_type);
 }
 MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::end() { // NOLINT: match stl API
-	return MultiFileListIterationHelper::MultiFileListIterator(nullptr);
+	return MultiFileListIterationHelper::MultiFileListIterator(nullptr, scan_type);
 }
 
 MultiFileListIterationHelper::MultiFileListIterator &MultiFileListIterationHelper::MultiFileListIterator::operator++() {
@@ -172,6 +196,16 @@ MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
 	return MultiFileCount(GetTotalFileCount());
 }
 
+MultiFileListIterationHelper MultiFileList::SampleFiles(optional_idx min_files) const {
+	if (!min_files.IsValid()) {
+		// no sample - expand the files while iterating over them
+		return Files();
+	}
+	// expand at least "min_files", then iterate over every file that is available without any further I/O
+	GetFileCount(min_files.GetIndex());
+	return Files(MultiFileListScanType::FETCH_IF_AVAILABLE);
+}
+
 bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) const {
 	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
 	if (iterator.scan_type == MultiFileListScanType::FETCH_IF_AVAILABLE &&
@@ -196,10 +230,16 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
 	}
+	if (filters.empty()) {
+		// nothing to push down - expanding here would only prevent a later pushdown from pruning paths
+		return nullptr;
+	}
+	// install the path filter before expanding - this way directories that can never match are never listed
+	auto path_filter = InstallPathFilter(*this, context, options, info, filters);
 
 	// FIXME: don't copy list until first file is filtered
 	auto file_copy = GetAllFiles();
-	auto res = PushdownInternal(context, options, info, filters, file_copy);
+	auto res = PushdownInternal(context, options, info, filters, file_copy, path_filter);
 	if (res) {
 		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
 	}
@@ -218,15 +258,22 @@ MultiFileList::DynamicFilterPushdown(MultiFileDynamicPushdownInfo &dynamic_pushd
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
 	}
-
-	// FIXME: don't copy list until first file is filtered
-	auto file_copy = GetAllFiles();
-	auto res = PushdownInternal(context, options, names, types, column_indexes, filters, file_copy);
+	vector<OpenFileInfo> file_copy;
+	auto res = PushdownInternal(*this, context, options, names, types, column_indexes, filters, file_copy);
 	if (res) {
 		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
 	}
 
 	return nullptr;
+}
+
+void MultiFileList::SetPathFilter(const shared_ptr<HivePathFilter> &filter) const {
+	path_filter = filter;
+}
+
+bool MultiFileList::PathIsPruned(const string &path) const {
+	auto filter = path_filter.lock();
+	return filter && filter->PrunePath(path);
 }
 
 unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context) const {
@@ -373,6 +420,15 @@ vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_file
 	return result;
 }
 
+void GlobMultiFileList::SetPathFilter(const shared_ptr<HivePathFilter> &filter) const {
+	lock_guard<mutex> lck(lock);
+	// the globs are expanded by the underlying file lists - they do the actual pruning
+	for (auto &file_list : file_lists) {
+		file_list->SetPathFilter(filter);
+	}
+	MultiFileList::SetPathFilter(filter);
+}
+
 bool GlobMultiFileList::ExpandNextPath() const {
 	if (current_glob >= globs.size()) {
 		return false;
@@ -381,6 +437,7 @@ bool GlobMultiFileList::ExpandNextPath() const {
 		// glob is not yet started for this file - start it and initiate the scan over this file
 		auto &fs = FileSystem::GetFileSystem(context);
 		auto glob_result = fs.GlobFileList(globs[current_glob], glob_input);
+		glob_result->SetPathFilter(path_filter.lock());
 		scan_state = MultiFileListScanData();
 		glob_result->InitializeScan(scan_state);
 		file_lists.push_back(std::move(glob_result));

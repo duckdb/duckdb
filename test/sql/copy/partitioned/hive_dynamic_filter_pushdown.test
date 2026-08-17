@@ -1,0 +1,54 @@
+# name: test/sql/copy/partitioned/hive_dynamic_filter_pushdown.test
+# description: Test filters that reach a hive partitioned scan as table filters, through DynamicFilterPushdown
+# group: [partitioned]
+
+require parquet
+
+statement ok
+SET hive_directory_pruning=true;
+
+statement ok
+COPY (SELECT i%4 AS k, i AS val FROM range(0,32) tbl(i)) TO '{TEST_DIR}/hive_dyn' (FORMAT PARQUET, PARTITION_BY (k));
+
+# a filter on a non-partition column only reaches the scan as a table filter - the partition column of the rows that
+# survive it must still be reconstructed from the path
+query II
+SELECT k, val FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1) WHERE val=17;
+----
+1	17
+
+# the same for a filter that is only known once the sub-query has been evaluated
+statement ok
+CREATE TABLE probe(k INTEGER);
+
+statement ok
+INSERT INTO probe VALUES (2);
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1) WHERE k IN (SELECT k FROM probe);
+----
+8
+
+# grouping on the reconstructed key checks that its value is right, not only that a value is there
+query II
+SELECT DISTINCT k, COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1) WHERE k IN (SELECT k FROM probe) GROUP BY k;
+----
+2	8
+
+# a partition filter and a non-partition filter on one scan, so both pushdown paths run together
+query II
+SELECT k, val FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1) WHERE k=3 AND val=19;
+----
+3	19
+
+# the filename column and the hive values come from the same path - they have to stay consistent
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1, FILENAME=1) WHERE val=17 AND filename LIKE '%k=1%';
+----
+1
+
+# a filter that matches nothing must still return an empty result rather than an error
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/hive_dyn/**/*.parquet', HIVE_PARTITIONING=1) WHERE val=9999;
+----
+0

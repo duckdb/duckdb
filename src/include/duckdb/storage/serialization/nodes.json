@@ -694,6 +694,18 @@
         "id": 107,
         "name": "allow_empty",
         "type": "bool"
+      },
+      {
+        "id": 108,
+        "name": "hive_directory_pruning",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 109,
+        "name": "explicit_hive_directory_pruning",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "pointer_type": "none"
@@ -1351,6 +1363,12 @@
         "id": 103,
         "name": "sample_options",
         "type": "unique_ptr<SampleOptions>"
+      },
+      {
+        "id": 104,
+        "name": "pruned_directories",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "pointer_type": "none"

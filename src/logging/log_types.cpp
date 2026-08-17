@@ -42,8 +42,10 @@ string FileSystemLogType::ConstructLogMessage(const FileHandle &handle, const st
 	                          handle.file_system.GetName(), handle.path, op, bytes, pos);
 }
 string FileSystemLogType::ConstructLogMessage(const FileHandle &handle, const string &op) {
-	return StringUtil::Format("{\"fs\":\"%s\",\"path\":\"%s\",\"op\":\"%s\"}", handle.file_system.GetName(),
-	                          handle.path, op);
+	return ConstructLogMessage(handle.file_system, handle.path, op);
+}
+string FileSystemLogType::ConstructLogMessage(FileSystem &fs, const string &path, const string &op) {
+	return StringUtil::Format("{\"fs\":\"%s\",\"path\":\"%s\",\"op\":\"%s\"}", fs.GetName(), path, op);
 }
 
 LogicalType FileSystemLogType::GetLogType() {

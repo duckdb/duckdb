@@ -374,6 +374,9 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result["Scanning Files"] = StringUtil::Format("%llu/%llu", extra_info.filtered_files.GetIndex(),
 			                                              extra_info.total_files.GetIndex());
 		}
+		if (extra_info.pruned_directories.IsValid()) {
+			result["Pruned Directories"] = to_string(extra_info.pruned_directories.GetIndex());
+		}
 	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);

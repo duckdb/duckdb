@@ -173,6 +173,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ForceUpdateToDelAndInsertSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
+    DUCKDB_SETTING(HiveDirectoryPruningSetting),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
@@ -250,12 +251,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 30),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 30),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 129),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 130),
                                                      DUCKDB_SETTING_ALIAS("null_order", 61),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 152),
-                                                     DUCKDB_SETTING_ALIAS("user", 171),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 153),
+                                                     DUCKDB_SETTING_ALIAS("user", 172),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 169),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 170),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
