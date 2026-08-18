@@ -74,6 +74,19 @@ void SetDefaultNotifier(Connection &con, NotifyListener &listener) {
 	};
 }
 
+//! Render the physical plan text so tests can assert the plan shape
+string PhysicalPlanText(Connection &con, const string &query) {
+	auto explain_result = con.Query("EXPLAIN " + query);
+	if (explain_result->HasError()) {
+		FAIL(explain_result->GetError());
+	}
+	string plan;
+	for (idx_t row = 0; row < explain_result->RowCount(); row++) {
+		plan += explain_result->GetValue(1, row).ToString();
+	}
+	return plan;
+}
+
 //! Listener that also records callbacks running on the consumer's own stack inside an engine call
 struct StackCheckListener {
 	NotifyListener listener;
@@ -456,6 +469,96 @@ TEST_CASE("Async mode is unaffected by an installed custom result collector", "[
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
 	REQUIRE(row_count == 10000);
+}
+
+TEST_CASE("Async stream result drains a streaming-fanout CTE plan", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE fanout AS SELECT range i, range % 512 g FROM range(200000)"));
+
+	// Distinct aggregates are rewritten into a shared materialized CTE: one scan fans out to both consumers
+	const string query = "SELECT COUNT(DISTINCT i), SUM(DISTINCT g) FROM fanout";
+	REQUIRE(StringUtil::Contains(PhysicalPlanText(con, query), "PIPELINE_DEPENDENT"));
+
+	NotifyListener listener;
+	SetDefaultNotifier(con, listener);
+	auto stream = ExecuteAsync(con, query);
+	auto deadline = MakeDeadline();
+	idx_t row_count = 0;
+	int64_t count_distinct = -1;
+	int64_t sum_distinct = -1;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			for (idx_t i = 0; i < chunk->size(); i++) {
+				count_distinct = chunk->GetValue(0, i).GetValue<int64_t>();
+				sum_distinct = chunk->GetValue(1, i).GetValue<int64_t>();
+			}
+			row_count += chunk->size();
+			continue;
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			break;
+		}
+		REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
+		         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
+		// Park until the engine wakes us. A missed notification over the fanout plan fails here by timeout.
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	REQUIRE(row_count == 1);
+	REQUIRE(count_distinct == 200000);
+	REQUIRE(sum_distinct == 130816);
+}
+
+TEST_CASE("Abandoning an undrained async stream result unwinds a streaming-fanout plan", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// Order-destroying settings admit async; the tiny buffer keeps producer sinks parked mid-plan
+	REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	// Two readers over one materialized CTE stream rows through the fanout into the result
+	const string query = "WITH c AS MATERIALIZED (SELECT i FROM range(2000000) t(i)) "
+	                     "SELECT i FROM c WHERE i % 7 = 0 UNION ALL SELECT i FROM c WHERE i % 11 = 3";
+	REQUIRE(StringUtil::Contains(PhysicalPlanText(con, query), "PIPELINE_DEPENDENT"));
+
+	NotifyListener listener;
+	SetDefaultNotifier(con, listener);
+
+	// Abandon at the pending stage: workers already produce in async mode, Execute never runs
+	{
+		auto pending = con.PendingQuery(query, AsyncParameters());
+		if (pending->HasError()) {
+			FAIL(pending->GetError());
+		}
+		// Wait until production demonstrably started, then drop the pending result
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// Abandon mid-stream: fetch a little, then drop the result while producers sit parked behind it
+	{
+		auto stream = ExecuteAsync(con, query);
+		auto deadline = MakeDeadline();
+		idx_t row_count = 0;
+		while (row_count < 10000) {
+			REQUIRE(!DeadlinePassed(deadline));
+			unique_ptr<DataChunk> chunk;
+			auto execution_result = stream->TryFetchChunk(chunk);
+			if (execution_result == StreamExecutionResult::CHUNK_READY) {
+				row_count += chunk->size();
+				continue;
+			}
+			REQUIRE(execution_result != StreamExecutionResult::EXECUTION_ERROR);
+			REQUIRE(execution_result != StreamExecutionResult::EXECUTION_FINISHED);
+			REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+		}
+	}
+	result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
 TEST_CASE("Async stream result with an empty result", "[api]") {
