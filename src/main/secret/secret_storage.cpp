@@ -419,7 +419,7 @@ unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const Ba
 		case OnCreateConflict::ERROR_ON_CONFLICT:
 			throw InvalidInputException("Connection secret with name '%s' already exists", name.GetIdentifierName());
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
-			return make_uniq<SecretEntry>(*existing->second);
+			return nullptr;
 		default: // REPLACE_ON_CONFLICT
 			break;
 		}
