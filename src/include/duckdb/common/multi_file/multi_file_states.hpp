@@ -22,7 +22,6 @@
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
-class MultiFileReadAhead;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -190,7 +189,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
-	unique_ptr<MultiFileReadAhead> read_ahead;
+	unique_ptr<ScanReadAhead> read_ahead;
 
 	optional_ptr<const PhysicalOperator> op;
 

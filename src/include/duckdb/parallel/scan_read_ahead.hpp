@@ -123,6 +123,10 @@ public:
 	              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p);
 	~ScanReadAhead();
 
+	//! Create the read-ahead driver from the read_ahead_depth setting, returns null when read-ahead is disabled.
+	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
+	static unique_ptr<ScanReadAhead> Create(ClientContext &context);
+
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Returns null when there are no more jobs to produce.

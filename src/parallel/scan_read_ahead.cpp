@@ -92,6 +92,19 @@ ScanReadAhead::~ScanReadAhead() {
 	executor->CancelAndDrain();
 }
 
+unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context) {
+	optional_idx depth;
+	if (!TryGetReadAheadDepth(context, depth)) {
+		return nullptr;
+	}
+	if (!depth.IsValid()) {
+		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
+		return make_uniq<ScanReadAhead>(context, NumericLimits<idx_t>::Maximum(),
+		                                make_uniq<ManagedAsyncMemoryGovernor>(context));
+	}
+	return make_uniq<ScanReadAhead>(context, depth.GetIndex(), nullptr);
+}
+
 bool ScanReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
 	ThrowIfError();
 	if (IsDone() || !TryReserveSlot()) {

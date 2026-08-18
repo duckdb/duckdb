@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -603,7 +602,7 @@ public:
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = MultiFileReadAhead::Create(context);
+		gstate.read_ahead = ScanReadAhead::Create(context);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -837,9 +836,7 @@ public:
 		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
-		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) {
-			    return ProduceJob(context, bind_data, gstate, io_tasks);
-		    },
+		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, bind_data, gstate, io_tasks); },
 		    claimed);
 		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
 			// finish scan states left in the recycle pool so per-file accounting completes
