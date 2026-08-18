@@ -72,16 +72,24 @@ SELECT count(*) FROM secure_view WHERE i > 100000
 ----
 0
 
-# statistics are still propagated *within* the view definition, so the view body is optimized as usual. The plan of
-# the view is hidden (see secure_view_explain.test), so this is observable through the aggregated row count: the body
-# collapses to an empty result, so no row is ever produced inside the view.
+# Statistics are still propagated *within* the view definition, so the view body is optimized as usual. This is
+# deliberately not observable from the outside - neither the plan nor the metrics of the operators inside a secure
+# view are ever reported (see secure_view_explain.test) - so we verify the rule on the equivalent regular view.
+statement ok
+CREATE VIEW impossible_regular_view AS SELECT * FROM integers WHERE i > 100000;
+
 statement ok
 CREATE SECURE VIEW impossible_secure_view AS SELECT * FROM integers WHERE i > 100000;
 
 query II
-EXPLAIN ANALYZE SELECT * FROM impossible_secure_view
+EXPLAIN SELECT * FROM impossible_regular_view
 ----
-analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]* 0 rows[\s\S]*
+physical_plan	<REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM impossible_secure_view
+----
+physical_plan	<!REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
 
 query I
 SELECT count(*) FROM impossible_secure_view

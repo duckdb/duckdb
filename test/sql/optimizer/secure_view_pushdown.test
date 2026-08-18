@@ -76,24 +76,32 @@ SELECT * FROM secure_view WHERE i = 42
 statement ok
 PRAGMA enable_optimizer
 
-# filters are still pushed down *within* the view definition itself. The plan of the view is hidden (see
-# secure_view_explain.test), so this is observable through the row count the secure view reports for its contents:
-# with the filter pushed into the scan only a handful of rows are produced inside the view, whereas an unpushed
-# filter would make the scan report all 10000.
+# Filters are still pushed down *within* the view definition itself. This is deliberately not observable from the
+# outside - neither the plan nor the metrics of the operators inside a secure view are ever reported (see
+# secure_view_explain.test) - so we verify the rule on the equivalent regular view and verify that the secure view
+# returns the same rows.
+statement ok
+CREATE VIEW filtered_regular_view AS SELECT * FROM integers WHERE i = 42;
+
 statement ok
 CREATE SECURE VIEW filtered_secure_view AS SELECT * FROM integers WHERE i = 42;
 
 query II
-EXPLAIN ANALYZE SELECT * FROM filtered_secure_view
+EXPLAIN SELECT * FROM filtered_regular_view
 ----
-analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*
+physical_plan	<REGEX>:[\s\S]*Filters: i = 42[\s\S]*
 
 query II
-EXPLAIN ANALYZE SELECT * FROM filtered_secure_view
+EXPLAIN SELECT * FROM filtered_secure_view
 ----
-analyzed_plan	<!REGEX>:[\s\S]*[0-9],[0-9]{3} rows[\s\S]*
+physical_plan	<!REGEX>:[\s\S]*Filters[\s\S]*
 
 query II
 SELECT * FROM filtered_secure_view
+----
+42	2
+
+query II
+SELECT * FROM filtered_regular_view
 ----
 42	2

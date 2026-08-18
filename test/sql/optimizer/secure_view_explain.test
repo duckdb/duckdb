@@ -99,8 +99,6 @@ EXPLAIN ANALYZE (FORMAT json) SELECT * FROM secure_view WHERE c > 0
 ----
 analyzed_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|"other")[\s\S]*
 
-# the timings and metrics of the operators inside the view are reported on the secure view node itself, so the
-# secure view accounts for all rows produced inside it rather than reporting nothing
 query II
 EXPLAIN ANALYZE (FORMAT json) SELECT * FROM secure_view WHERE c > 0
 ----
@@ -109,12 +107,54 @@ analyzed_plan	<REGEX>:[\s\S]*"type": "SECURE_VIEW"[\s\S]*
 statement ok
 CREATE SECURE VIEW counting_view AS SELECT * FROM hidden_table WHERE j = 3;
 
-# the view returns 1000 rows, so a secure view that only reported its own metrics would show "1,000 rows". Reporting
-# more than that proves the metrics of the operators inside the view were folded into the secure view node.
+# The secure view reports the number of rows that left it - that is observable through the query anyway - but none
+# of the counters that describe what happened inside it. In particular there is no "Row Groups Scanned: 1 / 7",
+# which would say how much of the table behind the view was read.
 query II
 EXPLAIN ANALYZE SELECT * FROM counting_view
 ----
-analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]* [2-9],[0-9]{3} rows[\s\S]*
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]* 1,000 rows[\s\S]*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM counting_view
+----
+analyzed_plan	<!REGEX>:[\s\S]*Row Groups Scanned[\s\S]*
+
+query I
+SELECT count(*) FROM counting_view
+----
+1000
+
+# the query-wide totals are sums over the operator tree, so they must not include the scan counters of the
+# operators inside the view - total_rows_scanned would otherwise report the full size of the table behind the view
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM counting_view
+----
+analyzed_plan	<REGEX>:[\s\S]*"total_rows_scanned": 0[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM counting_view
+----
+analyzed_plan	<REGEX>:[\s\S]*"total_row_groups_scanned": 0[\s\S]*
+
+# The time spent inside the view *is* accumulated onto the secure view node, so the profile still accounts for the
+# whole query. This view aggregates a million rows, which costs milliseconds - if only the time of the pass-through
+# itself were reported it would be measured in microseconds instead.
+statement ok
+CREATE TABLE big_table AS SELECT i, i % 10 AS j FROM range(1000000) t(i);
+
+statement ok
+CREATE SECURE VIEW heavy_view AS SELECT j, count(*) AS c FROM big_table GROUP BY j;
+
+query II
+EXPLAIN ANALYZE SELECT * FROM heavy_view
+----
+analyzed_plan	<!REGEX>:[\s\S]*µs[\s\S]*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM heavy_view
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*ms[\s\S]*
 
 # results are unaffected
 query III
