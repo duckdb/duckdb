@@ -158,6 +158,17 @@ FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
 	return db.GetLocalFileSystem();
 }
 
+FileSystem &FileSystem::GetTemporaryFileSystem(DatabaseInstance &db) {
+	if (db.config.options.lock_temp_directory) {
+		// The temp directory can no longer be redirected, so the files the buffer manager writes there are
+		// engine-internal state rather than user-directed file access. Exempting them from
+		// 'disabled_filesystems' lets an embedder fence off user file access without also giving up
+		// out-of-core execution. 'allowed_directories' still applies.
+		return db.GetTemporaryFileSystem();
+	}
+	return GetFileSystem(db);
+}
+
 FileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
@@ -307,6 +318,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
+	temporary_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this, false);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	external_resource_type_registry = make_uniq<ExternalResourceTypeRegistry>();
 	external_resources_manager = make_uniq<ExternalResourcesManager>();
@@ -421,6 +433,10 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 	return *local_db_file_system;
 }
 
+FileSystem &DatabaseInstance::GetTemporaryFileSystem() {
+	return *temporary_db_file_system;
+}
+
 static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
 	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
 	auto &default_fs = vfs.GetDefaultFileSystem();
@@ -431,12 +447,13 @@ static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileS
 	return *owned;
 }
 
-LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
-    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p, bool apply_disabled_file_systems_p)
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)),
+      apply_disabled_file_systems(apply_disabled_file_systems_p), database_opener(db_p) {
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
+	if (apply_disabled_file_systems && db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;

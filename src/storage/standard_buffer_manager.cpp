@@ -477,7 +477,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 }
 
 string StandardBufferManager::GetTemporaryPath(block_id_t id) {
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
 }
 
@@ -523,7 +523,7 @@ void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 
 	// Create the file and write the size followed by the buffer contents.
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
@@ -570,7 +570,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	idx_t block_size;
 	idx_t block_header_size;
 	auto path = GetTemporaryPath(id);
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(context, &block_size, sizeof(idx_t), 0);
 	handle->Read(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
@@ -630,7 +630,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	}
 
 	// The file is not in the shared pool of files.
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {
 		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= memory.GetMemoryUsage();
@@ -651,7 +651,7 @@ bool StandardBufferManager::HasFilesInTemporaryDirectory() const {
 		return false;
 	}
 
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	bool found = false;
 	fs.ListFiles(temporary_directory.path, [&](const string &name, bool is_dir) {
 		if (is_dir) {
@@ -679,7 +679,7 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 			result = temporary_directory.handle->GetTempFile().GetTemporaryFiles();
 		}
 	}
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetTemporaryFileSystem(db);
 	fs.ListFiles(temporary_directory.path, [&](const string &name, bool is_dir) {
 		if (is_dir) {
 			return;

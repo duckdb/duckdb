@@ -164,6 +164,10 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &GetLocal(DatabaseInstance &db);
+	//! File system through which the buffer manager reaches its temporary files. This is the regular file system
+	//! unless the temp directory has been locked, in which case it is the local one - see
+	//! DBConfigOptions::lock_temp_directory.
+	DUCKDB_API static FileSystem &GetTemporaryFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,

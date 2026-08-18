@@ -60,6 +60,7 @@ public:
 	DUCKDB_API ExternalResourcesManager &GetExternalResourcesManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API FileSystem &GetLocalFileSystem();
+	DUCKDB_API FileSystem &GetTemporaryFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -114,6 +115,12 @@ private:
 	unique_ptr<ParserCache> parser_cache;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
+
+	//! The same local file system as `local_db_file_system`, minus the `disabled_filesystems` check. Only ever
+	//! reached for the buffer manager's temporary files, and only once the temp directory is locked - see
+	//! DBConfigOptions::lock_temp_directory. Declared last on purpose: extensions are built against this class, so
+	//! everything above it keeps the offset it has in a release without this member.
+	unique_ptr<LocalDatabaseFileSystem> temporary_db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the

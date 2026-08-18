@@ -1471,9 +1471,37 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Lock Temp Directory
+//===----------------------------------------------------------------------===//
+static void CheckTempDirectoryNotLocked(const DBConfig &config) {
+	if (config.options.lock_temp_directory) {
+		throw PermissionException("Modifying the temp_directory is disabled - the temp directory has been locked");
+	}
+}
+
+void LockTempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!input.GetValue<bool>()) {
+		// Unlocking would hand back the ability to point the exempted temp directory somewhere else.
+		CheckTempDirectoryNotLocked(config);
+		return;
+	}
+	config.options.lock_temp_directory = true;
+}
+
+void LockTempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	CheckTempDirectoryNotLocked(config);
+}
+
+Value LockTempDirectorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.lock_temp_directory);
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	CheckTempDirectoryNotLocked(config);
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
@@ -1486,6 +1514,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	CheckTempDirectoryNotLocked(config);
 	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}

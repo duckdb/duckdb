@@ -71,7 +71,9 @@ private:
 
 class LocalDatabaseFileSystem : public OpenerFileSystem {
 public:
-	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p);
+	//! `apply_disabled_file_systems` may only be false where the paths reached are engine-internal and not
+	//! user-controllable, since it is what makes `disabled_filesystems` bite on a local path.
+	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p, bool apply_disabled_file_systems = true);
 
 	FileSystem &GetFileSystem() const override;
 	optional_ptr<FileOpener> GetOpener() const override {
@@ -82,6 +84,7 @@ private:
 	DatabaseInstance &db;
 	unique_ptr<FileSystem> owned_file_system;
 	FileSystem &local_fs;
+	bool apply_disabled_file_systems;
 	mutable DatabaseFileOpener database_opener;
 };
 
