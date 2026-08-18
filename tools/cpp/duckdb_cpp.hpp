@@ -34,6 +34,7 @@
 #include <vector>
 #include <stdexcept>
 #include <cstdint>
+#include <cstring>
 
 namespace duckdb {
 namespace cxx {
@@ -1024,7 +1025,7 @@ struct blob_t {
 
 	/// An empty blob.
 	blob_t() {
-		memset(&value, 0, sizeof(value));
+		std::memset(&value, 0, sizeof(value));
 	}
 
 	/// Borrows the bytes of `str`, which must outlive the blob unless they fit inline.
@@ -1035,11 +1036,11 @@ struct blob_t {
 	/// Borrows `size` bytes at `data`, which must outlive the blob unless they fit inline.
 	blob_t(const char *data, uint32_t size) {
 		if (size <= INLINE_LENGTH) {
-			memset(&value, 0, sizeof(value));
+			std::memset(&value, 0, sizeof(value));
 			value.inlined.length = size;
 			std::memcpy(value.inlined.inlined, data, size);
 		} else {
-			memset(&value, 0, sizeof(value));
+			std::memset(&value, 0, sizeof(value));
 			value.pointer.length = size;
 			value.pointer.ptr = const_cast<char *>(data); // NOLINT
 			std::memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
