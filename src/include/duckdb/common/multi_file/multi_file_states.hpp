@@ -219,16 +219,16 @@ enum class MultiFileDecodeResult : uint8_t {
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
+struct MultiFileScanJob : public ScanReadAheadJob {
 	MultiFileScanJob() = default;
 	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
 	MultiFileScanJob &operator=(MultiFileScanJob &&) noexcept = default;
 	~MultiFileScanJob() {
+		// scheduled reads might still be in flight, settle them before the members they write to are destroyed
 		if (io_completion) {
 			io_completion->WaitForIO();
 			io_completion.reset();
 		}
-		scan_state.reset();
 	}
 
 	//! The reader producing this job
@@ -237,6 +237,8 @@ struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
 	optional_ptr<MultiFileReaderData> reader_data;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
+	//! The scan state the job's I/O and decoding operate on, declared last so it is destroyed before the reader
+	unique_ptr<LocalTableFunctionState> scan_state;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {

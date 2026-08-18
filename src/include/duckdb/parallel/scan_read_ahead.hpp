@@ -75,8 +75,7 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
-//! Base of the job types driven by ScanReadAhead, STATE is the recyclable scan state the job operates on
-template <class STATE>
+//! Base of the job types driven by ScanReadAhead
 struct ScanReadAheadJob {
 	ScanReadAheadJob() = default;
 	ScanReadAheadJob(ScanReadAheadJob &&) noexcept = default;
@@ -88,8 +87,6 @@ struct ScanReadAheadJob {
 		}
 	}
 
-	//! The scan state the job's I/O and decoding operate on
-	unique_ptr<STATE> scan_state;
 	//! Batch index of this job, drives ordered queue admission
 	idx_t batch_index = 0;
 	//! Completion of the job's scheduled I/O
@@ -113,7 +110,7 @@ void ScanReadAheadYield(ClientContext &context);
 bool TryGetReadAheadDepth(ClientContext &context, optional_idx &depth);
 
 //! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
-//! JOB must derive from ScanReadAheadJob<STATE>.
+//! JOB must derive from ScanReadAheadJob.
 template <class JOB, class STATE>
 class ScanReadAhead {
 public:
@@ -135,8 +132,7 @@ public:
 
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
-		static_assert(std::is_base_of<ScanReadAheadJob<STATE>, JOB>::value,
-		              "JOB must derive from ScanReadAheadJob<STATE>");
+		static_assert(std::is_base_of<ScanReadAheadJob, JOB>::value, "JOB must derive from ScanReadAheadJob");
 		ThrowIfError();
 		if (IsDone() || !TryReserveSlot()) {
 			return false;
