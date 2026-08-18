@@ -266,13 +266,13 @@ private:
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                       const string &repository_namespace = string());
+	                                       const string &repository_name = string());
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                           const string &repository_namespace, ExtensionInitResult &result, string &error);
+	                           const string &repository_name, ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                          const string &repository_namespace, ExtensionActiveLoad &info);
+	                                          const string &repository_name, ExtensionActiveLoad &info);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

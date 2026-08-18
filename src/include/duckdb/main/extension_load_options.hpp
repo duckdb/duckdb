@@ -21,8 +21,8 @@ struct ExtensionLoadOptions {
 
 	string extension_name;
 	Identifier alias;
-	//! The repository namespace the extension is loaded from (e.g. LOAD core/httpfs). Empty for a bare LOAD, which
-	//! only resolves core and community extensions
+	//! The repository named in the FROM clause the extension is loaded from (e.g. LOAD httpfs FROM core). Empty for a
+	//! bare LOAD, which only resolves core and community extensions
 	string repository;
 };
 

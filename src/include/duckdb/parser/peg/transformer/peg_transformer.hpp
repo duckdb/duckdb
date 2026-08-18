@@ -3604,11 +3604,6 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeExtensionAliasTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeExtensionNamespaceTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                   TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeExtensionNamespaceTrampoline(PEGTransformer &transformer,
-	                                                                             TransformStack &stack,
-	                                                                             TransformStackFrame &frame);
 	static void InitializeInstallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7498,19 +7493,15 @@ public:
 	static unique_ptr<TransformResultValue> TransformLoadStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,
-	                                                       const optional<Identifier> &extension_namespace,
 	                                                       const Identifier &col_id_or_string,
+	                                                       const optional<ExtensionRepositoryInfo> &from_source,
 	                                                       const optional<Identifier> &extension_alias);
 	static unique_ptr<TransformResultValue> TransformExtensionAliasInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static Identifier TransformExtensionAlias(PEGTransformer &transformer, const Identifier &identifier);
-	static unique_ptr<TransformResultValue> TransformExtensionNamespaceInternal(PEGTransformer &transformer,
-	                                                                            ParseResult &parse_result);
-	static Identifier TransformExtensionNamespace(PEGTransformer &transformer, const Identifier &identifier);
 	static unique_ptr<TransformResultValue> TransformInstallStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformInstallStatement(PEGTransformer &transformer, const bool &has_result,
-	                                                          const optional<Identifier> &extension_namespace,
 	                                                          const QualifiedName &identifier_or_string_literal,
 	                                                          const optional<ExtensionRepositoryInfo> &from_source,
 	                                                          const optional<string> &version_number);

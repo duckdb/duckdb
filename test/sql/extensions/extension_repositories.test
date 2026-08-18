@@ -205,28 +205,22 @@ SELECT repository_name, type, key_fingerprints FROM duckdb_extension_repositorie
 core	CORE	NULL
 community	COMMUNITY	NULL
 
-# GitHub-style namespaced install: 'acme/some_extension' resolves the same repository as 'FROM acme', so it fails on
-# the network (the acme prefix) rather than on repository lookup
+# INSTALL ... FROM acme resolves the acme repository, so it fails on the network (the acme prefix) rather than on
+# repository lookup
 statement error
-INSTALL acme/some_extension
+INSTALL some_extension FROM acme
 ----
 <REGEX>:.*extensions\.acme\.com.*
 
-# combining a namespace with a FROM clause is contradictory
+# loading with a FROM from an unknown repository fails on the repository lookup, before touching disk
 statement error
-INSTALL acme/some_extension FROM core
+LOAD some_extension FROM not_a_repo
 ----
-<REGEX>:Parser Error.*Cannot combine a repository namespace with a FROM clause.*
+<REGEX>:Binder Error.*not a known repository name.*
 
-# loading from an unknown repository namespace fails on the namespace, before touching disk
+# a load with a FROM looks for the extension in the repository's subfolder; nothing is installed there yet
 statement error
-LOAD not_a_repo/some_extension
-----
-<REGEX>:.*not a known extension repository.*
-
-# a namespaced load looks for the extension in the repository's subfolder; nothing is installed there yet
-statement error
-LOAD acme/some_extension
+LOAD some_extension FROM acme
 ----
 <REGEX>:.*not found.*
 

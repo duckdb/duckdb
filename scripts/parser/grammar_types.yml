@@ -1684,7 +1684,6 @@ IdentifierType:
     - InsertAlias
     - UpdateAlias
     - TableAliasColon
-    - ExtensionNamespace
     - SecretStorageSpecifier
     - SecretName
     - TriggerName

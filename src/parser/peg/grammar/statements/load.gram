@@ -1,7 +1,6 @@
-LoadStatement <- 'LOAD' ExtensionNamespace? ColIdOrString ExtensionAlias?
+LoadStatement <- 'LOAD' ColIdOrString FromSource? ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
-ExtensionNamespace <- Identifier '/'
-InstallStatement <- 'FORCE'? 'INSTALL' ExtensionNamespace? IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
 FromSourceIdentifier <- 'FROM' Identifier
