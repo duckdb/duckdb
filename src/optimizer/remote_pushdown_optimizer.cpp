@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -34,6 +35,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -182,6 +184,9 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	case StatementType::UPDATE_STATEMENT:
 		result = Rewrite(*statement->Cast<UpdateStatement>().node);
 		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		result = Rewrite(*statement->Cast<MergeIntoStatement>().node);
+		break;
 	case StatementType::CREATE_STATEMENT:
 		result = RewriteStatement(statement->Cast<CreateStatement>());
 		break;
@@ -233,6 +238,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		break;
 	case QueryNodeType::UPDATE_QUERY_NODE:
 		result = RewriteNode(node.Cast<UpdateQueryNode>());
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = RewriteNode(node.Cast<MergeQueryNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
 		result = RewriteNode(node.Cast<SetOperationNode>());
@@ -465,6 +473,38 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(UpdateQueryNode &node
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(expr);
 		result = Merge(result, expr_result);
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(MergeQueryNode &node) {
+	// the target and the source form a join - like UPDATE ... FROM they are analyzed in the same scope,
+	// so a local table on either side is tracked for the action expressions below
+	auto result = Rewrite(node.target);
+	result = Merge(result, Rewrite(node.source));
+	if (node.join_condition) {
+		result = Merge(result, Rewrite(node.join_condition));
+	}
+	for (auto &entry : node.actions) {
+		for (auto &action : entry.second) {
+			if (action->condition) {
+				result = Merge(result, Rewrite(action->condition));
+			}
+			if (action->update_info) {
+				if (action->update_info->condition) {
+					result = Merge(result, Rewrite(action->update_info->condition));
+				}
+				for (auto &expr : action->update_info->expressions) {
+					result = Merge(result, Rewrite(expr));
+				}
+			}
+			for (auto &expr : action->expressions) {
+				result = Merge(result, Rewrite(expr));
+			}
+		}
+	}
+	for (auto &expr : node.returning_list) {
+		result = Merge(result, Rewrite(expr));
 	}
 	return result;
 }
@@ -1691,6 +1731,48 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 		}
 		break;
 	}
+	case QueryNodeType::MERGE_QUERY_NODE: {
+		auto &merge = node.Cast<MergeQueryNode>();
+		for (auto &cte_pair : merge.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
+		}
+		if (merge.target) {
+			StripCatalogName(*merge.target, catalog_name);
+		}
+		if (merge.source) {
+			StripCatalogName(*merge.source, catalog_name);
+		}
+		if (merge.join_condition) {
+			StripCatalogName(*merge.join_condition, catalog_name);
+		}
+		for (auto &entry : merge.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					StripCatalogName(*action->condition, catalog_name);
+				}
+				if (action->update_info) {
+					if (action->update_info->condition) {
+						StripCatalogName(*action->update_info->condition, catalog_name);
+					}
+					for (auto &expr : action->update_info->expressions) {
+						StripCatalogName(*expr, catalog_name);
+					}
+				}
+				for (auto &expr : action->expressions) {
+					StripCatalogName(*expr, catalog_name);
+				}
+			}
+		}
+		for (auto &expr : merge.returning_list) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		break;
+	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop = node.Cast<SetOperationNode>();
 		for (auto &cte_pair : setop.cte_map.map) {
@@ -1966,6 +2048,9 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Id
 	case StatementType::UPDATE_STATEMENT:
 		StripCatalogName(*statement.Cast<UpdateStatement>().node, catalog_name);
 		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		StripCatalogName(*statement.Cast<MergeIntoStatement>().node, catalog_name);
+		break;
 	case StatementType::CREATE_STATEMENT:
 		StripCatalogName(*statement.Cast<CreateStatement>().info, catalog_name);
 		break;
@@ -1994,6 +2079,8 @@ unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
 		return std::move(statement.Cast<DeleteStatement>().node);
 	case StatementType::UPDATE_STATEMENT:
 		return std::move(statement.Cast<UpdateStatement>().node);
+	case StatementType::MERGE_INTO_STATEMENT:
+		return std::move(statement.Cast<MergeIntoStatement>().node);
 	default:
 		return nullptr;
 	}

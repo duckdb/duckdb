@@ -31,6 +31,7 @@ class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
+class MergeQueryNode;
 class SelectStatement;
 struct AlterInfo;
 struct CreateInfo;
@@ -102,6 +103,7 @@ private:
 	CatalogPushdownResult RewriteNode(InsertQueryNode &node);
 	CatalogPushdownResult RewriteNode(DeleteQueryNode &node);
 	CatalogPushdownResult RewriteNode(UpdateQueryNode &node);
+	CatalogPushdownResult RewriteNode(MergeQueryNode &node);
 	//! Whether the target entry of a DDL statement already exists (DROP/ALTER) or is being created (CREATE).
 	//! The two resolve differently when the statement's name carries no explicit catalog qualifier
 	enum class DDLTarget { NEW_ENTRY, EXISTING_ENTRY };
