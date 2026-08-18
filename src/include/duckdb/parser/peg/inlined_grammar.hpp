@@ -3,8 +3,6 @@
 
 namespace duckdb {
 
-//! The full PEG grammar, embedded as a byte array (not a string literal) to stay within the per-literal
-//! length limits that MSVC and the C++ standard impose.
 const unsigned char INLINED_PEG_GRAMMAR[] = {
     80, 114, 111, 103, 114, 97, 109, 32, 60, 45, 32, 84, 111, 112, 76, 101, 118, 101, 108, 83,
     116, 97, 116, 101, 109, 101, 110, 116, 42, 10, 84, 111, 112, 76, 101, 118, 101, 108, 83, 116,
