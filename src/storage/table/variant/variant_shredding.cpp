@@ -439,11 +439,16 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 	bool fully_consistent = !force_partial && max_count == total_value_count;
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
 		child_list_t<LogicalType> child_types;
+		case_insensitive_string_set_t field_names;
 		for (auto &entry : column.field_stats) {
 			auto &child_column = GetColumnStats(entry.second);
 			if (entry.first.empty()) {
 				//! Do not include empty field names in the shredded type!
 				continue;
+			}
+			if (!field_names.emplace(entry.first).second) {
+				//! STRUCT field names are case-insensitive, but VARIANT object keys are case-sensitive.
+				return false;
 			}
 			LogicalType child_type;
 			if (GetShreddedTypeInternal(child_column, child_type, total_value_count, force_partial)) {
