@@ -258,7 +258,11 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		timestamp_tz_t micros(instant.value / Interval::NANOS_PER_MICRO);
 		auto cast = Operation(calendar, micros);
 
-		return timestamp_ns_t(cast.value * Interval::NANOS_PER_MICRO + nanos);
+		timestamp_ns_t result;
+		if (!Timestamp::TryFromTimestampNanos(cast, nanos, result)) {
+			throw ConversionException("ICU date overflows timestamp_ns range");
+		}
+		return result;
 	}
 
 	template <class SRC, class DST>
