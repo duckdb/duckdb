@@ -369,6 +369,7 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 	bool constant_pattern = TryParseConstantPattern(input.TryGetConstant(1), constant_string);
 
 	bool no_match_returns_input = false;
+
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(input.GetConstant(3), options, nullptr, &no_match_returns_input);
 	}
@@ -389,6 +390,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group, constant_string,
 			                                options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+		} else if (group.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(input.GetConstant(2), options, nullptr, &no_match_returns_input);
 		} else {
 			int32_t group_idx = group.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
