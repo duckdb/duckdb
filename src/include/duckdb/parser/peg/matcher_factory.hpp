@@ -75,7 +75,7 @@ private:
 
 private:
 	MatcherAllocator &allocator;
-	reference<const PEGKeywordHelper> keyword_helper;
+	const PEGKeywordHelper &keyword_helper;
 	string_map_t<reference<Matcher>> matchers;
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;

@@ -164,14 +164,13 @@ public:
 
 private:
 	bool IsAllowedKeyword(const string &token_text) const {
-		auto &helper = keyword_helper.get();
-		if (!helper.IsKeyword(token_text)) {
+		if (!keyword_helper.IsKeyword(token_text)) {
 			return true;
 		}
-		if (helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+		if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 			return true;
 		}
-		return helper.KeywordCategoryType(token_text, GetAllowedCategory());
+		return keyword_helper.KeywordCategoryType(token_text, GetAllowedCategory());
 	}
 
 	bool MatchIdentifier(MatchState &state) const {
@@ -189,7 +188,7 @@ private:
 	}
 
 	SuggestionState suggestion_type;
-	reference<const PEGKeywordHelper> keyword_helper;
+	const PEGKeywordHelper &keyword_helper;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {
