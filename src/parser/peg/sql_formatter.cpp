@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/parser/peg/sql_formatter.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -87,11 +88,10 @@ SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 }
 
 string SQLFormatter::Format(const string &sql) {
-	ParserCache cache;
-	auto compiled_grammar = cache.GetMatcher();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
+	Tokenizer tokenizer(behavior, keyword_helper);
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		auto back_type = tokens.back().type;

@@ -144,8 +144,7 @@ void ParseIterator::EnsureTokenized() {
 		// we never re-tokenize. Tokenization is grammar-free.
 		auto owned_tokens = make_uniq<vector<MatcherToken>>();
 		ParserTokenizerBehavior behavior(sql, *owned_tokens);
-		auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
-		auto compiled_grammar = parser_cache.GetMatcher();
+		auto compiled_grammar = CompiledGrammar::Get(context);
 		Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
 		tokenizer.TokenizeInput();
 		token_iterator = make_uniq<TokenIterator>(std::move(owned_tokens));
