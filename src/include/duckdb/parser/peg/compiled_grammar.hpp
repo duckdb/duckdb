@@ -10,10 +10,10 @@ public:
 	CompiledGrammar();
 
 public:
-	Matcher &ProgramMatcher() {
+	const Matcher &ProgramMatcher() {
 		return *program_matcher;
 	}
-	Matcher &TopLevelStatementMatcher() {
+	const Matcher &TopLevelStatementMatcher() {
 		return *top_level_statement_matcher;
 	}
 	const PEGKeywordHelper &GetKeywordHelper() const {
@@ -31,8 +31,8 @@ public:
 private:
 	friend struct ParserCache;
 	MatcherAllocator allocator;
-	optional_ptr<Matcher> program_matcher;
-	optional_ptr<Matcher> top_level_statement_matcher;
+	optional_ptr<const Matcher> program_matcher;
+	optional_ptr<const Matcher> top_level_statement_matcher;
 
 	//! TODO: this should be a unique_ptr when we allow keyword overrides
 	const PEGKeywordHelper &keyword_helper;
