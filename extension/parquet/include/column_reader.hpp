@@ -308,6 +308,13 @@ private:
 		}
 	}
 
+	//! The caller wraps the result in a dictionary that still spans the rows we skipped over, so those rows must hold
+	//! a defined value instead of uninitialized memory - zero is an empty string for string_t, and 0 otherwise
+	template <class VALUE_TYPE>
+	static void ZeroSkippedRows(VALUE_TYPE *result_ptr, idx_t row_offset, idx_t skip_count) {
+		memset(result_ptr + row_offset, 0, sizeof(VALUE_TYPE) * skip_count);
+	}
+
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
@@ -321,6 +328,7 @@ private:
 			// perform any skips forward if required
 			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, CHECKED>(plain_data, defines,
 			                                                             next_entry - current_entry, current_entry);
+			ZeroSkippedRows<VALUE_TYPE>(result_ptr, current_entry, next_entry - current_entry);
 			// read this row
 			if (HAS_DEFINES && defines[next_entry] != MaxDefine()) {
 				result_mask.SetInvalid(next_entry);
@@ -333,6 +341,7 @@ private:
 			// skip forward to the end of where we are selecting
 			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, CHECKED>(plain_data, defines,
 			                                                             num_values - current_entry, current_entry);
+			ZeroSkippedRows<VALUE_TYPE>(result_ptr, current_entry, num_values - current_entry);
 		}
 	}
 

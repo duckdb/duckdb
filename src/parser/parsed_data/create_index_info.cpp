@@ -9,10 +9,10 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, Identi
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.GetQualifiedName().Schema()), table(info.table), options(info.options),
-      index_type(info.index_type), constraint_type(info.constraint_type), column_ids(info.column_ids),
-      scan_types(info.scan_types), names(info.names) {
-	SetIndexName(info.GetIndexName());
+    : CreateInfo(CatalogType::INDEX_ENTRY), table(info.table), options(info.options), index_type(info.index_type),
+      constraint_type(info.constraint_type), column_ids(info.column_ids), scan_types(info.scan_types),
+      names(info.names) {
+	SetQualifiedName(info.GetQualifiedName());
 }
 
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const Identifier &table_name) {
@@ -73,8 +73,12 @@ string CreateIndexInfo::ToString() const {
 	}
 	result += SQLIdentifier(GetIndexName());
 	result += " ON ";
-	result += QualifiedName(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(), table)
-	              .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	// the index lives in the same (possibly nested) schema as the table it is created on
+	auto table_name = GetQualifiedName().WithName(table);
+	if (temporary) {
+		table_name.StripCatalog();
+	}
+	result += table_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

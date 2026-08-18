@@ -305,6 +305,11 @@ public:
 		return static_cast<idx_t>(pos - beg);
 	}
 
+	bool IsAtEnd() {
+		SkipWhitespace();
+		return pos >= end;
+	}
+
 	void Reset() {
 		pos = beg;
 	}
@@ -1105,6 +1110,14 @@ bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap
 	BlobWriter writer;
 
 	FromStringRecursive(reader, writer, 0, false, false);
+
+	// Check whether reader has consumed over all meaningful characters.
+	if (!reader.IsAtEnd()) {
+		if (strict) {
+			throw reader.MakeError("Unexpected trailing text");
+		}
+		return false;
+	}
 
 	const auto &buffer = writer.GetBuffer();
 	result = heap.AddBlob(buffer.data(), buffer.size());
@@ -2416,9 +2429,7 @@ void Geometry::FromVectorizedFormat(const Vector &source, Vector &target, idx_t 
 }
 
 LogicalType Geometry::GetSpatialGeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
+	return LogicalType(LogicalTypeId::BLOB).WithAlias("GEOMETRY");
 }
 
 bool Geometry::IsSpatialGeometryType(const LogicalType &type) {

@@ -1050,6 +1050,11 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeArrayKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeArrayKeywordWithBoundsTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
 	static void InitializeSquareBracketsArrayTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeSquareBracketsArrayTrampoline(PEGTransformer &transformer,
@@ -1184,6 +1189,11 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeSpecializedOptionListTrampoline(PEGTransformer &transformer,
 	                                                                                TransformStack &stack,
 	                                                                                TransformStackFrame &frame);
+	static void InitializeSpecializedOptionTailTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSpecializedOptionTailTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
 	static void InitializeSpecializedOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1249,6 +1259,27 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizePartitionByOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePartitionByColumnListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizePartitionByColumnListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeStarPartitionByColumnListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeStarPartitionByColumnListTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeParenthesizedPartitionByColumnListTrampoline(PEGTransformer &transformer,
+	                                                                   TransformStack &stack,
+	                                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeParenthesizedPartitionByColumnListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static void InitializeSinglePartitionByColumnListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSinglePartitionByColumnListTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
 	static void InitializeForceNullOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1257,6 +1288,24 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeForceNotNullTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCopyGenericOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCopyGenericOptionListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeCopyGenericOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCopyGenericOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOrderByCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeOrderByCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePartitionedByCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                        TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizePartitionedByCopyOptionTrampoline(PEGTransformer &transformer,
+	                                                                                  TransformStack &stack,
+	                                                                                  TransformStackFrame &frame);
 	static void InitializeGenericCopyOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                      TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeGenericCopyOptionListTrampoline(PEGTransformer &transformer,
@@ -3413,6 +3462,40 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeExtractDatePartTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExternalResourceStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExternalResourceStatementTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
+	static void InitializeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                       TransformStack &stack,
+	                                                                                       TransformStackFrame &frame);
+	static void InitializeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
+	static void InitializeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExternalResourceCreationOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceCreationOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
 	static void InitializeInsertStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4477,6 +4560,10 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeStandardAssignmentTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                   TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeStandardAssignmentTrampoline(PEGTransformer &transformer,
@@ -5231,7 +5318,8 @@ public:
 	                                                        const vector<pair<Identifier, LogicalType>> &col_id_type);
 	static unique_ptr<TransformResultValue> TransformMapTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, const vector<LogicalType> &type);
+	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer,
+	                                                     const optional<vector<LogicalType>> &type);
 	static unique_ptr<TransformResultValue> TransformTupleTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformTupleType(PEGTransformer &transformer,
@@ -5245,6 +5333,9 @@ public:
 	static unique_ptr<TransformResultValue> TransformArrayKeywordInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static int64_t TransformArrayKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformArrayKeywordWithBoundsInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static int64_t TransformArrayKeywordWithBounds(PEGTransformer &transformer, const int64_t &square_brackets_array);
 	static unique_ptr<TransformResultValue> TransformSquareBracketsArrayInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer,
@@ -5352,8 +5443,12 @@ public:
 	static unique_ptr<TransformResultValue> TransformSpecializedOptionListInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static vector<GenericCopyOption>
-	TransformSpecializedOptionList(PEGTransformer &transformer,
-	                               const optional<vector<GenericCopyOption>> &specialized_option);
+	TransformSpecializedOptionList(PEGTransformer &transformer, const GenericCopyOption &specialized_option,
+	                               const optional<vector<GenericCopyOption>> &specialized_option_tail);
+	static unique_ptr<TransformResultValue> TransformSpecializedOptionTailInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static GenericCopyOption TransformSpecializedOptionTail(PEGTransformer &transformer, const bool &has_result,
+	                                                        const GenericCopyOption &specialized_option);
 	static unique_ptr<TransformResultValue> TransformSpecializedOptionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformSingleOptionInternal(PEGTransformer &transformer,
@@ -5404,7 +5499,19 @@ public:
 	static unique_ptr<TransformResultValue> TransformPartitionByOptionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static GenericCopyOption TransformPartitionByOption(PEGTransformer &transformer,
-	                                                    const vector<string> &star_symbol_column_list);
+	                                                    const vector<string> &partition_by_column_list);
+	static unique_ptr<TransformResultValue> TransformPartitionByColumnListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformStarPartitionByColumnListInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static vector<string> TransformStarPartitionByColumnList(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue>
+	TransformParenthesizedPartitionByColumnListInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<string> TransformParenthesizedPartitionByColumnList(PEGTransformer &transformer,
+	                                                                  const vector<string> &column_list);
+	static unique_ptr<TransformResultValue> TransformSinglePartitionByColumnListInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static vector<string> TransformSinglePartitionByColumnList(PEGTransformer &transformer, const Identifier &col_id);
 	static unique_ptr<TransformResultValue> TransformForceNullOptionInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static GenericCopyOption TransformForceNullOption(PEGTransformer &transformer, const optional<bool> &force_not_null,
@@ -5412,6 +5519,21 @@ public:
 	static unique_ptr<TransformResultValue> TransformForceNotNullInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static bool TransformForceNotNull(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCopyGenericOptionListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<GenericCopyOption>
+	TransformCopyGenericOptionList(PEGTransformer &transformer, const vector<GenericCopyOption> &copy_generic_option);
+	static unique_ptr<TransformResultValue> TransformCopyGenericOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformOrderByCopyOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static GenericCopyOption TransformOrderByCopyOption(PEGTransformer &transformer,
+	                                                    optional<GenericCopyOptionValue> generic_copy_option_value);
+	static unique_ptr<TransformResultValue> TransformPartitionedByCopyOptionInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static GenericCopyOption
+	TransformPartitionedByCopyOption(PEGTransformer &transformer,
+	                                 optional<GenericCopyOptionValue> generic_copy_option_value);
 	static unique_ptr<TransformResultValue> TransformGenericCopyOptionListInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static vector<GenericCopyOption>
@@ -6474,7 +6596,7 @@ public:
 	                                                      unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformTypeLiteralInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, const Identifier &col_id,
+	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, const LogicalType &type,
 	                                                         const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformIntervalLiteralInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
@@ -7235,6 +7357,33 @@ public:
 	                                                                   const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformExtractDatePartInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExternalResourceStatementInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCreateExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformCreateExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
+	                                    const optional<Identifier> &attach_alias,
+	                                    const optional<vector<GenericCopyOption>> &external_resource_creation_options);
+	static unique_ptr<TransformResultValue> TransformRegisterExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformRegisterExternalResourceStmt(PEGTransformer &transformer,
+	                                                                      const string &string_literal,
+	                                                                      const optional<Identifier> &attach_alias,
+	                                                                      unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformDestroyExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDestroyExternalResourceStmt(PEGTransformer &transformer,
+	                                                                     const Identifier &col_id);
+	static unique_ptr<TransformResultValue> TransformShowExternalResourcesStmtInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformShowExternalResourcesStmt(PEGTransformer &transformer,
+	                                                                   const optional<bool> &show_all_modifier);
+	static unique_ptr<TransformResultValue> TransformShowAllModifierInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static bool TransformShowAllModifier(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue>
+	TransformExternalResourceCreationOptionsInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformInsertStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -7906,7 +8055,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformJoinWithoutOnClauseInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformJoinWithoutOnClause(PEGTransformer &transformer, const JoinPrefix &join_prefix,
-	                                                         unique_ptr<TableRef> table_ref);
+	                                                         unique_ptr<TableRef> inner_table_ref);
 	static unique_ptr<TransformResultValue> TransformJoinQualifierInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformOnClauseInternal(PEGTransformer &transformer,
@@ -8150,6 +8299,9 @@ public:
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        const SettingInfo &set_variable_or_setting);
+	static unique_ptr<TransformResultValue> TransformSetSchemaInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetSchema(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformStandardAssignmentInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,

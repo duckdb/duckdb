@@ -16,7 +16,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -382,7 +382,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -456,19 +457,21 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
-	HighlightTokenizer tokenizer(sql);
+	vector<MatcherToken> tokens;
+	HighlightTokenizerBehavior behavior(sql, tokens);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
 
 	// use the parser to annotate any tokens
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
+	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->ProgramMatcher().Match(state);
 
-	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
+	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
 
 unique_ptr<GlobalTableFunctionState> SQLTokenizeInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -476,7 +479,7 @@ unique_ptr<GlobalTableFunctionState> SQLTokenizeInit(ClientContext &context, Tab
 }
 
 static unique_ptr<FunctionData> SQLTokenizeBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -526,7 +529,8 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 }
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -538,7 +542,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	ParserTokenizer tokenizer(sql_ref, root_tokens);
+	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
+	Tokenizer tokenizer(behavior);
 
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {

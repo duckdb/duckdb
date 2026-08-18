@@ -473,6 +473,13 @@ public:
 		capture_argument_aliases = value;
 	}
 
+	auto RequiresOrderedExecution() const -> bool {
+		return requires_ordered_execution;
+	}
+	auto SetRequiresOrderedExecution(bool value) -> void {
+		requires_ordered_execution = value;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -496,6 +503,8 @@ public:
 	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
 	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
 	bool capture_argument_aliases = false;
+	//! Whether calls to this function must follow input order
+	bool requires_ordered_execution = false;
 };
 
 class BoundSimpleFunction {

@@ -319,6 +319,26 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 	}
 }
 
+TEST_CASE("Test RTrim preserves trailing UTF-8", "[string_util]") {
+	string value = u8"abcé";
+	StringUtil::RTrim(value);
+	REQUIRE(value == u8"abcé");
+
+	value = u8"abcé   ";
+	StringUtil::RTrim(value);
+	REQUIRE(value == u8"abcé");
+}
+
+TEST_CASE("Test custom RTrim preserves UTF-8 paths", "[string_util]") {
+	string path = u8"/tmp/café";
+	StringUtil::RTrim(path, "/");
+	REQUIRE(path == u8"/tmp/café");
+
+	path = u8"/tmp/café///";
+	StringUtil::RTrim(path, "/");
+	REQUIRE(path == u8"/tmp/café");
+}
+
 TEST_CASE("Test path utilities", "[string_util]") {
 	SECTION("File name") {
 		REQUIRE("bin" == StringUtil::GetFileName("/usr/bin/"));

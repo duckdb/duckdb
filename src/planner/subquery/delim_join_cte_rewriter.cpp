@@ -8,7 +8,6 @@
 
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -17,13 +16,12 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 
 #include <algorithm>
 
@@ -515,174 +513,6 @@ static void MergeBindingExpressionReplacements(BindingReplacementGraph &replacem
 	}
 }
 
-static bool FilterNullRejectsExpression(const Expression &filter, const Expression &expr) {
-	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
-		for (auto &child : conjunction.GetChildren()) {
-			if (FilterNullRejectsExpression(*child, expr)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
-		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
-		if (conjunction.GetChildren().empty()) {
-			return false;
-		}
-		for (auto &child : conjunction.GetChildren()) {
-			if (!FilterNullRejectsExpression(*child, expr)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	if (filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
-		auto &op = filter.Cast<BoundOperatorExpression>();
-		return !op.GetChildren().empty() && Expression::Equals(*op.GetChildren()[0], expr);
-	}
-	if (!BoundComparisonExpression::IsComparison(filter)) {
-		return false;
-	}
-	if (filter.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
-	    filter.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		return false;
-	}
-	auto &comparison = filter.Cast<BoundFunctionExpression>();
-	return Expression::Equals(BoundComparisonExpression::Left(comparison), expr) ||
-	       Expression::Equals(BoundComparisonExpression::Right(comparison), expr);
-}
-
-static optional_ptr<LogicalCTE> FindCTE(LogicalOperator &op, TableIndex cte_index) {
-	if ((op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
-	     op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) &&
-	    op.Cast<LogicalCTE>().table_index == cte_index) {
-		return op.Cast<LogicalCTE>();
-	}
-	for (auto &child : op.children) {
-		auto result = FindCTE(*child, cte_index);
-		if (result) {
-			return result;
-		}
-	}
-	return nullptr;
-}
-
-static bool ExpressionIsNotNull(ClientContext &context, LogicalOperator &op, const Expression &expr,
-                                LogicalOperator &rewrite_root, vector<TableIndex> &seen_ctes) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		if (projection.children.size() != 1) {
-			return false;
-		}
-		ColumnBinding binding;
-		if (!GetBoundColumnRefBinding(expr, binding)) {
-			return false;
-		}
-		auto projection_bindings = projection.GetColumnBindings();
-		for (idx_t idx = 0; idx < projection_bindings.size(); idx++) {
-			if (projection_bindings[idx] == binding) {
-				return ExpressionIsNotNull(context, *projection.children[0], *projection.expressions[idx], rewrite_root,
-				                           seen_ctes);
-			}
-		}
-		return false;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		for (auto &filter_expr : filter.expressions) {
-			if (FilterNullRejectsExpression(*filter_expr, expr)) {
-				return true;
-			}
-		}
-		return filter.children.size() == 1 &&
-		       ExpressionIsNotNull(context, *filter.children[0], expr, rewrite_root, seen_ctes);
-	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		ColumnBinding binding;
-		if (!GetBoundColumnRefBinding(expr, binding)) {
-			return false;
-		}
-		optional_ptr<LogicalOperator> binding_child;
-		for (auto &child : op.children) {
-			auto child_bindings = child->GetColumnBindings();
-			if (std::find(child_bindings.begin(), child_bindings.end(), binding) == child_bindings.end()) {
-				continue;
-			}
-			if (binding_child) {
-				return false;
-			}
-			binding_child = *child;
-		}
-		return binding_child && ExpressionIsNotNull(context, *binding_child, expr, rewrite_root, seen_ctes);
-	}
-	case LogicalOperatorType::LOGICAL_GET: {
-		ColumnBinding binding;
-		if (!GetBoundColumnRefBinding(expr, binding)) {
-			return false;
-		}
-		auto &get = op.Cast<LogicalGet>();
-		if (binding.table_index != get.table_index) {
-			return false;
-		}
-		if (get.table_filters.HasFilter(binding.column_index)) {
-			auto column_expr = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
-			auto filter_expr =
-			    get.table_filters.GetFilterByColumnIndex(binding.column_index).ToExpression(*column_expr);
-			if (FilterNullRejectsExpression(*filter_expr, expr)) {
-				return true;
-			}
-		}
-		auto table = get.GetTable();
-		if (!table) {
-			return false;
-		}
-		auto &column_index = get.GetColumnIndex(binding);
-		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() ||
-		    column_index.GetPrimaryIndex() == DConstants::INVALID_INDEX) {
-			return false;
-		}
-		auto stats = table->GetStatistics(context, column_index.GetPrimaryIndex());
-		return stats && !stats->CanHaveNull();
-	}
-	case LogicalOperatorType::LOGICAL_CTE_REF: {
-		ColumnBinding binding;
-		if (!GetBoundColumnRefBinding(expr, binding)) {
-			return false;
-		}
-		auto &cte_ref = op.Cast<LogicalCTERef>();
-		if (binding.table_index != cte_ref.table_index ||
-		    std::find(seen_ctes.begin(), seen_ctes.end(), cte_ref.cte_index) != seen_ctes.end()) {
-			return false;
-		}
-		auto cte = FindCTE(rewrite_root, cte_ref.cte_index);
-		if (!cte || cte->children.empty()) {
-			return false;
-		}
-		auto column_index = binding.column_index.GetIndex();
-		auto &cte_source = *cte->children[0];
-		auto source_bindings = cte_source.GetColumnBindings();
-		if (column_index >= source_bindings.size() || column_index >= cte_source.types.size()) {
-			return false;
-		}
-		seen_ctes.push_back(cte_ref.cte_index);
-		auto source_expr = BoundColumnRefExpression(cte_source.types[column_index], source_bindings[column_index]);
-		auto result = ExpressionIsNotNull(context, cte_source, source_expr, rewrite_root, seen_ctes);
-		seen_ctes.pop_back();
-		return result;
-	}
-	default:
-		return false;
-	}
-}
-
-static bool ExpressionIsNotNull(ClientContext &context, LogicalOperator &op, const Expression &expr,
-                                LogicalOperator &rewrite_root) {
-	vector<TableIndex> seen_ctes;
-	return ExpressionIsNotNull(context, op, expr, rewrite_root, seen_ctes);
-}
-
 static bool ExpressionReferencesBinding(Expression &expr, const vector<ColumnBinding> &bindings) {
 	bool found = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
@@ -1013,6 +843,7 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 			return false;
 		}
 	}
+	NotNullExpressionAnalyzer nullability(context, rewrite_root);
 
 	vector<ColumnBinding> traced_bindings;
 	for (const auto &cond : delim_conditions) {
@@ -1044,9 +875,15 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 		current_op = *current_op.get().children[0];
 	}
 
+	vector<JoinCondition> rewritten_conditions;
+	rewritten_conditions.reserve(delim_conditions.size());
+	for (auto &condition : delim_conditions) {
+		rewritten_conditions.push_back(condition.Copy());
+	}
+
 	bool found_all = true;
-	for (idx_t cond_idx = 0; cond_idx < delim_conditions.size(); cond_idx++) {
-		auto &delim_condition = delim_conditions[cond_idx];
+	for (idx_t cond_idx = 0; cond_idx < rewritten_conditions.size(); cond_idx++) {
+		auto &delim_condition = rewritten_conditions[cond_idx];
 		if (!delim_condition.IsComparison()) {
 			continue;
 		}
@@ -1067,9 +904,10 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 				auto original_join_comparison = join_condition.GetComparisonType();
 				// DISTINCT FROM changes regular inequality semantics when the MARK probe key can be NULL.
 				if (delim_join.join_type == JoinType::MARK &&
-				    original_join_comparison == ExpressionType::COMPARE_NOTEQUAL &&
-				    !ExpressionIsNotNull(context, *delim_join.children[0], delim_condition.GetLHS(), rewrite_root)) {
-					return false;
+				    original_join_comparison == ExpressionType::COMPARE_NOTEQUAL) {
+					if (!nullability.IsNotNull(*delim_join.children[0], delim_condition.GetLHS())) {
+						return false;
+					}
 				}
 				if (delim_condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    delim_condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
@@ -1086,20 +924,20 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 				auto left_copy = delim_condition.LeftReference()->Copy();
 				auto right_copy = delim_condition.RightReference()->Copy();
 
-				delim_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
-				                                           FlipComparisonExpression(join_comparison));
+				rewritten_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
+				                                               FlipComparisonExpression(join_comparison));
 				if (delim_join.join_type != JoinType::MARK &&
 				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
 				    original_join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-					auto final_comparison = delim_conditions[cond_idx].GetComparisonType();
+					auto final_comparison = rewritten_conditions[cond_idx].GetComparisonType();
 					if (final_comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 						final_comparison = ExpressionType::COMPARE_NOTEQUAL;
 					} else if (final_comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 						final_comparison = ExpressionType::COMPARE_EQUAL;
 					}
-					delim_conditions[cond_idx] =
-					    JoinCondition(delim_conditions[cond_idx].LeftReference()->Copy(),
-					                  delim_conditions[cond_idx].RightReference()->Copy(), final_comparison);
+					rewritten_conditions[cond_idx] =
+					    JoinCondition(rewritten_conditions[cond_idx].LeftReference()->Copy(),
+					                  rewritten_conditions[cond_idx].RightReference()->Copy(), final_comparison);
 				}
 				found = true;
 				break;
@@ -1108,7 +946,11 @@ bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator
 		found_all = found_all && found;
 	}
 
-	return found_all;
+	if (!found_all) {
+		return false;
+	}
+	delim_join.conditions = std::move(rewritten_conditions);
+	return true;
 }
 
 bool GeneratedDedupRefEliminator::PreserveJoinAsSemi(unique_ptr<LogicalOperator> &join,

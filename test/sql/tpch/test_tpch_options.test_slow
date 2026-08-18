@@ -25,6 +25,19 @@ call dbgen(sf=1, catalog=NULL);
 ----
 <REGEX>:.*Cannot use NULL.*
 
+statement error
+CALL dbgen(sf='nan'::DOUBLE);
+----
+<REGEX>:.*DBGen requires a valid scale factor.*
+
+statement error
+CALL dbgen(sf=1e19);
+----
+<REGEX>:.*does not support a scale factor exceeding 100000.*
+
+statement ok
+CALL dbgen(sf=-9223372036854775808);
+
 statement ok
 CALL dbgen(sf=1, children =100, step = 0);
 

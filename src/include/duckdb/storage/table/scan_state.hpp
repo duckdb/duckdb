@@ -22,6 +22,7 @@
 
 namespace duckdb {
 class AdaptiveFilter;
+class AsyncTask;
 class ColumnSegment;
 class LocalTableStorage;
 class CollectionScanState;
@@ -225,6 +226,35 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+enum class VectorPrepareState : uint8_t {
+	//! No vector is currently prepared for processing
+	NONE,
+	//! A vector is prepared for processing
+	PREPARED,
+	//! A vector is prepared and its I/O has been registered
+	IO_REGISTERED
+};
+
+//! Eligibility state of one vector, computed by RowGroup::PrepareScan and consumed by ProcessPreparedScan
+struct PreparedScanVector {
+	PreparedScanVector();
+
+	//! The prepare state of the current vector
+	VectorPrepareState prepare_state = VectorPrepareState::NONE;
+	//! The number of rows in the prepared vector
+	idx_t max_count = 0;
+	//! The number of rows visible to the transaction (held in CollectionScanState::valid_sel)
+	idx_t visible_count = 0;
+	//! Whether the prepared vector has a system sample selection
+	bool has_sample_selection = false;
+	//! The number of sampled rows (held in sample_sel)
+	idx_t sample_count = 0;
+	//! The system sample selection
+	SelectionVector sample_sel;
+
+	void Reset();
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -249,6 +279,8 @@ public:
 	optional_idx row_number_base;
 	//! The valid selection
 	SelectionVector valid_sel;
+	//! The currently prepared vector (see RowGroup::PrepareScan)
+	PreparedScanVector prepared_vector;
 
 	RandomEngine random;
 
@@ -269,6 +301,10 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
+	//! Prepares the next eligible vector of the assignment and collects its I/O tasks
+	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks);
+	//! Processes the vector prepared by PrepareScanIO
+	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
 
 private:
 	TableScanState &parent;

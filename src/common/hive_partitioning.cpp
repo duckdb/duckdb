@@ -131,13 +131,17 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
-	// Handle nulls
-	if (IsNull(str_val)) {
+	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
+	if (str_val == "__HIVE_DEFAULT_PARTITION__") {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// for string values we can directly return the type
 		return Value(Unescape(str_val));
+	}
+	// Handle Hive NULL markers for non-string partition types
+	if (StringUtil::CIEquals(str_val, "NULL")) {
+		return Value(type);
 	}
 	if (str_val.empty()) {
 		// empty strings are NULL for non-string types
@@ -146,11 +150,12 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 
 	// cast to the target type
 	Value value(Unescape(str_val));
-	if (!value.TryCastAs(context, type)) {
+	auto cast = value.TryCastAs(context, type);
+	if (!cast) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(key), type.ToString());
 	}
-	return value;
+	return std::move(*cast);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
@@ -227,15 +232,11 @@ static inline Value GetHiveKeyValue(const T &val) {
 
 template <class T>
 static inline Value GetHiveKeyValue(const T &val, const LogicalType &type) {
-	auto result = GetHiveKeyValue(val);
-	result.Reinterpret(type);
-	return result;
+	return GetHiveKeyValue(val).WithType(type);
 }
 
 static inline Value GetHiveKeyNullValue(const LogicalType &type) {
-	Value result;
-	result.Reinterpret(type);
-	return result;
+	return Value().WithType(type);
 }
 
 template <class T>

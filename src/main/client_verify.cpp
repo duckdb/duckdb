@@ -66,8 +66,14 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 }
 
-void ClientContext::StatementVerification(ClientContextLock &lock, const string &query,
-                                          unique_ptr<SQLStatement> &statement,
+//! Swap in a statement produced by verification, carrying over the source text of the statement the user
+//! issued - the rewrite is an internal detail, so errors and logging must keep reporting the original query
+static void ReplaceStatement(unique_ptr<SQLStatement> &statement, unique_ptr<SQLStatement> replacement) {
+	replacement->query = statement->query;
+	statement = std::move(replacement);
+}
+
+void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
                                           PendingQueryParameters query_parameters) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
@@ -75,7 +81,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 			// COPY verification not supported for plan statements
 			return;
 		}
-		statement = statement->Copy();
+		ReplaceStatement(statement, statement->Copy());
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
 		if (statement->type == StatementType::RELATION_STATEMENT) {
 			// reparsing not supported for relation statements
@@ -97,7 +103,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 			// re-apply auto rollback
 			reparsed_transaction_stmt.info->auto_rollback = statement->Cast<TransactionStatement>().info->auto_rollback;
 		}
-		statement = std::move(parser.statements[0]);
+		ReplaceStatement(statement, std::move(parser.statements[0]));
 	} else if (verification == DebugStatementVerification::SERIALIZE_STATEMENT) {
 		switch (statement->type) {
 		case StatementType::SELECT_STATEMENT:
@@ -146,24 +152,24 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 
 		switch (statement->type) {
 		case StatementType::SELECT_STATEMENT:
-			statement = std::move(deserialized_stmt);
+			ReplaceStatement(statement, std::move(deserialized_stmt));
 			break;
 		case StatementType::INSERT_STATEMENT: {
 			auto result = make_uniq<InsertStatement>();
 			result->node = unique_ptr_cast<QueryNode, InsertQueryNode>(std::move(deserialized_node));
-			statement = std::move(result);
+			ReplaceStatement(statement, std::move(result));
 			break;
 		}
 		case StatementType::DELETE_STATEMENT: {
 			auto result = make_uniq<DeleteStatement>();
 			result->node = unique_ptr_cast<QueryNode, DeleteQueryNode>(std::move(deserialized_node));
-			statement = std::move(result);
+			ReplaceStatement(statement, std::move(result));
 			break;
 		}
 		case StatementType::UPDATE_STATEMENT: {
 			auto result = make_uniq<UpdateStatement>();
 			result->node = unique_ptr_cast<QueryNode, UpdateQueryNode>(std::move(deserialized_node));
-			statement = std::move(result);
+			ReplaceStatement(statement, std::move(result));
 			break;
 		}
 		default:
@@ -207,7 +213,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// execute the PREPARE
 		ErrorData error;
 		try {
-			auto prepare_result = RunStatementInternal(lock, string(), std::move(prepare), query_parameters);
+			auto prepare_result = RunStatementInternal(lock, std::move(prepare), query_parameters);
 			if (prepare_result->HasError()) {
 				error = prepare_result->GetErrorObject();
 			}
@@ -228,7 +234,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		execute->name = Identifier(name);
 		execute->named_values = std::move(prep_verifier.values);
 
-		statement = std::move(execute);
+		ReplaceStatement(statement, std::move(execute));
 	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT) {
 		if (statement->type == StatementType::EXPLAIN_STATEMENT) {
 			// don't explain explain...
@@ -242,7 +248,8 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 			// not supported for statements that already have parameters
 			return;
 		}
-		auto explain_q = "EXPLAIN " + query;
+		// deliberately left without source text: the EXPLAIN runs as a nested statement, and giving it a
+		// query would let it consume the error location that belongs to the statement we are verifying
 		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
 		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
 		// (which would lose parser timing captured before StatementVerification was called) and from
@@ -252,7 +259,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		ScopedConfigSetting suppress_profiling(
 		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
 		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
-		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
+		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();
 		}

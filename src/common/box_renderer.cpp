@@ -1082,6 +1082,7 @@ bool JSONParser::Process(const string &value) {
 	char quote_char = '"';
 	bool can_parse_value = false;
 	bool in_unquoted_value = false;
+	success = true;
 	pos = 0;
 	for (; success && pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -1110,7 +1111,8 @@ bool JSONParser::Process(const string &value) {
 			case ']': {
 				// closing bracket - move to next line and pop back the separator
 				if (separators.empty() || !SeparatorIsMatching(separators.back(), c)) {
-					throw InternalException("Failed to parse JSON string %s - invalid JSON", value);
+					success = false;
+					break;
 				}
 				separators.pop_back();
 				HandleBracketClose(c);
@@ -1171,7 +1173,7 @@ bool JSONParser::Process(const string &value) {
 			state = JSONState::IN_QUOTE;
 			HandleCharacter(c);
 		} else {
-			throw InternalException("Invalid json state");
+			success = false;
 		}
 	}
 	if (!success) {
@@ -1536,6 +1538,20 @@ public:
 	explicit JSONHighlighter(BoxRenderValue &render_value) : render_value(render_value) {
 	}
 
+public:
+	bool Highlight(const string &value) {
+		const auto annotation_count = render_value.annotations.size();
+		if (JSONParser::Process(value)) {
+			return true;
+		}
+
+		while (render_value.annotations.size() > annotation_count) {
+			render_value.annotations.pop_back();
+		}
+
+		return false;
+	}
+
 protected:
 	void HandleNull() override {
 		render_value.annotations.emplace_back(ResultRenderType::NULL_VALUE, pos);
@@ -1582,7 +1598,7 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 		return;
 	}
 	JSONHighlighter highlighter(render_value);
-	highlighter.Process(render_value.text);
+	highlighter.Highlight(render_value.text);
 }
 
 void BoxRendererImplementation::PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows,

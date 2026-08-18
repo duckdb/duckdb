@@ -93,6 +93,9 @@ string SQLIdentifier::ToString(const string &identifier) {
 	return SQLQuotedIdentifier::ToString(identifier);
 }
 
+SQLQuotedIdentifier::SQLQuotedIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
+}
+
 string SQLQuotedIdentifier::ToString(const string &identifier) {
 	return KeywordHelper::WriteQuotedAndEscaped(identifier, '"');
 }

@@ -48,6 +48,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -67,6 +68,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -1229,10 +1231,12 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	result.name = StringValue::Get(children[0]);
 	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
 	string error_message;
-	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+	auto default_value = children[2].TryCastAs(context, result.type, &error_message);
+	if (!default_value) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
 		                      result.type.ToString());
 	}
+	result.default_value = std::move(*default_value);
 
 	return result;
 }
@@ -1281,10 +1285,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	} else {
 		metadata = std::move(metadata_p);
-		if (parquet_options.encryption_config) {
-			encryption_util = context_p.db->GetEncryptionUtil(true);
-		}
 	}
+	if (parquet_options.encryption_config && !encryption_util) {
+		encryption_util = context_p.db->GetEncryptionUtil(true);
+	}
+	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 	// Length-pushdown rewrites these columns to BIGINT, update the local schema
 	for (const auto &[idx, expr] : projection_expressions) {
@@ -1332,6 +1337,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_op
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 }
 
@@ -1483,6 +1489,157 @@ static FilterPropagateResult CheckParquetFloatFilter(ClientContext &context, Col
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                        optional_ptr<ColumnReader> &leaf_reader) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		if (expr.Cast<BoundReferenceExpression>().Index() != 0) {
+			return false;
+		}
+		leaf_reader = &column_reader;
+		return true;
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	if (function.GetChildren().empty() ||
+	    !TryGetNestedBloomFilterLeaf(column_reader, *function.GetChildren()[0], leaf_reader)) {
+		return false;
+	}
+
+	if (leaf_reader->Type().id() == LogicalTypeId::INTERVAL && function.GetChildren().size() == 1 &&
+	    function.Function().GetName() == "normalized_interval") {
+		return true;
+	}
+
+	// Handle LIST type.
+	if (leaf_reader->Type().id() == LogicalTypeId::LIST &&
+	    (function.Function().GetName() == "list_extract" || function.Function().GetName() == "array_extract")) {
+		leaf_reader = &leaf_reader->Cast<ListColumnReader>().GetChildReader();
+		return true;
+	}
+
+	// Handle STRUCT type.
+	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
+		idx_t child_idx;
+		if (!TryGetStructExtractChildIndex(function, child_idx)) {
+			return false;
+		}
+		auto &struct_reader = leaf_reader->Cast<StructColumnReader>();
+		if (child_idx >= struct_reader.child_readers.size() || !struct_reader.child_readers[child_idx]) {
+			return false;
+		}
+		leaf_reader = struct_reader.child_readers[child_idx].get();
+		return true;
+	}
+
+	return false;
+}
+
+static optional_ptr<ColumnReader> TryGetBloomFilterSource(ColumnReader &column_reader) {
+	if (column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN) {
+		return column_reader;
+	}
+	if (column_reader.Schema().schema_type != ParquetColumnSchemaType::EXPRESSION) {
+		return nullptr;
+	}
+	auto &expr_reader = column_reader.Cast<ExpressionColumnReader>();
+	if (expr_reader.child_readers.size() != 1 || !expr_reader.expr ||
+	    expr_reader.expr->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return nullptr;
+	}
+	if (expr_reader.expr->Cast<BoundReferenceExpression>().Index() != 0) {
+		return nullptr;
+	}
+	return TryGetBloomFilterSource(*expr_reader.child_readers[0]);
+}
+
+static bool TryGetComparisonBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                            optional_ptr<ColumnReader> &leaf_reader,
+                                            unique_ptr<TableFilter> &leaf_filter) {
+	auto comparison_type = expr.GetExpressionType();
+	if (!BoundComparisonExpression::IsComparison(expr) ||
+	    (comparison_type != ExpressionType::COMPARE_EQUAL &&
+	     comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+		return false;
+	}
+
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
+	auto &left = BoundComparisonExpression::Left(comparison);
+	auto &right = BoundComparisonExpression::Right(comparison);
+	optional_ptr<const Expression> column_expr;
+	optional_ptr<const BoundConstantExpression> constant;
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		constant = left.Cast<BoundConstantExpression>();
+		column_expr = &right;
+	} else if (right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		constant = right.Cast<BoundConstantExpression>();
+		column_expr = &left;
+	} else {
+		return false;
+	}
+	if (constant->GetValue().IsNull()) {
+		return false;
+	}
+
+	if (!TryGetNestedBloomFilterLeaf(column_reader, *column_expr, leaf_reader) ||
+	    leaf_reader->Type() != constant->GetValue().type()) {
+		return false;
+	}
+
+	auto leaf_comparison = BoundComparisonExpression::Create(
+	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
+	    make_uniq<BoundConstantExpression>(constant->GetValue()));
+	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
+	return true;
+}
+
+static bool TryGetInBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                    optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+	    expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &in_expr = expr.Cast<BoundOperatorExpression>();
+	auto &children = in_expr.GetChildren();
+	if (children.size() <= 1 || !TryGetNestedBloomFilterLeaf(column_reader, *children[0], leaf_reader)) {
+		return false;
+	}
+
+	vector<Value> values;
+	values.reserve(children.size() - 1);
+	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
+		if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return false;
+		}
+		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull()) {
+			continue;
+		}
+		if (leaf_reader->Type() != constant.type()) {
+			return false;
+		}
+		values.push_back(constant);
+	}
+	if (values.empty()) {
+		return false;
+	}
+
+	auto column = make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL);
+	leaf_filter =
+	    make_uniq<ExpressionFilter>(ExpressionFilter::CreateInExpression(std::move(column), std::move(values)));
+	return true;
+}
+
+static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
+                                  optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
+	auto &expr = *expr_filter.expr;
+	return TryGetComparisonBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter) ||
+	       TryGetInBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter);
+}
+
 ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
 	return *column_readers[i];
 }
@@ -1512,9 +1669,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			auto &filter = *filter_entry;
 
 			auto schema_column_index = column_reader.ColumnIndex();
-			FilterPropagateResult prune_result;
+			auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			bool is_generated_column = schema_column_index >= group.columns.size();
-			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
 			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
 			auto stats = column_reader.Stats(state.group_index, group.columns);
 			if (stats) {
@@ -1523,13 +1679,10 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
 					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
 				}
-				if (is_expression) {
-					// no pruning possible for expressions
-					prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				} else if (!is_generated_column && has_min_max &&
-				           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-				            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				           parquet_options.can_have_nan) {
+				if (!is_expression && !is_generated_column && has_min_max &&
+				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+				    parquet_options.can_have_nan) {
 					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 					// based on nan
@@ -1540,20 +1693,39 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
 					prune_result = expr_filter.CheckStatistics(context, *stats);
 				}
-				// check the bloom filter if present
-				if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-				    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
-				    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
-				                                                *state.thrift_file_proto, allocator,
-				                                                column_reader.Schema())) {
+			}
+			// check the bloom filter if present
+			auto bloom_source = TryGetBloomFilterSource(column_reader);
+			if (bloom_source) {
+				optional_ptr<ColumnReader> bloom_reader = bloom_source;
+				optional_ptr<const TableFilter> bloom_filter = &filter;
+				unique_ptr<TableFilter> leaf_filter;
+				auto check_bloom_filter = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				if (bloom_source->Type().IsNested()) {
+					if (!TryGetBloomFilterLeaf(*bloom_source, filter, bloom_reader, leaf_filter)) {
+						bloom_reader = nullptr;
+					} else {
+						bloom_filter = leaf_filter.get();
+						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
+					}
+				}
+				auto hash_strategy = bloom_reader ? ParquetStatisticsUtils::GetBloomFilterHashStrategy(
+				                                        bloom_reader->Schema(), interval_bloom_filter_version)
+				                                  : nullopt;
+				if (check_bloom_filter && bloom_reader && bloom_filter &&
+				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
+				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy &&
+				    ParquetStatisticsUtils::BloomFilterExcludes(
+				        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data, *state.thrift_file_proto,
+				        allocator, bloom_reader->Schema(), *hash_strategy)) {
 					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 				}
+			}
 
-				if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-					// this effectively will skip this chunk
-					state.offset_in_group = group.num_rows;
-					return;
-				}
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				// this effectively will skip this chunk
+				state.offset_in_group = group.num_rows;
+				return;
 			}
 		}
 	}
@@ -1976,10 +2148,7 @@ AsyncResult ParquetReader::ScheduleRowGroupReads(ParquetReaderScanState &state, 
 	default:
 		throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
 	}
-	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-	}
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
 }
 
 void ParquetReader::FinishRowGroup(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch) {
