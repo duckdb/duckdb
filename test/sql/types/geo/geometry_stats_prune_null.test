@@ -33,6 +33,8 @@ statement ok
 RESET disabled_optimizers;
 
 # Same, but for a table in storage instead of a parquet file
+require noforcestorage
+
 statement ok
 CREATE TABLE geo_nullable AS
 	SELECT
