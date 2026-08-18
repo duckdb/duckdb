@@ -31,11 +31,13 @@ struct LocalTableFunctionState;
 
 class ReadAheadJobCompletion {
 public:
-	ReadAheadJobCompletion(shared_ptr<TaskExecutor> executor_p, idx_t io_task_count)
-	    : executor(std::move(executor_p)), pending_io_tasks(io_task_count) {
+	explicit ReadAheadJobCompletion(shared_ptr<TaskExecutor> executor_p)
+	    : executor(std::move(executor_p)), pending_io_tasks(0) {
 	}
 
 public:
+	//! Arm the completion for one I/O task, only called before the job becomes visible to other threads
+	void AddIOTask();
 	//! Mark one I/O task as completed, waking the scan task when it was the last one
 	void FinishIOTask();
 	//! Try to park the calling scan task until the job's I/O completes, the last I/O task to finish wakes it.
@@ -59,6 +61,7 @@ public:
 	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p,
 	                shared_ptr<ReadAheadJobCompletion> completion_p)
 	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
+		completion->AddIOTask();
 	}
 	~ReadAheadIOTask() override {
 		// If we are done we decrement the pending
@@ -78,19 +81,25 @@ private:
 //! Base of the job types driven by ScanReadAhead
 struct ScanReadAheadJob {
 	ScanReadAheadJob() = default;
-	ScanReadAheadJob(ScanReadAheadJob &&) noexcept = default;
-	ScanReadAheadJob &operator=(ScanReadAheadJob &&) noexcept = default;
 	virtual ~ScanReadAheadJob();
 
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
+		return static_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
+		return static_cast<const TARGET &>(*this);
+	}
+
+	//! Settle in-flight I/O, subclass destructors must call this before the members the I/O writes to are destroyed
+	void SettleIO() {
+		if (io_completion) {
+			io_completion->WaitForIO();
+			io_completion.reset();
+		}
 	}
 
 	//! Batch index of this job, drives ordered queue admission
@@ -99,6 +108,11 @@ struct ScanReadAheadJob {
 	shared_ptr<ReadAheadJobCompletion> io_completion;
 	//! Total bytes of scheduled I/O for this job
 	idx_t io_bytes = 0;
+
+protected:
+	//! Only subclasses move jobs, a base-level move would slice off the subclass members
+	ScanReadAheadJob(ScanReadAheadJob &&) noexcept = default;
+	ScanReadAheadJob &operator=(ScanReadAheadJob &&) noexcept = default;
 };
 
 //! Outcome of ScanReadAhead::AcquireJob
@@ -129,8 +143,9 @@ public:
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	//! Returns null when there are no more jobs to produce.
-	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(vector<unique_ptr<AsyncTask>> &io_tasks)>;
+	//! Receives a recycled scan state when one is available, returns null when there are no more jobs to produce.
+	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(
+	    unique_ptr<LocalTableFunctionState> recycled_state, vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
@@ -144,10 +159,10 @@ public:
 	void PushState(unique_ptr<LocalTableFunctionState> state);
 	//! Pop a recycled scan state, returns null when none is available
 	unique_ptr<LocalTableFunctionState> TryPopState();
-	//! Block until the claimed job's scheduled I/O has completed
+	//! Settle the claimed job's scheduled I/O, blocking until it completed, and release its budget charge
 	void WaitForJob(ScanReadAheadJob &job);
 	//! Acquire the next job, producing and claiming as needed; on ACQUIRED the job's I/O has been settled.
-	//! On PARKED the caller must yield holding the claimed job, the next call settles its completed I/O.
+	//! On PARKED the caller must yield holding the claimed job and settle it with WaitForJob when it resumes.
 	ScanReadAheadAcquire AcquireJob(ClientContext &context, TableFunctionInput &data_p,
 	                                const ProduceJobCallback &claim_and_schedule, unique_ptr<ScanReadAheadJob> &job);
 

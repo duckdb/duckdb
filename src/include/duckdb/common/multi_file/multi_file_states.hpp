@@ -221,13 +221,23 @@ enum class MultiFileDecodeResult : uint8_t {
 struct MultiFileScanJob : public ScanReadAheadJob {
 	MultiFileScanJob() = default;
 	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
-	MultiFileScanJob &operator=(MultiFileScanJob &&) noexcept = default;
+	MultiFileScanJob &operator=(MultiFileScanJob &&other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
+		// settle the previous job first, its I/O and scan state must go before its reader is released
+		SettleIO();
+		scan_state.reset();
+		ScanReadAheadJob::operator=(std::move(other));
+		reader = std::move(other.reader);
+		reader_data = other.reader_data;
+		file_index = other.file_index;
+		scan_state = std::move(other.scan_state);
+		return *this;
+	}
 	~MultiFileScanJob() override {
 		// scheduled reads might still be in flight, settle them before the members they write to are destroyed
-		if (io_completion) {
-			io_completion->WaitForIO();
-			io_completion.reset();
-		}
+		SettleIO();
 	}
 
 	//! The reader producing this job

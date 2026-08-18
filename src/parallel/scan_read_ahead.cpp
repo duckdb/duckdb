@@ -7,6 +7,10 @@
 
 namespace duckdb {
 
+void ReadAheadJobCompletion::AddIOTask() {
+	++pending_io_tasks;
+}
+
 void ReadAheadJobCompletion::FinishIOTask() {
 	const auto previous = pending_io_tasks.fetch_sub(1);
 	D_ASSERT(previous > 0);
@@ -74,10 +78,8 @@ void ReadAheadJobCompletion::WaitForIO() {
 }
 
 ScanReadAheadJob::~ScanReadAheadJob() {
-	// scheduled reads might still be in flight, wait for them before destroying the job
-	if (io_completion) {
-		io_completion->WaitForIO();
-	}
+	// safety net for jobs without I/O-written members, other subclasses settle in their own destructor
+	SettleIO();
 }
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
@@ -113,7 +115,8 @@ bool ScanReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) 
 	ProducerReservation reservation(*this);
 	try {
 		vector<unique_ptr<AsyncTask>> io_tasks;
-		auto job = claim_and_schedule(io_tasks);
+		// hand a recycled scan state to the producer, so learned scan state carries over across jobs
+		auto job = claim_and_schedule(TryPopState(), io_tasks);
 		if (!job) {
 			// there are no more jobs to produce, the scan is done
 			SetDone();
@@ -167,9 +170,7 @@ unique_ptr<LocalTableFunctionState> ScanReadAhead::TryPopState() {
 }
 
 void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {
-	if (job.io_completion) {
-		job.io_completion->WaitForIO();
-	}
+	job.SettleIO();
 	// the job's I/O has completed, release its budget charge
 	pending_io_bytes -= job.io_bytes;
 	job.io_bytes = 0;
@@ -179,12 +180,7 @@ void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {
 ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunctionInput &data_p,
                                                const ProduceJobCallback &claim_and_schedule,
                                                unique_ptr<ScanReadAheadJob> &job) {
-	if (job) {
-		// resuming with an already claimed job, settle its completed I/O
-		WaitForJob(*job);
-		job->io_completion.reset();
-		return ScanReadAheadAcquire::ACQUIRED;
-	}
+	D_ASSERT(!job);
 	while (true) {
 		// keep the queue full before claiming
 		while (TryProduceJob(claim_and_schedule)) {
@@ -208,7 +204,6 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 		}
 		// parking is not available to this caller or the I/O has already completed
 		WaitForJob(*job);
-		job->io_completion.reset();
 		return ScanReadAheadAcquire::ACQUIRED;
 	}
 }
@@ -231,16 +226,20 @@ bool ScanReadAhead::TryReserveSlot() {
 void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
 	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
-	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor, io_tasks.size());
+	auto completion = make_shared_ptr<ReadAheadJobCompletion>(executor);
 	job->io_completion = completion;
+	// wrap all reads before scheduling any, a wrapped task settles the completion even when scheduling throws
+	vector<unique_ptr<Task>> read_tasks;
+	read_tasks.reserve(io_tasks.size());
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
+		read_tasks.push_back(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
 	pending_io_bytes += job->io_bytes;
 	// schedule the reads detached on the async pool right away
-	for (auto &task : io_tasks) {
-		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
+	for (auto &task : read_tasks) {
+		executor->ScheduleTask(std::move(task));
 	}
 	lock_guard<mutex> guard(lock);
 	if (memory_governor) {

@@ -785,10 +785,11 @@ public:
 	//! Returns null when there are no more jobs to produce.
 	static unique_ptr<MultiFileScanJob> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
 	                                               MultiFileGlobalState &gstate,
+	                                               unique_ptr<LocalTableFunctionState> recycled_state,
 	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
 		auto job = make_uniq<MultiFileScanJob>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		job->scan_state = gstate.read_ahead->TryPopState();
+		job->scan_state = std::move(recycled_state);
 		if (!job->scan_state) {
 			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 		}
@@ -829,14 +830,15 @@ public:
 		if (lstate.job_state == MultiFileJobState::WAIT_IO) {
 			// resuming after parking, the job's I/O has completed
 			read_ahead.WaitForJob(lstate.job);
-			lstate.job.io_completion.reset();
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
 		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
-		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, bind_data, gstate, io_tasks); },
+		    [&](unique_ptr<LocalTableFunctionState> recycled_state, vector<unique_ptr<AsyncTask>> &io_tasks) {
+			    return ProduceJob(context, bind_data, gstate, std::move(recycled_state), io_tasks);
+		    },
 		    claimed);
 		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
 			// finish scan states left in the recycle pool so per-file accounting completes
