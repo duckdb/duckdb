@@ -320,7 +320,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
 
 				auto bound_table = trig.schema.GetEntry(bind_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
-				auto current_table = trig.schema.GetEntry(commit_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
+				auto current_table =
+				    trig.schema.GetEntry(commit_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
 
 				// Case (A): a concurrent alter was committed while this trigger was binding
 				if (bound_table && current_table && !RefersToSameObject(*bound_table, *current_table)) {
