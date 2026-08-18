@@ -33,6 +33,7 @@
 #include <type_traits>
 #include <vector>
 #include <stdexcept>
+#include <cstdint>
 
 namespace duckdb {
 namespace cxx {
