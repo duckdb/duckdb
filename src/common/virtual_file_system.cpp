@@ -151,6 +151,10 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		// a CompressedFileSystem wrapper is applied to the returned handle below
+		flags |= FileOpenFlags(FileOpenFlags::FILE_FLAGS_COMPRESSION_WRAPPER_UPSTREAM);
+	}
 
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
