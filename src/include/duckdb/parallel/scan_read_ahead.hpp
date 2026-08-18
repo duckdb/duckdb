@@ -130,7 +130,8 @@ public:
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	using ProduceJobCallback = std::function<bool(JOB &job, vector<unique_ptr<AsyncTask>> &io_tasks)>;
+	//! Returns null when there are no more jobs to produce.
+	using ProduceJobCallback = std::function<unique_ptr<JOB>(vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
@@ -142,11 +143,9 @@ public:
 		}
 		ProducerReservation reservation(*this);
 		try {
-			auto job = make_uniq<JOB>();
-			// prefer a finished job's scan state, so learned scan state carries over across jobs
-			job->scan_state = TryPopState();
 			vector<unique_ptr<AsyncTask>> io_tasks;
-			if (!claim_and_schedule(*job, io_tasks)) {
+			auto job = claim_and_schedule(io_tasks);
+			if (!job) {
 				// there are no more jobs to produce, the scan is done
 				SetDone();
 				return false;

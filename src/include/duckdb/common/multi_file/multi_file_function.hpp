@@ -783,21 +783,25 @@ public:
 	}
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	static bool ProduceJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
-	                       MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
+	//! Returns null when there are no more jobs to produce.
+	static unique_ptr<MultiFileScanJob> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
+	                                               MultiFileGlobalState &gstate,
+	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<MultiFileScanJob>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		if (!job.scan_state) {
-			job.scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		job->scan_state = gstate.read_ahead->TryPopState();
+		if (!job->scan_state) {
+			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 		}
-		if (!ClaimNextJob(context, bind_data, gstate, job)) {
-			return false;
+		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+			return nullptr;
 		}
-		auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.scan_state);
+		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
 			// if we got blocked, we have tasks for the pool
 			io_tasks = scheduled.ExtractAsyncTasks();
 		}
-		return true;
+		return job;
 	}
 
 	static ScanReadAheadAcquire AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
@@ -833,8 +837,8 @@ public:
 		unique_ptr<MultiFileScanJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
-		    [&](MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
-			    return ProduceJob(context, bind_data, gstate, job, io_tasks);
+		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) {
+			    return ProduceJob(context, bind_data, gstate, io_tasks);
 		    },
 		    claimed);
 		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
