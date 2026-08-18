@@ -97,6 +97,12 @@
       "paths": [
         "test/fuzzer/duckfuzz/vector_type.test"
       ]
+    },
+    {
+      "reason": "Encrypted persistent storage packs validity into one segment, so zonemap pruning cannot skip rows.",
+      "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test"
+      ]
     }
   ]
 }

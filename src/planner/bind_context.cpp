@@ -244,7 +244,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAli
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	}
 	auto &registered_name = binding->GetRegisteredColumnName(column_name);
-	if (registered_name != column_name) {
+	if (registered_name.GetIdentifierName() != column_name.GetIdentifierName()) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
 		result->SetAlias(registered_name);
@@ -286,7 +286,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
 	}
 	auto &registered_name = binding->GetRegisteredColumnName(column_name);
-	if (registered_name != column_name) {
+	if (registered_name.GetIdentifierName() != column_name.GetIdentifierName()) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
 		result->SetAlias(registered_name);

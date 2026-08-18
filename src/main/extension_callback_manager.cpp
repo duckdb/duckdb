@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/dialect_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
@@ -11,6 +12,8 @@
 namespace duckdb {
 
 struct ExtensionCallbackRegistry {
+	//! SQL dialects made available to the PEG parser
+	vector<DialectExtension> dialect_extensions;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the planner
@@ -40,6 +43,7 @@ ExtensionCallbackManager &ExtensionCallbackManager::Get(DatabaseInstance &db) {
 }
 
 ExtensionCallbackManager::ExtensionCallbackManager() : callback_registry(make_shared_ptr<ExtensionCallbackRegistry>()) {
+	callback_registry->dialect_extensions.emplace_back("duckdb");
 }
 ExtensionCallbackManager::~ExtensionCallbackManager() {
 }
@@ -56,6 +60,21 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->parser_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
+void ExtensionCallbackManager::Register(DialectExtension extension) {
+	if (extension.name.empty()) {
+		throw InvalidInputException("Dialect name cannot be empty");
+	}
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	for (auto &existing : new_registry->dialect_extensions) {
+		if (StringUtil::CIEquals(existing.name, extension.name)) {
+			throw InvalidInputException("Dialect \"%s\" is already registered", extension.name);
+		}
+	}
+	new_registry->dialect_extensions.push_back(std::move(extension));
 	callback_registry.atomic_store(new_registry);
 }
 
@@ -129,6 +148,12 @@ ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::Parse
 	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
 }
 
+ExtensionCallbackIteratorHelper<DialectExtension> ExtensionCallbackManager::DialectExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &dialect_extensions = registry->dialect_extensions;
+	return ExtensionCallbackIteratorHelper<DialectExtension>(dialect_extensions, std::move(registry));
+}
+
 ExtensionCallbackIteratorHelper<PlannerExtension> ExtensionCallbackManager::PlannerExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	auto &planner_extensions = registry->planner_extensions;
@@ -164,11 +189,25 @@ bool ExtensionCallbackManager::HasParserExtensions() const {
 	return !registry->parser_extensions.empty();
 }
 
+bool ExtensionCallbackManager::HasDialectExtension(const string &name) const {
+	auto registry = callback_registry.atomic_load();
+	for (auto &dialect : registry->dialect_extensions) {
+		if (StringUtil::CIEquals(dialect.name, name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void OptimizerExtension::Register(DBConfig &config, OptimizerExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
 void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
+void DialectExtension::Register(DBConfig &config, DialectExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
@@ -205,6 +244,7 @@ template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
+template class ExtensionCallbackIteratorHelper<DialectExtension>;
 template class ExtensionCallbackIteratorHelper<PlannerExtension>;
 
 } // namespace duckdb

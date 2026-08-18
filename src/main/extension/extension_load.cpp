@@ -711,26 +711,17 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
-	// If this is a logical extension name (not an explicit path), prefer the
-	// statically linked implementation for built-in linked extensions only.
-	// This avoids loading a second copy from disk (ASan ODR violation) while
-	// keeping externally installed/autoloaded extensions on the normal path.
-	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
-	// statically linked extensions are compiled in and inherently core-trusted, so only take this shortcut for a bare
-	// load or an explicit core namespace - never let community/x or myrepo/x resolve to a linked core extension
+	// Loading a second copy of an extension that is already linked into this binary is an ODR
+	// violation. The default extension table cannot detect that for out-of-tree extensions, which
+	// are never marked statically_loaded, so ask the CMake-generated loader instead.
+	// Statically linked extensions are inherently core-trusted, so only take this shortcut for a bare
+	// load or an explicit core namespace - never let community/x or myrepo/x resolve to a linked core extension.
 	bool allow_static_shortcut = options.repository.empty() || StringUtil::Lower(options.repository) == "core";
 	if (allow_static_shortcut && !ExtensionHelper::IsFullPath(options.extension_name)) {
-		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
-			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
-			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
-				continue;
-			}
-			DuckDB db_wrapper(db);
-			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, logical_name);
-			if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
-				return;
-			}
-			break;
+		auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+		DuckDB db_wrapper(db);
+		if (ExtensionHelper::LoadExtension(db_wrapper, logical_name) == ExtensionLoadResult::LOADED_EXTENSION) {
+			return;
 		}
 	}
 

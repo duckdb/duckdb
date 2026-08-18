@@ -113,13 +113,13 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                            const std::string &stats) {
-	Value result;
 	string error;
 	auto stats_val = ConvertValueInternal(type, schema_ele, stats);
-	if (!stats_val.DefaultTryCastAs(type, result, &error)) {
+	auto result = stats_val.DefaultTryCastAs(type, &error);
+	if (!result) {
 		return Value(type);
 	}
-	return result;
+	return std::move(*result);
 }
 Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                    const std::string &stats) {

@@ -21,38 +21,51 @@
 
 namespace duckdb {
 
-static void ThrowJSONCopyParameterException(const Identifier &option_name) {
-	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", option_name);
+//! JSON and GeoJSON share the same COPY implementation, differing only in the per-row payload expression and in
+//! how the file is wrapped (a JSON array vs a GeoJSON FeatureCollection)
+enum class JSONCopyToFormat { JSON, GEOJSON };
+
+static const char *GetJSONCopyFormatName(const JSONCopyToFormat format) {
+	return format == JSONCopyToFormat::GEOJSON ? "GEOJSON" : "JSON";
 }
 
-static void ThrowJSONCopyNullException(const Identifier &option_name) {
-	throw BinderException("COPY (FORMAT JSON) parameter %s cannot be NULL.", option_name);
+static void ThrowJSONCopyParameterException(const JSONCopyToFormat format, const Identifier &option_name) {
+	throw BinderException("COPY (FORMAT %s) parameter %s expects a single argument.", GetJSONCopyFormatName(format),
+	                      option_name);
 }
 
-static void ThrowJSONCopyTypeException(const Identifier &option_name, const Value &value, const string &expected_type) {
-	throw BinderException("COPY (FORMAT JSON) parameter %s expects a %s argument, but got %s.", option_name,
-	                      expected_type, value.type());
+static void ThrowJSONCopyNullException(const JSONCopyToFormat format, const Identifier &option_name) {
+	throw BinderException("COPY (FORMAT %s) parameter %s cannot be NULL.", GetJSONCopyFormatName(format), option_name);
 }
 
-static const Value &GetSingleJSONCopyValue(const Identifier &option_name, const vector<Value> &values) {
+static void ThrowJSONCopyTypeException(const JSONCopyToFormat format, const Identifier &option_name, const Value &value,
+                                       const string &expected_type) {
+	throw BinderException("COPY (FORMAT %s) parameter %s expects a %s argument, but got %s.",
+	                      GetJSONCopyFormatName(format), option_name, expected_type, value.type());
+}
+
+static const Value &GetSingleJSONCopyValue(const JSONCopyToFormat format, const Identifier &option_name,
+                                           const vector<Value> &values) {
 	if (values.size() != 1) {
-		ThrowJSONCopyParameterException(option_name);
+		ThrowJSONCopyParameterException(format, option_name);
 	}
 	if (values.back().IsNull()) {
-		ThrowJSONCopyNullException(option_name);
+		ThrowJSONCopyNullException(format, option_name);
 	}
 	return values.back();
 }
 
-static string GetSingleJSONCopyString(const Identifier &option_name, const vector<Value> &values) {
-	auto &value = GetSingleJSONCopyValue(option_name, values);
+static string GetSingleJSONCopyString(const JSONCopyToFormat format, const Identifier &option_name,
+                                      const vector<Value> &values) {
+	auto &value = GetSingleJSONCopyValue(format, option_name, values);
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		ThrowJSONCopyTypeException(option_name, value, "VARCHAR");
+		ThrowJSONCopyTypeException(format, option_name, value, "VARCHAR");
 	}
 	return StringValue::Get(value);
 }
 
-static bool GetJSONCopyBoolean(Binder &binder, const Identifier &option_name, const vector<Value> &values) {
+static bool GetJSONCopyBoolean(Binder &binder, const JSONCopyToFormat format, const Identifier &option_name,
+                               const vector<Value> &values) {
 	if (values.size() > 1) {
 		throw InvalidInputException("Copy option %s did not expect a list as argument", option_name);
 	}
@@ -60,7 +73,7 @@ static bool GetJSONCopyBoolean(Binder &binder, const Identifier &option_name, co
 		return true;
 	}
 	if (values.back().IsNull()) {
-		ThrowJSONCopyNullException(option_name);
+		ThrowJSONCopyNullException(format, option_name);
 	}
 	return values.back().CastAs(binder.context, LogicalType::BOOLEAN).GetValue<bool>();
 }
@@ -130,7 +143,7 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	projection.ResolveOperatorTypes();
 }
 
-static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
+static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt, const JSONCopyToFormat format) {
 	static const identifier_set_t SUPPORTED_BASE_OPTIONS {
 	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
 	    "append",           "filename_pattern", "file_extension", "per_thread_output",   "file_size_bytes",
@@ -142,41 +155,63 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
+	// The column-selecting GeoJSON options are three-state: unset means "use the default", NULL means "explicitly
+	// none", and anything else names a column
+	unique_ptr<ParsedExpression> geometry_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
+	unique_ptr<ParsedExpression> id_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
+	bool write_bbox = false;
 	// Partition columns are kept as separate columns (instead of being packed into the JSON object), so that the
 	// COPY writer can partition on them. By default they are excluded from the written JSON, matching the behavior
 	// of the other formats. WRITE_PARTITION_COLUMNS keeps them inside the JSON object instead.
 	vector<string> partition_columns;
 	bool write_partition_columns = false;
 	vector<Identifier> original_column_names;
-	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
-	identifier_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
+	const auto is_geojson = format == JSONCopyToFormat::GEOJSON;
+	const auto is_geojsonl = is_geojson && StringUtil::CIEquals(stmt.info->format, "geojsonl");
+	// GeoJSON is wrapped in a FeatureCollection by default, but newline-delimited GeoJSON (geojsonl) and plain
+	// JSON are not wrapped unless ARRAY is requested
+	bool array_output = is_geojson && !is_geojsonl;
+	// We insert the file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
+	identifier_map_t<vector<Value>> csv_copy_options {
+	    {"file_extension", {is_geojsonl ? "geojsonl" : (is_geojson ? "geojson" : "json")}}};
 	for (const auto &kv : copy_info.options) {
 		auto &option_name = kv.first;
 		auto &option_values = kv.second;
 		if (option_name == "dateformat" || option_name == "date_format") {
-			date_format = GetSingleJSONCopyString(option_name, option_values);
+			date_format = GetSingleJSONCopyString(format, option_name, option_values);
 		} else if (option_name == "timestampformat" || option_name == "timestamp_format") {
-			timestamp_format = GetSingleJSONCopyString(option_name, option_values);
+			timestamp_format = GetSingleJSONCopyString(format, option_name, option_values);
 		} else if (option_name == "array") {
 			if (option_values.size() > 1) {
-				ThrowJSONCopyParameterException(option_name);
+				ThrowJSONCopyParameterException(format, option_name);
 			}
 			if (!option_values.empty() && option_values.back().IsNull()) {
-				ThrowJSONCopyNullException(option_name);
+				ThrowJSONCopyNullException(format, option_name);
 			}
-			if (option_values.empty() ||
-			    BooleanValue::Get(option_values.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
-				csv_copy_options["prefix"] = {"[\n\t"};
-				csv_copy_options["suffix"] = {"\n]\n"};
-				csv_copy_options["new_line"] = {",\n\t"};
+			array_output =
+			    option_values.empty() || BooleanValue::Get(option_values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+		} else if (is_geojson && (option_name == "geometry_column" || option_name == "id_column")) {
+			// NULL explicitly unsets these, so unlike the other options a NULL value is meaningful here
+			if (option_values.size() != 1) {
+				ThrowJSONCopyParameterException(format, option_name);
 			}
+			auto &value = option_values.back();
+			if (!value.IsNull() && value.type().id() != LogicalTypeId::VARCHAR) {
+				ThrowJSONCopyTypeException(format, option_name, value, "VARCHAR");
+			}
+			// An empty string marks "explicitly none", which a column name can never be
+			auto column = value.IsNull() ? Value("") : value;
+			auto &target = option_name == "geometry_column" ? geometry_column : id_column;
+			target = make_uniq<ConstantExpression>(std::move(column));
+		} else if (is_geojson && option_name == "bbox") {
+			write_bbox = GetJSONCopyBoolean(binder, format, option_name, option_values);
 		} else if (option_name == "file_extension") {
-			// Since we set the file extension to "json" above, we need to override it
-			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(option_name, option_values)};
+			// Since we set the file extension above, we need to override it
+			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(format, option_name, option_values)};
 		} else if (option_name == "partition_by") {
 			for (const auto &val : option_values) {
 				if (val.IsNull()) {
-					ThrowJSONCopyNullException(option_name);
+					ThrowJSONCopyNullException(format, option_name);
 				}
 			}
 			if (original_column_names.empty()) {
@@ -198,16 +233,22 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 		} else if (option_name == "write_partition_columns") {
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
-			write_partition_columns = GetJSONCopyBoolean(binder, option_name, option_values);
+			write_partition_columns = GetJSONCopyBoolean(binder, format, option_name, option_values);
 		} else if (SUPPORTED_BASE_OPTIONS.find(option_name) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!option_values.empty() && option_values.back().IsNull()) {
-				ThrowJSONCopyNullException(option_name);
+				ThrowJSONCopyNullException(format, option_name);
 			}
 			// We support these base options
 			csv_copy_options.insert(kv);
 		} else {
-			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): %s.", option_name);
+			throw BinderException("Unknown option for COPY ... TO ... (FORMAT %s): %s.", GetJSONCopyFormatName(format),
+			                      option_name);
 		}
+	}
+	if (array_output) {
+		csv_copy_options["prefix"] = {is_geojson ? "{\"type\":\"FeatureCollection\",\"features\":[\n\t" : "[\n\t"};
+		csv_copy_options["suffix"] = {is_geojson ? "\n]}\n" : "\n]\n"};
+		csv_copy_options["new_line"] = {",\n\t"};
 	}
 	if (!write_partition_columns && !partition_columns.empty() &&
 	    partition_columns.size() == original_column_names.size()) {
@@ -243,9 +284,24 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	struct_pack_args.push_back(std::move(unpack));
 	auto struct_pack = make_uniq<FunctionExpression>("struct_pack", std::move(struct_pack_args));
 
-	vector<unique_ptr<ParsedExpression>> to_json_args;
-	to_json_args.push_back(std::move(struct_pack));
-	select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
+	if (is_geojson) {
+		// Unlike to_json, the GeoJSON writer takes the formats as regular arguments, so it needs no post-bind fixup
+		vector<unique_ptr<ParsedExpression>> geojson_args;
+		geojson_args.push_back(std::move(struct_pack));
+		geojson_args.push_back(
+		    make_uniq<ConstantExpression>(date_format.empty() ? Value(LogicalType::VARCHAR) : Value(date_format)));
+		geojson_args.push_back(make_uniq<ConstantExpression>(timestamp_format.empty() ? Value(LogicalType::VARCHAR)
+		                                                                              : Value(timestamp_format)));
+		geojson_args.push_back(std::move(geometry_column));
+		geojson_args.push_back(std::move(id_column));
+		geojson_args.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(write_bbox)));
+		select_node.select_list.push_back(
+		    make_uniq<FunctionExpression>("__internal_json_copy_to_geojson", std::move(geojson_args)));
+	} else {
+		vector<unique_ptr<ParsedExpression>> to_json_args;
+		to_json_args.push_back(std::move(struct_pack));
+		select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
+	}
 
 	// Keep the partition columns as separate columns so the COPY writer can partition on them. The writer routes rows
 	// into the right files based on these columns but does not write them to disk (WRITE_PARTITION_COLUMNS is handled
@@ -264,8 +320,31 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	copy_info.options["header"] = {{0}};
 
 	auto result = binder.Bind(stmt);
-	BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
+	if (!is_geojson) {
+		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
+	}
 	return result;
+}
+
+static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
+	return CopyToJSONPlanInternal(binder, stmt, JSONCopyToFormat::JSON);
+}
+
+static BoundStatement CopyToGeoJSONPlan(Binder &binder, CopyStatement &stmt) {
+	return CopyToJSONPlanInternal(binder, stmt, JSONCopyToFormat::GEOJSON);
+}
+
+CopyFunction JSONFunctions::GetGeoJSONCopyFunction() {
+	CopyFunction function("geojson");
+	function.extension = "geojson";
+
+	function.plan = CopyToGeoJSONPlan;
+
+	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
+	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
+	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+
+	return function;
 }
 
 CopyFunction JSONFunctions::GetJSONCopyFunction() {

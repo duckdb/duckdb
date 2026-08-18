@@ -238,6 +238,9 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-H query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpch::DBGenWrapper::GetQuery(index);
 }

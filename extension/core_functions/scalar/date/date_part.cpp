@@ -2175,7 +2175,6 @@ struct StructDatePart {
 			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
-		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		return make_uniq<BindData>(bound_function.GetReturnType(), part_codes);
 	}
@@ -2184,10 +2183,11 @@ struct StructDatePart {
 	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		D_ASSERT(args.ColumnCount() == 1);
-
+		// the part list is folded into the bind data during the bind - only the trailing temporal argument is read.
+		// plans written by versions that erased the part list have a single argument
+		D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 		const auto count = args.size();
-		const Vector &input = args.data[0];
+		const Vector &input = args.data[args.ColumnCount() - 1];
 
 		//	Type counts
 		const auto BIGINT_COUNT = size_t(DatePartSpecifier::BEGIN_DOUBLE) - size_t(DatePartSpecifier::BEGIN_BIGINT);
