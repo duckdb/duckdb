@@ -12,6 +12,8 @@
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
+
 namespace duckdb {
 
 static bool IsDirectFilterColumnRef(const Expression &expr) {
@@ -137,8 +139,28 @@ static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
+		// everything after the constant is checked for NULLs, with the trailing arguments collected by a "*args"
+		// parameter - look through it at the arguments themselves
+		vector<reference<const Expression>> checked;
 		for (auto child = ++func.GetChildren().begin(); child != func.GetChildren().end(); child++) {
-			switch (child->get()->GetExpressionType()) {
+			auto &argument = *child->get();
+			if (!ArgumentPack::IsPackType(argument.GetReturnType())) {
+				checked.push_back(argument);
+				continue;
+			}
+			if (argument.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				// the pack collected only constants and was folded into a single value
+				continue;
+			}
+			if (argument.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+				return false;
+			}
+			for (auto &packed : argument.Cast<BoundOperatorExpression>().GetChildren()) {
+				checked.push_back(*packed);
+			}
+		}
+		for (auto &child : checked) {
+			switch (child.get().GetExpressionType()) {
 			case ExpressionType::BOUND_REF:
 			case ExpressionType::VALUE_CONSTANT:
 				continue;

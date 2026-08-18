@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,41 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOpera
 
 	result->Finalize();
 	return result;
+}
+
+//! Build the TUPLE/STRUCT value that fills a "*args"/"**kwargs" parameter out of the packed arguments.
+//! The pack itself is never NULL - NULLs among the packed arguments stay visible as NULL members, and it is up to the
+//! function to decide what they mean. A constant NULL argument still short-circuits the call at bind time, as it does
+//! for a regular argument.
+void ExpressionExecutor::ExecuteArgumentPack(const BoundOperatorExpression &expr, ExpressionState *state,
+                                             const SelectionVector *sel, idx_t count, Vector &result) {
+	auto &children = expr.GetChildren();
+	if (children.empty()) {
+		// empty pack: no children to reference, the value is a single non-null constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+		return;
+	}
+
+	state->intermediate_chunk.Reset();
+	auto &child_entries = StructVector::GetEntries(result);
+	D_ASSERT(child_entries.size() == children.size());
+
+	bool all_const = true;
+	idx_t children_size = 0;
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &intermediate = state->intermediate_chunk.data[i];
+		Execute(*children[i], state->child_states[i].get(), sel, count, intermediate);
+		if (intermediate.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			all_const = false;
+		}
+		child_entries[i].Reference(intermediate);
+		children_size = MaxValue<idx_t>(children_size, child_entries[i].size());
+	}
+
+	// only set the pack buffer's type/size - the children reference the intermediate vectors and must not be touched
+	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	result.BufferMutable().SetVectorSizeOnly(children_size);
 }
 
 void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, ExpressionState *state,
@@ -62,6 +98,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			// directly use the result
 			result.Reference(intermediate);
 		}
+	} else if (expression_type == ExpressionType::ARGUMENT_PACK) {
+		ExecuteArgumentPack(expr, state, sel, count, result);
 	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
 		SelectionVector sel_a(count);
 		SelectionVector sel_b(count);

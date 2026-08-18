@@ -9,7 +9,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -121,9 +123,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
-		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
-	}
+	D_ASSERT(arguments.size() == INDEX_KEY_FIXED_ARGS + 1);
 
 	auto path = EvaluateTableDescription(input.GetConstant(0));
 	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
@@ -161,7 +161,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 	auto key_types = bound_index.logical_types;
 
-	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
+	idx_t num_key_args = StructType::GetChildCount(arguments[INDEX_KEY_FIXED_ARGS]->GetReturnType());
 	if (num_key_args != key_types.size()) {
 		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided",
 		                      index_name, key_types.size(), num_key_args);
@@ -172,12 +172,11 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	// for execution even though they are only required for binding. This requires us to create a key_chunk
 	// that only references the key columns during execution. We could erase the first two arguments here, but
 	// that also requires some (de)serialization boilerplate, so for now we don't do it.
+	// giving the pack the index's key types makes CastToFunctionArguments cast the key columns into place
 	bound_function.GetArguments().clear();
 	bound_function.GetArguments().push_back(arguments[0]->GetReturnType());
 	bound_function.GetArguments().push_back(arguments[1]->GetReturnType());
-	for (auto &key_type : key_types) {
-		bound_function.GetArguments().push_back(key_type);
-	}
+	bound_function.GetArguments().push_back(ArgumentPack::PositionalType(key_types));
 
 	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
 }
@@ -191,8 +190,9 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// Create a DataChunk referencing only the key columns (skip path and index_name).
 	DataChunk key_chunk;
 	key_chunk.InitializeEmpty(bind_data.key_types);
+	auto &key_columns = StructVector::GetEntries(args.data[INDEX_KEY_FIXED_ARGS]);
 	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
-		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
+		key_chunk.data[i].Reference(key_columns[i]);
 	}
 
 	auto &art = bind_data.art;
@@ -218,9 +218,13 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction IndexKeyFun::GetFunction() {
-	ScalarFunction fun("index_key", {{"path", LogicalTypeId::STRUCT}, {"name", LogicalType::VARCHAR}},
-	                   LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
-	fun.SetVarArgs(LogicalTypeId::ANY);
+	FunctionSignature signature;
+	signature.AddParameter("path", LogicalTypeId::STRUCT);
+	signature.AddParameter("name", LogicalType::VARCHAR);
+	signature.AddVarPositionalParameter("keys", LogicalTypeId::ANY);
+	signature.SetReturnType(LogicalType::BLOB);
+	ScalarFunction fun("index_key", std::move(signature), IndexKeyFunction);
+	fun.SetBindCallback(IndexKeyBind);
 	return fun;
 }
 

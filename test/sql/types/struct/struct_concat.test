@@ -44,7 +44,7 @@ SELECT struct_concat(s, {'a': 2, 'b': NULL}) FROM t1 WHERE s.i % 2 = 0;
 statement error
 SELECT struct_concat();
 ----
-Invalid Input Error: struct_concat: At least one argument is required
+<REGEX>:Binder Error:.*No function matches the given name and argument types 'struct_concat\(\)'.*
 
 statement error
 SELECT struct_concat(NULL::STRUCT(k INT), 'not a struct');

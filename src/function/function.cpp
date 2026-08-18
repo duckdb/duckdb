@@ -6,6 +6,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
 
@@ -70,16 +71,36 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 }
 
 string FunctionParameter::ToString() const {
-	if (default_value) {
-		return StringUtil::Format("%s %s := %s", name, type.ToString(), default_value->ToString());
+	string prefix;
+	switch (kind) {
+	case FunctionParameterKind::VAR_POSITIONAL:
+		prefix = "*";
+		break;
+	case FunctionParameterKind::VAR_KEYWORD:
+		prefix = "**";
+		break;
+	default:
+		break;
 	}
-	return StringUtil::Format("%s %s", name, type.ToString());
+	if (default_value) {
+		return StringUtil::Format("%s%s %s := %s", prefix, name, type.ToString(), default_value->ToString());
+	}
+	return StringUtil::Format("%s%s %s", prefix, name, type.ToString());
 }
 
 string FunctionSignature::ToString() const {
 	vector<string> params;
 	params.reserve(parameters.size());
+	bool emitted_keyword_only_marker = false;
 	for (auto &param : parameters) {
+		// keyword-only parameters that are not preceded by a "*args" parameter are introduced by a bare "*",
+		// matching Python's notation
+		if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && !emitted_keyword_only_marker) {
+			emitted_keyword_only_marker = true;
+			if (!HasVarPositional()) {
+				params.push_back("*");
+			}
+		}
 		params.push_back(param.ToString());
 	}
 	if (varargs.IsValid()) {
@@ -139,6 +160,7 @@ hash_t FunctionSignature::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &param : parameters) {
 		hash = duckdb::CombineHash(hash, param.GetType().Hash());
+		hash = duckdb::CombineHash(hash, duckdb::Hash(static_cast<uint8_t>(param.GetKind())));
 	}
 	return hash;
 }
@@ -206,6 +228,10 @@ void Function::EraseArgument(BoundSimpleFunction &bound_function, vector<unique_
 	}
 	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
 	D_ASSERT(argument_index < arguments.size());
+	if (ArgumentPack::IsPackType(bound_function.GetArguments()[argument_index])) {
+		throw InternalException("%s: cannot erase argument %llu - it holds a packed argument list",
+		                        bound_function.GetName(), argument_index);
+	}
 	arguments.erase_at(argument_index);
 	bound_function.GetArguments().erase_at(argument_index);
 }
@@ -223,7 +249,7 @@ string BoundSimpleFunction::ToString() const {
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {
-	return type == other.type && name == other.name;
+	return type == other.type && name == other.name && kind == other.kind;
 }
 
 bool FunctionParameter::operator!=(const FunctionParameter &other) const {
@@ -246,6 +272,9 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 		if (parameters[i].GetType() != other.parameters[i].GetType()) {
 			return false;
 		}
+		if (parameters[i].GetKind() != other.parameters[i].GetKind()) {
+			return false;
+		}
 	}
 	if (varargs != other.varargs) {
 		return false;
@@ -259,6 +288,20 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
+vector<reference<Expression>> BindFunctionInput::GetUnpackedArguments() const {
+	vector<reference<Expression>> result;
+	for (auto &argument : arguments) {
+		if (!ArgumentPack::IsPackType(argument->GetReturnType())) {
+			result.push_back(*argument);
+			continue;
+		}
+		for (auto &packed : ArgumentPack::GetPackedChildren(*argument)) {
+			result.push_back(*packed);
+		}
+	}
+	return result;
+}
+
 Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	if (arg_idx >= arguments.size()) {
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);

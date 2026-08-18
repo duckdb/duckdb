@@ -56,7 +56,12 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	default:
 		break;
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE && !expr.IsVolatile()) {
+	// an argument pack only makes sense in the argument slot it was built for: hoisting it into a projection would
+	// leave the call holding a column reference, which its "bind" callback cannot read the collected arguments out
+	// of. Nothing is lost by that - building a pack is just referencing the vectors of the arguments it collected,
+	// and those are still considered below.
+	const auto is_argument_pack = expr.GetExpressionType() == ExpressionType::ARGUMENT_PACK;
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE && !expr.IsVolatile() && !is_argument_pack) {
 		// we can't move aggregates to a projection, so we only consider the children of the aggregate
 		auto node = state.expression_count.find(expr);
 		if (node == state.expression_count.end()) {

@@ -213,8 +213,11 @@ public:
 private:
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
+	//! Cast the arguments an argument pack collected to the types the function settled on
+	void CastArgumentPack(Expression &pack, LogicalType &pack_type);
 
-	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void ResolveTemplateTypes(const FunctionSignature &sig, BoundSimpleFunction &bound_function,
+	                          const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
 
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,

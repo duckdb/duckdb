@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
@@ -10,22 +11,11 @@ namespace duckdb {
 
 namespace {
 
-struct UnionValueBindData : public FunctionData {
-	UnionValueBindData() {
-	}
-
-public:
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<UnionValueBindData>();
-	}
-	bool Equals(const FunctionData &other_p) const override {
-		return true;
-	}
-};
-
 void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	const auto &kwargs = ArgumentPack::GetInput(args.data[0]);
+
 	// Assign the new entries to the result vector
-	UnionVector::GetMember(result, 0).Reference(args.data[0]);
+	UnionVector::GetMember(result, 0).Reference(kwargs[0]);
 
 	// Set the result tag vector to a constant value
 	auto &tag_vector = UnionVector::GetTags(result);
@@ -34,33 +24,32 @@ void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments.size() != 1) {
-		throw BinderException("union_value takes exactly one argument");
-	}
-	auto &child = arguments[0];
+	const auto &args = input.GetArguments();
 
-	if (child->GetAlias().empty()) {
-		throw BinderException("Need named argument for union tag, e.g. UNION_VALUE(a := b)");
+	const auto &kwargs = ArgumentPack::GetTypes(args[0]->GetReturnType());
+	if (kwargs.size() != 1) {
+		throw BinderException("union_value takes exactly one named argument");
 	}
 
-	child_list_t<LogicalType> union_members;
+	auto &fun = input.GetBoundFunction();
+	fun.SetReturnType(LogicalType::UNION(kwargs));
 
-	union_members.emplace_back(make_pair(child->GetAlias(), child->GetReturnType()));
-
-	bound_function.SetReturnType(LogicalType::UNION(std::move(union_members)));
-	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
+	return make_uniq<VariableReturnBindData>(fun.GetReturnType());
 }
 
 } // namespace
 
 ScalarFunction UnionValueFun::GetFunction() {
-	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
-	fun.SetVarArgs(LogicalType::ANY);
-	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
-	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
+	auto sig =
+	    FunctionSignature().AddVarKeywordParameter("kwargs", LogicalType::ANY).SetReturnType(LogicalTypeId::UNION);
+
+	auto fun = ScalarFunction("union_value", std::move(sig))
+	               .SetFunctionCallback(UnionValueFunction)
+	               .SetBindCallback(UnionValueBind)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetSerializeCallback(VariableReturnBindData::Serialize)
+	               .SetDeserializeCallback(VariableReturnBindData::Deserialize);
+
 	return fun;
 }
 

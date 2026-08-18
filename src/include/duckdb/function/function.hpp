@@ -117,6 +117,18 @@ struct FunctionParameters {
 	named_parameter_map_t named_parameters;
 };
 
+//! How a parameter may be supplied by the caller. Mirrors Python's parameter kinds.
+enum class FunctionParameterKind : uint8_t {
+	//! An ordinary parameter - may be supplied positionally or by name
+	STANDARD = 0,
+	//! A "*args" parameter - collects the trailing positional arguments into a TUPLE
+	VAR_POSITIONAL = 1,
+	//! A "**kwargs" parameter - collects the unmatched named arguments into a STRUCT
+	VAR_KEYWORD = 2,
+	//! A parameter that may only be supplied by name
+	KEYWORD_ONLY = 3,
+};
+
 class FunctionParameter {
 public:
 	FunctionParameter(Identifier name, LogicalType type)
@@ -125,6 +137,10 @@ public:
 
 	FunctionParameter(Identifier name, LogicalType type, Value value)
 	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
+	}
+
+	FunctionParameter(Identifier name, LogicalType type, FunctionParameterKind kind)
+	    : name(std::move(name)), type(std::move(type)), default_value(nullptr), kind(kind) {
 	}
 
 	string ToString() const;
@@ -156,10 +172,23 @@ public:
 		return default_value != nullptr;
 	}
 
+	auto GetKind() const -> FunctionParameterKind {
+		return kind;
+	}
+	auto SetKind(FunctionParameterKind kind_p) -> void {
+		kind = kind_p;
+	}
+	//! Whether this is a "*args" or "**kwargs" parameter, i.e. one that is presented to the function as a single
+	//! packed TUPLE/STRUCT value built from a variable number of arguments
+	auto IsArgumentPack() const -> bool {
+		return kind == FunctionParameterKind::VAR_POSITIONAL || kind == FunctionParameterKind::VAR_KEYWORD;
+	}
+
 private:
 	Identifier name;
 	LogicalType type;
 	shared_ptr<Value> default_value;
+	FunctionParameterKind kind = FunctionParameterKind::STANDARD;
 };
 
 class FunctionSignature {
@@ -206,8 +235,9 @@ public:
 	auto GetReturnType() const -> const LogicalType & {
 		return return_type;
 	}
-	auto SetReturnType(LogicalType return_type_p) -> void {
+	auto SetReturnType(LogicalType return_type_p) -> FunctionSignature & {
 		return_type = std::move(return_type_p);
+		return *this;
 	}
 
 	auto HasVarArgs() const -> bool {
@@ -236,9 +266,38 @@ public:
 		return *this;
 	}
 
+	//! Add a "*args" parameter. 'element_type' constrains the individual arguments collected into it (ANY for no
+	//! constraint) - the function itself is passed a single TUPLE of all of them.
+	auto AddVarPositionalParameter(Identifier name, LogicalType element_type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(element_type), FunctionParameterKind::VAR_POSITIONAL);
+		return *this;
+	}
+
+	//! Add a "**kwargs" parameter. 'value_type' constrains the individual arguments collected into it (ANY for no
+	//! constraint) - the function itself is passed a single STRUCT keyed by the caller's argument names.
+	auto AddVarKeywordParameter(Identifier name, LogicalType value_type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(value_type), FunctionParameterKind::VAR_KEYWORD);
+		return *this;
+	}
+
+	auto AddKeywordOnlyParameter(Identifier name, LogicalType type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type), FunctionParameterKind::KEYWORD_ONLY);
+		return *this;
+	}
+
+	auto AddKeywordOnlyParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value));
+		parameters.back().SetKind(FunctionParameterKind::KEYWORD_ONLY);
+		return *this;
+	}
+
 	auto GetParameterIndexByName(const Identifier &name) const -> optional_idx {
 		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
+			if (parameters[i].IsArgumentPack()) {
+				// argument packs cannot be supplied by name - they are built from the arguments they collect
+				continue;
+			}
 			if (parameters[i].GetName() == name) {
 				return i;
 			}
@@ -246,10 +305,42 @@ public:
 		return optional_idx();
 	}
 
+	auto GetVarPositionalIndex() const -> optional_idx {
+		return GetParameterIndexByKind(FunctionParameterKind::VAR_POSITIONAL);
+	}
+
+	auto GetVarKeywordIndex() const -> optional_idx {
+		return GetParameterIndexByKind(FunctionParameterKind::VAR_KEYWORD);
+	}
+
+	auto HasVarPositional() const -> bool {
+		return GetVarPositionalIndex().IsValid();
+	}
+
+	auto HasVarKeyword() const -> bool {
+		return GetVarKeywordIndex().IsValid();
+	}
+
+	auto HasArgumentPacks() const -> bool {
+		return HasVarPositional() || HasVarKeyword();
+	}
+
+	//! The number of parameter slots that can be filled positionally, i.e. everything up to the first parameter that
+	//! is not STANDARD (*args, **kwargs or a keyword-only parameter).
+	auto GetPositionalParameterCount() const -> idx_t {
+		for (idx_t i = 0; i < parameters.size(); i++) {
+			if (parameters[i].GetKind() != FunctionParameterKind::STANDARD) {
+				return i;
+			}
+		}
+		return parameters.size();
+	}
+
 	auto GetRequiredParameterCount() const -> idx_t {
 		idx_t result = 0;
 		for (const auto &param : parameters) {
-			if (!param.HasDefaultValue()) {
+			// an argument pack is always optional - it may collect zero arguments
+			if (!param.HasDefaultValue() && !param.IsArgumentPack()) {
 				result++;
 			}
 		}
@@ -266,9 +357,13 @@ public:
 			seen_names.insert(param.GetName());
 		}
 
-		// Also check for default values that are not at the end of the parameter list
+		// Also check for default values that are not at the end of the positional parameter list. Keyword-only
+		// parameters are exempt: they are always supplied by name, so their order is irrelevant.
 		bool found_default_value = false;
 		for (const auto &param : parameters) {
+			if (param.GetKind() != FunctionParameterKind::STANDARD) {
+				continue;
+			}
 			if (param.HasDefaultValue()) {
 				found_default_value = true;
 			} else if (found_default_value) {
@@ -278,9 +373,86 @@ public:
 				    param.GetName());
 			}
 		}
+
+		VerifyArgumentPacks();
+	}
+
+	//! Verify the "*args" / "**kwargs" / keyword-only rules. Split out from Verify so that it can be enforced on
+	//! function registration without also enforcing the pre-existing rules on every function ever written.
+	void VerifyArgumentPacks() const {
+		optional_idx var_positional;
+		optional_idx var_keyword;
+		bool found_keyword_only = false;
+
+		for (idx_t i = 0; i < parameters.size(); i++) {
+			const auto &param = parameters[i];
+			switch (param.GetKind()) {
+			case FunctionParameterKind::VAR_POSITIONAL:
+				if (var_positional.IsValid()) {
+					throw InvalidInputException("A function can only have a single '*args' parameter, but both '%s' "
+					                            "and '%s' are declared as one",
+					                            parameters[var_positional.GetIndex()].GetName(), param.GetName());
+				}
+				if (found_keyword_only) {
+					throw InvalidInputException("The '*args' parameter '%s' cannot follow a keyword-only parameter",
+					                            param.GetName());
+				}
+				var_positional = i;
+				break;
+			case FunctionParameterKind::VAR_KEYWORD:
+				if (var_keyword.IsValid()) {
+					throw InvalidInputException("A function can only have a single '**kwargs' parameter, but both "
+					                            "'%s' and '%s' are declared as one",
+					                            parameters[var_keyword.GetIndex()].GetName(), param.GetName());
+				}
+				var_keyword = i;
+				break;
+			case FunctionParameterKind::KEYWORD_ONLY:
+				found_keyword_only = true;
+				break;
+			case FunctionParameterKind::STANDARD:
+				if (found_keyword_only) {
+					throw InvalidInputException(
+					    "Parameter '%s' can be supplied positionally but follows a keyword-only parameter",
+					    param.GetName());
+				}
+				if (var_positional.IsValid()) {
+					throw InvalidInputException(
+					    "Parameter '%s' follows the '*args' parameter '%s' and must therefore be keyword-only",
+					    param.GetName(), parameters[var_positional.GetIndex()].GetName());
+				}
+				break;
+			}
+
+			if (param.IsArgumentPack() && param.HasDefaultValue()) {
+				throw InvalidInputException("The '*args'/'**kwargs' parameter '%s' cannot have a default value - it "
+				                            "collects zero arguments when none are supplied",
+				                            param.GetName());
+			}
+			if (var_keyword.IsValid() && i > var_keyword.GetIndex()) {
+				throw InvalidInputException("The '**kwargs' parameter '%s' must be the last parameter, but '%s' "
+				                            "follows it",
+				                            parameters[var_keyword.GetIndex()].GetName(), param.GetName());
+			}
+		}
+
+		if (HasVarArgs() && (var_positional.IsValid() || var_keyword.IsValid())) {
+			throw InvalidInputException("A function cannot combine trailing varargs with '*args'/'**kwargs' "
+			                            "parameters - use '*args' instead");
+		}
 	}
 
 	hash_t Hash() const;
+
+private:
+	auto GetParameterIndexByKind(FunctionParameterKind kind) const -> optional_idx {
+		for (idx_t i = 0; i < parameters.size(); i++) {
+			if (parameters[i].GetKind() == kind) {
+				return i;
+			}
+		}
+		return optional_idx();
+	}
 
 private:
 	vector<FunctionParameter> parameters;
@@ -590,7 +762,12 @@ public:
 		return argument_names;
 	}
 
-	//! Get the constant value of an argument.
+	//! The arguments as the call was written, with the arguments collected by a "*args"/"**kwargs" parameter
+	//! spread back out. Use this to walk the arguments of a function that has such a parameter positionally.
+	DUCKDB_API vector<reference<Expression>> GetUnpackedArguments() const;
+
+	//! Get the constant value of an argument, indexed by parameter. A function with a "*args"/"**kwargs" parameter
+	//! gets the pack itself here - reach into it with ArgumentPack if its individual arguments are wanted.
 	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
 	//! When 'accept_null' is false, also throws if the (constant) value is NULL.
 	DUCKDB_API Value GetConstant(idx_t arg_idx, bool accept_null = true) const;

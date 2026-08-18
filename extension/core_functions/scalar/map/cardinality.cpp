@@ -1,46 +1,23 @@
 #include "core_functions/scalar/map_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
-static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	const auto &map = args.data[0];
-	auto entries = map.Values<list_entry_t>();
-
-	auto result_data = FlatVector::Writer<uint64_t>(result, args.size());
-	for (idx_t row = 0; row < args.size(); row++) {
-		auto entry = entries[row];
-		if (!entry.IsValid()) {
-			result_data.WriteNull();
-			continue;
-		}
-		result_data.WriteValue(entries.GetValueUnsafe(row).length);
-	}
-}
-
-static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments.size() != 1) {
-		throw BinderException("Cardinality must have exactly one arguments");
-	}
-
-	if (arguments[0]->GetReturnType().id() != LogicalTypeId::MAP) {
-		throw BinderException("Cardinality can only operate on MAPs");
-	}
-
-	bound_function.SetReturnType(LogicalType::UBIGINT);
-	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
+static void CardinalityFunction(DataChunk &args, ExpressionState &, Vector &result) {
+	UnaryExecutor::Execute<list_entry_t, uint64_t>(args.data[0], result, args.size(),
+	                                               [&](const list_entry_t &input) { return input.length; });
 }
 
 ScalarFunction CardinalityFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
-	fun.SetVarArgs(LogicalType::ANY);
-	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	const auto key_type = LogicalType::TEMPLATE("K");
+	const auto val_type = LogicalType::TEMPLATE("V");
+	const auto map_type = LogicalType::MAP(key_type, val_type);
+
+	auto sig = FunctionSignature().AddParameter("map", map_type).SetReturnType(LogicalTypeId::UBIGINT);
+
+	auto fun = ScalarFunction("cardinality", std::move(sig), CardinalityFunction);
+
 	return fun;
 }
 

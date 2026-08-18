@@ -219,90 +219,90 @@ public:
 	// clang-format off
 	auto GetProperties() const -> const FunctionProperties & { return properties; }
 	auto GetProperties() -> FunctionProperties & { return properties; }
-	auto SetProperties(const FunctionProperties &properties_p) -> void { properties = properties_p; }
+	auto SetProperties(const FunctionProperties &properties_p) -> IMPL & { properties = properties_p; return static_cast<IMPL &>(*this); }
 
 	auto GetCallbacks() const -> const ScalarFunctionCallbacks & { return callbacks; }
 	auto GetCallbacks() -> ScalarFunctionCallbacks & { return callbacks; }
-	auto SetCallbacks(const ScalarFunctionCallbacks &callbacks_p) -> void { callbacks = callbacks_p; }
+	auto SetCallbacks(const ScalarFunctionCallbacks &callbacks_p) -> IMPL & { callbacks = callbacks_p; return static_cast<IMPL &>(*this); }
 
 public: // Properties
 
 	auto GetStability() const -> FunctionStability { return properties.stability; }
-	auto SetStability(FunctionStability value) -> void { properties.stability = value; }
+	auto SetStability(FunctionStability value) -> IMPL & { properties.stability = value; return static_cast<IMPL &>(*this); }
 
 	auto GetNullHandling() const -> FunctionNullHandling { return properties.null_handling; }
-	auto SetNullHandling(FunctionNullHandling value) -> void { properties.null_handling = value; }
+	auto SetNullHandling(FunctionNullHandling value) -> IMPL & { properties.null_handling = value; return static_cast<IMPL &>(*this); }
 
 	auto GetErrorMode() const -> FunctionErrors { return properties.errors; }
-	auto SetErrorMode(FunctionErrors value) -> void { properties.errors = value; }
+	auto SetErrorMode(FunctionErrors value) -> IMPL & { properties.errors = value; return static_cast<IMPL &>(*this); }
 
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
-	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
+	auto SetCollationHandling(FunctionCollationHandling value) -> IMPL & { properties.collation_handling = value; return static_cast<IMPL &>(*this); }
 
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
-	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+	auto SetCaptureArgumentAliases(bool value) -> IMPL & { properties.capture_argument_aliases = value; return static_cast<IMPL &>(*this); }
 
 	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
-	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
+	auto SetRequiresOrderedExecution(bool value) -> IMPL & { properties.requires_ordered_execution = value; return static_cast<IMPL &>(*this); }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
-	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	auto SetFallible() -> IMPL & { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; return static_cast<IMPL &>(*this); }
 	//! Set this functions stability as volatile (can not be cached per row)
-	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
+	auto SetVolatile() -> IMPL & { properties.stability = FunctionStability::VOLATILE; return static_cast<IMPL &>(*this); }
 
 public: // Callbacks
 
 	auto HasFunctionCallback() const -> bool { return callbacks.function != nullptr; }
 	auto GetFunctionCallback() const -> scalar_function_t { return callbacks.function; }
-	auto SetFunctionCallback(scalar_function_t callback) -> void { callbacks.function = std::move(callback); }
+	auto SetFunctionCallback(scalar_function_t callback) -> IMPL & { callbacks.function = std::move(callback); return static_cast<IMPL &>(*this); }
 
 	auto HasSelectCallback() const -> bool { return callbacks.select_function != nullptr; }
 	auto GetSelectCallback() const -> scalar_function_select_t { return callbacks.select_function; }
-	auto SetSelectCallback(scalar_function_select_t callback) -> void { callbacks.select_function = callback; }
+	auto SetSelectCallback(scalar_function_select_t callback) -> IMPL & { callbacks.select_function = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; };
 	auto GetBindCallback() const -> bind_scalar_function_t { return callbacks.bind; };
-	auto SetBindCallback(bind_scalar_function_t callback) -> void { callbacks.bind = callback; }
+	auto SetBindCallback(bind_scalar_function_t callback) -> IMPL & { callbacks.bind = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasBindLambdaCallback() const -> bool { return callbacks.bind_lambda != nullptr; }
 	auto GetBindLambdaCallback() const -> bind_lambda_function_t { return callbacks.bind_lambda; }
-	auto SetBindLambdaCallback(bind_lambda_function_t callback) -> void { callbacks.bind_lambda = callback; }
+	auto SetBindLambdaCallback(bind_lambda_function_t callback) -> IMPL & { callbacks.bind_lambda = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasBindExpressionCallback() const -> bool { return callbacks.bind_expression != nullptr; }
 	auto GetBindExpressionCallback() const -> function_bind_expression_t { return callbacks.bind_expression; }
-	auto SetBindExpressionCallback(function_bind_expression_t callback) -> void { callbacks.bind_expression = callback; }
+	auto SetBindExpressionCallback(function_bind_expression_t callback) -> IMPL & { callbacks.bind_expression = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasInitStateCallback() const -> bool { return callbacks.init_local_state != nullptr; }
 	auto GetInitStateCallback() const -> init_local_state_t { return callbacks.init_local_state; }
-	auto SetInitStateCallback(init_local_state_t callback) -> void { callbacks.init_local_state = callback; }
+	auto SetInitStateCallback(init_local_state_t callback) -> IMPL & { callbacks.init_local_state = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> function_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(function_statistics_t callback) -> void { callbacks.statistics = callback; }
+	auto SetStatisticsCallback(function_statistics_t callback) -> IMPL & { callbacks.statistics = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasModifiedDatabasesCallback() const -> bool { return callbacks.get_modified_databases != nullptr; }
 	auto GetModifiedDatabasesCallback() const -> get_modified_databases_t { return callbacks.get_modified_databases; }
-	auto SetModifiedDatabasesCallback(get_modified_databases_t callback) -> void { callbacks.get_modified_databases = callback; }
+	auto SetModifiedDatabasesCallback(get_modified_databases_t callback) -> IMPL & { callbacks.get_modified_databases = callback; return static_cast<IMPL &>(*this); }
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
-	auto SetSerializeCallback(function_serialize_t callback) -> void { callbacks.serialize = callback; }
-	auto SetDeserializeCallback(function_deserialize_t callback) -> void { callbacks.deserialize = callback; }
+	auto SetSerializeCallback(function_serialize_t callback) -> IMPL & { callbacks.serialize = callback; return static_cast<IMPL &>(*this); }
+	auto SetDeserializeCallback(function_deserialize_t callback) -> IMPL & { callbacks.deserialize = callback; return static_cast<IMPL &>(*this); }
 	auto GetSerializeCallback() const -> function_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> function_deserialize_t { return callbacks.deserialize; }
 
 	auto HasFilterPruneCallback() const -> bool { return callbacks.filter_prune != nullptr; }
-	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { callbacks.filter_prune = callback; }
+	auto SetFilterPruneCallback(propagate_filter_t callback) -> IMPL & { callbacks.filter_prune = callback; return static_cast<IMPL &>(*this); }
 	auto GetFilterPruneCallback() const -> propagate_filter_t { return callbacks.filter_prune; }
 
 	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
-	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
+	auto SetToStringCallback(function_to_string_t callback) -> IMPL & { callbacks.to_string = callback; return static_cast<IMPL &>(*this); }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
 
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
-	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
+	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> IMPL & { callbacks.legacy_serialize = callback; return static_cast<IMPL &>(*this); }
 	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
 
-	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { callbacks.get_expression_type = callback; }
+	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> IMPL & { callbacks.get_expression_type = callback; return static_cast<IMPL &>(*this); }
 	auto GetExpressionType(FunctionToStringInput &input) const -> ExpressionType {
 		if (callbacks.get_expression_type) {
 			return callbacks.get_expression_type(input);
@@ -346,12 +346,14 @@ public:
 		D_ASSERT(function_info.get());
 		return *function_info;
 	}
-	void SetExtraFunctionInfo(shared_ptr<ScalarFunctionInfo> info) {
+	IMPL &SetExtraFunctionInfo(shared_ptr<ScalarFunctionInfo> info) {
 		function_info = std::move(info);
+		return static_cast<IMPL &>(*this);
 	}
 	template <class T, class... ARGS>
-	void SetExtraFunctionInfo(ARGS &&... args) {
+	IMPL &SetExtraFunctionInfo(ARGS &&... args) {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
+		return static_cast<IMPL &>(*this);
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {
 		return function_info;
@@ -401,7 +403,7 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
+	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function = nullptr);
 	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,

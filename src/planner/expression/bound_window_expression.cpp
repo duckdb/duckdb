@@ -248,16 +248,29 @@ unique_ptr<Expression> BoundWindowExpression::SerializedDefault(Serializer &seri
 }
 
 void BoundWindowExpression::Serialize(Serializer &serializer) const {
+	// see BoundFunctionExpression::Serialize - argument packs are unrolled for older storage versions. Packs and
+	// the legacy lead/lag rewrite in SerializedChildren are mutually exclusive, so only one of the two applies.
+	vector<unique_ptr<Expression>> flat_children;
+	vector<LogicalType> flat_arguments;
+	bool unrolled = false;
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		const auto &arguments = aggregate ? aggregate->GetArguments() : window->GetArguments();
+		unrolled = ArgumentPack::Unroll(children, arguments, flat_children, flat_arguments);
+	}
+	if (!unrolled) {
+		flat_children = SerializedChildren(serializer);
+	}
+
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
-	serializer.WriteProperty(201, "children", SerializedChildren(serializer));
+	serializer.WriteProperty(201, "children", flat_children);
 	if (type == ExpressionType::WINDOW_AGGREGATE) {
 		D_ASSERT(aggregate);
-		FunctionSerializer::Serialize(serializer, *aggregate, bind_info.get());
+		FunctionSerializer::Serialize(serializer, *aggregate, bind_info.get(), unrolled ? &flat_arguments : nullptr);
 	} else if (type == ExpressionType::WINDOW_FUNCTION) {
 		//	New window function. Older versions will treat it as an unknown aggregate.
 		D_ASSERT(window);
-		FunctionSerializer::Serialize(serializer, *window, bind_info.get());
+		FunctionSerializer::Serialize(serializer, *window, bind_info.get(), unrolled ? &flat_arguments : nullptr);
 	} // else the expression type is all we need as there is no binding info.
 	auto null_expr = unique_ptr<Expression>();
 	serializer.WriteProperty(202, "partitions", partitions);

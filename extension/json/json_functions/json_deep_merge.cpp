@@ -1,6 +1,8 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
+#include "duckdb/common/vector/struct_vector.hpp"
+
 namespace duckdb {
 
 //! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
@@ -82,8 +84,8 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	DeepMergeReadObjects(doc, args.data[0], origs);
 
 	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
-	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		DeepMergeReadObjects(doc, args.data[arg_idx], patches);
+	for (auto &patch : StructVector::GetEntries(args.data[1])) {
+		DeepMergeReadObjects(doc, patch, patches);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				origs[i] = nullptr;
@@ -108,9 +110,12 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
-	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::JSON());
+	FunctionSignature signature;
+	signature.AddParameter("json", LogicalType::JSON());
+	signature.AddVarPositionalParameter("patches", LogicalType::JSON());
+	signature.SetReturnType(LogicalType::JSON());
+	ScalarFunction fun("json_deep_merge", std::move(signature), DeepMergeFunction);
+	fun.SetInitStateCallback(JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

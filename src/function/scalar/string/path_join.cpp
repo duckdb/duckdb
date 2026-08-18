@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
@@ -25,8 +26,7 @@ public:
 };
 
 // Process one output row; returns false if any input is NULL.
-static bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &inputs, idx_t col_count,
-                       string &out_result) {
+bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &inputs, idx_t col_count, string &out_result) {
 	Path out_path;
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		auto &vdata = inputs[col_idx];
@@ -47,11 +47,12 @@ static bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &in
 
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
-	auto col_count = args.ColumnCount();
 	vector<VectorIterator<string_t>> inputs;
-	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		inputs.emplace_back(args.data[col_idx].Values<string_t>());
+	inputs.emplace_back(args.data[0].Values<string_t>());
+	for (const auto &path : ArgumentPack::GetInput(args.data[1])) {
+		inputs.emplace_back(path.Values<string_t>());
 	}
+	const auto col_count = inputs.size();
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
@@ -67,12 +68,17 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 ScalarFunction PathJoinFun::GetFunction() {
-	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
-	path_join.SetVarArgs(LogicalType::VARCHAR);
-	path_join.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	// throws if the paths that are joined are incompatible
-	path_join.SetFallible();
-	return path_join;
+	auto sig = FunctionSignature()
+	               .AddParameter("path", LogicalType::VARCHAR)
+	               .AddVarPositionalParameter("paths", LogicalType::VARCHAR)
+	               .SetReturnType(LogicalType::VARCHAR);
+
+	auto fun = ScalarFunction(PathJoinFun::Name, std::move(sig))
+	               .SetFunctionCallback(PathJoinFunction)
+	               .SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING)
+	               .SetFallible(); // throws if the paths that are joined are incompatible
+
+	return fun;
 }
 
 } // namespace duckdb

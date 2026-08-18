@@ -5,6 +5,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
 
@@ -79,36 +80,36 @@ static void MakeTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpressionInput &input) {
-	vector<pair<string, Value>> args;
+	auto &name_arg = input.children[0];
+	auto &pack_arg = input.children[1];
 
-	// Evaluate all arguments to constant values
-	for (auto &child : input.children) {
-		string name = child->GetAlias().GetIdentifierName();
-		if (!child->IsFoldable()) {
-			throw BinderException("make_type function arguments must be constant expressions");
-		}
-		auto val = ExpressionExecutor::EvaluateScalar(input.context, *child);
-		args.emplace_back(name, val);
+	if (!name_arg->IsFoldable()) {
+		throw BinderException("make_type function arguments must be constant expressions");
+	}
+	auto name_val = ExpressionExecutor::EvaluateScalar(input.context, *name_arg);
+	if (name_val.IsNull()) {
+		throw BinderException("make_type function type_name argument must not be NULL");
+	}
+	auto &type_name = StringValue::Get(name_val);
+
+	if (!pack_arg->IsFoldable()) {
+		throw BinderException("make_type function arguments must be constant expressions");
 	}
 
-	if (args.empty()) {
-		throw BinderException("make_type function requires at least one argument");
-	}
-
-	if (args.front().second.type() != LogicalType::VARCHAR) {
-		throw BinderException("make_type function first argument must be the type name as VARCHAR");
-	}
+	auto pack_value = ExpressionExecutor::EvaluateScalar(input.context, *pack_arg);
+	auto &pack_items = StructValue::GetChildren(pack_value);
 
 	vector<unique_ptr<ParsedExpression>> type_args;
-	for (idx_t i = 1; i < args.size(); i++) {
-		auto &arg = args[i];
-		auto result = make_uniq<ConstantExpression>(arg.second);
-		result->SetAlias(Identifier(arg.first));
+	for (idx_t i = 0; i < pack_items.size(); i++) {
+		auto &item_name = StructType::GetChildName(pack_value.type(), i);
+		auto &item_value = pack_items[i];
+
+		auto result = make_uniq<ConstantExpression>(item_value);
+		result->SetAlias(Identifier(item_name));
 
 		type_args.push_back(std::move(result));
 	}
 
-	auto type_name = args.front().second.GetValue<string>();
 	auto qualified_name = QualifiedName::Parse(type_name);
 
 	auto unbound_type =
@@ -121,10 +122,16 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 }
 
 ScalarFunction MakeTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
-	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
-	fun.SetVarArgs(LogicalType::ANY);
+	auto sig = FunctionSignature()
+	               .AddParameter("type_name", LogicalType::VARCHAR)
+	               .AddVarKeywordParameter("kwargs", LogicalTypeId::ANY)
+	               .SetReturnType(LogicalType::TYPE());
+
+	auto fun = ScalarFunction("make_type", std::move(sig))
+	               .SetFunctionCallback(MakeTypeFunction)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetBindExpressionCallback(BindMakeTypeFunctionExpression);
+
 	return fun;
 }
 

@@ -4,6 +4,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
+#include "duckdb/common/vector/struct_vector.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -29,10 +31,19 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	result.Reference(info.value, count_t(args.size()));
-	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
-		switch (args.data[idx].GetVectorType()) {
+
+	// the first argument is the constant, the rest are only inspected for NULLs
+	vector<reference<Vector>> inputs;
+	inputs.push_back(args.data[1]);
+	for (auto &packed : StructVector::GetEntries(args.data[2])) {
+		inputs.push_back(packed);
+	}
+
+	for (auto &input_ref : inputs) {
+		auto &input = input_ref.get();
+		switch (input.GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
-			auto &input_mask = FlatVector::ValidityMutable(args.data[idx]);
+			auto &input_mask = FlatVector::ValidityMutable(input);
 			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten();
@@ -43,10 +54,10 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		case VectorType::CONSTANT_VECTOR: {
-			if (ConstantVector::IsNull(args.data[idx])) {
+			if (ConstantVector::IsNull(input)) {
 				// input is constant null, return constant null
 				auto &result_mask = ConstantVector::Validity(result);
-				auto &input_mask = ConstantVector::Validity(args.data[idx]);
+				auto &input_mask = ConstantVector::Validity(input);
 				result_mask.Initialize(input_mask);
 				ConstantVector::SetNull(result, count_t(args.size()));
 				return;
@@ -54,7 +65,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			auto entries = args.data[idx].Validity();
+			auto entries = input.Validity();
 			if (entries.CanHaveNull()) {
 				result.Flatten();
 				auto &result_mask = FlatVector::ValidityMutable(result);
@@ -75,7 +86,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 
 	auto value = input.GetConstant(0);
-	D_ASSERT(arguments.size() >= 2);
+	D_ASSERT(arguments.size() == 3);
 	function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
@@ -97,10 +108,13 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 }
 
 ScalarFunction ConstantOrNullFun::GetFunction() {
-	auto fun = ScalarFunction("constant_or_null", {{"arg1", LogicalType::ANY}, {"arg2", LogicalType::ANY}},
-	                          LogicalType::ANY, ConstantOrNullFunction);
+	FunctionSignature signature;
+	signature.AddParameter("arg1", LogicalType::ANY);
+	signature.AddParameter("arg2", LogicalType::ANY);
+	signature.AddVarPositionalParameter("args", LogicalType::ANY);
+	signature.SetReturnType(LogicalType::ANY);
+	ScalarFunction fun("constant_or_null", std::move(signature), ConstantOrNullFunction);
 	fun.SetBindCallback(ConstantOrNullBind);
-	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

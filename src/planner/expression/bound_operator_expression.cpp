@@ -9,6 +9,22 @@ BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalTyp
 }
 
 string BoundOperatorExpression::ToString() const {
+	if (type == ExpressionType::ARGUMENT_PACK) {
+		// print the packed arguments as they were written in the call, so that the enclosing function call reads
+		// back the way the user wrote it. Keyword names live in the STRUCT return type.
+		const auto named = return_type.id() == LogicalTypeId::STRUCT;
+		string result;
+		for (idx_t i = 0; i < children.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			if (named) {
+				result += StructType::GetChildName(return_type, i).GetIdentifierName() + " := ";
+			}
+			result += children[i]->ToString();
+		}
+		return result;
+	}
 	return OperatorExpression::ToString<BoundOperatorExpression, Expression>(*this);
 }
 

@@ -8,6 +8,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
+
 namespace duckdb {
 
 struct RewriteFrame {
@@ -87,15 +89,30 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression>
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
+	D_ASSERT(!children.empty());
 	auto type = value.type();
 	auto func = ConstantOrNullFun::GetFunction();
 	func.GetSignature().GetParameter(0).SetType(type);
 	func.SetReturnType(type);
-	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
+
+	// this bypasses the binder, so the arguments the "*args" parameter collects are packed here
+	vector<unique_ptr<Expression>> packed;
+	vector<LogicalType> packed_types;
+	for (idx_t i = 1; i < children.size(); i++) {
+		packed_types.push_back(children[i]->GetReturnType());
+		packed.push_back(std::move(children[i]));
+	}
+	auto pack_type = ArgumentPack::PositionalType(std::move(packed_types));
+
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(make_uniq<BoundConstantExpression>(value));
+	arguments.push_back(std::move(children[0]));
+	arguments.push_back(ArgumentPack::Create(std::move(packed), pack_type));
 
 	BoundScalarFunction bound_func(func);
+	bound_func.GetArguments() = {type, arguments[1]->GetReturnType(), std::move(pack_type)};
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
+	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(arguments),
 	                                          ConstantOrNull::Bind(std::move(value)));
 }
 

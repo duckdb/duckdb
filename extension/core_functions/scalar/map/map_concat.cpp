@@ -8,6 +8,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "core_functions/scalar/map_functions.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,16 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 	return entries;
 }
 
-void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	const auto &head = input.data[0];
+	const auto &tail = ArgumentPack::GetInput(input.data[1]);
+
+	vector<const_reference<Vector>> args;
+	args.emplace_back(head);
+	for (auto &arg : tail) {
+		args.emplace_back(arg);
+	}
+
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
 		auto &validity = FlatVector::ValidityMutable(result);
@@ -43,12 +53,12 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		return;
 	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
-	auto count = args.size();
+	auto count = input.size();
 
-	auto map_count = args.ColumnCount();
+	auto map_count = args.size();
 	vector<UnifiedVectorFormat> map_formats(map_count);
 	for (idx_t i = 0; i < map_count; i++) {
-		const auto &map = args.data[i];
+		const auto &map = args[i].get();
 		map.ToUnifiedFormat(map_formats[i]);
 	}
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
@@ -60,7 +70,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		vector<Value> keys_list;
 		bool all_null = true;
 		for (idx_t map_idx = 0; map_idx < map_count; map_idx++) {
-			if (args.data[map_idx].GetType().id() == LogicalTypeId::SQLNULL) {
+			if (args[map_idx].get().GetType().id() == LogicalTypeId::SQLNULL) {
 				continue;
 			}
 
@@ -71,7 +81,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 
 			all_null = false;
-			const auto &keys = MapVector::GetKeys(args.data[map_idx]);
+			const auto &keys = MapVector::GetKeys(args[map_idx].get());
 			auto entry = UnifiedVectorFormat::GetData<list_entry_t>(map_format)[index];
 
 			// Update the list for this row
@@ -104,7 +114,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		D_ASSERT(keys_list.size() == index_to_map.size());
 		// Get the values from the mapping
 		for (auto &mapping : index_to_map) {
-			const auto &map = args.data[mapping.map_index];
+			const auto &map = args[mapping.map_index].get();
 			const auto &values = MapVector::GetValues(map);
 			values_list.push_back(values.GetValue(mapping.key_index));
 		}
@@ -116,77 +126,24 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	}
 }
 
-bool IsEmptyMap(const LogicalType &map) {
-	D_ASSERT(map.id() == LogicalTypeId::MAP);
-	auto &key_type = MapType::KeyType(map);
-	auto &value_type = MapType::ValueType(map);
-	return key_type.id() == LogicalType::SQLNULL && value_type.id() == LogicalType::SQLNULL;
-}
-
-unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	auto arg_count = arguments.size();
-	if (arg_count < 2) {
-		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
-	}
-
-	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
-		// Prepared statement
-		bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
-		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
-		return nullptr;
-	}
-
-	LogicalType expected = LogicalType::SQLNULL;
-
-	bool is_null = true;
-	// Check and verify that all the maps are of the same type
-	for (idx_t i = 0; i < arg_count; i++) {
-		auto &arg = arguments[i];
-		auto &map = arg->GetReturnType();
-		if (map.id() == LogicalTypeId::UNKNOWN) {
-			// Prepared statement
-			bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
-			bound_function.SetReturnType(LogicalTypeId::SQLNULL);
-			return nullptr;
-		}
-		if (map.id() == LogicalTypeId::SQLNULL) {
-			// The maps are allowed to be NULL
-			continue;
-		}
-		if (map.id() != LogicalTypeId::MAP) {
-			throw InvalidInputException("MAP_CONCAT only takes map arguments");
-		}
-		is_null = false;
-		if (IsEmptyMap(map)) {
-			// Map is allowed to be empty
-			continue;
-		}
-
-		if (expected.id() == LogicalTypeId::SQLNULL) {
-			expected = map;
-		} else if (map != expected) {
-			throw InvalidInputException(
-			    "'value' type of map differs between arguments, expected '%s', found '%s' instead", expected.ToString(),
-			    map.ToString());
-		}
-	}
-
-	if (expected.id() == LogicalTypeId::SQLNULL && is_null == false) {
-		expected = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
-	}
-	bound_function.SetReturnType(expected);
-	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
-}
-
 } // namespace
 
 ScalarFunction MapConcatFun::GetFunction() {
-	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
-	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetVarArgs(LogicalType::ANY);
+	const auto key_type = LogicalType::TEMPLATE("K");
+	const auto val_type = LogicalType::TEMPLATE("V");
+	const auto map_type = LogicalType::MAP(key_type, val_type);
+
+	// TODO: this should take a single map arg + varargs
+	auto sig = FunctionSignature()
+	               .AddParameter("arg", map_type)
+	               .AddVarPositionalParameter("args", map_type)
+	               .SetReturnType(map_type);
+
+	auto fun = ScalarFunction("map_concat", std::move(sig))
+	               .SetFunctionCallback(MapConcatFunction)
+	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
+	               .SetFallible();
+
 	return fun;
 }
 
