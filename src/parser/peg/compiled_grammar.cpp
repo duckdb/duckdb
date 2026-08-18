@@ -2,6 +2,11 @@
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 #include "duckdb/main/database.hpp"
+#ifdef PEG_PARSER_SOURCE_FILE
+#include <fstream>
+#else
+#include "duckdb/parser/peg/inlined_grammar.hpp"
+#endif
 
 namespace duckdb {
 
