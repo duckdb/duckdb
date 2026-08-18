@@ -395,9 +395,11 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
-		D_ASSERT(args.ColumnCount() == 1);
+		// the part list is folded into the bind data during the bind - only the trailing temporal argument is read.
+		// plans written by versions that erased the part list have a single argument
+		D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 		const auto count = args.size();
-		const Vector &input = args.data[0];
+		const Vector &input = args.data[args.ColumnCount() - 1];
 		auto entries = input.Values<INPUT_TYPE>();
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -538,7 +540,6 @@ struct ICUDatePart : public ICUDateFunc {
 			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
-		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
 		return make_uniq<BindStructData>(context, std::move(part_codes));
 	}
