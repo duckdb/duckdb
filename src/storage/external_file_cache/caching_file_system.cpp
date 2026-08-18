@@ -206,6 +206,12 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       validate(
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
+	if (path.extended_info) {
+		auto entry = path.extended_info->options.find("defer_file_info");
+		if (entry != path.extended_info->options.end()) {
+			defer_file_info = entry->second.GetValue<bool>();
+		}
+	}
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
@@ -241,27 +247,57 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
-	last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
-	version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
-
-	{
-		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-		const bool first_access = (cached_file->file_size == 0);
-		if (first_access || Validate()) {
-			if (!ExternalFileCache::IsValid(Validate(), cached_file->version_tag, cached_file->last_modified,
-			                                version_tag, last_modified)) {
-				annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
-				cached_file->blocks.clear();
-				cached_file->cached_block_size.SetInvalid();
-			}
-			cached_file->file_size = file_handle->GetFileSize();
-			cached_file->last_modified = last_modified;
-			cached_file->version_tag = version_tag;
-			cached_file->can_seek = file_handle->CanSeek();
-			cached_file->on_disk_file = file_handle->OnDiskFile();
-		}
+	if (!defer_file_info) {
+		InitializeFileMetadata(file_handle);
 	}
 	return file_handle;
+}
+
+void CachingFileHandle::InitializeFileMetadata(const shared_ptr<FileHandle> &handle) {
+	D_ASSERT(handle);
+	D_ASSERT(!file_metadata_initialized);
+	last_modified = caching_file_system.file_system.GetLastModifiedTime(*handle);
+	version_tag = caching_file_system.file_system.GetVersionTag(*handle);
+
+	annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
+	const bool first_access = (cached_file->file_size == 0);
+	if (first_access || Validate()) {
+		if (!ExternalFileCache::IsValid(Validate(), cached_file->version_tag, cached_file->last_modified, version_tag,
+		                                last_modified)) {
+			annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
+			cached_file->blocks.clear();
+			cached_file->cached_block_size.SetInvalid();
+		}
+		cached_file->file_size = handle->GetFileSize();
+		cached_file->last_modified = last_modified;
+		cached_file->version_tag = version_tag;
+		cached_file->can_seek = handle->CanSeek();
+		cached_file->on_disk_file = handle->OnDiskFile();
+	}
+	file_metadata_initialized = true;
+}
+
+void CachingFileHandle::EnsureFileMetadata() {
+	if (file_metadata_initialized) {
+		return;
+	}
+	auto handle = GetFileHandle();
+	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+	if (!file_metadata_initialized) {
+		InitializeFileMetadata(handle);
+	}
+}
+
+bool CachingFileHandle::TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) {
+	auto handle = GetFileHandle();
+	if (!handle->TryReadSuffix(buffer, buffer_len, result)) {
+		return false;
+	}
+	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+	if (!file_metadata_initialized) {
+		InitializeFileMetadata(handle);
+	}
+	return true;
 }
 
 Allocator &CachingFileHandle::GetBufferAllocator() const {
@@ -396,6 +432,9 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
+	if (defer_file_info && !file_metadata_initialized) {
+		EnsureFileMetadata();
+	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
@@ -405,6 +444,9 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
+	if (defer_file_info && !file_metadata_initialized) {
+		EnsureFileMetadata();
+	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
@@ -416,6 +458,9 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
+	if (defer_file_info && !file_metadata_initialized) {
+		EnsureFileMetadata();
+	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);

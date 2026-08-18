@@ -46,6 +46,9 @@ public:
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
 		return GetFileSystem().Read(handle, buffer, nr_bytes);
 	}
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		return GetFileSystem().TryReadSuffix(handle, buffer, buffer_len, result);
+	}
 
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
 		return GetFileSystem().Write(handle, buffer, nr_bytes);
