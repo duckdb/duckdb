@@ -706,18 +706,19 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        make cli-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }} CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-linux-${{ matrix.config.arch }}.tar.gz duckdb-shared-libs-linux-${{ matrix.config.arch }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        path: duckdb-cli-linux-${{ matrix.config.arch }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-linux-${{ matrix.config.arch }}.tar.gz
+        archive: false
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -834,18 +835,19 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        make cli-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }}-musl CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }}-musl SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-linux-${{ matrix.config.arch }}-musl.tar.gz duckdb-shared-libs-linux-${{ matrix.config.arch }}-musl.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}-musl
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        path: duckdb-cli-linux-${{ matrix.config.arch }}-musl.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-linux-${{ matrix.config.arch }}-musl.tar.gz
+        archive: false
 
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
