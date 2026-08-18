@@ -41,6 +41,8 @@ public:
 
 	//! The partitions over which the children are grouped (if any)
 	vector<OperatorPartitionInfo> partition_infos;
+	//! RequiredPartitionInfo doesn't get passed the global sink state...
+	mutable size_t child = 1;
 
 protected:
 	// CachingOperator Interface
@@ -69,6 +71,7 @@ public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;

@@ -125,7 +125,7 @@ public:
 	//! Parent operator
 	const PhysicalAsOfJoin &op;
 	//! The child that is being materialised (right/1 then left/0)
-	size_t child = 1;
+	size_t &child;
 	//! The child's partitioning description
 	vector<SortStrategyPtr> sort_strategies;
 	//! The child's partitioning buffer
@@ -134,7 +134,8 @@ public:
 	atomic<idx_t> count;
 };
 
-AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op) : op(op), count(0) {
+AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op)
+    : op(op), child(op.child), count(0) {
 	// Set up partitions for both sides
 	sort_strategies.reserve(2);
 	strategy_sinks.resize(2);
@@ -234,6 +235,17 @@ unique_ptr<LocalSinkState> PhysicalAsOfJoin::GetLocalSinkState(ExecutionContext 
 }
 
 //===--------------------------------------------------------------------===//
+// RequiredPartitionInfo
+//===--------------------------------------------------------------------===//
+OperatorPartitionInfo PhysicalAsOfJoin::RequiredPartitionInfo() const {
+	if (partition_infos.empty() || !partition_infos[child].RequiresPartitionColumns()) {
+		return PhysicalOperator::RequiredPartitionInfo();
+	}
+
+	return partition_infos[child];
+}
+
+//===--------------------------------------------------------------------===//
 // NextBatch
 //===--------------------------------------------------------------------===//
 SinkNextBatchType PhysicalAsOfJoin::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &batch) const {
@@ -257,7 +269,7 @@ SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, DataChunk &chun
 	auto &lstate = sink.local_state.Cast<AsOfLocalSinkState>();
 
 	if (!partition_infos.empty()) {
-		if (!lstate.local_partition) {
+		if (!lstate.partition_group) {
 			child_list_t<Value> partition_values;
 			const auto &partition_info = partition_infos[gstate.child];
 			const auto &partition_columns = partition_info.partition_columns;
@@ -466,7 +478,7 @@ public:
 	}
 
 	AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
-	              const Value &sink_idx, const idx_t hash_group);
+	              const idx_t group_idx, const Value &sink_idx, const idx_t bin_idx);
 
 	//! Is this a right join (do we have a RIGHT stage?)
 	inline bool IsRightOuter() const {
@@ -510,10 +522,12 @@ public:
 
 	//! The parent operator
 	const PhysicalAsOfJoin &op;
-	//! The group number
+	//! The global group number (so we can find the task
 	const idx_t group_idx;
 	//! The sink index (so we can find the sink state)
 	const Value sink_idx;
+	//! The sink bin (so we can find the bin within the sink state)
+	const idx_t bin_idx;
 	//! The number of left chunks/rows
 	const ChunkRow left_stats;
 	//! The number of right chunks/rows
@@ -547,10 +561,10 @@ public:
 };
 
 AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
-                             const Value &sink_idx, const idx_t hash_group)
-    : op(op), group_idx(hash_group), sink_idx(sink_idx), left_stats(left_stats), right_stats(right_stats),
-      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0),
-      gotten(0), left_completed(0), right_completed(0) {
+                             const idx_t group_idx, const Value &sink_idx, const idx_t bin_idx)
+    : op(op), group_idx(group_idx), sink_idx(sink_idx), bin_idx(bin_idx), left_stats(left_stats),
+      right_stats(right_stats), right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT),
+      sorted(0), materialized(0), gotten(0), left_completed(0), right_completed(0) {
 	right_outer.Initialize(right_stats.count);
 }
 
@@ -815,16 +829,17 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 		auto &lhs_groups = child_groups[0][partition_key];
 		auto &rhs_groups = child_groups[1][partition_key];
 		const auto group_count = MaxValue<idx_t>(lhs_groups.size(), rhs_groups.size());
-		for (idx_t group_idx = 0; group_idx < group_count; ++group_idx) {
+		for (idx_t bin_idx = 0; bin_idx < group_count; ++bin_idx) {
 			ChunkRow lhs_stats;
-			if (group_idx < lhs_groups.size()) {
-				lhs_stats = lhs_groups[group_idx];
+			if (bin_idx < lhs_groups.size()) {
+				lhs_stats = lhs_groups[bin_idx];
 			}
 			ChunkRow rhs_stats;
-			if (group_idx < rhs_groups.size()) {
-				rhs_stats = rhs_groups[group_idx];
+			if (bin_idx < rhs_groups.size()) {
+				rhs_stats = rhs_groups[bin_idx];
 			}
-			auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_stats, rhs_stats, partition_key, group_idx);
+			const idx_t group_idx = asof_groups.size();
+			auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_stats, rhs_stats, group_idx, partition_key, bin_idx);
 			asof_groups.emplace_back(std::move(asof_group));
 		}
 	}
@@ -1648,7 +1663,7 @@ void AsOfLocalSourceState::ExecuteSortTask(ExecutionContext &context, DataChunk 
 	auto &hashed_sink = gsink.strategy_sinks[child][asof_group.sink_idx];
 
 	OperatorSinkFinalizeInput finalize {*hashed_sink, source.interrupt_state};
-	sort_strategy.SortColumnData(context, task_local.group_idx, finalize);
+	sort_strategy.SortColumnData(context, asof_group.bin_idx, finalize);
 
 	//	Mark this range as done
 	task->begin_idx = task->end_idx;
@@ -1666,7 +1681,7 @@ void AsOfLocalSourceState::ExecuteMaterializeTask(ExecutionContext &context, Dat
 
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
-	sort_strategy.MaterializeSortedRun(context, task_local.group_idx, hsource);
+	sort_strategy.MaterializeSortedRun(context, asof_group.bin_idx, hsource);
 
 	//	Mark this range as done
 	task->begin_idx = task->end_idx;
@@ -1694,7 +1709,7 @@ void AsOfLocalSourceState::ExecuteGetTask(ExecutionContext &context, DataChunk &
 		auto &hashed_source = *gsource.hashed_sources[child][asof_group.sink_idx];
 		OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
 
-		auto group = sort_strategy.GetSortedRun(context.client, task_local.group_idx, hsource);
+		auto group = sort_strategy.GetSortedRun(context.client, asof_group.bin_idx, hsource);
 		if (group) {
 			if (child) {
 				asof_group.right_group = std::move(group);
