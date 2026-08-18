@@ -25,6 +25,8 @@ public:
 
 	//! Optimize a plan by running specialized optimizers
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+	//! Lower aggregates whose ordinary grouped execution requires an explicit relational plan.
+	unique_ptr<LogicalOperator> LowerMandatoryAggregateRewrites(unique_ptr<LogicalOperator> plan);
 	//! Return a reference to the client context of this optimizer
 	ClientContext &GetContext();
 	//! Whether the specific optimizer is disabled

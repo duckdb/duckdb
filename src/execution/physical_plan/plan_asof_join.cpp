@@ -59,8 +59,12 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	LogicalComparisonJoin join_op(InverseJoinType(op.join_type));
 
-	join_op.types = op.children[1]->types;
-	const auto &probe_types = op.children[0]->types;
+	// Use the types of the planned children: planning a child can change the types of the logical operator
+	// (EXCEPT ALL/INTERSECT ALL append a ROW_NUMBER column to it)
+	const auto &probe_types = probe.GetTypes();
+	const auto &build_types = build.GetTypes();
+
+	join_op.types = build_types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
 	// Project pk
@@ -72,14 +76,14 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	//	we have to track this carefully...
 	join_op.left_projection_map = op.right_projection_map;
 	if (join_op.left_projection_map.empty()) {
-		for (idx_t i = 0; i < op.children[1]->types.size(); ++i) {
+		for (idx_t i = 0; i < build_types.size(); ++i) {
 			join_op.left_projection_map.emplace_back(i);
 		}
 	}
 
 	join_op.right_projection_map = op.left_projection_map;
 	if (join_op.right_projection_map.empty()) {
-		for (idx_t i = 0; i < op.children[0]->types.size(); ++i) {
+		for (idx_t i = 0; i < probe_types.size(); ++i) {
 			join_op.right_projection_map.emplace_back(i);
 		}
 	}
@@ -87,8 +91,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Remap predicate column references.
 	auto predicate = CreatePredicateFromConditions(op.conditions);
 	if (predicate) {
-		const auto lhs_width = op.children[0]->types.size();
-		const auto rhs_width = op.children[1]->types.size();
+		const auto lhs_width = probe_types.size();
+		const auto rhs_width = build_types.size();
 
 		ExpressionIterator::EnumerateExpression(predicate, [&](Expression &child) {
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
@@ -191,7 +195,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Wrap all the projected non-pk probe fields in `first` aggregates;
 	vector<unique_ptr<Expression>> aggregates;
 	for (const auto &right_proj : join_op.right_projection_map) {
-		const auto col_idx = op.children[1]->types.size() + right_proj;
+		const auto col_idx = build_types.size() + right_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
@@ -403,7 +407,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	vector<unique_ptr<Expression>> window_select;
 	window_select.emplace_back(std::move(asof_end));
 
-	auto &window_types = op.children[1]->types;
+	// Copy the types of the planned child instead of mutating the logical operator's types.
+	auto window_types = right.GetTypes();
 	window_types.emplace_back(asof_type);
 
 	auto &window = Make<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);

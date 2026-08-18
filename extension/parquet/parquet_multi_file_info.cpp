@@ -209,13 +209,13 @@ static bool GetBooleanArgument(const Identifier &key, const vector<Value> &optio
 	if (option_values.empty()) {
 		return true;
 	}
-	Value boolean_value;
 	string error_message;
-	if (!option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+	auto boolean_value = option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, &error_message);
+	if (!boolean_value) {
 		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for Parquet option %s",
 		                            option_values[0].ToString(), key);
 	}
-	return BooleanValue::Get(boolean_value);
+	return BooleanValue::Get(*boolean_value);
 }
 
 static bool ParquetScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {

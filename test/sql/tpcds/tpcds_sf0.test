@@ -31,6 +31,11 @@ statement error
 PRAGMA tpcds(1.1)
 ----
 
+statement error
+PRAGMA tpcds(NULL)
+----
+<REGEX>:.*Cannot use NULL as argument for the TPC-DS query number.*
+
 # queries
 statement ok
 SELECT * FROM tpcds_queries()

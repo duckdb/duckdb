@@ -125,11 +125,6 @@ public:
 	//! A table of groups, terminated by a null group
 	using ResolutionTable = const ResolutionGroup *;
 
-	//! Whether the years of the first era count backwards, as in the Gregorian BC era
-	virtual bool IsEra0CountingBackward() const {
-		return false;
-	}
-
 	const TimeZone &GetTimeZone() const {
 		return *zone;
 	}

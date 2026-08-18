@@ -3,7 +3,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
 
@@ -161,10 +161,10 @@ bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<U
 	return true;
 }
 
-class AutoCompleteTokenizer : public BaseTokenizer {
+class AutoCompleteTokenizerBehavior : public TokenizerBehavior {
 public:
-	AutoCompleteTokenizer(const string &sql, MatchState &state)
-	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	AutoCompleteTokenizerBehavior(const string &sql, MatchState &state)
+	    : TokenizerBehavior(sql, state.tokens), suggestions(state.suggestions) {
 		last_pos = 0;
 	}
 
@@ -173,7 +173,7 @@ public:
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
-		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
+		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
 		if (StringUtil::StartsWith(last_word_p, "'")) {
@@ -204,7 +204,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	AutoCompleteTokenizer tokenizer(sql_ref, state);
+	AutoCompleteTokenizerBehavior behavior(sql_ref, state);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
 		return {};
@@ -220,7 +221,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	}
 	vector<AutoCompleteCandidate> available_suggestions;
 	for (auto &suggestion : suggestions) {
-		idx_t suggestion_pos = tokenizer.last_pos;
+		idx_t suggestion_pos = behavior.last_pos;
 		// run the suggestions
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
@@ -247,7 +248,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 			break;
 		case SuggestionState::SUGGEST_FILE_NAME:
 			if (parameters.max_file_suggestion_count > 0) {
-				new_suggestions = provider.SuggestFileName(tokenizer.last_word, suggestion_pos);
+				new_suggestions = provider.SuggestFileName(behavior.last_word, suggestion_pos);
 				parameters.suggestion_contains_files = true;
 			}
 			break;
@@ -274,7 +275,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	return ComputeSuggestions(available_suggestions, tokenizer.last_word, parameters);
+	return ComputeSuggestions(available_suggestions, behavior.last_word, parameters);
 }
 
 } // namespace duckdb

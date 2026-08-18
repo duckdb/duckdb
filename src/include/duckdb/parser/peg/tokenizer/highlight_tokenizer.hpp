@@ -1,18 +1,16 @@
 #pragma once
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
 struct MatcherToken;
 
-class HighlightTokenizer : public BaseTokenizer {
+class HighlightTokenizerBehavior : public TokenizerBehavior {
 public:
-	explicit HighlightTokenizer(const string &sql);
-	~HighlightTokenizer() override = default;
+	HighlightTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens);
+	~HighlightTokenizerBehavior() override = default;
 
 	void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) override;
 	void OnStatementEnd(idx_t pos) override;
-
-	vector<MatcherToken> tokens;
 };
 
 } // namespace duckdb

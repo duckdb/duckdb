@@ -85,6 +85,14 @@ public:
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(idx_t flushed_row_group_idx);
 	void FlushBlocks();
+	//! Whether Flush() takes the bulk-append path for this storage: the append covers at least one
+	//! full row group and there are no deletes. Only depends on transaction-local state, i.e. this
+	//! can be decided before taking any locks.
+	bool IsBulkAppend() const;
+	//! Whether the optimistic writer of this storage writes to disk (not temporary / in-memory / read-only)
+	bool WritesToDisk() const;
+	//! Whether this storage holds optimistically written (flushed) row groups
+	bool HasFlushedRowGroups() const;
 	void Rollback();
 	idx_t EstimatedSize();
 
@@ -115,6 +123,7 @@ class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
+	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table) const;
 	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize() const;
@@ -213,10 +222,16 @@ public:
 		return context;
 	}
 
+	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);
+	bool SyncedFlushedBlocks() const {
+		return synced_flushed_blocks;
+	}
+
 private:
 	ClientContext &context;
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
+	bool synced_flushed_blocks = false;
 
 private:
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);

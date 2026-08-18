@@ -9,6 +9,7 @@
 #pragma once
 
 #include "json_common.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "json_enums.hpp"
 #include "duckdb/common/types/type_map.hpp"
@@ -116,6 +117,9 @@ struct JSONReaderOptions {
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
 	bool convert_strings_to_integers = false;
+	//! Whether GeoJSON geometry fragments are inferred as the GEOMETRY type, and Features are unnested into
+	//! geometry + property columns. Unset means "decide from the file name" (.geojson / .geojsonl)
+	optional<bool> geojson;
 	//! If a struct contains more fields than this threshold with at least 80% similar types,
 	//! we infer it as MAP type
 	idx_t map_inference_threshold = 200;

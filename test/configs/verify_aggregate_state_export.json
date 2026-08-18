@@ -39,6 +39,8 @@
         "test/sql/aggregate/aggregates/histogram_exact.test",
         "test/sql/aggregate/aggregates/histogram_table_function.test",
         "test/sql/aggregate/aggregates/max_n_all_types_grouped.test",
+        "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
+        "test/sql/aggregate/aggregates/mode_rewrite.test",
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
@@ -50,6 +52,7 @@
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
+        "test/sql/prepared/prepared_statistics_optimization.test",
         "test/sql/types/struct/struct_equality_bug.test",
         "test/sql/types/timestamp/test_infinite_time.test",
         "test/sql/variant/variant_comparator.test"
