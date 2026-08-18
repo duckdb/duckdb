@@ -24,14 +24,14 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	auto &cache = db.GetParserCache();
 	if (!client_config.cached_grammar || client_config.cached_grammar->Version() != cache.LatestParserVersion()) {
-		client_config.cached_grammar = cache.GetMatcher();
+		client_config.cached_grammar = cache.GetMatcher(context);
 	}
 	return client_config.cached_grammar;
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(DatabaseInstance &db) {
 	auto &parser_cache = db.GetParserCache();
-	return parser_cache.GetMatcher();
+	return parser_cache.GetMatcher(nullptr);
 }
 
 const PEGTransformerFactory &CompiledGrammar::GetTransformerFactory() {
@@ -41,7 +41,7 @@ const PEGTransformerFactory &CompiledGrammar::GetTransformerFactory() {
 ParserCache::ParserCache() : version(0) {
 }
 
-shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
+shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> context) {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (matcher) {

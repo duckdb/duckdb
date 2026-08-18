@@ -78,7 +78,7 @@ public:
 	}
 	CompiledGrammar &GetCompiledGrammar() override {
 		if (!compiled_grammar) {
-			compiled_grammar = cache.GetMatcher();
+			compiled_grammar = cache.GetMatcher(nullptr);
 		}
 		return *compiled_grammar;
 	}

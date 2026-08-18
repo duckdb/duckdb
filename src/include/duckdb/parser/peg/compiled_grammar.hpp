@@ -6,6 +6,7 @@
 namespace duckdb {
 
 struct ParserCache;
+class ClientContext;
 
 struct CompiledGrammar {
 	friend struct ParserCache;
@@ -59,7 +60,7 @@ public:
 	ParserCache();
 
 public:
-	shared_ptr<CompiledGrammar> GetMatcher();
+	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<ClientContext> context);
 	void Invalidate();
 
 public:
