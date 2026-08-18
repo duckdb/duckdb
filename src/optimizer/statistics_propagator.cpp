@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
@@ -68,6 +69,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = PropagateStatistics(node.Cast<LogicalProjection>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = PropagateStatistics(node.Cast<LogicalSecureView>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
