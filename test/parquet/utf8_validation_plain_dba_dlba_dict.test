@@ -1,5 +1,5 @@
 # name: test/parquet/utf8_validation_plain_dlba.test
-# description: Test UTF8 validation of strings in parquet files encoded as PLAIN or DELTA LENGTH BYTE ARRAY
+# description: Test UTF8 validation of strings in parquet files encoded as PLAIN, DELTA_LENGTH_BYTE_ARRAY, dba and dictionary
 # group: [parquet]
 
 require parquet
@@ -52,6 +52,60 @@ hello world
 
 query T rowsort
 SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dlba.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dba.parquet', utf8_validation='replace');
+----
+TREL?
+hello world
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='strict');
+----
+Invalid Input Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='duck');
+----
+Binder Error
+
+statement error
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet');
+----
+Invalid Input Error
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='ignore');
+----
+TREL
+hello world
+
+query T rowsort
+SELECT X1 FROM read_parquet('data/parquet-testing/invalid_utf8_dictionary.parquet', utf8_validation='replace');
 ----
 TREL?
 hello world
