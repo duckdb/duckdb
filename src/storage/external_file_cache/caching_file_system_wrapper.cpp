@@ -231,8 +231,8 @@ void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional
 	underlying_file_system.CreateDirectory(directory, opener);
 }
 
-bool CachingFileSystemWrapper::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	return underlying_file_system.TryCreateDirectory(directory, opener);
+bool CachingFileSystemWrapper::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
+	return underlying_file_system.CreateDirectoryIfNotExists(directory, opener);
 }
 
 void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {

@@ -1598,7 +1598,7 @@ bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	std::exception_ptr error;
 	bool created_directory = false;
 	try {
-		created_directory = fs.TryCreateDirectory(dir_path);
+		created_directory = fs.CreateDirectoryIfNotExists(dir_path);
 	} catch (...) {
 		error = std::current_exception();
 	}
@@ -3256,7 +3256,7 @@ void CopyToFileGlobalState::PrepareOutputDirectory() {
 		}
 	}
 
-	if (fs.TryCreateDirectory(op.file_path)) {
+	if (fs.CreateDirectoryIfNotExists(op.file_path)) {
 		output_lifecycle.RegisterCreatedDirectory(op.file_path);
 	} else {
 		CheckDirectory(fs, op.file_path, op.overwrite_mode);

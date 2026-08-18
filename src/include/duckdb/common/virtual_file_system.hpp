@@ -45,7 +45,7 @@ public:
 	// need to look up correct fs for this
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	bool TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) override;
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	bool TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) override;

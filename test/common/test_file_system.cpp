@@ -193,9 +193,9 @@ TEST_CASE("TryRemoveEmptyDirectory never removes directory contents", "[file_sys
 	REQUIRE(!fs.TryRemoveEmptyDirectory(directory));
 }
 
-TEST_CASE("TryCreateDirectory reports directory ownership", "[file_system]") {
+TEST_CASE("CreateDirectoryIfNotExists reports directory ownership", "[file_system]") {
 	ExistingDirectoryFileSystem existing_directory_fs;
-	REQUIRE(!existing_directory_fs.TryCreateDirectory("virtual_directory"));
+	REQUIRE(!existing_directory_fs.CreateDirectoryIfNotExists("virtual_directory"));
 	REQUIRE(!existing_directory_fs.create_called);
 
 	auto fs = FileSystem::CreateLocal();
@@ -214,7 +214,7 @@ TEST_CASE("TryCreateDirectory reports directory ownership", "[file_system]") {
 				std::this_thread::yield();
 			}
 			try {
-				if (fs->TryCreateDirectory(directory)) {
+				if (fs->CreateDirectoryIfNotExists(directory)) {
 					created++;
 				}
 			} catch (...) {
@@ -229,7 +229,7 @@ TEST_CASE("TryCreateDirectory reports directory ownership", "[file_system]") {
 
 	REQUIRE(errors == 0);
 	REQUIRE(created == 1);
-	REQUIRE(!fs->TryCreateDirectory(directory));
+	REQUIRE(!fs->CreateDirectoryIfNotExists(directory));
 	REQUIRE(fs->TryRemoveEmptyDirectory(directory));
 }
 

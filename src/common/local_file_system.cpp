@@ -714,10 +714,10 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	TryCreateDirectory(directory, opener);
+	CreateDirectoryIfNotExists(directory, opener);
 }
 
-bool LocalFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
 		return true;
@@ -1475,10 +1475,10 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	TryCreateDirectory(directory, opener);
+	CreateDirectoryIfNotExists(directory, opener);
 }
 
-bool LocalFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+bool LocalFileSystem::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
 	if (!directory.empty() && CreateDirectoryW(unicode_path.c_str(), NULL)) {
 		return true;

@@ -500,7 +500,7 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-bool FileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+bool FileSystem::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
 	if (DirectoryExists(directory, opener)) {
 		return false;
 	}

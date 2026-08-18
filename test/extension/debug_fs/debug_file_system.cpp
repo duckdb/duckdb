@@ -234,8 +234,8 @@ void DebugFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	inner_fs->CreateDirectory(directory, opener);
 }
 
-bool DebugFileSystem::TryCreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	return inner_fs->TryCreateDirectory(directory, opener);
+bool DebugFileSystem::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
+	return inner_fs->CreateDirectoryIfNotExists(directory, opener);
 }
 
 void DebugFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
