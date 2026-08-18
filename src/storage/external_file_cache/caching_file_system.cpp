@@ -179,6 +179,7 @@ bool CachingFileHandle::StripForceFullDownloadIfPresent() {
 
 shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCurrent() {
 	bool needs_reopen = false;
+	bool needs_metadata_refresh = false;
 	shared_ptr<CachedFile> current_cached_file;
 	{
 		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
@@ -187,7 +188,9 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 		}
 		needs_reopen = file_handle != nullptr;
 		if (needs_reopen) {
+			needs_metadata_refresh = file_metadata_initialized;
 			file_handle.reset();
+			file_metadata_initialized = false;
 		}
 		cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
 		current_cached_file = cached_file;
@@ -195,6 +198,9 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 
 	if (needs_reopen) {
 		GetFileHandle();
+		if (needs_metadata_refresh) {
+			EnsureFileMetadata();
+		}
 	}
 	return current_cached_file;
 }
