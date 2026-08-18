@@ -287,12 +287,12 @@ private:
 
 /// The severity of a log message, compared against the database's configured threshold.
 enum class LogLevel : uint32_t {
-	TRACE = 10,
-	DEBUG = 20,
-	INFO = 30,
-	WARNING = 40,
-	ERROR = 50,
-	FATAL = 60,
+	LOG_TRACE = 10,
+	LOG_DEBUG = 20,
+	LOG_INFO = 30,
+	LOG_WARNING = 40,
+	LOG_ERROR = 50,
+	LOG_FATAL = 60,
 };
 
 /// A borrowed handle to the client context of a running operation.
