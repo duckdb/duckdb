@@ -6,7 +6,6 @@ add_library_unity(
   duckdb_parser_peg
   OBJECT
   autocomplete_core.cpp
-  keyword_helper.cpp
   keyword_map.cpp
   matcher.cpp
   compiled_grammar.cpp
