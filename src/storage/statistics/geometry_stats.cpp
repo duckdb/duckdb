@@ -332,9 +332,11 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		result = CheckIntersectionFilter(data, rhs.Cast<BoundConstantExpression>().value);
 	}
 
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
-		// the predicate matches every non-null geometry, but NULL values are still filtered out
-		// (the predicate evaluates to NULL for them), so we cannot prune the filter
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && (stats.CanHaveNull() || data.flags.HasEmptyGeometry())) {
+		// the predicate matches every row that is represented in the extent, but rows that are not
+		// represented in it do not match: NULL values (the predicate evaluates to NULL for them) and
+		// empty geometries (which contribute no vertices, but never intersect anything).
+		// If either can be present we cannot prune the filter away
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;

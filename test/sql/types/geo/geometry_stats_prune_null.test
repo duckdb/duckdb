@@ -78,3 +78,36 @@ query I
 SELECT count(*) FROM geo_nullable WHERE g && 'POLYGON((500 500, 600 500, 600 600, 500 600, 500 500))'::GEOMETRY;
 ----
 0
+
+# Empty geometries contribute nothing to the extent, but never intersect anything either,
+# so a covering predicate cannot prune the filter away when the column contains one
+statement ok
+CREATE TABLE geo_empty AS SELECT printf('POINT(%d %d)', i % 100, i % 100)::GEOMETRY AS g FROM range(999) tbl(i);
+
+statement ok
+INSERT INTO geo_empty VALUES ('POLYGON EMPTY'::GEOMETRY);
+
+query I
+SELECT count(*) FROM geo_empty WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999
+
+statement ok
+SET disabled_optimizers='filter_pushdown';
+
+query I
+SELECT count(*) FROM geo_empty WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999
+
+statement ok
+RESET disabled_optimizers;
+
+# Same, for a parquet file - there the empty geometry is not even visible in the statistics
+statement ok
+COPY (SELECT * FROM geo_empty) TO '__TEST_DIR__/duckdb_geo_empty.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 2000);
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/duckdb_geo_empty.parquet' WHERE g && 'POLYGON((-1 -1, 200 -1, 200 200, -1 200, -1 -1))'::GEOMETRY;
+----
+999
