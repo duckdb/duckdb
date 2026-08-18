@@ -33,6 +33,9 @@ class DeleteQueryNode;
 class UpdateQueryNode;
 class MergeQueryNode;
 class SelectStatement;
+class CatalogEntry;
+struct EntryLookupInfo;
+enum class RemoteCapability : uint8_t;
 struct AlterInfo;
 struct CreateInfo;
 struct CreateTableInfo;
@@ -114,10 +117,15 @@ private:
 	CatalogPushdownResult RewriteCreateInfo(CreateInfo &info, const CatalogPushdownResult &target);
 	//! Resolve the catalog that the target of a DDL statement lives in
 	CatalogPushdownResult ResolveDDLTarget(const QualifiedName &name, DDLTarget target, CatalogType entry_type);
-	//! Resolve an explicitly named catalog to a pushdown result
-	CatalogPushdownResult ResolveNamedCatalog(const Identifier &catalog_name);
-	//! Verify that the catalog a DDL statement resolved to can execute the statement as a whole
+	//! Resolve an explicitly named catalog to a remote reference, or Unknown if it is local / missing
+	CatalogPushdownResult ResolveRemoteCatalog(const Identifier &catalog_name, RemoteCapability capability);
+	//! Give the resolved catalog the chance to veto pushing down this statement as a whole
 	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
+	//! Look an entry up in a catalog, defaulting to the main schema when the name carries no schema
+	optional_ptr<CatalogEntry> LookupEntry(const Identifier &catalog_name, const EntryLookupInfo &lookup,
+	                                       const Identifier &schema_name);
+	//! Whether any non-remote catalog in the search path holds this entry
+	bool EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const Identifier &schema_name);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
