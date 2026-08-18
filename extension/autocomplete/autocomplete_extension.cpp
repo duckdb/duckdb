@@ -461,10 +461,10 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
-	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
+	auto compiled_grammar = CompiledGrammar::Get(context);
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
+	Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
 	tokenizer.TokenizeInput();
 
 	// use the parser to annotate any tokens
@@ -474,8 +474,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	TokenIterator token_iterator(tokens);
 	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = parser_cache.GetMatcher();
-	peg_matcher->ProgramMatcher().Match(state);
+	compiled_grammar->ProgramMatcher().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(std::move(tokens));
 }
@@ -549,8 +548,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizerBehavior behavior(sql_ref, root_tokens);
-	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
+	auto compiled_grammar = CompiledGrammar::Get(context);
+	Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
 
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
@@ -567,8 +566,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	TokenIterator token_iterator(root_tokens);
 	MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = parser_cache.GetMatcher();
-	auto match_result = peg_matcher->ProgramMatcher().Match(state);
+	auto match_result = compiled_grammar->ProgramMatcher().Match(state);
 	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
 	// consuming it.
 	if (match_result != MatchResultType::SUCCESS || state.token_iterator.Position() + 1 < root_tokens.size()) {
