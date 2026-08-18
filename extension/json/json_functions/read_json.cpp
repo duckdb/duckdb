@@ -113,9 +113,13 @@ public:
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 				continue;
 			}
-			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers);
+			// options.timestamp_format is only ever set from the user-supplied timestampformat= parameter,
+			// so non-emptiness is exactly "the user specified a timestamp format"
+			const bool user_specified_timestamp_format = !options.timestamp_format.empty();
+			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers,
+			                              user_specified_timestamp_format);
 			node.RefineCandidateTypes(scan_state.values, next, string_vector, allocator,
-			                          auto_detect_state.date_format_map);
+			                          auto_detect_state.date_format_map, user_specified_timestamp_format);
 		}
 		auto_detect_state.total_file_size += file_size;
 		auto_detect_state.bytes_scanned += total_read_size;
