@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 

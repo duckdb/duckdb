@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "json_common.hpp"
 #include "yyjson_memory.hpp"
 
@@ -83,9 +84,14 @@ public:
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
+	static ScalarFunction GetJSONCopyToGeoJSONFunction();
+	static CopyFunction GetGeoJSONCopyFunction();
 	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
 	                                                             unique_ptr<Expression> date_format,
 	                                                             unique_ptr<Expression> timestamp_format);
+	//! Validation callback for the json_geometry_format setting, so an invalid value is rejected by SET rather
+	//! than by every subsequent conversion
+	static void ValidateGeometryFormat(ClientContext &context, SetScope scope, Value &parameter);
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
@@ -107,6 +113,9 @@ private:
 	static ScalarFunctionSet GetStructureFunction();
 	static ScalarFunctionSet GetTransformFunction();
 	static ScalarFunctionSet GetTransformStrictFunction();
+
+	static ScalarFunctionSet GetAsGeoJSONFunction();
+	static ScalarFunctionSet GetGeomFromGeoJSONFunction();
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();

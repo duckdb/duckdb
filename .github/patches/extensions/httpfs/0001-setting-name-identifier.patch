@@ -1,62 +1,8 @@
-diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
---- a/src/http/httpfs.cpp
-+++ b/src/http/httpfs.cpp
-@@ -87,7 +87,7 @@
- 		}
- 	}
- 
--	SettingLookupResult TryGetSetting(const string &key, Value &value) {
-+	SettingLookupResult TryGetSetting(const Identifier &key, Value &value) {
- 		if (info) {
- 			return FileOpener::TryGetCurrentSetting(opener, key, value, *info);
- 		}
-diff --git a/src/include/s3/s3_auth.hpp b/src/include/s3/s3_auth.hpp
---- a/src/include/s3/s3_auth.hpp
-+++ b/src/include/s3/s3_auth.hpp
-@@ -13,7 +13,8 @@
- 	explicit S3KeyValueReader(const KeyValueSecretReader &reader);
- 
- 	template <class TYPE>
--	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, TYPE &result) {
-+	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
-+	                                             TYPE &result) {
- 		Value temp_result;
- 		auto setting_scope = reader.TryGetSecretKeyOrSetting(secret_key, setting_name, temp_result);
- 		if (!temp_result.IsNull() && !(setting_scope && setting_scope.GetScope() == SettingScope::GLOBAL &&
-@@ -24,7 +25,7 @@
- 	}
- 
- 	template <class TYPE>
--	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
-+	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, TYPE &value_out) {
- 		return reader.TryGetSecretKey(secret_key, value_out);
- 	}
- 
-@@ -70,7 +71,7 @@
- 
- 	DBConfig &config;
- 
--	void SetExtensionOptionValue(string key, const char *env_var);
-+	void SetExtensionOptionValue(const Identifier &key, const char *env_var);
- 	void SetAll();
- };
- 
-diff --git a/src/s3/s3_auth.cpp b/src/s3/s3_auth.cpp
---- a/src/s3/s3_auth.cpp
-+++ b/src/s3/s3_auth.cpp
-@@ -6,7 +6,7 @@
- 
- namespace duckdb {
- 
--void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
-+void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(const Identifier &key, const char *env_var_name) {
- 	const auto env_value = std::getenv(env_var_name);
- 	if (env_value) {
- 		if (StringUtil::Lower(env_value) == "false") {
 diff --git a/test/extension/autoloading_base.test b/test/extension/autoloading_base.test
+index 238f1fd..0c137c5 100644
 --- a/test/extension/autoloading_base.test
 +++ b/test/extension/autoloading_base.test
-@@ -33,12 +33,12 @@
+@@ -33,12 +33,12 @@ set autoinstall_known_extensions=false
  statement error
  SET s3_region='eu-west-1';
  ----
@@ -71,10 +17,24 @@ diff --git a/test/extension/autoloading_base.test b/test/extension/autoloading_b
  
  statement error
  select * from thistablefunctionwillnotexistfosho();
+diff --git a/test/extension/autoloading_current_setting.test b/test/extension/autoloading_current_setting.test
+index 8d4b98d..60fd820 100644
+--- a/test/extension/autoloading_current_setting.test
++++ b/test/extension/autoloading_current_setting.test
+@@ -21,7 +21,7 @@ set autoinstall_known_extensions=false
+ statement error
+ select current_setting('s3_region');
+ ----
+-<REGEX>:.*Catalog Error.*Setting with name "s3_region" is not in the catalog.*
++<REGEX>:.*Catalog Error.*Setting with name s3_region is not in the catalog.*
+ 
+ ### Autoloading, but but not autoinstall
+ statement ok
 diff --git a/test/extension/autoloading_load_only.test b/test/extension/autoloading_load_only.test
+index 66f9770..defbfe7 100644
 --- a/test/extension/autoloading_load_only.test
 +++ b/test/extension/autoloading_load_only.test
-@@ -22,7 +22,7 @@
+@@ -22,7 +22,7 @@ set autoinstall_known_extensions=false
  statement error
  SET s3_region='eu-west-1';
  ----
@@ -84,9 +44,10 @@ diff --git a/test/extension/autoloading_load_only.test b/test/extension/autoload
  ### Autoloading but not autoinstall, while the extension is not installed: still not working
  statement ok
 diff --git a/test/extension/autoloading_reset_setting.test b/test/extension/autoloading_reset_setting.test
+index 3473e3b..b1a606f 100644
 --- a/test/extension/autoloading_reset_setting.test
 +++ b/test/extension/autoloading_reset_setting.test
-@@ -22,7 +22,7 @@
+@@ -22,7 +22,7 @@ set autoinstall_known_extensions=false
  statement error
  RESET s3_region;
  ----
@@ -94,16 +55,4 @@ diff --git a/test/extension/autoloading_reset_setting.test b/test/extension/auto
 +Catalog Error: Setting with name s3_region is not in the catalog, but it exists in the httpfs extension.
  
  ### Autoloading, but no auto install
- statement ok
-diff --git a/test/extension/autoloading_current_setting.test b/test/extension/autoloading_current_setting.test
---- a/test/extension/autoloading_current_setting.test
-+++ b/test/extension/autoloading_current_setting.test
-@@ -21,7 +21,7 @@
- statement error
- select current_setting('s3_region');
- ----
--<REGEX>:.*Catalog Error.*Setting with name "s3_region" is not in the catalog.*
-+<REGEX>:.*Catalog Error.*Setting with name s3_region is not in the catalog.*
- 
- ### Autoloading, but but not autoinstall
  statement ok

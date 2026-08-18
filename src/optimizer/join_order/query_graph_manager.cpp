@@ -716,11 +716,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	result_operator->has_estimated_cardinality = true;
 
 	// Collect unused residual predicates that belong to this join. Semantic non-inner joins own their complete
-	// condition directly, so only ordinary (notably INNER) residual predicates reach this path.
+	// condition directly, so only ordinary (notably INNER) residual predicates reach this path. Predicates that
+	// belong to a must-apply operator occurrence are consumed by that occurrence during reconstruction, instead
+	// of being added to unused_residual_predicates.
 	vector<unique_ptr<Expression>> unused_residual_predicates;
 	for (auto &filter_info : filters_and_bindings) {
 		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter &&
-		    filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
+		    !operator_costing_predicates.count(filter_info->filter_index) && filter_info->set.get().count > 0 &&
+		    JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
 			unused_residual_predicates.push_back(std::move(filters_and_bindings[filter_info->filter_index]->filter));
 		}
 	}

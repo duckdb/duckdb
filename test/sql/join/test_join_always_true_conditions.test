@@ -84,3 +84,28 @@ ANTI JOIN empty_table e ON TRUE;
 ----
 1	10
 2	20
+
+# A comparison that the statistics prove always true behaves the same way. The tag filter empties the
+# right side at runtime without narrowing category, so the condition still folds to always true.
+statement ok
+CREATE TABLE stats_table (category INTEGER, tag INTEGER);
+
+statement ok
+INSERT INTO stats_table VALUES (100, 1);
+
+query II rowsort
+SELECT * FROM left_table l
+ANTI JOIN (SELECT * FROM stats_table WHERE tag % 7 = 3) e ON l.val <= e.category;
+----
+1	10
+2	20
+
+query IIII rowsort
+SELECT * FROM left_table l
+JOIN (SELECT * FROM stats_table WHERE tag % 7 = 3) e ON l.val <= e.category;
+----
+
+query II rowsort
+SELECT * FROM left_table l
+SEMI JOIN (SELECT * FROM stats_table WHERE tag % 7 = 3) e ON l.val <= e.category;
+----

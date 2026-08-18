@@ -7,12 +7,13 @@
 // #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
@@ -69,12 +70,15 @@ optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult>
 
 //! Class for building matchers
 class MatcherFactory {
+public:
 	friend struct MatcherList;
 
 public:
 	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
 	}
+	virtual ~MatcherFactory() = default;
 
+public:
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
@@ -83,14 +87,20 @@ public:
 
 private:
 	// Base primitives
-	Matcher &Keyword(const string &keyword) const;
-	Matcher &List() const;
-	Matcher &List(vector<reference<Matcher>> matchers) const;
-	Matcher &Choice(vector<reference<Matcher>> matchers) const;
-	Matcher &Optional(Matcher &matcher) const;
-	Matcher &Repeat(Matcher &matcher) const;
+	KeywordMatcher &Keyword(const string &keyword) const;
+	ListMatcher &List() const;
+	ListMatcher &List(vector<reference<Matcher>> matchers) const;
+	ChoiceMatcher &Choice(vector<reference<Matcher>> &&matchers) const;
+	OptionalMatcher &Optional(Matcher &matcher) const;
+	RepeatMatcher &Repeat(Matcher &matcher) const;
 
-	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
+	virtual unique_ptr<KeywordMatcher> CreateKeyword(const string &keyword, const KeywordInfo &info) const;
+	virtual unique_ptr<ListMatcher> CreateList() const;
+	virtual unique_ptr<ChoiceMatcher> CreateChoice(vector<reference<Matcher>> &&matchers) const;
+	virtual unique_ptr<OptionalMatcher> CreateOptional(Matcher &matcher) const;
+	virtual unique_ptr<RepeatMatcher> CreateRepeat(Matcher &matcher) const;
+
+	void AddKeywordOverride(const char *name, KeywordInfo keyword_info);
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
@@ -100,37 +110,70 @@ private:
 private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
-	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
+	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
+	case_insensitive_map_t<KeywordInfo> keyword_overrides;
 	string_set_t no_suggestion_rules;
 	string_set_t packrat_memoized_rules;
 };
 
-Matcher &MatcherFactory::Keyword(const string &keyword) const {
+unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
+	return make_uniq<KeywordMatcher>(keyword, info);
+}
+
+unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
+	return make_uniq<ListMatcher>();
+}
+
+unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
+	return make_uniq<ChoiceMatcher>(std::move(matchers));
+}
+
+unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
+	return make_uniq<OptionalMatcher>(matcher);
+}
+
+unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
+	return make_uniq<RepeatMatcher>(matcher);
+}
+
+KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {
+	auto it = keywords.find(keyword);
+	if (it != keywords.end()) {
+		return it->second;
+	}
+
+	optional<KeywordInfo> info;
 	auto entry = keyword_overrides.find(keyword);
 	if (entry != keyword_overrides.end()) {
-		return entry->second.get();
+		info.emplace(entry->second);
+	} else {
+		info.emplace(0, ' ');
 	}
-	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, 0, ' '));
+	auto &result = allocator.Allocate(CreateKeyword(keyword, *info)).Cast<KeywordMatcher>();
+	keywords.emplace(keyword, result);
+	return result;
 }
 
-Matcher &MatcherFactory::List() const {
-	return allocator.Allocate(make_uniq<ListMatcher>());
+ListMatcher &MatcherFactory::List() const {
+	return allocator.Allocate(CreateList()).Cast<ListMatcher>();
 }
 
-Matcher &MatcherFactory::List(vector<reference<Matcher>> matchers) const {
-	return allocator.Allocate(make_uniq<ListMatcher>(std::move(matchers)));
+ListMatcher &MatcherFactory::List(vector<reference<Matcher>> matchers) const {
+	auto result = CreateList();
+	result->matchers = std::move(matchers);
+	return allocator.Allocate(std::move(result)).Cast<ListMatcher>();
 }
 
-Matcher &MatcherFactory::Choice(vector<reference<Matcher>> matchers) const {
-	return allocator.Allocate(make_uniq<ChoiceMatcher>(std::move(matchers)));
+ChoiceMatcher &MatcherFactory::Choice(vector<reference<Matcher>> &&matchers) const {
+	return allocator.Allocate(CreateChoice(std::move(matchers))).Cast<ChoiceMatcher>();
 }
 
-Matcher &MatcherFactory::Optional(Matcher &matcher) const {
-	return allocator.Allocate(make_uniq<OptionalMatcher>(matcher));
+OptionalMatcher &MatcherFactory::Optional(Matcher &matcher) const {
+	return allocator.Allocate(CreateOptional(matcher)).Cast<OptionalMatcher>();
 }
 
-Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
-	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher));
+RepeatMatcher &MatcherFactory::Repeat(Matcher &matcher) const {
+	return allocator.Allocate(CreateRepeat(matcher)).Cast<RepeatMatcher>();
 }
 
 Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
@@ -352,7 +395,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				} else {
 					vector<reference<Matcher>> choice_options;
 					choice_options.push_back(previous_matcher);
-					auto &new_choice_matcher = Choice(choice_options);
+					auto &new_choice_matcher = Choice(std::move(choice_options));
 
 					if (!list_matcher.matchers.empty()) {
 						list_matcher.matchers.pop_back();
@@ -404,9 +447,8 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	return matcher;
 }
 
-void MatcherFactory::AddKeywordOverride(const char *name, int32_t score, char extra_char) {
-	auto &keyword_matcher = allocator.Allocate(make_uniq<KeywordMatcher>(name, score, extra_char));
-	keyword_overrides.insert(make_pair(name, reference<Matcher>(keyword_matcher)));
+void MatcherFactory::AddKeywordOverride(const char *name, KeywordInfo info) {
+	keyword_overrides.insert(make_pair(name, info));
 }
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
@@ -430,9 +472,9 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	parser.ParseRules(grammar);
 
 	// keyword overrides
-	AddKeywordOverride("TABLE", 1, ' ');
-	AddKeywordOverride(".", 0, '\0');
-	AddKeywordOverride("(", 0, '\0');
+	AddKeywordOverride("TABLE", KeywordInfo(1, ' '));
+	AddKeywordOverride(".", KeywordInfo(0, '\0'));
+	AddKeywordOverride("(", KeywordInfo(0, '\0'));
 	// packrat memoized rules
 	//===--------------------------------------------------------------------===//
 	// START GENERATED PACKRAT MEMOIZED RULES

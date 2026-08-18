@@ -1,0 +1,109 @@
+# name: test/sql/json/scalar/test_st_asgeojson.test
+# description: Test ST_AsGeoJSON
+# group: [scalar]
+
+require json
+
+statement ok
+CREATE TABLE types (geom GEOMETRY);
+
+statement ok
+INSERT INTO types VALUES
+    ('POINT EMPTY'),
+    ('POINT(0 0)'),
+    ('LINESTRING EMPTY'),
+    ('LINESTRING(0 0, 1 1)'),
+    ('POLYGON EMPTY'),
+    ('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'),
+    ('MULTIPOINT EMPTY'),
+    ('MULTIPOINT(0 0, 1 1)'),
+    ('MULTILINESTRING EMPTY'),
+    ('MULTILINESTRING((0 0, 1 1), (2 2, 3 3))'),
+    ('MULTIPOLYGON EMPTY'),
+    ('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)), ((2 2, 3 2, 3 3, 2 3, 2 2)))'),
+    ('GEOMETRYCOLLECTION EMPTY'),
+    ('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0, 1 1))');
+
+query I
+SELECT ST_AsGeoJSON(geom) FROM types;
+----
+{"type":"Point","coordinates":[]}
+{"type":"Point","coordinates":[0.0,0.0]}
+{"type":"LineString","coordinates":[]}
+{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]}
+{"type":"Polygon","coordinates":[]}
+{"type":"Polygon","coordinates":[[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0],[0.0,0.0]]]}
+{"type":"MultiPoint","coordinates":[]}
+{"type":"MultiPoint","coordinates":[[0.0,0.0],[1.0,1.0]]}
+{"type":"MultiLineString","coordinates":[]}
+{"type":"MultiLineString","coordinates":[[[0.0,0.0],[1.0,1.0]],[[2.0,2.0],[3.0,3.0]]]}
+{"type":"MultiPolygon","coordinates":[]}
+{"type":"MultiPolygon","coordinates":[[[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0],[0.0,0.0]]],[[[2.0,2.0],[3.0,2.0],[3.0,3.0],[2.0,3.0],[2.0,2.0]]]]}
+{"type":"GeometryCollection","geometries":[]}
+{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":[0.0,0.0]},{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]}]}
+
+# The result is JSON, not just a string
+query I
+SELECT typeof(ST_AsGeoJSON('POINT(1 2)'::GEOMETRY));
+----
+JSON
+
+query I
+SELECT ST_AsGeoJSON('POINT(1 2)'::GEOMETRY)->>'$.type';
+----
+Point
+
+# Z is passed through
+query I
+SELECT ST_AsGeoJSON('POINT Z(1 2 3)'::GEOMETRY);
+----
+{"type":"Point","coordinates":[1.0,2.0,3.0]}
+
+query I
+SELECT ST_AsGeoJSON('LINESTRING Z(1 2 3, 4 5 6)'::GEOMETRY);
+----
+{"type":"LineString","coordinates":[[1.0,2.0,3.0],[4.0,5.0,6.0]]}
+
+# GeoJSON has no M dimension, so M is dropped
+query I
+SELECT ST_AsGeoJSON('POINT M(1 2 3)'::GEOMETRY);
+----
+{"type":"Point","coordinates":[1.0,2.0]}
+
+query I
+SELECT ST_AsGeoJSON('POINT ZM(1 2 3 4)'::GEOMETRY);
+----
+{"type":"Point","coordinates":[1.0,2.0,3.0]}
+
+query I
+SELECT ST_AsGeoJSON('LINESTRING M(1 2 3, 4 5 6)'::GEOMETRY);
+----
+{"type":"LineString","coordinates":[[1.0,2.0],[4.0,5.0]]}
+
+# Nested GeometryCollection
+query I
+SELECT ST_AsGeoJSON('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(1 2)))'::GEOMETRY);
+----
+{"type":"GeometryCollection","geometries":[{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":[1.0,2.0]}]}]}
+
+# An empty point inside a MultiPoint has no GeoJSON representation, so it is left out
+query I
+SELECT ST_AsGeoJSON('MULTIPOINT(1 2, EMPTY, 3 4)'::GEOMETRY);
+----
+{"type":"MultiPoint","coordinates":[[1.0,2.0],[3.0,4.0]]}
+
+query I
+SELECT ST_AsGeoJSON(NULL::GEOMETRY);
+----
+NULL
+
+# Negative and fractional coordinates
+query I
+SELECT ST_AsGeoJSON('POINT(-122.4194 37.7749)'::GEOMETRY);
+----
+{"type":"Point","coordinates":[-122.4194,37.7749]}
+
+statement error
+SELECT ST_AsGeoJSON('not a geometry');
+----
+<REGEX>:.*Failed to parse geometry.*

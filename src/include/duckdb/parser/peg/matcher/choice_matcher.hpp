@@ -12,7 +12,7 @@ public:
 public:
 	ChoiceMatcher() : Matcher(TYPE) {
 	}
-	explicit ChoiceMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
+	explicit ChoiceMatcher(vector<reference<Matcher>> &&matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {

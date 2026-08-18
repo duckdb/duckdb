@@ -1,0 +1,26 @@
+# name: test/sql/index/art/test_index_key_rebind.test
+# description: Test index_key prepared statement invalidation on DROP INDEX
+# group: [art]
+
+statement ok
+CREATE TABLE t(a INTEGER);
+
+statement ok
+CREATE INDEX idx ON t USING ART(a);
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+statement ok
+PREPARE stmt AS SELECT index_key({'table': 't'}, 'idx', CAST(random() * 0 AS INTEGER) + 42);
+
+statement ok
+EXECUTE stmt;
+
+statement ok
+DROP INDEX idx;
+
+statement error
+EXECUTE stmt
+----
+index 'idx' was not found

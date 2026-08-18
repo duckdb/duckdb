@@ -10,8 +10,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::KEYWORD;
 
 public:
-	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0')
-	    : Matcher(TYPE), keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
+	explicit KeywordMatcher(string keyword_p, const KeywordInfo &info)
+	    : Matcher(TYPE), keyword(std::move(keyword_p)), info(info) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -37,8 +37,9 @@ public:
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		AutoCompleteCandidate candidate(keyword, SuggestionState::SUGGEST_KEYWORD, score_bonus, CandidateType::KEYWORD);
-		candidate.extra_char = extra_char;
+		AutoCompleteCandidate candidate(keyword, SuggestionState::SUGGEST_KEYWORD, info.score_bonus,
+		                                CandidateType::KEYWORD);
+		candidate.extra_char = info.extra_char;
 		state.AddSuggestion(MatcherSuggestion(std::move(candidate)));
 		return SuggestionType::MANDATORY;
 	}
@@ -63,9 +64,8 @@ private:
 	}
 
 private:
-	string keyword;
-	int32_t score_bonus;
-	char extra_char;
+	const string keyword;
+	const KeywordInfo info;
 };
 
 } // namespace duckdb
