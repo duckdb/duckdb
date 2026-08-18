@@ -18,16 +18,151 @@ statement ok
 ALTER TABLE t ADD COLUMN j INTEGER;
 
 query I
-SELECT COUNT(*) FROM duckdb_triggers();
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't';
 ----
 1
+
+# RENAME COLUMN updates the column list of UPDATE OF triggers
+statement ok
+CREATE TABLE rename_target(i INTEGER, j INTEGER, other INTEGER);
+
+statement ok
+CREATE TABLE rename_audit(trigger_name VARCHAR);
+
+statement ok
+CREATE TRIGGER rename_one AFTER UPDATE OF j ON rename_target
+    INSERT INTO rename_audit VALUES ('one');
+
+statement ok
+CREATE TRIGGER rename_many BEFORE UPDATE OF i, j ON rename_target
+    INSERT INTO rename_audit VALUES ('many');
+
+statement ok
+CREATE TRIGGER rename_unqualified AFTER UPDATE ON rename_target
+    INSERT INTO rename_audit VALUES ('all');
+
+statement ok
+ALTER TABLE rename_target RENAME COLUMN j TO k;
+
+query TT rowsort
+SELECT trigger_name, columns FROM duckdb_triggers()
+WHERE trigger_name IN ('rename_many', 'rename_one', 'rename_unqualified');
+----
+rename_many	[i, k]
+rename_one	[k]
+rename_unqualified	[]
+
+statement ok
+UPDATE rename_target SET k = 1;
+
+query T rowsort
+SELECT trigger_name FROM rename_audit;
+----
+all
+many
+one
+
+# Identifier matching is case-insensitive, while catalogue output keeps the
+# spelling of the new column name
+statement ok
+CREATE TABLE rename_case("OldName" INTEGER);
+
+statement ok
+CREATE TRIGGER rename_case_trigger AFTER UPDATE OF oldname ON rename_case
+    INSERT INTO rename_audit VALUES ('case');
+
+statement ok
+ALTER TABLE rename_case RENAME COLUMN OLDNAME TO "NewName";
+
+query TT
+SELECT columns, sql LIKE '%UPDATE OF NewName%'
+FROM duckdb_triggers() WHERE trigger_name = 'rename_case_trigger';
+----
+[NewName]	true
+
+statement ok
+UPDATE rename_case SET newname = 1;
+
+query I
+SELECT count(*) FROM rename_audit WHERE trigger_name = 'case';
+----
+1
+
+statement ok
+DELETE FROM rename_audit;
+
+# An unrelated column rename leaves UPDATE OF lists unchanged
+statement ok
+ALTER TABLE rename_target RENAME COLUMN other TO extra;
+
+query TT rowsort
+SELECT trigger_name, columns FROM duckdb_triggers()
+WHERE trigger_name IN ('rename_many', 'rename_one', 'rename_unqualified');
+----
+rename_many	[i, k]
+rename_one	[k]
+rename_unqualified	[]
+
+statement ok
+UPDATE rename_target SET extra = 1;
+
+query T
+SELECT trigger_name FROM rename_audit;
+----
+all
+
+statement ok
+DELETE FROM rename_audit;
+
+# The untouched member of a multi-column UPDATE OF list still fires
+statement ok
+UPDATE rename_target SET i = 1;
+
+query T rowsort
+SELECT trigger_name FROM rename_audit;
+----
+all
+many
+
+statement ok
+DELETE FROM rename_audit;
+
+# Rolling back the rename also rolls back the trigger-catalogue replacement
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER TABLE rename_target RENAME COLUMN k TO j;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'rename_one';
+----
+[j]
+
+statement ok
+ROLLBACK;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'rename_one';
+----
+[k]
+
+statement ok
+UPDATE rename_target SET k = 2;
+
+query T rowsort
+SELECT trigger_name FROM rename_audit;
+----
+all
+many
+one
 
 # DROP COLUMN takes the physical-column rebuild path
 statement ok
 ALTER TABLE t DROP COLUMN j;
 
 query I
-SELECT COUNT(*) FROM duckdb_triggers();
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't';
 ----
 1
 
@@ -36,7 +171,7 @@ statement ok
 ALTER TABLE t ALTER COLUMN i SET NOT NULL;
 
 query I
-SELECT COUNT(*) FROM duckdb_triggers();
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't';
 ----
 1
 
@@ -45,7 +180,7 @@ statement ok
 ALTER TABLE t ALTER COLUMN i TYPE BIGINT;
 
 query I
-SELECT COUNT(*) FROM duckdb_triggers();
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't';
 ----
 1
 
@@ -54,6 +189,6 @@ statement ok
 ALTER TABLE t ADD PRIMARY KEY(i);
 
 query I
-SELECT COUNT(*) FROM duckdb_triggers();
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't';
 ----
 1
