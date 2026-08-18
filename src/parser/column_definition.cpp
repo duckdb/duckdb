@@ -38,6 +38,13 @@ const ParsedExpression &ColumnDefinition::DefaultValue() const {
 	return *expression;
 }
 
+ParsedExpression &ColumnDefinition::DefaultValueMutable() {
+	if (!HasDefaultValue()) {
+		throw InternalException("DefaultValueMutable() called on a column without a default value");
+	}
+	return *expression;
+}
+
 bool ColumnDefinition::HasDefaultValue() const {
 	if (Generated()) {
 		return false;

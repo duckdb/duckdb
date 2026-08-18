@@ -19,7 +19,19 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/constraints/check_constraint.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -69,6 +81,7 @@ RemotePushdownOptimizer::RemotePushdownOptimizer(optional_ptr<RemotePushdownOpti
     : binder(parent_p->binder), parent(parent_p), pushdown_state(parent->pushdown_state) {
 	// inherit table / column names from parent (for correlated subquery detection)
 	local_table_names = parent->local_table_names;
+	allow_constant_folding = parent->allow_constant_folding;
 }
 
 void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
@@ -168,6 +181,15 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 		break;
 	case StatementType::UPDATE_STATEMENT:
 		result = Rewrite(*statement->Cast<UpdateStatement>().node);
+		break;
+	case StatementType::CREATE_STATEMENT:
+		result = RewriteStatement(statement->Cast<CreateStatement>());
+		break;
+	case StatementType::DROP_STATEMENT:
+		result = RewriteStatement(statement->Cast<DropStatement>());
+		break;
+	case StatementType::ALTER_STATEMENT:
+		result = RewriteStatement(statement->Cast<AlterStatement>());
 		break;
 	case StatementType::EXPLAIN_STATEMENT:
 		Rewrite(statement->Cast<ExplainStatement>().stmt);
@@ -514,6 +536,323 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &nod
 		FinishPushdown(node.children[i], child_results[i]);
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// DDL statements
+//===--------------------------------------------------------------------===//
+CatalogPushdownResult RemotePushdownOptimizer::ResolveNamedCatalog(const Identifier &catalog_name) {
+	auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
+	if (!catalog || !catalog->Supports(RemoteCapability::EXECUTE_STATEMENT)) {
+		// a local catalog, or a catalog that does not exist - keep the statement local
+		return CatalogPushdownResult::Unknown();
+	}
+	return CatalogPushdownResult::RemoteReference(*catalog);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedName &name, DDLTarget target,
+                                                                CatalogType entry_type) {
+	Identifier catalog_name = name.Catalog();
+	Identifier schema_name = name.Schema();
+	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	if (!catalog_name.empty()) {
+		return ResolveNamedCatalog(catalog_name);
+	}
+	// no explicit catalog - the statement is only pushed down if the search path resolves it to a remote
+	FindRemoteCatalogsInSearchPath();
+	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
+		return CatalogPushdownResult::Unknown();
+	}
+	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
+	if (target == DDLTarget::NEW_ENTRY) {
+		// the entry does not exist yet - it is created in the catalog Binder::SearchSchema would pick
+		auto &search_path = *ClientData::Get(binder.context).catalog_search_path;
+		auto resolved =
+		    schema_name.empty() ? search_path.GetDefault().GetCatalog() : search_path.GetDefaultCatalog(schema_name);
+		if (resolved != remote_catalog.GetName()) {
+			return CatalogPushdownResult::Unknown();
+		}
+		return ResolveNamedCatalog(remote_catalog.GetName());
+	}
+	if (entry_type == CatalogType::SCHEMA_ENTRY) {
+		// a schema is not looked up as a (catalog, schema, name) triple - only push DROP/ALTER SCHEMA
+		// when the catalog is named explicitly
+		return CatalogPushdownResult::Unknown();
+	}
+	// the entry must already exist - if any local catalog in the search path holds it, stay local
+	EntryLookupInfo entry_lookup(entry_type, QualifiedName(name.Name()));
+	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
+		const auto &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(entry_lookup, QualifiedName(local_entry.GetCatalog(), schema,
+		                                                                           entry_lookup.GetEntryIdentifier())),
+		                               OnEntryNotFound::RETURN_NULL);
+		if (entry) {
+			return CatalogPushdownResult::Unknown();
+		}
+	}
+	return ResolveNamedCatalog(remote_catalog.GetName());
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::VerifyStatementSupport(const SQLStatement &statement,
+                                                                      CatalogPushdownResult target) {
+	if (target.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return target;
+	}
+	if (!target.catalog->SupportsPushdown(statement)) {
+		// the catalog cannot execute this statement - any definition query within it may still be pushed
+		return CatalogPushdownResult::Unknown();
+	}
+	return target;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::AnalyzeDefinition(const ParsedExpression &expr) {
+	// the expression is stored verbatim with the entry - analyze a copy so it is never rewritten
+	ConstantFoldingGuard guard(*this);
+	auto expr_copy = expr.Copy();
+	return Rewrite(expr_copy);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteDefinitionQuery(unique_ptr<QueryNode> &node,
+                                                                      const CatalogPushdownResult &target,
+                                                                      bool fold_constants) {
+	RemotePushdownOptimizer child_optimizer(this);
+	if (!fold_constants) {
+		child_optimizer.allow_constant_folding = false;
+	}
+	auto result = child_optimizer.Rewrite(*node);
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+	    (target.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG || target.catalog != result.catalog)) {
+		// the entry itself is not created in the remote catalog - push down only the query that defines it
+		FinishPushdown(node, result);
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateTableInfo &info,
+                                                                 const CatalogPushdownResult &target) {
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	// column defaults, generated columns and CHECK constraints are stored verbatim with the table
+	for (auto &col : info.columns.Logical()) {
+		if (col.HasDefaultValue()) {
+			result = Merge(result, AnalyzeDefinition(col.DefaultValue()));
+		} else if (col.Generated()) {
+			result = Merge(result, AnalyzeDefinition(col.GeneratedExpression()));
+		}
+	}
+	for (auto &constraint : info.constraints) {
+		if (constraint->type == ConstraintType::CHECK) {
+			result = Merge(result, AnalyzeDefinition(*constraint->Cast<CheckConstraint>().expression));
+		}
+	}
+	for (auto &expr : info.partition_keys) {
+		result = Merge(result, AnalyzeDefinition(*expr));
+	}
+	for (auto &expr : info.sort_keys) {
+		result = Merge(result, AnalyzeDefinition(*expr));
+	}
+	for (auto &option : info.options) {
+		result = Merge(result, AnalyzeDefinition(*option.second));
+	}
+	if (info.query) {
+		// CREATE TABLE AS - the query runs once, so it is rewritten (and folded) like any other query
+		result = Merge(result, RewriteDefinitionQuery(info.query->node, target, true));
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateViewInfo &info,
+                                                                 const CatalogPushdownResult &target) {
+	if (!info.query) {
+		return CatalogPushdownResult::Unknown();
+	}
+	// the view body is stored as written - it must not be constant-folded
+	return RewriteDefinitionQuery(info.query->node, target, false);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateTypeInfo &info,
+                                                                 const CatalogPushdownResult &target) {
+	if (!info.query) {
+		return CatalogPushdownResult::NoCatalogReference();
+	}
+	if (info.query->type != StatementType::SELECT_STATEMENT) {
+		return CatalogPushdownResult::Unknown();
+	}
+	// CREATE TYPE ... AS ENUM (<query>) - the query runs once, when the type is created
+	return RewriteDefinitionQuery(info.query->Cast<SelectStatement>().node, target, true);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateIndexInfo &info) {
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	for (auto &expr : info.parsed_expressions) {
+		result = Merge(result, AnalyzeDefinition(*expr));
+	}
+	for (auto &expr : info.expressions) {
+		result = Merge(result, AnalyzeDefinition(*expr));
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateMacroInfo &info) {
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	for (auto &macro : info.macros) {
+		for (auto &default_param : macro->default_parameters) {
+			result = Merge(result, AnalyzeDefinition(*default_param.second));
+		}
+		switch (macro->type) {
+		case MacroType::SCALAR_MACRO:
+			result = Merge(result, AnalyzeDefinition(*macro->Cast<ScalarMacroFunction>().expression));
+			break;
+		case MacroType::TABLE_MACRO: {
+			// the macro body is stored as written - it must not be constant-folded
+			RemotePushdownOptimizer child_optimizer(this);
+			child_optimizer.allow_constant_folding = false;
+			result = Merge(result, child_optimizer.Rewrite(*macro->Cast<TableMacroFunction>().query_node));
+			break;
+		}
+		default:
+			return CatalogPushdownResult::Unknown();
+		}
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateInfo &info,
+                                                                 const CatalogPushdownResult &target) {
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY:
+		return RewriteCreateInfo(info.Cast<CreateTableInfo>(), target);
+	case CatalogType::VIEW_ENTRY:
+		return RewriteCreateInfo(info.Cast<CreateViewInfo>(), target);
+	case CatalogType::TYPE_ENTRY:
+		return RewriteCreateInfo(info.Cast<CreateTypeInfo>(), target);
+	case CatalogType::INDEX_ENTRY:
+		return RewriteCreateInfo(info.Cast<CreateIndexInfo>());
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+		return RewriteCreateInfo(info.Cast<CreateMacroInfo>());
+	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SEQUENCE_ENTRY:
+		// these carry neither expressions nor a definition query
+		return CatalogPushdownResult::NoCatalogReference();
+	default:
+		// an entry type we do not analyze (secrets, ...) - never pushed down
+		return CatalogPushdownResult::Unknown();
+	}
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(CreateStatement &statement) {
+	auto &info = *statement.info;
+	CatalogPushdownResult target;
+	if (info.temporary) {
+		// temporary entries always live in the local temp catalog
+		target = CatalogPushdownResult::Unknown();
+	} else if (info.type == CatalogType::SCHEMA_ENTRY) {
+		// CREATE SCHEMA stores its name as [catalog, parent schemas..., new schema, <empty name>], so the
+		// generic Catalog()/Schema() split does not apply to it
+		auto &schema_info = info.Cast<CreateSchemaInfo>();
+		target = ResolveDDLTarget(QualifiedName(schema_info.SchemaCatalog(), Identifier(), schema_info.SchemaName()),
+		                          DDLTarget::NEW_ENTRY, info.type);
+	} else {
+		target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::NEW_ENTRY, info.type);
+	}
+	target = VerifyStatementSupport(statement, std::move(target));
+	return Merge(target, RewriteCreateInfo(info, target));
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(DropStatement &statement) {
+	auto &info = *statement.info;
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::INDEX_ENTRY:
+	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::TYPE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+		break;
+	default:
+		// prepared statements, secrets, ... never live in a remote catalog
+		return CatalogPushdownResult::Unknown();
+	}
+	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.type);
+	return VerifyStatementSupport(statement, std::move(target));
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteAlterInfo(AlterInfo &info) {
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	if (info.type != AlterType::ALTER_TABLE) {
+		return result;
+	}
+	auto &table_info = info.Cast<AlterTableInfo>();
+	switch (table_info.alter_table_type) {
+	case AlterTableType::SET_DEFAULT: {
+		auto &default_info = table_info.Cast<SetDefaultInfo>();
+		if (default_info.expression) {
+			result = Merge(result, AnalyzeDefinition(*default_info.expression));
+		}
+		break;
+	}
+	case AlterTableType::ALTER_COLUMN_TYPE: {
+		auto &change_info = table_info.Cast<ChangeColumnTypeInfo>();
+		if (change_info.expression) {
+			result = Merge(result, AnalyzeDefinition(*change_info.expression));
+		}
+		break;
+	}
+	case AlterTableType::ADD_COLUMN: {
+		auto &column = table_info.Cast<AddColumnInfo>().new_column;
+		if (column.HasDefaultValue()) {
+			result = Merge(result, AnalyzeDefinition(column.DefaultValue()));
+		} else if (column.Generated()) {
+			result = Merge(result, AnalyzeDefinition(column.GeneratedExpression()));
+		}
+		break;
+	}
+	case AlterTableType::ADD_CONSTRAINT: {
+		auto &constraint = *table_info.Cast<AddConstraintInfo>().constraint;
+		if (constraint.type == ConstraintType::CHECK) {
+			result = Merge(result, AnalyzeDefinition(*constraint.Cast<CheckConstraint>().expression));
+		}
+		break;
+	}
+	case AlterTableType::SET_PARTITIONED_BY:
+		for (auto &expr : table_info.Cast<SetPartitionedByInfo>().partition_keys) {
+			result = Merge(result, AnalyzeDefinition(*expr));
+		}
+		break;
+	case AlterTableType::SET_SORTED_BY:
+		for (auto &order : table_info.Cast<SetSortedByInfo>().orders) {
+			result = Merge(result, AnalyzeDefinition(*order.expression));
+		}
+		break;
+	case AlterTableType::SET_TABLE_OPTIONS:
+		for (auto &option : table_info.Cast<SetTableOptionsInfo>().table_options) {
+			result = Merge(result, AnalyzeDefinition(*option.second));
+		}
+		break;
+	default:
+		break;
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &statement) {
+	auto &info = *statement.info;
+	switch (info.type) {
+	case AlterType::ALTER_TABLE:
+	case AlterType::ALTER_VIEW:
+	case AlterType::ALTER_SEQUENCE:
+	case AlterType::SET_COMMENT:
+	case AlterType::SET_COLUMN_COMMENT:
+		break;
+	default:
+		return CatalogPushdownResult::Unknown();
+	}
+	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.GetCatalogType());
+	target = VerifyStatementSupport(statement, std::move(target));
+	return Merge(target, RewriteAlterInfo(info));
 }
 
 void RemotePushdownOptimizer::TrackLocalTable(const TableRef &ref) {
@@ -1039,6 +1378,10 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedExpression> &expr) {
+	if (!allow_constant_folding) {
+		// the expression is part of a catalog entry definition - it is stored as written, never folded
+		return RewriteExpression(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY).result;
+	}
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		// replace the expression with its locally-evaluated result
 		switch (TryConstantFold(expr)) {
@@ -1449,6 +1792,166 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 	}
 }
 
+//! Drop the catalog qualifier from a DDL statement's target name. A two-part name (e.g. "rpc.t") parses as
+//! schema.name, so the catalog being pushed to can sit in either slot
+static void StripCatalogFromName(QualifiedName &name, const Identifier &catalog_name) {
+	if (name.Catalog() == catalog_name) {
+		name.StripCatalog();
+	} else if (name.Catalog().empty() && name.Schema() == catalog_name) {
+		name = QualifiedName(Identifier(), Identifier(), name.Name());
+	}
+}
+
+void RemotePushdownOptimizer::StripCatalogName(CreateInfo &info, const Identifier &catalog_name) {
+	if (info.type == CatalogType::SCHEMA_ENTRY) {
+		// the name is [catalog, parent schemas..., new schema, <empty name>] - the catalog is only ever
+		// the leading component, so the two-part fallback above must not be applied
+		if (info.Cast<CreateSchemaInfo>().SchemaCatalog() == catalog_name) {
+			info.StripCatalogQualification();
+		}
+		return;
+	}
+	auto name = info.GetQualifiedName();
+	StripCatalogFromName(name, catalog_name);
+	info.SetQualifiedName(std::move(name));
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY: {
+		auto &table_info = info.Cast<CreateTableInfo>();
+		for (idx_t i = 0; i < table_info.columns.LogicalColumnCount(); i++) {
+			auto &col = table_info.columns.GetColumnMutable(LogicalIndex(i));
+			if (col.HasDefaultValue()) {
+				StripCatalogName(col.DefaultValueMutable(), catalog_name);
+			} else if (col.Generated()) {
+				StripCatalogName(col.GeneratedExpressionMutable(), catalog_name);
+			}
+		}
+		for (auto &constraint : table_info.constraints) {
+			if (constraint->type == ConstraintType::CHECK) {
+				StripCatalogName(*constraint->Cast<CheckConstraint>().expression, catalog_name);
+			}
+		}
+		for (auto &expr : table_info.partition_keys) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		for (auto &expr : table_info.sort_keys) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		for (auto &option : table_info.options) {
+			StripCatalogName(*option.second, catalog_name);
+		}
+		if (table_info.query) {
+			StripCatalogName(*table_info.query->node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::VIEW_ENTRY: {
+		auto &view_info = info.Cast<CreateViewInfo>();
+		if (view_info.query) {
+			StripCatalogName(*view_info.query->node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		auto &type_info = info.Cast<CreateTypeInfo>();
+		if (type_info.query && type_info.query->type == StatementType::SELECT_STATEMENT) {
+			StripCatalogName(*type_info.query->Cast<SelectStatement>().node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		auto &index_info = info.Cast<CreateIndexInfo>();
+		for (auto &expr : index_info.parsed_expressions) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		for (auto &expr : index_info.expressions) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto &macro_info = info.Cast<CreateMacroInfo>();
+		for (auto &macro : macro_info.macros) {
+			for (auto &default_param : macro->default_parameters) {
+				StripCatalogName(*default_param.second, catalog_name);
+			}
+			switch (macro->type) {
+			case MacroType::SCALAR_MACRO:
+				StripCatalogName(*macro->Cast<ScalarMacroFunction>().expression, catalog_name);
+				break;
+			case MacroType::TABLE_MACRO:
+				StripCatalogName(*macro->Cast<TableMacroFunction>().query_node, catalog_name);
+				break;
+			default:
+				break;
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void RemotePushdownOptimizer::StripCatalogName(AlterInfo &info, const Identifier &catalog_name) {
+	auto name = info.GetQualifiedName();
+	StripCatalogFromName(name, catalog_name);
+	info.SetQualifiedName(std::move(name));
+	if (info.type != AlterType::ALTER_TABLE) {
+		return;
+	}
+	auto &table_info = info.Cast<AlterTableInfo>();
+	switch (table_info.alter_table_type) {
+	case AlterTableType::SET_DEFAULT: {
+		auto &default_info = table_info.Cast<SetDefaultInfo>();
+		if (default_info.expression) {
+			StripCatalogName(*default_info.expression, catalog_name);
+		}
+		break;
+	}
+	case AlterTableType::ALTER_COLUMN_TYPE: {
+		auto &change_info = table_info.Cast<ChangeColumnTypeInfo>();
+		if (change_info.expression) {
+			StripCatalogName(*change_info.expression, catalog_name);
+		}
+		break;
+	}
+	case AlterTableType::ADD_COLUMN: {
+		auto &column = table_info.Cast<AddColumnInfo>().new_column;
+		if (column.HasDefaultValue()) {
+			StripCatalogName(column.DefaultValueMutable(), catalog_name);
+		} else if (column.Generated()) {
+			StripCatalogName(column.GeneratedExpressionMutable(), catalog_name);
+		}
+		break;
+	}
+	case AlterTableType::ADD_CONSTRAINT: {
+		auto &constraint = *table_info.Cast<AddConstraintInfo>().constraint;
+		if (constraint.type == ConstraintType::CHECK) {
+			StripCatalogName(*constraint.Cast<CheckConstraint>().expression, catalog_name);
+		}
+		break;
+	}
+	case AlterTableType::SET_PARTITIONED_BY:
+		for (auto &expr : table_info.Cast<SetPartitionedByInfo>().partition_keys) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		break;
+	case AlterTableType::SET_SORTED_BY:
+		for (auto &order : table_info.Cast<SetSortedByInfo>().orders) {
+			StripCatalogName(*order.expression, catalog_name);
+		}
+		break;
+	case AlterTableType::SET_TABLE_OPTIONS:
+		for (auto &option : table_info.Cast<SetTableOptionsInfo>().table_options) {
+			StripCatalogName(*option.second, catalog_name);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Identifier &catalog_name) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
@@ -1462,6 +1965,19 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Id
 		break;
 	case StatementType::UPDATE_STATEMENT:
 		StripCatalogName(*statement.Cast<UpdateStatement>().node, catalog_name);
+		break;
+	case StatementType::CREATE_STATEMENT:
+		StripCatalogName(*statement.Cast<CreateStatement>().info, catalog_name);
+		break;
+	case StatementType::DROP_STATEMENT: {
+		auto &info = *statement.Cast<DropStatement>().info;
+		auto name = info.GetQualifiedName();
+		StripCatalogFromName(name, catalog_name);
+		info.SetQualifiedName(std::move(name));
+		break;
+	}
+	case StatementType::ALTER_STATEMENT:
+		StripCatalogName(*statement.Cast<AlterStatement>().info, catalog_name);
 		break;
 	default:
 		break;
@@ -1483,6 +1999,15 @@ unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
 	}
 }
 
+unique_ptr<SelectStatement> RemotePushdownOptimizer::WrapRemoteRef(unique_ptr<TableRef> ref) {
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(ref);
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	return select_stmt;
+}
+
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
@@ -1490,16 +2015,20 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement
 	// Strip the catalog name so the remote server doesn't recursively re-push
 	StripCatalogName(*statement, result.catalog->GetName());
 	auto node = GetNodeFromStatement(*statement);
-	if (!node) {
+	if (node) {
+		statement = WrapRemoteRef(CreateRemoteFunctionRef(result, std::move(node)));
 		return;
 	}
-
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));
-	auto select_stmt = make_uniq<SelectStatement>();
-	select_stmt->node = std::move(select_node);
-	statement = std::move(select_stmt);
+	switch (statement->type) {
+	case StatementType::CREATE_STATEMENT:
+	case StatementType::DROP_STATEMENT:
+	case StatementType::ALTER_STATEMENT:
+		break;
+	default:
+		return;
+	}
+	// a statement that is not built around a query node (DDL) is shipped to the remote as a whole
+	statement = WrapRemoteRef(result.catalog->RemoteExecute(binder.context, std::move(statement)));
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {
