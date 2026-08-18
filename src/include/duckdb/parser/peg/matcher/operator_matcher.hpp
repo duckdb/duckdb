@@ -22,12 +22,13 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchOperator(state)) {
 			return nullptr;
 		}
@@ -44,10 +45,11 @@ public:
 
 private:
 	bool MatchOperator(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
 		if (token_text == "->" || token_text == "->>") {
 			return false;
@@ -71,7 +73,7 @@ private:
 				return false;
 			}
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}

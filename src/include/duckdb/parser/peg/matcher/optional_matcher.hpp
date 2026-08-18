@@ -21,15 +21,15 @@ public:
 			return MatchResultType::SUCCESS;
 		}
 		// propagate the child state upwards
-		state.token_index = child_state.token_index;
+		state.token_iterator.SetPosition(child_state.token_iterator);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		MatchState child_state(state);
 		optional_idx start_offset;
-		if (child_state.token_index < child_state.tokens.size()) {
-			start_offset = optional_idx(child_state.tokens[child_state.token_index].offset);
+		if (auto current = child_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 		auto child_match = matcher.MatchParseResult(child_state);
 		if (child_match == nullptr) {
@@ -37,7 +37,7 @@ public:
 			return state.allocator.Allocate(make_uniq<OptionalParseResult>());
 		}
 		// propagate the child state upwards
-		state.token_index = child_state.token_index;
+		state.token_iterator.SetPosition(child_state.token_iterator);
 		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match, start_offset));
 	}
 

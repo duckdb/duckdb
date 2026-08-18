@@ -20,9 +20,8 @@ public:
 		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
-			bool at_autocomplete_cursor =
-			    list_state.token_index < list_state.tokens.size() &&
-			    list_state.tokens[list_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			auto current = list_state.token_iterator.Current();
+			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				if (suppress_suggestions) {
 					// this rule should not contribute autocomplete suggestions
@@ -40,7 +39,7 @@ public:
 						break;
 					}
 				}
-				state.token_index = list_state.token_index;
+				state.token_iterator.SetPosition(list_state.token_iterator);
 				if (child_idx == matchers.size()) {
 					// we managed to provide suggestions for all tokens
 					// that means all other tokens were optional - i.e. we succeeded in matching them
@@ -59,7 +58,7 @@ public:
 			}
 		}
 		// we matched all child matchers - propagate token index upward
-		state.token_index = list_state.token_index;
+		state.token_iterator.SetPosition(list_state.token_iterator);
 		if (suppress_suggestions) {
 			// discard suggestions from child matchers that were added during matching
 			state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
@@ -73,8 +72,8 @@ public:
 		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
-		if (list_state.token_index < list_state.tokens.size()) {
-			start_offset = optional_idx(list_state.tokens[list_state.token_index].offset);
+		if (auto current = list_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 		for (const auto &child_matcher : matchers) {
 			auto child_result = child_matcher.get().MatchParseResult(list_state);
@@ -83,7 +82,7 @@ public:
 			}
 			results.push_back(*child_result);
 		}
-		state.token_index = list_state.token_index;
+		state.token_iterator.SetPosition(list_state.token_iterator);
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
 		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name, start_offset));
 	}

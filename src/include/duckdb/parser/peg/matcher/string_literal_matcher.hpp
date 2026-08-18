@@ -16,41 +16,42 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return MatchResultType::FAIL;
 		}
 
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		auto string_info = GetSpecialStringInfo(token_text);
 
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = TokenType::STRING_LITERAL;
+		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
 
-		auto &token = state.tokens[state.token_index];
-		auto start_offset = optional_idx(token.offset);
-		auto token_length = optional_idx(token.length);
-		auto string_info = GetSpecialStringInfo(token.text);
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
+		auto string_info = GetSpecialStringInfo(token->text);
 
 		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
 
 		idx_t suffix_len = 1;
-		if (token.text.length() < string_info.prefix_len + suffix_len) {
+		if (token->text.length() < string_info.prefix_len + suffix_len) {
 			return nullptr;
 		}
 
 		string stripped_string =
-		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		    token->text.substr(string_info.prefix_len, token->text.length() - (string_info.prefix_len + suffix_len));
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
 		auto result = state.allocator.Allocate(
@@ -68,17 +69,18 @@ public:
 	}
 
 private:
-	bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) const {
-		if (state.token_index >= state.tokens.size()) {
+	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 
 		idx_t open_quote_idx = string_info.prefix_len - 1;
 		idx_t min_len = string_info.prefix_len + 1;
 
 		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
-			state.token_index++;
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return true;
 		}

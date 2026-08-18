@@ -25,11 +25,10 @@ public:
 		// now we can keep on repeating the matching (optionally)
 		while (true) {
 			// update the token index we propagate upwards
-			state.token_index = repeat_state.token_index;
+			state.token_iterator.SetPosition(repeat_state.token_iterator);
 
-			bool at_autocomplete_cursor =
-			    repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			auto current = repeat_state.token_iterator.Current();
+			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				element.AddSuggestion(state);
 				return MatchResultType::SUCCESS;
@@ -49,8 +48,8 @@ public:
 		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
-		if (repeat_state.token_index < state.tokens.size()) {
-			start_offset = optional_idx(repeat_state.tokens[repeat_state.token_index].offset);
+		if (auto current = repeat_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 
 		// First, we MUST match the element at least once.
@@ -65,10 +64,10 @@ public:
 		// Now, we continue matching the element as many times as possible.
 		while (true) {
 			// Propagate the new state upwards.
-			state.token_index = repeat_state.token_index;
+			state.token_iterator.SetPosition(repeat_state.token_iterator);
 
-			if (repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			auto current = repeat_state.token_iterator.Current();
+			if (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 				break;
 			}
 

@@ -20,17 +20,18 @@ public:
 		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = TokenType::NUMBER_LITERAL;
+		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchNumberLiteral(state)) {
 			return nullptr;
 		}
@@ -48,11 +49,12 @@ public:
 	}
 
 private:
-	bool MatchNumberLiteral(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+	static bool MatchNumberLiteral(MatchState &state) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		if (token_text.empty() || !Tokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
@@ -75,7 +77,7 @@ private:
 				return false;
 			}
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}

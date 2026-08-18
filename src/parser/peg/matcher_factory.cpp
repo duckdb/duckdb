@@ -4,79 +4,6 @@
 
 namespace duckdb {
 
-unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
-	return make_uniq<KeywordMatcher>(keyword, info);
-}
-
-unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
-	return make_uniq<ListMatcher>();
-}
-
-unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
-	return make_uniq<ChoiceMatcher>(std::move(matchers));
-}
-
-unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
-	return make_uniq<OptionalMatcher>(matcher);
-}
-
-unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
-	return make_uniq<RepeatMatcher>(matcher);
-}
-
-KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {
-	auto it = keywords.find(keyword);
-	if (it != keywords.end()) {
-		return it->second;
-	}
-
-	optional<KeywordInfo> info;
-	auto entry = keyword_overrides.find(keyword);
-	if (entry != keyword_overrides.end()) {
-		info.emplace(entry->second);
-	} else {
-		info.emplace(0, ' ');
-	}
-	auto &result = allocator.Allocate(CreateKeyword(keyword, *info)).Cast<KeywordMatcher>();
-	keywords.emplace(keyword, result);
-	return result;
-}
-
-ListMatcher &MatcherFactory::List() const {
-	return allocator.Allocate(CreateList()).Cast<ListMatcher>();
-}
-
-ListMatcher &MatcherFactory::List(vector<reference<Matcher>> matchers) const {
-	auto result = CreateList();
-	result->matchers = std::move(matchers);
-	return allocator.Allocate(std::move(result)).Cast<ListMatcher>();
-}
-
-ChoiceMatcher &MatcherFactory::Choice(vector<reference<Matcher>> &&matchers) const {
-	return allocator.Allocate(CreateChoice(std::move(matchers))).Cast<ChoiceMatcher>();
-}
-
-OptionalMatcher &MatcherFactory::Optional(Matcher &matcher) const {
-	return allocator.Allocate(CreateOptional(matcher)).Cast<OptionalMatcher>();
-}
-
-RepeatMatcher &MatcherFactory::Repeat(Matcher &matcher) const {
-	return allocator.Allocate(CreateRepeat(matcher)).Cast<RepeatMatcher>();
-}
-
-Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
-	auto entry = matchers.find(rule_name);
-	if (entry == matchers.end()) {
-		throw InternalException("Matcher for rule '%s' has not been built", rule_name);
-	}
-	return entry->second.get();
-}
-
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
-	vector<reference<Matcher>> parameters;
-	return CreateMatcher(parser, rule_name, parameters);
-}
-
 MatcherFactory::MatcherList::MatcherList(PEGParser &parser, MatcherFactory &factory)
     : parser(parser), factory(factory) {
 }
@@ -438,6 +365,79 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
+}
+
+unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
+	return make_uniq<KeywordMatcher>(keyword, info);
+}
+
+unique_ptr<ListMatcher> MatcherFactory::CreateList() const {
+	return make_uniq<ListMatcher>();
+}
+
+unique_ptr<ChoiceMatcher> MatcherFactory::CreateChoice(vector<reference<Matcher>> &&matchers) const {
+	return make_uniq<ChoiceMatcher>(std::move(matchers));
+}
+
+unique_ptr<OptionalMatcher> MatcherFactory::CreateOptional(Matcher &matcher) const {
+	return make_uniq<OptionalMatcher>(matcher);
+}
+
+unique_ptr<RepeatMatcher> MatcherFactory::CreateRepeat(Matcher &matcher) const {
+	return make_uniq<RepeatMatcher>(matcher);
+}
+
+KeywordMatcher &MatcherFactory::Keyword(const string &keyword) const {
+	auto it = keywords.find(keyword);
+	if (it != keywords.end()) {
+		return it->second;
+	}
+
+	optional<KeywordInfo> info;
+	auto entry = keyword_overrides.find(keyword);
+	if (entry != keyword_overrides.end()) {
+		info.emplace(entry->second);
+	} else {
+		info.emplace(0, ' ');
+	}
+	auto &result = allocator.Allocate(CreateKeyword(keyword, *info)).Cast<KeywordMatcher>();
+	keywords.emplace(keyword, result);
+	return result;
+}
+
+ListMatcher &MatcherFactory::List() const {
+	return allocator.Allocate(CreateList()).Cast<ListMatcher>();
+}
+
+ListMatcher &MatcherFactory::List(vector<reference<Matcher>> matchers) const {
+	auto result = CreateList();
+	result->matchers = std::move(matchers);
+	return allocator.Allocate(std::move(result)).Cast<ListMatcher>();
+}
+
+ChoiceMatcher &MatcherFactory::Choice(vector<reference<Matcher>> &&matchers) const {
+	return allocator.Allocate(CreateChoice(std::move(matchers))).Cast<ChoiceMatcher>();
+}
+
+OptionalMatcher &MatcherFactory::Optional(Matcher &matcher) const {
+	return allocator.Allocate(CreateOptional(matcher)).Cast<OptionalMatcher>();
+}
+
+RepeatMatcher &MatcherFactory::Repeat(Matcher &matcher) const {
+	return allocator.Allocate(CreateRepeat(matcher)).Cast<RepeatMatcher>();
+}
+
+Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
+	auto entry = matchers.find(rule_name);
+	if (entry == matchers.end()) {
+		throw InternalException("Matcher for rule '%s' has not been built", rule_name);
+	}
+	return entry->second.get();
+}
+
+Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
+	vector<reference<Matcher>> parameters;
+	return CreateMatcher(parser, rule_name, parameters);
 }
 
 } // namespace duckdb

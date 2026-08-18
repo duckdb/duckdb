@@ -14,9 +14,9 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (state.token_index < state.tokens.size() &&
-		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
-			state.token_index++;
+		auto current = state.token_iterator.Current();
+		if (current && current->type == TokenType::END_OF_INPUT) {
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return MatchResultType::SUCCESS;
 		}
@@ -24,9 +24,9 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index < state.tokens.size() &&
-		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
-			state.token_index++;
+		auto current = state.token_iterator.Current();
+		if (current && current->type == TokenType::END_OF_INPUT) {
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
 		}

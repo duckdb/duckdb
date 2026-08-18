@@ -1,5 +1,4 @@
 #include "duckdb/parser/peg/matcher.hpp"
-#include "duckdb/parser/peg/matcher/list.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"

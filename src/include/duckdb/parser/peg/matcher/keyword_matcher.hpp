@@ -22,12 +22,13 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
@@ -50,13 +51,13 @@ public:
 
 private:
 	bool MatchKeyword(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token = state.tokens[state.token_index];
-		if (StringUtil::CIEquals(keyword, token.text)) {
+		if (StringUtil::CIEquals(keyword, token->text)) {
 			// move to the next token
-			state.token_index++;
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return true;
 		}
