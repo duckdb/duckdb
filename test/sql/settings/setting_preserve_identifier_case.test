@@ -119,12 +119,36 @@ SET preserve_identifier_case TO NULL;
 ----
 <REGEX>:.*preserve_identifier_case setting cannot be NULL.*
 
-# the setting used to be a BOOLEAN - the boolean spellings are deliberately no longer accepted
-foreach boolish true false 0 1 'yes' 'no'
+# the setting used to be a BOOLEAN - every legacy boolean spelling is kept as a backwards-compatible alias
+foreach truthy true 1 't' 'y' 'yes'
 
-statement error
-SET preserve_identifier_case TO {boolish};
+statement ok
+SET preserve_identifier_case TO {truthy};
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-<REGEX>:.*expected one of: preserve_case, lowercase, uppercase.*
+preserve_case
 
 endloop
+
+foreach falsy false 0 'f' 'n' 'no'
+
+statement ok
+SET preserve_identifier_case TO {falsy};
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+lowercase
+
+endloop
+
+statement ok
+RESET preserve_identifier_case;
+
+# non-boolean garbage is still rejected
+statement error
+SET preserve_identifier_case TO 'yesnt';
+----
+<REGEX>:.*expected one of: preserve_case, lowercase, uppercase.*
