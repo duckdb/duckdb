@@ -44,29 +44,16 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-bool ChunkInfo::Cleanup(transaction_t lowest_transaction) const {
-	return false;
+ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
+    : ChunkVectorInfo(allocator_p, start, insert_id_p, NOT_DELETED_ID) {
 }
 
-void ChunkInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
-	writer.Write<ChunkInfoType>(type);
+ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p,
+                                 transaction_t delete_id_p)
+    : start(start), allocator(allocator_p), constant_insert_id(insert_id_p), constant_delete_id(delete_id_p) {
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream &reader) {
-	auto type = reader.Read<ChunkInfoType>();
-	switch (type) {
-	case ChunkInfoType::EMPTY_INFO:
-		return nullptr;
-	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::Read(reader);
-	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::Read(allocator, reader);
-	default:
-		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
-	}
-}
-
-idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
+idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
@@ -74,116 +61,14 @@ idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	return max_count - not_deleted_count;
 }
 
-idx_t ChunkInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
+idx_t ChunkVectorInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
 	ScanOptions options(transaction);
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 	return GetSelVector(options, nullptr, max_count);
 }
 
-//===--------------------------------------------------------------------===//
-// Constant info
-//===--------------------------------------------------------------------===//
-ChunkConstantInfo::ChunkConstantInfo(idx_t start)
-    : ChunkInfo(start, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
-}
-
-template <class INSERT_OP, class DELETE_OP>
-idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
-                                               idx_t max_count) const {
-	if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, insert_id) &&
-	    !DELETE_OP::IsDeleted(start_time, transaction_id, delete_id)) {
-		return max_count;
-	}
-	return 0;
-}
-
-idx_t ChunkConstantInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
-                                      idx_t max_count) const {
-	auto &transaction = options.transaction;
-	if (options.insert_type == InsertedScanType::STANDARD) {
-		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
-		                                                insert_id)) {
-			return 0;
-		}
-	}
-	if (options.delete_type == DeletedScanType::STANDARD) {
-		if (StandardDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
-			return 0;
-		}
-	} else if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
-		if (CommittedDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
-			return 0;
-		}
-	}
-	return max_count;
-}
-
-bool ChunkConstantInfo::Fetch(TransactionData transaction, row_t row) {
-	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
-}
-
-void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
-	D_ASSERT(start == 0 && end == STANDARD_VECTOR_SIZE);
-	insert_id = commit_id;
-}
-
-bool ChunkConstantInfo::HasDeletes(transaction_t transaction_id) const {
-	if (transaction_id == MAX_TRANSACTION_ID) {
-		transaction_id = TRANSACTION_ID_START - 1;
-	}
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id <= transaction_id;
-	return is_deleted;
-}
-
-bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
-	if (delete_id != NOT_DELETED_ID) {
-		// the chunk info is labeled as deleted - we need to keep it around
-		return false;
-	}
-	if (insert_id > lowest_transaction) {
-		// there are still transactions active that need this ChunkInfo
-		return false;
-	}
-	return true;
-}
-
-void ChunkConstantInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
-	D_ASSERT(HasDeletes(checkpoint_id));
-	ChunkInfo::Write(writer, checkpoint_id);
-	writer.Write<idx_t>(start);
-}
-
-unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
-	auto start = reader.Read<idx_t>();
-	auto info = make_uniq<ChunkConstantInfo>(start);
-	info->insert_id = 0;
-	info->delete_id = 0;
-	return std::move(info);
-}
-
-string ChunkConstantInfo::ToString(idx_t max_count) const {
-	string result;
-	result += "Constant [Count: " + to_string(max_count);
-	result += ", ";
-	result += "Insert Id: " + to_string(insert_id);
-	if (delete_id != NOT_DELETED_ID) {
-		result += ", Delete Id: " + to_string(delete_id);
-	}
-	result += "]";
-	return result;
-}
-
-//===--------------------------------------------------------------------===//
-// Vector info
-//===--------------------------------------------------------------------===//
-ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
-    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), allocator(allocator_p), constant_insert_id(insert_id_p) {
-}
-
 ChunkVectorInfo::~ChunkVectorInfo() {
-	if (AnyDeleted()) {
-		allocator.Free(deleted_data);
-	}
+	FreeDeleteData();
 	if (!HasConstantInsertionId()) {
 		allocator.Free(inserted_data);
 	}
@@ -192,34 +77,22 @@ ChunkVectorInfo::~ChunkVectorInfo() {
 template <class INSERT_OP, class DELETE_OP>
 idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
                                              optional_ptr<SelectionVector> sel_vector, idx_t max_count) const {
-	if (HasConstantInsertionId()) {
-		if (!AnyDeleted()) {
-			// all tuples have the same inserted id: and no tuples were deleted
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT: {
+		// all tuples have the same deleted id
+		if (DELETE_OP::IsDeleted(start_time, transaction_id, ConstantDeleteId())) {
+			// all tuples are deleted
+			return 0;
+		}
+		// no tuples are deleted: we only have to check the inserted ids
+		if (HasConstantInsertionId()) {
+			// all tuples have the same inserted id as well
 			if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
 				return max_count;
 			} else {
 				return 0;
 			}
 		}
-		if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
-			return 0;
-		}
-		// have to check deleted flag
-		idx_t count = 0;
-		auto segment = allocator.GetHandle(GetDeletedPointer());
-		auto deleted = segment.GetPtr<transaction_t>();
-		for (idx_t i = 0; i < max_count; i++) {
-			if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
-				continue;
-			}
-			if (sel_vector) {
-				sel_vector->set_index(count, i);
-			}
-			count++;
-		}
-		return count;
-	}
-	if (!AnyDeleted()) {
 		// have to check inserted flag
 		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = insert_segment.GetPtr<transaction_t>();
@@ -236,27 +109,114 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 		}
 		return count;
 	}
-
-	idx_t count = 0;
-	// have to check both flags
-	auto insert_segment = allocator.GetHandle(GetInsertedPointer());
-	auto inserted = insert_segment.GetPtr<transaction_t>();
-
-	auto delete_segment = allocator.GetHandle(GetDeletedPointer());
-	auto deleted = delete_segment.GetPtr<transaction_t>();
-	for (idx_t i = 0; i < max_count; i++) {
-		if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
-			continue;
+	case DeleteIdState::MASKED: {
+		// every deleted row shares mask_delete_id and alive rows are NOT_DELETED_ID (never deleted), so the
+		// delete decision is a single constant for the whole vector
+		const bool masked_deleted = DELETE_OP::IsDeleted(start_time, transaction_id, mask_delete_id);
+		if (HasConstantInsertionId()) {
+			if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
+				return 0;
+			}
+			if (!masked_deleted) {
+				// the delete is not visible to this transaction - every row is visible
+				return max_count;
+			}
+			// only the alive (mask-invalid) rows are visible
+			if (!sel_vector) {
+				return max_count - deleted_mask.CountValid(max_count);
+			}
+			// scan the mask a word at a time: skip fully-deleted words, take fully-alive words wholesale,
+			// only extract bits for mixed words
+			idx_t count = 0;
+			const idx_t entry_count = ValidityMask::EntryCount(max_count);
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+				auto entry = deleted_mask.GetValidityEntry(entry_idx);
+				if (ValidityMask::AllValid(entry)) {
+					// every row in this word is deleted - skip
+					continue;
+				}
+				const idx_t base = entry_idx * ValidityMask::BITS_PER_VALUE;
+				const idx_t entry_end = MinValue<idx_t>(base + ValidityMask::BITS_PER_VALUE, max_count);
+				if (ValidityMask::NoneValid(entry)) {
+					// every row in this word is alive - select them all
+					for (idx_t i = base; i < entry_end; i++) {
+						sel_vector->set_index(count++, i);
+					}
+					continue;
+				}
+				for (idx_t i = base; i < entry_end; i++) {
+					if (!ValidityMask::RowIsValid(entry, i - base)) {
+						sel_vector->set_index(count++, i);
+					}
+				}
+			}
+			return count;
 		}
-		if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
-			continue;
+		// per-row insert ids: the mask cannot collapse the insert check, but the delete decision is still
+		// the constant masked_deleted
+		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = insert_segment.GetPtr<transaction_t>();
+		idx_t count = 0;
+		for (idx_t i = 0; i < max_count; i++) {
+			if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
+				continue;
+			}
+			if (masked_deleted && deleted_mask.RowIsValid(i)) {
+				// the row is deleted and the delete is visible to this transaction
+				continue;
+			}
+			if (sel_vector) {
+				sel_vector->set_index(count, i);
+			}
+			count++;
 		}
-		if (sel_vector) {
-			sel_vector->set_index(count, i);
-		}
-		count++;
+		return count;
 	}
-	return count;
+	case DeleteIdState::ARRAY: {
+		if (HasConstantInsertionId()) {
+			if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
+				return 0;
+			}
+			// have to check deleted flag
+			idx_t count = 0;
+			auto segment = allocator.GetHandle(GetDeletedPointer());
+			auto deleted = segment.GetPtr<transaction_t>();
+			for (idx_t i = 0; i < max_count; i++) {
+				if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
+					continue;
+				}
+				if (sel_vector) {
+					sel_vector->set_index(count, i);
+				}
+				count++;
+			}
+			return count;
+		}
+
+		idx_t count = 0;
+		// have to check both flags
+		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = insert_segment.GetPtr<transaction_t>();
+
+		auto delete_segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = delete_segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < max_count; i++) {
+			if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
+				continue;
+			}
+			if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
+				continue;
+			}
+			if (sel_vector) {
+				sel_vector->set_index(count, i);
+			}
+			count++;
+		}
+		return count;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in TemplatedGetSelVector");
+	}
 }
 
 idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
@@ -281,6 +241,10 @@ idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionV
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, StandardDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
+		if (options.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
+			// include all rows
+			return max_count;
+		}
 		if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, CommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
@@ -291,7 +255,6 @@ idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionV
 
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	transaction_t fetch_insert_id;
-	transaction_t fetch_deleted_id;
 	if (HasConstantInsertionId()) {
 		fetch_insert_id = ConstantInsertId();
 	} else {
@@ -299,12 +262,21 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 		auto inserted = insert_segment.GetPtr<transaction_t>();
 		fetch_insert_id = inserted[row];
 	}
-	if (!AnyDeleted()) {
-		fetch_deleted_id = NOT_DELETED_ID;
-	} else {
+	transaction_t fetch_deleted_id;
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		fetch_deleted_id = ConstantDeleteId();
+		break;
+	case DeleteIdState::MASKED:
+		fetch_deleted_id = deleted_mask.RowIsValid(row) ? mask_delete_id : NOT_DELETED_ID;
+		break;
+	case DeleteIdState::ARRAY: {
 		auto delete_segment = allocator.GetHandle(GetDeletedPointer());
-		auto deleted = delete_segment.GetPtr<transaction_t>();
-		fetch_deleted_id = deleted[row];
+		fetch_deleted_id = delete_segment.GetPtr<transaction_t>()[row];
+		break;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in Fetch");
 	}
 
 	return UseVersion(transaction, fetch_insert_id) && !UseVersion(transaction, fetch_deleted_id);
@@ -318,8 +290,9 @@ IndexPointer ChunkVectorInfo::GetInsertedPointer() const {
 }
 
 IndexPointer ChunkVectorInfo::GetDeletedPointer() const {
-	if (!AnyDeleted()) {
-		throw InternalException("ChunkVectorInfo: deleted id requested but deletions were not initialized");
+	if (delete_state != DeleteIdState::ARRAY) {
+		throw InternalException(
+		    "ChunkVectorInfo: deleted id array requested but delete side is not in the ARRAY state");
 	}
 	return deleted_data;
 }
@@ -340,19 +313,100 @@ IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
 }
 
 IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
-	if (!AnyDeleted()) {
+	if (delete_state == DeleteIdState::MASKED) {
+		// re-materialize the per-row array so callers can write into it
+		DecompressDeleteMask();
+	}
+	if (HasConstantDeleteId()) {
+		transaction_t constant_id = ConstantDeleteId();
+
 		deleted_data = allocator.New();
 		deleted_data.SetMetadata(1);
 		auto segment = allocator.GetHandle(deleted_data);
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			deleted[i] = NOT_DELETED_ID;
+			deleted[i] = constant_id;
 		}
+		delete_state = DeleteIdState::ARRAY;
 	}
 	return deleted_data;
 }
 
+void ChunkVectorInfo::FreeDeleteData() {
+	if (delete_state == DeleteIdState::ARRAY) {
+		allocator.Free(deleted_data);
+		deleted_data = IndexPointer();
+	}
+	deleted_mask.Reset();
+	delete_state = DeleteIdState::CONSTANT;
+}
+
+void ChunkVectorInfo::CompressDeleteToMask(transaction_t mask_id) {
+	D_ASSERT(delete_state == DeleteIdState::ARRAY);
+	// the mask can only carry a single committed id shared by every deleted row
+	D_ASSERT(mask_id < TRANSACTION_ID_START);
+	// start all-valid (== all deleted), then mark the alive rows invalid
+	deleted_mask.Initialize(STANDARD_VECTOR_SIZE);
+	{
+		auto segment = allocator.GetHandle(deleted_data);
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			if (deleted[i] == NOT_DELETED_ID) {
+				deleted_mask.SetInvalid(i);
+			}
+		}
+	} // release the read handle before freeing the buffer
+	allocator.Free(deleted_data);
+	deleted_data = IndexPointer();
+	mask_delete_id = mask_id;
+	delete_state = DeleteIdState::MASKED;
+}
+
+void ChunkVectorInfo::DecompressDeleteMask() {
+	D_ASSERT(delete_state == DeleteIdState::MASKED);
+	// re-materialize the per-row array: deleted rows == mask_delete_id, alive rows == NOT_DELETED_ID
+	deleted_data = allocator.New();
+	deleted_data.SetMetadata(1);
+	{
+		auto segment = allocator.GetHandle(deleted_data);
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			deleted[i] = deleted_mask.RowIsValid(i) ? mask_delete_id : NOT_DELETED_ID;
+		}
+	}
+	deleted_mask.Reset();
+	delete_state = DeleteIdState::ARRAY;
+	recheck_compression = true;
+}
+
+static bool DeletesEntireVector(const row_t rows[], idx_t count) {
+	D_ASSERT(count == STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < count; i++) {
+		if (rows[i] != row_t(i)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t count) {
+	if (HasConstantDeleteId() && ConstantDeleteId() != NOT_DELETED_ID) {
+		// all rows in this vector share the same deleted id - the rows we are trying to delete are already deleted
+		if (ConstantDeleteId() == transaction_id) {
+			// the rows were deleted by this transaction already - skip
+			return 0;
+		}
+		// the rows were deleted by another transaction - conflict
+		throw TransactionException("Conflict on tuple deletion!");
+	}
+	if (HasConstantDeleteId() && count == STANDARD_VECTOR_SIZE && DeletesEntireVector(rows, count)) {
+		// no rows were deleted yet and we are deleting the entire vector
+		// all rows share the same deleted id - store it as a constant instead of materializing per-row delete ids
+		constant_delete_id = transaction_id;
+		return count;
+	}
+	// we are materializing / modifying per-row delete ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInitializedDeletedPointer());
 	auto deleted = segment.GetPtr<transaction_t>();
 
@@ -379,19 +433,165 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 }
 
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
-	auto segment = allocator.GetHandle(GetDeletedPointer());
-	auto deleted = segment.GetPtr<transaction_t>();
+	if (info.is_consecutive && info.count == STANDARD_VECTOR_SIZE) {
+		// the delete covers the entire vector - all rows share the same deleted id
+		// we can store the deleted id as a constant and free any per-row delete ids
+		FreeDeleteData();
+		constant_delete_id = commit_id;
+		return;
+	}
+	if (HasConstantDeleteId() && ConstantDeleteId() == commit_id) {
+		// all rows already share this exact deleted id - nothing to do
+		return;
+	}
+	// we are materializing / modifying per-row delete ids - re-arm the compression check
+	recheck_compression = true;
+	bool all_equal = true;
+	{
+		auto segment = allocator.GetHandle(GetInitializedDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
 
-	if (info.is_consecutive) {
-		for (idx_t i = 0; i < info.count; i++) {
-			deleted[i] = commit_id;
+		if (info.is_consecutive) {
+			for (idx_t i = 0; i < info.count; i++) {
+				deleted[i] = commit_id;
+			}
+		} else {
+			auto rows = info.GetRows();
+			for (idx_t i = 0; i < info.count; i++) {
+				deleted[rows[i]] = commit_id;
+			}
 		}
-	} else {
-		auto rows = info.GetRows();
-		for (idx_t i = 0; i < info.count; i++) {
-			deleted[rows[i]] = commit_id;
+		// check if all rows now share the same deleted id
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			if (deleted[i] != commit_id) {
+				all_equal = false;
+				break;
+			}
 		}
 	}
+	if (all_equal) {
+		// all rows share the same deleted id - compress the per-row delete ids into a constant
+		FreeDeleteData();
+		constant_delete_id = commit_id;
+	}
+}
+
+void ChunkVectorInfo::VerifyCachedCompressionState() const {
+#ifdef DEBUG
+	if (recheck_compression) {
+		// armed - the next pass re-derives everything from the ids, there is no cached claim to verify
+		return;
+	}
+	// a disarmed check claims that nothing can compress, now or as older transactions finish, until a
+	// modification re-arms it. Both conditions below are independent of the lowest active start:
+	// per-row insert ids all become visible (or are reverted) eventually, so they must already be compressed
+	D_ASSERT(HasConstantInsertionId());
+	if (delete_state != DeleteIdState::CONSTANT) {
+		// a settled, non-constant delete side can only be the terminal masked state
+		D_ASSERT(delete_state == DeleteIdState::MASKED);
+		// the mask must hold at least one deleted row and one alive row: a fully deleted vector
+		// collapses to a constant, and a vector with no deletes carries no delete-side info
+		idx_t deleted_rows = deleted_mask.CountValid(STANDARD_VECTOR_SIZE);
+		D_ASSERT(deleted_rows > 0 && deleted_rows < STANDARD_VECTOR_SIZE);
+	}
+#endif
+}
+
+VersionCompressionResult ChunkVectorInfo::CompressVersionIds(transaction_t lowest_active_start) {
+	if (!recheck_compression) {
+		// no ids were modified since this vector last settled - only a further modification
+		// (which re-arms the check) can make it compressible, so skip re-scanning the ids
+#ifdef DEBUG
+		VerifyCachedCompressionState();
+#endif
+		return HasConstantDeleteId() && HasConstantInsertionId() ? VersionCompressionResult::FULLY_COMPRESSED
+		                                                         : VersionCompressionResult::SETTLED;
+	}
+	bool pending = false;
+	if (delete_state == DeleteIdState::ARRAY) {
+		// scan the per-row delete ids to decide how far they can collapse
+		bool rows_alive = false;
+		bool deletes_pending = false;
+		bool deletes_uncommitted = false;
+		bool deletes_equal = true;
+		transaction_t max_delete_id = 0;
+		transaction_t shared_delete_id = NOT_DELETED_ID;
+		{
+			auto segment = allocator.GetHandle(GetDeletedPointer());
+			auto deleted = segment.GetPtr<transaction_t>();
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+				if (deleted[i] == NOT_DELETED_ID) {
+					// the row is not deleted - the ids cannot fully collapse until it is
+					rows_alive = true;
+					continue;
+				}
+				if (deleted[i] >= lowest_active_start) {
+					// deleted, but the delete is not yet visible to all transactions
+					deletes_pending = true;
+					if (deleted[i] >= TRANSACTION_ID_START) {
+						// the delete is not even committed yet - the array must be kept
+						deletes_uncommitted = true;
+					}
+				} else {
+					max_delete_id = MaxValue(max_delete_id, deleted[i]);
+				}
+				// track whether every deleted row shares a single id
+				if (shared_delete_id == NOT_DELETED_ID) {
+					shared_delete_id = deleted[i];
+				} else if (deleted[i] != shared_delete_id) {
+					deletes_equal = false;
+				}
+			}
+		}
+		if (!rows_alive && !deletes_pending) {
+			// entire vector deleted and visible to all - collapse to a constant
+			FreeDeleteData();
+			constant_delete_id = max_delete_id;
+		} else if (!rows_alive) {
+			// entire vector deleted but a delete is still pending - retry next pass
+			pending = true;
+		} else if (!deletes_pending) {
+			// partially deleted, every delete visible to all - compress to a mask (terminal)
+			CompressDeleteToMask(0);
+		} else if (deletes_equal && !deletes_uncommitted) {
+			// partially deleted, every delete committed by the same transaction but not yet visible to
+			// all - compress to a mask carrying that single committed id (terminal). Older snapshots still
+			// see the rows via the id comparison, and on reload every id is visible so it becomes 0.
+			CompressDeleteToMask(shared_delete_id);
+		} else {
+			// partially deleted with pending deletes from multiple or uncommitted transactions - retry
+			pending = true;
+		}
+	}
+	if (!HasConstantInsertionId()) {
+		// check if all inserts are visible to all active and future transactions
+		// if so, the per-row insert ids are equivalent to a single constant insert id
+		bool can_compress = true;
+		{
+			auto segment = allocator.GetHandle(GetInsertedPointer());
+			auto inserted = segment.GetPtr<transaction_t>();
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+				if (inserted[i] >= lowest_active_start) {
+					// the insert is not yet visible to all transactions
+					can_compress = false;
+					break;
+				}
+			}
+		}
+		if (can_compress) {
+			allocator.Free(inserted_data);
+			inserted_data = IndexPointer();
+			constant_insert_id = 0;
+		} else {
+			// insert ids become visible to all transactions (or are reverted) eventually
+			pending = true;
+		}
+	}
+	recheck_compression = pending;
+	if (HasConstantDeleteId() && HasConstantInsertionId()) {
+		return VersionCompressionResult::FULLY_COMPRESSED;
+	}
+	return pending ? VersionCompressionResult::PENDING : VersionCompressionResult::SETTLED;
 }
 
 void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
@@ -405,6 +605,8 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 		return;
 	}
 
+	// we are materializing / modifying per-row insert ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInitializedInsertedPointer());
 	auto inserted = segment.GetPtr<transaction_t>();
 	for (idx_t i = start; i < end; i++) {
@@ -417,6 +619,8 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 		constant_insert_id = commit_id;
 		return;
 	}
+	// we are modifying per-row insert ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInsertedPointer());
 	auto inserted = segment.GetPtr<transaction_t>();
 
@@ -451,29 +655,58 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 }
 
 bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
+	if (HasConstantInsertionId() && ConstantInsertId() >= TRANSACTION_ID_START) {
+		// the vector was inserted by a transaction that has not committed yet
+		// the rows have to be masked as deleted when writing a checkpoint
+		return true;
+	}
 	if (!AnyDeleted()) {
 		return false;
 	}
 	if (transaction_id == MAX_TRANSACTION_ID) {
 		return true;
 	}
-	auto segment = allocator.GetHandle(deleted_data);
-	auto deleted = segment.GetPtr<transaction_t>();
-
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (deleted[i] <= transaction_id) {
-			return true;
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		return ConstantDeleteId() <= transaction_id;
+	case DeleteIdState::MASKED:
+		// AnyDeleted() above guaranteed at least one deleted row; they all share mask_delete_id
+		return mask_delete_id <= transaction_id;
+	case DeleteIdState::ARRAY: {
+		auto segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			if (deleted[i] <= transaction_id) {
+				return true;
+			}
 		}
+		return false;
 	}
-	return false;
+	default:
+		throw InternalException("Unknown DeleteIdState in HasDeletes");
+	}
 }
 
 bool ChunkVectorInfo::AnyDeleted() const {
-	return deleted_data.HasMetadata();
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		return ConstantDeleteId() != NOT_DELETED_ID;
+	case DeleteIdState::MASKED:
+		// a masked vector always contains at least one deleted row
+		return true;
+	case DeleteIdState::ARRAY:
+		return true;
+	default:
+		throw InternalException("Unknown DeleteIdState in AnyDeleted");
+	}
 }
 
 bool ChunkVectorInfo::HasConstantInsertionId() const {
 	return !inserted_data.HasMetadata();
+}
+
+bool ChunkVectorInfo::HasConstantDeleteId() const {
+	return delete_state == DeleteIdState::CONSTANT;
 }
 
 string ChunkVectorInfo::ToString(idx_t max_count) const {
@@ -495,6 +728,41 @@ string ChunkVectorInfo::ToString(idx_t max_count) const {
 		}
 		result += "]";
 	}
+	switch (delete_state) {
+	case DeleteIdState::CONSTANT:
+		if (ConstantDeleteId() != NOT_DELETED_ID) {
+			result += ", Delete Id: " + to_string(constant_delete_id);
+		}
+		break;
+	case DeleteIdState::MASKED: {
+		result += ", Delete Id: " + to_string(mask_delete_id);
+		result += ", Deleted (mask): [";
+		for (idx_t idx = 0; idx < max_count; idx++) {
+			if (idx > 0) {
+				result += ", ";
+			}
+			result += deleted_mask.RowIsValid(idx) ? "1" : "0";
+		}
+		result += "]";
+		break;
+	}
+	case DeleteIdState::ARRAY: {
+		result += ", Delete Ids: [";
+		auto segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
+
+		for (idx_t idx = 0; idx < max_count; idx++) {
+			if (idx > 0) {
+				result += ", ";
+			}
+			result += to_string(deleted[idx]);
+		}
+		result += "]";
+		break;
+	}
+	default:
+		throw InternalException("Unknown DeleteIdState in ToString");
+	}
 	result += "]";
 	return result;
 }
@@ -504,6 +772,13 @@ transaction_t ChunkVectorInfo::ConstantInsertId() const {
 		throw InternalException("ConstantInsertId() called but vector info does not have a constant insertion id");
 	}
 	return constant_insert_id;
+}
+
+transaction_t ChunkVectorInfo::ConstantDeleteId() const {
+	if (!HasConstantDeleteId()) {
+		throw InternalException("ConstantDeleteId() called but vector info does not have a constant delete id");
+	}
+	return constant_delete_id;
 }
 
 void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
@@ -523,7 +798,7 @@ void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) co
 		return;
 	}
 	// write a boolean vector
-	ChunkInfo::Write(writer, checkpoint_id);
+	writer.Write<ChunkInfoType>(ChunkInfoType::VECTOR_INFO);
 	writer.Write<idx_t>(start);
 	ValidityMask mask(STANDARD_VECTOR_SIZE);
 	mask.Initialize(STANDARD_VECTOR_SIZE);
@@ -533,20 +808,46 @@ void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) co
 	mask.Write(writer, STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::Read(FixedSizeAllocator &allocator, ReadStream &reader) {
-	auto start = reader.Read<idx_t>();
-	auto result = make_uniq<ChunkVectorInfo>(allocator, start);
-	ValidityMask mask;
-	mask.Read(reader, STANDARD_VECTOR_SIZE);
-
-	auto segment = allocator.GetHandle(result->GetInitializedDeletedPointer());
-	auto deleted = segment.GetPtr<transaction_t>();
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (mask.RowIsValid(i)) {
-			deleted[i] = 0;
-		}
+unique_ptr<ChunkVectorInfo> ChunkVectorInfo::Read(FixedSizeAllocator &allocator, ReadStream &reader) {
+	auto type = reader.Read<ChunkInfoType>();
+	switch (type) {
+	case ChunkInfoType::EMPTY_INFO:
+		// no rows are deleted
+		return nullptr;
+	case ChunkInfoType::CONSTANT_INFO: {
+		// a fully deleted vector - the constant insert and delete ids of 0 are visible to all transactions
+		auto start = reader.Read<idx_t>();
+		auto result = make_uniq<ChunkVectorInfo>(allocator, start, 0, 0);
+		// both ids are constant - there is nothing left to compress
+		result->recheck_compression = false;
+		return result;
 	}
-	return std::move(result);
+	case ChunkInfoType::VECTOR_INFO: {
+		// a partially deleted vector - the deleted rows are stored as a boolean mask, all committed and
+		// visible to every transaction. The on-disk orientation (valid == deleted) matches the in-memory
+		// MASKED state, so load it straight into deleted_mask without materializing a per-row array.
+		auto start = reader.Read<idx_t>();
+		auto result = make_uniq<ChunkVectorInfo>(allocator, start);
+		result->deleted_mask.Read(reader, STANDARD_VECTOR_SIZE);
+		// Write only emits VECTOR_INFO for a partial delete: an all-deleted vector becomes
+		// CONSTANT_INFO and an undeleted one becomes EMPTY_INFO, so the mask must have at least one
+		// deleted (valid) and one alive (invalid) bit - never all-valid, never all-invalid.
+		if (result->deleted_mask.CheckAllValid(STANDARD_VECTOR_SIZE) ||
+		    result->deleted_mask.CheckAllInvalid(STANDARD_VECTOR_SIZE)) {
+			throw SerializationException(
+			    "Partial-delete vector info mask marks either all rows deleted or all rows alive, but a "
+			    "VECTOR_INFO block must always encode a partial delete. The database file may be corrupted.");
+		}
+		result->delete_state = DeleteIdState::MASKED;
+		// on-disk deletes are all committed and visible to every transaction - the shared id is 0
+		result->mask_delete_id = 0;
+		// every id is already visible to all transactions - nothing left to compress
+		result->recheck_compression = false;
+		return result;
+	}
+	default:
+		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
+	}
 }
 
 } // namespace duckdb
