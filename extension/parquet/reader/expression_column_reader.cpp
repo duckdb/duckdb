@@ -5,6 +5,7 @@
 #include "parquet_reader.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -23,10 +24,11 @@ class ClientContext;
 //===--------------------------------------------------------------------===//
 // Expression Column Reader
 //===--------------------------------------------------------------------===//
-ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers_p,
+ExpressionColumnReader::ExpressionColumnReader(ClientContext &context_p,
+                                               vector<unique_ptr<ColumnReader>> child_readers_p,
                                                unique_ptr<Expression> expr_p, const ParquetColumnSchema &schema_p)
     : ColumnReader(child_readers_p[0]->Reader(), schema_p), child_readers(std::move(child_readers_p)),
-      expr(std::move(expr_p)), executor(context, expr.get()) {
+      expr(std::move(expr_p)), executor(context_p, expr.get()), context(context_p) {
 	if (child_readers.empty()) {
 		throw InternalException("Can't instantiate an ExpressionColumnReader with 0 children");
 	}
@@ -38,11 +40,13 @@ ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, vector<un
 	InitializeChunk();
 }
 
-ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers_p,
+ExpressionColumnReader::ExpressionColumnReader(ClientContext &context_p,
+                                               vector<unique_ptr<ColumnReader>> child_readers_p,
                                                unique_ptr<Expression> expr_p,
                                                unique_ptr<ParquetColumnSchema> owned_schema_p)
     : ColumnReader(child_readers_p[0]->Reader(), *owned_schema_p), child_readers(std::move(child_readers_p)),
-      expr(std::move(expr_p)), executor(context, expr.get()), owned_schema(std::move(owned_schema_p)) {
+      expr(std::move(expr_p)), executor(context_p, expr.get()), owned_schema(std::move(owned_schema_p)),
+      context(context_p) {
 	if (child_readers.empty()) {
 		throw InternalException("Can't instantiate an ExpressionColumnReader with 0 children");
 	}
@@ -67,6 +71,23 @@ void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_gro
 	for (auto &child_reader : child_readers) {
 		child_reader->InitializeRead(row_group_idx_p, row_group_num_rows, columns, protocol_p);
 	}
+}
+
+unique_ptr<BaseStatistics> ExpressionColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	if (Schema().schema_type != ParquetColumnSchemaType::EXPRESSION) {
+		return ColumnReader::Stats(row_group_idx_p, columns);
+	}
+	vector<BaseStatistics> input_stats;
+	input_stats.reserve(child_readers.size());
+	for (auto &child_reader : child_readers) {
+		auto child_stats = child_reader->Stats(row_group_idx_p, columns);
+		if (!child_stats) {
+			return nullptr;
+		}
+		input_stats.push_back(child_stats->Copy());
+	}
+	return ExpressionFilter::TryGetExpressionStatistics(
+	    context, *expr, array_ptr<const BaseStatistics>(input_stats.data(), input_stats.size()));
 }
 
 static void ReverseSelectionVector(const SelectionVector &input, SelectionVector &output, idx_t input_count,

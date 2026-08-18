@@ -42,21 +42,19 @@ struct ICUCalendarAge : public ICUDateFunc {
 	}
 };
 
-static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hour, UErrorCode &status) {
+static inline void CalendarAddHour(Calendar *calendar, int64_t interval_hour) {
 	if (interval_hour >= 0) {
 		while (interval_hour > 0) {
-			calendar->add(UCAL_HOUR,
-			              interval_hour > NumericLimits<int32_t>::Maximum() ? NumericLimits<int32_t>::Maximum()
-			                                                                : static_cast<int32_t>(interval_hour),
-			              status);
+			calendar->Add(CAL_HOUR, interval_hour > NumericLimits<int32_t>::Maximum()
+			                            ? NumericLimits<int32_t>::Maximum()
+			                            : static_cast<int32_t>(interval_hour));
 			interval_hour -= NumericLimits<int32_t>::Maximum();
 		}
 	} else {
 		while (interval_hour < 0) {
-			calendar->add(UCAL_HOUR,
-			              interval_hour < NumericLimits<int32_t>::Minimum() ? NumericLimits<int32_t>::Minimum()
-			                                                                : static_cast<int32_t>(interval_hour),
-			              status);
+			calendar->Add(CAL_HOUR, interval_hour < NumericLimits<int32_t>::Minimum()
+			                            ? NumericLimits<int32_t>::Minimum()
+			                            : static_cast<int32_t>(interval_hour));
 			interval_hour -= NumericLimits<int32_t>::Minimum();
 		}
 	}
@@ -67,7 +65,7 @@ timestamp_tz_t ICUCalendarAdd::Operation(timestamp_tz_t timestamp, interval_t in
 	if (!timestamp.IsFinite()) {
 		return timestamp;
 	}
-	auto calendar = calendar_p.GetICUCalendar();
+	auto calendar = calendar_p.GetCalendar();
 
 	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
@@ -89,9 +87,7 @@ timestamp_tz_t ICUCalendarAdd::Operation(timestamp_tz_t timestamp, interval_t in
 	Timestamp::Convert(timestamp_t(us), d, t);
 
 	// Now use the calendar to add the other parts
-	UErrorCode status = U_ZERO_ERROR;
-	const auto udate = UDate(millis);
-	calendar->setTime(udate, status);
+	calendar->SetTime(millis);
 
 	// Break units apart to avoid overflow
 	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
@@ -107,24 +103,24 @@ timestamp_tz_t ICUCalendarAdd::Operation(timestamp_tz_t timestamp, interval_t in
 
 	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
 		// Add interval fields from lowest to highest (non-ragged to ragged)
-		calendar->add(UCAL_MILLISECOND, interval_ms, status);
-		calendar->add(UCAL_SECOND, interval_s, status);
-		calendar->add(UCAL_MINUTE, interval_m, status);
-		CalendarAddHour(calendar, interval_h, status);
+		calendar->Add(CAL_MILLISECOND, interval_ms);
+		calendar->Add(CAL_SECOND, interval_s);
+		calendar->Add(CAL_MINUTE, interval_m);
+		CalendarAddHour(calendar, interval_h);
 
 		// PG Adds months before days
-		calendar->add(UCAL_MONTH, interval.months, status);
-		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->Add(CAL_MONTH, interval.months);
+		calendar->Add(CAL_DATE, interval.days);
 	} else {
 		// PG Adds months before days
-		calendar->add(UCAL_MONTH, interval.months, status);
-		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->Add(CAL_MONTH, interval.months);
+		calendar->Add(CAL_DATE, interval.days);
 
 		// Add interval fields from highest to lowest (ragged to non-ragged)
-		CalendarAddHour(calendar, interval_h, status);
-		calendar->add(UCAL_MINUTE, interval_m, status);
-		calendar->add(UCAL_SECOND, interval_s, status);
-		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+		CalendarAddHour(calendar, interval_h);
+		calendar->Add(CAL_MINUTE, interval_m);
+		calendar->Add(CAL_SECOND, interval_s);
+		calendar->Add(CAL_MILLISECOND, interval_ms);
 	}
 
 	return ICUDateFunc::GetTime(calendar, micros);
@@ -150,7 +146,7 @@ interval_t ICUCalendarSub::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 		auto negated = Operation<timestamp_tz_t, timestamp_tz_t, interval_t>(start_date, end_date, calendar_p);
 		return {-negated.months, -negated.days, -negated.micros};
 	}
-	auto calendar = calendar_p.GetICUCalendar();
+	auto calendar = calendar_p.GetCalendar();
 
 	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
 	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
@@ -165,12 +161,12 @@ interval_t ICUCalendarSub::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 	//	Timestamp differences do not use months, so start with days
 	interval_t result;
 	result.months = 0;
-	result.days = SubtractField(calendar, UCAL_DATE, end_date);
+	result.days = SubtractField(calendar, CAL_DATE, end_date);
 
-	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
-	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
-	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
-	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
+	auto hour_diff = SubtractField(calendar, CAL_HOUR_OF_DAY, end_date);
+	auto min_diff = SubtractField(calendar, CAL_MINUTE, end_date);
+	auto sec_diff = SubtractField(calendar, CAL_SECOND, end_date);
+	auto ms_diff = SubtractField(calendar, CAL_MILLISECOND, end_date);
 	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).value;
 
@@ -179,7 +175,7 @@ interval_t ICUCalendarSub::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 
 template <>
 interval_t ICUCalendarAge::Operation(timestamp_tz_t end_date, timestamp_tz_t start_date, TZCalendar &calendar_p) {
-	auto calendar = calendar_p.GetICUCalendar();
+	auto calendar = calendar_p.GetCalendar();
 	if (calendar_p.IsGregorian()) {
 		auto start_data = ICUHelpers::GetComponents(start_date, calendar);
 		auto end_data = ICUHelpers::GetComponents(end_date, calendar);
@@ -203,13 +199,13 @@ interval_t ICUCalendarAge::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 
 	//	Lunar calendars have uneven numbers of months, so we just diff months, not years
 	interval_t result;
-	result.months = SubtractField(calendar, UCAL_MONTH, end_date);
-	result.days = SubtractField(calendar, UCAL_DATE, end_date);
+	result.months = SubtractField(calendar, CAL_MONTH, end_date);
+	result.days = SubtractField(calendar, CAL_DATE, end_date);
 
-	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
-	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
-	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
-	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
+	auto hour_diff = SubtractField(calendar, CAL_HOUR_OF_DAY, end_date);
+	auto min_diff = SubtractField(calendar, CAL_MINUTE, end_date);
+	auto sec_diff = SubtractField(calendar, CAL_SECOND, end_date);
+	auto ms_diff = SubtractField(calendar, CAL_MILLISECOND, end_date);
 	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).value;
 
@@ -226,7 +222,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		//	Subtract argument from current_date (at midnight)
-		const auto end_date = CurrentMidnight(calendar.GetICUCalendar(), state);
+		const auto end_date = CurrentMidnight(calendar.GetCalendar(), state);
 
 		UnaryExecutor::Execute<TA, TR>(args.data[0], result, [&](TA start_date) {
 			return OP::template Operation<timestamp_tz_t, TA, TR>(end_date, start_date, calendar);
@@ -271,6 +267,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                               LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_tz_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                               LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -293,6 +291,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarSub>(
 		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -302,6 +302,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarAge>(
 		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_tz_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 };

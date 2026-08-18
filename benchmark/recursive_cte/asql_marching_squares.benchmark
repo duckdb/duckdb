@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_marching_squares.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=marching_squares
+QUERY=asql_marching_squares
+BENCHMARK_NAME=Advanced SQL Marching Squares
+DESCRIPTION=Trace a deterministic contour over an invariant spatial subplan

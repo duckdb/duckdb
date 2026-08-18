@@ -486,6 +486,28 @@ void BoxRendererImplementation::RenderValue(BaseResultRenderer &ss, const string
 	ss << string(rpadding, ' ');
 }
 
+static string LowerTypeStringPreservingQuotes(const string &str) {
+	string result;
+	result.reserve(str.size());
+	bool in_single_quote = false;
+	for (idx_t i = 0; i < str.size(); i++) {
+		char c = str[i];
+		if (c == '\'') {
+			result += c;
+			if (in_single_quote && i + 1 < str.size() && str[i + 1] == '\'') {
+				result += str[++i];
+				continue;
+			}
+			in_single_quote = !in_single_quote;
+		} else if (in_single_quote) {
+			result += c;
+		} else {
+			result += StringUtil::CharacterToLower(c);
+		}
+	}
+	return result;
+}
+
 string BoxRendererImplementation::RenderType(const LogicalType &type) {
 	if (type.HasAlias()) {
 		return StringUtil::Lower(type.ToString());
@@ -516,7 +538,7 @@ string BoxRendererImplementation::RenderType(const LogicalType &type) {
 		return child + "[]";
 	}
 	default:
-		return StringUtil::Lower(type.ToString());
+		return LowerTypeStringPreservingQuotes(type.ToString());
 	}
 }
 
@@ -1082,6 +1104,7 @@ bool JSONParser::Process(const string &value) {
 	char quote_char = '"';
 	bool can_parse_value = false;
 	bool in_unquoted_value = false;
+	success = true;
 	pos = 0;
 	for (; success && pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -1110,7 +1133,8 @@ bool JSONParser::Process(const string &value) {
 			case ']': {
 				// closing bracket - move to next line and pop back the separator
 				if (separators.empty() || !SeparatorIsMatching(separators.back(), c)) {
-					throw InternalException("Failed to parse JSON string %s - invalid JSON", value);
+					success = false;
+					break;
 				}
 				separators.pop_back();
 				HandleBracketClose(c);
@@ -1171,7 +1195,7 @@ bool JSONParser::Process(const string &value) {
 			state = JSONState::IN_QUOTE;
 			HandleCharacter(c);
 		} else {
-			throw InternalException("Invalid json state");
+			success = false;
 		}
 	}
 	if (!success) {
@@ -1536,6 +1560,20 @@ public:
 	explicit JSONHighlighter(BoxRenderValue &render_value) : render_value(render_value) {
 	}
 
+public:
+	bool Highlight(const string &value) {
+		const auto annotation_count = render_value.annotations.size();
+		if (JSONParser::Process(value)) {
+			return true;
+		}
+
+		while (render_value.annotations.size() > annotation_count) {
+			render_value.annotations.pop_back();
+		}
+
+		return false;
+	}
+
 protected:
 	void HandleNull() override {
 		render_value.annotations.emplace_back(ResultRenderType::NULL_VALUE, pos);
@@ -1582,7 +1620,7 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 		return;
 	}
 	JSONHighlighter highlighter(render_value);
-	highlighter.Process(render_value.text);
+	highlighter.Highlight(render_value.text);
 }
 
 void BoxRendererImplementation::PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows,

@@ -1,0 +1,34 @@
+# name: test/optimizer/topn_window_elimination_group_stats.test
+# description: The aggregate replacing a top-N window must use statistics of the window input
+# group: [optimizer]
+
+statement ok
+CREATE TABLE w(g INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO w SELECT (range * 7) % 40, range FROM range(400);
+
+statement ok
+CREATE TABLE k(k INTEGER);
+
+statement ok
+INSERT INTO k VALUES (0), (1), (2), (3);
+
+# The join above the window narrows the statistics of g to [0, 3], but the aggregate that replaces
+# the window sits below the join and still sees all 40 partitions
+query I
+SELECT count(*) FROM (
+	SELECT g, v, row_number() OVER (PARTITION BY g ORDER BY v) AS rn FROM w
+) t JOIN k ON t.g = k.k WHERE t.rn = 1
+----
+4
+
+query II
+SELECT t.g, t.v FROM (
+	SELECT g, v, row_number() OVER (PARTITION BY g ORDER BY v) AS rn FROM w
+) t JOIN k ON t.g = k.k WHERE t.rn = 1 ORDER BY t.g
+----
+0	0
+1	23
+2	6
+3	29

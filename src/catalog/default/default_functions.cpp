@@ -147,7 +147,7 @@ static const DefaultMacro internal_macros[] = {
      "(arr, sep := ',') AS case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) "
      "end"},
 
-    {DEFAULT_SCHEMA, "generate_subscripts", "(arr, dim) AS unnest(generate_series(1, array_length(arr, dim)))"},
+    {DEFAULT_SCHEMA, "generate_subscripts", "(arr, dim := 1) AS unnest(generate_series(1, array_length(arr, dim)))"},
     {DEFAULT_SCHEMA, "fdiv", "(x, y) AS floor(x/y)"},
     {DEFAULT_SCHEMA, "fmod", "(x, y) AS (x-y*floor(x/y))"},
     {DEFAULT_SCHEMA, "split_part",
@@ -159,6 +159,7 @@ static const DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "weighted_avg",
      "(value, weight) AS SUM(value * weight) / SUM(CASE WHEN value IS NOT NULL THEN weight ELSE 0 END)"},
     {DEFAULT_SCHEMA, "wavg", "(value, weight) AS weighted_avg(value, weight)"},
+    {DEFAULT_SCHEMA, "variant_group_array", "(x) AS list(x)::VARIANT"},
 
     {DEFAULT_SCHEMA, "list_reverse", "(l) AS l[:-:-1]"},
     {DEFAULT_SCHEMA, "array_reverse", "(l) AS list_reverse(l)"},

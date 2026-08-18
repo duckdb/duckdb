@@ -33,12 +33,11 @@ struct CCopyFunctionInfo : public CopyFunctionInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-Value MakeValueFromCopyOptions(const case_insensitive_map_t<vector<Value>> &options) {
+Value MakeValueFromCopyOptions(const identifier_map_t<vector<Value>> &options) {
 	child_list_t<duckdb::Value> option_list;
-	for (auto &entry : options) {
+	for (auto &[option_name, values] : options) {
 		// Uppercase the option name, to make it simpler for users
-		auto name = StringUtil::Upper(entry.first);
-		auto &values = entry.second;
+		auto name = StringUtil::Upper(option_name.GetIdentifierName());
 
 		if (values.empty()) {
 			// Null!
@@ -695,12 +694,14 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 	parameters.push_back(Value(info.info.file_path));
 
 	// Now bind, using the normal table function bind mechanism
-	CTableInternalBindInfo bind_info(context, parameters, named_parameters, expected_types, expected_names, *result,
-	                                 tf_info);
+	// the COPY bind still operates on plain strings - convert around the table function bind
+	auto names = StringsToIdentifiers(expected_names);
+	CTableInternalBindInfo bind_info(context, parameters, named_parameters, expected_types, names, *result, tf_info);
 	tf_info.bind(reinterpret_cast<duckdb_bind_info>(&bind_info));
 	if (!bind_info.success) {
 		throw BinderException(bind_info.error);
 	}
+	expected_names = IdentifiersToStrings(names);
 
 	return std::move(result);
 }

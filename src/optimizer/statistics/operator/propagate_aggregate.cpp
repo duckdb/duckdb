@@ -150,9 +150,14 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	}
 	result = comparator.GetVal(*column_stats);
-	if (result.type() != result_type && !result.DefaultTryCastAs(result_type)) {
+	if (result.type() == result_type) {
+		return true;
+	}
+	auto cast = result.DefaultTryCastAs(result_type);
+	if (!cast) {
 		return false;
 	}
+	result = std::move(*cast);
 	return true;
 }
 
@@ -342,6 +347,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		partition_stats = std::move(precomputed_partition_stats);
 	}
 
+	if (partition_stats.empty()) {
+		// no partitions can be pre-computed
+		return;
+	}
+
 	if (!min_max_columns.empty()) {
 		// Execute min/max aggregates on partition statistics
 		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
@@ -363,7 +373,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 					agg_result = rhs;
 				}
 			}
-			types.push_back(agg_result.GetTypeMutable());
+			types.push_back(agg_result.type());
 			auto expr = make_uniq<BoundConstantExpression>(agg_result);
 			agg_results.push_back(std::move(expr));
 		}

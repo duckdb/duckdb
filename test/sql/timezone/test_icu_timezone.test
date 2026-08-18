@@ -134,12 +134,12 @@ SELECT '-infinity'::DATE::TIMESTAMPTZ AS dttz;
 statement error
 select '5877642-06-25 (BC)'::DATE::TIMESTAMPTZ AS dttz;
 ----
-Invalid Input Error
+Conversion Error
 
 statement error
 select '5881580-07-10'::DATE::TIMESTAMPTZ AS dttz;
 ----
-Invalid Input Error
+Conversion Error
 
 # Table
 statement ok

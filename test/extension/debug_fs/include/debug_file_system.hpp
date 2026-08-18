@@ -57,7 +57,7 @@ public:
 	void Seek(FileHandle &handle, idx_t location) override;
 	void Reset(FileHandle &handle) override;
 	idx_t SeekPosition(FileHandle &handle) override;
-	bool SupportsPositionalWrites(FileHandle &handle) override;
+	FileWriteMode GetWriteMode(FileHandle &handle) override;
 	bool OnDiskFile(FileHandle &handle) override;
 	bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;

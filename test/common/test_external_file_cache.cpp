@@ -48,6 +48,14 @@ string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
 	return result;
 }
 
+string ReadSequential(CachingFileHandle &handle, idx_t size) {
+	auto read_size = size;
+	auto group = handle.Read(read_size);
+	string result(read_size, '\0');
+	group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), read_size);
+	return result;
+}
+
 void WriteTestContent(const string &path, const string &content) {
 	auto local_fs = FileSystem::CreateLocal();
 	auto handle = local_fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
@@ -292,6 +300,25 @@ TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[ext
 	REQUIRE(cache.GetCachedFileCount() == 1);
 }
 
+TEST_CASE("Sequential read preserves its position when the cache is disabled", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string first_block(block_size, 'A');
+	const string second_block(block_size, 'B');
+	EFCTestFileGuard test_file("test_efc_disabled_sequential_position.bin", first_block + second_block);
+
+	CachingFileSystem cfs(*tracking_fs, *db.instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(ReadSequential(*handle, block_size) == first_block);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+
+	cache.SetEnabled(false);
+	REQUIRE(ReadSequential(*handle, block_size) == second_block);
+}
+
 TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
@@ -525,6 +552,51 @@ TEST_CASE("No-metadata file is not cached and always returns fresh content", "[e
 		REQUIRE(ReadFull(*handle, content_b.size()) == content_b);
 	}
 	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("Retiring cache blocks preserves existing readers and cannot erase replacements", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto cached_file = cache.GetOrCreateCachedFile("retire-blocks-test");
+
+	constexpr idx_t BLOCK_SIZE = 4096;
+	constexpr idx_t FIRST_BLOCK = 7;
+	auto acquired = cache.ReindexAndAcquireBlocks(*cached_file, BLOCK_SIZE, FIRST_BLOCK, 2);
+	{
+		const annotated_lock_guard<annotated_mutex> guard(acquired[0]->mtx);
+		acquired[0]->state = CacheBlockState::LOADED;
+		acquired[0]->nr_bytes = BLOCK_SIZE;
+	}
+	{
+		const annotated_lock_guard<annotated_mutex> guard(acquired[1]->mtx);
+		acquired[1]->state = CacheBlockState::LOADED;
+		acquired[1]->nr_bytes = 123;
+	}
+
+	cache.RetireBlocks(*cached_file, FIRST_BLOCK, acquired);
+
+	// Existing readers retain the immutable block metadata needed to finish their reads.
+	{
+		const annotated_lock_guard<annotated_mutex> guard(acquired[0]->mtx);
+		REQUIRE(acquired[0]->state == CacheBlockState::LOADED);
+		REQUIRE(acquired[0]->nr_bytes == BLOCK_SIZE);
+	}
+	{
+		const annotated_lock_guard<annotated_mutex> guard(acquired[1]->mtx);
+		REQUIRE(acquired[1]->state == CacheBlockState::LOADED);
+		REQUIRE(acquired[1]->nr_bytes == 123);
+	}
+
+	// Future readers receive fresh cache blocks.
+	auto replacements = cache.ReindexAndAcquireBlocks(*cached_file, BLOCK_SIZE, FIRST_BLOCK, 2);
+	REQUIRE(replacements[0] != acquired[0]);
+	REQUIRE(replacements[1] != acquired[1]);
+
+	// A delayed retirement of the old range must not erase its replacements.
+	cache.RetireBlocks(*cached_file, FIRST_BLOCK, acquired);
+	auto reacquired = cache.ReindexAndAcquireBlocks(*cached_file, BLOCK_SIZE, FIRST_BLOCK, 2);
+	REQUIRE(reacquired[0] == replacements[0]);
+	REQUIRE(reacquired[1] == replacements[1]);
 }
 
 } // namespace duckdb

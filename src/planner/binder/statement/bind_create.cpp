@@ -59,7 +59,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->SetQualifiedName(QualifiedName(table.catalog.GetName(), table.schema.name, table.name));
+	alias_table_ref->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -167,7 +167,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 		schema_path.push_back(default_entry.GetSchema());
 	} else if (schema_path.empty()) {
 		// a catalog was given but no schema: use the catalog's default schema
-		schema_path.push_back(Identifier(search_path->GetDefaultSchema(context, catalog)));
+		schema_path.push_back(search_path->GetDefaultSchema(context, catalog));
 	} else if (IsInvalidCatalog(catalog)) {
 		// a schema was given but no catalog: resolve the catalog that holds it
 		catalog = Identifier(search_path->GetDefaultCatalog(schema_path[0]));
@@ -330,7 +330,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->SetCanContainNulls(true);
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();
@@ -444,11 +444,16 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Constant-fold all default parameter expressions
+		identifier_set_t integer_literal_defaults;
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
 			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				auto &value = param_expr->Cast<ConstantExpression>().GetValue();
+				if (value.type().IsIntegral() && !value.IsNull()) {
+					integer_literal_defaults.insert(param_name);
+				}
 				continue;
 			}
 
@@ -481,7 +486,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
+				auto &value = it->second->Cast<ConstantExpression>().GetValue();
+				auto val_type = value.type();
+				if (integer_literal_defaults.find(param_name) != integer_literal_defaults.end()) {
+					val_type = LogicalType::INTEGER_LITERAL(value);
+				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
@@ -634,9 +643,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	auto &table = *table_ptr;
 
-	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.SetQualifiedName(
-	    QualifiedName(table.catalog.GetName(), table.schema.name, create_trigger_info.GetQualifiedName().Name()));
+	// Trigger inherits the catalog and the (possibly nested) schema from the base table
+	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -836,10 +844,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
-		// Plan the table scan.
-		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(),
-		                                                 create_index_info.GetQualifiedName().Schema(),
-		                                                 create_index_info.table));
+		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
+		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);

@@ -212,11 +212,12 @@ void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBind
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.Depth() == 0);
 		    D_ASSERT(colref.Binding().table_index.IsValid());
-		    // map the base table index to the relation index used by the JoinOrderOptimizer
-		    D_ASSERT(relation_manager.relation_mapping.find(colref.Binding().table_index) !=
-		             relation_manager.relation_mapping.end());
-		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.Binding().table_index].index),
-		                            colref.Binding().column_index);
+		    // Map the logical output binding to the relation-local statistics column.
+		    auto normalized = relation_manager.TryNormalizeBinding(colref.Binding(), binding);
+		    D_ASSERT(normalized);
+		    if (!normalized) {
+			    return;
+		    }
 	    });
 }
 
@@ -228,9 +229,11 @@ void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, Colu
 		if (!colref.Binding().table_index.IsValid()) {
 			return;
 		}
-		auto entry = relation_manager.relation_mapping.find(colref.Binding().table_index);
-		D_ASSERT(entry != relation_manager.relation_mapping.end());
-		binding = ColumnBinding(TableIndex(entry->second.index), colref.Binding().column_index);
+		auto normalized = relation_manager.TryNormalizeBinding(colref.Binding(), binding);
+		D_ASSERT(normalized);
+		if (!normalized) {
+			return;
+		}
 		return;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -617,7 +620,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				throw InternalException("Could not orient operator occurrence %llu in reconstructed join tree",
 				                        descriptor->index);
 			}
-			if (!reconstructed_operators.insert(descriptor->index).second) {
+			if (descriptor->type != JoinOrderOperatorType::CROSS_PRODUCT &&
+			    !reconstructed_operators.insert(descriptor->index).second) {
 				throw InternalException("Operator occurrence %llu was reconstructed more than once", descriptor->index);
 			}
 
@@ -713,11 +717,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	result_operator->has_estimated_cardinality = true;
 
 	// Collect unused residual predicates that belong to this join. Semantic non-inner joins own their complete
-	// condition directly, so only ordinary (notably INNER) residual predicates reach this path.
+	// condition directly, so only ordinary (notably INNER) residual predicates reach this path. Predicates that
+	// belong to a must-apply operator occurrence are consumed by that occurrence during reconstruction, instead
+	// of being added to unused_residual_predicates.
 	vector<unique_ptr<Expression>> unused_residual_predicates;
 	for (auto &filter_info : filters_and_bindings) {
 		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter &&
-		    filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
+		    !operator_costing_predicates.count(filter_info->filter_index) && filter_info->set.get().count > 0 &&
+		    JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
 			unused_residual_predicates.push_back(std::move(filters_and_bindings[filter_info->filter_index]->filter));
 		}
 	}

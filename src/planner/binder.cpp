@@ -441,7 +441,7 @@ void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &ge
 	}
 }
 
-//! Helper: convert scan column mapping to projection expression mapping for MERGE INTO
+//! Helper: convert scan column mapping to expression mapping
 static void ConvertScanToProjectionMapping(TableCatalogEntry &table, const vector<idx_t> &scan_return_columns,
                                            vector<idx_t> &return_columns,
                                            vector<unique_ptr<Expression>> &projection_expressions,
@@ -600,6 +600,11 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, co
 	return entry_retriever.GetEntry(
 	    EntryLookupInfo(lookup_info, QualifiedName(catalog, schema, lookup_info.GetEntryIdentifier())),
 	    on_entry_not_found);
+}
+
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
+	return entry_retriever.GetEntry(lookup_info, on_entry_not_found);
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema

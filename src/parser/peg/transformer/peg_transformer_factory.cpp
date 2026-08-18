@@ -367,15 +367,17 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 		}
 
 		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
-		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+		if (cast_type.id() == LogicalTypeId::INVALID || cast_type.id() == LogicalTypeId::UNBOUND) {
 			return false;
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+		auto cast_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
+		if (!cast_value) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
 			                          EnumUtil::ToString(cast_type.id()));
 		}
+		value = std::move(*cast_value);
 		return true;
 	}
 	default:

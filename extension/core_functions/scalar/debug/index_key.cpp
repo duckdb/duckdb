@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -127,10 +128,18 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(input.GetConstant(0));
 	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
-	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
-	                                                    path.qualified_name.Name()))
-	                        .Cast<TableCatalogEntry>();
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
+	if (!table_entry.IsDuckTable()) {
+		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
+	}
+
+	// index_key resolves index metadata during binding.
+	// Register the owning catalog so cached prepared statements rebind after catalog changes.
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
+	}
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();

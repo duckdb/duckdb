@@ -2826,7 +2826,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		return false;
 	}
 	// For some reason PG does not use statistical rounding here (even though it _does_ for integers...)
-	result = Cast::Operation<SRC, DST>(static_cast<SRC>(roundedValue));
+	result = Cast::Operation<double, DST>(roundedValue);
 	return true;
 }
 

@@ -111,25 +111,36 @@ public:
 
 class MergeIntoGlobalState : public GlobalSinkState {
 public:
-	MergeIntoGlobalState(ClientContext &context, const PhysicalMergeInto &op) : op(op) {
+	MergeIntoGlobalState(ClientContext &context, const PhysicalMergeInto &op)
+	    : op(op), matched_rows(context, GetRowIdTypes(op)) {
 		for (auto &action : op.actions) {
 			sink_states.push_back(action->op ? action->op->GetGlobalSinkState(context) : nullptr);
 		}
 		merged_count = 0;
 	}
+
+	static vector<LogicalType> GetRowIdTypes(const PhysicalMergeInto &op) {
+		auto &input_types = op.children[0].get().types;
+		if (op.row_id_index >= input_types.size()) {
+			throw InternalException("MERGE row ID index is out of range");
+		}
+		auto row_id_offset = NumericCast<vector<LogicalType>::difference_type>(op.row_id_index);
+		return vector<LogicalType>(input_types.begin() + row_id_offset, input_types.end());
+	}
+
 	const PhysicalMergeInto &op;
 	idx_t finalize_idx = 0;
 	vector<unique_ptr<GlobalSinkState>> sink_states;
 	atomic<idx_t> merged_count;
 	//! Target row-ids already matched by a WHEN MATCHED modifying action, to detect a second action on a row.
 	mutex match_lock;
-	unordered_set<row_t> matched_rows;
+	RowIdDeduplicator matched_rows;
 
-	//! Record the matched target rows; throw if any row was already matched (cardinality violation). Uses the
-	//! shared row-id registration primitive; a distinct count below the input count means a row-id repeated.
+	//! Record the matched target rows; throw if any row was already matched (cardinality violation). A distinct
+	//! count below the input count means a row ID repeated.
 	void CheckMatchedRows(DataChunk &matched, idx_t row_id_index) {
 		lock_guard<mutex> glock(match_lock);
-		auto distinct = RegisterRowIds(matched_rows, matched.data[row_id_index], matched.size());
+		auto distinct = matched_rows.Register(matched, row_id_index);
 		if (distinct != matched.size()) {
 			throw InvalidInputException(
 			    "MERGE INTO command cannot affect the same target row more than once. A target row matched more "
@@ -313,6 +324,7 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	not_matched.count = 0;
 	not_matched_by_source.count = 0;
 
+	// The first row-ID component is also the target-presence marker and must be non-NULL for target rows.
 	auto row_id_validity = chunk.data[row_id_index].Validity();
 	if (source_marker.IsValid()) {
 		// source marker - check both row id and source marker

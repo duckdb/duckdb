@@ -77,6 +77,11 @@ int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer
 	return -1;
 }
 
+int64_t PEGTransformerFactory::TransformArrayKeywordWithBounds(PEGTransformer &transformer,
+                                                               const int64_t &square_brackets_array) {
+	return square_brackets_array;
+}
+
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
                                                             optional<unique_ptr<ParsedExpression>> expression) {
 	if (!expression) {
@@ -297,13 +302,13 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
-                                                                     const vector<LogicalType> &type) {
-	if (type.size() != 2) {
-		throw ParserException("Map type needs exactly two entries, key and value type.");
-	}
+                                                                     const optional<vector<LogicalType>> &type) {
 	vector<unique_ptr<ParsedExpression>> map_children;
-	map_children.push_back(UnboundType::GetTypeExpression(type[0])->Copy());
-	map_children.push_back(UnboundType::GetTypeExpression(type[1])->Copy());
+	if (type) {
+		for (auto &child_type : *type) {
+			map_children.push_back(UnboundType::GetTypeExpression(child_type)->Copy());
+		}
+	}
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 

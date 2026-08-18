@@ -15,6 +15,7 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
@@ -393,10 +394,66 @@ RecursiveProbeSidePreference BuildProbeSideOptimizer::GetRecursiveProbeSidePrefe
 	return RecursiveProbeSidePreference::NONE;
 }
 
+static optional_ptr<LogicalOperator> FindCorrelatedDomainAttachment(LogicalCTE &cte) {
+	if (cte.correlated_columns.empty()) {
+		return nullptr;
+	}
+
+	auto correlated_column_count = cte.correlated_columns.size();
+	auto anchor_bindings = cte.children[0]->GetColumnBindings();
+	if (anchor_bindings.size() != cte.column_count || anchor_bindings.size() < correlated_column_count) {
+		return nullptr;
+	}
+
+	vector<ColumnBinding> correlated_bindings(
+	    anchor_bindings.end() - NumericCast<vector<ColumnBinding>::difference_type>(correlated_column_count),
+	    anchor_bindings.end());
+	auto current = cte.children[0].get();
+	while (current->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = current->Cast<LogicalProjection>();
+		for (auto &binding : correlated_bindings) {
+			if (binding.table_index != projection.table_index ||
+			    binding.column_index.GetIndexUnsafe() >= projection.expressions.size()) {
+				return nullptr;
+			}
+			auto &expression = projection.GetExpression(binding);
+			if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return nullptr;
+			}
+			auto &column_ref = expression.Cast<BoundColumnRefExpression>();
+			if (column_ref.Depth() != 0) {
+				return nullptr;
+			}
+			binding = column_ref.Binding();
+		}
+		if (projection.children.size() != 1) {
+			return nullptr;
+		}
+		current = projection.children[0].get();
+	}
+
+	if (current->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return nullptr;
+	}
+	auto domain_bindings = current->children[1]->GetColumnBindings();
+	if (domain_bindings != correlated_bindings) {
+		return nullptr;
+	}
+	return current;
+}
+
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		VisitOperator(*op.children[0]);
-		active_recursive_cte_indexes.push_back(op.Cast<LogicalCTE>().table_index);
+		auto &cte = op.Cast<LogicalCTE>();
+		auto domain_attachment = FindCorrelatedDomainAttachment(cte);
+		if (domain_attachment) {
+			// FlattenDependentJoins appends the correlation domain to the recursive anchor. Optimize both inputs while
+			// preserving the orientation of this generated attachment.
+			VisitOperatorChildren(*domain_attachment);
+		} else {
+			VisitOperator(*op.children[0]);
+		}
+		active_recursive_cte_indexes.push_back(cte.table_index);
 		VisitOperator(*op.children[1]);
 		active_recursive_cte_indexes.pop_back();
 		return;
