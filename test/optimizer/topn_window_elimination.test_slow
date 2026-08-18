@@ -51,6 +51,7 @@ WHERE greatest(c.x, p.z) = p.z
 QUALIFY row_number() OVER (PARTITION BY c.id ORDER BY c.k) = 1
 ----
 logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
 # The duplicate-row-ID regression must exercise join late materialization rather than
 # passing by falling back to struct packing.
 # RelDebug uses an inner row-ID reconstruction join for this query. Debug's
