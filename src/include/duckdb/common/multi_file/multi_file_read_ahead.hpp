@@ -11,11 +11,9 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 namespace duckdb {
-struct MultiFileScanJob;
-struct LocalTableFunctionState;
 
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
-class MultiFileReadAhead : public ScanReadAhead<MultiFileScanJob, LocalTableFunctionState> {
+class MultiFileReadAhead : public ScanReadAhead {
 public:
 	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth,
 	                   unique_ptr<ManagedAsyncMemoryGovernor> memory_governor);

@@ -223,7 +223,7 @@ struct MultiFileScanJob : public ScanReadAheadJob {
 	MultiFileScanJob() = default;
 	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
 	MultiFileScanJob &operator=(MultiFileScanJob &&) noexcept = default;
-	~MultiFileScanJob() {
+	~MultiFileScanJob() override {
 		// scheduled reads might still be in flight, settle them before the members they write to are destroyed
 		if (io_completion) {
 			io_completion->WaitForIO();

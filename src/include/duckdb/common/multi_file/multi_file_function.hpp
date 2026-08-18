@@ -834,7 +834,7 @@ public:
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
-		unique_ptr<MultiFileScanJob> claimed;
+		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
 		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) {
@@ -849,7 +849,7 @@ public:
 			}
 			return acquired;
 		}
-		lstate.job = std::move(*claimed);
+		lstate.job = std::move(claimed->Cast<MultiFileScanJob>());
 		lstate.job_state =
 		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
 		return acquired;
