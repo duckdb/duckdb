@@ -4,7 +4,6 @@
 #include "duckdb/parser/peg/matcher/list.hpp"
 
 namespace duckdb {
-struct PEGParser;
 struct CompiledGrammar;
 
 class MatcherFactory;
@@ -15,7 +14,7 @@ private:
 	struct MatcherList {
 	public:
 		struct Entry {
-			explicit Entry(Matcher &matcher) : matcher(matcher), function_name(0U) {
+			explicit Entry(Matcher &matcher) : matcher(matcher), function_name(string_t("")) {
 			}
 			Entry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
 			}
@@ -25,7 +24,7 @@ private:
 		};
 
 	public:
-		explicit MatcherList(PEGParser &parser, MatcherFactory &factory);
+		explicit MatcherList(MatcherFactory &factory);
 		void AddMatcher(Matcher &matcher);
 		void AddRootMatcher(Matcher &matcher);
 		idx_t GetRootMatcherCount() const;
@@ -34,7 +33,6 @@ private:
 		MatcherList::Entry &GetLastRootMatcher();
 
 	private:
-		PEGParser &parser;
 		MatcherFactory &factory;
 		vector<MatcherList::Entry> matchers;
 	};
@@ -45,7 +43,8 @@ public:
 
 public:
 	//! Create a matcher from a PEG grammar
-	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
+	Matcher &CreateMatcher(string_t root_rule);
+	Matcher &CreateRootMatcher(const string &root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
 	//! CreateMatcher call). Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
@@ -69,8 +68,7 @@ private:
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
-	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
+	Matcher &CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;

@@ -5,8 +5,7 @@
 
 namespace duckdb {
 
-MatcherFactory::MatcherList::MatcherList(PEGParser &parser, MatcherFactory &factory)
-    : parser(parser), factory(factory) {
+MatcherFactory::MatcherList::MatcherList(MatcherFactory &factory) : factory(factory) {
 }
 
 void MatcherFactory::MatcherList::AddMatcher(Matcher &matcher) {
@@ -68,7 +67,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		vector<reference<Matcher>> parameters;
 		parameters.push_back(parameter);
 		// do the substitution of the function call
-		auto &function_call = factory.CreateMatcher(parser, function_name, parameters);
+		auto &function_call = factory.CreateMatcher(function_name, parameters);
 		// remove the last matcher from the stack
 		matchers.pop_back();
 		// push it into the last matcher
@@ -80,7 +79,7 @@ MatcherFactory::MatcherList::Entry &MatcherFactory::MatcherList::GetLastRootMatc
 	return matchers.back();
 }
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	if (!is_function_call) {
 		// check if the matcher has already been created first
@@ -91,21 +90,21 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 	}
 	// look up the rule
-	auto entry = parser.rules.find(rule_name.GetString());
-	if (entry == parser.rules.end()) {
+	auto entry = grammar.rules.find(rule_name.GetString());
+	if (entry == grammar.rules.end()) {
 		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
 	}
 	// create a matcher and cache it
 	// since matchers can be recursive we need to cache it prior to recursively constructing the other rules
 	auto &matcher = List();
 	if (!is_function_call) {
-		matchers.insert(make_pair(rule_name, reference<Matcher>(matcher)));
+		matchers.insert(make_pair(string_t(entry->second->name), reference<Matcher>(matcher)));
 	}
 
-	MatcherList list(parser, *this);
+	MatcherList list(*this);
 	list.AddRootMatcher(matcher);
 	// fill the matcher from the given set of rules
-	auto &rule = entry->second;
+	auto &rule = entry->second->recipe;
 	if (rule.parameters.size() > 1) {
 		throw InternalException("Only functions with a single parameter are supported");
 	}
@@ -128,7 +127,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list.AddMatcher(parameters[param_entry->second].get());
 			} else {
 				// refers to a different rule - create the matcher for that rule
-				list.AddMatcher(CreateMatcher(parser, token.text));
+				list.AddMatcher(CreateMatcher(token.text));
 			}
 			break;
 		}
@@ -278,11 +277,7 @@ MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar 
     : allocator(allocator), grammar(grammar_p), compiled(compiled_p) {
 }
 
-Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
-	// parse the grammar into a set of rules
-	PEGParser parser;
-	parser.ParseRules(grammar);
-
+Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// keyword overrides
 	AddKeywordOverride("TABLE", KeywordInfo(1, ' '));
 	AddKeywordOverride(".", KeywordInfo(0, '\0'));
@@ -379,7 +374,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	SuppressSuggestions("ExpressionStatement");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
-	return CreateMatcher(parser, root_rule);
+	return CreateMatcher(string_t(root_rule));
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
@@ -450,9 +445,9 @@ Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
 	return entry->second.get();
 }
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name) {
 	vector<reference<Matcher>> parameters;
-	return CreateMatcher(parser, rule_name, parameters);
+	return CreateMatcher(rule_name, parameters);
 }
 
 } // namespace duckdb

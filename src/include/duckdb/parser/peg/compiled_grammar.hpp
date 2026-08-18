@@ -37,10 +37,6 @@ public:
 public:
 	idx_t Version() const;
 
-public:
-	//! FIXME: this should be a private detail of the parsed grammar
-	const PEGTransformerFactory &GetTransformerFactory();
-
 private:
 	MatcherAllocator allocator;
 	optional_ptr<const Matcher> program_matcher;
@@ -48,7 +44,6 @@ private:
 
 	//! TODO: this should be a unique_ptr when we allow keyword overrides
 	const PEGKeywordHelper &keyword_helper;
-	PEGTransformerFactory transformer_factory;
 	Tokenizer tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 
