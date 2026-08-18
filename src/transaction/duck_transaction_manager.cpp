@@ -410,10 +410,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		}
 	} else {
 		DUCKDB_LOG(context, TransactionLogType, db, "Commit", info.commit_id);
-		last_commit = info.commit_id;
 		if (changes_made) {
-			// only transactions that actually modified something advance the write commit id
-			last_write_commit = info.commit_id;
+			// only transactions that actually modified something advance the commit id --
+			// read-only transactions are committed too, but must not move this counter
+			// (see GetLastCommit's doc comment)
+			last_commit = info.commit_id;
 		}
 
 		// check if catalog changes were made
