@@ -521,7 +521,7 @@ string_t ParquetVariantNode::GetString() const {
 			return str;
 		}
 		if (!Utf8Proc::IsValid(str.GetData(), str.GetSize())) {
-			throw InternalException("Can't decode Variant string, it isn't valid UTF8");
+			throw IOException("Can't decode Variant string, it isn't valid UTF8");
 		}
 		return str;
 	}
@@ -532,7 +532,7 @@ string_t ParquetVariantNode::GetString() const {
 		auto string_data = const_char_ptr_cast(payload);
 		CheckBinaryRead(payload, value_metadata.string_size, binary_end);
 		if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
-			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+			throw IOException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
 		return string_t(string_data, value_metadata.string_size);
 	}
@@ -544,7 +544,7 @@ string_t ParquetVariantNode::GetString() const {
 		return string_t(string_data, size);
 	}
 	if (!Utf8Proc::IsValid(string_data, size)) {
-		throw InternalException("Can't decode Variant string, it isn't valid UTF8");
+		throw IOException("Can't decode Variant string, it isn't valid UTF8");
 	}
 	return string_t(string_data, size);
 }

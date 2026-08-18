@@ -372,10 +372,12 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+		auto cast_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
+		if (!cast_value) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
 			                          EnumUtil::ToString(cast_type.id()));
 		}
+		value = std::move(*cast_value);
 		return true;
 	}
 	default:

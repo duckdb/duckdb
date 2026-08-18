@@ -106,7 +106,7 @@ public:
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = scan_state.values[i];
 				if (val) {
-					JSONStructure::ExtractStructure(val, node, true);
+					JSONStructure::ExtractStructure(val, node, true, options.geojson.value_or(false));
 				}
 			}
 			remaining -= next;
@@ -146,6 +146,95 @@ private:
 	ArenaAllocator allocator;
 	Vector string_vector;
 };
+
+//! A GeoJSON Feature: {"type": "Feature", "geometry": ..., "properties": {...}}, optionally with "id" and "bbox".
+//! Only these members are allowed, so that ordinary objects that happen to have a "geometry" are not unnested.
+static bool IsGeoJSONFeatureType(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	bool has_type = false;
+	bool has_geometry = false;
+	bool has_properties = false;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		if (child.first == "type") {
+			has_type = true;
+		} else if (child.first == "geometry") {
+			has_geometry = true;
+		} else if (child.first == "properties") {
+			has_properties = true;
+		} else if (child.first != "id" && child.first != "bbox") {
+			return false;
+		}
+	}
+	return has_type && has_geometry && has_properties;
+}
+
+//! Flatten a Feature into columns: the geometry and the "id"/"bbox" members come from the Feature itself, and
+//! every member of "properties" becomes a column of its own.
+//! The Feature's own members are emitted first, so that a property of the same name is the one that gets
+//! deduplicated by the usual column name collision handling.
+static void UnnestGeoJSONFeature(const LogicalType &type, const bool ignore_errors, vector<LogicalType> &return_types,
+                                 vector<Identifier> &names, vector<JSONFeatureColumn> &feature_columns) {
+	const auto add_column = [&](const Identifier &name, const LogicalType &column_type, const bool from_properties,
+	                            string key) {
+		names.emplace_back(name);
+		return_types.emplace_back(RemoveDuplicateStructKeys(column_type, ignore_errors));
+		feature_columns.push_back(JSONFeatureColumn {from_properties, std::move(key)});
+	};
+
+	optional_ptr<const LogicalType> geometry_type;
+	optional_ptr<const LogicalType> id_type;
+	optional_ptr<const LogicalType> bbox_type;
+	optional_ptr<const LogicalType> properties_type;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		if (child.first == "geometry") {
+			geometry_type = child.second;
+		} else if (child.first == "id") {
+			id_type = child.second;
+		} else if (child.first == "bbox") {
+			bbox_type = child.second;
+		} else if (child.first == "properties") {
+			properties_type = child.second;
+		}
+	}
+	D_ASSERT(geometry_type && properties_type);
+
+	add_column("geometry", *geometry_type, false, "geometry");
+	if (id_type) {
+		add_column("id", *id_type, false, "id");
+	}
+	if (bbox_type) {
+		add_column("bbox", *bbox_type, false, "bbox");
+	}
+	if (properties_type->id() == LogicalTypeId::STRUCT) {
+		for (const auto &property : StructType::GetChildTypes(*properties_type)) {
+			add_column(property.first, property.second, true, property.first.GetIdentifierName());
+		}
+	} else {
+		// Properties were not inferred as a struct (e.g. they were too heterogeneous and became a MAP), so we
+		// cannot give each one its own column - keep them together instead
+		add_column("properties", *properties_type, false, "properties");
+	}
+}
+
+//! COPY ... FROM takes its columns from the target table, so their names decide what is read from the Feature
+//! itself and what is looked up in its properties. Only members the Features actually have are bound to the
+//! Feature, so that e.g. a column named "id" reads an "id" property when there is no Feature-level id - which is
+//! where auto-detection would have found it too.
+static void BindGeoJSONFeatureColumns(const LogicalType &type, const vector<Identifier> &names,
+                                      vector<JSONFeatureColumn> &feature_columns) {
+	case_insensitive_set_t feature_members;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		if (child.first == "geometry" || child.first == "id" || child.first == "bbox") {
+			feature_members.insert(child.first.GetIdentifierName());
+		}
+	}
+	for (const auto &name : names) {
+		const auto from_properties = feature_members.find(name.GetIdentifierName()) == feature_members.end();
+		feature_columns.push_back(JSONFeatureColumn {from_properties, name.GetIdentifierName()});
+	}
+}
 
 void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
                           vector<Identifier> &names) {
@@ -199,11 +288,23 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 
 	// Auto-detect record type
 	if (json_data.options.record_type == JSONRecordType::AUTO_DETECT) {
-		if (type.id() == LogicalTypeId::STRUCT) {
+		if (options.geojson.value_or(false) && IsGeoJSONFeatureType(type)) {
+			json_data.options.record_type = JSONRecordType::FEATURES;
+		} else if (type.id() == LogicalTypeId::STRUCT) {
 			json_data.options.record_type = JSONRecordType::RECORDS;
 		} else {
 			json_data.options.record_type = JSONRecordType::VALUES;
 		}
+	}
+
+	if (json_data.options.record_type == JSONRecordType::FEATURES) {
+		if (names.empty()) {
+			UnnestGeoJSONFeature(type, options.ignore_errors, return_types, names, json_data.feature_columns);
+		} else {
+			// COPY - we already have names/types, but we still need to know where each of them is read from
+			BindGeoJSONFeatureColumns(type, names, json_data.feature_columns);
+		}
+		return;
 	}
 
 	if (!names.empty()) {
@@ -228,7 +329,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	} else {
 		D_ASSERT(json_data.options.record_type == JSONRecordType::VALUES);
 		return_types.emplace_back(RemoveDuplicateStructKeys(type, options.ignore_errors));
-		names.emplace_back("json");
+		// Newline-delimited bare geometries produce a single GEOMETRY column, which "json" would be a poor name for
+		names.emplace_back(type.id() == LogicalTypeId::GEOMETRY ? "geometry" : "json");
 	}
 }
 
@@ -238,6 +340,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["geojson"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;

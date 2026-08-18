@@ -1,0 +1,60 @@
+# name: test/sql/json/table/read_geojson_large.test_slow
+# description: Read a FeatureCollection that spans more than one read buffer
+# group: [table]
+
+require json
+
+statement ok
+CREATE TABLE big AS
+SELECT i AS idx,
+       ('POINT(' || (i % 180) || ' ' || (i % 80) || ')')::GEOMETRY AS geom,
+       'row-' || i AS label
+FROM range(400000) t(i);
+
+# Well over the 32MB read buffer, so the "features" array is split across buffers
+statement ok
+COPY big TO '{TEST_DIR}/big.geojson' (FORMAT GEOJSON);
+
+query IIII
+SELECT count(*), min(idx), max(idx), count(geometry) FROM read_json('{TEST_DIR}/big.geojson');
+----
+400000	0	399999	400000
+
+# The last feature in the file must survive the end-of-array handling
+query II
+SELECT ST_AsText(geometry), label FROM read_json('{TEST_DIR}/big.geojson') WHERE idx = 399999;
+----
+POINT (39 79)	row-399999
+
+query II
+SELECT ST_AsText(geometry), label FROM read_json('{TEST_DIR}/big.geojson') WHERE idx = 0;
+----
+POINT (0 0)	row-0
+
+# The same data as newline-delimited Features, which is read in parallel
+statement ok
+COPY big TO '{TEST_DIR}/big.geojsonl' (FORMAT GEOJSON, ARRAY false);
+
+query IIII
+SELECT count(*), min(idx), max(idx), count(geometry) FROM read_json('{TEST_DIR}/big.geojsonl');
+----
+400000	0	399999	400000
+
+# A member after the "features" array that itself extends past the read buffer is ignored
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"i":1}}],"name":"' || repeat('y', 50_000_000) || '"}' AS c)
+TO '{TEST_DIR}/trailing_big.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT count(*), max(i) FROM read_json('{TEST_DIR}/trailing_big.geojson');
+----
+1	1
+
+statement ok
+COPY (SELECT '{"type":"FeatureCollection","features":[],"name":"' || repeat('y', 50_000_000) || '"}' AS c)
+TO '{TEST_DIR}/trailing_big_empty.geojson' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query I
+SELECT count(*) FROM read_json('{TEST_DIR}/trailing_big_empty.geojson');
+----
+0

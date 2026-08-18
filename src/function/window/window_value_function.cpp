@@ -357,11 +357,11 @@ public:
 			if (offset_value.IsNull()) {
 				return false;
 			}
-			Value bigint_value;
-			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			auto bigint_value = offset_value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (!bigint_value) {
 				return false;
 			}
-			offset = bigint_value.GetValue<int64_t>();
+			offset = bigint_value->GetValue<int64_t>();
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -382,7 +382,12 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		return dflt_value.DefaultTryCastAs(wexpr.GetReturnType(), result, nullptr, false);
+		auto cast_value = dflt_value.DefaultTryCastAs(wexpr.GetReturnType());
+		if (!cast_value) {
+			return false;
+		}
+		result = std::move(*cast_value);
+		return true;
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
@@ -1041,13 +1046,13 @@ public:
 		if (nth_value.IsNull()) {
 			return false;
 		}
-		Value bigint_value;
-		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+		auto bigint_value = nth_value.DefaultTryCastAs(LogicalType::BIGINT);
+		if (!bigint_value) {
 			return false;
 		}
 		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
 		//	Streaming this will have the same behaviour if we use a 0 index.
-		const auto bigint = bigint_value.GetValue<int64_t>();
+		const auto bigint = bigint_value->GetValue<int64_t>();
 		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
 		return true;
 	}
