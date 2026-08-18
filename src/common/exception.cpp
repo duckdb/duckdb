@@ -65,6 +65,7 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 	case ExceptionType::PARAMETER_NOT_ALLOWED:
 	case ExceptionType::PARSER:
 	case ExceptionType::PERMISSION:
+	case ExceptionType::RESOURCE_IN_USE:
 		return false;
 	default:
 		return true;
