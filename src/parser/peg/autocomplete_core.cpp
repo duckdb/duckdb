@@ -1,5 +1,5 @@
 #include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -206,7 +206,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	AutoCompleteTokenizerBehavior behavior(sql_ref, state);
-	Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
+	auto compiled_grammar = parser_cache.GetMatcher();
+	Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
 	tokenizer.TokenizeInput();
 	if (!tokenizer.CanAutocomplete()) {
 		return {};
@@ -214,8 +215,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto peg_matcher = parser_cache.GetMatcher();
-		peg_matcher->ProgramMatcher().Match(state);
+		compiled_grammar->ProgramMatcher().Match(state);
 	}
 	if (state.suggestions.empty()) {
 		return {};

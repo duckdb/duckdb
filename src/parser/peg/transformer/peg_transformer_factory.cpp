@@ -89,7 +89,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vector<MatcherToken> &tokens,
                                                                            ParserOptions &options,
-                                                                           Matcher &root_matcher, idx_t &token_cursor) {
+                                                                           Matcher &root_matcher,
+                                                                           idx_t &token_cursor) const {
 	if (token_cursor >= tokens.size()) {
 		return nullptr;
 	}
@@ -213,7 +214,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 }
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
-PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) const {
 	if (options.debug_transformer_trampoline_style) {
 		return trampoline_transform_functions;
 	}

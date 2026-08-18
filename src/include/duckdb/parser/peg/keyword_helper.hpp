@@ -29,7 +29,7 @@ public:
 	vector<ParserKeyword> KeywordList() const;
 
 private:
-	friend struct ParserCache;
+	friend struct CompiledGrammar;
 	PEGKeywordHelper();
 	bool initialized;
 	case_insensitive_set_t reserved_keyword_map;

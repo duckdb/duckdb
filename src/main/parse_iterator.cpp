@@ -143,7 +143,8 @@ void ParseIterator::EnsureTokenized() {
 		tokens = make_uniq<vector<MatcherToken>>();
 		ParserTokenizerBehavior behavior(sql, *tokens);
 		auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
-		Tokenizer tokenizer(behavior, parser_cache.GetKeywordHelper());
+		auto compiled_grammar = parser_cache.GetMatcher();
+		Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
 		tokenizer.TokenizeInput();
 	}
 }

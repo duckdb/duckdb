@@ -397,7 +397,7 @@ public:
 	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
 	//! starts, and on return holds the token index immediately past the last consumed token.
 	unique_ptr<SQLStatement> TransformTopLevelStatement(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                                    Matcher &root_matcher, idx_t &token_cursor);
+	                                                    Matcher &root_matcher, idx_t &token_cursor) const;
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
@@ -8494,7 +8494,8 @@ public:
 	//===--------------------------------------------------------------------===//
 
 private:
-	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &GetTransformFunctions(ParserOptions &options);
+	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
+	GetTransformFunctions(ParserOptions &options) const;
 
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
