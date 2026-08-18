@@ -8,11 +8,11 @@
 
 namespace duckdb {
 
-ParsedGrammar::ParsedGrammar(ParsedGrammar &&other) : rules(std::move(other.rules)) {
+ParsedGrammar::ParsedGrammar(ParsedGrammar &&other) noexcept : rules(std::move(other.rules)) {
 	string_heap.Move(other.string_heap);
 }
 
-ParsedGrammar &ParsedGrammar::operator=(ParsedGrammar &&other) {
+ParsedGrammar &ParsedGrammar::operator=(ParsedGrammar &&other) noexcept {
 	if (this != &other) {
 		rules.clear();
 		string_heap.Destroy();
@@ -62,9 +62,12 @@ const ParsedGrammarRule &ParsedGrammar::GetRule(const string &rule_name) const {
 	}
 	return *entry->second;
 }
-
 ParsedGrammarRule &ParsedGrammar::GetMutableRule(const string &rule_name) {
-	return const_cast<ParsedGrammarRule &>(GetRule(rule_name));
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
+	}
+	return *entry->second;
 }
 
 ParsedGrammarRule ParsedGrammar::ParseSingleRule(const string &rule_definition) {
