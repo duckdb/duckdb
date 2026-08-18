@@ -366,12 +366,16 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return ::duckdb::SuggestSettingName(context);
 	}
-	ParserCache &GetParserCache() override {
-		return DatabaseInstance::GetDatabase(context).GetParserCache();
+	CompiledGrammar &GetCompiledGrammar() override {
+		if (!compiled_grammar) {
+			compiled_grammar = DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+		}
+		return *compiled_grammar;
 	}
 
 private:
 	ClientContext &context;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql,

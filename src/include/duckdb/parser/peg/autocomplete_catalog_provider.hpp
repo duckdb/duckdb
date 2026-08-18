@@ -39,7 +39,7 @@ public:
 	virtual vector<AutoCompleteCandidate> SuggestSettingName() = 0;
 
 	//! Get the parser cache for syntax-level autocomplete.
-	virtual ParserCache &GetParserCache() = 0;
+	virtual CompiledGrammar &GetCompiledGrammar() = 0;
 };
 
 //! Empty provider — returns no catalog suggestions.
@@ -76,12 +76,16 @@ public:
 	vector<AutoCompleteCandidate> SuggestSettingName() override {
 		return {};
 	}
-	ParserCache &GetParserCache() override {
-		return cache;
+	CompiledGrammar &GetCompiledGrammar() override {
+		if (!compiled_grammar) {
+			compiled_grammar = cache.GetMatcher();
+		}
+		return *compiled_grammar;
 	}
 
 private:
 	ParserCache cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 
 //! Get a human-readable string for a suggestion type.
