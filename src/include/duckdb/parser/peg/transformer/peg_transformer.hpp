@@ -2033,6 +2033,10 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCreateRecursiveTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer,
@@ -6117,14 +6121,17 @@ public:
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
-	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
-	                        const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
-	                        const optional<vector<string>> &insert_column_list,
+	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_secure,
+	                        const optional<bool> &create_recursive, const optional<bool> &if_not_exists,
+	                        const QualifiedName &qualified_name, const optional<vector<string>> &insert_column_list,
 	                        optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                        unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformCreateRecursiveInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static bool TransformCreateRecursive(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateSecureInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformCreateSecure(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeallocateStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,

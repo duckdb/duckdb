@@ -344,6 +344,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("second");
 	unreserved_keyword_map.insert("seconds");
 	unreserved_keyword_map.insert("secret");
+	unreserved_keyword_map.insert("secure");
 	unreserved_keyword_map.insert("security");
 	unreserved_keyword_map.insert("sequence");
 	unreserved_keyword_map.insert("sequences");

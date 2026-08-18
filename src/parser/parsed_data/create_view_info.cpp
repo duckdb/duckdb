@@ -20,7 +20,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, const Identifier &vie
 }
 
 string CreateViewInfo::ToString() const {
-	string result = GetCreatePrefix("VIEW");
+	string result = GetCreatePrefix(security_type == ViewSecurityType::SECURE_VIEW ? "SECURE VIEW" : "VIEW");
 	result += QualifiedNameToString();
 	if (!aliases.empty()) {
 		result += " (";
@@ -45,6 +45,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	result->names = names;
 	result->column_comments_map = column_comments_map;
 	result->binding_mode = binding_mode;
+	result->security_type = security_type;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	return std::move(result);
 }
