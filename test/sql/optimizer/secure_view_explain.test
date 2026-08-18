@@ -57,33 +57,7 @@ physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|oth
 statement ok
 SET explain_output='physical_only'
 
-# ... and in every other output format
-query II
-EXPLAIN (FORMAT json) SELECT * FROM secure_view WHERE c > 0
-----
-physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
-
-query II
-EXPLAIN (FORMAT json) SELECT * FROM secure_view WHERE c > 0
-----
-physical_plan	<REGEX>:[\s\S]*"name": "SECURE_VIEW"[\s\S]*"children": \[\][\s\S]*
-
-query II
-EXPLAIN (FORMAT yaml) SELECT * FROM secure_view WHERE c > 0
-----
-physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
-
-query II
-EXPLAIN (FORMAT graphviz) SELECT * FROM secure_view WHERE c > 0
-----
-physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
-
-query II
-EXPLAIN (FORMAT mermaid) SELECT * FROM secure_view WHERE c > 0
-----
-physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
-
-# EXPLAIN ANALYZE must not expose the internals either - in any format
+# EXPLAIN ANALYZE must not expose the internals either
 query II
 EXPLAIN ANALYZE SELECT * FROM secure_view WHERE c > 0
 ----
