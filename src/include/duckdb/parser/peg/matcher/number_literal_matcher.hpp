@@ -48,7 +48,7 @@ public:
 	}
 
 private:
-	static bool MatchNumberLiteral(MatchState &state) {
+	bool MatchNumberLiteral(MatchState &state) const {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}

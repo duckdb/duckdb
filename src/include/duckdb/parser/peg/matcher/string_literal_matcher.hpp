@@ -68,7 +68,7 @@ public:
 	}
 
 private:
-	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
+	bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) const {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}

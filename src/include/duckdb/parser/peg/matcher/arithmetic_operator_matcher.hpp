@@ -6,19 +6,6 @@
 
 namespace duckdb {
 
-static bool IsArithmeticOperatorChar(char c) {
-	switch (c) {
-	case '+':
-	case '-':
-	case '*':
-	case '/':
-	case '%':
-		return true;
-	default:
-		return false;
-	}
-}
-
 class ArithmeticOperatorMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
@@ -56,7 +43,7 @@ public:
 	}
 
 private:
-	static bool MatchArithmeticOperator(MatchState &state) {
+	bool MatchArithmeticOperator(MatchState &state) const {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}
@@ -69,6 +56,20 @@ private:
 		state.token_index++;
 		state.UpdateMaxTokenIndex();
 		return true;
+	}
+
+private:
+	bool IsArithmeticOperatorChar(char c) const {
+		switch (c) {
+		case '+':
+		case '-':
+		case '*':
+		case '/':
+		case '%':
+			return true;
+		default:
+			return false;
+		}
 	}
 };
 

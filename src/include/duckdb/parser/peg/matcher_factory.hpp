@@ -6,10 +6,37 @@
 namespace duckdb {
 struct PEGParser;
 
+class MatcherFactory;
+
 //! Class for building matchers
 class MatcherFactory {
-public:
-	friend struct MatcherList;
+private:
+	struct MatcherList {
+	public:
+		struct Entry {
+			explicit Entry(Matcher &matcher) : matcher(matcher), function_name(0U) {
+			}
+			Entry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
+			}
+
+			Matcher &matcher;
+			string_t function_name;
+		};
+
+	public:
+		explicit MatcherList(PEGParser &parser, MatcherFactory &factory);
+		void AddMatcher(Matcher &matcher);
+		void AddRootMatcher(Matcher &matcher);
+		idx_t GetRootMatcherCount() const;
+		void BeginFunction(string_t function_name);
+		void CloseBracket();
+		MatcherList::Entry &GetLastRootMatcher();
+
+	private:
+		PEGParser &parser;
+		MatcherFactory &factory;
+		vector<MatcherList::Entry> matchers;
+	};
 
 public:
 	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {

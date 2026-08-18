@@ -6,28 +6,6 @@
 
 namespace duckdb {
 
-static bool IsOperatorChar(char c) {
-	switch (c) {
-	case '+':
-	case '-':
-	case '*':
-	case '/':
-	case '%':
-	case '^':
-	case '<':
-	case '>':
-	case '=':
-	case '~':
-	case '!':
-	case '@':
-	case '&':
-	case '|':
-		return true;
-	default:
-		return false;
-	}
-}
-
 class OperatorMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
@@ -65,7 +43,7 @@ public:
 	}
 
 private:
-	static bool MatchOperator(MatchState &state) {
+	bool MatchOperator(MatchState &state) const {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}
@@ -96,6 +74,29 @@ private:
 		state.token_index++;
 		state.UpdateMaxTokenIndex();
 		return true;
+	}
+
+protected:
+	bool IsOperatorChar(char c) const {
+		switch (c) {
+		case '+':
+		case '-':
+		case '*':
+		case '/':
+		case '%':
+		case '^':
+		case '<':
+		case '>':
+		case '=':
+		case '~':
+		case '!':
+		case '@':
+		case '&':
+		case '|':
+			return true;
+		default:
+			return false;
+		}
 	}
 };
 

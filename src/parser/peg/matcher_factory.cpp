@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
+#include "duckdb/parser/peg/matcher/list.hpp"
 
 namespace duckdb {
 
@@ -74,6 +75,81 @@ Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
 	vector<reference<Matcher>> parameters;
 	return CreateMatcher(parser, rule_name, parameters);
+}
+
+MatcherFactory::MatcherList::MatcherList(PEGParser &parser, MatcherFactory &factory)
+    : parser(parser), factory(factory) {
+}
+
+void MatcherFactory::MatcherList::AddMatcher(Matcher &matcher) {
+	auto &root_matcher = matchers.back().matcher;
+	switch (root_matcher.Type()) {
+	case MatcherType::LIST: {
+		auto &root_list = root_matcher.Cast<ListMatcher>();
+		root_list.matchers.push_back(matcher);
+		break;
+	}
+	case MatcherType::CHOICE:
+		// for a choice matcher we need to pop the choice matcher from the stack afterwards
+		if (matchers.size() <= 1) {
+			throw InternalException("Choice matcher should never be the root in the matcher stack");
+		}
+		root_matcher.Cast<ChoiceMatcher>().matchers.push_back(matcher);
+		if (!matchers.empty()) {
+			matchers.pop_back();
+		}
+		break;
+	default:
+		throw InternalException("Cannot add matcher to root matcher of this type");
+	}
+}
+
+void MatcherFactory::MatcherList::AddRootMatcher(Matcher &matcher) {
+	matchers.emplace_back(matcher);
+}
+
+idx_t MatcherFactory::MatcherList::GetRootMatcherCount() const {
+	return matchers.size();
+}
+
+void MatcherFactory::MatcherList::BeginFunction(string_t function_name) {
+	auto &parameter_list = factory.List();
+	matchers.emplace_back(parameter_list, function_name);
+}
+
+void MatcherFactory::MatcherList::CloseBracket() {
+	if (matchers.size() <= 1) {
+		throw InternalException("PEG matcher create error - found too many close brackets");
+	}
+	auto &root_bracket_matcher = matchers.back();
+	if (root_bracket_matcher.function_name.GetSize() == 0) {
+		// not a function
+		auto &bracket_matcher = root_bracket_matcher.matcher;
+		// remove the last matcher from the stack
+		matchers.pop_back();
+		// push it into the last matcher
+		AddMatcher(bracket_matcher);
+	} else {
+		// function matcher
+		auto &function_name = root_bracket_matcher.function_name;
+		auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
+
+		// wrap the parameters in a list if there is more than one
+		auto &parameter = function_parameters.matchers.size() == 1 ? function_parameters.matchers[0].get()
+		                                                           : factory.List(function_parameters.matchers);
+		vector<reference<Matcher>> parameters;
+		parameters.push_back(parameter);
+		// do the substitution of the function call
+		auto &function_call = factory.CreateMatcher(parser, function_name, parameters);
+		// remove the last matcher from the stack
+		matchers.pop_back();
+		// push it into the last matcher
+		AddMatcher(function_call);
+	}
+}
+
+MatcherFactory::MatcherList::Entry &MatcherFactory::MatcherList::GetLastRootMatcher() {
+	return matchers.back();
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters) {
