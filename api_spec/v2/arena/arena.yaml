@@ -1,31 +1,23 @@
 module: arena
+# The "arena" is a handle to an "Arena Allocator", an object that manages a sequence of contiguous blocks of memory
+# from which it can hand out piecewise slices from in a linear fashion. Arena allocators are commonly used to amortize
+# the cost of many small allocations. It also provides a simple way to manage the lifetime of many small objects that
+# are allocated together as the blocks can all be freed at once when the arena is destroyed.
 #
-# Bump allocation of caller-written bytes whose lifetime belongs to another
-# object. An arena has no value semantics of its own: it hands out raw
-# uninitialized bytes, and the object that lends it defines what those bytes
-# may back and how long they live.
-#
-# The only source today is vector_get_arena, whose bytes back the out-of-line
-# payload of a string-backed vector. The write sequence is: borrow the arena
-# once (that borrow is the single string-ness check), reserve bytes with
-# arena_allocate, write them, assemble a duckdb_v2_bytes, and place it via
-# vector_get_data_mutable. Values of at most DUCKDB_V2_BYTES_INLINE_LENGTH
-# bytes are stored inline and need no allocation. The C++ API wraps the whole
-# sequence.
+# In DuckDB, vectors containing strings (or blobs, or any other string-based type) also hold an auxiliary "arena", the
+#  so called the "String Heap". This is used to store the actual string data of large strings that do not fit in the
+# individual `string_t`s inline storage.
 functions:
   # TODO: This should probably take an "alignment" parameter too
   arena_allocate:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Reserves byte_len bytes from the arena.
+      Allocate `byte_len` bytes from the arena.
 
-      Raw bump allocation: returns a writable pointer to byte_len uninitialized
-      bytes, valid for as long as the arena is. There is no size gating, and
-      byte_len may be 0. The caller writes the bytes and assembles whatever the
-      lending object expects; for a vector arena that is a duckdb_v2_bytes,
-      which records its length in a uint32, so the bytes backing a single value
-      must fit that bound. Enforcing it is the caller's responsibility.
+      Returns a writable pointer to `byte_len` uninitialized bytes, valid for as long as the arena is. There is no
+      minimum or maximum allocation size, and the arena may return a pointer to a block of memory that is larger than 
+      `byte_len`. The arena will free all allocated memory when it is destroyed, so the caller should not attempt to free the returned pointer themselves.
     role: method
     belongs_to: arena
     parameters:

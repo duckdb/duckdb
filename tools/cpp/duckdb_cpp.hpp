@@ -1978,7 +1978,7 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // DataChunk
 //----------------------------------------------------------------------------------------------------------------------
-// A batch of rows: one `Vector` per column, all of the same length.
+// A batch of rows: one `Vector` per column, all of the same logical length.
 // Chunks are the main "unit of execution" in DuckDB, and usually contain a couple of thousand rows at a time.
 
 /// A batch of rows, column by column. A chunk owns its vectors, so it must outlive any `Vector`, `VectorView` or
@@ -2010,7 +2010,7 @@ public:
 	/// How many rows the chunk holds.
 	auto GetRowCount() const -> idx_t;
 
-	/// One column.
+	/// Access one column, e.g. to read or write its data.
 	/// @param index Column index in [0, GetVectorCount()).
 	/// @return A borrowed handle, valid for as long as this chunk is.
 	auto GetVector(idx_t index) const -> Vector;

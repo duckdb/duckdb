@@ -217,9 +217,9 @@ typedef struct _duckdb_v2_connection {
 
 /*!
  * An opaque, owned handle to a single config option: a name and a setting, plus optional metadata (description, default
- * setting, target scope, aliases). option_create builds one from a name and a setting; a database/connection get
- * returns one with the metadata filled in too. The caller always destroys it via option_destroy, and everything the
- * accessors hand back is valid only until then.
+ * setting, target scope, aliases). You can create an with option_create and pass it when opening a database or
+ * connection, or you can retrieve one with metadata already filled in using option_get. The caller always destroys it
+ * via option_destroy,
  */
 typedef struct _duckdb_v2_option {
 	void *internal_ptr;
@@ -266,31 +266,28 @@ typedef struct _duckdb_v2_result {
 } * duckdb_v2_result_handle;
 
 /*!
- * An opaque, owned handle to a data chunk: a set of vectors of equal logical length plus a cardinality (row count). A
- * streaming result produces chunks via result_step / result_fetch_chunk, and the caller destroys them.
+ * An opaque, owned handle to a data chunk: a set of vectors of equal logical length plus a cardinality (row count).
  *
- * A chunk's lifetime is fully independent of the result, connection, and database that produced it. The chunk owns its
- * data, so it — and the vectors and view pointers borrowed from it — stay valid until data_chunk_destroy, even if the
- * producers are destroyed first.
+ * A data chunk is the main "unit of execution" in DuckDB, and the main unit of data transfer in the API. It may be
+ * owned or borrowed, depending on the context.
  */
 typedef struct _duckdb_v2_data_chunk {
 	void *internal_ptr;
 } * duckdb_v2_data_chunk_handle;
 
 /*!
- * A borrowed handle to a vector within a data chunk, carrying one column's worth of values. Valid for as long as the
- * owning chunk is; never destroy it. Read it with vector_get_view, which reports data, validity and selection in one
- * unified shape. The row count comes from the caller's context: the chunk for a top-level vector, the parent for a
- * nested child vector.
+ * A borrowed handle to a vector within a data chunk, carrying a part of a column's values. Vectors are always borrowed
+ * from a data chunk, and are valid only as long as their parent data chunk is alive.
  */
 typedef struct _duckdb_v2_vector {
 	void *internal_ptr;
 } * duckdb_v2_vector_handle;
 
 /*!
- * A borrowed handle to a bump allocator owned by another object. Bytes handed out by arena_allocate belong to that
- * object and share its lifetime; the caller never destroys the arena itself. vector_get_arena yields the arena backing
- * the out-of-line bytes of non-inlined VARCHAR / BLOB / BIT / BIGNUM values, valid until the owning vector is
+ * A borrowed handle to a "arena allocator".
+ *
+ * Bytes handed out by arena_allocate share the same lifetime as the arena itself. vector_get_arena yields the arena
+ * backing the out-of-line bytes of non-inlined VARCHAR / BLOB / BIT / BIGNUM values, valid until the owning vector is
  * flattened, reallocated, or destroyed.
  */
 typedef struct _duckdb_v2_arena {
@@ -309,7 +306,13 @@ typedef struct _duckdb_v2_context {
 	void *internal_ptr;
 } * duckdb_v2_context_handle;
 
-//! Selection-vector entry. Mirrors duckdb::sel_t.
+/*!
+ * An entry in a selection-vector.
+ *
+ * A selection-vector is a "dictionary" represented as an array of indices (sel_t's) mapping "logical" row indices to
+ * the "physical" offsets in a vectors primary data buffer. Used by "dictionary vectors" to represent a filtered or
+ * "sparse" view of the vector's data.
+ */
 typedef uint32_t duckdb_v2_sel_t;
 
 //! VARCHAR storage. Read the transparent bytes fields directly.
@@ -340,26 +343,41 @@ typedef duckdb_v2_str duckdb_v2_identifier_t;
 /* --- Function pointer typedefs for common --- */
 
 /*!
- * Receives text produced by DuckDB, without DuckDB allocating on the caller's behalf.
+ * Receives text produced by DuckDB
  *
- * Invoked exactly once per producing call, with the complete text in a single view. There is no chunking and no partial
- * consumption, so text.len is the whole length up front: size a buffer from it, or hand it straight to a writer,
- * knowing the sink will not be called again.
+ * Invoked exactly once per producing call, with the complete text in a single view.
  *
- * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain ptr.
- * The bytes are NOT null-terminated, so honor len.
+ * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain
+ * `text.ptr`. The bytes are NOT guaranteed to be null-terminated.
  *
- * err is a live error slot, never NULL. Populate it with error_info_set_code / error_info_set_text to fail the
- * producing call, which then returns that code instead of its own result; that is the sink's only influence on the
- * outcome. Do not destroy it — DuckDB owns it.
+ * `err` is a live error slot, never NULL. Populate it with error_info_set_code / error_info_set_text to signal failure
+ * to DuckDB. Do not destroy it yourself.
  *
- * The sink runs inside DuckDB's call frame: it must not throw across the boundary, and it must not re-enter the API on
- * the handle being operated on.
+ * The sink runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not re-enter
+ * the API on the handle being operated on.
  */
 typedef void (*duckdb_v2_text_sink_fn)(duckdb_v2_str text, void *user_data, duckdb_v2_error_info_handle *err);
 
+/*!
+ * Compares two caller-defined resources for equality.
+ *
+ * Invoked when DuckDB needs to compare two opaque handles. The callback is responsible for interpreting the pointers
+ * and comparing the underlying resources. Return true if they are equal, false otherwise.
+ *
+ * The callback runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not
+ * re-enter the API on the handle being operated on.
+ */
 typedef bool (*duckdb_v2_opaque_equals_fn)(void *a, void *b);
 
+/*!
+ * Destroys a caller-defined resource.
+ *
+ * Invoked when DuckDB needs to destroy an opaque handle. The callback is responsible for interpreting the pointer and
+ * freeing the underlying resource.
+ *
+ * The callback runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not
+ * re-enter the API on the handle being operated on.
+ */
 typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
 
 /* --- Functions for common --- */
@@ -597,12 +615,12 @@ typedef enum DUCKDB_V2_ERROR {
 /* --- Functions for arena --- */
 
 /*!
- * Reserves byte_len bytes from the arena.
+ * Allocate `byte_len` bytes from the arena.
  *
- * Raw bump allocation: returns a writable pointer to byte_len uninitialized bytes, valid for as long as the arena is.
- * There is no size gating, and byte_len may be 0. The caller writes the bytes and assembles whatever the lending object
- * expects; for a vector arena that is a duckdb_v2_bytes, which records its length in a uint32, so the bytes backing a
- * single value must fit that bound. Enforcing it is the caller's responsibility.
+ * Returns a writable pointer to `byte_len` uninitialized bytes, valid for as long as the arena is. There is no minimum
+ * or maximum allocation size, and the arena may return a pointer to a block of memory that is larger than `byte_len`.
+ * The arena will free all allocated memory when it is destroyed, so the caller should not attempt to free the returned
+ * pointer themselves.
  *
  * history:
  * - stable: v2.0.0
