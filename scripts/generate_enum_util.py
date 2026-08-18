@@ -51,6 +51,7 @@ blacklist = [
     "ProjectionMode",
     "ReaderWakeMode",
     "RecursiveDependencyMode",
+    "RowGroupBatchType",
     "RuntimeFilterCastMode",
     "SourceFinishNotificationState",
     "WatermarkState",
