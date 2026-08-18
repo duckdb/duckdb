@@ -304,8 +304,6 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
                                            const LogicalDependencyList &dependencies) {
-	auto legacy_default = DependencyDependentFlags::LegacyDefaultFor(object.type);
-
 	const auto object_info = GetLookupProperties(object);
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dependency : dependencies.Set()) {
@@ -318,10 +316,15 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	}
 
 	// add the object to the dependents_map of each object that it depends on
+	// backward compatibility for indexes: they differed from the default and were actually never blocking, so correct that
+	// legacy placeholder value for them specifically,
+	// for storage files that were written before we started serializing flags
+	static const DependencyDependentFlags legacy_marker = DependencyDependentFlags().SetBlocking();
 	for (auto &dependency : dependencies.Set()) {
-		auto flags = legacy_default;
-		if (!dependency.flags.IsBlocking()) {
-			flags = dependency.flags;
+		auto flags = dependency.flags;
+		if (object.type == CatalogType::INDEX_ENTRY && flags == legacy_marker) {
+			// the legacy flags used to be for INDEX_ENTRY before we started serializing flags into the storage
+			flags = DependencyDependentFlags();
 		}
 		DependencyInfo info {
 		    /*dependent = */ DependencyDependent {object_info, flags},

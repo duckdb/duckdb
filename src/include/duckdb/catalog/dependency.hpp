@@ -141,19 +141,6 @@ public:
 	}
 
 public:
-	//! The flags to fall back to for a dependency whose `LogicalDependency.flags` came out as the deserialization
-	//! default rather than a deliberately-set value - i.e. it was read from a database written before the `flags`
-	//! field existed. Indexes predate that field (unlike triggers, which require v2.0.0+ storage) and were always
-	//! non-blocking, so this corrects the otherwise-misleading blocking default specifically for them.
-	static DependencyDependentFlags LegacyDefaultFor(CatalogType dependent_type) {
-		DependencyDependentFlags result;
-		if (dependent_type != CatalogType::INDEX_ENTRY) {
-			result.SetBlocking();
-		}
-		return result;
-	}
-
-public:
 	string ToString() const override {
 		string result;
 		if (IsBlocking()) {

@@ -302,3 +302,30 @@ DROP TABLE t10;
 
 statement ok
 DROP TABLE log10;
+
+# --- Altering a column that the trigger body reads from a DIFFERENT (non-owning) table is rejected too ---
+statement ok
+CREATE TABLE t11(i INTEGER);
+
+statement ok
+CREATE TABLE src11(j INTEGER);
+
+statement ok
+CREATE TABLE audit11(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr11 AFTER INSERT ON t11 FOR EACH STATEMENT INSERT INTO audit11 SELECT j FROM src11;
+
+statement error
+ALTER TABLE src11 RENAME COLUMN j TO k;
+----
+<REGEX>:.*Cannot alter entry "src11" because there are entries that depend on it.*
+
+statement ok
+DROP TABLE t11 CASCADE;
+
+statement ok
+DROP TABLE src11;
+
+statement ok
+DROP TABLE audit11;
