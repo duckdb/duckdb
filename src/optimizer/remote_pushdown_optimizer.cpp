@@ -653,6 +653,34 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeDefinition(const ParsedExp
 	return Rewrite(expr_copy);
 }
 
+CatalogPushdownResult RemotePushdownOptimizer::AnalyzeType(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::UNBOUND) {
+		// a built-in type never refers to a catalog
+		return CatalogPushdownResult::NoCatalogReference();
+	}
+	// a user-defined type is stored unbound - the type expression may carry a catalog qualifier
+	return AnalyzeDefinition(*UnboundType::GetTypeExpression(type));
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::AnalyzeColumn(const ColumnDefinition &column) {
+	auto result = AnalyzeType(column.Type());
+	if (column.HasDefaultValue()) {
+		result = Merge(result, AnalyzeDefinition(column.DefaultValue()));
+	} else if (column.Generated()) {
+		result = Merge(result, AnalyzeDefinition(column.GeneratedExpression()));
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::AnalyzeConstraint(const Constraint &constraint) {
+	// only CHECK carries an expression. A FOREIGN KEY names its target as a (schema, table) pair with no
+	// catalog slot, so it can only ever reference a table in the same catalog - nothing to analyze
+	if (constraint.type == ConstraintType::CHECK) {
+		return AnalyzeDefinition(*constraint.Cast<CheckConstraint>().expression);
+	}
+	return CatalogPushdownResult::NoCatalogReference();
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::RewriteDefinitionQuery(unique_ptr<QueryNode> &node,
                                                                       const CatalogPushdownResult &target,
                                                                       bool fold_constants) {
@@ -672,18 +700,12 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteDefinitionQuery(unique_ptr
 CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateTableInfo &info,
                                                                  const CatalogPushdownResult &target) {
 	auto result = CatalogPushdownResult::NoCatalogReference();
-	// column defaults, generated columns and CHECK constraints are stored verbatim with the table
+	// column types, defaults, generated columns and constraints are stored verbatim with the table
 	for (auto &col : info.columns.Logical()) {
-		if (col.HasDefaultValue()) {
-			result = Merge(result, AnalyzeDefinition(col.DefaultValue()));
-		} else if (col.Generated()) {
-			result = Merge(result, AnalyzeDefinition(col.GeneratedExpression()));
-		}
+		result = Merge(result, AnalyzeColumn(col));
 	}
 	for (auto &constraint : info.constraints) {
-		if (constraint->type == ConstraintType::CHECK) {
-			result = Merge(result, AnalyzeDefinition(*constraint->Cast<CheckConstraint>().expression));
-		}
+		result = Merge(result, AnalyzeConstraint(*constraint));
 	}
 	for (auto &expr : info.partition_keys) {
 		result = Merge(result, AnalyzeDefinition(*expr));
@@ -822,6 +844,12 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(DropStatement &s
 
 CatalogPushdownResult RemotePushdownOptimizer::RewriteAlterInfo(AlterInfo &info) {
 	auto result = CatalogPushdownResult::NoCatalogReference();
+	if (info.type == AlterType::CHANGE_OWNERSHIP) {
+		// the owner is stored as a (schema, name) pair with no catalog slot, so "OWNED BY rpc.t" puts the
+		// catalog in the schema
+		auto &ownership_info = info.Cast<ChangeOwnershipInfo>();
+		return CheckCatalogQualification(Identifier(), ownership_info.owner_schema);
+	}
 	if (info.type != AlterType::ALTER_TABLE) {
 		return result;
 	}
@@ -836,27 +864,21 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteAlterInfo(AlterInfo &info)
 	}
 	case AlterTableType::ALTER_COLUMN_TYPE: {
 		auto &change_info = table_info.Cast<ChangeColumnTypeInfo>();
+		result = Merge(result, AnalyzeType(change_info.target_type));
 		if (change_info.expression) {
 			result = Merge(result, AnalyzeDefinition(*change_info.expression));
 		}
 		break;
 	}
-	case AlterTableType::ADD_COLUMN: {
-		auto &column = table_info.Cast<AddColumnInfo>().new_column;
-		if (column.HasDefaultValue()) {
-			result = Merge(result, AnalyzeDefinition(column.DefaultValue()));
-		} else if (column.Generated()) {
-			result = Merge(result, AnalyzeDefinition(column.GeneratedExpression()));
-		}
+	case AlterTableType::ADD_COLUMN:
+		result = Merge(result, AnalyzeColumn(table_info.Cast<AddColumnInfo>().new_column));
 		break;
-	}
-	case AlterTableType::ADD_CONSTRAINT: {
-		auto &constraint = *table_info.Cast<AddConstraintInfo>().constraint;
-		if (constraint.type == ConstraintType::CHECK) {
-			result = Merge(result, AnalyzeDefinition(*constraint.Cast<CheckConstraint>().expression));
-		}
+	case AlterTableType::ADD_FIELD:
+		result = Merge(result, AnalyzeColumn(table_info.Cast<AddFieldInfo>().new_field));
 		break;
-	}
+	case AlterTableType::ADD_CONSTRAINT:
+		result = Merge(result, AnalyzeConstraint(*table_info.Cast<AddConstraintInfo>().constraint));
+		break;
 	case AlterTableType::SET_PARTITIONED_BY:
 		for (auto &expr : table_info.Cast<SetPartitionedByInfo>().partition_keys) {
 			result = Merge(result, AnalyzeDefinition(*expr));
@@ -884,10 +906,16 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &
 	case AlterType::ALTER_TABLE:
 	case AlterType::ALTER_VIEW:
 	case AlterType::ALTER_SEQUENCE:
+	case AlterType::CHANGE_OWNERSHIP:
 	case AlterType::SET_COMMENT:
 	case AlterType::SET_COLUMN_COMMENT:
 		break;
+	case AlterType::ALTER_DATABASE:
+		// renaming a database renames the attachment, which only exists locally
+		return CatalogPushdownResult::Unknown();
 	default:
+		// ALTER_SCALAR_FUNCTION / ALTER_TABLE_FUNCTION are only built by CreateInfo::GetAlterInfo when a
+		// CREATE resolves an OnCreateConflict, so they never reach the optimizer as a parsed statement
 		return CatalogPushdownResult::Unknown();
 	}
 	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.GetCatalogType());
@@ -1227,6 +1255,11 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Subque
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr,
                                                                          const Identifier &catalog_p,
+                                                                         const Identifier &schema_p) {
+	return CheckCatalogQualification(catalog_p, schema_p);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const Identifier &catalog_p,
                                                                          const Identifier &schema_p) {
 	Identifier catalog_name = catalog_p;
 	Identifier schema_name = schema_p;
@@ -1884,6 +1917,30 @@ static void StripCatalogFromName(QualifiedName &name, const Identifier &catalog_
 	}
 }
 
+void RemotePushdownOptimizer::StripCatalogName(LogicalType &type, const Identifier &catalog_name) {
+	if (type.id() != LogicalTypeId::UNBOUND) {
+		return;
+	}
+	auto type_expr = UnboundType::GetTypeExpression(type)->Copy();
+	StripCatalogName(*type_expr, catalog_name);
+	type = LogicalType::UNBOUND(std::move(type_expr));
+}
+
+void RemotePushdownOptimizer::StripCatalogName(ColumnDefinition &column, const Identifier &catalog_name) {
+	StripCatalogName(column.TypeMutable(), catalog_name);
+	if (column.HasDefaultValue()) {
+		StripCatalogName(column.DefaultValueMutable(), catalog_name);
+	} else if (column.Generated()) {
+		StripCatalogName(column.GeneratedExpressionMutable(), catalog_name);
+	}
+}
+
+void RemotePushdownOptimizer::StripCatalogName(Constraint &constraint, const Identifier &catalog_name) {
+	if (constraint.type == ConstraintType::CHECK) {
+		StripCatalogName(*constraint.Cast<CheckConstraint>().expression, catalog_name);
+	}
+}
+
 void RemotePushdownOptimizer::StripCatalogName(CreateInfo &info, const Identifier &catalog_name) {
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// the name is [catalog, parent schemas..., new schema, <empty name>] - the catalog is only ever
@@ -1900,17 +1957,10 @@ void RemotePushdownOptimizer::StripCatalogName(CreateInfo &info, const Identifie
 	case CatalogType::TABLE_ENTRY: {
 		auto &table_info = info.Cast<CreateTableInfo>();
 		for (idx_t i = 0; i < table_info.columns.LogicalColumnCount(); i++) {
-			auto &col = table_info.columns.GetColumnMutable(LogicalIndex(i));
-			if (col.HasDefaultValue()) {
-				StripCatalogName(col.DefaultValueMutable(), catalog_name);
-			} else if (col.Generated()) {
-				StripCatalogName(col.GeneratedExpressionMutable(), catalog_name);
-			}
+			StripCatalogName(table_info.columns.GetColumnMutable(LogicalIndex(i)), catalog_name);
 		}
 		for (auto &constraint : table_info.constraints) {
-			if (constraint->type == ConstraintType::CHECK) {
-				StripCatalogName(*constraint->Cast<CheckConstraint>().expression, catalog_name);
-			}
+			StripCatalogName(*constraint, catalog_name);
 		}
 		for (auto &expr : table_info.partition_keys) {
 			StripCatalogName(*expr, catalog_name);
@@ -1979,6 +2029,13 @@ void RemotePushdownOptimizer::StripCatalogName(AlterInfo &info, const Identifier
 	auto name = info.GetQualifiedName();
 	StripCatalogFromName(name, catalog_name);
 	info.SetQualifiedName(std::move(name));
+	if (info.type == AlterType::CHANGE_OWNERSHIP) {
+		auto &ownership_info = info.Cast<ChangeOwnershipInfo>();
+		if (ownership_info.owner_schema == catalog_name) {
+			ownership_info.owner_schema = Identifier();
+		}
+		return;
+	}
 	if (info.type != AlterType::ALTER_TABLE) {
 		return;
 	}
@@ -1993,27 +2050,21 @@ void RemotePushdownOptimizer::StripCatalogName(AlterInfo &info, const Identifier
 	}
 	case AlterTableType::ALTER_COLUMN_TYPE: {
 		auto &change_info = table_info.Cast<ChangeColumnTypeInfo>();
+		StripCatalogName(change_info.target_type, catalog_name);
 		if (change_info.expression) {
 			StripCatalogName(*change_info.expression, catalog_name);
 		}
 		break;
 	}
-	case AlterTableType::ADD_COLUMN: {
-		auto &column = table_info.Cast<AddColumnInfo>().new_column;
-		if (column.HasDefaultValue()) {
-			StripCatalogName(column.DefaultValueMutable(), catalog_name);
-		} else if (column.Generated()) {
-			StripCatalogName(column.GeneratedExpressionMutable(), catalog_name);
-		}
+	case AlterTableType::ADD_COLUMN:
+		StripCatalogName(table_info.Cast<AddColumnInfo>().new_column, catalog_name);
 		break;
-	}
-	case AlterTableType::ADD_CONSTRAINT: {
-		auto &constraint = *table_info.Cast<AddConstraintInfo>().constraint;
-		if (constraint.type == ConstraintType::CHECK) {
-			StripCatalogName(*constraint.Cast<CheckConstraint>().expression, catalog_name);
-		}
+	case AlterTableType::ADD_FIELD:
+		StripCatalogName(table_info.Cast<AddFieldInfo>().new_field, catalog_name);
 		break;
-	}
+	case AlterTableType::ADD_CONSTRAINT:
+		StripCatalogName(*table_info.Cast<AddConstraintInfo>().constraint, catalog_name);
+		break;
 	case AlterTableType::SET_PARTITIONED_BY:
 		for (auto &expr : table_info.Cast<SetPartitionedByInfo>().partition_keys) {
 			StripCatalogName(*expr, catalog_name);

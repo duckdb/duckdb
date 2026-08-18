@@ -41,6 +41,9 @@ struct CreateTableInfo;
 struct CreateTypeInfo;
 struct CreateViewInfo;
 struct DropInfo;
+class ColumnDefinition;
+class Constraint;
+struct LogicalType;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
@@ -137,6 +140,12 @@ private:
 	//! default, a CHECK constraint, an index expression, ...). The analysis runs on a copy: the stored
 	//! SQL must keep the text the user wrote, but a reference to a local table / macro still blocks pushdown
 	CatalogPushdownResult AnalyzeDefinition(const ParsedExpression &expr);
+	//! Analyze a column / target type - a user-defined type is stored unbound and may name a catalog
+	CatalogPushdownResult AnalyzeType(const LogicalType &type);
+	//! Analyze a column definition - its type, and its DEFAULT or generated expression
+	CatalogPushdownResult AnalyzeColumn(const ColumnDefinition &column);
+	//! Analyze a table constraint - a CHECK expression, or the table a FOREIGN KEY references
+	CatalogPushdownResult AnalyzeConstraint(const Constraint &constraint);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
@@ -176,6 +185,7 @@ private:
 
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const Identifier &catalog_name,
 	                                                const Identifier &schema_name);
+	CatalogPushdownResult CheckCatalogQualification(const Identifier &catalog_name, const Identifier &schema_name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
@@ -196,6 +206,10 @@ private:
 	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
 	static void StripCatalogName(CreateInfo &info, const Identifier &catalog_name);
 	static void StripCatalogName(AlterInfo &info, const Identifier &catalog_name);
+	static void StripCatalogName(ColumnDefinition &column, const Identifier &catalog_name);
+	static void StripCatalogName(Constraint &constraint, const Identifier &catalog_name);
+	//! Strip the catalog from a user-defined (unbound) type
+	static void StripCatalogName(LogicalType &type, const Identifier &catalog_name);
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
 	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
