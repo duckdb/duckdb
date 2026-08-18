@@ -17,11 +17,6 @@
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#ifdef PEG_PARSER_SOURCE_FILE
-#include <fstream>
-#else
-#include "duckdb/parser/peg/inlined_grammar.hpp"
-#endif
 
 namespace duckdb {
 
