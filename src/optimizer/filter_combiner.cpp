@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -402,8 +403,9 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (bindings.size() == 2 && bindings[0] != bindings[1] &&
-	    get.function.GetName().GetIdentifierName() == "seq_scan" && BoundComparisonExpression::IsComparison(expr)) {
+	auto table = get.GetTable();
+	if (bindings.size() == 2 && bindings[0] != bindings[1] && table && table->IsDuckTable() &&
+	    BoundComparisonExpression::IsComparison(expr)) {
 		const auto &comparison = expr.Cast<BoundFunctionExpression>();
 		const auto &left = BoundComparisonExpression::Left(comparison);
 		const auto &right = BoundComparisonExpression::Right(comparison);
