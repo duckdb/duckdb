@@ -35,7 +35,7 @@ public:
 public:
 	virtual void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false);
 	virtual void OnStatementEnd(idx_t pos);
-	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
+	virtual void OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word, idx_t last_pos);
 
 	//! Sentinel appended at the end of the token vector on a clean exit. Override to return
 	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete behavior. Dirty exits (unterminated comment /
@@ -47,8 +47,6 @@ public:
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	optional_ptr<const PEGKeywordHelper> keyword_helper;
-
 	friend class Tokenizer;
 };
 
@@ -88,10 +86,12 @@ public:
 	static TokenType TokenizeStateToType(TokenizeState state);
 	static bool IsUnterminatedState(TokenizeState state);
 
+public:
+	const PEGKeywordHelper &keyword_helper;
+
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
-	reference<const PEGKeywordHelper> keyword_helper;
 	TokenizerBehavior &behavior;
 };
 

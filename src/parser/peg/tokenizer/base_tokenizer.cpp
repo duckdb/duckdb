@@ -8,8 +8,7 @@ TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &to
 }
 
 Tokenizer::Tokenizer(TokenizerBehavior &behavior, const PEGKeywordHelper &keyword_helper_p)
-    : sql(behavior.sql), tokens(behavior.tokens), keyword_helper(keyword_helper_p), behavior(behavior) {
-	behavior.keyword_helper = keyword_helper_p;
+    : keyword_helper(keyword_helper_p), sql(behavior.sql), tokens(behavior.tokens), behavior(behavior) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -439,7 +438,7 @@ bool Tokenizer::TokenizeInputInternal() {
 			if (c != '$' && !CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
-				auto token_type = keyword_helper.get().IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
 				behavior.PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
@@ -553,7 +552,7 @@ bool Tokenizer::TokenizeInputInternal() {
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	behavior.OnLastToken(state, std::move(last_word), last_pos);
+	behavior.OnLastToken(*this, state, std::move(last_word), last_pos);
 	return true;
 }
 
@@ -561,13 +560,12 @@ void TokenizerBehavior::OnStatementEnd(idx_t pos) {
 	// Default: Do nothing
 }
 
-void TokenizerBehavior::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+void TokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word, idx_t last_pos) {
 	if (last_word.empty()) {
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		D_ASSERT(keyword_helper);
-		state = keyword_helper->IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+		state = tokenizer.keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
 	}
 
 	bool is_unterminated = Tokenizer::IsUnterminatedState(state);

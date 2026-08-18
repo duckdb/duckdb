@@ -173,7 +173,7 @@ public:
 		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
-	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+	void OnLastToken(const Tokenizer &, TokenizeState state, string last_word_p, idx_t last_pos_p) override {
 		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
