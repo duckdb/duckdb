@@ -71,12 +71,13 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
@@ -99,13 +100,13 @@ public:
 
 private:
 	bool MatchKeyword(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token = state.tokens[state.token_index];
-		if (StringUtil::CIEquals(keyword, token.text)) {
+		if (StringUtil::CIEquals(keyword, token->text)) {
 			// move to the next token
-			state.token_index++;
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return true;
 		}
@@ -133,9 +134,8 @@ public:
 		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
-			bool at_autocomplete_cursor =
-			    list_state.token_index < list_state.tokens.size() &&
-			    list_state.tokens[list_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			auto current = list_state.token_iterator.Current();
+			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				if (suppress_suggestions) {
 					// this rule should not contribute autocomplete suggestions
@@ -153,7 +153,7 @@ public:
 						break;
 					}
 				}
-				state.token_index = list_state.token_index;
+				state.token_iterator.SetPosition(list_state.token_iterator);
 				if (child_idx == matchers.size()) {
 					// we managed to provide suggestions for all tokens
 					// that means all other tokens were optional - i.e. we succeeded in matching them
@@ -172,7 +172,7 @@ public:
 			}
 		}
 		// we matched all child matchers - propagate token index upward
-		state.token_index = list_state.token_index;
+		state.token_iterator.SetPosition(list_state.token_iterator);
 		if (suppress_suggestions) {
 			// discard suggestions from child matchers that were added during matching
 			state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
@@ -186,8 +186,8 @@ public:
 		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
-		if (list_state.token_index < list_state.tokens.size()) {
-			start_offset = optional_idx(list_state.tokens[list_state.token_index].offset);
+		if (auto current = list_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 		for (const auto &child_matcher : matchers) {
 			auto child_result = child_matcher.get().MatchParseResult(list_state);
@@ -196,7 +196,7 @@ public:
 			}
 			results.push_back(*child_result);
 		}
-		state.token_index = list_state.token_index;
+		state.token_iterator.SetPosition(list_state.token_iterator);
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
 		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name, start_offset));
 	}
@@ -249,15 +249,15 @@ public:
 			return MatchResultType::SUCCESS;
 		}
 		// propagate the child state upwards
-		state.token_index = child_state.token_index;
+		state.token_iterator.SetPosition(child_state.token_iterator);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		MatchState child_state(state);
 		optional_idx start_offset;
-		if (child_state.token_index < child_state.tokens.size()) {
-			start_offset = optional_idx(child_state.tokens[child_state.token_index].offset);
+		if (auto current = child_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 		auto child_match = matcher.MatchParseResult(child_state);
 		if (child_match == nullptr) {
@@ -265,7 +265,7 @@ public:
 			return state.allocator.Allocate(make_uniq<OptionalParseResult>());
 		}
 		// propagate the child state upwards
-		state.token_index = child_state.token_index;
+		state.token_iterator.SetPosition(child_state.token_iterator);
 		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match, start_offset));
 	}
 
@@ -298,7 +298,7 @@ public:
 			auto child_result = child_matcher.get().Match(choice_state);
 			if (child_result != MatchResultType::FAIL) {
 				// we matched this child - propagate upwards
-				state.token_index = choice_state.token_index;
+				state.token_iterator.SetPosition(choice_state.token_iterator);
 				return child_result;
 			}
 		}
@@ -307,15 +307,15 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		optional_idx start_offset;
-		if (state.token_index < state.tokens.size()) {
-			start_offset = optional_idx(state.tokens[state.token_index].offset);
+		if (auto current = state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			MatchState choice_state(state);
 			auto child_result = matchers[i].get().MatchParseResult(choice_state);
 			if (child_result != nullptr) {
 				// we matched this child - propagate upwards
-				state.token_index = choice_state.token_index;
+				state.token_iterator.SetPosition(choice_state.token_iterator);
 				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(*child_result, i, start_offset));
 				return result;
 			}
@@ -366,11 +366,10 @@ public:
 		// now we can keep on repeating the matching (optionally)
 		while (true) {
 			// update the token index we propagate upwards
-			state.token_index = repeat_state.token_index;
+			state.token_iterator.SetPosition(repeat_state.token_iterator);
 
-			bool at_autocomplete_cursor =
-			    repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			auto current = repeat_state.token_iterator.Current();
+			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				element.AddSuggestion(state);
 				return MatchResultType::SUCCESS;
@@ -390,8 +389,8 @@ public:
 		vector<reference<ParseResult>> results;
 
 		optional_idx start_offset;
-		if (repeat_state.token_index < state.tokens.size()) {
-			start_offset = optional_idx(repeat_state.tokens[repeat_state.token_index].offset);
+		if (auto current = repeat_state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
 		}
 
 		// First, we MUST match the element at least once.
@@ -406,10 +405,10 @@ public:
 		// Now, we continue matching the element as many times as possible.
 		while (true) {
 			// Propagate the new state upwards.
-			state.token_index = repeat_state.token_index;
+			state.token_iterator.SetPosition(repeat_state.token_iterator);
 
-			if (repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			auto current = repeat_state.token_iterator.Current();
+			if (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 				break;
 			}
 
@@ -448,9 +447,9 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (state.token_index < state.tokens.size() &&
-		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
-			state.token_index++;
+		auto current = state.token_iterator.Current();
+		if (current && current->type == TokenType::END_OF_INPUT) {
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return MatchResultType::SUCCESS;
 		}
@@ -458,9 +457,9 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index < state.tokens.size() &&
-		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
-			state.token_index++;
+		auto current = state.token_iterator.Current();
+		if (current && current->type == TokenType::END_OF_INPUT) {
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
 		}
@@ -519,17 +518,18 @@ public:
 		if (!MatchIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = GetTokenType();
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		const auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		const auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
@@ -644,14 +644,15 @@ private:
 	}
 
 	bool MatchIdentifier(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		if (!IsAllowedKeyword(token_text) || !IsIdentifier(token_text)) {
 			return false;
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}
@@ -673,17 +674,18 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = GetTokenType();
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
@@ -699,14 +701,15 @@ public:
 
 private:
 	bool MatchReservedIdentifier(MatchState &state) const {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		if (!IsIdentifier(token_text)) {
 			return false;
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}
@@ -722,41 +725,42 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return MatchResultType::FAIL;
 		}
 
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		auto string_info = GetSpecialStringInfo(token_text);
 
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = TokenType::STRING_LITERAL;
+		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
 
-		auto &token = state.tokens[state.token_index];
-		auto start_offset = optional_idx(token.offset);
-		auto token_length = optional_idx(token.length);
-		auto string_info = GetSpecialStringInfo(token.text);
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
+		auto string_info = GetSpecialStringInfo(token->text);
 
 		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
 
 		idx_t suffix_len = 1;
-		if (token.text.length() < string_info.prefix_len + suffix_len) {
+		if (token->text.length() < string_info.prefix_len + suffix_len) {
 			return nullptr;
 		}
 
 		string stripped_string =
-		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		    token->text.substr(string_info.prefix_len, token->text.length() - (string_info.prefix_len + suffix_len));
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
 		auto result = state.allocator.Allocate(
@@ -775,16 +779,17 @@ public:
 
 private:
 	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 
 		idx_t open_quote_idx = string_info.prefix_len - 1;
 		idx_t min_len = string_info.prefix_len + 1;
 
 		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
-			state.token_index++;
+			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
 			return true;
 		}
@@ -806,17 +811,18 @@ public:
 		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.tokens[state.token_index - 1].type = TokenType::NUMBER_LITERAL;
+		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		return MatchResultType::SUCCESS;
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchNumberLiteral(state)) {
 			return nullptr;
 		}
@@ -835,10 +841,11 @@ public:
 
 private:
 	static bool MatchNumberLiteral(MatchState &state) {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		if (token_text.empty() || !Tokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
@@ -861,7 +868,7 @@ private:
 				return false;
 			}
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}
@@ -918,12 +925,13 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchOperator(state)) {
 			return nullptr;
 		}
@@ -940,10 +948,11 @@ public:
 
 private:
 	static bool MatchOperator(MatchState &state) {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
 		if (token_text == "->" || token_text == "->>") {
 			return false;
@@ -967,7 +976,7 @@ private:
 				return false;
 			}
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}
@@ -989,12 +998,13 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
-		auto token_length = optional_idx(state.tokens[state.token_index].length);
+		auto &token_text = token->text;
+		auto start_offset = optional_idx(token->offset);
+		auto token_length = optional_idx(token->length);
 		if (!MatchArithmeticOperator(state)) {
 			return nullptr;
 		}
@@ -1011,16 +1021,17 @@ public:
 
 private:
 	static bool MatchArithmeticOperator(MatchState &state) {
-		if (state.token_index >= state.tokens.size()) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
 			return false;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		auto &token_text = token->text;
 		for (auto &c : token_text) {
 			if (!IsArithmeticOperatorChar(c)) {
 				return false;
 			}
 		}
-		state.token_index++;
+		state.token_iterator.Advance();
 		state.UpdateMaxTokenIndex();
 		return true;
 	}
