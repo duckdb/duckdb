@@ -416,15 +416,17 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	if (IsInvalidCatalog(default_entry.GetCatalog())) {
 		auto &manager = DatabaseManager::Get(context);
 		lock_guard<mutex> guard(manager.databases_lock);
-		for (auto &entry : manager.databases) {
-			if (entry.second->IsInitialDatabase()) {
-				return entry.first;
-			}
-		}
 		if (manager.databases.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no database attached");
 		}
-		return manager.databases.begin()->first;
+		// OIDs are assigned in attach order, so the oldest attached database is the default.
+		auto default_database = manager.databases.begin();
+		for (auto entry = manager.databases.begin(); entry != manager.databases.end(); entry++) {
+			if (entry->second->oid < default_database->second->oid) {
+				default_database = entry;
+			}
+		}
+		return default_database->first;
 	}
 	return default_entry.GetCatalog();
 }
