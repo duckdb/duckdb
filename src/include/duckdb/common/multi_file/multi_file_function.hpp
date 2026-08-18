@@ -932,6 +932,14 @@ public:
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
 
+		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
+		// file describe the overridden column and can even have a different type, so they cannot be used here
+		for (auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (hive_partitioning_index.index == primary_index) {
+				return nullptr;
+			}
+		}
+
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			if (!bind_data.file_options.union_by_name) {

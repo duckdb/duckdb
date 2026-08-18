@@ -33,7 +33,7 @@
 
 namespace duckdb {
 
-static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+bool ColumnData::IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &expr = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::IsDirectNullCheckFilter").expr;
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
 		return false;
@@ -45,6 +45,16 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 		return false;
 	}
 	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+FilterPropagateResult ColumnData::CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+                                                       optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+                                                       ColumnData &validity_column) {
+	if (!IsDirectNullCheckFilter(filter) || state.child_states.empty()) {
+		checked_segment = nullptr;
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return validity_column.CheckZonemap(state.child_states[0], filter, checked_segment);
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,

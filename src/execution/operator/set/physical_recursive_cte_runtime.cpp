@@ -605,7 +605,7 @@ FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta
 			if (!depends_on_variant) {
 				for (auto &entry : meta_pipeline->GetDependencies()) {
 					for (auto &dependency : entry.second) {
-						auto dep_entry = pipeline_to_meta_pipeline.find(dependency.get());
+						auto dep_entry = pipeline_to_meta_pipeline.find(dependency.pipeline.get());
 						if (dep_entry == pipeline_to_meta_pipeline.end()) {
 							continue;
 						}

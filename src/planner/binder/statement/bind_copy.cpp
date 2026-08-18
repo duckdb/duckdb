@@ -267,16 +267,16 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
 	}
 	if (options.UserSetUseTmpFile() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITIONED BY for COPY");
 	}
 	if (options.UserSetUseTmpFile() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER BY for COPY");
 	}
 	if (options.PerThreadOutput() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITIONED BY for COPY");
 	}
 	if (options.PerThreadOutput() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER BY for COPY");
 	}
 	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
 		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
@@ -287,10 +287,10 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
 		}
 		if (options.Partitioned()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITIONED BY");
 		}
 		if (!options.order_columns.empty()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER BY");
 		}
 	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// include/parser/tokenizer/tokenizer.hpp
+// duckdb/parser/peg/tokenizer/tokenizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -25,18 +25,45 @@ enum class TokenizeState {
 	DOLLAR_QUOTED_STRING
 };
 
-class BaseTokenizer {
+class Tokenizer;
+
+class TokenizerBehavior {
 public:
-	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens);
-	virtual ~BaseTokenizer() = default;
+	TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens);
+	virtual ~TokenizerBehavior() = default;
 
 public:
-	void TokenizeInput();
+	virtual void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false);
+	virtual void OnStatementEnd(idx_t pos);
+	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
+
+	//! Sentinel appended at the end of the token vector on a clean exit. Override to return
+	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete behavior. Dirty exits (unterminated comment /
+	//! dollar-quote) always append `END_OF_INPUT` regardless of this hook.
+	virtual TokenType GetTerminator() const {
+		return TokenType::END_OF_INPUT;
+	}
+
+protected:
+	const string &sql;
+	vector<MatcherToken> &tokens;
+	PEGKeywordHelper keyword_helper;
+
+	friend class Tokenizer;
+};
+
+class Tokenizer {
+public:
+	explicit Tokenizer(TokenizerBehavior &behavior);
+	virtual ~Tokenizer() = default;
+
+public:
+	virtual void TokenizeInput();
 
 	//! True iff `TokenizeInput()` finished in a state where autocomplete could be offered (the
 	//! input wasn't truncated mid-comment / mid-dollar-quoted-string). Derived by inspecting the
 	//! trailing sentinel: the clean-exit paths append `GetTerminator()` (which becomes
-	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete tokenizers); the dirty-exit paths always append
+	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete behavior); the dirty-exit paths always append
 	//! `END_OF_INPUT`.
 	bool CanAutocomplete() const;
 
@@ -48,17 +75,6 @@ private:
 	bool TokenizeInputInternal();
 
 public:
-	virtual void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false);
-	virtual void OnStatementEnd(idx_t pos);
-	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
-
-	//! Sentinel appended at the end of the token vector on a clean exit. Override to return
-	//! `END_OF_INPUT_AUTOCOMPLETE` in autocomplete tokenizers. Dirty exits (unterminated comment /
-	//! dollar-quote) always append `END_OF_INPUT` regardless of this hook.
-	virtual TokenType GetTerminator() const {
-		return TokenType::END_OF_INPUT;
-	}
-
 	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
@@ -69,13 +85,14 @@ public:
 	static bool CharacterIsOperator(char c);
 	static bool CharacterIsSpecialStringCharacter(char c);
 	bool IsValidDollarTagCharacter(char c);
-	TokenType TokenizeStateToType(TokenizeState state);
+	static TokenType TokenizeStateToType(TokenizeState state);
 	static bool IsUnterminatedState(TokenizeState state);
 
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
 	PEGKeywordHelper keyword_helper;
+	TokenizerBehavior &behavior;
 };
 
 } // namespace duckdb

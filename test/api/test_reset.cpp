@@ -5,6 +5,7 @@
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/show_behavior.hpp"
+#include "duckdb/parser/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -145,6 +146,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
+	    {"current_dialect", {"test"}},
 	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
@@ -262,6 +264,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DBConfig config;
 	config.options.load_extensions = false;
+	DialectExtension::Register(config, DialectExtension("test"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");
