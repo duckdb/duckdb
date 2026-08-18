@@ -8,5 +8,5 @@ DUCKDB_CPP_EXTENSION_ENTRYPOINT(duckdb::cxx::Extension &extension, duckdb::cxx::
 	(void)extension;
 
 	const auto type = context.ParseType("DECIMAL(18, 3)");
-	context.Log(duckdb::cxx::LogLevel::INFO, "cpp_api_static_demo loaded, parsed " + type.ToText(), "CppApiStaticDemo");
+	context.Log(duckdb::cxx::LogLevel::LOG_INFO, "cpp_api_static_demo loaded, parsed " + type.ToText(), "CppApiStaticDemo");
 }
