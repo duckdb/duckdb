@@ -1,0 +1,47 @@
+# name: test/issues/general/test_24795.test
+# description: GROUP BY ALL preserves collation semantics
+# group: [general]
+
+statement ok
+CREATE TABLE collated_strings(c0 VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO collated_strings VALUES ('A'), ('a'), ('b')
+
+query TI rowsort
+SELECT lower(c0), n
+FROM (SELECT c0, count(*) AS n FROM collated_strings GROUP BY ALL)
+----
+a	2
+b	1
+
+statement ok
+CREATE TABLE plain_strings(c0 VARCHAR)
+
+statement ok
+INSERT INTO plain_strings VALUES ('A'), ('a'), ('b')
+
+statement ok
+SET default_collation = 'nocase'
+
+query TI rowsort
+SELECT lower(c0), n
+FROM (SELECT c0, count(*) AS n FROM plain_strings GROUP BY ALL)
+----
+a	2
+b	1
+
+statement ok
+CREATE TABLE collated_lists(c0 VARCHAR[])
+
+statement ok
+INSERT INTO collated_lists VALUES (['A']), (['a']), (['b'])
+
+query II
+SELECT count(*), max(n)
+FROM (SELECT c0, count(*) AS n FROM collated_lists GROUP BY ALL)
+----
+2	2
+
+statement ok
+RESET default_collation
