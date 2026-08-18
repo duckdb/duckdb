@@ -308,15 +308,15 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	for (const auto &param : info.options) {
 		auto matched_param = function->named_parameters.find(Identifier(param.first));
 		if (matched_param == function->named_parameters.end()) {
-			throw BinderException("Unknown parameter '%s' for secret type '%s' with %sprovider '%s'", param.first, type,
-			                      default_string, provider);
+			throw BinderException("Unknown parameter %s for secret type %s with %sprovider %s", Identifier(param.first),
+			                      type, default_string, provider);
 		}
 
 		// Cast the provided value to the expected type
 		string error_msg;
 		auto cast_value = param.second.DefaultTryCastAs(matched_param->second, &error_msg);
 		if (!cast_value) {
-			throw BinderException("Failed to cast option '%s' to type '%s': '%s'", matched_param->first,
+			throw BinderException("Failed to cast option %s to type '%s': '%s'", matched_param->first,
 			                      matched_param->second.ToString(), error_msg);
 		}
 
@@ -415,7 +415,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 			return transaction_storage->DropSecretByName(name, on_entry_not_found, &transaction);
 		}
 		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw InvalidInputException("Failed to remove non-existent transaction secret with name '%s'", name);
+			throw InvalidInputException("Failed to remove non-existent transaction secret with name %s", name);
 		}
 		return;
 	}
@@ -468,7 +468,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 			if (!storage.empty()) {
 				storage_str = " for storage '" + storage + "'";
 			}
-			throw InvalidInputException("Failed to remove non-existent secret with name '%s'%s", name, storage_str);
+			throw InvalidInputException("Failed to remove non-existent secret with name %s%s", name, storage_str);
 		}
 		// Do nothing on OnEntryNotFound::RETURN_NULL...
 	} else {

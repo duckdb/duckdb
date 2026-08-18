@@ -299,8 +299,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
 				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"",
-					                      child.GetExpression().GetAlias().GetIdentifierName());
+					throw BinderException("Duplicate struct entry name %s", child.GetExpression().GetAlias());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {

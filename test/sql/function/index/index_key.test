@@ -92,19 +92,19 @@ SELECT index_key({'catalog': current_catalog(), 'schema': 'main', 'table': 'tbl1
 statement error
 SELECT index_key({'catalog': '', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path field 'catalog' cannot be empty
+Binder Error: index_key: path field "catalog" cannot be empty
 
 # NULL catalog is an error
 statement error
 SELECT index_key({'catalog': NULL::VARCHAR, 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path field 'catalog' cannot be NULL
+Binder Error: index_key: path field "catalog" cannot be NULL
 
 # NULL schema is an error
 statement error
 SELECT index_key({'schema': NULL::VARCHAR, 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path field 'schema' cannot be NULL
+Binder Error: index_key: path field "schema" cannot be NULL
 
 ########################################################################################################################
 #                                                                                                                      #
@@ -338,7 +338,7 @@ Binder Error: index_key: path must contain a 'table' field
 statement error
 SELECT index_key({'table': NULL::VARCHAR}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path field 'table' cannot be NULL
+Binder Error: index_key: path field "table" cannot be NULL
 
 statement error
 SELECT index_key({'table': 123}, 'PRIMARY_tbl1_0', 1);

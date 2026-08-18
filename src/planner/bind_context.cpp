@@ -26,16 +26,16 @@ BindContext::BindContext(Binder &binder) : binder(binder) {
 
 string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) {
 	if (alias.GetAlias() != other.GetAlias()) {
-		return alias.GetAlias().GetIdentifierName();
+		return SQLIdentifier::ToString(alias.GetAlias().GetIdentifierName());
 	}
 	// the table names are equal - qualify with as much of the (nested) schema path as needed to disambiguate,
 	// walking from the innermost schema outwards
 	auto schema_path = alias.GetSchemaPath();
 	auto other_path = other.GetSchemaPath();
-	string qualification = alias.GetAlias().GetIdentifierName();
+	string qualification = SQLIdentifier::ToString(alias.GetAlias().GetIdentifierName());
 	for (idx_t i = 0; i < schema_path.size(); i++) {
 		auto &schema = schema_path[schema_path.size() - 1 - i];
-		qualification = schema.GetIdentifierName() + "." + qualification;
+		qualification = SQLIdentifier::ToString(schema.GetIdentifierName()) + "." + qualification;
 		bool other_matches = i < other_path.size() && other_path[other_path.size() - 1 - i] == schema;
 		if (!other_matches) {
 			// this schema component distinguishes the two - we are done
@@ -56,12 +56,14 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const Identifier &column_n
 		}
 		if (binding.HasMatchingBinding(column_name)) {
 			if (result || is_using_binding) {
-				throw BinderException(
-				    context,
-				    "Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
-				    "or \"%s.%s\")",
-				    column_name, MinimumUniqueAlias(result->GetBindingAlias(), binding.GetBindingAlias()), column_name,
-				    MinimumUniqueAlias(binding.GetBindingAlias(), result->GetBindingAlias()), column_name);
+				throw BinderException(context,
+				                      "Ambiguous reference to column name %s (use: '%s.%s' "
+				                      "or '%s.%s')",
+				                      column_name,
+				                      MinimumUniqueAlias(result->GetBindingAlias(), binding.GetBindingAlias()),
+				                      SQLIdentifier(column_name),
+				                      MinimumUniqueAlias(binding.GetBindingAlias(), result->GetBindingAlias()),
+				                      SQLIdentifier(column_name));
 			}
 			result = &binding;
 		}
@@ -169,7 +171,7 @@ void BindContext::TransferUsingBinding(BindContext &current_context, optional_pt
 string BindContext::GetActualColumnName(Binding &binding, const Identifier &column_name) {
 	column_t binding_index;
 	if (!binding.TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
-		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding.GetAlias(),
+		throw InternalException("Binding with name %s does not have a column named %s", binding.GetAlias(),
 		                        column_name);
 	} // LCOV_EXCL_STOP
 	return binding.GetColumnNames()[binding_index].GetIdentifierName();
@@ -673,7 +675,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	//! Verify correctness of the replace list
 	for (auto &entry : expr.ReplaceList()) {
 		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first.GetIdentifierName(),
+			throw BinderException("Column %s in REPLACE list not found in %s", entry.first,
 			                      expr.RelationName().empty() ? string("FROM clause")
 			                                                  : expr.RelationName().GetIdentifierName());
 		}
@@ -743,7 +745,7 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
                                                  const vector<Identifier> &column_aliases) {
 	vector<Identifier> result;
 	if (column_aliases.size() > names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
+		throw BinderException("table %s has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
 	identifier_set_t current_names;
