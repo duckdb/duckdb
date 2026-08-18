@@ -61,7 +61,25 @@ static bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length
 		start = MinValue<int64_t>(input_size, offset - 1);
 	} else if (offset < 0) {
 		// negative offset: scan from end (i.e. start = end + offset)
-		start = MaxValue<int64_t>(input_size + offset, 0);
+		int64_t virtual_start = input_size + offset;
+		if (length > 0) {
+			// end must be computed from the unclamped virtual start: clamping start to 0 first
+			// (and only then adding length) would forget how far left the window actually began,
+			// and could make an out-of-range window look like it still overlaps the string
+			int64_t virtual_end = virtual_start + length;
+			if (virtual_end <= 0) {
+				// the requested [offset, offset + length) window lies entirely before the string
+				return false;
+			}
+			start = MaxValue<int64_t>(virtual_start, 0);
+			end = MinValue<int64_t>(input_size, virtual_end);
+			if (start == end) {
+				return false;
+			}
+			D_ASSERT(start < end);
+			return true;
+		}
+		start = MaxValue<int64_t>(virtual_start, 0);
 	} else {
 		// offset = 0: special case, we start 1 character BEHIND the first character
 		start = 0;
