@@ -95,3 +95,63 @@ SELECT * FROM read_parquet(
 )
 ----
 TREL
+
+query T
+SELECT hex(decode(from_hex('C328'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('E228A1'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('E28228'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('F0288CBC'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('C2FF28'), 'ignore'));
+----
+28
+
+query T
+SELECT hex(decode(from_hex('C2FF28'), 'replace'));
+----
+3F3F28
+
+query T
+SELECT hex(decode(from_hex('C08041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('EDA08041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('EDA08041'), 'replace'));
+----
+3F3F3F41
+
+query T
+SELECT hex(decode(from_hex('F490808041'), 'ignore'));
+----
+41
+
+query T
+SELECT hex(decode(from_hex('41E2FF42C08043'), 'ignore'));
+----
+414243
+
+query T
+SELECT hex(decode(from_hex('41E2'), 'ignore'));
+----
+41
