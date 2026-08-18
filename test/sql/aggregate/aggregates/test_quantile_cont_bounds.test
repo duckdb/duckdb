@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont_bounds.test
+# description: Test QUANTILE_CONT interpolation at timestamp bounds - llround of an out-of-range double is UB (x86 yields INT64_MIN, ARM saturates)
+# group: [aggregates]
+
+require 64bit
+
+# Median of two identical near-max timestamps is the timestamp itself, not +/-infinity.
+# The interpolation computes lo*(1-d)+hi*d in double, which rounds up to 2^63 here;
+# casting that back to int64 overflows without a clamp.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775806
+
+# Interpolation between two distinct near-max timestamps stays finite
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775800::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775803
+
+# Ordinary timestamp quantiles are unaffected
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '2020-01-01 00:00:00'), (TIMESTAMP '2020-01-03 00:00:00')) t(y);
+----
+2020-01-02 00:00:00

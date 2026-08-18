@@ -362,6 +362,10 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				// negating/taking the absolute value of INT64_MIN would overflow - do not stream
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector

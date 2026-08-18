@@ -1,0 +1,35 @@
+# name: test/sql/aggregate/aggregates/test_equi_width_bins_bounds.test
+# description: Test equi_width_bins edge cases - a bin count much larger than the range must error instead of looping forever
+# group: [aggregates]
+
+require 64bit
+
+# bin_count far exceeds the integer span: the internal step truncates to 0.
+# This must raise an error - a step of 0 previously caused an infinite loop
+# that could not be interrupted (no InterruptCheck inside the loop).
+statement error
+SELECT equi_width_bins(0, 1, 1000000, false)
+----
+bin count
+
+statement error
+SELECT equi_width_bins(0, 1, 1000000, true)
+----
+bin count
+
+# timestamp inputs delegate to the integer path
+statement error
+SELECT equi_width_bins(TIMESTAMP '2020-01-01', TIMESTAMP '2020-01-01 00:00:00.0005', 1000000, false)
+----
+bin count
+
+# reasonable bin counts for the same range still work
+query I
+SELECT equi_width_bins(0, 1, 1, false)
+----
+[1]
+
+query I
+SELECT equi_width_bins(0, 10, 5, false)
+----
+[2, 4, 6, 8, 10]

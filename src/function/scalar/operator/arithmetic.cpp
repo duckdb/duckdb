@@ -1316,14 +1316,29 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
+static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi) {
+	// long double can represent all int64 values exactly on x86-64 and aarch64
+	const auto result = static_cast<long double>(lo) * (1.0L - static_cast<long double>(d)) +
+	                    static_cast<long double>(hi) * static_cast<long double>(d);
+	// casting an out-of-range floating point value to int64 is UB and platform-dependent
+	// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first
+	if (result >= static_cast<long double>(NumericLimits<int64_t>::Maximum())) {
+		return NumericLimits<int64_t>::Maximum();
+	}
+	if (result <= static_cast<long double>(NumericLimits<int64_t>::Minimum())) {
+		return NumericLimits<int64_t>::Minimum();
+	}
+	return std::llround(result);
+}
+
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value));
 }
 
 template <>
