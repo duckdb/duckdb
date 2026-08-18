@@ -14,6 +14,8 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -149,6 +151,37 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+
+	// For ALTER TABLE ADD FOREIGN KEY: the upstream scan uses is_create_index and only
+	// sees committed rows. Verify any locally-appended FK rows against the referenced
+	// PK table here, while the transaction is still active.
+	if (bound_fk) {
+		auto &storage = table.GetStorage();
+		auto &local_storage = LocalStorage::Get(context, table.catalog);
+		auto local = local_storage.GetStorage(storage);
+		if (local) {
+			vector<LogicalType> fk_table_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				fk_table_types.emplace_back(col.Type());
+			}
+			vector<StorageIndex> fk_key_columns;
+			for (auto &fk_key : bound_fk->info.fk_keys) {
+				fk_key_columns.emplace_back(fk_key.index);
+			}
+			auto &transaction = DuckTransaction::Get(context, table.catalog);
+			auto &collection = local->GetCollection();
+			DataChunk full_chunk;
+			full_chunk.InitializeEmpty(fk_table_types);
+			for (auto &local_chunk : collection.Chunks(transaction, fk_key_columns)) {
+				full_chunk.Reset();
+				for (idx_t i = 0; i < bound_fk->info.fk_keys.size(); i++) {
+					full_chunk.data[bound_fk->info.fk_keys[i].index].Reference(local_chunk.data[i]);
+				}
+				full_chunk.SetCardinality(local_chunk.size());
+				storage.VerifyFKReferentialIntegrity(*bound_fk, context, full_chunk);
+			}
+		}
+	}
 
 	// Finalize the index
 	IndexBuildFinalizeInput finalize_input {*gstate.gstate};
