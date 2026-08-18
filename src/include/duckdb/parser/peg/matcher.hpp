@@ -14,6 +14,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
@@ -110,31 +111,30 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true,
 	           ParserPackratCache *packrat_cache_p = nullptr)
-	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
+	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
 	      packrat_cache(packrat_cache_p) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
+	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
+	      max_token_index(state.max_token_index), preserve_identifier_case(state.preserve_identifier_case),
+	      packrat_cache(state.packrat_cache) {
 	}
 
-	vector<MatcherToken> &tokens;
+	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
-	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
 	ParserPackratCache *packrat_cache;
 
 	void UpdateMaxTokenIndex() {
-		if (token_index > max_token_index) {
-			max_token_index = token_index;
+		if (token_iterator.Position() > max_token_index) {
+			max_token_index = token_iterator.Position();
 		}
 	}
 
@@ -218,6 +218,19 @@ protected:
 	bool packrat_memoized = false;
 };
 
+class KeywordInfo {
+public:
+	KeywordInfo() {
+	}
+	explicit KeywordInfo(int32_t score_bonus, char extra_char = ' ')
+	    : score_bonus(score_bonus), extra_char(extra_char) {
+	}
+
+public:
+	int32_t score_bonus = 0;
+	char extra_char = '\0';
+};
+
 class MatcherAllocator {
 public:
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
@@ -232,54 +245,6 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
-};
-
-struct PEGMatcher {
-	MatcherAllocator allocator;
-
-	Matcher &ProgramMatcher() {
-		return *program_matcher;
-	}
-	Matcher &TopLevelStatementMatcher() {
-		return *top_level_statement_matcher;
-	}
-
-	static shared_ptr<PEGMatcher> Get(ClientContext &context);
-	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
-
-private:
-	friend struct ParserCache;
-	optional_ptr<Matcher> program_matcher;
-	optional_ptr<Matcher> top_level_statement_matcher;
-};
-
-//! Per-database cache holder for the PEG tokenizer, matcher and transformer factory.
-struct ParserCache {
-	ParserCache() : tokenizer(keyword_helper) {
-	}
-
-	PEGKeywordHelper &GetKeywordHelper() {
-		return keyword_helper;
-	}
-	const PEGKeywordHelper &GetKeywordHelper() const {
-		return keyword_helper;
-	}
-	Tokenizer &GetTokenizer() {
-		return tokenizer;
-	}
-	const Tokenizer &GetTokenizer() const {
-		return tokenizer;
-	}
-	shared_ptr<PEGMatcher> GetMatcher();
-	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	void Invalidate();
-
-private:
-	PEGKeywordHelper keyword_helper;
-	Tokenizer tokenizer;
-	std::mutex mutex;
-	shared_ptr<PEGMatcher> matcher;
-	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
 } // namespace duckdb

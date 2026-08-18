@@ -1,5 +1,6 @@
 add_subdirectory(tokenizer)
 add_subdirectory(transformer)
+add_subdirectory(keyword_helper)
 
 add_library_unity(
   duckdb_parser_peg
@@ -8,6 +9,8 @@ add_library_unity(
   keyword_helper.cpp
   keyword_map.cpp
   matcher.cpp
+  compiled_grammar.cpp
+  matcher_factory.cpp
   parser_packrat.cpp
   peg_parser.cpp
   sql_formatter.cpp)
