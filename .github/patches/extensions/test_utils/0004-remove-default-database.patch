@@ -1,11 +1,4 @@
-commit ecd65bf3bcaac3ec2672cc79465934f2c189bd6f
-Author: dentinyhao <dentinyhao@gmail.com>
-Date:   Tue Aug 18 02:47:18 2026 -0700
-
-    Patch default database changes
-
 diff --git a/src/utils/misc.cpp b/src/utils/misc.cpp
-index 87f610c..ca1372c 100644
 --- a/src/utils/misc.cpp
 +++ b/src/utils/misc.cpp
 @@ -3,6 +3,7 @@
@@ -20,17 +13,17 @@ index 87f610c..ca1372c 100644
  
  namespace duckdb {
  
-+static void UseDatabase(Connection &con, const string &db_name) {
-+	auto result = con.Query("USE " + KeywordHelper::WriteOptionallyQuoted(db_name));
++static void UseDatabase(Connection &con, const Identifier &db_name) {
++	auto result = con.Query("USE " + KeywordHelper::WriteOptionallyQuoted(db_name.GetIdentifierName()));
 +	if (result->HasError()) {
 +		result->ThrowError();
 +	}
 +}
 +
- void UseDBAndDetachOthers(Connection &con, const std::string &db_name, bool need_tx) {
+ void UseDBAndDetachOthers(Connection &con, const Identifier &db_name, bool need_tx) {
  	auto &db_manager = DatabaseManager::Get(*con.context);
  
-@@ -19,7 +27,7 @@ void UseDBAndDetachOthers(Connection &con, const std::string &db_name, bool need
+@@ -19,7 +27,7 @@ void UseDBAndDetachOthers(Connection &con, const Identifier &db_name, bool need_
  	}
  
  	// First "USE" the desired database
