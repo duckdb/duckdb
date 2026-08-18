@@ -5,12 +5,31 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+optional_idx AggregateRewriteHelper::GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
+	auto bindings = input.GetColumnBindings();
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto index = expression.Cast<BoundReferenceExpression>().Index();
+		return index < bindings.size() ? optional_idx(index) : optional_idx();
+	}
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return optional_idx();
+	}
+	auto binding = expression.Cast<BoundColumnRefExpression>().Binding();
+	for (idx_t index = 0; index < bindings.size(); index++) {
+		if (bindings[index] == binding) {
+			return optional_idx(index);
+		}
+	}
+	return optional_idx();
+}
 
 vector<Identifier> AggregateRewriteHelper::GenerateColumnNames(const string &prefix, idx_t column_count) {
 	vector<Identifier> result;

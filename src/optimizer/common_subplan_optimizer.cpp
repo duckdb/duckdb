@@ -568,7 +568,6 @@ private:
 		case LogicalOperatorType::LOGICAL_TOP_N:
 		case LogicalOperatorType::LOGICAL_DISTINCT:
 		case LogicalOperatorType::LOGICAL_PIVOT:
-		case LogicalOperatorType::LOGICAL_GET:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -580,6 +579,18 @@ private:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			return true;
+		case LogicalOperatorType::LOGICAL_GET: {
+			auto &get = op.Cast<LogicalGet>();
+			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty() &&
+			    get.named_parameters.empty()) {
+				// Without serialization callbacks, the serialized form carries only the call parameters
+				// (see LogicalGet::Serialize). A parameter-less scan - e.g., one created through an
+				// attached catalog - keeps its identity solely in the bind data, so equal serialized
+				// bytes cannot prove that two scans read the same table.
+				return false;
+			}
+			return true;
+		}
 		case LogicalOperatorType::LOGICAL_CHUNK_GET:
 			// Avoid serializing massive amounts of data (this is here because of the "Test TPCH arrow roundtrip" test)
 			return op.Cast<LogicalColumnDataGet>().collection->Count() < 1000;

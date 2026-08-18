@@ -308,8 +308,9 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 	return quantile;
 }
 
+//! Binds the quantile parameter and the sample size into the bind data. They stay part of the expression tree, and
+//! the aggregate is handed them along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() >= 2);
 	Value quantile_val = input.GetConstant(1);

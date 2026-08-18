@@ -21,6 +21,16 @@
 
 namespace duckdb {
 
+//! Where a column of a GeoJSON Feature scan reads its value from. A Feature has two independent namespaces - its
+//! own members and its "properties" - which can both contain the same name, so columns are resolved by position
+//! rather than by name. The key is kept separately from the column name, which may have been deduplicated.
+struct JSONFeatureColumn {
+	//! Whether to read from the Feature's "properties" object instead of from the Feature itself
+	bool from_properties;
+	//! The JSON key to read
+	string key;
+};
+
 struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
@@ -34,6 +44,8 @@ public:
 
 	//! The set of keys to extract (case sensitive)
 	vector<string> key_names;
+	//! For JSONRecordType::FEATURES: where each column reads its value from, in bind order
+	vector<JSONFeatureColumn> feature_columns;
 
 	//! The date format map
 	unique_ptr<DateFormatMap> date_format_map;
@@ -72,6 +84,8 @@ public:
 	vector<string> names;
 	vector<column_t> column_ids;
 	vector<ColumnIndex> column_indices;
+	//! For JSONRecordType::FEATURES: parallel to names, where each of them reads its value from
+	vector<JSONFeatureColumn> feature_columns;
 
 	//! Buffer manager allocator
 	Allocator &allocator;

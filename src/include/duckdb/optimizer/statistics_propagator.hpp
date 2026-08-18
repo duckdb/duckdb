@@ -10,7 +10,9 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/table_index.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
@@ -50,6 +52,8 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCopyToFile &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCTERef &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalMaterializedCTE &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -81,8 +85,14 @@ private:
 	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+	//! Propagate a filter condition and determine whether it can be pruned; does not update any statistics
+	FilterPropagateResult ClassifyFilter(unique_ptr<Expression> &condition);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
+	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
+	bool HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
+	//! Rewrite a join whose condition always matches; returns true if the operator was replaced
+	bool HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);
@@ -131,6 +141,15 @@ private:
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	//! The statistics of a materialized CTE definition, which hold for every reference to it
+	struct CTEStatistics {
+		//! Statistics of the columns emitted by the definition, by position
+		vector<unique_ptr<BaseStatistics>> column_stats;
+		//! Cardinality of the definition
+		unique_ptr<NodeStatistics> node_stats;
+	};
+	//! The map of CTE index -> statistics of its definition
+	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };
