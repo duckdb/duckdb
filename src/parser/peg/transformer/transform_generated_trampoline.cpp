@@ -7453,12 +7453,11 @@ void PEGTransformerFactory::InitializePartitionByColumnListTrampoline(PEGTransfo
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
 	frame.ReserveChildSlots(1);
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
+	auto trampoline_ops = choice_result.HasRule() ? choice_result.GetRule().trampoline_ops.get() : nullptr;
+	if (!trampoline_ops) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
-	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(choice_result, *trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue>
@@ -7583,12 +7582,11 @@ void PEGTransformerFactory::InitializeCopyGenericOptionTrampoline(PEGTransformer
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
 	frame.ReserveChildSlots(1);
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
+	auto trampoline_ops = choice_result.HasRule() ? choice_result.GetRule().trampoline_ops.get() : nullptr;
+	if (!trampoline_ops) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
-	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(choice_result, *trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue>
