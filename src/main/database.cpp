@@ -354,7 +354,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	LoadExtensionSettings();
 
-	if (!db_manager->HasDefaultDatabase()) {
+	if (!db_manager->HasAttachedDatabase()) {
 		CreateMainDatabase();
 	}
 
