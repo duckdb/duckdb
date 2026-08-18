@@ -224,6 +224,8 @@ enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtensionRepositoryAccess : uint8_t;
+
 enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
@@ -912,6 +914,9 @@ const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
@@ -1801,6 +1806,9 @@ ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *valu
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
 
 template<>
 ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
