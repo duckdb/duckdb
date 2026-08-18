@@ -88,6 +88,11 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
 			continue;
 		}
+		if (block.block_handle->GetMemory().IsUnloaded()) {
+			// Evicted blocks do not survive a re-index, whether they spilled or were dropped:
+			// pinning all of them to copy them over could exceed the memory limit
+			continue;
+		}
 		auto pin = buffer_manager.Pin(block.block_handle);
 		if (pin.IsValid()) {
 			pinned.emplace(old_idx, make_pair(std::move(pin), block.nr_bytes));
@@ -129,7 +134,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_size);
+			auto buf = AllocateCacheBuffer(buffer_manager, cached_file.path, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -319,8 +324,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 				continue;
 			}
 			const idx_t location = block_idx * block_size;
-			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
-			result.push_back({file->path, block.nr_bytes, location, loaded});
+			const auto &memory = block.block_handle->GetMemory();
+			const bool loaded = !memory.IsUnloaded();
+			// An unloaded cache block is spilled if it still has a temporary file backing
+			const bool spilled = !loaded && memory.MustWriteToTemporaryFile();
+			result.push_back({file->path, block.nr_bytes, location, loaded, spilled});
 		}
 	}
 	return result;
@@ -341,6 +349,13 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 
 BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
+}
+
+BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, const string &path, idx_t nr_bytes) {
+	const bool spill = Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase()) &&
+	                   FileSystem::IsRemoteFile(path) && buffer_manager.HasTemporaryDirectory() &&
+	                   nr_bytes >= buffer_manager.GetBlockAllocSize();
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, !spill);
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
