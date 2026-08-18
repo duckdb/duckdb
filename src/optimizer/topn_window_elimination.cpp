@@ -187,8 +187,7 @@ bool IsRecreatableByLateMaterialization(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		return true;
 	}
-	if (BoundCastExpression::IsCast(expr) &&
-	    !BoundCastExpression::IsTryCast(expr.Cast<BoundFunctionExpression>())) {
+	if (BoundCastExpression::IsCast(expr) && !BoundCastExpression::IsTryCast(expr.Cast<BoundFunctionExpression>())) {
 		return BoundCastExpression::Child(expr.Cast<BoundFunctionExpression>()).GetExpressionClass() ==
 		       ExpressionClass::BOUND_COLUMN_REF;
 	}
