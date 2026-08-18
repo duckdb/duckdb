@@ -150,7 +150,25 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 						}
 					}
 
-					// TODO: Parse the bounding box, other metadata that might be useful.
+					// Parse the covering field (GeoParquet 1.1+)
+					// covering.bbox maps each coordinate (xmin/ymin/xmax/ymax) to
+					// [column_name, field_name]. We only need the column name.
+					const auto covering_val = yyjson_obj_get(column_val, "covering");
+					if (covering_val && yyjson_is_obj(covering_val)) {
+						const auto bbox_covering = yyjson_obj_get(covering_val, "bbox");
+						if (bbox_covering && yyjson_is_obj(bbox_covering)) {
+							// All four coords reference the same column; read from xmin
+							const auto xmin_arr = yyjson_obj_get(bbox_covering, "xmin");
+							if (xmin_arr && yyjson_is_arr(xmin_arr) && yyjson_arr_size(xmin_arr) >= 1) {
+								const auto col_name_val = yyjson_arr_get_first(xmin_arr);
+								if (col_name_val && yyjson_is_str(col_name_val)) {
+									column.bbox_column_name = yyjson_get_str(col_name_val);
+								}
+							}
+						}
+					}
+
+					// TODO: Parse the file-level bounding box, other metadata that might be useful.
 					// (Only encoding and geometry types are required to be present)
 				}
 
@@ -201,6 +219,17 @@ static void ConvertCRS(ClientContext &context, GeoParquetColumnMetadata &column,
 	column.projjson = crs.GetDefinition();
 }
 
+void GeoParquetFileMetadata::RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name) {
+	lock_guard<mutex> glock(write_lock);
+	const auto it = geometry_columns.find(geom_column_name);
+	if (it != geometry_columns.end()) {
+		it->second.bbox_column_name = bbox_column_name;
+	} else {
+		// Column not yet registered via AddGeoParquetStats; store for later
+		pending_bbox_columns[geom_column_name] = bbox_column_name;
+	}
+}
+
 void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const string &column_name,
                                                 const LogicalType &type, const GeometryStatsData &stats,
                                                 GeoParquetVersion version) {
@@ -221,6 +250,12 @@ void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const st
 		column.stats.Merge(stats);
 		column.insertion_index = geometry_columns.size() - 1;
 
+		// Apply any pending bbox covering registration
+		const auto pending_it = pending_bbox_columns.find(column_name);
+		if (pending_it != pending_bbox_columns.end()) {
+			column.bbox_column_name = pending_it->second;
+			pending_bbox_columns.erase(pending_it);
+		}
 	} else {
 		it->second.stats.Merge(stats);
 	}
@@ -263,6 +298,9 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	case GeoParquetVersion::V1:
 	case GeoParquetVersion::BOTH:
 		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.0.0");
+		break;
+	case GeoParquetVersion::V1_1:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.1.0");
 		break;
 	case GeoParquetVersion::V2:
 		yyjson_mut_obj_add_strcpy(doc, root, "version", "2.0.0");
@@ -307,6 +345,18 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
 				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_max);
+			}
+		}
+
+		// If a bbox covering column is registered, write the 'covering' field (GeoParquet 1.1+)
+		if (!column.second.bbox_column_name.empty()) {
+			const auto &bcol = column.second.bbox_column_name;
+			const auto covering = yyjson_mut_obj_add_obj(doc, column_json, "covering");
+			const auto bbox_covering = yyjson_mut_obj_add_obj(doc, covering, "bbox");
+			for (const auto *coord : {"xmin", "ymin", "xmax", "ymax"}) {
+				const auto arr = yyjson_mut_obj_add_arr(doc, bbox_covering, coord);
+				yyjson_mut_arr_add_strncpy(doc, arr, bcol.c_str(), bcol.size());
+				yyjson_mut_arr_add_str(doc, arr, coord);
 			}
 		}
 
