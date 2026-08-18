@@ -35,15 +35,8 @@ class MergeQueryNode;
 class SelectStatement;
 struct AlterInfo;
 struct CreateInfo;
-struct CreateIndexInfo;
-struct CreateMacroInfo;
 struct CreateTableInfo;
-struct CreateTypeInfo;
-struct CreateViewInfo;
 struct DropInfo;
-class ColumnDefinition;
-class Constraint;
-struct LogicalType;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
@@ -115,37 +108,16 @@ private:
 	CatalogPushdownResult RewriteStatement(CreateStatement &statement);
 	CatalogPushdownResult RewriteStatement(DropStatement &statement);
 	CatalogPushdownResult RewriteStatement(AlterStatement &statement);
-	//! Analyze the definition carried by a CREATE statement (the CTAS/view query, column defaults, ...).
-	//! "target" is where the entry itself is created - when the definition query is fully remote but the
-	//! entry is not, the query alone is pushed down
+	//! Analyze the CTAS query of a CREATE statement. "target" is where the table itself is created - when
+	//! the query is fully remote but the table is not, the query alone is pushed down. Nothing else a
+	//! CREATE carries is analyzed: the pushdown decision is made by the target catalog alone
 	CatalogPushdownResult RewriteCreateInfo(CreateInfo &info, const CatalogPushdownResult &target);
-	CatalogPushdownResult RewriteCreateInfo(CreateTableInfo &info, const CatalogPushdownResult &target);
-	CatalogPushdownResult RewriteCreateInfo(CreateViewInfo &info, const CatalogPushdownResult &target);
-	CatalogPushdownResult RewriteCreateInfo(CreateTypeInfo &info, const CatalogPushdownResult &target);
-	CatalogPushdownResult RewriteCreateInfo(CreateIndexInfo &info);
-	CatalogPushdownResult RewriteCreateInfo(CreateMacroInfo &info);
-	//! Analyze the expressions carried by an ALTER statement (a new column default, a CHECK constraint, ...)
-	CatalogPushdownResult RewriteAlterInfo(AlterInfo &info);
-	//! Rewrite the body of a definition query, pushing it down on its own if it is fully remote but the
-	//! entry that holds it is not
-	CatalogPushdownResult RewriteDefinitionQuery(unique_ptr<QueryNode> &node, const CatalogPushdownResult &target,
-	                                             bool fold_constants);
 	//! Resolve the catalog that the target of a DDL statement lives in
 	CatalogPushdownResult ResolveDDLTarget(const QualifiedName &name, DDLTarget target, CatalogType entry_type);
 	//! Resolve an explicitly named catalog to a pushdown result
 	CatalogPushdownResult ResolveNamedCatalog(const Identifier &catalog_name);
 	//! Verify that the catalog a DDL statement resolved to can execute the statement as a whole
 	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
-	//! Analyze an expression that is stored verbatim as part of a catalog entry definition (a column
-	//! default, a CHECK constraint, an index expression, ...). The analysis runs on a copy: the stored
-	//! SQL must keep the text the user wrote, but a reference to a local table / macro still blocks pushdown
-	CatalogPushdownResult AnalyzeDefinition(const ParsedExpression &expr);
-	//! Analyze a column / target type - a user-defined type is stored unbound and may name a catalog
-	CatalogPushdownResult AnalyzeType(const LogicalType &type);
-	//! Analyze a column definition - its type, and its DEFAULT or generated expression
-	CatalogPushdownResult AnalyzeColumn(const ColumnDefinition &column);
-	//! Analyze a table constraint - a CHECK expression, or the table a FOREIGN KEY references
-	CatalogPushdownResult AnalyzeConstraint(const Constraint &constraint);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
@@ -185,7 +157,6 @@ private:
 
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const Identifier &catalog_name,
 	                                                const Identifier &schema_name);
-	CatalogPushdownResult CheckCatalogQualification(const Identifier &catalog_name, const Identifier &schema_name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
@@ -206,30 +177,12 @@ private:
 	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
 	static void StripCatalogName(CreateInfo &info, const Identifier &catalog_name);
 	static void StripCatalogName(AlterInfo &info, const Identifier &catalog_name);
-	static void StripCatalogName(ColumnDefinition &column, const Identifier &catalog_name);
-	static void StripCatalogName(Constraint &constraint, const Identifier &catalog_name);
-	//! Strip the catalog from a user-defined (unbound) type
-	static void StripCatalogName(LogicalType &type, const Identifier &catalog_name);
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
 	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
 	bool RefersToLocalTable(const ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const;
-
-	//! Scoped disable of constant folding, used while descending into a catalog entry definition
-	struct ConstantFoldingGuard {
-		explicit ConstantFoldingGuard(RemotePushdownOptimizer &optimizer_p)
-		    : optimizer(optimizer_p), previous(optimizer_p.allow_constant_folding) {
-			optimizer.allow_constant_folding = false;
-		}
-		~ConstantFoldingGuard() {
-			optimizer.allow_constant_folding = previous;
-		}
-
-		RemotePushdownOptimizer &optimizer;
-		bool previous;
-	};
 
 private:
 	Binder &binder;
@@ -240,9 +193,5 @@ private:
 	identifier_set_t local_table_names;
 	//! CTE name to catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	identifier_map_t<CatalogPushdownResult> cte_results;
-	//! Whether foldable subtrees may be replaced by their locally-evaluated constant. Disabled while
-	//! analyzing a catalog entry definition: folding "DEFAULT now()" or a view body would freeze an
-	//! expression that must be re-evaluated every time the entry is used
-	bool allow_constant_folding = true;
 };
 } // namespace duckdb
