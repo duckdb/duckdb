@@ -156,6 +156,16 @@ TEST_CASE("COPY dispatches abort only for unfinished file state", "[api][copy]")
 	REQUIRE(success_info->finalize_count == 1);
 	REQUIRE(success_info->abort_count == 0);
 
+	auto no_finalize_info = make_shared_ptr<CopyAbortTestInfo>(false);
+	auto no_finalize = CreateCopyAbortFunction("copy_abort_no_finalize", no_finalize_info);
+	no_finalize.copy_to_finalize = nullptr;
+	loader.RegisterFunction(std::move(no_finalize));
+	REQUIRE_NO_FAIL(connection.Query(
+	    "COPY (SELECT i FROM range(1) t(i)) TO 'copy_abort_no_finalize.test' (FORMAT copy_abort_no_finalize)"));
+	REQUIRE(no_finalize_info->initialize_count == 1);
+	REQUIRE(no_finalize_info->finalize_count == 0);
+	REQUIRE(no_finalize_info->abort_count == 0);
+
 	auto batch_success_info = make_shared_ptr<CopyAbortTestInfo>(false);
 	auto batch_success = CreateCopyAbortFunction("copy_abort_batch_success", batch_success_info);
 	batch_success.copy_to_finalize = nullptr;

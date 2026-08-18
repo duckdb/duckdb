@@ -46,8 +46,6 @@ public:
 
 public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
-	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
-	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
 
 	bool Rotate() const;

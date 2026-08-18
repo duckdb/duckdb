@@ -1482,20 +1482,6 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 	return result;
 }
 
-//===--------------------------------------------------------------------===//
-// Copy File Lifecycle
-//===--------------------------------------------------------------------===//
-static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       unique_ptr<GlobalFileState> state) {
-	if (!finalize) {
-		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
-	}
-	if (!state || !state->data) {
-		throw InternalException("COPY file lifecycle finalize reached an empty file state");
-	}
-	finalize(context, bind_data, *state->data);
-	state->MarkFinalized();
-}
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
@@ -3509,22 +3495,19 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 		auto state = file_state.TakeFileState();
 		auto state_holder = make_shared_ptr<unique_ptr<GlobalFileState>>(std::move(state));
 		auto finalize = op.function.copy_to_finalize;
-		auto &context_ref = context;
-		auto &bind_data = *op.bind_data;
 		try {
 			lifecycle_executor.Schedule(finalize_job, CopyFileLifecycleWaitMode::DRAIN,
-			                            [this, finalize, &context_ref, &bind_data, state_holder]() mutable {
+			                            [this, finalize, state_holder]() mutable {
 				                            if (aborting) {
 					                            return;
 				                            }
-				                            FinalizeLifecycleFileState(context_ref, finalize, bind_data,
-				                                                       std::move(*state_holder));
+				                            (*state_holder)->Finalize(finalize);
 			                            });
 		} catch (...) {
 			if (!finalize_job->IsFinished() && state_holder && *state_holder) {
 				if (!aborting) {
 					try {
-						FinalizeLifecycleFileState(context_ref, finalize, bind_data, std::move(*state_holder));
+						(*state_holder)->Finalize(finalize);
 					} catch (...) {
 					}
 				}
@@ -3597,26 +3580,6 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context, const string &
 	string trimmed_path = file_path;
 	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
 	return trimmed_path;
-}
-
-void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	fs.MoveFile(tmp_file_path, file_path);
-}
-
-string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &tmp_file_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	auto path = StringUtil::GetFilePath(tmp_file_path);
-	auto base = StringUtil::GetFileName(tmp_file_path);
-
-	auto prefix = base.find("tmp_");
-	if (prefix == 0) {
-		base = base.substr(4);
-	}
-
-	return fs.JoinPath(path, base);
 }
 
 void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
@@ -3834,9 +3797,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		D_ASSERT(!partition_output);
 		D_ASSERT(!file_size_bytes.IsValid());
 		D_ASSERT(!Rotate());
-		auto target_path = GetNonTmpFile(context, file_path);
-		MoveTmpFile(context, file_path);
-		gstate.output_lifecycle.ReplaceCommittedFile(file_path, std::move(target_path));
+		gstate.output_lifecycle.CommitTemporaryFile(file_path);
 	}
 
 	return SinkFinalizeType::READY;
@@ -4004,7 +3965,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		for (idx_t i = 0; i < count; i++) {
 			auto &file_entry = gstate.output_files.GetWrittenFile(source_state.offset + i);
 			if (use_tmp_file) {
-				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
+				file_entry.file_path = gstate.output_lifecycle.GetTemporaryFileTarget(file_entry.file_path);
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
@@ -4025,7 +3986,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		vector<Value> file_name_list;
 		for (auto &file_info : gstate.output_files.GetWrittenFiles()) {
 			if (use_tmp_file) {
-				file_name_list.emplace_back(GetNonTmpFile(context.client, file_info->file_path));
+				file_name_list.emplace_back(gstate.output_lifecycle.GetTemporaryFileTarget(file_info->file_path));
 			} else {
 				file_name_list.emplace_back(file_info->file_path);
 			}

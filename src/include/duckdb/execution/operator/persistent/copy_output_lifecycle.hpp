@@ -24,7 +24,8 @@ public:
 	idx_t RegisterFile(string path);
 	void UpdateFile(idx_t file_index, string path);
 	void MarkFileCommitted(idx_t file_index);
-	void ReplaceCommittedFile(const string &source, string target);
+	string GetTemporaryFileTarget(const string &temporary_path) const;
+	void CommitTemporaryFile(const string &temporary_path);
 	void RegisterCreatedDirectory(string path);
 	void MarkSuccessful();
 
@@ -51,7 +52,7 @@ public:
 	~GlobalFileState();
 
 public:
-	void MarkFinalized();
+	void Finalize(copy_to_finalize_t finalize);
 
 public:
 	annotated_mutex lock;

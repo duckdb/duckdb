@@ -344,15 +344,10 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
 	if (gstate.global_state) {
-		if (function.copy_to_finalize) {
-			function.copy_to_finalize(context, *bind_data, *gstate.global_state->data);
-		}
-		gstate.global_state->MarkFinalized();
+		gstate.global_state->Finalize(function.copy_to_finalize);
 
 		if (use_tmp_file) {
-			auto target_path = PhysicalCopyToFile::GetNonTmpFile(context, file_path);
-			PhysicalCopyToFile::MoveTmpFile(context, file_path);
-			gstate.output_lifecycle.ReplaceCommittedFile(file_path, std::move(target_path));
+			gstate.output_lifecycle.CommitTemporaryFile(file_path);
 		}
 	}
 	gstate.memory_manager.FinalCheck();
@@ -714,7 +709,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                           OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
-	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
+	auto fp = use_tmp_file ? g.output_lifecycle.GetTemporaryFileTarget(file_path) : file_path;
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));

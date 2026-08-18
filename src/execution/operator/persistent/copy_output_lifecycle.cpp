@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include <algorithm>
@@ -82,15 +84,28 @@ void CopyOutputLifecycle::MarkFileCommitted(idx_t file_index) {
 	files[file_index].committed = true;
 }
 
-void CopyOutputLifecycle::ReplaceCommittedFile(const string &source, string target) {
+string CopyOutputLifecycle::GetTemporaryFileTarget(const string &temporary_path) const {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto path = StringUtil::GetFilePath(temporary_path);
+	auto base = StringUtil::GetFileName(temporary_path);
+	if (base.find("tmp_") == 0) {
+		base = base.substr(4);
+	}
+	return fs.JoinPath(path, base);
+}
+
+void CopyOutputLifecycle::CommitTemporaryFile(const string &temporary_path) {
+	auto target = GetTemporaryFileTarget(temporary_path);
 	lock_guard<mutex> guard(lock);
 	for (auto &file : files) {
-		if (file.committed && file.path == source) {
+		if (file.committed && file.path == temporary_path) {
+			auto &fs = FileSystem::GetFileSystem(context);
+			fs.MoveFile(temporary_path, target);
 			file.path.swap(target);
 			return;
 		}
 	}
-	D_ASSERT(false);
+	throw InternalException("Cannot commit untracked COPY temporary file \"%s\"", temporary_path);
 }
 
 void CopyOutputLifecycle::RegisterCreatedDirectory(string path) {
@@ -120,7 +135,13 @@ GlobalFileState::~GlobalFileState() {
 	}
 }
 
-void GlobalFileState::MarkFinalized() {
+void GlobalFileState::Finalize(copy_to_finalize_t finalize) {
+	if (!data) {
+		throw InternalException("Cannot finalize an empty COPY file state");
+	}
+	if (finalize) {
+		finalize(context, bind_data, *data);
+	}
 	output_lifecycle.MarkFileCommitted(lifecycle_file_index);
 	data.reset();
 }
