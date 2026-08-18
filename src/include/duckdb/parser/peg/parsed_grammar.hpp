@@ -39,8 +39,8 @@ struct ParsedGrammarRule {
 class ParsedGrammar {
 public:
 	ParsedGrammar() = default;
-	DUCKDB_API ParsedGrammar(ParsedGrammar &&other);
-	DUCKDB_API ParsedGrammar &operator=(ParsedGrammar &&other);
+	DUCKDB_API ParsedGrammar(ParsedGrammar &&other) noexcept;
+	DUCKDB_API ParsedGrammar &operator=(ParsedGrammar &&other) noexcept;
 	ParsedGrammar(const ParsedGrammar &) = delete;
 	ParsedGrammar &operator=(const ParsedGrammar &) = delete;
 
