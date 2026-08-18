@@ -153,7 +153,7 @@ private:
 	//! crash could still lose. An entry is removed only by its own thread after it leaves
 	//! WriteAheadLog::SyncUpTo, making WaitForDurability a quiescence barrier for checkpoints.
 	//! Teardown does not rely on that drain - a committing thread holds the AttachedDatabase - so
-	//! the destructor asserts the queue is empty instead
+	//! the destructor asserts the queue is empty instead, except after a failed sync
 	struct UnsyncedCommit {
 		transaction_t commit_id;
 		//! The WAL offset covering the commit's flush marker
