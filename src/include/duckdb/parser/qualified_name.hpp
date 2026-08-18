@@ -36,9 +36,6 @@ struct QualifiedName {
 	string schema;
 	string name;
 
-	//! NOTE(backport): these return references into this QualifiedName, exactly as DuckDB 2.0 does, so the reference is
-	//! only valid while the QualifiedName is - `const string &s = QualifiedName::Parse(x).Name();` dangles, as it does on
-	//! DuckDB 2.0. GCC's -Wdangling-reference catches some of those shapes; clang catches none of them.
 	const string &Catalog() const {
 		return catalog;
 	}
