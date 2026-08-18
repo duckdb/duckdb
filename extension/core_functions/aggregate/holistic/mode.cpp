@@ -64,8 +64,6 @@ struct ModeString {
 		return StringVector::AddStringOrBlob(result, input);
 	}
 
-	//! alloc_size tracks the capacity of the arena allocation currently held by "mode" - the string_t's own
-	//! size reflects only the current key's length, which can shrink and grow again as the winning mode changes.
 	static string_t *Update(string_t *mode, uint32_t &alloc_size, const string_t &key,
 	                        AggregateInputData &aggr_input_data) {
 		if (key.IsInlined()) {
