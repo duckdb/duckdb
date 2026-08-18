@@ -28,8 +28,8 @@ public:
 	static constexpr const char *FILE_EXTENSION = ".json";
 	//! The version of the repository file format
 	static constexpr const idx_t FORMAT_VERSION = 1;
-	//! The file that serves the public key(s) of a repository, relative to the repository prefix
-	static constexpr const char *PUBLIC_KEY_FILE = "public_key.pem";
+	//! The metadata file that a repository serves under its prefix, describing its trusted signing keys
+	static constexpr const char *METADATA_FILE = ".well-known/duckdb-extension-repo.json";
 
 public:
 	//! The directory in which the trusted extension repositories are stored
@@ -60,7 +60,8 @@ public:
 	//! The string representation of an access value, as used by the allow_extension_repositories setting
 	static string AccessToString(ExtensionRepositoryAccess access);
 
-	//! Fetch the public keys that a repository serves at its prefix. The file may contain more than one PEM key
+	//! Fetch the trusted signing keys from the metadata file that a repository serves under its prefix. The file is a
+	//! json object with a "signature_keys" array of PEM-encoded keys
 	static vector<string> FetchPublicKeys(DatabaseInstance &db, optional_ptr<ClientContext> context,
 	                                      const string &prefix);
 

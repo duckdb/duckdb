@@ -20,8 +20,18 @@ static constexpr const char *PEM_HEADER = "-----BEGIN PUBLIC KEY-----";
 static constexpr const char *PEM_FOOTER = "-----END PUBLIC KEY-----";
 //! The number of base64 characters that are written per line in a PEM encoded key
 static constexpr const idx_t PEM_LINE_LENGTH = 64;
-//! Sanity limit on the size of a public key file that is fetched from a repository
-static constexpr const idx_t MAX_PUBLIC_KEY_SIZE = 4096;
+//! Sanity limit on the size of the metadata file that is fetched from a repository
+static constexpr const idx_t MAX_METADATA_FILE_SIZE = 65536;
+
+//! Wrapper that ensures the yyjson document is freed when an exception is thrown
+struct JSONDocument {
+	explicit JSONDocument(yyjson_doc *doc_p) : doc(doc_p) {
+	}
+	~JSONDocument() {
+		yyjson_doc_free(doc);
+	}
+	yyjson_doc *doc;
+};
 
 //===--------------------------------------------------------------------===//
 // Public keys
@@ -122,35 +132,70 @@ string ExtensionRepositoryManager::GetPublicKeyFingerprint(const string &compact
 //! is created: the fingerprints that are reported back are what identify the keys from there on
 vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db, optional_ptr<ClientContext> context,
                                                            const string &prefix) {
-	auto key_path = prefix;
-	StringUtil::RTrim(key_path, "/");
-	key_path += "/" + string(PUBLIC_KEY_FILE);
+	auto metadata_path = prefix;
+	StringUtil::RTrim(metadata_path, "/");
+	metadata_path += "/" + string(METADATA_FILE);
 
 	auto &fs = db.GetFileSystem();
 	// remote file systems are provided by extensions - autoload them if necessary
 	string required_extension;
-	if (context && fs.IsRemoteFile(key_path, required_extension) && !db.ExtensionIsLoaded(required_extension) &&
+	if (context && fs.IsRemoteFile(metadata_path, required_extension) && !db.ExtensionIsLoaded(required_extension) &&
 	    Settings::Get<AutoloadKnownExtensionsSetting>(*context)) {
 		ExtensionHelper::AutoLoadExtension(*context, required_extension);
 	}
 
 	string contents;
 	try {
-		auto handle = fs.OpenFile(key_path, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(metadata_path, FileFlags::FILE_FLAGS_READ);
 		auto file_size = handle->GetFileSize();
-		if (file_size > MAX_PUBLIC_KEY_SIZE) {
-			throw IOException("File is %llu bytes, which is too large to be a public key", file_size);
+		if (file_size > MAX_METADATA_FILE_SIZE) {
+			throw IOException("File is %llu bytes, which is too large to be a repository metadata file", file_size);
 		}
 		auto buffer = make_unsafe_uniq_array<char>(file_size);
 		handle->Read(buffer.get(), file_size, 0);
 		contents = string(buffer.get(), file_size);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		throw IOException("Failed to read the public key of the extension repository from '%s': %s\nProvide the key "
+		throw IOException("Failed to read the metadata file of the extension repository from '%s': %s\nProvide the key "
 		                  "directly using `USING PUBLIC KEY '<key>'` if the repository does not serve it",
-		                  key_path, error.RawMessage());
+		                  metadata_path, error.RawMessage());
 	}
-	return ToCompactPublicKeys(contents);
+
+	JSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
+	if (!document.doc) {
+		throw IOException("Failed to read extension repository metadata file '%s': the file is not valid json",
+		                  metadata_path);
+	}
+	auto root = yyjson_doc_get_root(document.doc);
+	if (!root || !yyjson_is_obj(root)) {
+		throw IOException("Failed to read extension repository metadata file '%s': expected a json object",
+		                  metadata_path);
+	}
+	auto keys = yyjson_obj_get(root, "signature_keys");
+	if (!keys || !yyjson_is_arr(keys)) {
+		throw IOException(
+		    "Failed to read extension repository metadata file '%s': missing or invalid field 'signature_keys'",
+		    metadata_path);
+	}
+
+	vector<string> result;
+	size_t idx, max;
+	yyjson_val *key;
+	yyjson_arr_foreach(keys, idx, max, key) {
+		if (!yyjson_is_str(key)) {
+			throw IOException(
+			    "Failed to read extension repository metadata file '%s': 'signature_keys' must be a list of strings",
+			    metadata_path);
+		}
+		result.push_back(ToCompactPublicKey(string(yyjson_get_str(key), yyjson_get_len(key))));
+	}
+	if (result.empty()) {
+		throw IOException(
+		    "Failed to read extension repository metadata file '%s': 'signature_keys' cannot be empty\nProvide the key "
+		    "directly using `USING PUBLIC KEY '<key>'` if the repository does not serve it",
+		    metadata_path);
+	}
+	return result;
 }
 
 ExtensionRepositoryAccess ExtensionRepositoryManager::ParseAccess(const string &value) {
@@ -238,16 +283,6 @@ string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, 
 string ExtensionRepositoryManager::GetRepositoryPath(DatabaseInstance &db, FileSystem &fs, const string &name) {
 	return fs.JoinPath(GetRepositoryDirectory(db, fs), name + FILE_EXTENSION);
 }
-
-//! Wrapper that ensures the yyjson document is freed when an exception is thrown
-struct JSONDocument {
-	explicit JSONDocument(yyjson_doc *doc_p) : doc(doc_p) {
-	}
-	~JSONDocument() {
-		yyjson_doc_free(doc);
-	}
-	yyjson_doc *doc;
-};
 
 //! Wrapper that ensures the mutable yyjson document is freed when an exception is thrown
 struct MutableJSONDocument {

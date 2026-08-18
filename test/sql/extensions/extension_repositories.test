@@ -73,10 +73,13 @@ SELECT public_keys FROM duckdb_extension_repositories() WHERE repository_name='m
 statement ok
 DROP EXTENSION REPOSITORY multi
 
-# when no key is provided, it is fetched from `<prefix>/public_key.pem` and pinned. The file may contain more than
-# one key
+# when no key is provided, it is fetched from `<prefix>/.well-known/duckdb-extension-repo.json` and pinned. The
+# "signature_keys" array may contain more than one key. PER_THREAD_OUTPUT is used to create the .well-known directory
 statement ok
-COPY (SELECT unnest(['-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdX','APV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTt','y9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0j','N0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6','AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGR','exqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxD','ZQIDAQAB','-----END PUBLIC KEY-----'])) TO '{TEST_DIR}/public_key.pem' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/.well-known' (FORMAT csv, PER_THREAD_OUTPUT true)
+
+statement ok
+COPY (SELECT '{"signature_keys":["-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB-----END PUBLIC KEY-----"]}') TO '{TEST_DIR}/.well-known/duckdb-extension-repo.json' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
 
 query III
 CREATE EXTENSION REPOSITORY fetched WITH PREFIX '{TEST_DIR}'
@@ -92,9 +95,9 @@ SELECT public_keys FROM duckdb_extension_repositories() WHERE repository_name='f
 statement ok
 DROP EXTENSION REPOSITORY fetched
 
-# a public_key.pem file with two concatenated PEM blocks pins both keys
+# a "signature_keys" array with two keys pins both keys (the .well-known directory already exists from above)
 statement ok
-COPY (SELECT unnest(['-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdX','APV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTt','y9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0j','N0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6','AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGR','exqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxD','ZQIDAQAB','-----END PUBLIC KEY-----','-----BEGIN PUBLIC KEY-----','MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyj','ug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoN','PjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpA','bYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP','4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX','3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9','ZQIDAQAB','-----END PUBLIC KEY-----'])) TO '{TEST_DIR}/public_key.pem' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
+COPY (SELECT '{"signature_keys":["-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB-----END PUBLIC KEY-----","-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42wcKQCSwoEFA89qFVyjug5NIRKtExLQ+cCIdb8tbKICvGmiK6aQY5sO1iNiTxaRzfeDcxH4dSVxBIY7RZoNPjPpakd1K06gGv2R31LUg2JZY6P/oqvliHdhxMOcMdMnzsyQPJuSXFrzBXsy4xpAbYfNbdjZfPgH27iORiiUEjG6gmEeXzWe9bis5hEExvWD5GIRV6B+YCaAt41+g+nP4byZ5MPCw9dXHIk5+OMakOsiM/dTj66SxdRfeYJE7HBdmk2zXD2t1st3gHydJQyX3Ov6a1Q/mhnWJq3tni5ZzkmaDKHHcnitI7iQxrCp+XWzVsT5N9wQeFvQLcFLcrR9ZQIDAQAB-----END PUBLIC KEY-----"]}') TO '{TEST_DIR}/.well-known/duckdb-extension-repo.json' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
 
 query III
 CREATE EXTENSION REPOSITORY fetched_multi WITH PREFIX '{TEST_DIR}'
@@ -104,11 +107,29 @@ fetched_multi	{TEST_DIR}	['sha256:172c29bbb3cd41c70a8225d36ba3a53c94ca9236389fba
 statement ok
 DROP EXTENSION REPOSITORY fetched_multi
 
-# a repository that does not serve a key has to provide it directly
+# a metadata file that is not valid json is rejected
+statement ok
+COPY (SELECT 'not json at all') TO '{TEST_DIR}/.well-known/duckdb-extension-repo.json' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
+
+statement error
+CREATE EXTENSION REPOSITORY bad_json WITH PREFIX '{TEST_DIR}'
+----
+<REGEX>:IO Error.*not valid json.*
+
+# a metadata file without a "signature_keys" array is rejected
+statement ok
+COPY (SELECT '{"other":1}') TO '{TEST_DIR}/.well-known/duckdb-extension-repo.json' (FORMAT csv, HEADER false, QUOTE '', USE_TMP_FILE false)
+
+statement error
+CREATE EXTENSION REPOSITORY no_keys WITH PREFIX '{TEST_DIR}'
+----
+<REGEX>:IO Error.*signature_keys.*
+
+# a repository that does not serve a metadata file has to provide the key directly
 statement error
 CREATE EXTENSION REPOSITORY no_key WITH PREFIX '{TEST_DIR}/no_such_repo'
 ----
-<REGEX>:IO Error.*Failed to read the public key.*
+<REGEX>:IO Error.*Failed to read the metadata file.*
 
 # the public key can also be provided in PEM format - it is always stored in the compact representation
 statement ok
