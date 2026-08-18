@@ -172,3 +172,16 @@ NULL	NULL	0
 
 endloop
 
+query I
+WITH src(x) AS (
+  VALUES (0), (2)
+)
+SELECT
+  MODE(DISTINCT x) OVER (
+    ORDER BY x ASC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS actual
+FROM src;
+----
+0
+0

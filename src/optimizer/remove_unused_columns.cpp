@@ -903,6 +903,11 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				continue;
 			}
 			auto &column_id = get.GetColumnIndex(column_binding);
+			if (column_id.IsPushdownExtract()) {
+				//! We already pushed down an extract for this column, so a new path is relative to that
+				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+				continue;
+			}
 			auto logical_column_index = LogicalIndex(column_id.GetPrimaryIndex());
 			if (!get.function.supports_pushdown_extract || get.function.statistics) {
 				//! Either 'statistics_extended' needs to be set or 'statistics' needs to be NULL
@@ -1042,7 +1047,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			if (logical_column_id.IsPushdownExtract()) {
 				//! RemoveUnusedColumns is also used by other optimizers,
 				//! so we have to deal with this case and preserve the PushdownExtract we created earlier
-				D_ASSERT(entry->second.child_columns.empty());
+				D_ASSERT(entry->second.child_columns.empty() ||
+				         entry->second.supports_pushdown_extract == PushdownExtractSupport::DISABLED);
 				new_column_ids.emplace_back(logical_column_id);
 			} else {
 				ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);

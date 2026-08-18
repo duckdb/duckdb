@@ -520,18 +520,13 @@ struct BoundedType {
 	}
 
 	static LogicalType Get(int32_t max_val) {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("BOUNDED");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("BOUNDED").WithExtensionInfo(std::move(info));
 	}
 
 	static LogicalType GetDefault() {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("BOUNDED");
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("BOUNDED");
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
@@ -695,13 +690,10 @@ struct MinMaxType {
 			throw BinderException("MINMAX type min value must be less than max value");
 		}
 
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(min_val));
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX").WithExtensionInfo(std::move(info));
 	}
 
 	static int32_t GetMinValue(const LogicalType &type) {
@@ -717,19 +709,14 @@ struct MinMaxType {
 	}
 
 	static LogicalType Get(int32_t min_val, int32_t max_val) {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
 		auto info = make_uniq<ExtensionTypeInfo>();
 		info->modifiers.emplace_back(Value::INTEGER(min_val));
 		info->modifiers.emplace_back(Value::INTEGER(max_val));
-		type.SetExtensionInfo(std::move(info));
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX").WithExtensionInfo(std::move(info));
 	}
 
 	static LogicalType GetDefault() {
-		auto type = LogicalType(LogicalTypeId::INTEGER);
-		type.SetAlias("MINMAX");
-		return type;
+		return LogicalType(LogicalTypeId::INTEGER).WithAlias("MINMAX");
 	}
 };
 
@@ -1193,8 +1180,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
 	alias_info->SetTypeName(Identifier(alias_name));
-	LogicalType target_type = LogicalType::STRUCT(child_types);
-	target_type.SetAlias(alias_name);
+	LogicalType target_type = LogicalType::STRUCT(child_types).WithAlias(alias_name);
 	alias_info->type = target_type;
 
 	auto type_entry = catalog.CreateType(client_context, *alias_info);

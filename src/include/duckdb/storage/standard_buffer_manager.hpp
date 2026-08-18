@@ -75,6 +75,8 @@ public:
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
 
 	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) final;
+	vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	                                                  vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
