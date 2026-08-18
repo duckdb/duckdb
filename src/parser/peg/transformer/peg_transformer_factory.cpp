@@ -37,7 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	auto &choice_result = choice_pr.GetResult();
 
 	TransformStack stack(transformer);
-	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result.name));
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result));
 	if (!transformer.named_parameter_map.empty()) {
 		result->named_param_map = transformer.named_parameter_map;
 	}
@@ -52,16 +52,16 @@ PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &tran
 }
 
 void PEGTransformerFactory::RegisterGeneratedTrampoline() {
-	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
+	grammar.GetMutableRule("Statement").trampoline_transform =
+	    &PEGTransformerFactory::TransformStatementTrampolineInternal;
 }
 
-const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &rule_name) {
-	auto &ops_map = GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(rule_name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
+	auto &rule = parse_result.GetRule();
+	if (!rule.trampoline_ops) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule.name);
 	}
-	return *ops_entry->second;
+	return *rule.trampoline_ops;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
@@ -89,7 +89,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const Matcher &root_matcher) const {
+                                                                           const Matcher &root_matcher) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -142,8 +142,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	auto &transform_functions = GetTransformFunctions(options);
-	PEGTransformer transformer(transformer_allocator, transform_functions, parser.rules, options);
+	PEGTransformer transformer(transformer_allocator, token_iterator, options);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
@@ -197,7 +196,7 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("SettingName", &TransformIdentifierOrKeyword);
 }
 
-PEGTransformerFactory::PEGTransformerFactory() {
+PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
 	RegisterGenerated();
 	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
@@ -209,12 +208,13 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterKeywordsAndIdentifiers();
 }
 
-const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
-PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) const {
-	if (options.debug_transformer_trampoline_style) {
-		return trampoline_transform_functions;
+void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
+	PEGTransformerFactory factory(grammar);
+	for (auto &entry : GeneratedTrampolineOps()) {
+		if (grammar.HasRule(entry.first)) {
+			grammar.SetTrampolineOps(entry.first, *entry.second);
+		}
 	}
-	return sql_transform_functions;
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {

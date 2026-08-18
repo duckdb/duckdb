@@ -1660,8 +1660,6 @@ void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
 		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
 	}
-	if (info.db) {
-		info.db->GetParserCache().Invalidate();
-	}
+	//! TODO: recreate the ParserCache with the current dialect
 }
 } // namespace duckdb

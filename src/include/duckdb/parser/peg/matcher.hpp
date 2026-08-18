@@ -17,8 +17,8 @@
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -179,6 +179,13 @@ public:
 	void SetName(string name_p) {
 		name = std::move(name_p);
 	}
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+		name = rule_p.name;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
 	bool HasName() const {
 		return !name.empty();
 	}
@@ -216,6 +223,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	optional_ptr<const CompiledGrammarRule> rule;
 };
 
 class KeywordInfo {

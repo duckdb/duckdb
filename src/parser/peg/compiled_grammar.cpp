@@ -49,7 +49,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 		}
 	}
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
-	MatcherFactory factory(new_matcher->allocator, new_matcher->GetKeywordHelper());
+	MatcherFactory factory(new_matcher->allocator, parsed_grammar, *new_matcher);
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
@@ -67,6 +67,14 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 		matcher = std::move(new_matcher);
 	}
 	return matcher;
+}
+
+const CompiledGrammarRule &CompiledGrammar::GetRule(const string &rule_name) const {
+	auto entry = rules.find(rule_name);
+	if (entry == rules.end()) {
+		throw InternalException("Compiled grammar rule '%s' does not exist", rule_name);
+	}
+	return *entry->second;
 }
 
 idx_t ParserCache::LatestParserVersion() const {

@@ -5,6 +5,7 @@
 
 namespace duckdb {
 struct PEGParser;
+struct CompiledGrammar;
 
 class MatcherFactory;
 
@@ -39,9 +40,7 @@ private:
 	};
 
 public:
-	MatcherFactory(MatcherAllocator &allocator, const PEGKeywordHelper &keyword_helper)
-	    : allocator(allocator), keyword_helper(keyword_helper) {
-	}
+	MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p);
 	virtual ~MatcherFactory() = default;
 
 public:
@@ -75,7 +74,8 @@ private:
 
 private:
 	MatcherAllocator &allocator;
-	reference<const PEGKeywordHelper> keyword_helper;
+	const ParsedGrammar &grammar;
+	CompiledGrammar &compiled;
 	string_map_t<reference<Matcher>> matchers;
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;

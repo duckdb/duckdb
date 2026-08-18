@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,7 @@ public:
 	const Tokenizer &GetTokenizer() const {
 		return tokenizer;
 	}
+	const CompiledGrammarRule &GetRule(const string &rule_name) const;
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -48,6 +50,7 @@ private:
 	const PEGKeywordHelper &keyword_helper;
 	PEGTransformerFactory transformer_factory;
 	Tokenizer tokenizer;
+	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 
 private:
 	const idx_t version;
