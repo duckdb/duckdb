@@ -591,7 +591,8 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 }
 
 template <>
-const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value) {
+const char *
+EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value) {
 	switch (value) {
 	case StringColumnReader::Utf8ValidationOption::STRICT:
 		return "STRICT";
@@ -605,7 +606,8 @@ const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringCo
 }
 
 template <>
-StringColumnReader::Utf8ValidationOption EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value) {
+StringColumnReader::Utf8ValidationOption
+EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value) {
 	if (StringUtil::Equals(value, "STRICT")) {
 		return StringColumnReader::Utf8ValidationOption::STRICT;
 	}

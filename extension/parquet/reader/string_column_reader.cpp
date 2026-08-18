@@ -139,5 +139,4 @@ void StringColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx
 	PlainSkipTemplated<StringParquetValueConversion>(plain_data, defines, num_values);
 }
 
-
 } // namespace duckdb

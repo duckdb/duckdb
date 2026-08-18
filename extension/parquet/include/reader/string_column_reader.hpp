@@ -44,19 +44,22 @@ public:
 	}
 
 	static Utf8ValidationOption GetUtf8ValidationOption(const string &value) {
-	if (StringUtil::CIEquals(value, "strict")) {
-		return Utf8ValidationOption::STRICT;
-	} else if (StringUtil::CIEquals(value, "replace")) {
-		return Utf8ValidationOption::REPLACE;
-	} else if (StringUtil::CIEquals(value, "ignore")) {
-		return Utf8ValidationOption::IGNORE;
+		if (StringUtil::CIEquals(value, "strict")) {
+			return Utf8ValidationOption::STRICT;
+		} else if (StringUtil::CIEquals(value, "replace")) {
+			return Utf8ValidationOption::REPLACE;
+		} else if (StringUtil::CIEquals(value, "ignore")) {
+			return Utf8ValidationOption::IGNORE;
+		}
+		throw BinderException(
+		    "utf8_validation option \"%s\" not recognized, must be one of 'strict', 'replace', 'ignore'", value);
 	}
-	throw BinderException("utf8_validation option \"%s\" not recognized, must be one of 'strict', 'replace', 'ignore'", value);
-}
 
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
-	void SetCurrentResult(Vector &result) const { current_plain_result = &result; }
+	void SetCurrentResult(Vector &result) const {
+		current_plain_result = &result;
+	}
 
 public:
 	StringColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
