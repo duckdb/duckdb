@@ -4,6 +4,8 @@
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -95,11 +97,20 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
+static unique_ptr<BaseStatistics> MapExtractValueStats(ClientContext &, FunctionStatisticsInput &input) {
+	auto &entry_stats = ListStats::GetChildStats(input.child_stats[0]);
+	auto value_copy = StructStats::GetChildStats(entry_stats, 1).Copy();
+	// missing keys return NULL
+	value_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return value_copy.ToUnique();
+}
+
 ScalarFunction MapExtractValueFun::GetFunction() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
+	fun.SetStatisticsCallback(MapExtractValueStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
