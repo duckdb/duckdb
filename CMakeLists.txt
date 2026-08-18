@@ -851,13 +851,8 @@ endif()
 
 
 if(NOT MSVC)
-  # TODO: The inlined PEG grammar is a single string literal that is larger
-  # than the 65536 characters compilers are required to support by the
-  # standard, which -pedantic warns about. Both GCC and Clang handle it fine.
-  # We should address this before the 2.0 release. For now just use
-  # -Wno-overlength-strings to avoid the warning.
   set(CXX_EXTRA_DEBUG
-          "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic -Wno-overlength-strings"
+          "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
   )
 
   if(${FORCE_WARN_UNUSED})
