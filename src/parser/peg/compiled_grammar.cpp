@@ -1,6 +1,10 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 namespace duckdb {
+
+CompiledGrammar::CompiledGrammar() : keyword_helper(DuckDBKeywordHelper::Instance()) {
+}
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &db = DatabaseInstance::GetDatabase(context);

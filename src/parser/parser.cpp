@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/group_by_node.hpp"
@@ -371,11 +372,10 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &to
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
-	ParserCache cache;
-	auto compiled_grammar = cache.GetMatcher();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior, compiled_grammar->GetKeywordHelper());
+	Tokenizer tokenizer(behavior, keyword_helper);
 	tokenizer.TokenizeInput();
 
 	vector<SimplifiedToken> result;
@@ -552,10 +552,8 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	ParserCache cache;
-	auto compiled_grammar = cache.GetMatcher();
+	auto &helper = DuckDBKeywordHelper::Instance();
 
-	auto &helper = compiled_grammar->GetKeywordHelper();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -576,9 +574,8 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
-	ParserCache cache;
-	auto compiled_grammar = cache.GetMatcher();
-	return compiled_grammar->GetKeywordHelper().KeywordList();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	return keyword_helper.KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {

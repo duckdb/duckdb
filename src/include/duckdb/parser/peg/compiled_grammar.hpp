@@ -7,6 +7,9 @@ namespace duckdb {
 
 struct CompiledGrammar {
 public:
+	CompiledGrammar();
+
+public:
 	Matcher &ProgramMatcher() {
 		return *program_matcher;
 	}
@@ -31,7 +34,8 @@ private:
 	optional_ptr<Matcher> program_matcher;
 	optional_ptr<Matcher> top_level_statement_matcher;
 
-	PEGKeywordHelper keyword_helper;
+	//! TODO: this should be a unique_ptr when we allow keyword overrides
+	const PEGKeywordHelper &keyword_helper;
 	PEGTransformerFactory transformer_factory;
 };
 

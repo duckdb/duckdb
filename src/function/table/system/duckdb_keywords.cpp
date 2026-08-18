@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -28,9 +29,8 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, Table
 
 unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBKeywordsData>();
-	auto &parser_cache = DatabaseInstance::GetDatabase(context).GetParserCache();
-	auto compiled_grammar = parser_cache.GetMatcher();
-	result->entries = compiled_grammar->GetKeywordHelper().KeywordList();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	result->entries = keyword_helper.KeywordList();
 	return std::move(result);
 }
 

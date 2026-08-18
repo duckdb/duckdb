@@ -1,5 +1,6 @@
 add_subdirectory(tokenizer)
 add_subdirectory(transformer)
+add_subdirectory(keyword_helper)
 
 add_library_unity(
   duckdb_parser_peg
