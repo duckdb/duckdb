@@ -582,13 +582,15 @@ public:
 		}
 	}
 
-	PEGKeywordCategory GetBannedCategory() const {
+	PEGKeywordCategory GetAllowedCategory() const {
 		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			return PEGKeywordCategory::KEYWORD_TYPE_NAME;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			return PEGKeywordCategory::KEYWORD_COL_NAME;
-		default:
 			return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
+		default:
+			return PEGKeywordCategory::KEYWORD_COL_NAME;
 		}
 	}
 
@@ -629,48 +631,23 @@ public:
 	}
 
 private:
+	bool IsAllowedKeyword(const string &token_text) const {
+		auto &keyword_helper = PEGKeywordHelper::Instance();
+		if (!keyword_helper.IsKeyword(token_text)) {
+			return true;
+		}
+		if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+			return true;
+		}
+		return keyword_helper.KeywordCategoryType(token_text, GetAllowedCategory());
+	}
+
 	bool MatchIdentifier(MatchState &state) const {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}
-		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = PEGKeywordHelper::Instance();
-		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
-				break;
-			}
-			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
-				return false;
-			}
-			break;
-		default: {
-			const auto banned_category = GetBannedCategory();
-			const auto allowed_override_category = banned_category == PEGKeywordCategory::KEYWORD_COL_NAME
-			                                           ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
-			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
-
-			const bool is_reserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
-			const bool has_banned_flag = is_reserved || has_extra_banned_category;
-
-			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
-			const bool has_allowed_flag = is_unreserved || has_override_flag;
-
-			if (has_banned_flag && !has_allowed_flag) {
-				return false;
-			}
-			break;
-		}
-		}
-		if (!IsIdentifier(token_text)) {
+		if (!IsAllowedKeyword(token_text) || !IsIdentifier(token_text)) {
 			return false;
 		}
 		state.token_index++;
