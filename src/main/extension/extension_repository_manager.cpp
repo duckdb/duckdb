@@ -24,10 +24,10 @@ static constexpr const idx_t PEM_LINE_LENGTH = 64;
 static constexpr const idx_t MAX_METADATA_FILE_SIZE = 65536;
 
 //! Wrapper that ensures the yyjson document is freed when an exception is thrown
-struct JSONDocument {
-	explicit JSONDocument(yyjson_doc *doc_p) : doc(doc_p) {
+struct RepositoryJSONDocument {
+	explicit RepositoryJSONDocument(yyjson_doc *doc_p) : doc(doc_p) {
 	}
-	~JSONDocument() {
+	~RepositoryJSONDocument() {
 		yyjson_doc_free(doc);
 	}
 	yyjson_doc *doc;
@@ -161,7 +161,7 @@ vector<string> ExtensionRepositoryManager::FetchPublicKeys(DatabaseInstance &db,
 		                  metadata_path, error.RawMessage());
 	}
 
-	JSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
+	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	if (!document.doc) {
 		throw IOException("Failed to read extension repository metadata file '%s': the file is not valid json",
 		                  metadata_path);
@@ -285,10 +285,10 @@ string ExtensionRepositoryManager::GetRepositoryPath(DatabaseInstance &db, FileS
 }
 
 //! Wrapper that ensures the mutable yyjson document is freed when an exception is thrown
-struct MutableJSONDocument {
-	MutableJSONDocument() : doc(yyjson_mut_doc_new(nullptr)) {
+struct RepositoryMutableJSONDocument {
+	RepositoryMutableJSONDocument() : doc(yyjson_mut_doc_new(nullptr)) {
 	}
-	~MutableJSONDocument() {
+	~RepositoryMutableJSONDocument() {
 		yyjson_mut_doc_free(doc);
 	}
 	yyjson_mut_doc *doc;
@@ -333,7 +333,7 @@ ExtensionRepository ExtensionRepositoryManager::ReadRepository(FileSystem &fs, c
 	handle->Read(buffer.get(), file_size, 0);
 	string contents(buffer.get(), file_size);
 
-	JSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
+	RepositoryJSONDocument document(yyjson_read(contents.c_str(), contents.size(), 0));
 	if (!document.doc) {
 		throw IOException("Failed to read extension repository file '%s': the file is not valid json", path);
 	}
@@ -404,7 +404,7 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 		fs.CreateDirectoriesRecursive(directory);
 	}
 
-	MutableJSONDocument document;
+	RepositoryMutableJSONDocument document;
 	auto root = yyjson_mut_obj(document.doc);
 	yyjson_mut_doc_set_root(document.doc, root);
 	yyjson_mut_obj_add_uint(document.doc, root, "version", FORMAT_VERSION);
