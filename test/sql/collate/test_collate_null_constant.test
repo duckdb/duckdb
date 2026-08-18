@@ -133,7 +133,9 @@ SELECT AGE(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17') GROUP BY AGE(TIMESTAM
 ----
 8 days
 
-query II
-SELECT i, count(*) FROM (VALUES (INTERVAL '30' DAY), (INTERVAL '1' MONTH), (INTERVAL '720' HOUR)) t(i) GROUP BY i;
+# these three intervals compare equal, so they collapse into a single group - which of the
+# three representations ends up as the group key is not defined, so we only count the group
+query I
+SELECT count(*) FROM (VALUES (INTERVAL '30' DAY), (INTERVAL '1' MONTH), (INTERVAL '720' HOUR)) t(i) GROUP BY i;
 ----
-30 days	3
+3
