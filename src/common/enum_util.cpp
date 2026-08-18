@@ -4789,6 +4789,24 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 11, "QueryNodeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetQueryResultExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultExecutionMode::SYNC), "SYNC" },
+		{ static_cast<uint32_t>(QueryResultExecutionMode::ASYNC), "ASYNC" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultExecutionMode>(QueryResultExecutionMode value) {
+	return StringUtil::EnumToString(GetQueryResultExecutionModeValues(), 2, "QueryResultExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultExecutionMode EnumUtil::FromString<QueryResultExecutionMode>(const char *value) {
+	return static_cast<QueryResultExecutionMode>(StringUtil::StringToEnum(GetQueryResultExecutionModeValues(), 2, "QueryResultExecutionMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(QueryResultMemoryType::IN_MEMORY), "IN_MEMORY" },

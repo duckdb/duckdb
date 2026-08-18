@@ -80,6 +80,10 @@ struct ClientConfig {
 
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
+	//! Called whenever an async streaming result's observable state may have changed, for every
+	//! ASYNC query on this connection; ignored for SYNC queries. Armed before execution starts.
+	//! Callback rules: see QueryResultNotifier.
+	std::function<void()> default_notify_callback = nullptr;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

@@ -48,6 +48,8 @@ public:
 	QueryResultOutputType output_type;
 	//! Whether we are creating a buffer-managed result or not
 	QueryResultMemoryType memory_type;
+	//! Whether the result is async by background workers or paced by the consumer
+	QueryResultExecutionMode execution_mode = QueryResultExecutionMode::SYNC;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);

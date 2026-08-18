@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
@@ -45,6 +46,11 @@ unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientC
 
 	// Order-preserving plan, and we can use the batch index: use a batch collector.
 	if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
+		if (data.execution_mode == QueryResultExecutionMode::ASYNC) {
+			throw NotImplementedException(
+			    "Async streaming results do not support order-preserving batched streaming yet. "
+			    "SET preserve_insertion_order=false to use an async result for this query");
+		}
 		return make_uniq<PhysicalBufferedBatchCollector>(physical_plan, data);
 	}
 	return make_uniq<PhysicalBatchCollector>(physical_plan, data);

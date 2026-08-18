@@ -14,6 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -57,6 +58,14 @@ public:
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
+	//! Bounded wait for background progress. Ignores the producer queue, for callers that
+	//! observe execution without running tasks (async results).
+	void WaitForProgress();
+
+private:
+	void WaitForTaskInternal(bool consider_producer_queue);
+
+public:
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
 	void Reset();
@@ -114,6 +123,9 @@ public:
 		executor_tasks++;
 	}
 	void UnregisterTask();
+
+	//! Set the notifier called when execution finishes or errors (async streaming results)
+	void SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p);
 
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
@@ -185,6 +197,8 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+	//! Called on the terminal transition (may be null). Guarded by executor_lock.
+	shared_ptr<QueryResultNotifier> result_notifier;
 
 	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
 	atomic<idx_t> blocked_thread_time;

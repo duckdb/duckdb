@@ -149,18 +149,7 @@ StreamExecutionResult BatchedBufferedData::ExecuteTaskInternal(StreamQueryResult
 	if (result.HasError()) {
 		Close();
 	}
-	switch (execution_result) {
-	case PendingExecutionResult::NO_TASKS_AVAILABLE:
-	case PendingExecutionResult::RESULT_NOT_READY:
-		return StreamExecutionResult::CHUNK_NOT_READY;
-	case PendingExecutionResult::EXECUTION_FINISHED:
-		return StreamExecutionResult::EXECUTION_FINISHED;
-	case PendingExecutionResult::EXECUTION_ERROR:
-		return StreamExecutionResult::EXECUTION_ERROR;
-	default:
-		throw InternalException("No conversion from PendingExecutionResult (%s) -> StreamExecutionResult",
-		                        EnumUtil::ToString(execution_result));
-	}
+	return MapExecutionResult(execution_result);
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {

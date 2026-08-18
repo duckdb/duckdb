@@ -17,6 +17,7 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 
 namespace duckdb {
 
@@ -28,7 +29,7 @@ protected:
 	enum class Type { SIMPLE, BATCHED };
 
 public:
-	BufferedData(Type type, ClientContext &context);
+	BufferedData(Type type, ClientContext &context, bool async = false);
 	virtual ~BufferedData();
 
 public:
@@ -36,8 +37,24 @@ public:
 	virtual StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	virtual void UnblockSinks() = 0;
+	//! Blocking, bounded wait until a chunk may be available; the base waits for generic progress
+	virtual void WaitForChunk(ClientContext &client_context, ClientContextLock &context_lock,
+	                          StreamQueryResult &result);
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
+	}
+	//! Whether background workers keep this buffer filled (see QueryResultExecutionMode)
+	bool IsAsync() const {
+		return async;
+	}
+	//! Set the notifier called when the buffer turns non-empty (async streaming results)
+	void SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p) {
+		lock_guard<mutex> guard(glock);
+		result_notifier = std::move(result_notifier_p);
+	}
+	shared_ptr<QueryResultNotifier> GetResultNotifier() {
+		lock_guard<mutex> guard(glock);
+		return result_notifier;
 	}
 	bool Closed() const {
 		if (context.expired()) {
@@ -68,11 +85,18 @@ public:
 	}
 
 protected:
+	static StreamExecutionResult MapExecutionResult(PendingExecutionResult execution_result);
+
+protected:
 	Type type;
 	//! This is weak to avoid a cyclical reference
 	weak_ptr<ClientContext> context;
 	//! The maximum amount of memory we should keep buffered
 	idx_t total_buffer_size;
+	//! Whether background workers keep the buffer filled (async results)
+	bool async;
+	//! Called when the buffer turns non-empty (may be null). Guarded by glock.
+	shared_ptr<QueryResultNotifier> result_notifier;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

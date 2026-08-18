@@ -33,6 +33,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -340,6 +341,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
+	{
+		lock_guard<mutex> guard(notifier_lock);
+		active_result_notifier.reset();
+	}
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
@@ -650,6 +655,28 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 	const auto stream_result = parameters.query_parameters.output_type == QueryResultOutputType::ALLOW_STREAMING &&
 	                           statement_data.properties.output_type == QueryResultOutputType::ALLOW_STREAMING;
 
+	const auto async_result = parameters.query_parameters.execution_mode == QueryResultExecutionMode::ASYNC;
+	if (async_result) {
+#ifdef DUCKDB_NO_THREADS
+		throw NotImplementedException("Async streaming results require a threaded build of DuckDB");
+#else
+		if (!stream_result) {
+			throw InvalidInputException(
+			    "Async streaming results require a streaming result: allow streaming output for a statement type "
+			    "that can produce rows");
+		}
+		const auto total_threads = TaskScheduler::GetScheduler(*this).NumberOfThreads();
+		if (total_threads <= 1) {
+			throw InvalidInputException("Async streaming results require more than one thread, because background "
+			                            "workers produce the result. Increase the 'threads' setting");
+		}
+		// The pool total counts external threads, which never pump the queue on their own
+		if (total_threads <= Settings::Get<ExternalThreadsSetting>(*this)) {
+			throw InvalidInputException("Async streaming results require a DuckDB-managed worker thread, but every "
+			                            "thread is external. Lower 'external_threads' or increase 'threads'");
+		}
+#endif
+	}
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
@@ -659,10 +686,20 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 	statement_data.output_type =
 	    stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	statement_data.memory_type = parameters.query_parameters.memory_type;
+	statement_data.execution_mode = parameters.query_parameters.execution_mode;
 
 	// Get the result collector and initialize the executor.
 	auto collector = get_collector(*this, statement_data);
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	if (async_result && client_config.default_notify_callback) {
+		// The connection's default notifier, armed before execution starts so no notify edge
+		// can be missed: the buffered collector picks it up when it creates the result buffer
+		auto notifier = make_shared_ptr<QueryResultNotifier>();
+		notifier->Set(client_config.default_notify_callback);
+		executor.SetResultNotifier(notifier);
+		lock_guard<mutex> guard(notifier_lock);
+		active_result_notifier = std::move(notifier);
+	}
 	executor.Initialize(std::move(collector));
 
 	auto types = executor.GetTypes();
@@ -678,6 +715,10 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
 	active_query->executor->WaitForTask();
+}
+
+void ClientContext::WaitForProgress(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForProgress();
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
@@ -742,6 +783,9 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+	// Also covers a notifier armed by a query whose creation failed before it could run
+	lock_guard<mutex> guard(notifier_lock);
+	active_result_notifier.reset();
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
@@ -1165,6 +1209,8 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			parameters.query_parameters = query_parameters;
 			if (!is_last_overall) {
 				parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+				// Only the final result can be async
+				parameters.query_parameters.execution_mode = QueryResultExecutionMode::SYNC;
 			}
 			auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
 			auto has_result = pending_query->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT;
@@ -1308,6 +1354,21 @@ unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContext
 void ClientContext::Interrupt() {
 	ClientInterruptState expected = ClientInterruptState::NOT_INTERRUPTED;
 	interrupt_state.compare_exchange_strong(expected, ClientInterruptState::INTERRUPTED);
+	// Wake a parked async-stream consumer. Interrupt runs in signal handlers (the shell's
+	// Ctrl-C), so it must never block: try-lock only. A contended slot lock means the query
+	// is being registered or torn down, so no consumer is parked and skipping is safe.
+	if (notifier_lock.try_lock()) {
+		auto notifier = active_result_notifier;
+		notifier_lock.unlock();
+		if (notifier) {
+			notifier->TryNotify();
+		}
+	}
+}
+
+shared_ptr<QueryResultNotifier> ClientContext::GetActiveResultNotifier() {
+	lock_guard<mutex> guard(notifier_lock);
+	return active_result_notifier;
 }
 
 bool ClientContext::IsInterrupted() const {
