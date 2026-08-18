@@ -98,7 +98,32 @@ static void ExecuteListExtract(Vector &result, const Vector &list, const Vector 
 static void ExecuteStringExtract(Vector &result, const Vector &input_vector, const Vector &subscript_vector) {
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
 	    input_vector, subscript_vector, result,
-	    [&](string_t input_string, int64_t subscript) { return SubstringUnicode(result, input_string, subscript, 1); });
+	    [&](string_t input_string, int64_t subscript) {
+		    // negative subscripts count from the end of the string; if the index is out of
+		    // range the result is empty
+		    if (subscript < 0) {
+			    const auto input_data = input_string.GetData();
+			    const auto input_size = input_string.GetSize();
+			    int64_t num_characters = 0;
+			    for (idx_t i = 0; i < input_size; i++) {
+				    if (IsCharacter(input_data[i])) {
+					    num_characters++;
+				    }
+			    }
+			    // -subscript can overflow for INT64_MIN, so compare against the negated count
+			    if (subscript < -num_characters) {
+				    // only subscripts within the supported range fall back to an empty string;
+				    // anything below that is left for SubstringUnicode to raise an error for
+				    const int64_t SUPPORTED_LOWER_BOUND = -static_cast<int64_t>(NumericLimits<uint32_t>::Maximum()) - 1;
+				    if (subscript >= SUPPORTED_LOWER_BOUND) {
+					    auto result_string = StringVector::EmptyString(result, 0);
+					    result_string.Finalize();
+					    return result_string;
+				    }
+			    }
+		    }
+		    return SubstringUnicode(result, input_string, subscript, 1);
+	    });
 }
 
 static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
