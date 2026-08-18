@@ -923,6 +923,9 @@ static const TransformFrameOps COL_ID_OR_STRING_OPS = {"ColIdOrString",
 static const TransformFrameOps TYPE_FUNC_NAME_OPS = {"TypeFuncName",
                                                      &PEGTransformerFactory::InitializeTypeFuncNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeTypeFuncNameTrampoline};
+static const TransformFrameOps TYPE_FUNC_KEYWORD_OPS = {"TypeFuncKeyword",
+                                                        &PEGTransformerFactory::InitializeTypeFuncKeywordTrampoline,
+                                                        &PEGTransformerFactory::FinalizeTypeFuncKeywordTrampoline};
 static const TransformFrameOps COL_LABEL_OPS = {"ColLabel", &PEGTransformerFactory::InitializeColLabelTrampoline,
                                                 &PEGTransformerFactory::FinalizeColLabelTrampoline};
 static const TransformFrameOps COL_LABEL_OR_STRING_OPS = {"ColLabelOrString",
@@ -3216,6 +3219,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColId", &COL_ID_OPS},
 	    {"ColIdOrString", &COL_ID_OR_STRING_OPS},
 	    {"TypeFuncName", &TYPE_FUNC_NAME_OPS},
+	    {"TypeFuncKeyword", &TYPE_FUNC_KEYWORD_OPS},
 	    {"ColLabel", &COL_LABEL_OPS},
 	    {"ColLabelOrString", &COL_LABEL_OR_STRING_OPS},
 	    {"ColLabelIdentifier", &COL_LABEL_IDENTIFIER_OPS},
@@ -10423,8 +10427,8 @@ void PEGTransformerFactory::InitializeTypeFuncNameTrampoline(PEGTransformer &tra
 	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
 		return;
 	}
-	if (!trampoline_ops && (choice_result.name == "UnreservedKeyword" || choice_result.name == "TypeNameKeyword" ||
-	                        choice_result.name == "FuncNameKeyword" || choice_result.name == "Identifier")) {
+	if (!trampoline_ops && (choice_result.name == "UnreservedKeyword" || choice_result.name == "TypeFuncKeyword" ||
+	                        choice_result.name == "Identifier")) {
 		return;
 	}
 	if (!trampoline_ops) {
@@ -10453,6 +10457,47 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeFuncNameTram
 		}
 	}
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeTypeFuncKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto trampoline_ops = choice_result.HasRule() ? choice_result.GetRule().trampoline_ops.get() : nullptr;
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
+	if (!trampoline_ops) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeFuncKeywordTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,

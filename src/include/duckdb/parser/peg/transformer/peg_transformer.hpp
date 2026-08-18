@@ -1861,6 +1861,10 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeTypeFuncNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTypeFuncKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeTypeFuncKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -5994,6 +5998,8 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTypeFuncNameInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTypeFuncKeywordInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColLabelInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColLabelOrStringInternal(PEGTransformer &transformer,
