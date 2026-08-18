@@ -230,6 +230,19 @@ protected:
 	bool packrat_memoized = false;
 };
 
+class KeywordInfo {
+public:
+	KeywordInfo() {
+	}
+	explicit KeywordInfo(int32_t score_bonus, char extra_char = ' ')
+	    : score_bonus(score_bonus), extra_char(extra_char) {
+	}
+
+public:
+	int32_t score_bonus = 0;
+	char extra_char = '\0';
+};
+
 class MatcherAllocator {
 public:
 	Matcher &Allocate(unique_ptr<Matcher> matcher);
