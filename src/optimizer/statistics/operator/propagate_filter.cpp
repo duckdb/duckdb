@@ -226,7 +226,7 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
+FilterPropagateResult StatisticsPropagator::ClassifyFilter(unique_ptr<Expression> &condition) {
 	PropagateExpression(condition);
 
 	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
@@ -243,9 +243,16 @@ FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> 
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 
-	// cannot prune this filter: propagate statistics from the filter
-	UpdateFilterStatistics(*condition);
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
+	auto prune_result = ClassifyFilter(condition);
+	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		// cannot prune this filter: propagate statistics from the filter
+		UpdateFilterStatistics(*condition);
+	}
+	return prune_result;
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter,

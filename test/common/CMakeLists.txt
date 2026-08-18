@@ -19,6 +19,7 @@ add_library_unity(
   test_parse_load_statement.cpp
   test_parse_logical_type.cpp
   test_recursive_cte_metrics.cpp
+  test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
   test_logical_type_immutable.cpp
   test_utf.cpp
