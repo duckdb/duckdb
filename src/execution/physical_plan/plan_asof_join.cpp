@@ -338,13 +338,12 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
-	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	auto &left = CreatePlan(*op.children[0]);
 	auto &right = CreatePlan(*op.children[1]);
 
 	//	Validate
 	vector<idx_t> equi_indexes;
-	const auto asof_idx = ValidateAsOfConditions(op, equi_indexes);
+	(void) ValidateAsOfConditions(op, equi_indexes);
 
 	// If there is a non-comparison predicate, we have to use NLJ.
 	const bool has_predicate = op.HasArbitraryConditions();
