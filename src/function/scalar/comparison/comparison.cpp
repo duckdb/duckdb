@@ -196,12 +196,10 @@ unique_ptr<Expression> &BoundComparisonExpression::RightMutable(BoundFunctionExp
 
 void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type) {
 	auto arguments = comparison_expr.FunctionMutable().GetArguments();
-	auto original_arguments = comparison_expr.FunctionMutable().GetOriginalArguments();
 
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
 	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
 	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
-	comparison_expr.FunctionMutable().GetOriginalArguments() = std::move(original_arguments);
 	comparison_expr.BindInfoMutable().reset();
 	comparison_expr.IsOperatorMutable() = true;
 }
