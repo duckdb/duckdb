@@ -343,7 +343,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	//	Validate
 	vector<idx_t> equi_indexes;
-	(void) ValidateAsOfConditions(op, equi_indexes);
+	(void)ValidateAsOfConditions(op, equi_indexes);
 
 	// If there is a non-comparison predicate, we have to use NLJ.
 	const bool has_predicate = op.HasArbitraryConditions();
