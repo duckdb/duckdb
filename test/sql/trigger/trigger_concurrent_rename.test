@@ -77,3 +77,29 @@ CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
 
 statement ok con1
 COMMIT;
+
+# ---------------------------------------------------------------------------
+# Scenario C: con1 renames j→k AND adds a new column j (both uncommitted).
+# A naive ColumnExists check would pass because the new j exists in the head
+# entry.  The version-comparison check catches this: any structural change to
+# the table while an UPDATE OF trigger is being created must conflict.
+# ---------------------------------------------------------------------------
+statement ok
+ALTER TABLE t RENAME COLUMN k TO j;
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE t RENAME COLUMN j TO k;
+
+statement ok con1
+ALTER TABLE t ADD COLUMN j INTEGER;
+
+statement error con2
+CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con1
+ROLLBACK;

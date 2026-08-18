@@ -301,46 +301,42 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
 
-		// For a genuine CREATE TRIGGER (not an ALTER propagation), verify that every UPDATE OF
-		// column still exists in the table at commit time.  Two orderings can produce an
-		// inconsistent catalog:
-		//   (A) rename commits before this trigger commits  → check committed table schema
-		//   (B) this trigger commits before rename commits  → check the pending uncommitted rename
+		// For a genuine CREATE TRIGGER (not an ALTER propagation), verify that the table version
+		// the trigger was bound against is still current at commit time.  Checking column
+		// existence is insufficient: a concurrent transaction can rename the column and re-add
+		// a new column with the same name, making ColumnExists pass while the trigger is stale.
+		// Instead we compare table entry pointers: any structural change to the table produces a
+		// new CatalogEntry object.  Two orderings need to be handled:
+		//   (A) rename commits before this trigger commits  → bound and current entries differ
+		//   (B) this trigger commits before rename commits  → head entry has a write-write conflict
 		// old_entry.type is TRIGGER_ENTRY only for column-rename propagations (ALTER), which we skip.
 		if (new_entry.type == CatalogType::TRIGGER_ENTRY && old_entry.type != CatalogType::TRIGGER_ENTRY) {
 			auto &trig = new_entry.Cast<TriggerCatalogEntry>();
 			if (!trig.columns.empty()) {
-				// Build a transaction view that sees all committed changes up to this commit
-				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
 				auto &table_set = trig.schema.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::TABLE_ENTRY);
+				// Transaction view at bind time (what the trigger saw when it was created)
+				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, transaction.start_time);
+				// Transaction view at commit time (all changes committed before this commit)
+				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
 
-				// Case (A): check the committed table schema
-				auto table_entry = trig.schema.GetEntry(commit_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
-				if (table_entry) {
-					auto &table = table_entry->Cast<TableCatalogEntry>();
-					for (const auto &col : trig.columns) {
-						if (!table.ColumnExists(col)) {
-							throw TransactionException("Catalog write-write conflict on create with \"%s\": "
-							                           "column \"%s\" was renamed by a concurrent transaction",
-							                           trig.name, col.GetIdentifierName());
-						}
-					}
+				auto bound_table = trig.schema.GetEntry(bind_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
+				auto current_table = trig.schema.GetEntry(commit_txn, CatalogType::TABLE_ENTRY, trig.base_table->Table());
+
+				// Case (A): a concurrent alter was committed while this trigger was binding
+				if (bound_table && current_table && !RefersToSameObject(*bound_table, *current_table)) {
+					throw TransactionException("Catalog write-write conflict on create with \"%s\": "
+					                           "table \"%s\" was altered by a concurrent transaction",
+					                           trig.name, trig.base_table->Table());
 				}
 
-				// Case (B): check whether an uncommitted concurrent alter on the table has already
-				// renamed one of our columns (the alter will commit after us, leaving an inconsistency).
+				// Case (B): an uncommitted alter is in flight; this trigger would commit first,
+				// leaving the catalog in an inconsistent state once the alter commits.
 				auto head_entry = table_set.GetHeadEntry(trig.base_table->Table());
-				if (head_entry && table_set.HasConflict(commit_txn, head_entry->timestamp)) {
-					if (head_entry->type == CatalogType::TABLE_ENTRY && !head_entry->deleted) {
-						auto &modified_table = head_entry->Cast<TableCatalogEntry>();
-						for (const auto &col : trig.columns) {
-							if (!modified_table.ColumnExists(col)) {
-								throw TransactionException("Catalog write-write conflict on create with \"%s\": "
-								                           "column \"%s\" is being renamed by a concurrent transaction",
-								                           trig.name, col.GetIdentifierName());
-							}
-						}
-					}
+				if (head_entry && table_set.HasConflict(commit_txn, head_entry->timestamp) &&
+				    head_entry->type == CatalogType::TABLE_ENTRY && !head_entry->deleted) {
+					throw TransactionException("Catalog write-write conflict on create with \"%s\": "
+					                           "table \"%s\" is being altered by a concurrent transaction",
+					                           trig.name, trig.base_table->Table());
 				}
 			}
 		}
