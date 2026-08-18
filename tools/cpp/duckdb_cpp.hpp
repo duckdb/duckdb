@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 
 namespace duckdb {
 namespace cxx {
