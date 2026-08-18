@@ -8,6 +8,18 @@
 namespace duckdb {
 
 struct ICUCalendarSub : public ICUDateFunc {
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto part_value = input.TryGetConstant(0);
+		if (part_value && !part_value->IsNull()) {
+			DatePartSpecifier part;
+			if (TryGetDatePartSpecifier(part_value->GetValue<string>(), part) && part == DatePartSpecifier::ERA) {
+				// date_sub is not monotone for eras because era boundaries can occur partway through a year
+				input.GetBoundFunction().SetArgProperties({});
+			}
+		}
+		return ICUDateFunc::Bind(input);
+	}
+
 	//	ICU only has 32 bit precision for date parts, so it can overflow a high resolution.
 	//	Since there is no difference between ICU and the obvious calculations,
 	//	we make these using the DuckDB internal type.
@@ -189,6 +201,20 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // MS-SQL differences can be computed using ICU by truncating both arguments
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
+	static int64_t DifferenceEra(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
+		SetTime(calendar, start_date);
+		const auto start_era = ExtractField(calendar, CAL_ERA);
+		SetTime(calendar, end_date);
+		return int64_t(ExtractField(calendar, CAL_ERA)) - start_era;
+	}
+
+	static int64_t DifferenceEra(Calendar *calendar, timestamp_tz_ns_t start_date, timestamp_tz_ns_t end_date) {
+		SetTimeNS(calendar, start_date);
+		const auto start_era = ExtractField(calendar, CAL_ERA);
+		SetTimeNS(calendar, end_date);
+		return int64_t(ExtractField(calendar, CAL_ERA)) - start_era;
+	}
+
 	static timestamp_tz_t TruncateForDiff(Calendar *calendar, timestamp_tz_t date, part_trunc_t trunc_func) {
 		auto micros = SetTime(calendar, date);
 		trunc_func(calendar, micros);
@@ -249,6 +275,9 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				BinaryExecutor::Execute<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, [&](T start_date, T end_date) -> optional<int64_t> {
 					    if (start_date.IsFinite() && end_date.IsFinite()) {
+						    if (part == DatePartSpecifier::ERA) {
+							    return DifferenceEra(calendar, start_date, end_date);
+						    }
 						    return DifferenceFunc(calendar, start_date, end_date, trunc_func, sub_func);
 					    } else {
 						    return nullopt;
@@ -261,6 +290,9 @@ struct ICUCalendarDiff : public ICUDateFunc {
 			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
 				    if (start_date.IsFinite() && end_date.IsFinite()) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
+					    if (part == DatePartSpecifier::ERA) {
+						    return DifferenceEra(calendar, start_date, end_date);
+					    }
 					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
 					    return DifferenceFunc(calendar, start_date, end_date, trunc_func, sub_func);
