@@ -457,6 +457,17 @@ struct ConfigureProfilingSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CurrentDialectSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "current_dialect";
+	static constexpr const char *Description = "The SQL dialect used by the parser";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "duckdb";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct CurrentTransactionInvalidationPolicySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "current_transaction_invalidation_policy";

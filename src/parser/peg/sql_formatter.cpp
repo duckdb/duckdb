@@ -87,15 +87,16 @@ SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 }
 
 string SQLFormatter::Format(const string &sql) {
-	HighlightTokenizer tokenizer(sql);
+	vector<MatcherToken> tokens;
+	HighlightTokenizerBehavior behavior(sql, tokens);
+	Tokenizer tokenizer(behavior);
 	tokenizer.TokenizeInput();
-	if (!tokenizer.tokens.empty()) {
-		auto back_type = tokenizer.tokens.back().type;
+	if (!tokens.empty()) {
+		auto back_type = tokens.back().type;
 		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			tokenizer.tokens.pop_back();
+			tokens.pop_back();
 		}
 	}
-	const auto &tokens = tokenizer.tokens;
 
 	if (tokens.empty()) {
 		return sql;

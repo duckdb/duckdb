@@ -85,8 +85,14 @@ private:
 	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+	//! Propagate a filter condition and determine whether it can be pruned; does not update any statistics
+	FilterPropagateResult ClassifyFilter(unique_ptr<Expression> &condition);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
+	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
+	bool HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
+	//! Rewrite a join whose condition always matches; returns true if the operator was replaced
+	bool HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);

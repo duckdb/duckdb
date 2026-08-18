@@ -555,23 +555,38 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	if (!filter_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto result = CheckZonemapAgainstConstants(*filter_stats, ExpressionType::COMPARE_EQUAL,
-	                                           array_ptr<const Value>(values.data(), values.size()));
+	array_ptr<const Value> constants(values.data(), values.size());
+	auto result = CheckZonemapAgainstConstants(*filter_stats, ExpressionType::COMPARE_EQUAL, constants);
+	if (result == FilterPropagateResult::NO_PRUNING_POSSIBLE &&
+	    NumericStats::ConstantsCoverRange(*filter_stats, constants)) {
+		// an integral column whose whole [min, max] range is listed always matches
+		result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
 	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
 }
 
-static FilterPropagateResult CheckNotOperatorStatistics(const BoundOperatorExpression &op_expr) {
-	if (op_expr.GetChildren().size() != 1 ||
-	    op_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::COMPARE_IN) {
+static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
+                                                        const BoundOperatorExpression &op_expr,
+                                                        const BaseStatistics &stats) {
+	if (op_expr.GetChildren().size() != 1) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &children = op_expr.GetChildren()[0]->Cast<BoundOperatorExpression>().GetChildren();
-	if (children.size() == 2 && children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
-	    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
-		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	auto &child = *op_expr.GetChildren()[0];
+	if (child.GetExpressionType() == ExpressionType::COMPARE_IN) {
+		auto &children = child.Cast<BoundOperatorExpression>().GetChildren();
+		if (children.size() == 2 && children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+		}
+	}
+	// a child matching every row makes NOT match no row - the converse does not hold, since a child
+	// that matches no row may be NULL rather than false, and NOT NULL does not match either
+	if (ExpressionFilter::CheckExpressionStatistics(context_p, child, stats) ==
+	    FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
@@ -586,7 +601,7 @@ static FilterPropagateResult CheckOperatorStatistics(optional_ptr<ClientContext>
 	case ExpressionType::COMPARE_IN:
 		return CheckInOperatorStatistics(context_p, op_expr, stats);
 	case ExpressionType::OPERATOR_NOT:
-		return CheckNotOperatorStatistics(op_expr);
+		return CheckNotOperatorStatistics(context_p, op_expr, stats);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
