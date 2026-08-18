@@ -345,6 +345,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
+		if (name == default_database) {
+			default_database = databases.empty() ? Identifier() : databases.begin()->first;
+		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;

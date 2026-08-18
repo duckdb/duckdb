@@ -36,7 +36,7 @@ struct ListFunction {
 template <bool IGNORE_NULLS = false>
 inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                Vector &state_vector, idx_t count) {
-	D_ASSERT(input_count == 1);
+	D_ASSERT(input_count >= 1); // see AggregateFunction::UnaryScatterUpdate
 	auto &input = inputs[0];
 	RecursiveUnifiedVectorFormat input_data;
 	Vector::RecursiveToUnifiedFormat(input, input_data);
@@ -64,7 +64,7 @@ inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 template <bool IGNORE_NULLS = false>
 inline void ListClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                               const ClusteredAggr &clustered, idx_t count) {
-	D_ASSERT(input_count == 1);
+	D_ASSERT(input_count >= 1); // see AggregateFunction::UnaryScatterUpdate
 	auto &input = inputs[0];
 	RecursiveUnifiedVectorFormat input_data;
 	Vector::RecursiveToUnifiedFormat(input, input_data);

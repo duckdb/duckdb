@@ -652,6 +652,16 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
+.PHONY: cli-release-artifact
+
+cli-release-artifact:
+	bash scripts/package_release_artifact.sh cli "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)"
+
+.PHONY: shared-libs-release-artifact
+
+shared-libs-release-artifact:
+	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
+
 .PHONY: symbol-checks symbol-leakage-check banned-symbol-check
 
 symbol-checks: symbol-leakage-check banned-symbol-check
