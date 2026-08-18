@@ -2990,9 +2990,9 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 			p_dir += HivePartitioning::Escape(partition_col_name.GetIdentifierName());
 			p_dir += "=";
 			if (partition_value.IsNull()) {
-				p_dir += "__HIVE_DEFAULT_PARTITION__";
+				p_dir += HivePartitioning::DEFAULT_PARTITION_NAME;
 			} else {
-				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				p_dir += HivePartitioning::EscapeValue(partition_value.ToString());
 			}
 			result.path = fs.JoinPath(result.path, p_dir);
 			result.directories.push_back(result.path);

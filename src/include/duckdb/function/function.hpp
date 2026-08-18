@@ -333,9 +333,6 @@ public:
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
-	//! Used in the bind to erase an argument from a function
-	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-	                                     idx_t argument_index);
 
 private:
 	//! Optional catalog name of the function
@@ -393,9 +390,6 @@ public:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
-	//! The set of original arguments of the function - only set if Function::EraseArgument is called
-	//! Used for (de)serialization purposes
-	vector<LogicalType> original_arguments;
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;
@@ -412,13 +406,6 @@ public:
 	}
 	const vector<LogicalType> &GetArguments() const {
 		return arguments;
-	}
-
-	vector<LogicalType> &GetOriginalArguments() {
-		return original_arguments;
-	}
-	const vector<LogicalType> &GetOriginalArguments() const {
-		return original_arguments;
 	}
 
 	const LogicalType &GetVarArgs() const {
@@ -516,9 +503,6 @@ protected:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
-	//! The set of original arguments of the function - only set if Function::EraseArgument is called
-	//! Used for (de)serialization purposes
-	vector<LogicalType> original_arguments;
 	//! Return type of the function
 	LogicalType return_type;
 
@@ -549,13 +533,6 @@ public:
 	}
 	auto GetArguments() -> vector<LogicalType> & {
 		return arguments;
-	}
-
-	auto GetOriginalArguments() const -> const vector<LogicalType> & {
-		return original_arguments;
-	}
-	auto GetOriginalArguments() -> vector<LogicalType> & {
-		return original_arguments;
 	}
 
 	auto GetReturnType() const -> const LogicalType & {
