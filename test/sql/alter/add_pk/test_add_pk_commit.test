@@ -12,6 +12,9 @@ statement ok
 INSERT INTO test VALUES (1, 1)
 
 statement ok
+INSERT INTO test VALUES (2, 1)
+
+statement ok
 ALTER TABLE test ADD PRIMARY KEY (j)
 
 statement ok
