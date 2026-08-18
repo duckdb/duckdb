@@ -170,6 +170,15 @@ int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t
 	return nr_bytes;
 }
 
+bool CachingFileSystemWrapper::TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len,
+                                             SuffixReadResult &result) {
+	auto *caching_handle = GetCachingHandleIfPossible(handle);
+	if (!caching_handle) {
+		return underlying_file_system.TryReadSuffix(handle, buffer, buffer_len, result);
+	}
+	return caching_handle->TryReadSuffix(buffer, buffer_len, result);
+}
+
 //===----------------------------------------------------------------------===//
 // File Metadata Operations
 //===----------------------------------------------------------------------===//

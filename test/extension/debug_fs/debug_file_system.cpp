@@ -124,6 +124,12 @@ int64_t DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	return inner.file_system.Read(inner, buffer, nr_bytes);
 }
 
+bool DebugFileSystem::TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) {
+	ApplyDelay();
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.TryReadSuffix(inner, buffer, buffer_len, result);
+}
+
 void DebugFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	ApplyDelay();
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
