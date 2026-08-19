@@ -83,6 +83,38 @@ SELECT currval('destroy_seq');
 ----
 2
 
+# The resource can also be rejected between provisioning and the attach, while its own options are
+# parsed. That window used to sit outside the compensating teardown, so the resource was provisioned
+# and then stranded. Each of these throws from a different place in the option parsing.
+statement ok
+CREATE MACRO bad_status(h) AS TABLE SELECT 'ready' AS state,
+  MAP {'uri': '{TEST_DIR}/er_taken.db', 'attached_db_type': 'duckdb', 'recovery_mode': 'bogus'} AS result;
+
+statement ok
+CALL register_external_resource_type('badopt@local', kind := 'catalog', create_function := 't_create',
+    status_function := 'bad_status', destroy_function := 't_destroy');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'badopt@local' AS rejected;
+----
+<REGEX>:.*(recovery_mode|Enum value).*
+
+# Provisioned, then reaped rather than left running.
+query II
+SELECT operation, outcome FROM duckdb_logs_parsed('ExternalResource') ORDER BY timestamp;
+----
+create	ok
+status	ok
+destroy	ok
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'rejected';
+----
+0
+
 # DESTROY removes the attached databases that borrowed the resource -- both of them, and only them.
 statement ok
 CREATE EXTERNAL RESOURCE 'taken@local' AS shared;
@@ -110,8 +142,9 @@ FROM duckdb_databases();
 ----
 0	1
 
-# The deleter fired once for the DESTROY, not once per borrower.
+# The deleter fired once for the DESTROY, not once per borrower. (4 not 3: the rejected-option case
+# above reaped its own resource too.)
 query I
 SELECT currval('destroy_seq');
 ----
-3
+4

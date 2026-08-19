@@ -65,43 +65,39 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		AttachInfo attach_info;
 		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
 		// The grammar gives this form no options of its own, so everything comes from the resource.
-		try {
-			ApplyLaunchedResource(launched, attach_info);
-		} catch (...) {
-			// Compensating teardown, as below: the resource exists by now and nothing owns it yet.
+		// Everything from here to the end of the attach can throw: applying the resource, parsing the
+		// options it supplied, and the attach itself. The resource exists by now and nothing owns it
+		// yet, so one guard covers the lot -- a narrower one strands it.
+		auto reap_if_owned = [&]() {
 			if (owns_resource) {
 				ResourceDeleter(DatabaseInstance::GetDatabase(client), launched.deleter_function,
 				                launched.deleter_payload, resource_type, resource_name)
 				    .TryDelete();
 			}
-			throw;
-		}
-
-		auto &config = DBConfig::GetConfig(client);
-		AttachOptions options(attach_info.options, config.options.access_mode);
-		options.visibility = AttachVisibility::HIDDEN;
-		options.ephemeral = true;
-		if (owns_resource) {
-			options.deleter_function = launched.deleter_function;
-			options.deleter_payload = launched.deleter_payload;
-			options.deleter_resource_type = resource_type;
-			options.deleter_resource_name = resource_name;
-		}
-		options.borrowed_resource_name = borrowed_resource_name;
-		if (options.db_type.empty()) {
-			DBPathAndType::ExtractExtensionPrefix(attach_info.path, options.db_type);
-		}
+		};
 		shared_ptr<AttachedDatabase> target;
 		try {
+			ApplyLaunchedResource(launched, attach_info);
+
+			auto &config = DBConfig::GetConfig(client);
+			AttachOptions options(attach_info.options, config.options.access_mode);
+			options.visibility = AttachVisibility::HIDDEN;
+			options.ephemeral = true;
+			if (owns_resource) {
+				options.deleter_function = launched.deleter_function;
+				options.deleter_payload = launched.deleter_payload;
+				options.deleter_resource_type = resource_type;
+				options.deleter_resource_name = resource_name;
+			}
+			options.borrowed_resource_name = borrowed_resource_name;
+			if (options.db_type.empty()) {
+				DBPathAndType::ExtractExtensionPrefix(attach_info.path, options.db_type);
+			}
 			target = db_manager.AttachDatabase(client, attach_info, options);
 		} catch (...) {
 			// Compensating teardown (best-effort): only for a resource we just PROVISIONED; a borrowed
 			// (referenced) resource is never torn down here.
-			if (owns_resource) {
-				ResourceDeleter(DatabaseInstance::GetDatabase(client), launched.deleter_function,
-				                launched.deleter_payload, resource_type, resource_name)
-				    .TryDelete();
-			}
+			reap_if_owned();
 			throw;
 		}
 		if (!target->GetCatalog().Supports(RemoteCapability::CONNECT)) {

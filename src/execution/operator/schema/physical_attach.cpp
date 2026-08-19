@@ -52,55 +52,53 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 			                                     resource_name);
 			owns_resource = true;
 		}
-		try {
-			ApplyLaunchedResource(launched, *attach_info);
-		} catch (...) {
-			// Same compensating teardown as a failed attach: the resource is provisioned by now and
-			// nothing owns it yet, so a rejection here must not strand it.
-			if (owns_resource) {
-				ResourceDeleter(DatabaseInstance::GetDatabase(context.client), launched.deleter_function,
-				                launched.deleter_payload, resource_type, resource_name)
-				    .TryDelete();
-			}
-			throw;
-		}
 	}
 
-	// construct the options
-	AttachOptions options(attach_info->options, config.options.access_mode);
-	if (owns_resource) {
-		options.deleter_function = launched.deleter_function;
-		options.deleter_payload = launched.deleter_payload;
-		options.deleter_resource_type = resource_type;
-		options.deleter_resource_name = resource_name;
-	}
-	options.borrowed_resource_name = borrowed_resource_name;
-
-	// get the name and path of the database
-	auto &name = attach_info->name;
-	auto &path = attach_info->path;
-	// preserve the verbatim path before extension-prefix stripping
-	options.original_path = path;
-	if (options.db_type.empty()) {
-		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
-	}
-	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = Identifier(AttachedDatabase::ExtractDatabaseName(path, fs));
-	}
-
-	// check ATTACH IF NOT EXISTS
-	auto &db_manager = DatabaseManager::Get(context.client);
-	try {
-		db_manager.AttachDatabase(context.client, *attach_info, options);
-	} catch (...) {
-		// Compensating teardown (best-effort): a failed attach of a resource we just PROVISIONED leaves
-		// nothing owning it. A borrowed (referenced) resource is never torn down here.
+	// Everything from here to the end of the attach can throw: applying the resource, parsing the
+	// options it supplied, deriving the path and name, and the attach itself. The resource exists by
+	// now and nothing owns it yet, so one guard covers the lot -- a narrower one strands it.
+	auto reap_if_owned = [&]() {
 		if (owns_resource) {
 			ResourceDeleter(DatabaseInstance::GetDatabase(context.client), launched.deleter_function,
 			                launched.deleter_payload, resource_type, resource_name)
 			    .TryDelete();
 		}
+	};
+	try {
+		if (attach_info->external_resource) {
+			ApplyLaunchedResource(launched, *attach_info);
+		}
+
+		// construct the options
+		AttachOptions options(attach_info->options, config.options.access_mode);
+		if (owns_resource) {
+			options.deleter_function = launched.deleter_function;
+			options.deleter_payload = launched.deleter_payload;
+			options.deleter_resource_type = resource_type;
+			options.deleter_resource_name = resource_name;
+		}
+		options.borrowed_resource_name = borrowed_resource_name;
+
+		// get the name and path of the database
+		auto &name = attach_info->name;
+		auto &path = attach_info->path;
+		// preserve the verbatim path before extension-prefix stripping
+		options.original_path = path;
+		if (options.db_type.empty()) {
+			DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
+		}
+		if (name.empty()) {
+			auto &fs = FileSystem::GetFileSystem(context.client);
+			name = Identifier(AttachedDatabase::ExtractDatabaseName(path, fs));
+		}
+
+		// check ATTACH IF NOT EXISTS
+		auto &db_manager = DatabaseManager::Get(context.client);
+		db_manager.AttachDatabase(context.client, *attach_info, options);
+	} catch (...) {
+		// Compensating teardown (best-effort): a resource we just PROVISIONED has nothing owning it yet.
+		// A borrowed (referenced) resource is never torn down here.
+		reap_if_owned();
 		throw;
 	}
 	return SourceResultType::FINISHED;
