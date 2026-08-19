@@ -1,5 +1,5 @@
 #include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -163,8 +163,9 @@ bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<U
 
 class AutoCompleteTokenizerBehavior : public TokenizerBehavior {
 public:
-	AutoCompleteTokenizerBehavior(const string &sql, MatchState &state)
-	    : TokenizerBehavior(sql, state.tokens), suggestions(state.suggestions) {
+	AutoCompleteTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens,
+	                              vector<MatcherSuggestion> &suggestions_p)
+	    : TokenizerBehavior(sql, tokens), suggestions(suggestions_p) {
 		last_pos = 0;
 	}
 
@@ -172,7 +173,7 @@ public:
 		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
-	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+	void OnLastToken(const Tokenizer &, TokenizeState state, string last_word_p, idx_t last_pos_p) override {
 		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
@@ -196,27 +197,26 @@ public:
 vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatalogProvider &provider, const string &sql,
                                                                AutoCompleteParameters &parameters) {
 	// tokenize the input
+	auto compiled_grammar = provider.GetCompiledGrammar();
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	AutoCompleteTokenizerBehavior behavior(sql_ref, state);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	AutoCompleteTokenizerBehavior behavior(sql_ref, tokens, suggestions);
+	if (!compiled_grammar->GetTokenizer().TokenizeInput(behavior)) {
 		return {};
 	}
-	if (state.suggestions.empty()) {
+	if (suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto peg_matcher = provider.GetPEGMatcher();
-		peg_matcher->ProgramMatcher().Match(state);
+		TokenIterator token_iterator(tokens);
+		MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
+		compiled_grammar->ProgramMatcher().Match(state);
 	}
-	if (state.suggestions.empty()) {
+	if (suggestions.empty()) {
 		return {};
 	}
 	vector<AutoCompleteCandidate> available_suggestions;
