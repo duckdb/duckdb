@@ -23,11 +23,11 @@ optional_ptr<ParseResult> ParserPackratCache::Match(const Matcher &matcher, Matc
 	}
 
 	auto matcher_id = packrat_id.GetIndex();
-	ParserPackratKey key {matcher_id, state.token_index};
+	ParserPackratKey key {matcher_id, state.token_iterator.Position()};
 	auto entry = entries.find(key);
 	if (entry != entries.end()) {
 		auto &cached = entry->second;
-		state.token_index = cached.token_index_after;
+		state.token_iterator.SetPosition(cached.token_index_after);
 		state.max_token_index = MaxValue(state.max_token_index, cached.max_token_index_seen);
 		if (cached.success) {
 			return cached.result;
@@ -39,7 +39,7 @@ optional_ptr<ParseResult> ParserPackratCache::Match(const Matcher &matcher, Matc
 	auto result = matcher.MatchParseResultInternal(state);
 	ParserPackratEntry cached;
 	cached.success = result != nullptr;
-	cached.token_index_after = state.token_index;
+	cached.token_index_after = state.token_iterator.Position();
 	cached.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
 	cached.result = result;
 	entries.insert(make_pair(key, cached));

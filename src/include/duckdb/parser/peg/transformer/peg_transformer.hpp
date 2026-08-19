@@ -67,6 +67,7 @@ struct QualifiedName;
 struct MatcherToken;
 struct GroupingExpressionMap;
 class Matcher;
+class TokenIterator;
 
 enum class GroupByExpressionInfoType : uint8_t { EXPRESSION, EMPTY, CUBE, ROLLUP, GROUPING_SETS };
 
@@ -75,14 +76,6 @@ struct GroupByExpressionInfo {
 	unique_ptr<ParsedExpression> expression;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<GroupByExpressionInfo> children;
-};
-
-struct PEGTransformerState {
-	explicit PEGTransformerState(const vector<MatcherToken> &tokens_p) : tokens(tokens_p), token_index(0) {
-	}
-
-	const vector<MatcherToken> &tokens;
-	idx_t token_index;
 };
 
 class PEGTransformer;
@@ -126,7 +119,7 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
 		if (!typed_result) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
 			if (bridged) {
@@ -147,7 +140,7 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
 		if (!typed_result) {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
@@ -174,7 +167,7 @@ public:
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
 		auto base_result = ExecuteInternal(parse_result, ops);
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		auto *typed_result = TryCastTransformResult<T>(base_result.get());
 		if (!typed_result) {
 			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
 		}
@@ -203,10 +196,9 @@ class PEGTransformer {
 public:
 	using AnyTransformFunction = std::function<unique_ptr<TransformResultValue>(PEGTransformer &, ParseResult &)>;
 
-	PEGTransformer(ArenaAllocator &allocator, PEGTransformerState &state,
-	               const case_insensitive_map_t<AnyTransformFunction> &transform_functions,
+	PEGTransformer(ArenaAllocator &allocator, const case_insensitive_map_t<AnyTransformFunction> &transform_functions,
 	               const case_insensitive_map_t<PEGRule> &grammar_rules, ParserOptions &options_p)
-	    : allocator(allocator), state(state), grammar_rules(grammar_rules), transform_functions(transform_functions),
+	    : allocator(allocator), grammar_rules(grammar_rules), transform_functions(transform_functions),
 	      options(options_p) {
 	}
 
@@ -224,7 +216,7 @@ public:
 			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
 		}
 
-		auto *typed_result_ptr = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		auto *typed_result_ptr = TryCastTransformResult<T>(base_result.get());
 		if (!typed_result_ptr) {
 			// allow transparent bridging between string-typed and Identifier-typed rules
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
@@ -307,7 +299,6 @@ private:
 
 public:
 	ArenaAllocator &allocator;
-	PEGTransformerState &state;
 	const case_insensitive_map_t<PEGRule> &grammar_rules;
 	const case_insensitive_map_t<AnyTransformFunction> &transform_functions;
 	identifier_map_t<idx_t> named_parameter_map;
@@ -347,7 +338,7 @@ inline unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(Transfo
 template <>
 inline unique_ptr<TypedTransformResult<string>>
 TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
-	if (auto *ident = dynamic_cast<TypedTransformResult<Identifier> *>(&base_result)) {
+	if (auto *ident = TryCastTransformResult<Identifier>(base_result)) {
 		return make_uniq<TypedTransformResult<string>>(ident->value.GetIdentifierName());
 	}
 	return nullptr;
@@ -356,7 +347,7 @@ TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<Identifier>>
 TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
-	if (auto *str = dynamic_cast<TypedTransformResult<string> *>(&base_result)) {
+	if (auto *str = TryCastTransformResult<string>(base_result)) {
 		return make_uniq<TypedTransformResult<Identifier>>(Identifier(str->value));
 	}
 	return nullptr;
@@ -365,7 +356,7 @@ TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<vector<string>>>
 TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result) {
-	if (auto *idents = dynamic_cast<TypedTransformResult<vector<Identifier>> *>(&base_result)) {
+	if (auto *idents = TryCastTransformResult<vector<Identifier>>(base_result)) {
 		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(idents->value));
 	}
 	return nullptr;
@@ -374,7 +365,7 @@ TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result)
 template <>
 inline unique_ptr<TypedTransformResult<vector<Identifier>>>
 TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_result) {
-	if (auto *strs = dynamic_cast<TypedTransformResult<vector<string>> *>(&base_result)) {
+	if (auto *strs = TryCastTransformResult<vector<string>>(base_result)) {
 		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(strs->value));
 	}
 	return nullptr;
@@ -396,8 +387,8 @@ public:
 	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).
 	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
 	//! starts, and on return holds the token index immediately past the last consumed token.
-	unique_ptr<SQLStatement> TransformTopLevelStatement(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                                    Matcher &root_matcher, idx_t &token_cursor);
+	unique_ptr<SQLStatement> TransformTopLevelStatement(TokenIterator &token_iterator, ParserOptions &options,
+	                                                    const Matcher &root_matcher) const;
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
@@ -2042,6 +2033,10 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCreateRecursiveTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer,
@@ -6126,14 +6121,17 @@ public:
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
-	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
-	                        const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
-	                        const optional<vector<string>> &insert_column_list,
+	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_secure,
+	                        const optional<bool> &create_recursive, const optional<bool> &if_not_exists,
+	                        const QualifiedName &qualified_name, const optional<vector<string>> &insert_column_list,
 	                        optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                        unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformCreateRecursiveInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static bool TransformCreateRecursive(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateSecureInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformCreateSecure(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeallocateStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
@@ -8494,7 +8492,8 @@ public:
 	//===--------------------------------------------------------------------===//
 
 private:
-	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &GetTransformFunctions(ParserOptions &options);
+	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
+	GetTransformFunctions(ParserOptions &options) const;
 
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;

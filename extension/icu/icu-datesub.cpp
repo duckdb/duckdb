@@ -3,6 +3,7 @@
 
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -24,7 +25,9 @@ struct ICUCalendarSub : public ICUDateFunc {
 	//	Since there is no difference between ICU and the obvious calculations,
 	//	we make these using the DuckDB internal type.
 	static int64_t SubtractMicrosecond(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
-		return end_date.value - start_date.value;
+		// the span of two representable timestamps does not always fit in one, so this needs the same
+		// overflow check the non-timezone date_diff uses
+		return SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(end_date.value, start_date.value);
 	}
 
 	static int64_t SubtractMillisecond(Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {

@@ -35,7 +35,9 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 unique_ptr<FunctionData> ListAggregatesBindFailure(BoundScalarFunction &bound_function) {
 	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
-	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
+	// no bind data, like the other path that binds nothing: the bind data of this function is always a
+	// ListAggregatesBindData, so anything else here cannot be told apart from one
+	return nullptr;
 }
 
 struct ListAggregatesBindData : public FunctionData {
@@ -66,7 +68,10 @@ struct ListAggregatesBindData : public FunctionData {
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                              const BoundScalarFunction &function) {
-		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
+		const ListAggregatesBindData *bind_data = nullptr;
+		if (bind_data_p) {
+			bind_data = &bind_data_p->Cast<ListAggregatesBindData>();
+		}
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 

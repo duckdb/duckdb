@@ -644,6 +644,7 @@ UnreservedKeyword <- 'ABORT' /
 'SECRET' /
 'SECOND' /
 'SECONDS' /
+'SECURE' /
 'SECURITY' /
 'SEQUENCE' /
 'SEQUENCES' /
@@ -1084,8 +1085,9 @@ CreateTypeFromType <- Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
 
-CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateViewStmt <- CreateSecure? CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
 CreateRecursive <- 'RECURSIVE'
+CreateSecure <- 'SECURE'
 
 DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
 DeallocatePrepare <- 'PREPARE'

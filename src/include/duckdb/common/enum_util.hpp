@@ -612,6 +612,8 @@ enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
 
+enum class ViewSecurityType : uint8_t;
+
 enum class WALType : uint8_t;
 
 enum class WindowAggregationMode : uint32_t;
@@ -1492,6 +1494,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -2378,6 +2383,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);
