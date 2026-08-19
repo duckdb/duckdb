@@ -1,4 +1,4 @@
-# name: test/parquet/utf8_validation_plain_dlba.test
+# name: test/parquet/utf8_validation_plain_dba_dlba_dict.test
 # description: Test UTF8 validation of strings in parquet files encoded as PLAIN, DELTA_LENGTH_BYTE_ARRAY, dba and dictionary
 # group: [parquet]
 
