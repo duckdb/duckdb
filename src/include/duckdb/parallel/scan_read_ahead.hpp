@@ -15,7 +15,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/deque.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -53,29 +52,6 @@ private:
 	atomic<idx_t> pending_io_tasks;
 	//! Holds the scan task parked on this job's I/O
 	StateWithBlockableTasks parked_scan;
-};
-
-//! Async task that runs one scan job's I/O and releases the job's pending count when done.
-class ReadAheadIOTask : public BaseExecutorTask {
-public:
-	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p,
-	                shared_ptr<ReadAheadJobCompletion> completion_p)
-	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
-		completion->AddIOTask();
-	}
-	~ReadAheadIOTask() override {
-		// If we are done we decrement the pending
-		completion->FinishIOTask();
-	}
-
-	void ExecuteTask() override {
-		// Does the actual IO
-		task->Execute();
-	}
-
-private:
-	unique_ptr<AsyncTask> task;
-	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
 //! Base of the job types driven by ScanReadAhead
@@ -122,13 +98,6 @@ enum class ScanReadAheadAcquire : uint8_t {
 	EXHAUSTED, //! every job has been produced and claimed, the scan is done
 	PARKED     //! the scan task parked until the claimed job's I/O completes, the caller must yield
 };
-
-//! Throw when the query was interrupted, otherwise yield the thread
-void ScanReadAheadYield(ClientContext &context);
-
-//! Resolve the read_ahead_depth setting, returns false when read-ahead is disabled.
-//! An invalid depth means automatic mode, its interpretation is up to the scan.
-bool TryGetReadAheadDepth(ClientContext &context, optional_idx &depth);
 
 //! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
 //! Jobs derive from ScanReadAheadJob, callers claim them back with Cast.

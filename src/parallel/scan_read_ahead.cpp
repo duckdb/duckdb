@@ -44,24 +44,10 @@ bool ReadAheadJobCompletion::TryPark(TableFunctionInput &data_p) {
 	return true;
 }
 
-void ScanReadAheadYield(ClientContext &context) {
+//! Throw when the query was interrupted, otherwise yield the thread
+static void ScanReadAheadYield(ClientContext &context) {
 	context.InterruptCheck();
 	TaskScheduler::YieldThread();
-}
-
-bool TryGetReadAheadDepth(ClientContext &context, optional_idx &depth) {
-	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
-		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
-		return false;
-	}
-	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == 0) {
-		return false;
-	}
-	if (configured_depth > 0) {
-		depth = NumericCast<idx_t>(configured_depth);
-	}
-	return true;
 }
 
 void ReadAheadJobCompletion::WaitForIO() {
@@ -77,6 +63,29 @@ void ReadAheadJobCompletion::WaitForIO() {
 		TaskScheduler::YieldThread();
 	}
 }
+
+//! Async task that runs one scan job's I/O and releases the job's pending count when done.
+class ReadAheadIOTask : public BaseExecutorTask {
+public:
+	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p,
+	                shared_ptr<ReadAheadJobCompletion> completion_p)
+	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
+		completion->AddIOTask();
+	}
+	~ReadAheadIOTask() override {
+		// If we are done we decrement the pending
+		completion->FinishIOTask();
+	}
+
+	void ExecuteTask() override {
+		// Does the actual IO
+		task->Execute();
+	}
+
+private:
+	unique_ptr<AsyncTask> task;
+	shared_ptr<ReadAheadJobCompletion> completion;
+};
 
 ScanReadAheadJob::~ScanReadAheadJob() {
 	// safety net for jobs without I/O-written members, other subclasses settle in their own destructor
@@ -96,16 +105,20 @@ ScanReadAhead::~ScanReadAhead() {
 }
 
 unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context) {
-	optional_idx depth;
-	if (!TryGetReadAheadDepth(context, depth)) {
+	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
+		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
 		return nullptr;
 	}
-	if (!depth.IsValid()) {
+	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
+	if (configured_depth == 0) {
+		return nullptr;
+	}
+	if (configured_depth < 0) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
 		return make_uniq<ScanReadAhead>(context, NumericLimits<idx_t>::Maximum(),
 		                                make_uniq<ManagedAsyncMemoryGovernor>(context));
 	}
-	return make_uniq<ScanReadAhead>(context, depth.GetIndex(), nullptr);
+	return make_uniq<ScanReadAhead>(context, NumericCast<idx_t>(configured_depth), nullptr);
 }
 
 bool ScanReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
