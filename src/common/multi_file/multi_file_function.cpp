@@ -4,6 +4,15 @@
 
 namespace duckdb {
 
+MultiFileGlobalState::MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
+}
+
+MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
+    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
+}
+
+MultiFileGlobalState::~MultiFileGlobalState() = default;
+
 MultiFileReaderInterface::~MultiFileReaderInterface() {
 }
 

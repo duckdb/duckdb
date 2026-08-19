@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -603,7 +602,7 @@ public:
 		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = MultiFileReadAhead::Create(context);
+		gstate.read_ahead = ScanReadAhead::Create(context);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -783,21 +782,25 @@ public:
 	}
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	static bool ProduceJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
-	                       MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
+	//! Returns null when there are no more jobs to produce.
+	static unique_ptr<MultiFileScanJob> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
+	                                               MultiFileGlobalState &gstate,
+	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<MultiFileScanJob>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		if (!job.scan_state) {
-			job.scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		job->scan_state = gstate.TryPopState();
+		if (!job->scan_state) {
+			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 		}
-		if (!ClaimNextJob(context, bind_data, gstate, job)) {
-			return false;
+		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+			return nullptr;
 		}
-		auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.scan_state);
+		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
 			// if we got blocked, we have tasks for the pool
 			io_tasks = scheduled.ExtractAsyncTasks();
 		}
-		return true;
+		return job;
 	}
 
 	static ScanReadAheadAcquire AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
@@ -826,26 +829,24 @@ public:
 		if (lstate.job_state == MultiFileJobState::WAIT_IO) {
 			// resuming after parking, the job's I/O has completed
 			read_ahead.WaitForJob(lstate.job);
-			lstate.job.io_completion.reset();
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
-		unique_ptr<MultiFileScanJob> claimed;
+		unique_ptr<ScanReadAheadJob> claimed;
 		auto acquired = read_ahead.AcquireJob(
 		    context, data_p,
-		    [&](MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
-			    return ProduceJob(context, bind_data, gstate, job, io_tasks);
-		    },
+		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, bind_data, gstate, io_tasks); },
 		    claimed);
 		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
 			// finish scan states left in the recycle pool so per-file accounting completes
 			unique_lock<mutex> parallel_lock(gstate.lock);
-			while (auto state = read_ahead.TryPopState()) {
+			for (auto &state : gstate.state_pool) {
 				bind_data.interface->FinishReading(context, *gstate.global_state, *state);
 			}
+			gstate.state_pool.clear();
 			return acquired;
 		}
-		lstate.job = std::move(*claimed);
+		lstate.job = std::move(claimed->Cast<MultiFileScanJob>());
 		lstate.job_state =
 		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
 		return acquired;
@@ -883,7 +884,7 @@ public:
 			case MultiFileDecodeResult::JOB_FINISHED: {
 				if (gstate.read_ahead) {
 					// hand the scan state back so learned reader state carries over to jobs created later
-					gstate.read_ahead->PushState(std::move(data.job.scan_state));
+					gstate.PushState(std::move(data.job.scan_state));
 				}
 				data.job_state = MultiFileJobState::NONE;
 				// emit any trailing chunk, then loop to acquire the next job

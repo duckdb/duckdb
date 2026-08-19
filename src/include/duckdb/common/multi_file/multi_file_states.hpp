@@ -22,7 +22,6 @@
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
-class MultiFileReadAhead;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -190,12 +189,30 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
-	unique_ptr<MultiFileReadAhead> read_ahead;
+	unique_ptr<ScanReadAhead> read_ahead;
+	//! Scan states of finished read-ahead jobs, recycled so learned scan state carries over
+	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 
 	optional_ptr<const PhysicalOperator> op;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
+	void PushState(unique_ptr<LocalTableFunctionState> state) {
+		lock_guard<mutex> guard(lock);
+		state_pool.push_back(std::move(state));
+	}
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<LocalTableFunctionState> TryPopState() {
+		lock_guard<mutex> guard(lock);
+		if (state_pool.empty()) {
+			return nullptr;
+		}
+		auto state = std::move(state_pool.back());
+		state_pool.pop_back();
+		return state;
 	}
 
 	bool CanRemoveColumns() const {
@@ -219,16 +236,26 @@ enum class MultiFileDecodeResult : uint8_t {
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
+struct MultiFileScanJob : public ScanReadAheadJob {
 	MultiFileScanJob() = default;
 	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
-	MultiFileScanJob &operator=(MultiFileScanJob &&) noexcept = default;
-	~MultiFileScanJob() {
-		if (io_completion) {
-			io_completion->WaitForIO();
-			io_completion.reset();
+	MultiFileScanJob &operator=(MultiFileScanJob &&other) noexcept {
+		if (this == &other) {
+			return *this;
 		}
+		// settle the previous job first, its I/O and scan state must go before its reader is released
+		SettleIO();
 		scan_state.reset();
+		ScanReadAheadJob::operator=(std::move(other));
+		reader = std::move(other.reader);
+		reader_data = other.reader_data;
+		file_index = other.file_index;
+		scan_state = std::move(other.scan_state);
+		return *this;
+	}
+	~MultiFileScanJob() override {
+		// scheduled reads might still be in flight, settle them before the members they write to are destroyed
+		SettleIO();
 	}
 
 	//! The reader producing this job
@@ -237,6 +264,8 @@ struct MultiFileScanJob : public ScanReadAheadJob<LocalTableFunctionState> {
 	optional_ptr<MultiFileReaderData> reader_data;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
+	//! The scan state the job's I/O and decoding operate on, declared last so it is destroyed before the reader
+	unique_ptr<LocalTableFunctionState> scan_state;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
