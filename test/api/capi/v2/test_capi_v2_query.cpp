@@ -132,7 +132,7 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 	CHECK(msg.find("Query exceeded maximum execution time") != string::npos);
 	duckdb_v2_error_info_destroy(&err);
 }
-
+#if STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE
 TEST_CASE("V2: a consumer interrupt still surfaces as CANCELLED, not an error", "[capi_v2][query_execution]") {
 	EnvFixture fx;
 
@@ -154,5 +154,6 @@ TEST_CASE("V2: a consumer interrupt still surfaces as CANCELLED, not an error", 
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 } // namespace test_capi_v2

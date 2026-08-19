@@ -243,6 +243,7 @@ TEST_CASE("V2: BLOB with embedded nulls (inline + heap)", "[capi_v2][arena]") {
 // Constant vector: the heap surface works the same; placement targets slot 0
 // ---------------------------------------------------------------------------
 
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: arena write on constant vector", "[capi_v2][arena]") {
 	EnvFixture fx;
 	StringChunk fixture(DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
@@ -271,5 +272,6 @@ TEST_CASE("V2: arena write on constant vector", "[capi_v2][arena]") {
 	REQUIRE(Convert(arr[SelAt(view.sel, 0)]) == constant);
 	REQUIRE(Convert(arr[SelAt(view.sel, 2)]) == constant);
 }
+#endif
 
 } // namespace test_capi_v2

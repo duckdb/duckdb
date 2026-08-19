@@ -56,7 +56,7 @@ TEST_CASE("V2: chunk + view round-trip on SELECT 1", "[capi_v2][data_chunk]") {
 // view.sel is NULL for FLAT (identity), so sel resolution returns the
 // row index unchanged.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: INTEGER vector with NULL — validity + identity sel", "[capi_v2][data_chunk]") {
 	EnvFixture fx;
 
@@ -97,6 +97,7 @@ TEST_CASE("V2: INTEGER vector with NULL — validity + identity sel", "[capi_v2]
 	duckdb_v2_data_chunk_destroy(&chunk);
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // Read multiple primitive kinds in one chunk. Each column gets its own
@@ -428,7 +429,7 @@ TEST_CASE("V2: BIGNUM via bignum_decode (positive + negative)", "[capi_v2][data_
 // LIST = elements). Pin vector_list_get_size against the expected
 // total element count.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: LIST<INTEGER> via get_child + entries", "[capi_v2][data_chunk]") {
 	EnvFixture fx;
 
@@ -481,6 +482,7 @@ TEST_CASE("V2: LIST<INTEGER> via get_child + entries", "[capi_v2][data_chunk]") 
 	duckdb_v2_data_chunk_destroy(&chunk);
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // STRUCT(INTEGER, VARCHAR): descend via the generic vector_get_child.
@@ -941,7 +943,7 @@ TEST_CASE("V2: CONSTANT vector view", "[capi_v2][data_chunk]") {
 
 	const int32_t *data = static_cast<const int32_t *>(view.data);
 	// Every logical row resolves through sel to physical index 0.
-	for (idx_t i = 0; i < 4; i++) {
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		REQUIRE(SelAt(view.sel, i) == 0);
 		REQUIRE(data[SelAt(view.sel, i)] == 7);
 	}
@@ -973,7 +975,7 @@ TEST_CASE("V2: CONSTANT NULL vector view", "[capi_v2][data_chunk]") {
 	REQUIRE(view.sel != nullptr);      // CONSTANT → zero singleton
 	REQUIRE(view.validity != nullptr); // not all-valid
 
-	for (idx_t i = 0; i < 4; i++) {
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		REQUIRE_FALSE(RowValid(view, SelAt(view.sel, i)));
 	}
 }
@@ -1171,7 +1173,7 @@ TEST_CASE("V2: success leaves a pre-existing err untouched", "[capi_v2][data_chu
 // data. Pin this by destroying the result, connection, AND database,
 // then reading the chunk + its vectors.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][data_chunk]") {
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 
@@ -1211,6 +1213,7 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }
+#endif
 
 TEST_CASE("V2: data_chunk_destroy is null-safe", "[capi_v2][data_chunk]") {
 	REQUIRE(duckdb_v2_data_chunk_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
