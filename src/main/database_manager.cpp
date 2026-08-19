@@ -417,6 +417,10 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 		auto &manager = DatabaseManager::Get(context);
 		lock_guard<mutex> guard(manager.databases_lock);
 		if (manager.databases.empty()) {
+			auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
+			if (modified_database) {
+				return modified_database->GetName();
+			}
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no database attached");
 		}
 		// OIDs are assigned in attach order, so the oldest attached database is the default.
