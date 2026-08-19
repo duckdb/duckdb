@@ -4,8 +4,10 @@
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -85,6 +87,24 @@ string PhysicalPlanText(Connection &con, const string &query) {
 		plan += explain_result->GetValue(1, row).ToString();
 	}
 	return plan;
+}
+
+//! Verify a chunk column continues the ascending sequence; returns the next expected value.
+//! Reads the vector data directly: the consumer must stay fast enough to outrun the
+//! producers, or the drain loops never park and the wake edges go untested.
+int64_t VerifyAscending(DataChunk &chunk, int64_t next_value, idx_t column = 0) {
+	chunk.Flatten();
+	if (!FlatVector::Validity(chunk.data[column]).CheckAllValid(chunk.size())) {
+		FAIL("Unexpected NULL in ascending sequence");
+	}
+	auto data = FlatVector::GetData<int64_t>(chunk.data[column]);
+	for (idx_t i = 0; i < chunk.size(); i++) {
+		if (data[i] != next_value) {
+			FAIL(StringUtil::Format("Out-of-order row: expected %lld, got %lld", next_value, data[i]));
+		}
+		next_value++;
+	}
+	return next_value;
 }
 
 //! Listener that also records callbacks running on the consumer's own stack inside an engine call
@@ -561,6 +581,479 @@ TEST_CASE("Abandoning an undrained async stream result unwinds a streaming-fanou
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
+TEST_CASE("Async batched stream result preserves insertion order", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	// preserve_insertion_order is on by default: a table scan takes the batched streaming collector
+	auto stream = ExecuteAsync(con, "SELECT i FROM t");
+	REQUIRE_NOTHROW(stream->GetBufferedData().Cast<BatchedBufferedData>());
+	auto deadline = MakeDeadline();
+	int64_t next_value = 0;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			next_value = VerifyAscending(*chunk, next_value);
+			continue;
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			break;
+		}
+		REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
+		         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(next_value == 500000);
+
+	// The connection is usable again after the stream is drained
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Async batched stream result wakes a parked consumer", "[api]") {
+	constexpr idx_t ROW_COUNT = 500000;
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("CREATE TABLE t AS SELECT range i FROM range(%llu)", ROW_COUNT)));
+	// A one-chunk buffer makes the parking structural: the consumer drains to empty and
+	// parks between chunks in every build type, so each append-edge wake is exercised
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='1B'"));
+
+	// The callback must never run on the consumer's stack inside an engine call
+	StackCheckListener state;
+	state.consumer_thread = std::this_thread::get_id();
+	std::atomic<idx_t> notification_count {0};
+	auto &config = ClientConfig::GetConfig(*con.context);
+	config.default_notify_callback = [&state, &notification_count]() {
+		notification_count++;
+		if (std::this_thread::get_id() == state.consumer_thread && state.in_call.load()) {
+			state.consumer_stack_notifications++;
+		}
+		state.listener.Notify();
+	};
+
+	state.in_call = true;
+	auto stream = ExecuteAsync(con, "SELECT i FROM t");
+	state.in_call = false;
+
+	// Purely notification-driven, like an event loop: the consumer parks unconditionally
+	// between drains and only advances when the engine notifies. A missed chunk-arrival
+	// or terminal notification fails by timeout.
+	auto deadline = MakeDeadline();
+	int64_t next_value = 0;
+	bool finished = false;
+	while (!finished) {
+		REQUIRE(!DeadlinePassed(deadline));
+		REQUIRE(state.listener.WaitAndReset(std::chrono::seconds(10)));
+		while (true) {
+			unique_ptr<DataChunk> chunk;
+			state.in_call = true;
+			auto execution_result = stream->TryFetchChunk(chunk);
+			state.in_call = false;
+			if (execution_result == StreamExecutionResult::CHUNK_READY) {
+				next_value = VerifyAscending(*chunk, next_value);
+				continue;
+			}
+			if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+				finished = true;
+			} else {
+				REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
+				         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
+			}
+			break;
+		}
+	}
+	REQUIRE(next_value == int64_t(ROW_COUNT));
+	REQUIRE(state.consumer_stack_notifications.load() == 0);
+	// At a one-chunk buffer, admission implies an empty queue, so every direct append is
+	// an empty-to-non-empty edge and must notify, one per chunk, regardless of consumer
+	// timing. Losing the chunk-arrival notification collapses this count.
+	INFO(notification_count.load());
+	REQUIRE(notification_count.load() >= (ROW_COUNT / STANDARD_VECTOR_SIZE) / 2);
+}
+
+TEST_CASE("Async batched stream result wakes on the terminal transition", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empty_t AS SELECT range i FROM range(0)"));
+
+	NotifyListener listener;
+	SetDefaultNotifier(con, listener);
+	// A rowless scan produces no append edge; only the terminal notification can wake us
+	auto stream = ExecuteAsync(con, "SELECT i FROM empty_t");
+	auto deadline = MakeDeadline();
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			REQUIRE(!chunk);
+			break;
+		}
+		REQUIRE(execution_result != StreamExecutionResult::EXECUTION_ERROR);
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	// The terminal state is sticky: further calls keep reporting it
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream->TryFetchChunk(chunk) == StreamExecutionResult::EXECUTION_FINISHED);
+}
+
+TEST_CASE("Async batched stream result surfaces a mid-stream execution error", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(200000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	auto stream =
+	    ExecuteAsync(con, "SELECT CASE WHEN i < 100000 THEN i ELSE CAST(concat('x', i) AS BIGINT) END FROM t");
+	auto deadline = MakeDeadline();
+	idx_t clean_rows = 0;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+			break;
+		}
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			clean_rows += chunk->size();
+			continue;
+		}
+		REQUIRE(execution_result != StreamExecutionResult::EXECUTION_FINISHED);
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(stream->HasError());
+	INFO(stream->GetError());
+	REQUIRE(StringUtil::Contains(stream->GetError(), "Conversion"));
+	// Only rows before the failing one can have been delivered
+	REQUIRE(clean_rows <= 100000);
+	// The terminal error is sticky: further calls keep reporting it
+	unique_ptr<DataChunk> chunk;
+	REQUIRE(stream->TryFetchChunk(chunk) == StreamExecutionResult::EXECUTION_ERROR);
+}
+
+TEST_CASE("Async batched stream result observes an interrupt", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(4000000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	auto stream = ExecuteAsync(con, "SELECT i FROM t");
+	auto deadline = MakeDeadline();
+	// Consume a little, then interrupt while sinks are parked in both tiers
+	int64_t next_value = 0;
+	while (next_value < 10000) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			next_value = VerifyAscending(*chunk, next_value);
+			continue;
+		}
+		REQUIRE(execution_result != StreamExecutionResult::EXECUTION_ERROR);
+		REQUIRE(execution_result != StreamExecutionResult::EXECUTION_FINISHED);
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	con.Interrupt();
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+			break;
+		}
+		REQUIRE(execution_result != StreamExecutionResult::EXECUTION_FINISHED);
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(stream->HasError());
+	REQUIRE(StringUtil::Contains(stream->GetError(), "INTERRUPT"));
+	// Every parked producer unwound: the connection is usable again
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Async batched stream result under batch skew", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// Many row groups and a small buffer: high batches complete while the minimum lags
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE skew AS SELECT range i FROM range(2000000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='64KB'"));
+
+	NotifyListener listener;
+	std::atomic<idx_t> notification_count {0};
+	auto &config = ClientConfig::GetConfig(*con.context);
+	config.default_notify_callback = [&listener, &notification_count]() {
+		notification_count++;
+		listener.Notify();
+	};
+
+	auto stream = ExecuteAsync(con, "SELECT i FROM skew");
+	auto deadline = MakeDeadline();
+	int64_t next_value = 0;
+	idx_t parks = 0;
+	idx_t throttle_rows = 0;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			next_value = VerifyAscending(*chunk, next_value);
+			// Deliberately slower than the producers, so the read queue is non-empty at
+			// append time and the notification bound below stays discriminating. A fast
+			// consumer empties the queue per chunk, making every append a legitimate
+			// empty-to-non-empty fire; those edges are pinned structurally by the parked
+			// consumer test's one-chunk buffer. The throttle is a fixed row budget,
+			// deliberately NOT STANDARD_VECTOR_SIZE, so the total sleep stays constant
+			// at any vector size.
+			throttle_rows += chunk->size();
+			if (throttle_rows >= 2048) {
+				throttle_rows = 0;
+				std::this_thread::sleep_for(std::chrono::microseconds(200));
+			}
+			continue;
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			break;
+		}
+		REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
+		         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
+		parks++;
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	REQUIRE(next_value == 2000000);
+	// With the queue non-empty at append time, notifications only fire when the consumer
+	// drains it plus a bounded terminal tail. A notifier that fired per append (one per
+	// chunk over 2M rows) blows through this bound.
+	INFO(notification_count.load());
+	INFO(parks);
+	REQUIRE(notification_count.load() <= parks + 64);
+}
+
+TEST_CASE("Async batched stream result survives tiny stream buffers", "[api]") {
+	for (auto buffer_size : {"0B", "1B"}) {
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(250000)"));
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET streaming_buffer_size='%s'", buffer_size)));
+
+		auto stream = ExecuteAsync(con, "SELECT i FROM t");
+		auto deadline = MakeDeadline();
+		int64_t next_value = 0;
+		while (true) {
+			REQUIRE(!DeadlinePassed(deadline));
+			unique_ptr<DataChunk> chunk;
+			auto execution_result = stream->TryFetchChunk(chunk);
+			if (execution_result == StreamExecutionResult::CHUNK_READY) {
+				next_value = VerifyAscending(*chunk, next_value);
+				continue;
+			}
+			if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+		}
+		REQUIRE(next_value == 250000);
+
+		// Sync leg: with both tiers floored at one byte the buffer still admits chunks.
+		// Before the floors this parked every sink on an always-full empty tier, an
+		// unbounded busy loop; the watchdog interrupt turns that regression into an error.
+		std::atomic<bool> sync_leg_done {false};
+		std::thread watchdog([&]() {
+			auto watchdog_deadline = MakeDeadline();
+			while (!sync_leg_done.load() && !DeadlinePassed(watchdog_deadline)) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
+			if (!sync_leg_done.load()) {
+				con.Interrupt();
+			}
+		});
+		unique_ptr<MaterializedQueryResult> materialized;
+		try {
+			auto pending = con.PendingQuery("SELECT i FROM t", QueryParameters(true));
+			if (!pending->HasError()) {
+				auto result = pending->Execute();
+				if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
+					materialized = result->Cast<StreamQueryResult>().Materialize();
+				}
+			}
+		} catch (...) {
+			// The watchdog must be joined on every path, or the thread dtor aborts
+			sync_leg_done = true;
+			watchdog.join();
+			throw;
+		}
+		sync_leg_done = true;
+		watchdog.join();
+		REQUIRE(materialized);
+		REQUIRE(!materialized->HasError());
+		REQUIRE(materialized->RowCount() == 250000);
+	}
+}
+
+TEST_CASE("Blocking materialization of an async batched stream result", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	auto stream = ExecuteAsync(con, "SELECT i FROM t");
+	auto materialized = stream->Materialize();
+	REQUIRE(!materialized->HasError());
+	REQUIRE(materialized->RowCount() == 500000);
+	REQUIRE(materialized->GetValue(0, 0).GetValue<int64_t>() == 0);
+	REQUIRE(materialized->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+}
+
+TEST_CASE("Async batched stream drain across buffer sizes", "[api]") {
+	// Stresses the restart and notify edges across buffer sizes: with a small buffer,
+	// faster batches fill the in-progress tier while the minimum batch lags. A lost
+	// restart or notification edge fails by timeout.
+	auto drain_counting_moved_nothing = [](const char *buffer_size, idx_t row_count) -> idx_t {
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("CREATE TABLE t AS SELECT range i FROM range(%llu)", row_count)));
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET streaming_buffer_size='%s'", buffer_size)));
+
+		NotifyListener listener;
+		SetDefaultNotifier(con, listener);
+		auto stream = ExecuteAsync(con, "SELECT i FROM t");
+		auto deadline = MakeDeadline();
+		int64_t next_value = 0;
+		while (true) {
+			REQUIRE(!DeadlinePassed(deadline));
+			unique_ptr<DataChunk> chunk;
+			auto execution_result = stream->TryFetchChunk(chunk);
+			if (execution_result == StreamExecutionResult::CHUNK_READY) {
+				next_value = VerifyAscending(*chunk, next_value);
+				continue;
+			}
+			if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+				break;
+			}
+			// A lost restart or notification edge fails here by timeout
+			REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+		}
+		REQUIRE(next_value == int64_t(row_count));
+		return stream->GetBufferedData().Cast<BatchedBufferedData>().MovedNothingRestarts();
+	};
+
+	// Only the 1KB drain pins the deadlock shape at the default vector size: the queue
+	// capacity is fixed while the chunk cost scales with STANDARD_VECTOR_SIZE, so here
+	// "below capacity" means empty and the pop edge cannot rescue a parked minimum
+	// sink. The larger sizes are stress only.
+	idx_t moved_nothing_restarts = drain_counting_moved_nothing("1KB", 1000000);
+	(void)drain_counting_moved_nothing("32KB", 1000000);
+	(void)drain_counting_moved_nothing("256KB", 1000000);
+
+	// The moved-nothing advance (a newly minimum batch that parked before its first
+	// append) is scheduling-dependent. Hunt for it on a small table (the shape needs a
+	// few row groups in flight), bounded by attempts. The counter's job is to stop the
+	// hunt early on healthy code; under the freed-bytes regression it stays zero, every
+	// attempt runs, and any drain that hits the shape hangs on the 10 second waits and
+	// fails. A zero result is reported for direct local runs only, never a failure.
+	for (idx_t attempt = 0; moved_nothing_restarts == 0 && attempt < 6; attempt++) {
+		moved_nothing_restarts += drain_counting_moved_nothing("1KB", 4 * DEFAULT_ROW_GROUP_SIZE);
+	}
+	if (moved_nothing_restarts == 0) {
+		WARN("moved-nothing advance not observed in this run");
+	}
+}
+
+TEST_CASE("Async batched stream result drains a streaming-fanout CTE plan", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	// Two readers over one table-backed materialized CTE: the batch index survives the
+	// exchange, so the order-preserving batched collector consumes fanout output directly
+	const string query = "WITH c AS MATERIALIZED (SELECT i FROM t) SELECT (SELECT COUNT(*) FROM c) total, i FROM c";
+	REQUIRE(StringUtil::Contains(PhysicalPlanText(con, query), "PIPELINE_DEPENDENT"));
+
+	NotifyListener listener;
+	SetDefaultNotifier(con, listener);
+	auto stream = ExecuteAsync(con, query);
+	// PIPELINE_DEPENDENT alone does not pin the collector: without a batch index this
+	// plan would silently fall back to the order-preserving simple collector
+	REQUIRE_NOTHROW(stream->GetBufferedData().Cast<BatchedBufferedData>());
+	auto deadline = MakeDeadline();
+	int64_t next_value = 0;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			chunk->Flatten();
+			auto totals = FlatVector::GetData<int64_t>(chunk->data[0]);
+			for (idx_t i = 0; i < chunk->size(); i++) {
+				if (totals[i] != 500000) {
+					FAIL(StringUtil::Format("Wrong total: %lld", totals[i]));
+				}
+			}
+			next_value = VerifyAscending(*chunk, next_value, 1);
+			continue;
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			break;
+		}
+		REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
+		         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	REQUIRE(next_value == 500000);
+}
+
+TEST_CASE("Abandoning an undrained async batched stream result unwinds a streaming-fanout plan", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(2000000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100KB'"));
+
+	const string query = "WITH c AS MATERIALIZED (SELECT i FROM t) SELECT (SELECT COUNT(*) FROM c) total, i FROM c";
+	REQUIRE(StringUtil::Contains(PhysicalPlanText(con, query), "PIPELINE_DEPENDENT"));
+
+	NotifyListener listener;
+	SetDefaultNotifier(con, listener);
+
+	// Abandon at the pending stage: workers already produce in async mode, Execute never runs
+	{
+		auto pending = con.PendingQuery(query, AsyncParameters());
+		if (pending->HasError()) {
+			FAIL(pending->GetError());
+		}
+		// Wait until production demonstrably started, then drop the pending result
+		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	}
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// Abandon mid-stream: fetch a little, then drop the result while producers sit parked
+	{
+		auto stream = ExecuteAsync(con, query);
+		REQUIRE_NOTHROW(stream->GetBufferedData().Cast<BatchedBufferedData>());
+		auto deadline = MakeDeadline();
+		idx_t row_count = 0;
+		while (row_count < 10000) {
+			REQUIRE(!DeadlinePassed(deadline));
+			unique_ptr<DataChunk> chunk;
+			auto execution_result = stream->TryFetchChunk(chunk);
+			if (execution_result == StreamExecutionResult::CHUNK_READY) {
+				row_count += chunk->size();
+				continue;
+			}
+			REQUIRE(execution_result != StreamExecutionResult::EXECUTION_ERROR);
+			REQUIRE(execution_result != StreamExecutionResult::EXECUTION_FINISHED);
+			REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+		}
+	}
+	result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
 TEST_CASE("Async stream result with an empty result", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -692,17 +1185,12 @@ TEST_CASE("Async stream results require a streaming result", "[api]") {
 	REQUIRE(StringUtil::Contains(pending->GetError(), "streaming result"));
 }
 
-TEST_CASE("Async stream results refuse order-preserving batched plans", "[api]") {
+TEST_CASE("Async stream result on a table scan without insertion-order preservation", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT i FROM range(10000) t(i)"));
 
-	// preserve_insertion_order is on by default: a table scan takes the batched streaming collector
-	auto pending = con.PendingQuery("SELECT i FROM t", AsyncParameters());
-	REQUIRE(pending->HasError());
-	REQUIRE(StringUtil::Contains(pending->GetError(), "preserve_insertion_order"));
-
-	// Without insertion-order preservation the plain streaming collector is used and driving works
+	// Without insertion-order preservation the plain streaming collector serves a table scan
 	REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
 	auto stream = ExecuteAsync(con, "SELECT i FROM t");
 	auto deadline = MakeDeadline();

@@ -39,6 +39,7 @@ bool SimpleBufferedData::HasBufferedChunk() {
 }
 
 void SimpleBufferedData::CollectRestartableSinks(vector<InterruptState> &to_unblock) {
+	D_ASSERT(to_unblock.empty());
 	// Reserve first so a failed allocation loses no parked sink
 	to_unblock.reserve(blocked_sinks.size());
 	while (!blocked_sinks.empty() && buffered_count < BufferSize()) {
@@ -47,7 +48,7 @@ void SimpleBufferedData::CollectRestartableSinks(vector<InterruptState> &to_unbl
 	}
 }
 
-void SimpleBufferedData::InvokeUnblocks(vector<InterruptState> &to_unblock) {
+void SimpleBufferedData::InvokeUnblocks(const vector<InterruptState> &to_unblock) {
 	// Invoked outside glock: Callback() takes the executor lock
 	for (idx_t i = 0; i < to_unblock.size(); i++) {
 		try {
@@ -164,10 +165,8 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 			auto allocation_size = chunk->GetDataSize();
 			buffered_count -= allocation_size;
 		}
-		// The pop restarts parked producers. The half-full mark batches restarts; the floor
-		// of 1 keeps it satisfiable for tiny buffers.
-		const idx_t low_water_mark = MaxValue<idx_t>(BufferSize() / 2, 1);
-		if (buffered_count < low_water_mark) {
+		// The pop restarts parked producers below the low-water mark
+		if (buffered_count < LowWaterMark(BufferSize())) {
 			CollectRestartableSinks(to_unblock);
 		}
 	}

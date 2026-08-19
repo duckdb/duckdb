@@ -56,6 +56,12 @@ public:
 
 	DUCKDB_API bool IsOpen();
 
+	//! The buffer backing this stream result
+	BufferedData &GetBufferedData() {
+		D_ASSERT(buffered_data);
+		return *buffered_data;
+	}
+
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
 

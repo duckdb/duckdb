@@ -15,8 +15,6 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 class StreamQueryResult;
@@ -53,13 +51,11 @@ private:
 	//! Pop restartable sinks into to_unblock; the caller holds glock
 	void CollectRestartableSinks(vector<InterruptState> &to_unblock);
 	//! Invoke the collected restarts; called outside glock, re-parks the remainder on a throw
-	void InvokeUnblocks(vector<InterruptState> &to_unblock);
+	void InvokeUnblocks(const vector<InterruptState> &to_unblock);
 
 private:
 	//! Our handles to reschedule the blocked sink tasks
 	queue<InterruptState> blocked_sinks;
-	//! Signalled when the buffer turns non-empty, for blocking async fetches
-	std::condition_variable chunk_ready_cv;
 	//! The queue of chunks
 	queue<unique_ptr<DataChunk>> buffered_chunks;
 	//! The current capacity of the buffer (tuples)

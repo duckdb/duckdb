@@ -19,6 +19,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/query_result_notifier.hpp"
 
+#include <condition_variable>
+
 namespace duckdb {
 
 class StreamQueryResult;
@@ -86,6 +88,13 @@ public:
 
 protected:
 	static StreamExecutionResult MapExecutionResult(PendingExecutionResult execution_result);
+	//! Wake both chunk-ready audiences: the cv (blocking fetches) and the notifier (async
+	//! consumers). Call outside glock, with the notifier captured under it on the same edge.
+	//! The simple buffer cannot use this: its collector's Sink holds an outer lock, so it
+	//! fires the cv inline and returns the notifier for the collector to fire instead.
+	void SignalChunkAvailable(const shared_ptr<QueryResultNotifier> &notifier);
+	//! Restart-batching mark for the pop edge; the floor keeps it satisfiable for tiny buffers
+	static idx_t LowWaterMark(idx_t capacity);
 
 protected:
 	Type type;
@@ -97,6 +106,8 @@ protected:
 	bool async;
 	//! Called when the buffer turns non-empty (may be null). Guarded by glock.
 	shared_ptr<QueryResultNotifier> result_notifier;
+	//! Signalled when the buffer turns non-empty, for blocking async fetches
+	std::condition_variable chunk_ready_cv;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

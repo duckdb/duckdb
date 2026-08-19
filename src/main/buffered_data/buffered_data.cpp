@@ -40,6 +40,17 @@ void BufferedData::WaitForChunk(ClientContext &client_context, ClientContextLock
 	client_context.WaitForProgress(context_lock, result);
 }
 
+void BufferedData::SignalChunkAvailable(const shared_ptr<QueryResultNotifier> &notifier) {
+	chunk_ready_cv.notify_all();
+	if (notifier) {
+		notifier->Notify();
+	}
+}
+
+idx_t BufferedData::LowWaterMark(idx_t capacity) {
+	return MaxValue<idx_t>(capacity / 2, 1);
+}
+
 StreamExecutionResult BufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	auto cc = context.lock();
 	if (!cc) {
