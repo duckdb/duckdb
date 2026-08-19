@@ -2035,7 +2035,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
 		auto write_action = row_group_write_data.write_action;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
-		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
+		                           checkpoint_state.writer.IsSingleFileWriter();
 		vector<bool> reuse_column;
 		if (debug_verify_blocks) {
 			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {

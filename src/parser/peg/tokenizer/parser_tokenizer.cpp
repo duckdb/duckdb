@@ -24,7 +24,8 @@ void ParserTokenizerBehavior::OnStatementEnd(idx_t pos) {
 	tokens.emplace_back(";", pos, TokenType::TERMINATOR);
 }
 
-void ParserTokenizerBehavior::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+void ParserTokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word,
+                                          idx_t last_pos) {
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
 		throw ParserException::SyntaxError(sql, "unterminated string literal", optional_idx(last_pos));
@@ -33,7 +34,7 @@ void ParserTokenizerBehavior::OnLastToken(TokenizeState state, string last_word,
 	default:
 		break;
 	}
-	TokenizerBehavior::OnLastToken(state, std::move(last_word), last_pos);
+	TokenizerBehavior::OnLastToken(tokenizer, state, std::move(last_word), last_pos);
 }
 
 } // namespace duckdb

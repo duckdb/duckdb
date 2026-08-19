@@ -10,6 +10,7 @@ add_library_unity(
   propagate_join.cpp
   propagate_order.cpp
   propagate_projection.cpp
+  propagate_secure_view.cpp
   propagate_set_operation.cpp
   propagate_window.cpp)
 set(ALL_OBJECT_FILES
