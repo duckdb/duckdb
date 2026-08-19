@@ -34,6 +34,15 @@ build_loadable_extension_directory(
   loadable_extension_demo.cpp)
 
 build_loadable_extension_directory(
+  loadable_parser_change_extension_demo
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  loadable_parser_change_extension_demo.cpp)
+
+build_loadable_extension_directory(
   explicit_extension_schema
   "CPP"
   test/extension

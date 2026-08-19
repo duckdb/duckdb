@@ -196,9 +196,11 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
+#include "duckdb/parser/parser_change.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -3120,6 +3122,31 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 5, "KeywordCategory", value));
 }
 
+const StringUtil::EnumStringLiteral *GetKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(Kind::LITERAL), "LITERAL" },
+		{ static_cast<uint32_t>(Kind::REFERENCE), "REFERENCE" },
+		{ static_cast<uint32_t>(Kind::FUNCTION_CALL), "FUNCTION_CALL" },
+		{ static_cast<uint32_t>(Kind::SEQUENCE), "SEQUENCE" },
+		{ static_cast<uint32_t>(Kind::CHOICE), "CHOICE" },
+		{ static_cast<uint32_t>(Kind::OPTIONAL), "OPTIONAL" },
+		{ static_cast<uint32_t>(Kind::REPEAT), "REPEAT" },
+		{ static_cast<uint32_t>(Kind::OPTIONAL_REPEAT), "OPTIONAL_REPEAT" },
+		{ static_cast<uint32_t>(Kind::REGEX), "REGEX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<Kind>(Kind value) {
+	return StringUtil::EnumToString(GetKindValues(), 9, "Kind", static_cast<uint32_t>(value));
+}
+
+template<>
+Kind EnumUtil::FromString<Kind>(const char *value) {
+	return static_cast<Kind>(StringUtil::StringToEnum(GetKindValues(), 9, "Kind", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLambdaSyntaxValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LambdaSyntax::DEFAULT), "DEFAULT" },
@@ -4201,6 +4228,23 @@ const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value) {
 template<>
 ParseResultType EnumUtil::FromString<ParseResultType>(const char *value) {
 	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 14, "ParseResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetParserChangeTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ParserChangeType::GRAMMAR), "GRAMMAR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ParserChangeType>(ParserChangeType value) {
+	return StringUtil::EnumToString(GetParserChangeTypeValues(), 1, "ParserChangeType", static_cast<uint32_t>(value));
+}
+
+template<>
+ParserChangeType EnumUtil::FromString<ParserChangeType>(const char *value) {
+	return static_cast<ParserChangeType>(StringUtil::StringToEnum(GetParserChangeTypeValues(), 1, "ParserChangeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {

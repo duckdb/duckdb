@@ -27,7 +27,7 @@ struct TransformResultValue {
 };
 
 template <class T>
-struct TypedTransformResult : public TransformResultValue {
+struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 	explicit TypedTransformResult(T value_p) : value(std::move(value_p)) {
 	}
 

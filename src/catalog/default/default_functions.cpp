@@ -286,6 +286,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
                                                                       const Identifier &entry_name) {
 	ParserOptions options;
 	options.parser_cache = &context.db->GetParserCache();
+	options.context = &context;
 	auto info = GetDefaultFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());

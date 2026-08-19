@@ -21,6 +21,7 @@ class DialectExtension;
 class ExtensionCallback;
 class OperatorExtension;
 class OptimizerExtension;
+class ParserChange;
 class ParserExtension;
 class PlannerExtension;
 class ProfilerExtension;
@@ -43,6 +44,7 @@ public:
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
 
 	void Register(ParserExtension extension);
+	void Register(shared_ptr<ParserChange> change);
 	void Register(DialectExtension extension);
 	void Register(PlannerExtension extension);
 	void Register(OptimizerExtension extension);
@@ -54,6 +56,7 @@ public:
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
+	ExtensionCallbackIteratorHelper<shared_ptr<ParserChange>> ParserChanges() const;
 	ExtensionCallbackIteratorHelper<DialectExtension> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;

@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
@@ -19,7 +20,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
-	if (transformer.options.debug_transformer_trampoline_style) {
+	if (transformer.options.debug_transformer_trampoline_style && !transformer.grammar.HasGrammarChanges()) {
 		return TransformStatementTrampoline(transformer, parse_result);
 	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -82,7 +83,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const Matcher &root_matcher) {
+                                                                           const CompiledGrammar &grammar) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -92,7 +93,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	idx_t max_token_index = token_iterator.Position();
 	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
 	                 options.preserve_identifier_case, &packrat_cache);
-	auto match_result = root_matcher.MatchParseResult(state);
+	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		auto token_stream = token_iterator.ToString();
@@ -135,7 +136,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformer transformer(transformer_allocator, token_iterator, options);
+	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }

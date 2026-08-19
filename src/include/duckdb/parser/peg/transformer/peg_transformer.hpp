@@ -64,6 +64,7 @@ namespace duckdb {
 
 // Forward declare
 struct QualifiedName;
+struct CompiledGrammar;
 struct MatcherToken;
 struct GroupingExpressionMap;
 class Matcher;
@@ -196,8 +197,9 @@ class PEGTransformer {
 public:
 	using AnyTransformFunction = grammar_transform_function_t;
 
-	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p)
-	    : allocator(allocator), token_iterator(token_iterator), options(options_p) {
+	PEGTransformer(ArenaAllocator &allocator, TokenIterator &token_iterator, ParserOptions &options_p,
+	               const CompiledGrammar &grammar_p)
+	    : allocator(allocator), token_iterator(token_iterator), options(options_p), grammar(grammar_p) {
 	}
 
 public:
@@ -328,6 +330,7 @@ public:
 	}
 
 	ParserOptions options;
+	const CompiledGrammar &grammar;
 };
 
 template <typename T>
@@ -389,7 +392,7 @@ public:
 	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
 	//! starts, and on return holds the token index immediately past the last consumed token.
 	static unique_ptr<SQLStatement> TransformTopLevelStatement(TokenIterator &token_iterator, ParserOptions &options,
-	                                                           const Matcher &root_matcher);
+	                                                           const CompiledGrammar &grammar);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);

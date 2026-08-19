@@ -294,6 +294,8 @@ enum class KeywordCase : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
+enum class Kind : uint8_t;
+
 enum class LambdaSyntax : uint8_t;
 
 enum class LambdaSyntaxType : uint8_t;
@@ -383,6 +385,8 @@ enum class PEGKeywordCategory : uint8_t;
 enum class ParseInfoType : uint8_t;
 
 enum class ParseResultType : uint8_t;
+
+enum class ParserChangeType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
@@ -1019,6 +1023,9 @@ template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
 
 template<>
+const char* EnumUtil::ToChars<Kind>(Kind value);
+
+template<>
 const char* EnumUtil::ToChars<LambdaSyntax>(LambdaSyntax value);
 
 template<>
@@ -1152,6 +1159,9 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value);
+
+template<>
+const char* EnumUtil::ToChars<ParserChangeType>(ParserChangeType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
@@ -1908,6 +1918,9 @@ template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
 
 template<>
+Kind EnumUtil::FromString<Kind>(const char *value);
+
+template<>
 LambdaSyntax EnumUtil::FromString<LambdaSyntax>(const char *value);
 
 template<>
@@ -2041,6 +2054,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
 
 template<>
 ParseResultType EnumUtil::FromString<ParseResultType>(const char *value);
+
+template<>
+ParserChangeType EnumUtil::FromString<ParserChangeType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);

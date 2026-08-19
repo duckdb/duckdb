@@ -13,13 +13,13 @@ struct CompiledGrammar {
 	friend struct ParserCache;
 
 private:
-	CompiledGrammar(ParserCache &cache, const ParsedGrammar &grammar);
+	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes, idx_t version);
 
 public:
-	const Matcher &ProgramMatcher() {
+	const Matcher &ProgramMatcher() const {
 		return *program_matcher;
 	}
-	const Matcher &TopLevelStatementMatcher() {
+	const Matcher &TopLevelStatementMatcher() const {
 		return *top_level_statement_matcher;
 	}
 	const PEGKeywordHelper &GetKeywordHelper() const {
@@ -29,10 +29,12 @@ public:
 		return tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	bool HasGrammarChanges() const {
+		return has_grammar_changes;
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
-	static shared_ptr<CompiledGrammar> Get(DatabaseInstance &db);
 
 public:
 	idx_t Version() const;
@@ -48,6 +50,7 @@ private:
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 
 private:
+	const bool has_grammar_changes;
 	const idx_t version;
 };
 
@@ -58,7 +61,7 @@ public:
 	ParserCache();
 
 public:
-	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<ClientContext> context);
+	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<const ClientContext> context = nullptr);
 	void Invalidate();
 
 public:
