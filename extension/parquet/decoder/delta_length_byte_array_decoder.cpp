@@ -45,7 +45,7 @@ void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, 
                                        Vector &result, idx_t result_offset) {
 	bool validate_individually =
 	    reader.Type().IsJSONType() || reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option !=
-	                                      StringColumnReader::Utf8ValidationOption::STRICT;
+	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 	if (defines) {
 		if (validate_individually) {
 			ReadInternal<true, true>(block_ref, defines, read_count, result, result_offset);

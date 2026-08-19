@@ -54,12 +54,12 @@ string_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 	}
 
 	switch (reader.parquet_options.utf8_validation_option) {
-	case StringColumnReader::Utf8ValidationOption::STRICT:
+	case StringColumnReader::Utf8ValidationOption::STRICT_UTF8:
 		throw InvalidInputException(
 		    "Invalid string encoding found in Parquet file \"%s\": value \"%s\" is not valid UTF8!",
 		    reader.GetFileName(), Blob::ToString(string_t(str_data, str_len)));
 
-	case StringColumnReader::Utf8ValidationOption::REPLACE: {
+	case StringColumnReader::Utf8ValidationOption::REPLACE_UTF8: {
 		if (!current_plain_result) {
 			throw InternalException("VerifyString: REPLACE mode requires current_plain_result to be set");
 		}
@@ -71,7 +71,7 @@ string_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 		return target;
 	}
 
-	case StringColumnReader::Utf8ValidationOption::IGNORE: {
+	case StringColumnReader::Utf8ValidationOption::IGNORE_UTF8: {
 		if (!current_plain_result) {
 			throw InternalException("VerifyString: IGNORE mode requires current_plain_result to be set");
 		}

@@ -31,7 +31,7 @@ class StringColumnReader : public ColumnReader {
 public:
 	enum class StringColumnType : uint8_t { VARCHAR, JSON, OTHER };
 
-	enum class Utf8ValidationOption : uint8_t { STRICT = 1, REPLACE = 2, IGNORE = 3 };
+	enum class Utf8ValidationOption : uint8_t { STRICT_UTF8 = 1, REPLACE_UTF8 = 2, IGNORE_UTF8 = 3 };
 
 	static StringColumnType GetStringColumnType(const LogicalType &type) {
 		if (type.IsJSONType()) {
@@ -45,11 +45,11 @@ public:
 
 	static Utf8ValidationOption GetUtf8ValidationOption(const string &value) {
 		if (StringUtil::CIEquals(value, "strict")) {
-			return Utf8ValidationOption::STRICT;
+			return Utf8ValidationOption::STRICT_UTF8;
 		} else if (StringUtil::CIEquals(value, "replace")) {
-			return Utf8ValidationOption::REPLACE;
+			return Utf8ValidationOption::REPLACE_UTF8;
 		} else if (StringUtil::CIEquals(value, "ignore")) {
-			return Utf8ValidationOption::IGNORE;
+			return Utf8ValidationOption::IGNORE_UTF8;
 		}
 		throw BinderException(
 		    "utf8_validation option \"%s\" not recognized, must be one of 'strict', 'replace', 'ignore'", value);
