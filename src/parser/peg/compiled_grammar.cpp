@@ -53,9 +53,6 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	ValidateParsedGrammarRoots(grammar);
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		if (rule.semantic && !rule.transform) {
-			throw InvalidInputException("Semantic grammar rule '%s' has no transform function", rule.name);
-		}
 		for (auto &token : rule.recipe.tokens) {
 			if (token.type != PEGTokenType::REFERENCE && token.type != PEGTokenType::FUNCTION_CALL) {
 				continue;
@@ -73,9 +70,11 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform),
-		                                                                     std::move(rule.trampoline_transform),
-		                                                                     std::move(rule.trampoline_ops)));
+		auto transform_data = std::move(rule.transform_data);
+		if (!transform_data) {
+			transform_data.emplace();
+		}
+		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(*transform_data)));
 	}
 	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher);
 	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
