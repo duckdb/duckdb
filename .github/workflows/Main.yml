@@ -79,6 +79,7 @@ jobs:
       runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
       runners: ${{ steps.runners.outputs.runners }}
+      images: ${{ steps.config.outputs.images }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
@@ -175,6 +176,12 @@ jobs:
 
           runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
           runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
+          image_version="$(<scripts/ci/image_version.txt)"
+
+          images=$(
+            jq -nc --arg image_version "$image_version" \
+              '{manylinux_amd64_cpp: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_cpp:" + $image_version)}'
+          )
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
@@ -219,6 +226,7 @@ jobs:
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           {
+            echo "images=$images"
             echo "linux_cli_matrix=$linux_cli_matrix"
             echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
@@ -373,6 +381,7 @@ jobs:
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+      images: ${{ needs.prepare.outputs.images }}
 
  tidy-check:
     name: Tidy Check
