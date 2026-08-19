@@ -1036,6 +1036,11 @@ struct blob_t {
 
 	/// Borrows `size` bytes at `data`, which must outlive the blob unless they fit inline.
 	blob_t(const char *data, uint32_t size) {
+		if (!data || size == 0) {
+			std::memset(&value, 0, sizeof(value));
+			value.inlined.length = size;
+			return;
+		}
 		if (size <= INLINE_LENGTH) {
 			std::memset(&value, 0, sizeof(value));
 			value.inlined.length = size;
