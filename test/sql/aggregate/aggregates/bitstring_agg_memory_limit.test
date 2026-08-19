@@ -3,13 +3,18 @@
 # group: [aggregates]
 
 statement ok
-SET temp_directory='{TEST_DIR}/bitstring_agg_memory_limit';
-
-statement ok
 SET memory_limit='256MB';
 
 statement ok
 SET threads=4;
+
+# disable spilling so the memory limit assertion below is deterministic, not a race against the
+# radix hash table's spill-to-disk speed
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA max_temp_directory_size='0B'
 
 statement ok
 CREATE TABLE src AS
