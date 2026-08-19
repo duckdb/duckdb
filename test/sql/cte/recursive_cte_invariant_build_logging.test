@@ -41,6 +41,15 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 0
 
+query III
+SELECT info.recursive_pipeline_execute_work_ns::UBIGINT > 0,
+       info.invariant_build_execute_work_ns::UBIGINT = 0,
+       info.invariant_cte_materialization_execute_work_ns::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1
+
 # SYSTEM sampling is pushed into a table scan and must keep the same classification.
 statement ok
 CREATE TABLE repeatability_sample AS SELECT i FROM range(1000) t(i);
@@ -109,6 +118,14 @@ FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1
+
+query II
+SELECT info.recursive_pipeline_execute_work_ns::UBIGINT > 0,
+       info.invariant_build_execute_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1
 
 # Stable window aggregates are repeatable and can back a retained hash build.
 statement ok
@@ -184,6 +201,14 @@ SELECT info.retained_cte_materializations::UBIGINT,
        info.retained_cte_reuses::UBIGINT >= 2
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1
+
+query II
+SELECT info.recursive_pipeline_execute_work_ns::UBIGINT > 0,
+       info.invariant_cte_materialization_execute_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
 1	1
 

@@ -12,8 +12,7 @@ add_library_unity(
   cost_model.cpp
   plan_enumerator.cpp
   relation_manager.cpp
-  query_graph_manager.cpp
-  relation_statistics_helper.cpp)
+  query_graph_manager.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_join_order>
     PARENT_SCOPE)

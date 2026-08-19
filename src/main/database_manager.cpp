@@ -345,6 +345,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
+		if (name == default_database) {
+			default_database = databases.empty() ? Identifier() : databases.begin()->first;
+		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
@@ -397,18 +400,24 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-	if (StorageExtension::Find(config, extension_name)) {
+	auto storage_extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (StorageExtension::Find(config, storage_extension_name)) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
+	auto extension_name =
+	    ExtensionHelper::FindExtensionInEntries(Identifier(storage_extension_name), EXTENSION_STORAGE_EXTENSIONS);
+	if (extension_name.empty()) {
+		//! Couldn't find a mapping, assume that the storage extension name is also the extension name
+		extension_name = storage_extension_name;
+	}
 
 	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
-	if (!Catalog::TryAutoLoad(context, options.db_type)) {
+	if (!Catalog::TryAutoLoad(context, extension_name)) {
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, {options.db_type});
+		ExtensionHelper::LoadExternalExtension(context, {extension_name});
 	}
 }
 
@@ -426,18 +435,18 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 }
 
 // LCOV_EXCL_START
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	auto db_entry = GetDatabase(context, Identifier(new_value));
+void DatabaseManager::SetDefaultDatabase(ClientContext &context, const Identifier &new_value) {
+	auto db_entry = GetDatabase(context, new_value);
 
 	if (!db_entry) {
-		throw InternalException("Database \"%s\" not found", new_value);
+		throw InternalException("Database %s not found", new_value);
 	} else if (db_entry->IsTemporary()) {
 		throw InternalException("Cannot set the default database to a temporary database");
 	} else if (db_entry->IsSystem()) {
 		throw InternalException("Cannot set the default database to a system database");
 	}
 
-	default_database = Identifier(new_value);
+	default_database = new_value;
 }
 // LCOV_EXCL_STOP
 

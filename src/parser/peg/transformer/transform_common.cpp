@@ -77,6 +77,11 @@ int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer
 	return -1;
 }
 
+int64_t PEGTransformerFactory::TransformArrayKeywordWithBounds(PEGTransformer &transformer,
+                                                               const int64_t &square_brackets_array) {
+	return square_brackets_array;
+}
+
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
                                                             optional<unique_ptr<ParsedExpression>> expression) {
 	if (!expression) {
@@ -134,7 +139,14 @@ PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const Logi
 		if (modifiers[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Expected a constant expression for timestamp precision");
 		}
-		auto timestamp_precision = modifiers[0]->Cast<ConstantExpression>().GetValue().GetValue<int64_t>();
+		auto precision_value = modifiers[0]->Cast<ConstantExpression>().GetValue();
+		if (precision_value.IsNull()) {
+			throw ParserException("TIMESTAMP precision cannot be NULL");
+		}
+		if (!precision_value.type().IsIntegral()) {
+			throw ParserException("TIMESTAMP precision must be an integral type");
+		}
+		auto timestamp_precision = precision_value.GetValue<int64_t>();
 		if (timestamp_precision > 10) {
 			throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
 		}

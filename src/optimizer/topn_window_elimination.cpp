@@ -363,18 +363,16 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->children.push_back(std::move(window.children[0]));
 	aggregate->ResolveOperatorTypes();
 
-	// Add group statistics to allow for perfect hash aggregation if applicable
+	// Add group statistics to allow for perfect hash aggregation if applicable.
+	// The partition statistics describe the window input, i.e. exactly what this aggregate reads.
+	// The global statistics map cannot be used here: its entries are narrowed by operators above the window.
+	auto &partitions_stats = window_expr.PartitionsStats();
 	aggregate->group_stats.resize(aggregate->groups.size());
-	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
-		auto &group = aggregate->groups[i];
-		if (group->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			auto &column_ref = group->Cast<BoundColumnRefExpression>();
-			auto group_stats = stats->find(column_ref.Binding());
-			if (group_stats == stats->end()) {
-				continue;
-			}
-			aggregate->group_stats[i] = group_stats->second->ToUnique();
+	for (idx_t i = 0; i < MinValue<idx_t>(aggregate->groups.size(), partitions_stats.size()); i++) {
+		if (!partitions_stats[i]) {
+			continue;
 		}
+		aggregate->group_stats[i] = partitions_stats[i]->ToUnique();
 	}
 
 	return unique_ptr<LogicalOperator>(std::move(aggregate));

@@ -34,9 +34,7 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTHandlingResult : uint8_t;
-
-enum class ARTScanHandling : uint8_t;
+enum class ARTScanNodeResult : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
@@ -51,6 +49,10 @@ enum class AggregateDistinctDependent : uint8_t;
 enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
+
+enum class AggregateRewritePolicy : uint8_t;
+
+enum class AggregateRewriteSourceType : uint8_t;
 
 enum class AggregateStateExportMode : uint8_t;
 
@@ -183,6 +185,8 @@ enum class DecimalBitWidth : uint8_t;
 enum class DefaultOrderByNullType : uint8_t;
 
 enum class DeferredRuntimeFilterType : uint8_t;
+
+enum class DeleteIdState : uint8_t;
 
 enum class DependencyEntryType : uint8_t;
 
@@ -402,6 +406,8 @@ enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
 enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
+enum class PipelineBroadcastExchangeScanMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PipelineScheduleMode : uint8_t;
@@ -435,6 +441,8 @@ enum class QueryResultOutputType : uint8_t;
 enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
+
+enum class RecursiveCTEPipelineMetricType : uint8_t;
 
 enum class RecursiveCTESourcePhase : uint8_t;
 
@@ -502,9 +510,13 @@ enum class SinkResultType : uint8_t;
 
 enum class SortKeyType : uint8_t;
 
+enum class SourceBatchIndexState : uint8_t;
+
 enum class SourceResultType : uint8_t;
 
 enum class StarExpressionType : uint8_t;
+
+enum class StateMemoryOwnership : uint8_t;
 
 enum class StatementReturnType : uint8_t;
 
@@ -590,6 +602,8 @@ enum class VariantStatsShreddingState : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
+enum class VectorPrepareState : uint8_t;
+
 enum class VectorType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
@@ -597,6 +611,8 @@ enum class VerifyExistenceType : uint8_t;
 enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
+
+enum class ViewSecurityType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -613,10 +629,7 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
@@ -638,6 +651,12 @@ const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewritePolicy>(AggregateRewritePolicy value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewriteSourceType>(AggregateRewriteSourceType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value);
@@ -836,6 +855,9 @@ const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType val
 
 template<>
 const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<DeleteIdState>(DeleteIdState value);
 
 template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
@@ -1165,6 +1187,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1214,6 +1239,9 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEPipelineMetricType>(RecursiveCTEPipelineMetricType value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTESourcePhase>(RecursiveCTESourcePhase value);
@@ -1315,10 +1343,16 @@ template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
 
 template<>
+const char* EnumUtil::ToChars<SourceBatchIndexState>(SourceBatchIndexState value);
+
+template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
 
 template<>
 const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
+
+template<>
+const char* EnumUtil::ToChars<StateMemoryOwnership>(StateMemoryOwnership value);
 
 template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
@@ -1447,6 +1481,9 @@ template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
+const char* EnumUtil::ToChars<VectorPrepareState>(VectorPrepareState value);
+
+template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
 
 template<>
@@ -1457,6 +1494,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1478,10 +1518,7 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
-
-template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
@@ -1503,6 +1540,12 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
 
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value);
+
+template<>
+AggregateRewritePolicy EnumUtil::FromString<AggregateRewritePolicy>(const char *value);
+
+template<>
+AggregateRewriteSourceType EnumUtil::FromString<AggregateRewriteSourceType>(const char *value);
 
 template<>
 AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value);
@@ -1701,6 +1744,9 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 
 template<>
 DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value);
+
+template<>
+DeleteIdState EnumUtil::FromString<DeleteIdState>(const char *value);
 
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
@@ -2030,6 +2076,9 @@ template<>
 PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
 
 template<>
+PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value);
+
+template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
@@ -2079,6 +2128,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
+
+template<>
+RecursiveCTEPipelineMetricType EnumUtil::FromString<RecursiveCTEPipelineMetricType>(const char *value);
 
 template<>
 RecursiveCTESourcePhase EnumUtil::FromString<RecursiveCTESourcePhase>(const char *value);
@@ -2180,10 +2232,16 @@ template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
 
 template<>
+SourceBatchIndexState EnumUtil::FromString<SourceBatchIndexState>(const char *value);
+
+template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
 
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
+
+template<>
+StateMemoryOwnership EnumUtil::FromString<StateMemoryOwnership>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);
@@ -2312,6 +2370,9 @@ template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
+VectorPrepareState EnumUtil::FromString<VectorPrepareState>(const char *value);
+
+template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
 
 template<>
@@ -2322,6 +2383,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

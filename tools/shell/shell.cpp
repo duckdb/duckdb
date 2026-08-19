@@ -966,9 +966,12 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		if (result_chunk && result_chunk->size() == 1) {
 			// update total changes
 			auto row_changes = result_chunk->GetValue(0, 0);
-			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
-				last_changes = row_changes.GetValue<int64_t>();
-				total_changes += last_changes;
+			if (!row_changes.IsNull()) {
+				auto cast_row_changes = row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT);
+				if (cast_row_changes) {
+					last_changes = cast_row_changes->GetValue<int64_t>();
+					total_changes += last_changes;
+				}
 			}
 		}
 	}
