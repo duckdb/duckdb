@@ -118,14 +118,6 @@ public:
 	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(
 	    unique_ptr<LocalTableFunctionState> recycled_state, vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
-	//! Try to produce one job into the queue.
-	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
-	//! Check if scan is done, i.e., no more jobs to do
-	bool IsDone() const;
-	//! Whether any thread holds a reserved slot it has not pushed a job for yet
-	bool HasActiveProducers() const;
-	//! Pop the oldest queued job
-	unique_ptr<ScanReadAheadJob> ClaimJob();
 	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
 	void PushState(unique_ptr<LocalTableFunctionState> state);
 	//! Pop a recycled scan state, returns null when none is available
@@ -153,6 +145,14 @@ private:
 		bool committed = false;
 	};
 
+	//! Try to produce one job into the queue.
+	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
+	//! Check if scan is done, i.e., no more jobs to do
+	bool IsDone() const;
+	//! Whether any thread holds a reserved slot it has not pushed a job for yet
+	bool HasActiveProducers() const;
+	//! Pop the oldest queued job
+	unique_ptr<ScanReadAheadJob> ClaimJob();
 	//! Mark the scan as done, i.e., no more jobs to produce
 	void SetDone();
 	//! Whether jobs are held back from admission, used to detect gaps in the batch indexes on exhaustion
