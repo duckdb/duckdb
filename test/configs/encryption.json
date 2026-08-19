@@ -103,6 +103,15 @@
       "paths": [
         "test/sql/optimizer/nested_null_segment_pruning.test"
       ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
+      ]
     }
   ]
 }

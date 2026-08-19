@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -317,7 +318,9 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 		file_path.emplace_back(path);
 	}
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
-	input.allow_empty = serialization.file_options.allow_empty;
+	// we are restoring an already bound file list rather than globbing user input - it is legitimately empty
+	// when filter pushdown pruned every file away, and rejecting that makes the plan impossible to deserialize
+	input.allow_empty = true;
 
 	auto multi_file_reader = MultiFileReader::Create(function);
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
@@ -531,8 +534,20 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		// no cached metadata - bail
 		return result;
 	}
+	const auto &parquet_options = parquet_data.GetParquetOptions();
+	string encryption_key_hash;
+	optional_ptr<const string> encryption_key_hash_ptr;
 	// first check if all caches are valid and there are no deletes
 	for (auto &cache : cached_metadata) {
+		if (cache.metadata->IsEncrypted() && parquet_options.encryption_config && !encryption_key_hash_ptr) {
+			auto hash_util = context.db->GetMbedTLSUtil(false);
+			encryption_key_hash =
+			    ParquetFileMetadataCache::CreateEncryptionKeyHash(*parquet_options.encryption_config, *hash_util);
+			encryption_key_hash_ptr = encryption_key_hash;
+		}
+		if (!cache.metadata->CanUseMetadataStatistics(parquet_options.encryption_config, encryption_key_hash_ptr)) {
+			return result;
+		}
 		if (cache.has_deletes) {
 			// we have deletes - don't return any partition stats
 			// FIXME: we could return with count approximate

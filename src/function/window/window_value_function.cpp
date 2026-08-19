@@ -1312,7 +1312,7 @@ struct TryExtrapolateOperator {
 		if (lo > hi) {
 			return Operation<T>(hi, -d, lo, result);
 		}
-		const auto delta = LossyNumericCast<double>(hi - lo);
+		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;
 		if (d < 0) {
 			if (!TryCast::Operation(delta * (-d), offset)) {

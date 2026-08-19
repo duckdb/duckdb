@@ -124,6 +124,15 @@ public:
 			return std::move(result);
 		}
 
+		if (result->file_list->IsEmpty() && !return_types.empty()) {
+			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
+			// left to bind the readers on, but the schema is already known so we can use it as-is
+			result->types = return_types;
+			result->names = names;
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+			return std::move(result);
+		}
+
 		// now bind the readers
 		// there are two ways of binding the readers
 		// (1) MultiFileReader::Bind -> custom bind, used only for certain lakehouse extensions

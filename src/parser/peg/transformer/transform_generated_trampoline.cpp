@@ -1036,6 +1036,9 @@ static const TransformFrameOps CREATE_VIEW_STMT_OPS = {"CreateViewStmt",
 static const TransformFrameOps CREATE_RECURSIVE_OPS = {"CreateRecursive",
                                                        &PEGTransformerFactory::InitializeCreateRecursiveTrampoline,
                                                        &PEGTransformerFactory::FinalizeCreateRecursiveTrampoline};
+static const TransformFrameOps CREATE_SECURE_OPS = {"CreateSecure",
+                                                    &PEGTransformerFactory::InitializeCreateSecureTrampoline,
+                                                    &PEGTransformerFactory::FinalizeCreateSecureTrampoline};
 static const TransformFrameOps DEALLOCATE_STATEMENT_OPS = {
     "DeallocateStatement", &PEGTransformerFactory::InitializeDeallocateStatementTrampoline,
     &PEGTransformerFactory::FinalizeDeallocateStatementTrampoline};
@@ -3255,6 +3258,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"EnumStringLiteralList", &ENUM_STRING_LITERAL_LIST_OPS},
 	    {"CreateViewStmt", &CREATE_VIEW_STMT_OPS},
 	    {"CreateRecursive", &CREATE_RECURSIVE_OPS},
+	    {"CreateSecure", &CREATE_SECURE_OPS},
 	    {"DeallocateStatement", &DEALLOCATE_STATEMENT_OPS},
 	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"DeleteStatement", &DELETE_STATEMENT_OPS},
@@ -11241,27 +11245,32 @@ PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &t
 void PEGTransformerFactory::InitializeCreateViewStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(6);
-	stack.PushFrame(list_pr.GetChild(7), SELECT_STATEMENT_INTERNAL_OPS,
-	                TransformFrameResultTarget(frame.frame_index, 5));
-	auto &with_list_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	frame.ReserveChildSlots(7);
+	stack.PushFrame(list_pr.GetChild(8), SELECT_STATEMENT_INTERNAL_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 6));
+	auto &with_list_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (with_list_opt.HasResult()) {
-		stack.PushFrame(with_list_opt.GetResult(), WITH_LIST_OPS, TransformFrameResultTarget(frame.frame_index, 4));
+		stack.PushFrame(with_list_opt.GetResult(), WITH_LIST_OPS, TransformFrameResultTarget(frame.frame_index, 5));
 	}
-	auto &insert_column_list_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &insert_column_list_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (insert_column_list_opt.HasResult()) {
 		stack.PushFrame(insert_column_list_opt.GetResult(), INSERT_COLUMN_LIST_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 3));
+		                TransformFrameResultTarget(frame.frame_index, 4));
 	}
-	stack.PushFrame(list_pr.GetChild(3), QUALIFIED_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 2));
-	auto &if_not_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	stack.PushFrame(list_pr.GetChild(4), QUALIFIED_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 3));
+	auto &if_not_exists_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		stack.PushFrame(if_not_exists_opt.GetResult(), IF_NOT_EXISTS_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 1));
+		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	auto &create_recursive_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	auto &create_recursive_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (create_recursive_opt.HasResult()) {
 		stack.PushFrame(create_recursive_opt.GetResult(), CREATE_RECURSIVE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	auto &create_secure_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (create_secure_opt.HasResult()) {
+		stack.PushFrame(create_secure_opt.GetResult(), CREATE_SECURE_OPS,
 		                TransformFrameResultTarget(frame.frame_index, 0));
 	}
 }
@@ -11269,27 +11278,31 @@ void PEGTransformerFactory::InitializeCreateViewStmtTrampoline(PEGTransformer &t
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateViewStmtTrampoline(PEGTransformer &transformer,
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
-	optional<bool> create_recursive {};
+	optional<bool> create_secure {};
 	if (frame.child_results[0]) {
-		create_recursive = frame.TakeResult<bool>(0);
+		create_secure = frame.TakeResult<bool>(0);
+	}
+	optional<bool> create_recursive {};
+	if (frame.child_results[1]) {
+		create_recursive = frame.TakeResult<bool>(1);
 	}
 	optional<bool> if_not_exists {};
-	if (frame.child_results[1]) {
-		if_not_exists = frame.TakeResult<bool>(1);
+	if (frame.child_results[2]) {
+		if_not_exists = frame.TakeResult<bool>(2);
 	}
-	auto qualified_name = frame.TakeResult<QualifiedName>(2);
+	auto qualified_name = frame.TakeResult<QualifiedName>(3);
 	optional<vector<string>> insert_column_list {};
-	if (frame.child_results[3]) {
-		insert_column_list = frame.TakeResult<vector<string>>(3);
+	if (frame.child_results[4]) {
+		insert_column_list = frame.TakeResult<vector<string>>(4);
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
-	if (frame.child_results[4]) {
-		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(4);
+	if (frame.child_results[5]) {
+		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(5);
 	}
-	auto select_statement_internal = frame.TakeResult<unique_ptr<SelectStatement>>(5);
+	auto select_statement_internal = frame.TakeResult<unique_ptr<SelectStatement>>(6);
 	auto result =
-	    TransformCreateViewStmt(transformer, create_recursive, if_not_exists, qualified_name, insert_column_list,
-	                            std::move(with_list), std::move(select_statement_internal));
+	    TransformCreateViewStmt(transformer, create_secure, create_recursive, if_not_exists, qualified_name,
+	                            insert_column_list, std::move(with_list), std::move(select_statement_internal));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
@@ -11302,6 +11315,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateRecursiveT
                                                                                           TransformStack &stack,
                                                                                           TransformStackFrame &frame) {
 	auto result = TransformCreateRecursive(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateSecureTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = TransformCreateSecure(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
