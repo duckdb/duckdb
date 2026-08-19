@@ -129,8 +129,7 @@ bool ScanReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) 
 	ProducerReservation reservation(*this);
 	try {
 		vector<unique_ptr<AsyncTask>> io_tasks;
-		// hand a recycled scan state to the producer, so learned scan state carries over across jobs
-		auto job = claim_and_schedule(TryPopState(), io_tasks);
+		auto job = claim_and_schedule(io_tasks);
 		if (!job) {
 			// there are no more jobs to produce, the scan is done
 			SetDone();
@@ -165,22 +164,6 @@ unique_ptr<ScanReadAheadJob> ScanReadAhead::ClaimJob() {
 	ready_queue.pop_front();
 	ReleaseSlot();
 	return job;
-}
-
-void ScanReadAhead::PushState(unique_ptr<LocalTableFunctionState> state) {
-	D_ASSERT(state);
-	lock_guard<mutex> guard(lock);
-	state_pool.push_back(std::move(state));
-}
-
-unique_ptr<LocalTableFunctionState> ScanReadAhead::TryPopState() {
-	lock_guard<mutex> guard(lock);
-	if (state_pool.empty()) {
-		return nullptr;
-	}
-	auto state = std::move(state_pool.back());
-	state_pool.pop_back();
-	return state;
 }
 
 void ScanReadAhead::WaitForJob(ScanReadAheadJob &job) {

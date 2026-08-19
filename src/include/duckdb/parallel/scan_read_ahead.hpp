@@ -26,7 +26,6 @@
 namespace duckdb {
 class ClientContext;
 struct TableFunctionInput;
-struct LocalTableFunctionState;
 
 class ReadAheadJobCompletion {
 public:
@@ -113,15 +112,10 @@ public:
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	//! Receives a recycled scan state when one is available, returns null when there are no more jobs to produce.
+	//! Returns null when there are no more jobs to produce.
 	//! The callback must assign the job's batch index, densely from 0 in claim order.
-	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(
-	    unique_ptr<LocalTableFunctionState> recycled_state, vector<unique_ptr<AsyncTask>> &io_tasks)>;
+	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
-	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
-	void PushState(unique_ptr<LocalTableFunctionState> state);
-	//! Pop a recycled scan state, returns null when none is available
-	unique_ptr<LocalTableFunctionState> TryPopState();
 	//! Settle the claimed job's scheduled I/O, blocking until it completed, and release its budget charge
 	void WaitForJob(ScanReadAheadJob &job);
 	//! Acquire the next job, producing and claiming as needed; on ACQUIRED the job's I/O has been settled.
@@ -185,8 +179,6 @@ private:
 	map<idx_t, unique_ptr<ScanReadAheadJob>> pending_jobs;
 	//! The batch index the queue admits next
 	idx_t next_batch_index = 0;
-	//! Scan states of finished jobs
-	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
 	//! Bytes of scheduled I/O that has not completed yet, released once the claimed job's I/O finished
