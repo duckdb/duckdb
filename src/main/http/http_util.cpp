@@ -322,6 +322,16 @@ void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx
 	if (StringUtil::StartsWith(proxy_value, "http://")) {
 		sanitized_proxy_value = proxy_value.substr(7);
 	}
+	auto path_pos = sanitized_proxy_value.find('/');
+	if (path_pos != string::npos) {
+		if (path_pos != sanitized_proxy_value.size() - 1) {
+			throw InvalidInputException("Failed to parse http_proxy '%s' into a host and port", proxy_value);
+		}
+		sanitized_proxy_value.pop_back();
+	}
+	if (sanitized_proxy_value.empty()) {
+		throw InvalidInputException("Failed to parse http_proxy '%s' into a host and port", proxy_value);
+	}
 	auto proxy_split = StringUtil::Split(sanitized_proxy_value, ":");
 	if (proxy_split.size() == 1) {
 		hostname_out = proxy_split[0];
