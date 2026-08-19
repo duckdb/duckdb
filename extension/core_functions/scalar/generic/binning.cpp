@@ -141,6 +141,10 @@ struct EquiWidthBinsInteger {
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
+		// a step of 0 (bin count too large for the range, or min == max) would never advance the loop below
+		if (step == 0) {
+			throw InvalidInputException("equi_width_bins: bin count is too large for the range between min and max");
+		}
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
@@ -187,7 +191,7 @@ struct EquiWidthBinsDouble {
 			bin_count *= 2;
 		}
 		if (step == 0) {
-			throw InternalException("step is 0!?");
+			throw InvalidInputException("equi_width_bins: bin count is too large for the range between min and max");
 		}
 
 		const double round_multiplication = 10 / step_power_of_ten;

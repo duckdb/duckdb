@@ -1,0 +1,45 @@
+# name: test/sql/window/test_lead_lag_bounds.test
+# description: Test LEAD/LAG with offset at the bounds of BIGINT
+# group: [window]
+
+require 64bit
+
+# INT64_MIN offset: negating/abs of INT64_MIN is UB, so the streaming path must decline it
+# and fall back to the non-streaming path. LAG computes i - offset which overflows for
+# INT64_MIN - the index saturates and every row lands out of partition -> default
+query II
+SELECT i, lag(v, (-9223372036854775807 - 1)::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20)) t(i, v) ORDER BY i
+----
+1	-1
+2	-1
+
+# LEAD computes i + offset which stays in range, so every row lands out of partition -> default
+query II
+SELECT i, lead(v, (-9223372036854775807 - 1)::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20), (3, 30)) t(i, v) ORDER BY i
+----
+1	-1
+2	-1
+3	-1
+
+# INT64_MAX offset is fine - exceeds the partition so every row gets the default
+query II
+SELECT i, lead(v, 9223372036854775807::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20), (3, 30)) t(i, v) ORDER BY i
+----
+1	-1
+2	-1
+3	-1
+
+query II
+SELECT i, lag(v, 9223372036854775807::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20), (3, 30)) t(i, v) ORDER BY i
+----
+1	-1
+2	-1
+3	-1
+
+# ordinary offsets are unaffected
+query III
+SELECT i, lag(v, 1) OVER (ORDER BY i), lead(v, 1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20), (3, 30)) t(i, v) ORDER BY i
+----
+1	NULL	20
+2	10	30
+3	20	NULL
