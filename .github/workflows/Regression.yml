@@ -46,7 +46,7 @@ jobs:
     name: Linux Base
     runs-on: ${{ inputs.runner_linux_x64 }}
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       GEN: ninja
 
@@ -126,7 +126,7 @@ jobs:
       - linux-base
     runs-on: ubuntu-24.04
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -205,7 +205,7 @@ jobs:
       - linux-base
     runs-on: namespace-profile-linux-small
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +272,7 @@ jobs:
       - linux-base
     runs-on: ubuntu-24.04
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
@@ -320,7 +320,7 @@ jobs:
       - linux-base
     runs-on: ubuntu-24.04
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
@@ -359,7 +359,7 @@ jobs:
       - linux-base
     runs-on: ${{ inputs.runner_linux_small }}
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       EXTENSION_STATIC_BUILD: 1
 
@@ -402,7 +402,7 @@ jobs:
       - linux-base
     runs-on: ubuntu-24.04
     container:
-      image: ${{ fromJson(inputs.images).manylinux_amd64_cpp }}
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6

@@ -180,7 +180,7 @@ jobs:
 
           images=$(
             jq -nc --arg image_version "$image_version" \
-              '{manylinux_amd64_cpp: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_cpp:" + $image_version)}'
+              '{manylinux_amd64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:" + $image_version)}'
           )
 
           linux_cli_matrix=$(
@@ -486,6 +486,8 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -496,10 +498,6 @@ jobs:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
