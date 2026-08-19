@@ -202,6 +202,7 @@ private:
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                                                PhysicalOperator &build);
 	optional_ptr<PhysicalOperator> PlanAsOfInequalityJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
-	                                                      PhysicalOperator &build);
+	                                                      PhysicalOperator &build, const idx_t lhs_cardinality,
+	                                                      const idx_t rhs_cardinality);
 };
 } // namespace duckdb

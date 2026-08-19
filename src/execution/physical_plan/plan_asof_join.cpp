@@ -338,6 +338,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
+	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	auto &left = CreatePlan(*op.children[0]);
 	auto &right = CreatePlan(*op.children[1]);
 
@@ -378,16 +379,15 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 		return Make<PhysicalAsOfJoin>(op, left, right, lhs_partition_cols, rhs_partition_cols);
 	}
 
-	return *PlanAsOfInequalityJoin(op, left, right);
+	return *PlanAsOfInequalityJoin(op, left, right, lhs_cardinality, rhs_cardinality);
 }
 
 optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfInequalityJoin(LogicalComparisonJoin &op,
                                                                              PhysicalOperator &left,
-                                                                             PhysicalOperator &right) {
-	//	Caller already did this but they are cheap...
-	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
-	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-
+                                                                             PhysicalOperator &right,
+                                                                             const idx_t lhs_cardinality,
+                                                                             const idx_t rhs_cardinality) {
+	//	Caller already did this but it is cheap...
 	vector<idx_t> equi_indexes;
 	const auto asof_idx = ValidateAsOfConditions(op, equi_indexes);
 
