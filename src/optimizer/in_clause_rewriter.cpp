@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -11,6 +12,29 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+	    (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
+	     expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN)) {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetChildren().size() >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+			for (idx_t child_idx = 1; child_idx < op.GetChildren().size(); child_idx++) {
+				if (!op.GetChildren()[child_idx]->IsFoldable()) {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (!result && HasRewritableInClause(child)) {
+			result = true;
+		}
+	});
+	return result;
+}
 
 unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
