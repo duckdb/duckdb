@@ -81,6 +81,7 @@ static bool GroupingMergesDistinguishableValues(const LogicalType &type) {
 		case LogicalTypeId::UUID:
 		case LogicalTypeId::ENUM:
 			return false;
+
 		// bytewise string_t equality (no unicode or other normalization): they only merge identical values
 		case LogicalTypeId::BLOB:
 		case LogicalTypeId::BIT:
@@ -88,12 +89,11 @@ static bool GroupingMergesDistinguishableValues(const LogicalType &type) {
 		case LogicalTypeId::GEOMETRY:
 		case LogicalTypeId::TYPE:
 			return false;
-		case LogicalTypeId::VARCHAR:
-			// bytewise equality, unless a collation is attached (e.g. NOCASE merges 'a' and 'A')
-			return !StringType::GetCollation(ty).empty();
+
 		// the only value is NULL
 		case LogicalTypeId::SQLNULL:
 			return false;
+
 		// element-wise equality, the child types are visited separately; MAP is key-order-sensitive and
 		// UNION is tag-sensitive, so the containers themselves only merge identical values
 		case LogicalTypeId::STRUCT:
@@ -103,21 +103,29 @@ static bool GroupingMergesDistinguishableValues(const LogicalType &type) {
 		case LogicalTypeId::MAP:
 		case LogicalTypeId::UNION:
 			return false;
+
+		case LogicalTypeId::VARCHAR:
+			// bytewise equality, unless a collation is attached (e.g. NOCASE merges 'a' and 'A')
+			return !StringType::GetCollation(ty).empty();
+
 		// normalizing comparator (EqualsFloat): -0.0 and 0.0 merge, as do all NaN bit patterns;
 		// a VARCHAR cast or signbit() tells both pairs apart ('0.0' vs '-0.0', 'nan' vs '-nan'),
 		// and 1/x additionally tells the zeros apart (inf vs -inf)
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 			return true;
+
 		// normalizing comparator (Interval::Equals): 1 month = 30 days, but the values behave differently
 		// in date arithmetic and casts to VARCHAR
 		case LogicalTypeId::INTERVAL:
 			return true;
+
 		// VARIANT holds its payload in a fixed physical layout, so TypeVisitor cannot visit the types actually
 		// stored inside it. Its comparator recurses into those values, inheriting their normalization: a VARIANT
 		// holding -0.0 compares equal to one holding 0.0, while a cast to VARCHAR tells them apart
 		case LogicalTypeId::VARIANT:
 			return true;
+
 		// internal and planning-only types that should not appear as the type of a bound group expression;
 		// conservatively assume they merge
 		case LogicalTypeId::INVALID:
@@ -233,10 +241,12 @@ bool RemoveUnnecessaryAggregates::CanReplaceAggregateWithProjection(const Logica
 		// the aggregate computes values, not just a distinct set of groups
 		return false;
 	}
+
 	if (aggr.groups.empty()) {
 		// scalar aggregate, produces exactly one row instead of eliminating duplicates
 		return false;
 	}
+
 	if (aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
 		// with multiple grouping sets (ROLLUP/CUBE) the aggregate is not just a duplicate eliminator: it outputs one
 		// batch of rows per grouping set (e.g. the subtotal and grand-total rows of a ROLLUP), which a projection of
@@ -244,11 +254,13 @@ bool RemoveUnnecessaryAggregates::CanReplaceAggregateWithProjection(const Logica
 		// equivalent either
 		return false;
 	}
+
 	if (!aggr.grouping_sets.empty() && aggr.grouping_sets[0].size() != aggr.groups.size()) {
 		// groups that are not part of the (single) grouping set are output as NULL instead of being grouped on,
 		// a projection would output their actual values
 		return false;
 	}
+
 	for (idx_t i = 0; i < aggr.groups.size(); i++) {
 		if (column_references.find(ColumnBinding(aggr.group_index, ProjectionIndex(i))) == column_references.end()) {
 			// unreferenced groups are not observable, so their values do not matter
@@ -260,6 +272,7 @@ bool RemoveUnnecessaryAggregates::CanReplaceAggregateWithProjection(const Logica
 			return false;
 		}
 	}
+
 	// volatile group expressions (e.g. GROUP BY random()) do not block the removal: grouping evaluates the group
 	// key once per input row (not per group), exactly like the replacement projection does
 	return true;
