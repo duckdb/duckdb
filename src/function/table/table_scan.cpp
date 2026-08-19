@@ -46,28 +46,30 @@
 namespace duckdb {
 
 //! A pre-claimed scan assignment whose I/O is scheduled on the async pool ahead of decoding
-struct TableScanJob : public ScanReadAheadJob<TableScanState> {
+struct TableScanJob : public ScanReadAheadJob {
 	//! The number of rows in the assignment
 	idx_t rows = 0;
+	//! The scan state the job's I/O and decoding operate on
+	unique_ptr<TableScanState> scan_state;
 };
 
-//! Keeps scan assignments claimed and their I/O scheduled ahead of decoding
-using TableScanReadAhead = ScanReadAhead<TableScanJob, TableScanState>;
-
 //! Create the read-ahead driver, returns null when read-ahead is disabled or prefetching is not beneficial
-static unique_ptr<TableScanReadAhead> CreateTableScanReadAhead(ClientContext &context, DataTable &storage) {
+static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context, DataTable &storage) {
 	if (!storage.GetTableIOManager().GetBlockManagerForRowData().Prefetch()) {
 		return nullptr;
 	}
-	optional_idx depth;
-	if (!TryGetReadAheadDepth(context, depth)) {
+	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
+		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
+		return nullptr;
+	}
+	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
+	if (configured_depth == 0) {
 		return nullptr;
 	}
 	// automatic mode follows the number of threads, jobs hold buffer pool memory rather than a reservation
-	const idx_t resolved_depth =
-	    depth.IsValid() ? depth.GetIndex() : TaskScheduler::GetScheduler(context).NumberOfThreads();
-	// claim order is queue order, the assignment batch indexes are not gapless
-	return make_uniq<TableScanReadAhead>(context, resolved_depth, nullptr, true);
+	const idx_t depth = configured_depth > 0 ? NumericCast<idx_t>(configured_depth)
+	                                         : TaskScheduler::GetScheduler(context).NumberOfThreads();
+	return make_uniq<ScanReadAhead>(context, depth, nullptr);
 }
 
 struct TableScanLocalState : public LocalTableFunctionState {
@@ -314,7 +316,7 @@ public:
 public:
 	ParallelTableScanState state;
 	//! Read-ahead driver
-	unique_ptr<TableScanReadAhead> read_ahead;
+	unique_ptr<ScanReadAhead> read_ahead;
 
 private:
 	const TableScanBindData &bind_data;
@@ -326,6 +328,12 @@ private:
 	vector<StorageIndex> storage_ids;
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
+	//! Guards assignment claims, keeping job batch indexes dense in claim order, and the state pool
+	mutex read_ahead_lock;
+	//! Batch index assigned to the next produced job
+	idx_t next_job_index = 0;
+	//! Scan states of finished read-ahead jobs, recycled so learned scan state carries over
+	vector<unique_ptr<TableScanState>> state_pool;
 
 public:
 	//! Retains the scan initialization info shared by all scan states of this scan
@@ -406,21 +414,46 @@ public:
 		return PersistentScanResult::NEXT_VECTOR;
 	}
 
-	bool ProduceJob(ClientContext &context, TableScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
+	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
+	void PushState(unique_ptr<TableScanState> scan_state) {
+		lock_guard<mutex> guard(read_ahead_lock);
+		state_pool.push_back(std::move(scan_state));
+	}
+
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<TableScanState> TryPopState() {
+		lock_guard<mutex> guard(read_ahead_lock);
+		if (state_pool.empty()) {
+			return nullptr;
+		}
+		auto scan_state = std::move(state_pool.back());
+		state_pool.pop_back();
+		return scan_state;
+	}
+
+	//! Claims the next assignment as a job and registers its I/O, returns null when there are no more assignments
+	unique_ptr<TableScanJob> ProduceJob(ClientContext &context, vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<TableScanJob>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		if (!job.scan_state) {
-			job.scan_state = make_uniq<TableScanState>();
-			InitializeScanState(context, *job.scan_state);
+		job->scan_state = TryPopState();
+		if (!job->scan_state) {
+			job->scan_state = make_uniq<TableScanState>();
+			InitializeScanState(context, *job->scan_state);
 		}
-		job.rows = storage.NextParallelScan(context, state, *job.scan_state);
-		if (job.rows == 0) {
-			return false;
+		{
+			// claim and index under one lock, queue admission needs batch indexes dense in claim order
+			lock_guard<mutex> guard(read_ahead_lock);
+			job->rows = storage.NextParallelScan(context, state, *job->scan_state);
+			if (job->rows == 0) {
+				return nullptr;
+			}
+			job->batch_index = next_job_index++;
 		}
-		auto &table_state = job.scan_state->table_state;
+		auto &table_state = job->scan_state->table_state;
 		if (table_state.row_group && table_state.vector_index * STANDARD_VECTOR_SIZE < table_state.max_row_group_row) {
 			io_tasks = table_state.RegisterAssignmentIO();
 		}
-		return true;
+		return job;
 	}
 
 	//! Decodes read-ahead jobs, returns true when the caller must yield (parked or output produced),
