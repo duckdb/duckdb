@@ -120,10 +120,8 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 
 	bool parallel = append_count <= 1 && !op.return_chunk;
 
-	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker,
-	                                               parallel, op.return_chunk);
-	result.children.push_back(plan);
-	return result;
+	return planner.Make<PhysicalMergeInto>(op.types, plan, std::move(actions), op.row_id_start, op.source_marker,
+	                                       parallel, op.return_chunk);
 }
 
 PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
