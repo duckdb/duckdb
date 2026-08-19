@@ -219,7 +219,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
 	PEGTransformerFactory factory(grammar);
 	for (auto &entry : GeneratedTrampolineOps()) {
-		if (grammar.HasRule(entry.first)) {
+		if (grammar.GetRule(entry.first)) {
 			grammar.SetTrampolineOps(entry.first, *entry.second);
 		}
 	}

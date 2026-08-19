@@ -51,8 +51,7 @@ public:
 	DUCKDB_API static ParsedGrammar Parse(const string &grammar);
 	DUCKDB_API static ParsedGrammar CreateDefault();
 
-	DUCKDB_API bool HasRule(const string &rule_name) const;
-	DUCKDB_API const ParsedGrammarRule &GetRule(const string &rule_name) const;
+	DUCKDB_API optional_ptr<const ParsedGrammarRule> GetRule(const string &rule_name) const;
 	DUCKDB_API void AddRule(const string &rule_definition, optional<RuleTransformData> transform_data = std::nullopt);
 	DUCKDB_API void ReplaceRule(const string &rule_definition,
 	                            optional<RuleTransformData> transform_data = std::nullopt);

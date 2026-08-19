@@ -266,7 +266,7 @@ void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	if (packrat_memoized_rules.count(name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (grammar.HasRule(name)) {
+	if (grammar.GetRule(name)) {
 		auto rule_p = compiled.GetRule(name);
 		if (!rule_p) {
 			throw InvalidInputException("No registered data exists for rule '%s', failed to set RuleOverride", name);

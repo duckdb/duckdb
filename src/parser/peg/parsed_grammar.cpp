@@ -44,21 +44,17 @@ ParsedGrammar ParsedGrammar::CreateDefault() {
 	const char *grammar = const_char_ptr_cast(INLINED_PEG_GRAMMAR);
 #endif
 	auto result = Parse(grammar);
-	if (!result.HasRule("EndOfInput")) {
+	if (!result.GetRule("EndOfInput")) {
 		result.AddParsedRule(ParsedGrammarRule("EndOfInput", PEGRule()));
 	}
 	PEGTransformerFactory::RegisterDefaultTransforms(result);
 	return result;
 }
 
-bool ParsedGrammar::HasRule(const string &rule_name) const {
-	return rules.find(rule_name) != rules.end();
-}
-
-const ParsedGrammarRule &ParsedGrammar::GetRule(const string &rule_name) const {
+optional_ptr<const ParsedGrammarRule> ParsedGrammar::GetRule(const string &rule_name) const {
 	auto entry = rules.find(rule_name);
 	if (entry == rules.end()) {
-		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
+		return nullptr;
 	}
 	return *entry->second;
 }
@@ -92,7 +88,7 @@ void ParsedGrammar::RegisterStrings(PEGRule &rule) {
 }
 
 void ParsedGrammar::AddParsedRule(ParsedGrammarRule rule) {
-	if (HasRule(rule.name)) {
+	if (GetRule(rule.name)) {
 		throw InvalidInputException("Grammar rule '%s' already exists", rule.name);
 	}
 	RegisterStrings(rule.recipe);
