@@ -19,6 +19,9 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
+	if (transformer.options.debug_transformer_trampoline_style) {
+		return TransformStatementTrampoline(transformer, parse_result);
+	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
@@ -45,31 +48,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	return result;
 }
 
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto result = TransformStatementTrampoline(transformer, parse_result);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
-}
-
-void PEGTransformerFactory::RegisterGeneratedTrampoline() {
-	auto &rule = grammar.GetMutableRule("Statement");
-	if (!rule.transform_data) {
-		throw InvalidInputException(
-		    "Can't register trampoline transform on 'Statement' because it's missing transform data");
-	}
-	rule.transform_data->trampoline_transform = &PEGTransformerFactory::TransformStatementTrampolineInternal;
-}
-
 const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
-	auto rule_p = parse_result.GetRule();
-	if (!rule_p) {
-		throw InternalException("No registered data exists for rule '%s'", parse_result.name);
+	auto &ops_map = GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(parse_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", parse_result.name);
 	}
-	auto &rule = *rule_p;
-	if (!rule.transform_data.trampoline_ops) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule.name);
-	}
-	return *rule.transform_data.trampoline_ops;
+	return *ops_entry->second;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
@@ -207,7 +192,6 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
 	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
-	RegisterGeneratedTrampoline();
 	RegisterCommon();
 	RegisterCreateTable();
 	RegisterExpression();
@@ -218,11 +202,6 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
 	PEGTransformerFactory factory(grammar);
-	for (auto &entry : GeneratedTrampolineOps()) {
-		if (grammar.GetRule(entry.first)) {
-			grammar.SetTrampolineOps(entry.first, *entry.second);
-		}
-	}
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {

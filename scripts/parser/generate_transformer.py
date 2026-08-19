@@ -1168,9 +1168,7 @@ def generate_table_and_register(all_registrations):
         + entries
         + "\t};\n"
         + "\tfor (const auto &rule : builtin_transform_rules) {\n"
-        + "\t\tRuleTransformData transform_data;\n"
-        + "\t\ttransform_data.transform = rule.transform;\n"
-        + "\t\tgrammar.SetTransform(rule.name, std::move(transform_data));\n"
+        + "\t\tgrammar.SetTransform(rule.name, rule.transform);\n"
         + "\t}\n"
         + "}\n"
     )

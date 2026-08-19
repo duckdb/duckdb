@@ -70,11 +70,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		auto transform_data = std::move(rule.transform_data);
-		if (!transform_data) {
-			transform_data.emplace();
-		}
-		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(*transform_data)));
+		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform)));
 	}
 	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher);
 	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
