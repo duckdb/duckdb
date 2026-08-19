@@ -88,5 +88,5 @@ COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE);
 statement error
 COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE 42);
 ----
-force_quote expected to find 42, but it was not found in the table
+"force_quote" expected to find 42, but it was not found in the table
 

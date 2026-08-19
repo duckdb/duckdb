@@ -61,7 +61,7 @@ COPY test (col_b, col_a) FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv'
 statement error
 COPY test FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 ----
-force_not_null expected to find col_d, but it was not found in the table
+"force_not_null" expected to find col_d, but it was not found in the table
 
 # FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I

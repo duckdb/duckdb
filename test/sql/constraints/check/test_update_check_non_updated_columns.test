@@ -136,7 +136,7 @@ CHECK constraint failed on table "v_char"
 statement error
 UPDATE v_char SET status = 'deleted' WHERE username = 'alice';
 ----
-CHECK constraint failed on table v_char
+CHECK constraint failed on table "v_char"
 
 # UPDATE that keeps constraints satisfied must succeed
 statement ok
