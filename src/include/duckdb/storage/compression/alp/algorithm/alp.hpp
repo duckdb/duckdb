@@ -86,7 +86,7 @@ public:
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	vector<AlpCombination> best_k_combinations;
-	uint8_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	uint32_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 2];
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	idx_t RequiredSpace() const {
@@ -371,8 +371,8 @@ struct AlpCompression {
 		auto bit_width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
 		auto bp_size = BitpackingPrimitives::GetRequiredSize(n_values, bit_width);
 		if (!EMPTY && bit_width > 0) { //! We only execute the BP if we are writing the data
-			BitpackingPrimitives::PackBuffer<uint64_t, false>(compression_data.values_encoded, u_encoded_integers,
-			                                                  n_values, bit_width);
+			BitpackingPrimitives::PackBuffer<uint64_t, false>(data_ptr_cast(compression_data.values_encoded),
+			                                                  u_encoded_integers, n_values, bit_width);
 		}
 		compression_data.bit_width = bit_width;                                 // in bits
 		compression_data.bp_size = bp_size;                                     // in bytes
