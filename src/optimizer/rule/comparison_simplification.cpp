@@ -8,7 +8,10 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -91,6 +94,58 @@ static unique_ptr<Expression> CreateNullCheckExpression(ExpressionType expressio
 	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
 	result->GetChildrenMutable().push_back(std::move(child));
 	return std::move(result);
+}
+
+static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalOperator &op, const ColumnBinding &binding,
+                                                      ClientContext &context) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		if (get.table_index == binding.table_index && binding.column_index.GetIndex() < get.GetColumnIds().size() &&
+		    get.bind_data) {
+			auto &column_index = get.GetColumnIndex(binding);
+			if (get.function.statistics_extended) {
+				TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
+				return get.function.statistics_extended(context, input);
+			}
+			if (get.function.statistics) {
+				return get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		auto stats = GetColumnStatistics(*child, binding, context);
+		if (stats) {
+			return stats;
+		}
+	}
+	return nullptr;
+}
+
+static bool DateTimestampCastFitsStatistics(LogicalOperator &op, BoundFunctionExpression &cast_expression,
+                                            ClientContext &context) {
+	if (BoundCastExpression::SourceType(cast_expression).id() != LogicalTypeId::DATE ||
+	    cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+		return false;
+	}
+	auto &child = *BoundCastExpression::ChildMutable(cast_expression);
+	if (child.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return false;
+	}
+	auto &column_ref = child.Cast<BoundColumnRefExpression>();
+	if (column_ref.Depth() != 0) {
+		return false;
+	}
+	auto stats = GetColumnStatistics(op, column_ref.Binding(), context);
+	if (!stats || stats->GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(*stats)) {
+		return false;
+	}
+	auto min = NumericStats::Min(*stats);
+	auto max = NumericStats::Max(*stats);
+	if (!min.GetValue<date_t>().IsFinite() || !max.GetValue<date_t>().IsFinite()) {
+		return false;
+	}
+	return min.DefaultTryCastAs(cast_expression.GetReturnType()) &&
+	       max.DefaultTryCastAs(cast_expression.GetReturnType());
 }
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -184,11 +239,13 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	}
 	if (BoundCastExpression::IsCast(column_ref_expr)) {
 		//! Here we check if we can apply the expression on the constant side
-		//! We can do this if the cast itself is invertible and casting the constant is
+		//! We can do this if the cast itself is invertible and cannot fail for the input, and casting the constant is
 		//! invertible in practice.
 		auto &cast_expression = column_ref_expr.Cast<BoundFunctionExpression>();
 		auto target_type = BoundCastExpression::SourceType(cast_expression);
-		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
+		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType()) ||
+		    (BoundCastExpression::CastCanThrow(target_type, cast_expression.GetReturnType(), false) &&
+		     !DateTimestampCastFitsStatistics(op, cast_expression, rewriter.context))) {
 			return nullptr;
 		}
 

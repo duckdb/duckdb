@@ -1,0 +1,50 @@
+# name: test/issues/general/test_24241.test
+# description: Preserve failures when simplifying DATE to TIMESTAMP comparisons
+# group: [general]
+
+statement ok
+CREATE TABLE dates(d DATE);
+
+statement ok
+INSERT INTO dates VALUES
+	(DATE '294247-01-10'),
+	(DATE '294247-01-11'),
+	(DATE '5874897-12-31'),
+	(DATE 'infinity'),
+	(NULL);
+
+statement error
+SELECT d
+FROM dates
+WHERE CAST(d AS TIMESTAMP) > TIMESTAMP '294247-01-10 04:00:00'
+ORDER BY d;
+----
+<REGEX>:Conversion Error:.*294247-01-11.*can't be cast.*
+
+query I
+SELECT count(*)
+FROM dates
+WHERE TRY_CAST(d AS TIMESTAMP) > TIMESTAMP '294247-01-10 04:00:00';
+----
+1
+
+statement ok
+SET disabled_optimizers = 'expression_rewriter';
+
+statement error
+SELECT d
+FROM dates
+WHERE CAST(d AS TIMESTAMP) > TIMESTAMP '294247-01-10 04:00:00'
+ORDER BY d;
+----
+<REGEX>:Conversion Error:.*294247-01-11.*can't be cast.*
+
+query I
+SELECT count(*)
+FROM dates
+WHERE TRY_CAST(d AS TIMESTAMP) > TIMESTAMP '294247-01-10 04:00:00';
+----
+1
+
+statement ok
+SET disabled_optimizers = '';
