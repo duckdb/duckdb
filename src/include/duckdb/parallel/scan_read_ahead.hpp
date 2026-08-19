@@ -102,7 +102,8 @@ struct ScanReadAheadJob {
 		}
 	}
 
-	//! Batch index of this job, drives ordered queue admission
+	//! Batch index of this job, drives ordered queue admission.
+	//! Producers must assign batch indexes densely from 0 in claim order
 	idx_t batch_index = 0;
 	//! Completion of the job's scheduled I/O
 	shared_ptr<ReadAheadJobCompletion> io_completion;
@@ -144,6 +145,7 @@ public:
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Receives a recycled scan state when one is available, returns null when there are no more jobs to produce.
+	//! The callback must assign the job's batch index, densely from 0 in claim order.
 	using ProduceJobCallback = std::function<unique_ptr<ScanReadAheadJob>(
 	    unique_ptr<LocalTableFunctionState> recycled_state, vector<unique_ptr<AsyncTask>> &io_tasks)>;
 
@@ -184,6 +186,11 @@ private:
 
 	//! Mark the scan as done, i.e., no more jobs to produce
 	void SetDone();
+	//! Whether jobs are held back from admission, used to detect gaps in the batch indexes on exhaustion
+	bool HasPendingJobs() const {
+		lock_guard<mutex> guard(lock);
+		return !pending_jobs.empty();
+	}
 	//! Reserve an in-flight job slot for producing a job
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue

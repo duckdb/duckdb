@@ -1,3 +1,4 @@
+
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/function/table_function.hpp"
@@ -190,6 +191,11 @@ ScanReadAheadAcquire ScanReadAhead::AcquireJob(ClientContext &context, TableFunc
 			// re-check the queue, a job may have been pushed between the claim and the done check
 			job = ClaimJob();
 			if (!job) {
+				if (HasPendingJobs()) {
+					// with no producers left the held-back jobs can never be admitted, their rows would be lost
+					throw InternalException("Read-ahead exhausted with jobs still held back, "
+					                        "batch indexes must be gapless from 0");
+				}
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 		}
@@ -247,7 +253,9 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 		backlog_budget = memory_governor->BackpressureBudget();
 	}
 	// producers push concurrently, so admit jobs to the queue in batch-index order
-	pending_jobs.emplace(job->batch_index, std::move(job));
+	if (job->batch_index < next_batch_index || !pending_jobs.emplace(job->batch_index, std::move(job)).second) {
+		throw InternalException("Read-ahead jobs must have unique batch indexes, assigned densely from 0");
+	}
 	while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {
 		ready_queue.push_back(std::move(pending_jobs.begin()->second));
 		pending_jobs.erase(pending_jobs.begin());
