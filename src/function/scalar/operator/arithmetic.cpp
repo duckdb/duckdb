@@ -1317,7 +1317,30 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 }
 
 static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi) {
-	// long double can represent all int64 values exactly on x86-64 and aarch64
+	int64_t delta;
+	if (TrySubtractOperator::Operation(hi, lo, delta)) {
+		// the result stays within [lo, hi], so an exact integer computation cannot overflow and is
+		// platform-independent - unlike the floating point path below (long double is only 64 bits on MSVC)
+		const auto bound = static_cast<double>(delta);
+		const auto offset = bound * d;
+		if (delta >= 0) {
+			if (offset <= 0) {
+				return lo;
+			}
+			if (offset >= bound) {
+				return hi;
+			}
+		} else {
+			if (offset >= 0) {
+				return lo;
+			}
+			if (offset <= bound) {
+				return hi;
+			}
+		}
+		return lo + std::llround(offset);
+	}
+	// the delta overflows int64 - long double can represent all int64 values exactly on x86-64 and aarch64
 	const auto result = static_cast<long double>(lo) * (1.0L - static_cast<long double>(d)) +
 	                    static_cast<long double>(hi) * static_cast<long double>(d);
 	// casting an out-of-range floating point value to int64 is UB and platform-dependent

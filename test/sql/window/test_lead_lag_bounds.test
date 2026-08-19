@@ -5,12 +5,13 @@
 require 64bit
 
 # INT64_MIN offset: negating/abs of INT64_MIN is UB, so the streaming path must decline it
-# and fall back to the (range-checked) non-streaming path. LAG computes i - offset which
-# overflows for INT64_MIN and reports it:
-statement error
-SELECT lag(v, (-9223372036854775807 - 1)::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20)) t(i, v)
+# and fall back to the non-streaming path. LAG computes i - offset which overflows for
+# INT64_MIN - the index saturates and every row lands out of partition -> default
+query II
+SELECT i, lag(v, (-9223372036854775807 - 1)::BIGINT, -1) OVER (ORDER BY i) FROM (VALUES (1, 10), (2, 20)) t(i, v) ORDER BY i
 ----
-Out of Range Error
+1	-1
+2	-1
 
 # LEAD computes i + offset which stays in range, so every row lands out of partition -> default
 query II

@@ -617,6 +617,19 @@ unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &con
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
+static int64_t LeadLagRowIndex(int64_t base, int64_t offset, const ExpressionType &type) {
+	// a row index is always non-negative, so the adjustment can only overflow upwards - saturate instead of
+	// throwing, an out-of-range index just lands outside the partition and yields the default
+	int64_t val_idx;
+	bool in_range;
+	if (type == ExpressionType::WINDOW_LEAD) {
+		in_range = TryAddOperator::Operation(base, offset, val_idx);
+	} else {
+		in_range = TrySubtractOperator::Operation(base, offset, val_idx);
+	}
+	return in_range ? val_idx : NumericLimits<int64_t>::Maximum();
+}
+
 void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                     idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
@@ -657,12 +670,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
-			auto val_idx = NumericCast<int64_t>(own_row);
-			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
-				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-			} else {
-				val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-			}
+			auto val_idx = LeadLagRowIndex(NumericCast<int64_t>(own_row), offset, wexpr.GetExpressionType());
 			const auto frame_width = NumericCast<int64_t>(frame.end - frame.start);
 			if (val_idx >= 0 && val_idx < frame_width) {
 				// (3) find the row at that offset
@@ -716,12 +724,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
-		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
-			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-		} else {
-			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
-		}
+		int64_t val_idx = LeadLagRowIndex(NumericCast<int64_t>(row_idx), offset, wexpr.GetExpressionType());
 
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
