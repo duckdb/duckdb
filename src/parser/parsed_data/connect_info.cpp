@@ -23,9 +23,8 @@ unique_ptr<ConnectInfo> ConnectInfo::Copy() const {
 
 string ConnectInfo::ToString() const {
 	if (external_resource) {
-		// `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> [(create opts)]` -- this form carries
-		// no options of its own, so there is nothing else to render.
-		return "CONNECT TO " + external_resource->ToString() + ";";
+		// Only the borrow form can carry connect options; provisioning gives its one list to the recipe.
+		return "CONNECT TO " + external_resource->ToString() + RenderOptionList(parsed_options, options) + ";";
 	}
 	if (target_is_local) {
 		return "CONNECT LOCAL;";

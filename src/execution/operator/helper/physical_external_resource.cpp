@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-//! Provision (CREATE) or adopt (REGISTER) a resource and register it in the manager under its name.
+//! Provision it (CREATE) or take over an existing handle (REGISTER), then record it under its name.
 static void RegisterExternalResource(ClientContext &client, const BoundExternalResource &data) {
 	auto &manager = ExternalResourcesManager::Get(client);
 	// Reject a duplicate name before provisioning, so a name clash does not spin up (and tear down) a
@@ -47,10 +47,8 @@ static void DestroyExternalResource(ClientContext &client, const BoundExternalRe
 	if (!instance) {
 		throw InvalidInputException("external resource \"%s\" is not registered", data.name);
 	}
-	// DESTROY is never blocked by a borrower (`ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`). It is the
-	// operation that stops the meter, so it must not be contingent on a DETACH that can itself be held up --
-	// by the default database, an in-flight query, or another connection. A stranded resource costs money
-	// indefinitely and is invisible; a dangling attachment costs nothing.
+	// Never blocked by a borrower: DESTROY is what stops the meter, so it cannot depend on a DETACH
+	// that may itself be refused. A stranded resource costs money; a dangling attachment costs nothing.
 	auto &db = DatabaseInstance::GetDatabase(client);
 	ResourceDeleter(db, instance->deleter_function, instance->deleter_payload, instance->type, instance->name).Delete();
 	manager.Remove(data.name);

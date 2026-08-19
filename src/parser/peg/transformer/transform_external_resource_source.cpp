@@ -7,10 +7,8 @@
 
 namespace duckdb {
 
-// `(ATTACH|CONNECT) TO [NEW TEMPORARY] EXTERNAL RESOURCE <resource> (create opts)? ...` produces a
-// normal ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY '<type>' (opts)` provisions
-// a fresh resource this attachment owns (deleter bound, DETACH/DISCONNECT reaps it); a bare `<name>`
-// references an already-registered resource it only borrows.
+// Both statements produce a normal ATTACH/CONNECT carrying an ExternalResourceOptions. `NEW TEMPORARY`
+// provisions a resource the statement owns; a bare `<name>` borrows a registered one.
 
 //! NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)] — provision a fresh resource.
 unique_ptr<ExternalResourceOptions> PEGTransformerFactory::TransformExternalResourceCreateClause(
@@ -48,10 +46,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachToExternalResourc
 	return std::move(result);
 }
 
-//! CONNECT has no alias to separate its own options from the recipe's create params. Borrowing a
-//! registered resource takes no create params, so a list there is unambiguously the connection's.
-//! Provisioning does take them -- the create clause has already claimed the first list -- so a second
-//! one could only be told apart by position, and is refused instead.
+//! CONNECT has no alias separating its options from the recipe's. Borrowing takes no create params, so
+//! a list there is the connection's; provisioning claims the first, and a second is refused.
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformConnectToExternalResource(PEGTransformer &transformer,
                                                           unique_ptr<ExternalResourceOptions> external_resource_source,

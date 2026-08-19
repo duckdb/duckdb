@@ -19,9 +19,8 @@ namespace duckdb {
 class ParsedExpression;
 class Value;
 
-//! Render a statement's `(k v, ...)` option list, quoting each name as an identifier. Options may be
-//! unbound (still expressions) or bound (values); both maps are rendered into the one list. Returns an
-//! empty string when there is nothing to render, so callers can append it unconditionally.
+//! Render a statement's `(k v, ...)` option list, quoting each name, from the unbound and bound maps
+//! alike. Empty string when there is nothing to render, so callers can append it unconditionally.
 string RenderOptionList(const case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
                         const unordered_map<string, Value> &options);
 

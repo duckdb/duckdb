@@ -146,6 +146,15 @@ TEST_CASE("CONNECT TO EXTERNAL RESOURCE option lists", "[parse_external_resource
 	auto &borrowed = borrow.statements[0]->Cast<ConnectStatement>();
 	REQUIRE(borrowed.info->external_resource->reference_name == "beefy");
 	REQUIRE(borrowed.info->parsed_options.size() + borrowed.info->options.size() == 1);
+	// ...and ToString keeps them, so the rendering still round-trips.
+	auto borrowed_str = borrowed.info->ToString();
+	REQUIRE(StringUtil::Contains(borrowed_str, "token"));
+	Parser borrow_again;
+	borrow_again.ParseQuery(borrowed_str);
+	REQUIRE(borrow_again.statements.size() == 1);
+	auto &again = borrow_again.statements[0]->Cast<ConnectStatement>();
+	REQUIRE(again.info->external_resource->reference_name == "beefy");
+	REQUIRE(again.info->parsed_options.size() + again.info->options.size() == 1);
 
 	// Only the genuinely ambiguous spelling is refused: a second list while provisioning could be told
 	// apart from the first by position alone.

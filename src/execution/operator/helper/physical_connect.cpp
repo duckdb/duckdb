@@ -36,7 +36,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		}
 	};
 
-	// `CONNECT TO [NEW] EXTERNAL RESOURCE`: provision the resource, then ephemeral-attach its endpoint
+	// `CONNECT TO [NEW TEMPORARY] EXTERNAL RESOURCE`: get the endpoint, then ephemeral-attach it
 	// under a hidden alias and connect to it. The deleter is bound so the DISCONNECT reap tears it down.
 	if (info->external_resource) {
 		ensure_not_connected();
@@ -63,10 +63,8 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		}
 		AttachInfo attach_info;
 		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
-		// The grammar gives this form no options of its own, so everything comes from the resource.
-		// Everything from here to the end of the attach can throw: applying the resource, parsing the
-		// options it supplied, and the attach itself. The resource exists by now and nothing owns it
-		// yet, so one guard covers the lot -- a narrower one strands it.
+		// Applying the resource, parsing its options and the attach can all throw, and by now the
+		// resource exists with nothing owning it. One guard covers the lot; a narrower one strands it.
 		auto reap_if_owned = [&]() {
 			if (owns_resource) {
 				ResourceDeleter(DatabaseInstance::GetDatabase(client), launched.deleter_function,

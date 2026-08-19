@@ -25,10 +25,8 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 	// writes the provisioned endpoint into it, so work on a copy and leave the plan-owned info pristine.
 	auto attach_info = info->Copy();
 
-	// `ATTACH TO [NEW] EXTERNAL RESOURCE`: get the resource's endpoint, then attach under this alias.
-	// NEW PROVISIONS a fresh resource this attachment OWNS (deleter bound, DETACH tears it down). A bare
-	// identifier REFERENCES a registered resource this attachment only BORROWS (no deleter; DETACH leaves
-	// it registered for DESTROY).
+	// `NEW TEMPORARY` provisions a resource this attachment OWNS: a deleter is bound and DETACH reaps it.
+	// A bare identifier BORROWS a registered one -- no deleter, and DETACH leaves it for DESTROY.
 	LaunchedResource launched;
 	string resource_type, resource_name, borrowed_resource_name;
 	bool owns_resource = false;
@@ -54,9 +52,8 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 		}
 	}
 
-	// Everything from here to the end of the attach can throw: applying the resource, parsing the
-	// options it supplied, deriving the path and name, and the attach itself. The resource exists by
-	// now and nothing owns it yet, so one guard covers the lot -- a narrower one strands it.
+	// Applying the resource, parsing its options, deriving the name and the attach can all throw, and by
+	// now the resource exists with nothing owning it. One guard covers the lot; a narrower one strands it.
 	auto reap_if_owned = [&]() {
 		if (owns_resource) {
 			ResourceDeleter(DatabaseInstance::GetDatabase(context.client), launched.deleter_function,

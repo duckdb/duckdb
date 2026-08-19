@@ -334,14 +334,9 @@ void DatabaseManager::DetachResourceBorrowers(ClientContext &context, const stri
 		try {
 			DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
 		} catch (std::exception &) {
-			// Best-effort by design: DETACH refuses a connection's default database, and a detach that has to
-			// talk to the endpoint can fail now that it is gone. DESTROY goes through either way; the
-			// attachment is left in place for the user to DETACH.
-			//
-			// Deliberately NOT marked invalid here. ValidChecker::Invalidate would make the next use report
-			// why, but MetaTransaction::GetTransaction throws for *every* statement resolving through that
-			// database -- including USE and DETACH themselves. For the dominant failure (it is the default
-			// database) that recommends a recovery it has just made impossible, and the connection is stuck.
+			// Best-effort: DETACH refuses a connection's default database, and DESTROY goes through anyway.
+			// Deliberately not marked invalid -- ValidChecker would then throw for every statement
+			// resolving through it, including the USE and DETACH needed to recover.
 		}
 	}
 }

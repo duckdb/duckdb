@@ -18,10 +18,8 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-//! The `[NEW TEMPORARY] EXTERNAL RESOURCE '<type>' [WITH (params)]` clause of an
-//! `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` statement. Owned by AttachInfo/ConnectInfo. Separates the resource TYPE
-//! (the recipe/registry key) from its create PARAMS, which is why provider is its own field rather than a magic key
-//! inside the params.
+//! The `[NEW TEMPORARY] EXTERNAL RESOURCE '<type>' [(params)]` clause, owned by AttachInfo/ConnectInfo.
+//! provider is its own field rather than a magic key in params: the TYPE is the registry key, not a param.
 struct ExternalResourceOptions {
 	//! Create params (key -> expression); transient — consumed at bind, then `params` holds them.
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_params;
@@ -30,13 +28,12 @@ struct ExternalResourceOptions {
 	string provider;
 	//! Bound create params forwarded to the type's create function as a MAP(VARCHAR, VARCHAR).
 	unordered_map<string, Value> params;
-	//! Reference form: when the resource clause is a bare identifier (not a string type), this is the
-	//! name of an already-registered resource to BORROW (attach/connect to it without owning teardown),
-	//! rather than provisioning a new one. Mutually exclusive with `provider`.
+	//! Reference form: a bare identifier naming a registered resource to BORROW rather than provision,
+	//! so no teardown is owned. Mutually exclusive with `provider`.
 	string reference_name;
 
 	unique_ptr<ExternalResourceOptions> Copy() const;
-	//! Renders `NEW TEMPORARY EXTERNAL RESOURCE '<type>' [WITH (k v, ...)]`, or the reference form.
+	//! Renders `NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(k v, ...)]`, or the reference form.
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;

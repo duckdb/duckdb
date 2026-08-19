@@ -95,8 +95,8 @@ struct AttachOptions {
 	//! runs to tear down the external resource the attachment owns.
 	string deleter_function;
 	Value deleter_payload;
-	//! Resource type (provider) and name (the `AS r` alias) of the owned resource, carried for teardown
-	//! logging only. resource_name is empty for an anonymous resource.
+	//! Type and name of the owned resource, for teardown logging only. The name is the database alias,
+	//! or empty where there is none (CONNECT).
 	string deleter_resource_type;
 	string deleter_resource_name;
 	//! Registered resource this attachment BORROWS (from `ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`): it binds
@@ -149,9 +149,8 @@ public:
 	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
-	//! Move the deleter binding (if any) out of this attachment: the returned object owns the
-	//! teardown of the external resource. Call after removing the attachment from the databases map,
-	//! while holding it exclusively; run the deleter only once no lock is held (it executes SQL).
+	//! Move the deleter binding out, if any. Call once the attachment is out of the databases map and
+	//! held exclusively, and run the deleter only with no lock held -- it executes SQL.
 	unique_ptr<ResourceDeleter> ExtractDeleter();
 	bool IsSystem() const;
 	bool IsTemporary() const;
