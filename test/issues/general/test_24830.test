@@ -1,0 +1,34 @@
+# name: test/issues/general/test_24830.test
+# description: Volatile implicit ordering for constant window aggregates
+# group: [general]
+
+foreach windowmode "window" "combine" "separate"
+
+statement ok
+PRAGMA debug_window_mode={windowmode};
+
+statement ok
+DROP SEQUENCE IF EXISTS test_24830_seq;
+
+statement ok
+CREATE SEQUENCE test_24830_seq START 1;
+
+query I
+SELECT LIST(x) OVER (
+	ORDER BY (nextval('test_24830_seq') % 2 = 0), x
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) AS actual
+FROM (VALUES (1), (2), (3), (4), (5)) AS t(x)
+LIMIT 1;
+----
+[1, 3, 5, 2, 4]
+
+query I
+SELECT currval('test_24830_seq');
+----
+5
+
+endloop
+
+statement ok
+RESET debug_window_mode;
