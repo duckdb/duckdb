@@ -100,6 +100,15 @@ void ApplyLaunchedResource(const LaunchedResource &launched, AttachInfo &info) {
 				continue;
 			}
 			RejectOptionCollision(info, key);
+			// No option anywhere takes NULL -- every consumer casts and unwraps without checking, so a
+			// NULL would be read as a value rather than as "unset" (read_only would come out true). The
+			// SQL side rejects it in six places; a resource is just another way in, so it rejects it too.
+			// A recipe that means "no value" omits the key.
+			if (kv[1].IsNull()) {
+				throw InvalidInputException("EXTERNAL RESOURCE: NULL is not supported as a valid option for \"%s\"; "
+				                            "omit the key rather than returning NULL",
+				                            key);
+			}
 			info.options[key] = kv[1];
 		}
 	}

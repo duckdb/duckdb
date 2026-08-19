@@ -85,6 +85,26 @@ SELECT currval('destroy_seq');
 ----
 2
 
+# A NULL from the recipe is refused rather than passed on. Nothing downstream checks for NULL before
+# unwrapping, so it would be read as a value -- read_only NULL used to yield a READ-ONLY database.
+statement ok
+CREATE MACRO null_status(h) AS TABLE SELECT 'ready' AS state,
+  MAP {'uri': '{TEST_DIR}/er_collision.db', 'attached_db_type': 'duckdb', 'read_only': NULL} AS result;
+
+statement ok
+CALL register_external_resource_type('null@local', kind := 'catalog', create_function := 'c_create',
+    status_function := 'null_status', destroy_function := 'c_destroy');
+
+statement error
+ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE 'null@local' AS nulled;
+----
+<REGEX>:.*NULL is not supported as a valid option for "read_only".*
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 'nulled';
+----
+0
+
 # A recipe that supplies only uri + type leaves every other option to the statement, so a resource can
 # be borrowed read-only twice over the same file.
 statement ok
