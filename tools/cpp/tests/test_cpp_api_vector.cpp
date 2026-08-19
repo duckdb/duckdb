@@ -192,6 +192,7 @@ TEST_CASE("Stable C++API: AssignString rejects misuse", "[cpp_api]") {
 		REQUIRE_NOTHROW(vec.AssignString(0, "ok"));
 	}
 }
+#if (STANDARD_VECTOR_SIZE > 10)
 TEST_CASE("Stable C++API: VectorView NULL-aware read of a queried chunk", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -219,6 +220,9 @@ TEST_CASE("Stable C++API: VectorView NULL-aware read of a queried chunk", "[cpp_
 		REQUIRE(data[view.SelAt(i)] == static_cast<int64_t>(i));
 	}
 }
+#endif
+
+#if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -246,6 +250,9 @@ TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 	// The view did not flatten.
 	REQUIRE(vec.GetVectorType() == VectorType::CONSTANT);
 }
+#endif
+
+
 TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -291,6 +298,8 @@ TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", 
 	// The view did not flatten the parent.
 	REQUIRE(vec.GetVectorType() == VectorType::DICTIONARY);
 }
+
+#if (STANDARD_VECTOR_SIZE > 3)
 TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -324,6 +333,9 @@ TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]"
 	REQUIRE(cview.count == 3);
 	REQUIRE(cview.Data<int64_t>()[cview.SelAt(2)] == -5);
 }
+#endif
+
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -359,6 +371,9 @@ TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_a
 	REQUIRE(blobs[bview.SelAt(1)].view() == long_str);
 	REQUIRE_FALSE(bview.IsValid(2));
 }
+#endif
+
+#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("Stable C++API: validity write round-trip", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -404,6 +419,9 @@ TEST_CASE("Stable C++API: validity write round-trip", "[cpp_api]") {
 	con.SetConstantValid(true);
 	REQUIRE(con.GetView().IsValid(0));
 }
+#endif
+
+
 TEST_CASE("Stable C++API: validity mask word-boundary rows", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
