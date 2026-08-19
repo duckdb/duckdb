@@ -240,13 +240,10 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 }
 
 unique_ptr<FunctionData> BindBitstringAgg(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 3) {
 		auto min = input.GetConstant(1);
 		auto max = input.GetConstant(2);
-		Function::EraseArgument(function, arguments, 2);
-		Function::EraseArgument(function, arguments, 1);
 		return make_uniq<BitstringAggBindData>(min, max);
 	}
 	return make_uniq<BitstringAggBindData>();
@@ -265,6 +262,8 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
 	function.GetSignature() = FunctionSignature({{"arg", type}, {"min", type}, {"max", type}}, LogicalType::BIT);
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
+	// note that the bind folds min and max into the bind data - they stay part of the expression tree, and the
+	// update callback simply does not read them
 	bitstring_agg.AddFunction(function);
 }
 

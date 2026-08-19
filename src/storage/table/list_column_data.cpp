@@ -29,9 +29,7 @@ void ListColumnData::SetDataType(ColumnDataType data_type) {
 
 FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
                                                    optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
-	// table filters are not supported yet for list columns
-	checked_segment = nullptr;
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	return CheckValidityZonemap(state, filter, checked_segment, *validity);
 }
 
 void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {

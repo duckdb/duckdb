@@ -50,13 +50,16 @@ idx_t StructColumnData::GetMaxEntry() {
 
 FilterPropagateResult StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
                                                      optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
-	if (!state.storage_index.IsPushdownExtract() || state.expression_state) {
+	if (state.expression_state) {
 		checked_segment = nullptr;
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto children = GetStructChildren(state);
-	D_ASSERT(children.size() == 1);
-	return children[0].col.CheckZonemap(children[0].state, filter, checked_segment);
+	if (state.storage_index.IsPushdownExtract()) {
+		auto children = GetStructChildren(state);
+		D_ASSERT(children.size() == 1);
+		return children[0].col.CheckZonemap(children[0].state, filter, checked_segment);
+	}
+	return CheckValidityZonemap(state, filter, checked_segment, *validity);
 }
 
 vector<StructColumnData::StructColumnDataChild> StructColumnData::GetStructChildren(ColumnScanState &state) const {

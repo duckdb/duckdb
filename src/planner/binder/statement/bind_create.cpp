@@ -810,6 +810,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
+		if (base.security_type == ViewSecurityType::SECURE_VIEW) {
+			// secure views cannot be persisted in older storage formats - block their creation instead of silently
+			// turning them into regular views on the next checkpoint
+			auto &attached = schema.ParentCatalog().GetAttached();
+			if (!base.temporary && !attached.IsTemporary() && attached.HasStorageManager()) {
+				auto &storage_manager = attached.GetStorageManager();
+				if (!storage_manager.InMemory() && storage_manager.GetStorageVersion() < StorageVersion::V2_0_0) {
+					throw BinderException("CREATE SECURE VIEW is only supported for storage versions v2.0.0 and "
+					                      "higher.\nUse an in-memory database, or ATTACH with (STORAGE_VERSION "
+					                      "v2.0.0)");
+				}
+			}
+		}
 		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			CatalogTransaction transaction(schema.ParentCatalog(), context);
 			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.GetViewName());
