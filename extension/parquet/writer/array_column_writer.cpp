@@ -5,6 +5,7 @@
 #include "column_writer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -13,6 +14,39 @@
 #include "writer/list_column_writer.hpp"
 
 namespace duckdb {
+
+static idx_t GetConsecutiveChildArray(Vector &array, Vector &result, idx_t count) {
+	auto &validity = FlatVector::ValidityMutable(array);
+	auto array_size = ArrayType::GetSize(array.GetType());
+	bool is_consecutive = true;
+	idx_t total_length = 0;
+	for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+		if (!validity.RowIsValid(array_idx)) {
+			continue;
+		}
+		if (array_idx * array_size != total_length) {
+			is_consecutive = false;
+		}
+		total_length += array_size;
+	}
+	if (is_consecutive) {
+		return total_length;
+	}
+
+	SelectionVector sel(total_length);
+	idx_t result_idx = 0;
+	for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+		if (!validity.RowIsValid(array_idx)) {
+			continue;
+		}
+		for (idx_t child_idx = 0; child_idx < array_size; child_idx++) {
+			sel.set_index(result_idx++, array_idx * array_size + child_idx);
+		}
+	}
+	result.Slice(sel, total_length);
+	result.Flatten();
+	return total_length;
+}
 
 void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
@@ -45,8 +79,8 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &validity = FlatVector::ValidityMutable(vector);
 
 	// write definition levels and repeats
-	// the main difference between this and ListColumnWriter::Prepare is that we need to make sure to write out
-	// repetition levels and definitions for the child elements of the array even if the array itself is NULL.
+	// The main difference between this and ListColumnWriter::Prepare is that valid arrays always have array_size
+	// child elements.
 	idx_t vcount = parent ? parent->definition_levels.size() - state.parent_index : count;
 	idx_t vector_index = 0;
 	for (idx_t i = 0; i < vcount; i++) {
@@ -59,29 +93,32 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 		auto first_repeat_level =
 		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : MaxRepeat();
 		if (parent && parent->definition_levels[parent_index] != PARQUET_DEFINE_VALID) {
-			WriteArrayState(state, array_size, first_repeat_level, parent->definition_levels[parent_index]);
+			WriteArrayState(state, array_size, first_repeat_level, parent->definition_levels[parent_index], true);
 		} else if (validity.RowIsValid(vector_index)) {
 			// push the repetition levels
 			WriteArrayState(state, array_size, first_repeat_level, PARQUET_DEFINE_VALID);
 		} else {
 			//! Produce a null
-			WriteArrayState(state, array_size, first_repeat_level, MaxDefine() - 1);
+			WriteArrayState(state, array_size, first_repeat_level, MaxDefine() - 1, true);
 		}
 		vector_index++;
 	}
 	state.parent_index += vcount;
 
 	auto &array_child = ArrayVector::GetChildMutable(vector);
+	Vector child_array(Vector::Ref(array_child));
+	auto child_count = GetConsecutiveChildArray(vector, child_array, count);
 	// The elements of a single array should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
-	GetChildWriter().Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
+	GetChildWriter().Prepare(*state.child_state, &state_p, child_array, child_count, false);
 }
 
 void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	auto array_size = ArrayType::GetSize(vector.GetType());
 	auto &array_child = ArrayVector::GetChildMutable(vector);
-	GetChildWriter().Write(*state.child_state, array_child, count * array_size);
+	Vector child_array(Vector::Ref(array_child));
+	auto child_count = GetConsecutiveChildArray(vector, child_array, count);
+	GetChildWriter().Write(*state.child_state, child_array, child_count);
 }
 
 } // namespace duckdb
