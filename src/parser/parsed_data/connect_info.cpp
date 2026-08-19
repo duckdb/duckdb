@@ -39,18 +39,7 @@ string ConnectInfo::ToString() const {
 	} else {
 		result += SQLIdentifier(name);
 	}
-	if (!parsed_options.empty() || !options.empty()) {
-		vector<string> stringified;
-		for (auto &opt : parsed_options) {
-			stringified.push_back(
-			    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second->ToString()));
-		}
-		for (auto &opt : options) {
-			stringified.push_back(
-			    StringUtil::Format("%s %s", SQLIdentifier::ToString(opt.first), opt.second.ToSQLString()));
-		}
-		result += " (" + StringUtil::Join(stringified, ", ") + ")";
-	}
+	result += RenderOptionList(parsed_options, options);
 	result += ";";
 	return result;
 }

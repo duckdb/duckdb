@@ -1,5 +1,7 @@
 #include "duckdb/parser/parsed_data/external_resource_options.hpp"
 
+#include "duckdb/parser/parsed_data/parse_info.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -26,18 +28,7 @@ string ExternalResourceOptions::ToString() const {
 	}
 	// Create form: NEW TEMPORARY EXTERNAL RESOURCE '<type>' [(create opts)].
 	string result = "NEW TEMPORARY EXTERNAL RESOURCE " + SQLString(provider);
-	vector<string> stringified;
-	for (auto &entry : parsed_params) {
-		stringified.push_back(
-		    StringUtil::Format("%s %s", SQLIdentifier::ToString(entry.first), entry.second->ToString()));
-	}
-	for (auto &entry : params) {
-		stringified.push_back(
-		    StringUtil::Format("%s %s", SQLIdentifier::ToString(entry.first), entry.second.ToSQLString()));
-	}
-	if (!stringified.empty()) {
-		result += " (" + StringUtil::Join(stringified, ", ") + ")";
-	}
+	result += RenderOptionList(parsed_params, params);
 	return result;
 }
 

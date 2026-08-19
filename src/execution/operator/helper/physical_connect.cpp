@@ -44,7 +44,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		// A string type PROVISIONS a resource this connection OWNS (deleter bound, DISCONNECT reaps it);
 		// a bare identifier REFERENCES a registered resource it only BORROWS (no deleter).
 		LaunchedResource launched;
-		string resource_type, resource_name, borrowed_resource_name;
+		string resource_type, borrowed_resource_name;
 		bool owns_resource = false;
 		if (!external_resource.reference_name.empty()) {
 			auto instance = ExternalResourcesManager::Get(client).Lookup(external_resource.reference_name);
@@ -58,8 +58,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		} else {
 			resource_type = external_resource.provider;
 			// CONNECT has no alias to borrow a label from, so the resource stays unnamed in the logs.
-			launched =
-			    ProvisionExternalResource(client, external_resource.provider, external_resource.params, resource_name);
+			launched = ProvisionExternalResource(client, external_resource.provider, external_resource.params);
 			owns_resource = true;
 		}
 		AttachInfo attach_info;
@@ -71,7 +70,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		auto reap_if_owned = [&]() {
 			if (owns_resource) {
 				ResourceDeleter(DatabaseInstance::GetDatabase(client), launched.deleter_function,
-				                launched.deleter_payload, resource_type, resource_name)
+				                launched.deleter_payload, resource_type, string())
 				    .TryDelete();
 			}
 		};
@@ -87,7 +86,6 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 				options.deleter_function = launched.deleter_function;
 				options.deleter_payload = launched.deleter_payload;
 				options.deleter_resource_type = resource_type;
-				options.deleter_resource_name = resource_name;
 			}
 			options.borrowed_resource_name = borrowed_resource_name;
 			if (options.db_type.empty()) {
