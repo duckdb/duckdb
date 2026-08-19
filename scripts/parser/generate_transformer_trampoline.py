@@ -945,10 +945,7 @@ class UseGramPreviewEmitter:
         lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
         lines.append("\tauto &choice_result = choice_pr.GetResult();")
         lines.append("\tframe.ReserveChildSlots(1);")
-        lines.append(
-            "\tauto trampoline_ops = "
-            "choice_result.HasRule() ? choice_result.GetRule().trampoline_ops.get() : nullptr;"
-        )
+        lines.append("\tauto rule_p = choice_result.GetRule();")
         syntax_only_alternatives = self.choice_syntax_only_alternative_names(ast)
         child_cpp_types = set()
         for alternative in ast.alternatives:
@@ -979,7 +976,7 @@ class UseGramPreviewEmitter:
             lines.append("\t}")
             if direct_string_names:
                 direct_string_conditions = [f'choice_result.name == "{name}"' for name in direct_string_names]
-                lines.append("\tif (!trampoline_ops && (" + " || ".join(direct_string_conditions) + ")) {")
+                lines.append("\tif (!rule_p && (" + " || ".join(direct_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
         if self.cpp_type(rule_name) == "string":
@@ -994,7 +991,7 @@ class UseGramPreviewEmitter:
             lines.append("\t}")
         if syntax_only_alternatives:
             syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
-            lines.append("\tif (!trampoline_ops && (" + " || ".join(syntax_only_conditions) + ")) {")
+            lines.append("\tif (!rule_p && (" + " || ".join(syntax_only_conditions) + ")) {")
             lines.append("\t\treturn;")
             lines.append("\t}")
         if has_string_child_manual_transform:
@@ -1006,21 +1003,21 @@ class UseGramPreviewEmitter:
                 "choice_result.type == ParseResultType::CHOICE",
                 "choice_result.type == ParseResultType::LIST",
             ]
-            lines.append("\tif (!trampoline_ops && (" + " || ".join(direct_conditions) + ")) {")
+            lines.append("\tif (!rule_p && (" + " || ".join(direct_conditions) + ")) {")
             lines.append("\t\treturn;")
             lines.append("\t}")
         if self.is_parse_result_manual_choice_rule(rule_name, ast):
-            lines.append("\tif (!trampoline_ops) {")
+            lines.append("\tif (!rule_p) {")
             lines.append("\t\treturn;")
             lines.append("\t}")
         else:
-            lines.append("\tif (!trampoline_ops) {")
+            lines.append("\tif (!rule_p || !rule_p->transform_data.trampoline_ops.get()) {")
             lines.append(
                 "\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);"
             )
             lines.append("\t}")
         lines.append(
-            "\tstack.PushFrame(choice_result, *trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));"
+            "\tstack.PushFrame(choice_result, *rule_p->transform_data.trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));"
         )
         lines.append("}")
         return lines

@@ -173,6 +173,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		result = LogicalSample::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = LogicalSecureView::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(deserializer);
 		break;
@@ -826,6 +829,17 @@ void LogicalSample::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalSample>(new LogicalSample());
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(200, "sample_options", result->sample_options);
+	return std::move(result);
+}
+
+void LogicalSecureView::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
+}
+
+unique_ptr<LogicalOperator> LogicalSecureView::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalSecureView>(new LogicalSecureView());
+	deserializer.ReadPropertyWithDefault<string>(200, "view_name", result->view_name);
 	return std::move(result);
 }
 

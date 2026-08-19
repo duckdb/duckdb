@@ -12,7 +12,11 @@ static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_
 		throw InvalidInputException("Keyword grammar rule '%s' contains a recursive reference to rule '%s'",
 		                            root_rule_name, rule_name);
 	}
-	auto &rule = grammar.GetRule(rule_name);
+	auto rule_p = grammar.GetRule(rule_name);
+	if (!rule_p) {
+		throw InvalidInputException("No registered data exists for keyword rule '%s'", rule_name);
+	}
+	auto &rule = *rule_p;
 	if (!rule.recipe.parameters.empty()) {
 		throw InvalidInputException("Keyword grammar rule '%s' references parameterized rule '%s'", root_rule_name,
 		                            rule_name);

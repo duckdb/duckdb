@@ -28,7 +28,7 @@ public:
 	const Tokenizer &GetTokenizer() const {
 		return tokenizer;
 	}
-	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);

@@ -49,7 +49,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		throw InternalException("PEG matcher create error - found too many close brackets");
 	}
 	auto &root_bracket_matcher = matchers.back();
-	if (root_bracket_matcher.function_name.GetSize() == 0) {
+	if (!root_bracket_matcher.function_name) {
 		// not a function
 		auto &bracket_matcher = root_bracket_matcher.matcher;
 		// remove the last matcher from the stack
@@ -58,7 +58,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		AddMatcher(bracket_matcher);
 	} else {
 		// function matcher
-		auto &function_name = root_bracket_matcher.function_name;
+		auto &function_name = *root_bracket_matcher.function_name;
 		auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
 
 		// wrap the parameters in a list if there is more than one
@@ -241,7 +241,14 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
 
-	matcher.SetRule(compiled.GetRule(rule_name.GetString()));
+	auto rule_name_str = rule_name.GetString();
+	auto rule_p = compiled.GetRule(rule_name_str);
+	if (!rule_p) {
+		throw InvalidInputException("Failed to compile rule '%s', no registered data exists for it", rule_name_str);
+	}
+	auto &compiled_rule = *rule_p;
+
+	matcher.SetRule(compiled_rule);
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
@@ -259,8 +266,13 @@ void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	if (packrat_memoized_rules.count(name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (grammar.HasRule(name)) {
-		matcher.SetRule(compiled.GetRule(name));
+	if (grammar.GetRule(name)) {
+		auto rule_p = compiled.GetRule(name);
+		if (!rule_p) {
+			throw InvalidInputException("No registered data exists for rule '%s', failed to set RuleOverride", name);
+		}
+		auto &rule = *rule_p;
+		matcher.SetRule(rule);
 	}
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
 }

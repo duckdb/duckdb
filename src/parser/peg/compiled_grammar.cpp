@@ -34,10 +34,10 @@ ParserCache::ParserCache() : version(0) {
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
-	if (!grammar.HasRule("Program")) {
+	if (!grammar.GetRule("Program")) {
 		throw InvalidInputException("Grammar is missing required root rule 'Program'");
 	}
-	if (!grammar.HasRule("TopLevelStatement")) {
+	if (!grammar.GetRule("TopLevelStatement")) {
 		throw InvalidInputException("Grammar is missing required root rule 'TopLevelStatement'");
 	}
 }
@@ -54,9 +54,6 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	ValidateParsedGrammarRoots(grammar);
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		if (rule.semantic && !rule.transform) {
-			throw InvalidInputException("Semantic grammar rule '%s' has no transform function", rule.name);
-		}
 		for (auto &token : rule.recipe.tokens) {
 			if (token.type != PEGTokenType::REFERENCE && token.type != PEGTokenType::FUNCTION_CALL) {
 				continue;
@@ -64,7 +61,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 			if (token.type == PEGTokenType::REFERENCE && rule.recipe.parameters.count(token.text)) {
 				continue;
 			}
-			if (!grammar.HasRule(token.text.GetString())) {
+			if (!grammar.GetRule(token.text.GetString())) {
 				throw InvalidInputException("Grammar rule '%s' references missing rule '%s'", rule.name,
 				                            token.text.GetString());
 			}
@@ -74,9 +71,11 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this, grammar));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform),
-		                                                                     std::move(rule.trampoline_transform),
-		                                                                     std::move(rule.trampoline_ops)));
+		auto transform_data = std::move(rule.transform_data);
+		if (!transform_data) {
+			transform_data.emplace();
+		}
+		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(*transform_data)));
 	}
 	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher);
 	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
@@ -89,10 +88,10 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	return matcher;
 }
 
-const CompiledGrammarRule &CompiledGrammar::GetRule(const string &rule_name) const {
+optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {
 	auto entry = rules.find(rule_name);
 	if (entry == rules.end()) {
-		throw InternalException("Compiled grammar rule '%s' does not exist", rule_name);
+		return nullptr;
 	}
 	return *entry->second;
 }

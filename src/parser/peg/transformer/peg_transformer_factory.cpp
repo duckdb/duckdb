@@ -52,16 +52,24 @@ PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &tran
 }
 
 void PEGTransformerFactory::RegisterGeneratedTrampoline() {
-	grammar.GetMutableRule("Statement").trampoline_transform =
-	    &PEGTransformerFactory::TransformStatementTrampolineInternal;
+	auto &rule = grammar.GetMutableRule("Statement");
+	if (!rule.transform_data) {
+		throw InvalidInputException(
+		    "Can't register trampoline transform on 'Statement' because it's missing transform data");
+	}
+	rule.transform_data->trampoline_transform = &PEGTransformerFactory::TransformStatementTrampolineInternal;
 }
 
 const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
-	auto &rule = parse_result.GetRule();
-	if (!rule.trampoline_ops) {
+	auto rule_p = parse_result.GetRule();
+	if (!rule_p) {
+		throw InternalException("No registered data exists for rule '%s'", parse_result.name);
+	}
+	auto &rule = *rule_p;
+	if (!rule.transform_data.trampoline_ops) {
 		throw NotImplementedException("No trampoline transformer for rule '%s'", rule.name);
 	}
-	return *rule.trampoline_ops;
+	return *rule.transform_data.trampoline_ops;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
@@ -198,8 +206,8 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
 	RegisterGenerated();
-	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
+	RegisterGeneratedTrampoline();
 	RegisterCommon();
 	RegisterCreateTable();
 	RegisterExpression();
@@ -211,7 +219,7 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
 	PEGTransformerFactory factory(grammar);
 	for (auto &entry : GeneratedTrampolineOps()) {
-		if (grammar.HasRule(entry.first)) {
+		if (grammar.GetRule(entry.first)) {
 			grammar.SetTrampolineOps(entry.first, *entry.second);
 		}
 	}

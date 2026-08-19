@@ -44,21 +44,17 @@ ParsedGrammar ParsedGrammar::CreateDefault() {
 	const char *grammar = const_char_ptr_cast(INLINED_PEG_GRAMMAR);
 #endif
 	auto result = Parse(grammar);
-	if (!result.HasRule("EndOfInput")) {
+	if (!result.GetRule("EndOfInput")) {
 		result.AddParsedRule(ParsedGrammarRule("EndOfInput", PEGRule()));
 	}
 	PEGTransformerFactory::RegisterDefaultTransforms(result);
 	return result;
 }
 
-bool ParsedGrammar::HasRule(const string &rule_name) const {
-	return rules.find(rule_name) != rules.end();
-}
-
-const ParsedGrammarRule &ParsedGrammar::GetRule(const string &rule_name) const {
+optional_ptr<const ParsedGrammarRule> ParsedGrammar::GetRule(const string &rule_name) const {
 	auto entry = rules.find(rule_name);
 	if (entry == rules.end()) {
-		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
+		return nullptr;
 	}
 	return *entry->second;
 }
@@ -92,7 +88,7 @@ void ParsedGrammar::RegisterStrings(PEGRule &rule) {
 }
 
 void ParsedGrammar::AddParsedRule(ParsedGrammarRule rule) {
-	if (HasRule(rule.name)) {
+	if (GetRule(rule.name)) {
 		throw InvalidInputException("Grammar rule '%s' already exists", rule.name);
 	}
 	RegisterStrings(rule.recipe);
@@ -100,45 +96,43 @@ void ParsedGrammar::AddParsedRule(ParsedGrammarRule rule) {
 	rules.emplace(std::move(name), make_uniq<ParsedGrammarRule>(std::move(rule)));
 }
 
-void ParsedGrammar::AddRule(const string &rule_definition, grammar_transform_function_t transform,
-                            grammar_transform_function_t trampoline_transform) {
+void ParsedGrammar::AddRule(const string &rule_definition, optional<RuleTransformData> transform_data) {
 	auto rule = ParseSingleRule(rule_definition);
-	rule.transform = std::move(transform);
-	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
-	rule.semantic = bool(rule.transform);
+	rule.transform_data = std::move(transform_data);
 	AddParsedRule(std::move(rule));
 }
 
-void ParsedGrammar::ReplaceRule(const string &rule_definition, grammar_transform_function_t transform,
-                                grammar_transform_function_t trampoline_transform) {
+void ParsedGrammar::ReplaceRule(const string &rule_definition, optional<RuleTransformData> transform_data) {
 	auto rule = ParseSingleRule(rule_definition);
 	auto entry = rules.find(rule.name);
 	if (entry == rules.end()) {
 		throw InvalidInputException("Grammar rule '%s' does not exist", rule.name);
 	}
 	RegisterStrings(rule.recipe);
-	rule.transform = std::move(transform);
-	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
-	rule.semantic = bool(rule.transform);
+	rule.transform_data = std::move(transform_data);
 	entry->second = make_uniq<ParsedGrammarRule>(std::move(rule));
 }
 
-void ParsedGrammar::RemoveRule(const string &rule_name) {
-	if (rules.erase(rule_name) == 0) {
-		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
-	}
-}
-
-void ParsedGrammar::SetTransform(const string &rule_name, grammar_transform_function_t transform,
-                                 grammar_transform_function_t trampoline_transform) {
+void ParsedGrammar::SetTransform(const string &rule_name, RuleTransformData &&transform_data) {
 	auto &rule = GetMutableRule(rule_name);
-	rule.transform = std::move(transform);
-	rule.trampoline_transform = trampoline_transform ? std::move(trampoline_transform) : rule.transform;
-	rule.semantic = true;
+	rule.transform_data = std::move(transform_data);
 }
 
 void ParsedGrammar::SetTrampolineOps(const string &rule_name, const TransformFrameOps &ops) {
-	GetMutableRule(rule_name).trampoline_ops = make_shared_ptr<TransformFrameOps>(ops);
+	auto &rule = GetMutableRule(rule_name);
+	//! FIXME: this should be fixed
+	// if (!rule.transform_data) {
+	//	throw InvalidInputException("Can't set trampoline ops on a rule (%s) that doesn't have transform data",
+	//	                            rule_name);
+	//}
+	// if (!rule.transform_data->trampoline_transform) {
+	//	throw InvalidInputException(
+	//	    "Can't set trampoline ops on a rule (%s) that doesn't have a trampoline transform function", rule_name);
+	//}
+	if (!rule.transform_data) {
+		rule.transform_data.emplace();
+	}
+	rule.transform_data->trampoline_ops = make_shared_ptr<TransformFrameOps>(ops);
 }
 
 } // namespace duckdb

@@ -203,8 +203,14 @@ public:
 public:
 	template <typename T>
 	T Transform(ParseResult &parse_result) {
-		auto &rule = parse_result.GetRule();
-		auto &func = options.debug_transformer_trampoline_style ? rule.trampoline_transform : rule.transform;
+		auto rule_p = parse_result.GetRule();
+		if (!rule_p) {
+			throw InternalException("No registered data exists for rule '%s'", parse_result.name);
+		}
+		auto &rule = *rule_p;
+		auto &transform_data = rule.transform_data;
+		auto &func =
+		    options.debug_transformer_trampoline_style ? transform_data.trampoline_transform : transform_data.transform;
 		if (!func) {
 			throw NotImplementedException("No transformer function found for rule '%s'", parse_result.name);
 		}
@@ -2034,6 +2040,10 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCreateRecursiveTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateSecureTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer,
@@ -4799,15 +4809,16 @@ public:
 	template <class FUNC>
 	void Register(const string &rule_name, FUNC function) {
 		auto &rule = grammar.GetMutableRule(rule_name);
-		if (rule.transform) {
+		if (rule.transform_data) {
 			throw InternalException("Rule %s already exists", rule_name);
 		}
-		grammar.SetTransform(
-		    rule_name,
-		    [function](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformResultValue> {
-			    auto result_value = function(transformer, parse_result);
-			    return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
-		    });
+		RuleTransformData transform_data;
+		transform_data.transform = [function](PEGTransformer &transformer,
+		                                      ParseResult &parse_result) -> unique_ptr<TransformResultValue> {
+			auto result_value = function(transformer, parse_result);
+			return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
+		};
+		grammar.SetTransform(rule_name, std::move(transform_data));
 	}
 
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
@@ -6121,14 +6132,17 @@ public:
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
-	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
-	                        const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
-	                        const optional<vector<string>> &insert_column_list,
+	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_secure,
+	                        const optional<bool> &create_recursive, const optional<bool> &if_not_exists,
+	                        const QualifiedName &qualified_name, const optional<vector<string>> &insert_column_list,
 	                        optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                        unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformCreateRecursiveInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static bool TransformCreateRecursive(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateSecureInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformCreateSecure(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeallocateStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
