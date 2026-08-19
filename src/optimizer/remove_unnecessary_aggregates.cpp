@@ -197,7 +197,7 @@ void RemoveUnnecessaryAggregates::VisitOperator(unique_ptr<LogicalOperator> &op_
 			return;
 		}
 		// FIXME: the unreferenced groups of this aggregate need to stay, they decide which rows are duplicates
-		// of each other -> but they don't need to be scanned and output. Note that dropping them from the
+		// of each other -> but they don't need to be part of its output. Note that dropping them from the
 		// output cannot renumber the groups themselves: grouping sets are defined as positions into the group
 		// list, and GROUPING() refers to groups by index as well
 		// this aggregate's output is unaffected by how many duplicate rows it receives, so the path below it
