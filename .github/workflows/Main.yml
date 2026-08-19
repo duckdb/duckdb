@@ -1213,6 +1213,50 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
+ no-rtti:
+    name: No RTTI
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-rtti') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-relassert
+    env:
+      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
+      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
+      DISABLE_RTTI: 1
+      EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
+
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Install
+        timeout-minutes: 10
+        run: python3 scripts/ci/retry.py -- make toolsci
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        with:
+          build-type: release
+          build: python3 scripts/ci/retry.py -- make release
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_rtti
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      # Loadable extensions are the part a plain build cannot check: each one links its own
+      # copy of duckdb, so a type identity that is not stable across images only fails here.
+      - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+        run: make unittest_release
+
  vector-sizes:
     name: Vector Sizes
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
@@ -1390,6 +1434,7 @@ jobs:
       - static-libs-osx
       - static-libs-windows-mingw
       - no-string-inline
+      - no-rtti
       - vector-sizes
       - threadsan
       - linux-configs

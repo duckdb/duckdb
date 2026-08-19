@@ -119,7 +119,7 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
 		if (!typed_result) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
 			if (bridged) {
@@ -140,7 +140,7 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
 		if (!typed_result) {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
@@ -167,7 +167,7 @@ public:
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
 		auto base_result = ExecuteInternal(parse_result, ops);
-		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		auto *typed_result = TryCastTransformResult<T>(base_result.get());
 		if (!typed_result) {
 			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
 		}
@@ -216,7 +216,7 @@ public:
 			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
 		}
 
-		auto *typed_result_ptr = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		auto *typed_result_ptr = TryCastTransformResult<T>(base_result.get());
 		if (!typed_result_ptr) {
 			// allow transparent bridging between string-typed and Identifier-typed rules
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
@@ -338,7 +338,7 @@ inline unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(Transfo
 template <>
 inline unique_ptr<TypedTransformResult<string>>
 TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
-	if (auto *ident = dynamic_cast<TypedTransformResult<Identifier> *>(&base_result)) {
+	if (auto *ident = TryCastTransformResult<Identifier>(base_result)) {
 		return make_uniq<TypedTransformResult<string>>(ident->value.GetIdentifierName());
 	}
 	return nullptr;
@@ -347,7 +347,7 @@ TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<Identifier>>
 TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
-	if (auto *str = dynamic_cast<TypedTransformResult<string> *>(&base_result)) {
+	if (auto *str = TryCastTransformResult<string>(base_result)) {
 		return make_uniq<TypedTransformResult<Identifier>>(Identifier(str->value));
 	}
 	return nullptr;
@@ -356,7 +356,7 @@ TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<vector<string>>>
 TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result) {
-	if (auto *idents = dynamic_cast<TypedTransformResult<vector<Identifier>> *>(&base_result)) {
+	if (auto *idents = TryCastTransformResult<vector<Identifier>>(base_result)) {
 		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(idents->value));
 	}
 	return nullptr;
@@ -365,7 +365,7 @@ TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result)
 template <>
 inline unique_ptr<TypedTransformResult<vector<Identifier>>>
 TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_result) {
-	if (auto *strs = dynamic_cast<TypedTransformResult<vector<string>> *>(&base_result)) {
+	if (auto *strs = TryCastTransformResult<vector<string>>(base_result)) {
 		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(strs->value));
 	}
 	return nullptr;
