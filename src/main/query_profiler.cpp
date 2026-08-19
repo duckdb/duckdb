@@ -1063,6 +1063,31 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &resu
 	}
 }
 
+static double SumSubtreeTime(ProfilingNode &node) {
+	auto result = node.GetOperatorMetrics().time;
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		result += SumSubtreeTime(*node.GetChild(i));
+	}
+	return result;
+}
+
+//! Drop the operators of a secure view, keeping only the metrics that describe the view as a whole: the time spent
+//! in it (accumulated over its operators) and the rows it returned, which are observable regardless. The remaining
+//! metrics of the operators inside the view are discarded rather than accumulated, because their sum describes the
+//! contents of the view - how many rows it processed internally, how much of the table it scanned.
+//! This runs before any profiling output is produced, so every consumer (EXPLAIN ANALYZE in any format, the
+//! profiling output, the query profile result) sees the collapsed tree.
+static void CollapseSecureViews(ProfilingNode &node) {
+	if (node.GetOperatorMetrics().operator_type == PhysicalOperatorType::SECURE_VIEW) {
+		node.GetOperatorMetrics().time = SumSubtreeTime(node);
+		node.children.clear();
+		return;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		CollapseSecureViews(*node.GetChild(i));
+	}
+}
+
 void QueryProfiler::FinalizeMetricsInternal() {
 	if (metrics_finalized || !IsEnabled() || !metrics) {
 		return;
@@ -1071,6 +1096,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		query_metrics.latency_timer->EndTimer();
 	}
 	if (root) {
+		// collapse secure views first - the query-wide totals are sums over the operator tree, so leaving the
+		// operators of the view in would expose how much of the table behind it was scanned. The time of the view
+		// is accumulated onto its boundary node, so the total CPU time still covers the whole query.
+		CollapseSecureViews(*root);
 		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
 		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
