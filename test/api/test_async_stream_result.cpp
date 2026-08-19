@@ -784,36 +784,16 @@ TEST_CASE("Async batched stream result under batch skew", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='64KB'"));
 
 	NotifyListener listener;
-	std::atomic<idx_t> notification_count {0};
-	auto &config = ClientConfig::GetConfig(*con.context);
-	config.default_notify_callback = [&listener, &notification_count]() {
-		notification_count++;
-		listener.Notify();
-	};
-
+	SetDefaultNotifier(con, listener);
 	auto stream = ExecuteAsync(con, "SELECT i FROM skew");
 	auto deadline = MakeDeadline();
 	int64_t next_value = 0;
-	idx_t parks = 0;
-	idx_t throttle_rows = 0;
 	while (true) {
 		REQUIRE(!DeadlinePassed(deadline));
 		unique_ptr<DataChunk> chunk;
 		auto execution_result = stream->TryFetchChunk(chunk);
 		if (execution_result == StreamExecutionResult::CHUNK_READY) {
 			next_value = VerifyAscending(*chunk, next_value);
-			// Deliberately slower than the producers, so the read queue is non-empty at
-			// append time and the notification bound below stays discriminating. A fast
-			// consumer empties the queue per chunk, making every append a legitimate
-			// empty-to-non-empty fire; those edges are pinned structurally by the parked
-			// consumer test's one-chunk buffer. The throttle is a fixed row budget,
-			// deliberately NOT STANDARD_VECTOR_SIZE, so the total sleep stays constant
-			// at any vector size.
-			throttle_rows += chunk->size();
-			if (throttle_rows >= 2048) {
-				throttle_rows = 0;
-				std::this_thread::sleep_for(std::chrono::microseconds(200));
-			}
 			continue;
 		}
 		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
@@ -821,16 +801,64 @@ TEST_CASE("Async batched stream result under batch skew", "[api]") {
 		}
 		REQUIRE((execution_result == StreamExecutionResult::BLOCKED ||
 		         execution_result == StreamExecutionResult::CHUNK_NOT_READY));
-		parks++;
+		// A lost wake under skewed batch completion fails here by timeout
 		REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
 	}
 	REQUIRE(next_value == 2000000);
-	// With the queue non-empty at append time, notifications only fire when the consumer
-	// drains it plus a bounded terminal tail. A notifier that fired per append (one per
-	// chunk over 2M rows) blows through this bound.
-	INFO(notification_count.load());
-	INFO(parks);
-	REQUIRE(notification_count.load() <= parks + 64);
+}
+
+TEST_CASE("Async batched notifications fire only when the queue turns non-empty", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// A buffer far larger than the whole result: no producer ever parks, and until the
+	// consumer pops, the read queue turns non-empty exactly once. Legitimate fires are
+	// that one append edge plus a bounded terminal tail, on any machine at any vector
+	// size; a notifier that fired per append would fire once per chunk.
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(200000)"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='100MB'"));
+	// Bounds the terminal tail: each worker can observe the finished state once
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+
+	NotifyListener listener;
+	std::atomic<idx_t> notification_count {0};
+	auto &config = ClientConfig::GetConfig(*con.context);
+	config.default_notify_callback = [&listener, &notification_count]() {
+		notification_count++;
+		listener.Notify();
+	};
+
+	auto stream = ExecuteAsync(con, "SELECT i FROM t");
+	// Do not pop. With a buffer this large the collector never blocks, so ExecuteAsync
+	// returns only after the whole query completed; the wait below merely flushes
+	// straggler terminal notifications, and an early quiet verdict can only lower the
+	// count before the assertion, never raise it.
+	auto deadline = MakeDeadline();
+	REQUIRE(listener.WaitAndReset(std::chrono::seconds(10)));
+	while (listener.WaitAndReset(std::chrono::milliseconds(500))) {
+		REQUIRE(!DeadlinePassed(deadline));
+	}
+	// Pins the append notify site; the move site contributes at most the one first-fill
+	// fire here (two row groups), and is exercised under parking by the skew test
+	const auto observed_notifications = notification_count.load();
+	INFO(observed_notifications);
+	REQUIRE(observed_notifications <= 16);
+
+	// The result is intact: drain and verify
+	int64_t next_value = 0;
+	while (true) {
+		REQUIRE(!DeadlinePassed(deadline));
+		unique_ptr<DataChunk> chunk;
+		auto execution_result = stream->TryFetchChunk(chunk);
+		if (execution_result == StreamExecutionResult::CHUNK_READY) {
+			next_value = VerifyAscending(*chunk, next_value);
+			continue;
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(next_value == 200000);
 }
 
 TEST_CASE("Async batched stream result survives tiny stream buffers", "[api]") {
