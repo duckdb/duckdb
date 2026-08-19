@@ -484,7 +484,32 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 	SetAlterDependencies(*bound_create_info, info);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+
+	auto transaction = catalog.GetCatalogTransaction(context);
+	vector<Identifier> triggers_to_update;
+	triggers->ScanWithConflictDetection(
+	    transaction,
+	    [&](CatalogEntry &entry) {
+		    auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		    if (std::find(trigger.columns.begin(), trigger.columns.end(), info.old_name) != trigger.columns.end()) {
+			    triggers_to_update.push_back(trigger.name);
+		    }
+	    },
+	    [&](CatalogEntry &entry) {
+		    if (entry.type != CatalogType::TRIGGER_ENTRY || entry.deleted) {
+			    return;
+		    }
+		    auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		    if (std::find(trigger.columns.begin(), trigger.columns.end(), info.old_name) != trigger.columns.end()) {
+			    throw TransactionException("Catalog write-write conflict on alter with \"%s\"", name);
+		    }
+	    });
+	for (const auto &trigger_name : triggers_to_update) {
+		triggers->AlterEntry(transaction, trigger_name, info);
+	}
+	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+	result->trigger_column_rename = info.old_name;
+	return std::move(result);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
@@ -1465,8 +1490,26 @@ TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	return storage->GetStorageInfo();
 }
 
+void DuckTableEntry::ValidateTriggerColumnRename() {
+	if (!trigger_column_rename) {
+		return;
+	}
+	auto validate = [&](CatalogEntry &entry) {
+		if (entry.type != CatalogType::TRIGGER_ENTRY || entry.deleted) {
+			return;
+		}
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (std::find(trigger.columns.begin(), trigger.columns.end(), *trigger_column_rename) !=
+		    trigger.columns.end()) {
+			throw TransactionException("Catalog write-write conflict on alter with \"%s\"", name);
+		}
+	};
+	triggers->Scan(validate);
+	trigger_column_rename.reset();
+}
+
 optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
-	auto trigger = make_uniq<TriggerCatalogEntry>(catalog, schema, info);
+	auto trigger = make_uniq<TriggerCatalogEntry>(catalog, schema, info, this);
 	auto entry_name = trigger->name;
 	LogicalDependencyList dependencies = trigger->dependencies;
 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {

@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+class TableCatalogEntry;
+
 //! A trigger catalog entry
 class TriggerCatalogEntry : public StandardEntry {
 public:
@@ -14,7 +16,8 @@ public:
 	static constexpr const char *Name = "trigger";
 
 public:
-	TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info);
+	TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info,
+	                    optional_ptr<TableCatalogEntry> bound_table = nullptr);
 
 	//! The table the trigger is on
 	unique_ptr<BaseTableRef> base_table;
@@ -32,8 +35,13 @@ public:
 	Identifier referencing_old_table;
 	//! The trigger action (INSERT/UPDATE/DELETE as QueryNode)
 	unique_ptr<QueryNode> trigger_action;
+	//! Owning table version, retained only until CREATE [OR REPLACE] commits
+	optional_ptr<TableCatalogEntry> bound_table;
+	//! Whether this version was produced by the owning table's column rename
+	bool column_rename = false;
 
 public:
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info) override;
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 	unique_ptr<CreateInfo> GetInfo() const override;
 

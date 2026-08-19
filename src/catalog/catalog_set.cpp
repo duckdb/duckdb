@@ -521,6 +521,12 @@ bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t times
 	return CreatedByOtherActiveTransaction(transaction, timestamp) || CommittedAfterStarting(transaction, timestamp);
 }
 
+bool CatalogSet::IsCurrentEntry(CatalogTransaction transaction, CatalogEntry &entry) {
+	lock_guard<mutex> lock(catalog_lock);
+	auto head = map.GetEntry(entry.name);
+	return head && (head.get() == &entry || head->timestamp == transaction.transaction_id);
+}
+
 bool CatalogSet::IsCommitted(transaction_t timestamp) {
 	//! FIXME: `transaction_t` itself should be a class that has these methods
 	return timestamp < TRANSACTION_ID_START;
@@ -737,6 +743,24 @@ void CatalogSet::ScanWithReturn(CatalogTransaction transaction, const std::funct
 			if (!callback(entry_for_transaction)) {
 				return;
 			}
+		}
+	}
+}
+
+void CatalogSet::ScanWithConflictDetection(CatalogTransaction transaction,
+                                           const std::function<void(CatalogEntry &)> &scan_callback,
+                                           const std::function<void(CatalogEntry &)> &conflict_callback) {
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(transaction, lock);
+
+	for (auto &kv : map.Entries()) {
+		auto &entry = *kv.second;
+		if (HasConflict(transaction, entry.timestamp) && !entry.deleted) {
+			conflict_callback(entry);
+		}
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			scan_callback(entry_for_transaction);
 		}
 	}
 }

@@ -4,25 +4,48 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
-TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info)
+TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info,
+                                         optional_ptr<TableCatalogEntry> bound_table_p)
     : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.GetTriggerName()),
       base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
       event_type(info.event_type), columns(info.columns), for_each(info.for_each),
       referencing_new_table(info.referencing_new_table), referencing_old_table(info.referencing_old_table),
-      trigger_action(info.trigger_action->Copy()) {
+      trigger_action(info.trigger_action->Copy()), bound_table(bound_table_p) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
 }
 
+unique_ptr<CatalogEntry> TriggerCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &alter_info) {
+	if (alter_info.type != AlterType::ALTER_TABLE) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::RENAME_COLUMN) {
+		return CatalogEntry::AlterEntry(transaction, alter_info);
+	}
+	auto &rename_info = alter_info.Cast<RenameColumnInfo>();
+	auto info_copy = GetInfo();
+	auto &trigger_info = info_copy->Cast<CreateTriggerInfo>();
+	for (auto &column : trigger_info.columns) {
+		if (column == rename_info.old_name) {
+			column = rename_info.new_name;
+		}
+	}
+	auto result = make_uniq<TriggerCatalogEntry>(catalog, schema, trigger_info, bound_table);
+	result->column_rename = true;
+	return std::move(result);
+}
+
 unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const {
 	auto info_copy = GetInfo();
 	auto &cast_info = info_copy->Cast<CreateTriggerInfo>();
-	return make_uniq<TriggerCatalogEntry>(catalog, schema, cast_info);
+	return make_uniq<TriggerCatalogEntry>(catalog, schema, cast_info, bound_table);
 }
 
 unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
