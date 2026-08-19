@@ -154,10 +154,10 @@ SELECT regexp_extract('how much good would a good duck duck if a good duck could
 ----
 goo
 
-query T
-SELECT regexp_extract('q u a c k', 'q..', CAST(NULL AS VARCHAR))
+statement error
+SELECT regexp_extract('foobarbaz', 'B..', 0, NULL);
 ----
-(empty)
+must not be NULL
 
 statement error
 SELECT regexp_extract('abcdefg', 'A..', 'i', 'c');

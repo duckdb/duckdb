@@ -376,24 +376,25 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 
 	int8_t group_index = 0;
 	if (arguments.size() >= 3) {
-		Value arg2 = input.GetConstant(2);
-		if (arg2.IsNull()) {
-			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
-			group_index = -1;
-		} else if (arg2.type().id() == LogicalTypeId::LIST) {
+		Value group_or_options = input.GetConstant(2);
+		if (group_or_options.type().id() == LogicalTypeId::LIST) {
 			if (!constant_pattern) {
 				throw BinderException("%s with LIST of group names requires a constant pattern",
 				                      bound_function.GetName());
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), arg2, constant_string,
+			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options, constant_string,
 			                                options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
-		} else if (arg2.type().id() == LogicalTypeId::VARCHAR) {
-			ParseRegexOptions(input.GetConstant(2), options, nullptr, &no_match_returns_input);
-		} else {
-			int32_t group_idx = arg2.GetValue<int32_t>();
+		} else if (group_or_options.type().id() == LogicalTypeId::VARCHAR) {
+			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
+		} else if (group_or_options.IsNull()) {
+			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
+			group_index = -1;
+		} 
+		else {
+			int32_t group_idx = group_or_options.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
