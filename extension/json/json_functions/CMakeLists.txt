@@ -7,6 +7,7 @@ add_library_unity(
   json_create.cpp
   json_exists.cpp
   json_extract.cpp
+  json_geojson.cpp
   json_keys.cpp
   json_merge_patch.cpp
   json_pretty.cpp
@@ -21,6 +22,7 @@ add_library_unity(
   json_serialize_sql.cpp
   json_deep_merge.cpp
   json_merge_patch_diff.cpp
+  json_modify.cpp
   json_strip_nulls.cpp
   read_json.cpp
   read_json_objects.cpp)

@@ -260,7 +260,7 @@ foreach part year month day quarter dow isodow doy week yearweek
 statement error
 SELECT date_part('{part}', '23:59:59.123456789'::TIME_NS);
 ----
-Binder Error: No function matches the given name and argument types
+not recognized
 
 statement error
 SELECT date_part(['{part}'], '23:59:59.123456789'::TIME_NS);
@@ -286,7 +286,7 @@ endloop
 statement error
 SELECT date_part('julian', '23:59:59.123456789'::TIME_NS);
 ----
-Binder Error: julian can only take DATE or TIMESTAMP arguments
+Not implemented Error: "time_ns" units "julian" not recognized
 
 statement error
 SELECT date_part(['julian'], '23:59:59.123456789'::TIME_NS);
@@ -296,6 +296,12 @@ not recognized
 #
 # Casts
 #
+
+# TIME => TIME_NS
+query I
+SELECT '23:59:59.123456'::TIME::TIME_NS;
+----
+23:59:59.123456
 
 # TIME_NS => TIME
 query II
@@ -344,3 +350,25 @@ query I
 SELECT '1962-05-20 15:30:00.123456789'::TIMESTAMP_NS::TIME_NS t;
 ----
 15:30:00.123456789
+
+# pre-epoch timestamps within a microsecond of midnight: the time-of-day is the
+# wall-clock time, not a negative value carried over from the truncated date
+query I
+SELECT (TIMESTAMP_NS '1969-12-31 23:59:59.999999999'::TIME_NS)::VARCHAR t;
+----
+23:59:59.999999999
+
+query I
+SELECT '1969-12-31 23:59:59.999999'::TIMESTAMP_NS::TIME_NS t;
+----
+23:59:59.999999
+
+query I
+SELECT '1969-12-31 23:59:59.000000001'::TIMESTAMP_NS::TIME_NS t;
+----
+23:59:59.000000001
+
+query I
+SELECT '1969-06-15 08:30:15.123456789'::TIMESTAMP_NS::TIME_NS t;
+----
+08:30:15.123456789

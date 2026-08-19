@@ -50,7 +50,7 @@ TEST_CASE("BindStatement does not disturb a live streaming result", "[api][bind_
 
 	// Open a stream and consume one chunk, leaving it live mid-flight.
 	auto stream = con.SendQuery("SELECT i FROM range(5000) t(i)");
-	REQUIRE(stream->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto first = stream->Fetch();
 	REQUIRE(first);
 	idx_t seen = first->size();
@@ -249,7 +249,7 @@ TEST_CASE("BindStatement does not advance a suspended streaming query", "[api][b
 	// after one fetch it is suspended with most rows still unproduced.
 	const idx_t N = 2000000;
 	auto stream = con.SendQuery("SELECT probe_rows(i) FROM range(" + std::to_string(N) + ") t(i)");
-	REQUIRE(stream->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 
 	auto first = stream->Fetch();
 	REQUIRE(first);
@@ -280,7 +280,7 @@ TEST_CASE("A failing BindStatement while a stream is live", "[api][bind_statemen
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto stream = con.SendQuery("SELECT i FROM range(5000) t(i)");
-	REQUIRE(stream->type == QueryResultType::STREAM_RESULT);
+	REQUIRE(stream->GetResultType() == QueryResultType::STREAM_RESULT);
 	auto first = stream->Fetch();
 	REQUIRE(first);
 	idx_t seen = first->size();

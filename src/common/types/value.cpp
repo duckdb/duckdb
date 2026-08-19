@@ -280,6 +280,12 @@ Value Value::MinimumValue(const LogicalType &type) {
 		min_ns *= Interval::NANOS_PER_DAY;
 		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
 	}
+	case LogicalTypeId::INTERVAL: {
+		const auto min_months = NumericLimits<int32_t>::Minimum();
+		const auto min_days = NumericLimits<int32_t>::Minimum();
+		const auto min_micros = NumericLimits<int64_t>::Minimum();
+		return Value::INTERVAL(min_months, min_days, min_micros);
+	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -372,6 +378,12 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
+	case LogicalTypeId::INTERVAL: {
+		const auto max_months = NumericLimits<int32_t>::Maximum();
+		const auto max_days = NumericLimits<int32_t>::Maximum();
+		const auto max_micros = NumericLimits<int64_t>::Maximum();
+		return Value::INTERVAL(max_months, max_days, max_micros);
+	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
@@ -553,16 +565,6 @@ bool Value::FloatIsFinite(float value) {
 
 bool Value::DoubleIsFinite(double value) {
 	return !(std::isnan(value) || std::isinf(value));
-}
-
-template <>
-bool Value::IsNan(float input) {
-	return std::isnan(input);
-}
-
-template <>
-bool Value::IsNan(double input) {
-	return std::isnan(input);
 }
 
 template <>
@@ -1421,6 +1423,11 @@ DUCKDB_API Value Value::GetValue() const {
 	return Value(*this);
 }
 
+template <>
+DUCKDB_API Identifier Value::GetValue() const {
+	return Identifier(GetValue<string>());
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -2103,32 +2110,32 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-                      Value &new_value, string *error_message, bool strict) const {
+optional<Value> Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
+                                 string *error_message, bool strict) const {
 	if (type_ == target_type) {
-		new_value = Copy();
-		return true;
+		return Copy();
 	}
 	Vector input(*this, count_t(1));
 	Vector result(target_type);
-	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message, strict)) {
-		return false;
+	// always pass an error string - VectorOperations::TryCast throws instead of returning false without one
+	string local_error;
+	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message ? error_message : &local_error,
+	                               strict)) {
+		return nullopt;
 	}
-	new_value = result.GetValue(0);
-	return true;
+	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value, string *error_message,
-                      bool strict) const {
+optional<Value> Value::TryCastAs(ClientContext &context, const LogicalType &target_type, string *error_message,
+                                 bool strict) const {
 	GetCastFunctionInput get_input(context);
-	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, new_value, error_message, strict);
+	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, error_message, strict);
 }
 
-bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
-                             bool strict) const {
+optional<Value> Value::DefaultTryCastAs(const LogicalType &target_type, string *error_message, bool strict) const {
 	CastFunctionSet set;
 	GetCastFunctionInput get_input;
-	return TryCastAs(set, get_input, target_type, new_value, error_message, strict);
+	return TryCastAs(set, get_input, target_type, error_message, strict);
 }
 
 Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
@@ -2136,12 +2143,12 @@ Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const
 	if (target_type.id() == LogicalTypeId::ANY) {
 		return *this;
 	}
-	Value new_value;
 	string error_message;
-	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
+	auto new_value = TryCastAs(set, get_input, target_type, &error_message, strict);
+	if (!new_value) {
 		throw InvalidInputException("Failed to cast value: %s", error_message);
 	}
-	return new_value;
+	return std::move(*new_value);
 }
 
 Value Value::CastAs(ClientContext &context, const LogicalType &target_type, bool strict) const {
@@ -2155,33 +2162,10 @@ Value Value::DefaultCastAs(const LogicalType &target_type, bool strict) const {
 	return CastAs(set, get_input, target_type, strict);
 }
 
-bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-                      bool strict) {
-	Value new_value;
-	string error_message;
-	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
-		return false;
-	}
-	type_ = target_type;
-	is_null = new_value.is_null;
-	value_ = new_value.value_;
-	value_info_ = std::move(new_value.value_info_);
-	return true;
-}
-
-bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict) {
-	GetCastFunctionInput get_input(context);
-	return TryCastAs(CastFunctionSet::Get(context), get_input, target_type, strict);
-}
-
-bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
-	CastFunctionSet set;
-	GetCastFunctionInput get_input;
-	return TryCastAs(set, get_input, target_type, strict);
-}
-
-void Value::Reinterpret(LogicalType new_type) {
-	this->type_ = std::move(new_type);
+Value Value::WithType(LogicalType new_type) const {
+	Value result = *this;
+	result.type_ = std::move(new_type);
+	return result;
 }
 
 static const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {

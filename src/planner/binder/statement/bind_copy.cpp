@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -29,6 +30,12 @@
 
 namespace duckdb {
 
+BoundStatement Binder::BindNode(CopyQueryNode &node) {
+	CopyStatement statement;
+	statement.info = std::move(node.info);
+	return Bind(statement, CopyToType::COPY_TO_FILE);
+}
+
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
@@ -44,21 +51,21 @@ void IsFormatExtensionKnown(const string &format) {
 	}
 }
 
-case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode) {
-	case_insensitive_map_t<CopyOption> copy_options;
+identifier_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode) {
+	identifier_map_t<CopyOption> copy_options;
 	CopyOptionsInput input(copy_options);
 	function.copy_options(context, input);
 
 	// first erase all options that don't match this type
 	if (mode != CopyOptionMode::READ_WRITE) {
-		vector<string> erased_options;
-		for (auto &entry : copy_options) {
-			if (entry.second.mode == CopyOptionMode::READ_WRITE) {
+		vector<Identifier> erased_options;
+		for (auto &[option_name, copy_option] : copy_options) {
+			if (copy_option.mode == CopyOptionMode::READ_WRITE) {
 				// used for both
 				continue;
 			}
-			if (entry.second.mode != mode) {
-				erased_options.push_back(entry.first);
+			if (copy_option.mode != mode) {
+				erased_options.push_back(option_name);
 			}
 		}
 		for (auto &erased : erased_options) {
@@ -92,15 +99,16 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 	return copy_options;
 }
 
-static idx_t ParseBytesArg(const string &name, Value &arg) {
+static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		return DBConfig::ParseMemoryLimit(arg.ToString());
 	}
-	if (!arg.DefaultTryCastAs(LogicalType::UBIGINT)) {
+	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (!cast_arg) {
 		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
-		                      StringUtil::Upper(name));
+		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	return arg.GetValue<idx_t>();
+	return cast_arg->GetValue<idx_t>();
 }
 
 struct CopyToParsedOptions {
@@ -176,6 +184,10 @@ struct CopyToParsedOptions {
 	bool Partitioned() const {
 		return !partition_cols.empty();
 	}
+
+	bool PartitionedOrOrdered() const {
+		return Partitioned() || !order_columns.empty();
+	}
 };
 
 struct CopyToResolvedOptions {
@@ -202,6 +214,10 @@ struct CopyToResolvedOptions {
 	bool Partitioned() const {
 		return !partition_cols.empty();
 	}
+
+	bool PartitionedOrOrdered() const {
+		return Partitioned() || !order_columns.empty();
+	}
 };
 
 static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, const CopyToParsedOptions &options) {
@@ -215,7 +231,7 @@ static bool ResolveUseTmpFile(ClientContext &context, const string &file_path, c
 	auto &fs = FileSystem::GetFileSystem(context);
 	bool is_file_and_exists = fs.FileExists(file_path);
 	bool is_stdout = file_path == "/dev/stdout";
-	return is_file_and_exists && !options.PerThreadOutput() && !options.Partitioned() && !is_stdout;
+	return is_file_and_exists && !options.PerThreadOutput() && !options.PartitionedOrOrdered() && !is_stdout;
 }
 
 static CopyToResolvedOptions ResolveCopyToOptions(ClientContext &context, const string &file_path,
@@ -251,10 +267,16 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
 	}
 	if (options.UserSetUseTmpFile() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITIONED BY for COPY");
+	}
+	if (options.UserSetUseTmpFile() && !options.order_columns.empty()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER BY for COPY");
 	}
 	if (options.PerThreadOutput() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITIONED BY for COPY");
+	}
+	if (options.PerThreadOutput() && !options.order_columns.empty()) {
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER BY for COPY");
 	}
 	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
 		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
@@ -265,15 +287,15 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
 		}
 		if (options.Partitioned()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITIONED BY");
+		}
+		if (!options.order_columns.empty()) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER BY");
 		}
 	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
 	    !function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", format);
-	}
-	if (!options.order_columns.empty() && !options.Partitioned()) {
-		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
 	}
 }
 
@@ -308,22 +330,21 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
-	for (auto &option : original_options) {
-		auto loption = StringUtil::Lower(option.first);
-		if (loption == "use_tmp_file") {
-			parsed_options.use_tmp_file = GetBooleanArg(context, option.second);
-		} else if (loption == "overwrite_or_ignore" || loption == "overwrite" || loption == "append") {
+	for (auto &[option_name, option_values] : original_options) {
+		if (option_name == "use_tmp_file") {
+			parsed_options.use_tmp_file = GetBooleanArg(context, option_values);
+		} else if (option_name == "overwrite_or_ignore" || option_name == "overwrite" || option_name == "append") {
 			if (parsed_options.overwrite_mode.has_value()) {
 				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE, OVERWRITE or APPEND");
 			}
 
-			auto boolean = GetBooleanArg(context, option.second);
+			auto boolean = GetBooleanArg(context, option_values);
 			if (boolean) {
-				if (loption == "overwrite_or_ignore") {
+				if (option_name == "overwrite_or_ignore") {
 					parsed_options.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
-				} else if (loption == "overwrite") {
+				} else if (option_name == "overwrite") {
 					parsed_options.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
-				} else if (loption == "append") {
+				} else if (option_name == "append") {
 					if (!parsed_options.filename_pattern.has_value()) {
 						parsed_options.SetFilenamePattern("{uuid}");
 					}
@@ -332,69 +353,69 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			} else {
 				parsed_options.overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
 			}
-		} else if (loption == "filename_pattern") {
-			if (option.second.empty()) {
+		} else if (option_name == "filename_pattern") {
+			if (option_values.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
 			parsed_options.SetFilenamePattern(
-			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
-		} else if (loption == "file_extension") {
-			if (option.second.empty()) {
+			    option_values[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+		} else if (option_name == "file_extension") {
+			if (option_values.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
 			}
-			bind_input.file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-		} else if (loption == "per_thread_output") {
-			parsed_options.per_thread_output = GetBooleanArg(context, option.second);
-		} else if (loption == "batch_size" || loption == "row_group_size") {
-			if (option.second.empty()) {
+			bind_input.file_extension = option_values[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+		} else if (option_name == "per_thread_output") {
+			parsed_options.per_thread_output = GetBooleanArg(context, option_values);
+		} else if (option_name == "batch_size" || option_name == "row_group_size") {
+			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE cannot be empty");
 			}
-			parsed_options.batch_size = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "batch_size_bytes" || loption == "row_group_size_bytes") {
-			if (option.second.empty()) {
+			parsed_options.batch_size = option_values[0].GetValue<uint64_t>();
+		} else if (option_name == "batch_size_bytes" || option_name == "row_group_size_bytes") {
+			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE_BYTES/ROW_GROUP_SIZE_BYTES cannot be empty");
 			}
-			parsed_options.batch_size_bytes = ParseBytesArg(loption, option.second[0]);
-		} else if (loption == "file_size_bytes") {
-			if (option.second.empty()) {
+			parsed_options.batch_size_bytes = ParseBytesArg(option_name, option_values[0]);
+		} else if (option_name == "file_size_bytes") {
+			if (option_values.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
 			if (!function.file_size_bytes) {
 				throw BinderException("FILE_SIZE_BYTES not implemented for %s", function.name);
 			}
-			parsed_options.file_size_bytes = ParseBytesArg(loption, option.second[0]);
-		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
-			if (option.second.empty()) {
+			parsed_options.file_size_bytes = ParseBytesArg(option_name, option_values[0]);
+		} else if (option_name == "batches_per_file" || option_name == "row_groups_per_file") {
+			if (option_values.empty()) {
 				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE cannot be empty");
 			}
-			parsed_options.batches_per_file = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "partition_by") {
-			auto converted = ConvertVectorToValue(std::move(option.second));
-			parsed_options.partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
-		} else if (loption == "order_by") {
-			parsed_options.order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
-		} else if (loption == "return_files") {
-			if (GetBooleanArg(context, option.second)) {
+			parsed_options.batches_per_file = option_values[0].GetValue<uint64_t>();
+		} else if (option_name == "partition_by") {
+			auto converted = ConvertVectorToValue(std::move(option_values));
+			parsed_options.partition_cols = ParseColumnsOrdered(converted, select_node.names, option_name);
+		} else if (option_name == "order_by") {
+			parsed_options.order_columns = ParseOrderByColumns(*this, option_values, select_node, option_name);
+		} else if (option_name == "return_files") {
+			if (GetBooleanArg(context, option_values)) {
 				parsed_options.SetReturnType(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST);
 			}
-		} else if (loption == "preserve_order") {
-			if (GetBooleanArg(context, option.second)) {
+		} else if (option_name == "preserve_order") {
+			if (GetBooleanArg(context, option_values)) {
 				parsed_options.preserve_order = PreserveOrderType::PRESERVE_ORDER;
 			} else {
 				parsed_options.preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
 			}
-		} else if (loption == "return_stats") {
-			if (GetBooleanArg(context, option.second)) {
+		} else if (option_name == "return_stats") {
+			if (GetBooleanArg(context, option_values)) {
 				parsed_options.SetReturnType(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS);
 			}
-		} else if (loption == "write_partition_columns") {
-			parsed_options.write_partition_columns = GetBooleanArg(context, option.second);
-		} else if (loption == "write_empty_file") {
-			parsed_options.write_empty_file = GetBooleanArg(context, option.second);
-		} else if (loption == "hive_file_pattern") {
-			parsed_options.hive_file_pattern = GetBooleanArg(context, option.second);
+		} else if (option_name == "write_partition_columns") {
+			parsed_options.write_partition_columns = GetBooleanArg(context, option_values);
+		} else if (option_name == "write_empty_file") {
+			parsed_options.write_empty_file = GetBooleanArg(context, option_values);
+		} else if (option_name == "hive_file_pattern") {
+			parsed_options.hive_file_pattern = GetBooleanArg(context, option_values);
 		} else {
-			stmt.info->options[option.first] = option.second;
+			stmt.info->options[option_name] = option_values;
 		}
 	}
 
@@ -447,7 +468,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
+	auto copy =
+	    make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info), GenerateTableIndex());
 	copy->file_path = file_path;
 	copy->use_tmp_file = resolved_options.use_tmp_file;
 	copy->overwrite_mode = resolved_options.overwrite_mode;
@@ -459,7 +481,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->batches_per_file = resolved_options.batches_per_file;
 	copy->file_size_bytes = resolved_options.file_size_bytes;
 	copy->rotate = resolved_options.Rotate();
-	copy->partition_output = resolved_options.Partitioned();
+	copy->partition_output = resolved_options.PartitionedOrOrdered();
 	copy->write_partition_columns = resolved_options.write_partition_columns;
 	copy->partition_columns = std::move(resolved_options.partition_cols);
 	copy->write_empty_file = resolved_options.write_empty_file;
@@ -524,7 +546,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->GetQualifiedName());
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
@@ -551,7 +573,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	return result;
 }
 
-vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option_binder, const string &name,
+vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option_binder, const Identifier &name,
                              unique_ptr<ParsedExpression> &expr) {
 	vector<Value> result;
 	if (!expr) {
@@ -566,7 +588,7 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 			return result;
 		}
 	}
-	const bool is_partition_by = StringUtil::CIEquals(name, "partition_by");
+	const bool is_partition_by = name == "partition_by";
 
 	if (is_partition_by) {
 		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction
@@ -625,9 +647,9 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 		info.file_path = inputs[0].ToString();
 		info.file_path_expression.reset();
 	}
-	for (auto &entry : info.parsed_options) {
-		auto inputs = BindCopyOption(context, option_binder, entry.first, entry.second);
-		if (StringUtil::CIEquals(entry.first, "format")) {
+	for (auto &[option_name, option_expr] : info.parsed_options) {
+		auto inputs = BindCopyOption(context, option_binder, option_name, option_expr);
+		if (option_name == "format") {
 			// format specifier: interpret this option
 			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
@@ -636,7 +658,7 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 			info.is_format_auto_detected = false;
 			continue;
 		}
-		info.options[entry.first] = std::move(inputs);
+		info.options[option_name] = std::move(inputs);
 	}
 	if (info.is_format_auto_detected && info.format.empty()) {
 		info.format = ExtractFormat(info.file_path);
@@ -694,44 +716,42 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// list all copy options - then bind them and offer alternatives
 		auto copy_mode = stmt.info->is_from ? CopyOptionMode::READ_ONLY : CopyOptionMode::WRITE_ONLY;
 		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_WRITE);
-		for (auto &provided_entry : stmt.info->options) {
-			auto &provided_option = provided_entry.first;
+		for (auto &[provided_option, provided_values] : stmt.info->options) {
 			auto option_entry = copy_options.find(provided_option);
 			if (option_entry == copy_options.end()) {
 				// option not found - offer an alternative suggestion
 				vector<string> candidates;
-				for (auto &copy_entry : copy_options) {
-					candidates.push_back(copy_entry.first);
+				for (auto &[candidate_option, candidate] : copy_options) {
+					candidates.push_back(candidate_option.GetIdentifierName());
 				}
 				string candidate_str = StringUtil::CandidatesMessage(
 				    StringUtil::TopNJaroWinkler(candidates, provided_option), "Candidate options");
 
-				throw NotImplementedException("Unrecognized option \"%s\" for %s\n%s", provided_option,
-				                              stmt.info->format, candidate_str);
+				throw NotImplementedException("Unrecognized option %s for %s\n%s", provided_option, stmt.info->format,
+				                              candidate_str);
 			}
 			auto &copy_option = option_entry->second;
 			// check if this matches the mode
 			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
-				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
+				throw InvalidInputException("Option %s is not supported for %s - only for %s", provided_option,
 				                            stmt.info->is_from ? "reading" : "writing",
 				                            stmt.info->is_from ? "writing" : "reading");
 			}
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
-				if (provided_entry.second.empty()) {
+				if (provided_values.empty()) {
 					if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
 						// boolean can be empty (e.g. "HEADER")
 						continue;
 					}
-					throw InvalidInputException("Copy option \"%s\" requires an argument of type %s", provided_option,
+					throw InvalidInputException("Copy option %s requires an argument of type %s", provided_option,
 					                            copy_option.type.ToString());
 				}
-				if (provided_entry.second.size() > 1) {
-					throw InvalidInputException("Copy option \"%s\" did not expect a list as argument",
-					                            provided_option);
+				if (provided_values.size() > 1) {
+					throw InvalidInputException("Copy option %s did not expect a list as argument", provided_option);
 				}
-				auto &original_value = provided_entry.second[0];
+				auto &original_value = provided_values[0];
 				if (original_value.IsNull()) {
-					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					throw BinderException("NULL is not supported as a valid option for COPY option %s",
 					                      provided_option);
 				}
 				if (copy_option.type == original_value.type()) {
@@ -752,14 +772,14 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					}
 				}
 
-				Value new_value;
-				if (!can_cast || !original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
-					throw InvalidInputException("Copy option \"%s\" expected an argument of type %s - the argument "
+				auto new_value = can_cast ? original_value.TryCastAs(context, copy_option.type) : nullopt;
+				if (!new_value) {
+					throw InvalidInputException("Copy option %s expected an argument of type %s - the argument "
 					                            "\"%s\" of type %s could not be cast as this type",
 					                            provided_option, copy_option.type, original_value.ToString(),
 					                            original_value.type());
 				}
-				original_value = std::move(new_value);
+				original_value = std::move(*new_value);
 			}
 		}
 	}

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/main/external_dependencies.hpp"
@@ -32,8 +33,8 @@ public:
 	Identifier alias;
 	//! Sample options (if any)
 	unique_ptr<SampleOptions> sample;
-	//! The location in the query (if any)
-	optional_idx query_location;
+	//! The source location in the query (if any)
+	QueryLocation query_location;
 	//! External dependencies of this table function
 	shared_ptr<ExternalDependency> external_dependency;
 	//! Aliases for the column names

@@ -2,9 +2,7 @@
 # description: bulk appends merge transaction-local storage after persisted rowid gaps
 # group: [rowid_gaps]
 
-# A bulk append goes through LocalStorage::MergeStorage rather than row-by-row
-# append. The appended row groups must start at next_row_id, not total_rows,
-# when the persistent table has a rowid gap.
+# Bulk append must start at next_row_id after a persisted rowid gap.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_bulk_append.db' AS rowid_gap_bulk_append (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
@@ -34,6 +32,10 @@ query III
 SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_bulk_append.t;
 ----
 0	6143	4096
+
+# Keep the rowid gap until the bulk-append frontier is checked.
+statement ok
+SET max_vacuum_tasks = 0;
 
 statement ok
 INSERT INTO rowid_gap_bulk_append.t SELECT 1000000 + i FROM range(4096) tbl(i);

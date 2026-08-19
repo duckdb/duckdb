@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -20,6 +21,9 @@ namespace duckdb {
 class BufferManager;
 class InterruptState;
 class BoundAggregateFunction;
+struct AggregateRewriteInput;
+struct AggregateRewritePlan;
+struct AggregateRewriteCostInput;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -54,33 +58,28 @@ struct WindowPartitionInput {
 	InterruptState &interrupt_state;
 };
 
-class BindAggregateFunctionInput {
+class BindAggregateFunctionInput : public BindFunctionInput {
 public:
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
-	}
+	                           vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
+	                           vector<unique_ptr<Expression>> &arguments_p);
+
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
-	}
 
 private:
-	ClientContext &context;
 	BoundAggregateFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 };
 
 //! The type used for sizing hashed aggregate function states
-typedef idx_t (*aggregate_size_t)(const BoundAggregateFunction &function);
-//! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(const BoundAggregateFunction &function, data_ptr_t state);
+typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
+//! The type used for initializing hashed aggregate function states (batched: initializes `count` states)
+typedef void (*aggregate_initialize_t)(AggregateStateInput &input, data_ptr_t *states, idx_t count);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
@@ -132,6 +131,22 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deseri
                                                             BoundAggregateFunction &function);
 
 typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
+
+//! Replaces an aggregate with another expression in the same aggregate operator.
+typedef unique_ptr<Expression> (*aggregate_direct_rewrite_t)(AggregateRewriteInput &input);
+//! Creates an owned logical plan rewrite for a bound aggregate.
+typedef unique_ptr<AggregateRewritePlan> (*aggregate_rewrite_t)(AggregateRewriteInput &input);
+//! Decides whether a cost-based logical rewrite should be applied.
+typedef bool (*aggregate_rewrite_cost_t)(AggregateRewriteCostInput &input);
+
+enum class AggregateRewritePolicy : uint8_t {
+	//! Required lowering for aggregates whose native state is not suitable for ordinary grouped execution.
+	MANDATORY,
+	//! An optional rewrite that is always applied when its optimizer strategy is enabled.
+	UNCONDITIONAL,
+	//! An optional rewrite selected using propagated input statistics.
+	COST_BASED
+};
 
 //! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
 //! dest_buffer (state i at offset i * layout.total_state_size).
@@ -235,6 +250,27 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
+	bool HasDirectRewriteCallback() const { return direct_rewrite != nullptr; }
+	aggregate_direct_rewrite_t GetDirectRewriteCallback() const { return direct_rewrite; }
+	void SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) { direct_rewrite = callback; }
+
+	bool HasRewriteCallback() const { return rewrite != nullptr; }
+	aggregate_rewrite_t GetRewriteCallback() const { return rewrite; }
+	AggregateRewritePolicy GetRewritePolicy() const { return rewrite_policy; }
+	OptimizerType GetRewriteOptimizerType() const { return rewrite_optimizer_type; }
+	aggregate_rewrite_cost_t GetRewriteCostCallback() const { return rewrite_cost; }
+	void SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) {
+		D_ASSERT(callback);
+		D_ASSERT((policy == AggregateRewritePolicy::MANDATORY) == (optimizer_type == OptimizerType::INVALID));
+		D_ASSERT((policy == AggregateRewritePolicy::COST_BASED) == (cost != nullptr));
+		rewrite = callback;
+		rewrite_policy = policy;
+		rewrite_optimizer_type = optimizer_type;
+		rewrite_cost = cost;
+	}
+
 public:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size = nullptr;
@@ -269,6 +305,15 @@ public:
 	aggregate_serialize_t serialize = nullptr;
 
 	aggregate_deserialize_t deserialize = nullptr;
+
+	//! Optional expression rewrite that remains inside the original aggregate operator.
+	aggregate_direct_rewrite_t direct_rewrite = nullptr;
+
+	//! Optional logical-plan rewrite for aggregates represented by multiple aggregate stages.
+	aggregate_rewrite_t rewrite = nullptr;
+	AggregateRewritePolicy rewrite_policy = AggregateRewritePolicy::UNCONDITIONAL;
+	OptimizerType rewrite_optimizer_type = OptimizerType::INVALID;
+	aggregate_rewrite_cost_t rewrite_cost = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
 
@@ -394,6 +439,21 @@ public: // Callbacks
 	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
+
+	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
+	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
+	auto SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) -> void { callbacks.direct_rewrite = callback; }
+
+	auto HasRewriteCallback() const -> bool { return callbacks.rewrite != nullptr; }
+	auto GetRewriteCallback() const -> aggregate_rewrite_t { return callbacks.rewrite; }
+	auto GetRewritePolicy() const -> AggregateRewritePolicy { return callbacks.rewrite_policy; }
+	auto GetRewriteOptimizerType() const -> OptimizerType { return callbacks.rewrite_optimizer_type; }
+	auto GetRewriteCostCallback() const -> aggregate_rewrite_cost_t { return callbacks.rewrite_cost; }
+	auto SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) -> void {
+		callbacks.SetRewriteCallback(callback, policy, optimizer_type, cost);
+	}
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
@@ -638,7 +698,7 @@ public:
 	static void WireStructStateType(AggregateFunction &result);
 
 	template <class STATE>
-	static idx_t StateSize(const BoundAggregateFunction &) {
+	static idx_t StateSize(AggregateStateInput &) {
 		return sizeof(STATE);
 	}
 
@@ -662,18 +722,20 @@ public:
 	};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
-	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {
+	static void StateInitialize(AggregateStateInput &, data_ptr_t *states, idx_t count) {
 		// FIXME: we should remove the "destructor_type" option in the future
 #if !defined(__GNUC__) || (__GNUC__ >= 5)
 		static_assert(std::is_trivially_move_constructible<STATE>::value ||
 		                  destructor_type == AggregateDestructorType::LEGACY,
 		              "Aggregate state must be trivially move constructible");
 #endif
-		if constexpr (OperationHasInitialize<STATE, OP>::value) {
-			OP::Initialize(*reinterpret_cast<STATE *>(state));
-		} else {
-			// if the operation does not define an Initialize method - initialize the state by zero-initializing it
-			memset(state, 0, sizeof(STATE));
+		for (idx_t i = 0; i < count; i++) {
+			if constexpr (OperationHasInitialize<STATE, OP>::value) {
+				OP::Initialize(*reinterpret_cast<STATE *>(states[i]));
+			} else {
+				// if the operation does not define an Initialize method - initialize the state by zero-initializing it
+				memset(states[i], 0, sizeof(STATE));
+			}
 		}
 	}
 
@@ -698,31 +760,34 @@ public:
 		AggregateExecutor::NullaryClustUpdate<STATE, OP>(aggr_input_data, clustered, count);
 	}
 
+	//! Update callbacks consume their leading arguments. They can be handed more: a bind may fold trailing
+	//! arguments into its bind data (e.g. the separator of string_agg), and those stay part of the argument list and
+	//! are still evaluated into the payload - they are simply not read here.
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               Vector &states, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, aggr_input_data, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                        idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::ExecuteUnaryClustered<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                Vector &states, idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], states,
 		                                                            count);
 	}
@@ -730,7 +795,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], state, count);
 	}
 
@@ -770,6 +835,13 @@ public:
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
 		return callbacks.get_state_type(input);
+	}
+
+	//! Sizes an aggregate state by constructing an AggregateStateInput and invoking the state-size callback
+	idx_t GetStateSize(optional_ptr<const FunctionData> bind_data) const {
+		D_ASSERT(callbacks.state_size);
+		AggregateStateInput input(*this, bind_data);
+		return callbacks.state_size(input);
 	}
 };
 

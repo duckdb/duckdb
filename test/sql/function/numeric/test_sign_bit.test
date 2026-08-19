@@ -29,6 +29,18 @@ NULL	NULL	NULL	NULL
 inf	False	True	False
 
 statement ok
+CREATE TABLE negative_zero AS SELECT -0.0::{type} AS x FROM range(2);
+
+query I
+SELECT signbit(abs(x)) FROM negative_zero;
+----
+0
+0
+
+statement ok
+DROP TABLE negative_zero;
+
+statement ok
 SELECT signbit(1.0 / 0.0);
 
 statement ok

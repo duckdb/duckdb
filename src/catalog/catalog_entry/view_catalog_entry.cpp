@@ -17,6 +17,7 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
+	this->security_type = info.security_type;
 	if (!info.types.empty()) {
 		bind_state = ViewBindState::BOUND;
 		view_columns = make_shared_ptr<ViewColumnInfo>();
@@ -48,10 +49,11 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
-	result->SetQualifiedName(QualifiedName({schema.name}, name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
+	result->security_type = security_type;
 	auto view_columns = GetColumnInfo();
 	if (view_columns) {
 		result->names = view_columns->names;
@@ -197,6 +199,7 @@ string ViewCatalogEntry::ToSQL() const {
 		return sql;
 	}
 	auto info = GetInfo();
+	info->StripCatalogQualification();
 	auto result = info->ToString();
 	return result;
 }

@@ -26,6 +26,10 @@ static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const Logica
 			return;
 		}
 		const ColumnIndex &col_idx = column_ids[binding.column_index];
+		if (!col_idx.HasPrimaryIndex()) {
+			ref.SetAlias(Identifier(col_idx.GetFieldName()));
+			return;
+		}
 		const idx_t primary = col_idx.GetPrimaryIndex();
 		if (col_idx.IsVirtualColumn()) {
 			if (const auto it = get.virtual_columns.find(primary); it != get.virtual_columns.end()) {

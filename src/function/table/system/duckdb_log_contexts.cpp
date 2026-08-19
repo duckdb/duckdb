@@ -25,7 +25,7 @@ struct DuckDBLogContextData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("context_id");
 	return_types.emplace_back(LogicalType::UBIGINT);
 

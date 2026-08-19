@@ -64,8 +64,11 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       init_local_state_finalize == rhs.init_local_state_finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
-	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type &&
-	       export_aggregate_state == rhs.export_aggregate_state && import_aggregate_state == rhs.import_aggregate_state;
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && direct_rewrite == rhs.direct_rewrite &&
+	       rewrite == rhs.rewrite && rewrite_policy == rhs.rewrite_policy &&
+	       rewrite_optimizer_type == rhs.rewrite_optimizer_type && rewrite_cost == rhs.rewrite_cost &&
+	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
+	       import_aggregate_state == rhs.import_aggregate_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
@@ -121,6 +124,19 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+}
+
+BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
+                                                       BoundAggregateFunction &bound_function_p,
+                                                       vector<unique_ptr<Expression>> &arguments_p,
+                                                       const vector<Identifier> &argument_names_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p), bound_function(bound_function_p) {
+}
+
+BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
+                                                       BoundAggregateFunction &bound_function_p,
+                                                       vector<unique_ptr<Expression>> &arguments_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p) {
 }
 
 } // namespace duckdb

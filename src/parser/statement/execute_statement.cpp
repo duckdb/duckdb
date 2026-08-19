@@ -1,11 +1,14 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 
+#include "duckdb/common/sql_identifier.hpp"
+
 namespace duckdb {
 
 ExecuteStatement::ExecuteStatement() : SQLStatement(StatementType::EXECUTE_STATEMENT) {
 }
 
-ExecuteStatement::ExecuteStatement(const ExecuteStatement &other) : SQLStatement(other), name(other.name) {
+ExecuteStatement::ExecuteStatement(const ExecuteStatement &other)
+    : SQLStatement(other), name(other.name), bound_values(other.bound_values) {
 	for (const auto &item : other.named_values) {
 		named_values.emplace(std::make_pair(item.first, item.second->Copy()));
 	}
@@ -18,12 +21,15 @@ unique_ptr<SQLStatement> ExecuteStatement::Copy() const {
 string ExecuteStatement::ToString() const {
 	string result = "";
 	result += "EXECUTE";
-	result += " " + name;
-	if (!named_values.empty()) {
-		vector<string> stringified;
-		for (auto &val : named_values) {
-			stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second->ToString()));
-		}
+	result += " " + SQLIdentifier(name);
+	vector<string> stringified;
+	for (auto &val : named_values) {
+		stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second->ToString()));
+	}
+	for (auto &val : bound_values) {
+		stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second.GetValue().ToSQLString()));
+	}
+	if (!stringified.empty()) {
 		result += "(" + StringUtil::Join(stringified, ", ") + ")";
 	}
 	result += ";";

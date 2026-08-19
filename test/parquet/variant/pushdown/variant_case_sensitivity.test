@@ -1,0 +1,116 @@
+# name: test/parquet/variant/pushdown/variant_case_sensitivity.test
+# group: [pushdown]
+
+require parquet
+
+statement ok
+CREATE OR REPLACE VIEW vw AS SELECT
+	{'Foo': i::INTEGER}::VARIANT AS v
+FROM range(10) t(i);
+
+statement ok
+COPY (
+	SELECT * from vw
+) TO '{TEST_DIR}/variant_case_sensitivity_shredded.parquet';
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity_shredded.parquet' WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity_shredded.parquet' WHERE v.Foo = 3;
+----
+1
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.Foo = 3;
+----
+1
+
+# A differently cased field is not the field named by the explicit shredding
+# schema and must remain in the untyped overlay.
+
+statement ok
+CREATE OR REPLACE VIEW vw AS SELECT {'foo': 2::INTEGER}::VARIANT AS v;
+
+statement ok
+COPY vw TO '{TEST_DIR}/variant_case_mismatch.parquet' (
+	SHREDDING {'v': 'STRUCT("Foo" INTEGER)'}
+);
+
+query III
+SELECT v::VARCHAR, variant_extract(v, 'foo')::VARCHAR, variant_extract(v, 'Foo')::VARCHAR
+FROM '{TEST_DIR}/variant_case_mismatch.parquet';
+----
+{'foo': 2}	2	NULL
+
+# Apply the same exact matching recursively.
+
+statement ok
+CREATE OR REPLACE VIEW vw AS SELECT {'outer': {'foo': 3::INTEGER}}::VARIANT AS v;
+
+statement ok
+COPY vw TO '{TEST_DIR}/variant_nested_case_mismatch.parquet' (
+	SHREDDING {'v': 'STRUCT("outer" STRUCT("Foo" INTEGER))'}
+);
+
+query II
+SELECT variant_extract(variant_extract(v, 'outer'), 'foo')::VARCHAR,
+	variant_extract(variant_extract(v, 'outer'), 'Foo')::VARCHAR
+FROM '{TEST_DIR}/variant_nested_case_mismatch.parquet';
+----
+3	NULL
+
+# Shred "Foo" on a different type, causing the values to not land in 'typed_value'
+
+statement ok
+CREATE OR REPLACE VIEW vw AS SELECT
+	{'Foo': i::INTEGER}::VARIANT AS v
+FROM range(10) t(i);
+
+statement ok
+COPY (
+	SELECT * from vw
+) TO '{TEST_DIR}/variant_case_sensitivity_unshredded.parquet' (
+	SHREDDING {
+		'v': 'STRUCT("Foo" VARCHAR)'
+	}
+);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity_unshredded.parquet' WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity_unshredded.parquet' WHERE v.Foo = 3;
+----
+1
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.Foo = 3;
+----
+1

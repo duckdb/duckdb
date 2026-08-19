@@ -305,6 +305,11 @@ public:
 		return static_cast<idx_t>(pos - beg);
 	}
 
+	bool IsAtEnd() {
+		SkipWhitespace();
+		return pos >= end;
+	}
+
 	void Reset() {
 		pos = beg;
 	}
@@ -315,14 +320,15 @@ public:
 		auto msg = StringUtil::Format("Failed to parse geometry: %s at offset %lu",
 		                              StringUtil::Format(raw_msg, args...), byte_offset);
 		if (query_location.IsValid()) {
-			const auto expr_offset = optional_idx(query_location.GetIndex() + byte_offset);
-			return InvalidInputException(Exception::InitializeExtraInfo(expr_offset), msg);
+			// point at the specific byte within the WKT literal where parsing failed
+			const QueryLocation expr_location(query_location.Start() + byte_offset, 0);
+			return InvalidInputException(Exception::InitializeExtraInfo(expr_location), msg);
 		} else {
 			return InvalidInputException(msg);
 		}
 	}
 
-	void SetQueryLocation(optional_idx location) {
+	void SetQueryLocation(QueryLocation location) {
 		query_location = location;
 	}
 
@@ -336,7 +342,7 @@ private:
 	const char *beg;
 	const char *pos;
 	const char *end;
-	optional_idx query_location;
+	QueryLocation query_location;
 };
 
 void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth, bool parent_has_z, bool parent_has_m) {
@@ -1098,12 +1104,20 @@ void Geometry::ToBinary(const Vector &source, Vector &result) {
 }
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict,
-                          optional_idx query_location) {
+                          QueryLocation query_location) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
 	reader.SetQueryLocation(query_location);
 	BlobWriter writer;
 
 	FromStringRecursive(reader, writer, 0, false, false);
+
+	// Check whether reader has consumed over all meaningful characters.
+	if (!reader.IsAtEnd()) {
+		if (strict) {
+			throw reader.MakeError("Unexpected trailing text");
+		}
+		return false;
+	}
 
 	const auto &buffer = writer.GetBuffer();
 	result = heap.AddBlob(buffer.data(), buffer.size());
@@ -2415,9 +2429,7 @@ void Geometry::FromVectorizedFormat(const Vector &source, Vector &target, idx_t 
 }
 
 LogicalType Geometry::GetSpatialGeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
+	return LogicalType(LogicalTypeId::BLOB).WithAlias("GEOMETRY");
 }
 
 bool Geometry::IsSpatialGeometryType(const LogicalType &type) {

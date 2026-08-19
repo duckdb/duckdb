@@ -156,24 +156,31 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 	// for that reason we need to keep track of the lowest offset, so we can skip all the data that comes before it
 	// when we scan the child data
 
-	auto lowest_offset = size ? offsets[0] : 0;
+	bool has_non_empty_entry = false;
+	BUFFER_TYPE lowest_offset = 0;
+	BUFFER_TYPE highest_offset = 0;
 	auto list_data = FlatVector::GetDataMutable<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
 		le.offset = offsets[i];
 		le.length = sizes[i];
-		list_size += le.length;
-		if (sizes[i] != 0) {
-			lowest_offset = MinValue(lowest_offset, offsets[i]);
+		if (le.length != 0) {
+			auto end_offset = offsets[i] + sizes[i];
+			if (!has_non_empty_entry) {
+				lowest_offset = offsets[i];
+				highest_offset = end_offset;
+				has_non_empty_entry = true;
+			} else {
+				lowest_offset = MinValue(lowest_offset, offsets[i]);
+				highest_offset = MaxValue(highest_offset, end_offset);
+			}
 		}
 	}
-	start_offset = lowest_offset;
-	if (start_offset) {
-		// We start scanning the child data at the 'start_offset' so we need to fix up the created list entries
-		for (idx_t i = 0; i < size; i++) {
-			auto &le = list_data[i];
-			le.offset = le.offset <= start_offset ? 0 : le.offset - start_offset;
-		}
+	start_offset = has_non_empty_entry ? lowest_offset : 0;
+	list_size = has_non_empty_entry ? highest_offset - lowest_offset : 0;
+	for (idx_t i = 0; i < size; i++) {
+		auto &le = list_data[i];
+		le.offset = le.length == 0 ? 0 : le.offset - start_offset;
 	}
 	return result;
 }
@@ -1474,8 +1481,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 
 	SelectionVector sel;
 	if (has_nulls) {
-		ValidityMask indices_validity;
-		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
+		// size may exceed STANDARD_VECTOR_SIZE, so the scratch mask must be sized for it.
+		ValidityMask indices_validity(size);
+		// validity must be read from the same effective offset as the indices
+		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset),
+		                nested_offset);
 		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {

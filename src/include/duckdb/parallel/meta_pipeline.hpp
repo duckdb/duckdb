@@ -18,6 +18,22 @@ enum class MetaPipelineType : uint8_t {
 	JOIN_BUILD = 1 //! The shared sink is a join build
 };
 
+enum class MetaPipelineDependencyMode : uint8_t { ADD_DEPENDENCY, NO_DEPENDENCY };
+enum class RecursiveDependencyMode : uint8_t { RESPECT_PARALLELISM, FORCE };
+enum class DataflowDependencyMode : uint8_t { INCLUDE, SKIP_CONFLICTING };
+enum class MetaPipelineDependencyType : uint8_t { REQUIRED, OPTIONAL_DEPENDENCY };
+
+struct MetaPipelineDependency {
+	MetaPipelineDependency(Pipeline &pipeline_p, MetaPipelineDependencyType type_p)
+	    : pipeline(pipeline_p), type(type_p) {
+	}
+
+	reference<Pipeline> pipeline;
+	MetaPipelineDependencyType type;
+};
+
+using meta_pipeline_dependency_map_t = reference_map_t<Pipeline, vector<MetaPipelineDependency>>;
+
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public enable_shared_from_this<MetaPipeline> {
 	//! We follow these rules when building:
@@ -53,7 +69,9 @@ public:
 	//! Recursively gets the last child added
 	MetaPipeline &GetLastChild();
 	//! Get the dependencies of the Pipelines of this MetaPipeline
-	const reference_map_t<Pipeline, vector<reference<Pipeline>>> &GetDependencies() const;
+	const meta_pipeline_dependency_map_t &GetDependencies() const;
+	bool RemoveOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
+	void AddOptionalDependency(Pipeline &pipeline, Pipeline &dependency);
 	//! Whether the sink of this pipeline is a join build
 	MetaPipelineType Type() const;
 	//! Whether this MetaPipeline has a recursive CTE
@@ -64,12 +82,15 @@ public:
 	void AssignNextBatchIndex(Pipeline &pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
-	vector<shared_ptr<Pipeline>> AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
+	vector<shared_ptr<Pipeline>>
+	AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including,
+	                    MetaPipelineDependencyType dependency_type = MetaPipelineDependencyType::REQUIRED);
 	//! Recursively makes all children of this MetaPipeline depend on the given Pipeline.
-	//! If 'force' is true, dependencies are added regardless of pipeline/thread count
-	//! (required for DML CTEs where ordering is mandatory, not just a performance hint).
-	void AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child,
-	                              bool force = false);
+	//! Force dependencies when ordering is mandatory, rather than using the pipeline/thread-count heuristic.
+	void
+	AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child,
+	                         RecursiveDependencyMode dependency_mode = RecursiveDependencyMode::RESPECT_PARALLELISM,
+	                         DataflowDependencyMode dataflow_mode = DataflowDependencyMode::INCLUDE);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
@@ -93,8 +114,9 @@ public:
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline &last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
-	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op,
-	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
+	MetaPipeline &
+	CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type = MetaPipelineType::REGULAR,
+	                        MetaPipelineDependencyMode dependency_mode = MetaPipelineDependencyMode::ADD_DEPENDENCY);
 
 private:
 	//! The executor for all MetaPipelines in the query plan
@@ -112,7 +134,7 @@ private:
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! Dependencies of Pipelines of this MetaPipeline
-	reference_map_t<Pipeline, vector<reference<Pipeline>>> pipeline_dependencies;
+	meta_pipeline_dependency_map_t pipeline_dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index

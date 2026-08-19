@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 		bool has_cast = false;
 		if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			for (auto &expression : node->expressions) {
-				if (expression->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+				if (BoundCastExpression::IsCast(*expression)) {
 					has_cast = true;
 					break;
 				}
@@ -91,18 +91,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
-	for (idx_t child_idx = 0; child_idx < node.bound_children.size(); child_idx++) {
-		auto &child = node.bound_children[child_idx];
-		auto &child_binder = *node.child_binders[child_idx];
-
+	for (auto &child : node.bound_children) {
 		// construct the logical plan for the child node
 		auto child_node = std::move(child.plan);
 		// push casts for the target types
 		child_node = CastLogicalOperatorToTypes(child.types, node.types, std::move(child_node));
-		// check if there are any unplanned subqueries left in any child
-		if (child_binder.has_unplanned_dependent_joins) {
-			has_unplanned_dependent_joins = true;
-		}
 		children.push_back(std::move(child_node));
 	}
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type,

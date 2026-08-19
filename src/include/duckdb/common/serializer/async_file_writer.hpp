@@ -106,8 +106,8 @@ private:
 	//! Leave a registration batch without scheduling, blocking, or throwing.
 	void LeaveBatch() noexcept;
 
-	//! Return whether the file handle supports independent positional writes.
-	bool SupportsPositionalWrites() override;
+	//! Return the file handle's write ordering contract.
+	FileWriteMode GetWriteMode() override;
 	//! Return whether this writer targets a local file-like handle.
 	bool IsLocalFile() override;
 	//! Write bytes to the underlying file handle at the assigned logical stream offset.

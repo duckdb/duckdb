@@ -141,12 +141,12 @@ for test in test_list:
     print(f"Running test {test}")
     clear_directories(test_dirs)
     # TEMP_DIR must BE the given dir exactly and survive for the post-run byte diff below,
-    # so pin the base with both levels off and destroy=never (the dirs are pre-rmtree'd
+    # so pin the root with both levels off and destroy=never (the dirs are pre-rmtree'd
     # above, so the default create=on-absent is fine). --database-destroy off keeps the
     # generated DB files (otherwise the harness deletes loaded DBs under TEMP_DIR, leaving
     # the retained dir empty and the compare with nothing to diff).
     temp_dir_flags = lambda d: [
-        '--temp-dir-base',
+        '--temp-dir-root',
         d,
         '--temp-dir-run-id',
         'off',

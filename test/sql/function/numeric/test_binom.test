@@ -1,0 +1,73 @@
+# name: test/sql/function/numeric/test_binom.test
+# description: Test the binom function
+# group: [numeric]
+
+query I
+SELECT binom(5, 2);
+----
+10
+
+query III
+SELECT binom(10, 1), binom(10, 5), binom(10, 10);
+----
+10	252	1
+
+query III
+SELECT binom(0, 0), binom(1, 0), binom(1, 1);
+----
+1	1	1
+
+query II
+SELECT binom(8, 6), binom(6, 8);
+----
+28	0
+
+query II
+SELECT binom(100, 2), binom(100, 98);
+----
+4950	4950
+
+query I
+SELECT binom(60, 30);
+----
+118264581564861424
+
+query I
+SELECT binom(120, 60);
+----
+96614908840363322603893139521372656
+
+query I
+SELECT binom(130, 65);
+----
+95067625827960698145584333020095113100
+
+statement error
+SELECT binom(131, 65);
+----
+Value out of range
+
+query I
+SELECT binom(NULL, NULL);
+----
+NULL
+
+query II
+SELECT binom(NULL, 3), binom(3, NULL);
+----
+NULL	NULL
+
+statement error
+SELECT binom(-6, 3);
+----
+binom with negative input is undefined
+
+statement error
+SELECT binom(6, -3);
+----
+binom with negative input is undefined
+
+statement error
+SELECT binom(-6, -3);
+----
+binom with negative input is undefined

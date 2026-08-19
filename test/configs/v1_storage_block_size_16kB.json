@@ -15,19 +15,24 @@
     {
       "reason": "TODO",
       "paths": [
-        "test/fuzzer/sqlsmith/current_schemas_null.test",
-        "test/sql/catalog/test_set_search_path.test",
         "test/sql/json/test_json_serialize_sql.test",
-        "test/sql/settings/drop_set_schema.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
-        "test/sql/table_function/duckdb_databases.test",
-        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+        "test/sql/table_function/duckdb_databases.test"
       ]
     },
     {
       "reason": "ALP is disabled for non-default block sizes.",
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
       ]
     }
   ]

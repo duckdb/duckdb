@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,21 @@ ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundSca
                                                                   optional_ptr<FunctionData> bind_info_p) {
 	FunctionToStringInput input(bound_function, bind_info_p.get(), arguments);
 	return bound_function.GetExpressionType(input);
+}
+
+bool BoundFunctionExpression::RequiresOrderedExecution() const {
+	if (function.RequiresOrderedExecution()) {
+		return true;
+	}
+	bool has_value = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+			return;
+		}
+		auto &child_function = child.Cast<BoundFunctionExpression>().Function();
+		has_value |= child_function.RequiresOrderedExecution();
+	});
+	return has_value;
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
