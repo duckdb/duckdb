@@ -395,20 +395,19 @@ struct AlpDecompression {
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
 		// Bit Unpacking
-		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8] = {0};
+		uint64_t for_decoded[AlpConstants::ALP_VECTOR_SIZE] = {0};
 		if (bit_width > 0) {
-			BitpackingPrimitives::UnPackBuffer<uint64_t>(for_decoded, for_encoded, count, bit_width);
+			BitpackingPrimitives::UnPackBuffer<uint64_t>(data_ptr_cast(for_decoded), for_encoded, count, bit_width);
 		}
-		auto *encoded_integers = reinterpret_cast<uint64_t *>(data_ptr_cast(for_decoded));
 
 		// unFOR
 		for (idx_t i = 0; i < count; i++) {
-			encoded_integers[i] += frame_of_reference;
+			for_decoded[i] += frame_of_reference;
 		}
 
 		// Decoding
 		for (idx_t i = 0; i < count; i++) {
-			auto encoded_integer = static_cast<int64_t>(encoded_integers[i]);
+			auto encoded_integer = static_cast<int64_t>(for_decoded[i]);
 			output[i] = alp::AlpCompression<T, true>::DecodeValue(encoded_integer, encoding_indices);
 		}
 
