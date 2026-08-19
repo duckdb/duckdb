@@ -127,9 +127,9 @@ public:
 	//! The child that is being materialised (right/1 then left/0)
 	size_t &child;
 	//! The child's partitioning description
-	vector<SortStrategyPtr> sort_strategies;
+	array<SortStrategyPtr, 2> sort_strategies;
 	//! The child's partitioning buffer
-	vector<value_map_t<SortStrategySinkPtr>> strategy_sinks;
+	array<value_map_t<SortStrategySinkPtr>, 2> strategy_sinks;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
 };
@@ -137,8 +137,6 @@ public:
 AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op)
     : op(op), child(op.child), count(0) {
 	// Set up partitions for both sides
-	sort_strategies.reserve(2);
-	strategy_sinks.resize(2);
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	auto &lhs = op.children[0].get();
 
@@ -153,7 +151,7 @@ AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAs
 		sort_strategy = SortStrategy::Factory(client, unpartitioned, op.lhs_orders, lhs.GetTypes(), unpartitioned_stats,
 		                                      lhs.estimated_cardinality, true);
 	}
-	sort_strategies.emplace_back(std::move(sort_strategy));
+	sort_strategies[0] = std::move(sort_strategy);
 
 	auto &rhs = op.children[1].get();
 	if (op.partition_infos.empty()) {
@@ -164,7 +162,7 @@ AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAs
 		sort_strategy = SortStrategy::Factory(client, unpartitioned, op.rhs_orders, rhs.GetTypes(), unpartitioned_stats,
 		                                      rhs.estimated_cardinality, true);
 	}
-	sort_strategies.emplace_back(std::move(sort_strategy));
+	sort_strategies[1] = std::move(sort_strategy);
 
 	if (op.partition_infos.empty()) {
 		GetOrCreatePartition(client, Value(), 0);
@@ -772,7 +770,7 @@ public:
 	//! The parent operator
 	const PhysicalAsOfJoin &op;
 	//! The source states for the hashed sort
-	vector<HashedSourceMap> hashed_sources;
+	array<HashedSourceMap, 2> hashed_sources;
 	//! The hash groups
 	AsOfHashGroups asof_groups;
 	//! The sorted list of (blocks, group_idx) pairs
@@ -813,7 +811,6 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	vector<ChunkPartitionRows> child_groups(2);
 	value_set_t partition_keys;
 
-	hashed_sources.resize(2);
 	for (idx_t child = 0; child < child_groups.size(); ++child) {
 		auto &sort_strategy = *gsink.sort_strategies[child];
 		for (auto &strategy_sink : gsink.strategy_sinks[child]) {
