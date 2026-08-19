@@ -50,6 +50,7 @@ public:
 
 	void CommitAlter(string &column_name, CommitDropState &drop_state);
 	void CommitDrop(CommitDropState &drop_state);
+	void ValidateTriggerColumnRename();
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
@@ -104,6 +105,8 @@ private:
 	shared_ptr<DataTable> storage;
 	//! The catalog set holding triggers for this table
 	shared_ptr<CatalogSet> triggers;
+	//! Column whose trigger references must be rechecked when this table version commits
+	optional<Identifier> trigger_column_rename;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

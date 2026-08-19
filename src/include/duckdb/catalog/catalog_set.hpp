@@ -107,6 +107,9 @@ public:
 	                               const Identifier &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback);
+	DUCKDB_API void ScanWithConflictDetection(CatalogTransaction transaction,
+	                                          const std::function<void(CatalogEntry &)> &scan_callback,
+	                                          const std::function<void(CatalogEntry &)> &conflict_callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback);
 
@@ -120,6 +123,7 @@ public:
 	DUCKDB_API bool CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
+	DUCKDB_API bool IsCurrentEntry(CatalogTransaction transaction, CatalogEntry &entry);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 	static bool IsCommitted(transaction_t timestamp);
 
