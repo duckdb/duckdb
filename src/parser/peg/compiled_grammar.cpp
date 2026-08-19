@@ -88,10 +88,10 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 	return matcher;
 }
 
-const CompiledGrammarRule &CompiledGrammar::GetRule(const string &rule_name) const {
+optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {
 	auto entry = rules.find(rule_name);
 	if (entry == rules.end()) {
-		throw InternalException("Compiled grammar rule '%s' does not exist", rule_name);
+		return nullptr;
 	}
 	return *entry->second;
 }
