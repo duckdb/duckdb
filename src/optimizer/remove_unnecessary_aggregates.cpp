@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/remove_unnecessary_aggregates.hpp"
 
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -263,6 +265,40 @@ bool RemoveUnnecessaryAggregates::CanReplaceAggregateWithProjection(const Logica
 	return true;
 }
 
+// the path operators (the plan ancestors between the replacement projection and the not-distinct-dependent aggregate
+// that made the removal legal) were estimated based on the removed aggregate's deduplicated output, but now process all
+// of its input rows instead. So the cardinality estimates will look all wrong in an explain plan. This re-estimates the
+// cardinalities by scaling them in the same way they were scaled before. That assumes duplicates are spread evenly over
+// the group values, which isn't always true. But that is the same assumption that was made to produce the original
+// estimates, so by undoing that we get the original estimates back.
+void RemoveUnnecessaryAggregates::RescaleCardinalityEstimates(LogicalProjection &proj, const LogicalAggregate &aggr,
+                                                              const OperatorPath &path) {
+	auto &proj_input = *proj.children[0];
+	if (!proj_input.has_estimated_cardinality) {
+		return;
+	}
+
+	proj.SetEstimatedCardinality(proj_input.estimated_cardinality);
+	const bool have_duplication_factor = aggr.has_estimated_cardinality && aggr.estimated_cardinality > 0;
+	const double duplication_factor = have_duplication_factor ? static_cast<double>(proj_input.estimated_cardinality) /
+	                                                                static_cast<double>(aggr.estimated_cardinality)
+	                                                          : 1.0;
+	for (auto &ancestor : path) {
+		auto &ancestor_op = ancestor.get();
+		if (have_duplication_factor && ancestor_op.has_estimated_cardinality) {
+			// inconsistent pre-existing estimates could scale past the raw input, which a
+			// duplicate-preserving projection or filter can never exceed. Clamping before the cast
+			// also keeps the product from overflowing idx_t
+			auto scaled = static_cast<double>(ancestor_op.estimated_cardinality) * duplication_factor;
+			auto bound = static_cast<double>(proj_input.estimated_cardinality);
+			ancestor_op.SetEstimatedCardinality(LossyNumericCast<idx_t>(MinValue(scaled, bound)));
+		} else {
+			// without a selectivity to preserve, the raw input cardinality is the only bound we have
+			ancestor_op.SetEstimatedCardinality(proj_input.estimated_cardinality);
+		}
+	}
+}
+
 void RemoveUnnecessaryAggregates::ReplaceAggregateWithProjection(unique_ptr<LogicalOperator> &op_ref,
                                                                  const OperatorPath &path) {
 	auto &aggr = op_ref->Cast<LogicalAggregate>();
@@ -271,18 +307,7 @@ void RemoveUnnecessaryAggregates::ReplaceAggregateWithProjection(unique_ptr<Logi
 	auto proj = make_uniq<LogicalProjection>(aggr.group_index, std::move(aggr.groups));
 	proj->children.push_back(std::move(aggr.children[0]));
 
-	// the operators between here and the not-distinct-dependent aggregate above were estimated based on this
-	// aggregate's deduplicated output, but now process all of its input rows instead. That is an upper bound for
-	// filters among them: their selectivity was estimated on the deduplicated stream, which can be arbitrarily
-	// different on the duplicated one (a 50% filter on two distinct values can match 99% of the raw rows), so there
-	// is nothing better to scale by
-	auto &aggr_input = *proj->children[0];
-	if (aggr_input.has_estimated_cardinality) {
-		proj->SetEstimatedCardinality(aggr_input.estimated_cardinality);
-		for (auto &ancestor : path) {
-			ancestor.get().SetEstimatedCardinality(aggr_input.estimated_cardinality);
-		}
-	}
+	RescaleCardinalityEstimates(*proj, aggr, path);
 	op_ref = std::move(proj);
 
 	// unreferenced groups are dead expressions of this projection, but they still reference the operators

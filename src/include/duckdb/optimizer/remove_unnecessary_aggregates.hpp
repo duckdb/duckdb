@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class LogicalAggregate;
+class LogicalProjection;
 class Optimizer;
 
 //! Removes aggregates whose only remaining effect is eliminating duplicate rows that no ancestor can
@@ -35,6 +36,10 @@ private:
 	                   OperatorPath path);
 	bool CanReplaceAggregateWithProjection(const LogicalAggregate &aggr) const;
 	void ReplaceAggregateWithProjection(unique_ptr<LogicalOperator> &op_ref, const OperatorPath &path);
+	//! Correct the estimates of the path operators for the removed aggregate no longer eliminating duplicates,
+	//! by scaling them with the duplication factor so their estimated selectivities are preserved
+	static void RescaleCardinalityEstimates(LogicalProjection &proj, const LogicalAggregate &aggr,
+	                                        const OperatorPath &path);
 	//! Recompute which column bindings are still referenced anywhere in the plan
 	void GatherColumnReferences();
 
