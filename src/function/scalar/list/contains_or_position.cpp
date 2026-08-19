@@ -74,19 +74,18 @@ static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPru
 	FilterPropagateResult zonemap;
 	switch (child_stats.GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
-		zonemap = NumericStats::CheckZonemap(child_stats, ExpressionType::COMPARE_EQUAL,
-		                                     array_ptr<const Value>(&needle, 1));
+		zonemap =
+		    NumericStats::CheckZonemap(child_stats, ExpressionType::COMPARE_EQUAL, array_ptr<const Value>(&needle, 1));
 		break;
 	case StatisticsType::STRING_STATS:
-		zonemap = StringStats::CheckZonemap(child_stats, ExpressionType::COMPARE_EQUAL,
-		                                    array_ptr<const Value>(&needle, 1));
+		zonemap =
+		    StringStats::CheckZonemap(child_stats, ExpressionType::COMPARE_EQUAL, array_ptr<const Value>(&needle, 1));
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// Empty lists still do not contain the needle
-	return zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ? zonemap
-	                                                             : FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	return zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ? zonemap : FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
