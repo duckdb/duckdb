@@ -312,44 +312,48 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
-	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("ReservedIdentifier",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("CatalogName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME)));
-	AddRuleOverride("SchemaName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
-	AddRuleOverride("ReservedSchemaName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
-	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
-	AddRuleOverride("ReservedTableName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
-	AddRuleOverride("ColumnName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
-	AddRuleOverride("ReservedColumnName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
-	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("ReservedIndexName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("SequenceName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("FunctionName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
+	AddRuleOverride("Identifier", allocator.Allocate(
+	                                  make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("ReservedIdentifier", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("CatalogName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                   SuggestionState::SUGGEST_CATALOG_NAME, keyword_helper)));
+	AddRuleOverride("SchemaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME,
+	                                                                              keyword_helper)));
+	AddRuleOverride("ReservedSchemaName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_SCHEMA_NAME, keyword_helper)));
+	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME,
+	                                                                             keyword_helper)));
+	AddRuleOverride("ReservedTableName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_TABLE_NAME, keyword_helper)));
+	AddRuleOverride("ColumnName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME,
+	                                                                              keyword_helper)));
+	AddRuleOverride("ReservedColumnName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                          SuggestionState::SUGGEST_COLUMN_NAME, keyword_helper)));
+	AddRuleOverride("IndexName", allocator.Allocate(
+	                                 make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("ReservedIndexName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("SequenceName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                                keyword_helper)));
+	AddRuleOverride("FunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper)));
 	AddRuleOverride("ReservedFunctionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
-	AddRuleOverride("ReservedKeyword",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
-	AddRuleOverride("TableFunctionName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME)));
-	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
-	AddRuleOverride("ReservedTypeName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
-	AddRuleOverride("PragmaName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME)));
-	AddRuleOverride("SettingName",
-	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME)));
-	AddRuleOverride("CopyOptionName",
-	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper)));
+	AddRuleOverride("ReservedKeyword", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                       SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("TableFunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                         SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, keyword_helper)));
+	AddRuleOverride("TypeName", allocator.Allocate(
+	                                make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME, keyword_helper)));
+	AddRuleOverride("ReservedTypeName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                        SuggestionState::SUGGEST_TYPE_NAME, keyword_helper)));
+	AddRuleOverride("PragmaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME,
+	                                                                              keyword_helper)));
+	AddRuleOverride("SettingName", allocator.Allocate(make_uniq<IdentifierMatcher>(
+	                                   SuggestionState::SUGGEST_SETTING_NAME, keyword_helper)));
+	AddRuleOverride("CopyOptionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                      SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
 	AddRuleOverride("NumberLiteral", allocator.Allocate(make_uniq<NumberLiteralMatcher>()));
 	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
 	AddRuleOverride("OperatorLiteral", allocator.Allocate(make_uniq<OperatorMatcher>()));
