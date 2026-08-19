@@ -1,13 +1,8 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include <algorithm>
-#include <cstring>
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/windows.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/database.hpp"
@@ -15,6 +10,12 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
+
+#ifndef _WIN32
+#include <cerrno>
+#include <csignal>
+#include <unistd.h>
+#endif
 
 namespace duckdb {
 
@@ -714,94 +715,95 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 //! an array rather than a pointer, so the length below is derived from it and cannot drift
 static constexpr const char TEMPORARY_FILE_PREFIX[] = "duckdb_temp_";
 static constexpr idx_t TEMPORARY_FILE_PREFIX_LENGTH = sizeof(TEMPORARY_FILE_PREFIX) - 1;
-//! base 32 without i, l, o and u, so a code is not misread. One case only: macOS and Windows match
-//! names case-insensitively, so mixing cases would hand two slots the same file.
-static constexpr const char *SLOT_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
-static constexpr idx_t SLOT_ALPHABET_SIZE = 32;
 
-string TemporarySlotCode(idx_t slot) {
-	string result;
-	do {
-		result += SLOT_ALPHABET[slot % SLOT_ALPHABET_SIZE];
-		slot /= SLOT_ALPHABET_SIZE;
-	} while (slot > 0);
-	std::reverse(result.begin(), result.end());
-	return result;
+string TemporaryFilePrefix(const TemporaryFileOwner &owner) {
+	return TEMPORARY_FILE_PREFIX + to_string(owner.pid) + "_" + to_string(owner.instance) + "_";
 }
 
-string TemporaryFilePrefix(const string &slot) {
-	return TEMPORARY_FILE_PREFIX + slot + "_";
-}
-
-string TemporaryLockFileName(const string &slot) {
-	return TemporaryFilePrefix(slot) + "instance.lock";
-}
-
-static bool LooksLikeSlotCode(const string &candidate) {
-	if (candidate.empty()) {
+//! Only unsigned decimal, so nothing a version naming its files differently wrote can parse
+static bool TryParseDecimal(const string &text, uint64_t &result) {
+	if (text.empty() || text.size() > 19) {
 		return false;
 	}
-	for (const auto c : candidate) {
-		if (!strchr(SLOT_ALPHABET, c) || c == '\0') {
+	uint64_t value = 0;
+	for (const auto c : text) {
+		if (c < '0' || c > '9') {
 			return false;
 		}
+		value = value * 10 + static_cast<uint64_t>(c - '0');
 	}
+	result = value;
 	return true;
 }
 
-bool TryParseTemporaryFileOwner(const string &file_name, string &slot) {
+bool TryParseTemporaryFileOwner(const string &file_name, TemporaryFileOwner &owner) {
 	if (!StringUtil::StartsWith(file_name, TEMPORARY_FILE_PREFIX)) {
 		return false;
 	}
-	auto separator = file_name.find('_', TEMPORARY_FILE_PREFIX_LENGTH);
-	if (separator == string::npos) {
+	auto pid_end = file_name.find('_', TEMPORARY_FILE_PREFIX_LENGTH);
+	if (pid_end == string::npos) {
 		return false;
 	}
-	auto candidate = file_name.substr(TEMPORARY_FILE_PREFIX_LENGTH, separator - TEMPORARY_FILE_PREFIX_LENGTH);
-	if (!LooksLikeSlotCode(candidate)) {
-		// written by a version that did not name its files after a slot - a UUID carries '-', which
-		// is not in the alphabet, so those land here too
+	auto instance_end = file_name.find('_', pid_end + 1);
+	if (instance_end == string::npos) {
 		return false;
 	}
-	slot = std::move(candidate);
+	uint64_t pid, instance;
+	if (!TryParseDecimal(file_name.substr(TEMPORARY_FILE_PREFIX_LENGTH, pid_end - TEMPORARY_FILE_PREFIX_LENGTH), pid) ||
+	    !TryParseDecimal(file_name.substr(pid_end + 1, instance_end - pid_end - 1), instance)) {
+		// written by a version that did not name its files after their owner - a UUID carries '-',
+		// which is not a decimal digit, so those land here too
+		return false;
+	}
+	owner.pid = NumericCast<int64_t>(pid);
+	owner.instance = NumericCast<idx_t>(instance);
 	return true;
 }
 
-//! Slots leased in this process. fcntl locks belong to the process, so they cannot separate two
-//! instances inside one; the lock file only ever has to answer for other processes.
-struct LiveInstanceRegistry {
-	mutex lock;
-	unordered_set<string> instances;
-};
-
-//! Leaked, mutex included: a DatabaseInstance can be destroyed during static destruction, and
-//! locking a destroyed mutex throws from a path a destructor reaches.
-static LiveInstanceRegistry &GetLiveInstanceRegistry() {
-	static auto &registry = *new LiveInstanceRegistry();
-	return registry;
+static int64_t CurrentProcessId() {
+#ifdef _WIN32
+	return static_cast<int64_t>(GetCurrentProcessId());
+#else
+	return static_cast<int64_t>(getpid());
+#endif
 }
 
-//! Slots are unique per directory, not globally, so the registry is keyed by both
-static string LiveSlotKey(const string &temp_directory, const string &slot) {
-	return temp_directory + "\n" + slot;
+bool ProcessIsRunning(int64_t pid) {
+	if (pid <= 0) {
+		// not a process id we handed out: kill(0) would signal our own process group
+		return true;
+	}
+#ifdef _WIN32
+	auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
+	if (!process) {
+		return GetLastError() != ERROR_INVALID_PARAMETER;
+	}
+	DWORD exit_code = 0;
+	auto running = GetExitCodeProcess(process, &exit_code) && exit_code == STILL_ACTIVE;
+	CloseHandle(process);
+	return running;
+#else
+	// EPERM means it exists and belongs to somebody else
+	return kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM;
+#endif
 }
 
-static bool TryRegisterLiveSlot(const string &temp_directory, const string &slot) {
-	auto &registry = GetLiveInstanceRegistry();
-	lock_guard<mutex> guard(registry.lock);
-	return registry.instances.insert(LiveSlotKey(temp_directory, slot)).second;
+//! Handed out in order, so instances in this process never take the same id twice
+static idx_t NextInstanceId() {
+	static atomic<idx_t> next_id(0);
+	return next_id++;
 }
 
-static void UnregisterLiveSlot(const string &temp_directory, const string &slot) {
-	auto &registry = GetLiveInstanceRegistry();
-	lock_guard<mutex> guard(registry.lock);
-	registry.instances.erase(LiveSlotKey(temp_directory, slot));
-}
-
-static bool SlotIsLiveInThisProcess(const string &temp_directory, const string &slot) {
-	auto &registry = GetLiveInstanceRegistry();
-	lock_guard<mutex> guard(registry.lock);
-	return registry.instances.find(LiveSlotKey(temp_directory, slot)) != registry.instances.end();
+//! Whether this process still owes a directory its sweep. Leaked, mutex included: a DatabaseInstance
+//! can be created during static destruction, and locking a destroyed mutex throws.
+static bool ClaimDirectorySweep(const string &temp_directory) {
+	struct SweptDirectories {
+		mutex lock;
+		unordered_set<string> directories;
+	};
+	static auto &swept = *new SweptDirectories();
+	lock_guard<mutex> guard(swept.lock);
+	return swept.directories.insert(temp_directory).second;
 }
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
@@ -839,60 +841,43 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
 	}
-	LeaseSlot();
-	// reap whatever earlier instances left behind - a crash never reaches the teardown sweep
-	SweepAbandonedInstances();
+	ClaimOwner();
+	// reap whatever earlier instances left behind - a crash never reaches teardown. Once per
+	// directory: repeating it per instance only multiplies the chances of misjudging a live process.
+	if (ClaimDirectorySweep(temp_directory)) {
+		SweepAbandonedInstances();
+	}
 	temp_file = make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk, file_prefix);
 	temp_file->SetMaxSwapSpace(max_swap_space);
 }
 
-void TemporaryDirectoryHandle::LeaseSlot() {
+void TemporaryDirectoryHandle::ClaimOwner() {
 	auto &fs = FileSystem::GetFileSystem(db);
-	// Take the lowest free slot. Nothing here assumes the code is unique: the lock is what
-	// establishes that, so a code only has to be short enough to keep the search cheap.
-	for (idx_t candidate = 0;; candidate++) {
-		auto code = TemporarySlotCode(candidate);
-		// ask the registry first: opening a sibling's lock file, even briefly, would drop its lock
-		if (!TryRegisterLiveSlot(temp_directory, code)) {
-			continue;
+	owner.pid = CurrentProcessId();
+	unordered_set<idx_t> ids_in_use;
+	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+		TemporaryFileOwner found;
+		if (!is_dir && TryParseTemporaryFileOwner(name, found) && found.pid == owner.pid) {
+			ids_in_use.insert(found.instance);
 		}
-		auto lock_path = fs.JoinPath(temp_directory, TemporaryLockFileName(code));
-		try {
-			// DISABLE_LOGGING: this handle outlives the log manager, which DatabaseInstance destroys
-			// before the buffer manager that owns us - logging its close would touch a destroyed mutex
-			instance_lock =
-			    fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
-			                               FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_DISABLE_LOGGING |
-			                               FileLockType::WRITE_LOCK);
-		} catch (std::exception &) {
-			// another process holds this slot
-			UnregisterLiveSlot(temp_directory, code);
-			continue;
-		}
-		slot = std::move(code);
-		file_prefix = TemporaryFilePrefix(slot);
-		break;
-	}
-	// slots are reused, so a dead predecessor's files may carry ours - we hold the lock, so they are
-	// abandoned, and FILE_CREATE would otherwise adopt them
-	fs.RemoveFiles(ListOwnFiles());
+	});
+	// A process that held our id before us counted from zero just as we do, so its files carry the
+	// name we are about to take, and FILE_CREATE adopts a file rather than failing on it. Step over
+	// them instead: our pid is live, so nothing may delete under it, and they are reaped once we exit.
+	do {
+		owner.instance = NextInstanceId();
+	} while (ids_in_use.find(owner.instance) != ids_in_use.end());
+	file_prefix = TemporaryFilePrefix(owner);
 }
 
 vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
 	auto &fs = FileSystem::GetFileSystem(db);
-	auto lock_name = TemporaryLockFileName(slot);
 	vector<string> result;
 	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
-		string owner;
-		if (is_dir || !TryParseTemporaryFileOwner(name, owner) || owner != slot) {
-			return;
+		TemporaryFileOwner found;
+		if (!is_dir && TryParseTemporaryFileOwner(name, found) && found == owner) {
+			result.push_back(fs.JoinPath(temp_directory, name));
 		}
-		if (name == lock_name) {
-			// the lease itself: it is what tells everyone else this slot is taken, so it is released
-			// and removed on its own, after everything it protects is gone
-			return;
-		}
-		result.push_back(fs.JoinPath(temp_directory, name));
 	});
 	return result;
 }
@@ -900,43 +885,23 @@ vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
 void TemporaryDirectoryHandle::SweepAbandonedInstances() {
 	auto &fs = FileSystem::GetFileSystem(db);
 	try {
-		unordered_map<string, vector<string>> by_owner;
+		// the instance an id belongs to never affects the verdict, only the process it ran in does
+		unordered_map<int64_t, vector<string>> by_pid;
 		fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
-			string owner;
-			if (is_dir || !TryParseTemporaryFileOwner(name, owner)) {
-				return;
+			TemporaryFileOwner found;
+			if (!is_dir && TryParseTemporaryFileOwner(name, found)) {
+				by_pid[found.pid].push_back(fs.JoinPath(temp_directory, name));
 			}
-			by_owner[owner].push_back(name);
 		});
-		for (auto &entry : by_owner) {
-			auto &owner = entry.first;
-			if (owner == slot || SlotIsLiveInThisProcess(temp_directory, owner)) {
+		for (auto &entry : by_pid) {
+			// our own pid included: a live process is the one thing that can still be using these
+			if (ProcessIsRunning(entry.first)) {
 				continue;
 			}
-			auto lock_name = TemporaryLockFileName(owner);
-			auto lock_path = fs.JoinPath(temp_directory, lock_name);
-			unique_ptr<FileHandle> claimed;
-			try {
-				claimed = fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
-				                                     FileFlags::FILE_FLAGS_FILE_CREATE |
-				                                     FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileLockType::WRITE_LOCK);
-			} catch (std::exception &) {
-				// the lock is held: that instance is still running, its files are not ours to remove
-				continue;
-			}
-			vector<string> files_to_delete;
-			for (auto &name : entry.second) {
-				if (name != lock_name) {
-					files_to_delete.push_back(fs.JoinPath(temp_directory, name));
-				}
-			}
-			fs.RemoveFiles(files_to_delete);
-			// release before removing, so the descriptor is not what keeps it alive on Windows
-			claimed.reset();
-			fs.TryRemoveFile(lock_path);
+			fs.RemoveFiles(entry.second);
 		}
 	} catch (...) { // NOLINT
-		            // nothing to do: this also runs from teardown, where the log manager is already gone
+		            // reclaiming disk is not worth failing an open over - a later process tries again
 	}
 }
 
@@ -960,17 +925,9 @@ void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
 		return;
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	// our own files first - no probing needed, we are their owner
+	// only our own: we are their owner, so no process has to be judged to know they are free. What
+	// others left behind is the startup sweep's business
 	fs.RemoveFiles(ListOwnFiles());
-	// then whatever earlier instances left behind, so that the last instance out leaves the
-	// directory clean even if some of its predecessors crashed
-	SweepAbandonedInstances();
-	if (instance_lock) {
-		auto lock_path = fs.JoinPath(temp_directory, TemporaryLockFileName(slot));
-		instance_lock.reset();
-		fs.TryRemoveFile(lock_path);
-	}
-	UnregisterLiveSlot(temp_directory, slot);
 	if (created_directory) {
 		// only if nothing else is in it: another instance may have joined us here, and removing the
 		// directory is recursive - it would take their files with it

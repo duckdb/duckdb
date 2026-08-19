@@ -41,17 +41,26 @@ enum class TemporaryBufferSize : uint64_t {
 	DEFAULT = DEFAULT_BLOCK_ALLOC_SIZE,
 };
 
-//! "duckdb_temp_<slot>_", the start of every temporary file name. The slot keeps instances
-//! sharing a temp_directory off each other's paths; taking its lock is what makes it unique.
-DUCKDB_API string TemporaryFilePrefix(const string &slot);
-//! Name of the lock file that leases a slot in a temporary directory.
-DUCKDB_API string TemporaryLockFileName(const string &slot);
-//! Renders a slot number in the alphabet used for slot codes: base 32 without i, l, o and u, so a
-//! code is unambiguous when read off a directory listing and cannot spell much.
-DUCKDB_API string TemporarySlotCode(idx_t slot);
-//! Extracts the owning slot, if the name carries one. Names from a version that did not use slots
-//! do not, and are left alone: a running instance of that version may still own them.
-DUCKDB_API bool TryParseTemporaryFileOwner(const string &file_name, string &slot);
+//! The instance a temporary file belongs to: the process that created it, and which
+//! DatabaseInstance within that process.
+struct TemporaryFileOwner {
+	int64_t pid = 0;
+	idx_t instance = 0;
+
+	bool operator==(const TemporaryFileOwner &other) const {
+		return pid == other.pid && instance == other.instance;
+	}
+};
+
+//! "duckdb_temp_<pid>_<instance>_", the start of every temporary file name. It keeps instances
+//! sharing a temp_directory off each other's paths, and says who to ask whether they are still live.
+DUCKDB_API string TemporaryFilePrefix(const TemporaryFileOwner &owner);
+//! Extracts the owner, if the name carries one. Names from a version that did not name files after
+//! their owner do not, and are left alone: a running instance of that version may still own them.
+DUCKDB_API bool TryParseTemporaryFileOwner(const string &file_name, TemporaryFileOwner &owner);
+//! Whether a process with this id exists. Answers true whenever it cannot tell, so a process it
+//! may not inspect never costs a live instance its files.
+DUCKDB_API bool ProcessIsRunning(int64_t pid);
 
 //===--------------------------------------------------------------------===//
 // TemporaryFileIdentifier/TemporaryFileIndex
@@ -375,13 +384,13 @@ private:
 	//! Removes this instance's temporary files and, if it created it, the directory. May throw; the
 	//! destructor is what guarantees nothing escapes.
 	void CleanupTemporaryDirectory();
-	//! Removes files of instances that are gone, proven by claiming their lock. Never throws.
+	//! Removes files of instances whose process is gone. Never throws.
 	void SweepAbandonedInstances();
 	//! Files in the directory that belong to this instance.
 	vector<string> ListOwnFiles();
-	//! Takes the lowest slot in the directory whose lock is free, and reaps whatever a dead
-	//! predecessor holding that slot left behind. Sets slot and instance_lock.
-	void LeaseSlot();
+	//! Names this instance after its process, taking an id no file in the directory already uses.
+	//! Sets owner and file_prefix.
+	void ClaimOwner();
 
 public:
 	//! Prefix every temporary file of this instance carries.
@@ -393,11 +402,9 @@ private:
 	DatabaseInstance &db;
 	string temp_directory;
 	bool created_directory = false;
-	//! Slot leased in this directory, and the prefix built from it
-	string slot;
+	//! Who this instance is in the directory, and the prefix built from it
+	TemporaryFileOwner owner;
 	string file_prefix;
-	//! Held for as long as this instance uses the directory; how other instances tell it is running
-	unique_ptr<FileHandle> instance_lock;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 
