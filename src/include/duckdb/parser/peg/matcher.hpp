@@ -13,8 +13,10 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
@@ -243,38 +245,6 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
-};
-
-struct PEGMatcher {
-	MatcherAllocator allocator;
-
-	Matcher &ProgramMatcher() {
-		return *program_matcher;
-	}
-	Matcher &TopLevelStatementMatcher() {
-		return *top_level_statement_matcher;
-	}
-
-	static shared_ptr<PEGMatcher> Get(ClientContext &context);
-	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
-
-private:
-	friend struct ParserCache;
-	optional_ptr<Matcher> program_matcher;
-	optional_ptr<Matcher> top_level_statement_matcher;
-};
-
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
-struct ParserCache {
-	shared_ptr<PEGMatcher> GetMatcher();
-	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	void Invalidate();
-
-private:
-	std::mutex mutex;
-	shared_ptr<PEGMatcher> matcher;
-	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
 } // namespace duckdb

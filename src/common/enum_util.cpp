@@ -4992,6 +4992,7 @@ const StringUtil::EnumStringLiteral *GetRemoteCapabilityValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RemoteCapability::IS_REMOTE), "IS_REMOTE" },
 		{ static_cast<uint32_t>(RemoteCapability::EXECUTE_QUERY_NODE), "EXECUTE_QUERY_NODE" },
+		{ static_cast<uint32_t>(RemoteCapability::EXECUTE_STATEMENT), "EXECUTE_STATEMENT" },
 		{ static_cast<uint32_t>(RemoteCapability::CONNECT), "CONNECT" }
 	};
 	return values;
@@ -4999,12 +5000,12 @@ const StringUtil::EnumStringLiteral *GetRemoteCapabilityValues() {
 
 template<>
 const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value) {
-	return StringUtil::EnumToString(GetRemoteCapabilityValues(), 3, "RemoteCapability", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetRemoteCapabilityValues(), 4, "RemoteCapability", static_cast<uint32_t>(value));
 }
 
 template<>
 RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value) {
-	return static_cast<RemoteCapability>(StringUtil::StringToEnum(GetRemoteCapabilityValues(), 3, "RemoteCapability", value));
+	return static_cast<RemoteCapability>(StringUtil::StringToEnum(GetRemoteCapabilityValues(), 4, "RemoteCapability", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRemoveUnusedColumnsModeValues() {

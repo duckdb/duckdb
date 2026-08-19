@@ -99,6 +99,22 @@ inline void ListClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_da
 	}
 }
 
+inline void ListAbsorbState(ListAggState &source, ListAggState &target) {
+	if (source.linked_list.total_capacity == 0) {
+		// NULL, no need to append. This can happen with a filtered aggregate.
+		return;
+	}
+	if (target.linked_list.total_capacity == 0) {
+		target.linked_list = source.linked_list;
+		return;
+	}
+
+	// Append the linked list.
+	target.linked_list.last_segment->next = source.linked_list.first_segment;
+	target.linked_list.last_segment = source.linked_list.last_segment;
+	target.linked_list.total_capacity += source.linked_list.total_capacity;
+}
+
 inline void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
                                idx_t count) {
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
@@ -106,23 +122,7 @@ inline void ListAbsorbFunction(Vector &states_vector, Vector &combined, Aggregat
 	auto states = states_vector.Values<ListAggState *>();
 	auto combined_ptr = FlatVector::GetDataMutable<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].GetValue();
-		if (state.linked_list.total_capacity == 0) {
-			// NULL, no need to append
-			// this can happen when adding a FILTER to the grouping, e.g.,
-			// LIST(i) FILTER (WHERE i <> 3)
-			continue;
-		}
-
-		if (combined_ptr[i]->linked_list.total_capacity == 0) {
-			combined_ptr[i]->linked_list = state.linked_list;
-			continue;
-		}
-
-		// append the linked list
-		combined_ptr[i]->linked_list.last_segment->next = state.linked_list.first_segment;
-		combined_ptr[i]->linked_list.last_segment = state.linked_list.last_segment;
-		combined_ptr[i]->linked_list.total_capacity += state.linked_list.total_capacity;
+		ListAbsorbState(*states[i].GetValue(), *combined_ptr[i]);
 	}
 }
 
@@ -130,7 +130,8 @@ inline void ListAbsorbFunction(Vector &states_vector, Vector &combined, Aggregat
 template <class OP>
 void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	//	Can we use destructive combining?
-	if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+	if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE &&
+	    !aggr_input_data.combine_multiplicities) {
 		ListAbsorbFunction(states_vector, combined, aggr_input_data, count);
 		return;
 	}
@@ -141,10 +142,35 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 	auto element_type = OP::GetElementType(aggr_input_data);
 	ListSegmentFunctions functions;
 	GetSegmentDataFunctions(functions, element_type);
+	UnifiedVectorFormat multiplicities;
+	const int64_t *multiplicity_data = nullptr;
+	if (aggr_input_data.combine_multiplicities) {
+		aggr_input_data.combine_multiplicities->ToUnifiedFormat(multiplicities);
+		multiplicity_data = UnifiedVectorFormat::GetData<int64_t>(multiplicities);
+	}
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &source = *states[i].GetValue();
 		auto &target = *combined_ptr[i];
+		idx_t multiplicity = 1;
+		if (multiplicity_data) {
+			const auto multiplicity_idx = multiplicities.sel->get_index(i);
+			if (!multiplicities.validity.RowIsValid(multiplicity_idx)) {
+				continue;
+			}
+			const auto signed_multiplicity = multiplicity_data[multiplicity_idx];
+			if (signed_multiplicity < 0) {
+				throw InvalidInputException("combine_aggr multiplicity must be non-negative");
+			}
+			multiplicity = static_cast<idx_t>(signed_multiplicity);
+		}
+		if (multiplicity == 0 || source.linked_list.total_capacity == 0) {
+			continue;
+		}
+		if (multiplicity == 1 && aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+			ListAbsorbState(source, target);
+			continue;
+		}
 
 		const auto entry_count = source.linked_list.total_capacity;
 		Vector input(element_type, entry_count);
@@ -153,8 +179,10 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 		RecursiveUnifiedVectorFormat input_data;
 		Vector::RecursiveToUnifiedFormat(input, input_data);
 
-		functions.AppendListEntry(aggr_input_data.allocator, target.linked_list, input_data,
-		                          list_entry_t(0, entry_count));
+		for (idx_t repeat_idx = 0; repeat_idx < multiplicity; repeat_idx++) {
+			functions.AppendListEntry(aggr_input_data.allocator, target.linked_list, input_data,
+			                          list_entry_t(0, entry_count));
+		}
 	}
 }
 
