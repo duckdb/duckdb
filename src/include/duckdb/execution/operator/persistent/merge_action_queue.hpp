@@ -54,6 +54,8 @@ public:
 	SinkResultType Push(DataChunk &chunk, const InterruptState &interrupt_state);
 	//! Signal that no more data will be pushed into the queue
 	void Finish();
+	//! Signal that the pipeline of the action no longer consumes any data - rows that are pushed are discarded
+	void ConsumerFinished();
 	//! Abandon the queue - unblocks all producers and consumers
 	void Cancel();
 	//! Scan the next chunk. Returns BLOCKED while the queue is empty and the producers are not done yet.
@@ -95,6 +97,7 @@ private:
 	vector<InterruptState> blocked_producers;
 	bool finished = false;
 	bool cancelled = false;
+	bool consumer_finished = false;
 	idx_t rows_pushed = 0;
 	idx_t rows_buffered = 0;
 };

@@ -97,7 +97,7 @@ SinkResultType MergeActionQueue::Push(DataChunk &chunk, const InterruptState &in
 
 SinkResultType MergeActionQueue::PushMaterialized(DataChunk &chunk) {
 	lock_guard<mutex> guard(lock);
-	if (cancelled) {
+	if (cancelled || consumer_finished) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 	collection->Append(append_state, chunk);
@@ -109,8 +109,8 @@ SinkResultType MergeActionQueue::PushMaterialized(DataChunk &chunk) {
 SinkResultType MergeActionQueue::PushBounded(DataChunk &chunk, const InterruptState &interrupt_state) {
 	{
 		lock_guard<mutex> guard(lock);
-		if (cancelled) {
-			// nobody is reading from this queue anymore
+		if (cancelled || consumer_finished) {
+			// nobody is reading from this queue anymore - discard the rows
 			return SinkResultType::NEED_MORE_INPUT;
 		}
 		if (chunks.size() + reserved_slots >= max_buffered_chunks) {
@@ -148,6 +148,18 @@ void MergeActionQueue::Finish() {
 		blocked_consumers.clear();
 	}
 	CallbackAll(consumers);
+}
+
+void MergeActionQueue::ConsumerFinished() {
+	vector<InterruptState> producers;
+	{
+		lock_guard<mutex> guard(lock);
+		consumer_finished = true;
+		producers = std::move(blocked_producers);
+		blocked_producers.clear();
+	}
+	// the buffered chunks are not cleared here - another consumer may still be scanning them
+	CallbackAll(producers);
 }
 
 void MergeActionQueue::Cancel() {

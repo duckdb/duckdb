@@ -95,6 +95,11 @@ ProgressData PhysicalMergeActionSource::GetProgress(ClientContext &context, Glob
 	return result;
 }
 
+void PhysicalMergeActionSource::SourceFinished(ClientContext &context, GlobalSourceState &gstate_p) const {
+	// the pipeline of this action no longer reads from the queue - the merge into must not block on it
+	gstate_p.Cast<MergeActionGlobalSourceState>().queue->ConsumerFinished();
+}
+
 InsertionOrderPreservingMap<string> PhysicalMergeActionSource::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Action"] = MergeQueryNode::ActionConditionToString(condition) + " THEN " + MergeActionName(action_type);
