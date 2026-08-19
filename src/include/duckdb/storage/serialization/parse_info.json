@@ -774,6 +774,12 @@
         "name": "missing_ok",
         "type": "bool",
         "default": "false"
+      },
+      {
+        "id": 210,
+        "name": "load_after_install",
+        "type": "bool",
+        "default": "false"
       }
     ]
   },

@@ -71,6 +71,17 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 			InstallFromRepository(context.client, *info);
 		}
 
+		// INSTALL AND LOAD: load the extension immediately after installing it. Only a named repository (core,
+		// community or a user repository alias) is passed on to the load - a URL or bare install lands in the flat
+		// top-level layout, which a bare load resolves
+		if (info->load_after_install) {
+			ExtensionLoadOptions load_options;
+			load_options.extension_name = info->filename;
+			load_options.repository = info->repo_is_alias ? info->repository : string();
+			ExtensionHelper::LoadExternalExtension(context.client, load_options);
+			ExtensionLoader::RefreshSearchPath(context.client);
+		}
+
 	} else {
 		ExtensionLoadOptions options;
 		options.extension_name = info->filename;

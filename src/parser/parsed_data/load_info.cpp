@@ -24,6 +24,7 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	result->filename = filename;
 	result->repository = repository;
 	result->load_type = load_type;
+	result->load_after_install = load_after_install;
 	result->repo_is_alias = repo_is_alias;
 	result->version = version;
 	result->alias = alias;
@@ -34,15 +35,16 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	return result;
 }
 
-static string LoadInfoToString(LoadType load_type) {
+static string LoadInfoToString(LoadType load_type, bool load_after_install) {
+	string suffix = load_after_install ? " AND LOAD" : "";
 	switch (load_type) {
 	case LoadType::LOAD:
 	case LoadType::LOAD_AS:
 		return "LOAD";
 	case LoadType::INSTALL:
-		return "INSTALL";
+		return "INSTALL" + suffix;
 	case LoadType::FORCE_INSTALL:
-		return "FORCE INSTALL";
+		return "FORCE INSTALL" + suffix;
 	default:
 		throw InternalException("ToString for LoadType with type: %s not implemented", EnumUtil::ToString(load_type));
 	}
@@ -83,7 +85,7 @@ string LoadInfo::ToString() const {
 		return RepositoryToString(*this);
 	}
 	string result = "";
-	result += LoadInfoToString(load_type);
+	result += LoadInfoToString(load_type, load_after_install);
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
 		if (repo_is_alias) {

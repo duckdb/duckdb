@@ -22,6 +22,16 @@ CALL check_peg_parser($TEST_PEG_PARSER$LOAD tpch;$TEST_PEG_PARSER$);
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD '{SPATIAL_EXTENSION}'$TEST_PEG_PARSER$);
 
+# INSTALL AND LOAD combines install and load in a single statement
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL AND LOAD tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL AND LOAD tpch FROM core;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FORCE INSTALL AND LOAD tpch;$TEST_PEG_PARSER$);
+
 # LOAD with an explicit FROM repository
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$INSTALL tpch FROM core;$TEST_PEG_PARSER$);

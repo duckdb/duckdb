@@ -7675,22 +7675,34 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInstallStatemen
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
-	auto identifier_or_string_literal = transformer.Transform<QualifiedName>(list_pr.GetChild(2));
+	optional<bool> install_and_load {};
+	auto &install_and_load_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (install_and_load_opt.HasResult()) {
+		auto install_and_load_value = transformer.Transform<bool>(install_and_load_opt.GetResult());
+		install_and_load = install_and_load_value;
+	}
+	auto identifier_or_string_literal = transformer.Transform<QualifiedName>(list_pr.GetChild(3));
 	optional<ExtensionRepositoryInfo> from_source {};
-	auto &from_source_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	auto &from_source_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (from_source_opt.HasResult()) {
 		auto from_source_value = transformer.Transform<ExtensionRepositoryInfo>(from_source_opt.GetResult());
 		from_source = from_source_value;
 	}
 	optional<string> version_number {};
-	auto &version_number_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &version_number_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (version_number_opt.HasResult()) {
 		auto version_number_value = transformer.Transform<string>(version_number_opt.GetResult());
 		version_number = version_number_value;
 	}
-	auto result =
-	    TransformInstallStatement(transformer, has_result, identifier_or_string_literal, from_source, version_number);
+	auto result = TransformInstallStatement(transformer, has_result, install_and_load, identifier_or_string_literal,
+	                                        from_source, version_number);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInstallAndLoadInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformInstallAndLoad(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -11539,6 +11551,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"LoadStatement", &PEGTransformerFactory::TransformLoadStatementInternal},
 	    {"ExtensionAlias", &PEGTransformerFactory::TransformExtensionAliasInternal},
 	    {"InstallStatement", &PEGTransformerFactory::TransformInstallStatementInternal},
+	    {"InstallAndLoad", &PEGTransformerFactory::TransformInstallAndLoadInternal},
 	    {"UpdateExtensionsStatement", &PEGTransformerFactory::TransformUpdateExtensionsStatementInternal},
 	    {"FromSource", &PEGTransformerFactory::TransformFromSourceInternal},
 	    {"FromSourceIdentifier", &PEGTransformerFactory::TransformFromSourceIdentifierInternal},

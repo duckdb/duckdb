@@ -32,12 +32,18 @@ Identifier PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transf
 	return identifier;
 }
 
+bool PEGTransformerFactory::TransformInstallAndLoad(PEGTransformer &transformer) {
+	return true;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
-    PEGTransformer &transformer, const bool &has_result, const QualifiedName &identifier_or_string_literal,
-    const optional<ExtensionRepositoryInfo> &from_source, const optional<string> &version_number) {
+    PEGTransformer &transformer, const bool &has_result, const optional<bool> &install_and_load,
+    const QualifiedName &identifier_or_string_literal, const optional<ExtensionRepositoryInfo> &from_source,
+    const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = has_result ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	info->load_after_install = install_and_load.has_value();
 	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
 	if (from_source) {

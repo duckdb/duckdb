@@ -29,6 +29,8 @@ public:
 	bool repo_is_alias;
 	string version;
 	LoadType load_type;
+	//! Whether to load the extension immediately after installing it (INSTALL AND LOAD)
+	bool load_after_install = false;
 	Identifier alias;
 	//! The url prefix of the repository (CREATE_REPOSITORY only)
 	string repository_url;

@@ -1587,7 +1587,8 @@ ReturningClause <- 'RETURNING' TargetList
 
 LoadStatement <- 'LOAD' ColIdOrString FromSource? ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
-InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallStatement <- 'FORCE'? 'INSTALL' InstallAndLoad? IdentifierOrStringLiteral FromSource? VersionNumber?
+InstallAndLoad <- 'AND' 'LOAD'
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- FromSourceIdentifier / FromSourceString
 FromSourceIdentifier <- 'FROM' Identifier

@@ -1153,6 +1153,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - InstallAndLoad
     - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword

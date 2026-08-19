@@ -3603,6 +3603,10 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeInstallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeInstallAndLoadTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeInstallAndLoadTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
@@ -7500,9 +7504,13 @@ public:
 	static unique_ptr<TransformResultValue> TransformInstallStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformInstallStatement(PEGTransformer &transformer, const bool &has_result,
+	                                                          const optional<bool> &install_and_load,
 	                                                          const QualifiedName &identifier_or_string_literal,
 	                                                          const optional<ExtensionRepositoryInfo> &from_source,
 	                                                          const optional<string> &version_number);
+	static unique_ptr<TransformResultValue> TransformInstallAndLoadInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformInstallAndLoad(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformUpdateExtensionsStatementInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformUpdateExtensionsStatement(PEGTransformer &transformer,
