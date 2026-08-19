@@ -11753,9 +11753,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NameList", &PEGTransformerFactory::TransformNameListInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
-		RuleTransformData transform_data;
-		transform_data.transform = rule.transform;
-		grammar.SetTransform(rule.name, std::move(transform_data));
+		grammar.SetTransform(rule.name, rule.transform);
 	}
 }
 

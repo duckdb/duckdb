@@ -208,9 +208,7 @@ public:
 			throw InternalException("No registered data exists for rule '%s'", parse_result.name);
 		}
 		auto &rule = *rule_p;
-		auto &transform_data = rule.transform_data;
-		auto &func =
-		    options.debug_transformer_trampoline_style ? transform_data.trampoline_transform : transform_data.transform;
+		auto &func = rule.transform;
 		if (!func) {
 			throw NotImplementedException("No transformer function found for rule '%s'", parse_result.name);
 		}
@@ -4804,21 +4802,18 @@ public:
 	void RegisterSelect();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterGenerated();
-	void RegisterGeneratedTrampoline();
-
 	template <class FUNC>
 	void Register(const string &rule_name, FUNC function) {
 		auto &rule = grammar.GetMutableRule(rule_name);
-		if (rule.transform_data) {
+		if (rule.transform) {
 			throw InternalException("Rule %s already exists", rule_name);
 		}
-		RuleTransformData transform_data;
-		transform_data.transform = [function](PEGTransformer &transformer,
-		                                      ParseResult &parse_result) -> unique_ptr<TransformResultValue> {
-			auto result_value = function(transformer, parse_result);
-			return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
-		};
-		grammar.SetTransform(rule_name, std::move(transform_data));
+		grammar.SetTransform(
+		    rule_name,
+		    [function](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformResultValue> {
+			    auto result_value = function(transformer, parse_result);
+			    return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
+		    });
 	}
 
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
@@ -4826,8 +4821,6 @@ public:
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
 	static unique_ptr<SQLStatement> TransformStatementTrampoline(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
-	static unique_ptr<TransformResultValue> TransformStatementTrampolineInternal(PEGTransformer &transformer,
-	                                                                             ParseResult &parse_result);
 	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
 	static const TransformFrameOps &GetTrampolineOps(const ParseResult &parse_result);
 
