@@ -457,7 +457,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 		list_of_matches.pop_back(); // trailing comma
 
 		throw InvalidInputException(
-		    "Ambiguity found for secret name '%s', secret occurs in multiple storages: [%s] Please specify which "
+		    "Ambiguity found for secret name %s, secret occurs in multiple storages: [%s] Please specify which "
 		    "secret to drop using: 'DROP <PERSISTENT|TEMPORARY> SECRET [FROM <storage>]'.",
 		    name, list_of_matches);
 	}

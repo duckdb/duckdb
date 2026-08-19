@@ -16,7 +16,7 @@ index 91a3526..8b9a6b5 100644
  	}
  	if (!unrecognized_options.empty()) {
 diff --git a/test/sql/copy/invalid_option.test b/test/sql/copy/invalid_option.test
-index ad94908..9a1f044 100644
+index ad94908..b97e2ef 100644
 --- a/test/sql/copy/invalid_option.test
 +++ b/test/sql/copy/invalid_option.test
 @@ -11,7 +11,7 @@ COPY (
@@ -28,3 +28,9 @@ index ad94908..9a1f044 100644
  
  statement error
  COPY (
+@@ -21,4 +21,4 @@ COPY (
+ 	ROOT_NAME 'test'
+ );
+ ----
+-Invalid Configuration Error: The following option(s) are not recognized: key: 'not_recognized' with value: 'with_value'
++Invalid Configuration Error: The following option(s) are not recognized: key: "not_recognized" with value: 'with_value'
