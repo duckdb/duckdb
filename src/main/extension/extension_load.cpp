@@ -613,6 +613,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 		}
 		// the extension load failed - try installing the extension
 		ExtensionInstallOptions options;
+		options.reason = "auto-install of missing extension during LOAD '" + extension + "'";
 		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
 		if (!TryInitialLoad(db, fs, extension, result, error)) {
