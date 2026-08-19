@@ -330,6 +330,8 @@ enum class MemoryTag : uint8_t;
 
 enum class MergeActionCondition : uint8_t;
 
+enum class MergeActionQueueMode : uint8_t;
+
 enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
@@ -611,6 +613,8 @@ enum class VerifyExistenceType : uint8_t;
 enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
+
+enum class ViewSecurityType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -1071,6 +1075,9 @@ template<>
 const char* EnumUtil::ToChars<MergeActionCondition>(MergeActionCondition value);
 
 template<>
+const char* EnumUtil::ToChars<MergeActionQueueMode>(MergeActionQueueMode value);
+
+template<>
 const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
 
 template<>
@@ -1492,6 +1499,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1957,6 +1967,9 @@ template<>
 MergeActionCondition EnumUtil::FromString<MergeActionCondition>(const char *value);
 
 template<>
+MergeActionQueueMode EnumUtil::FromString<MergeActionQueueMode>(const char *value);
+
+template<>
 MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
 
 template<>
@@ -2378,6 +2391,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

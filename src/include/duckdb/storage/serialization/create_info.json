@@ -272,6 +272,13 @@
         "type": "identifier_map_t<Value>",
         "default": "identifier_map_t<Value>()",
         "version": "v1.5.0"
+      },
+      {
+        "id": 207,
+        "name": "security_type",
+        "type": "ViewSecurityType",
+        "default": "ViewSecurityType::REGULAR_VIEW",
+        "version": "v2.0.0"
       }
     ],
     "constructor": [
