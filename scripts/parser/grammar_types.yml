@@ -1167,6 +1167,7 @@ Bool:
     - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
+    - CreateSecure
     - WithOrWithoutOids
     - WithOids
     - WithoutOids

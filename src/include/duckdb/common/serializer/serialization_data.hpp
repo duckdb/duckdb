@@ -77,7 +77,8 @@ struct SerializationData {
 		if (stack.empty()) {
 			throw duckdb::InternalException("SerializationData - unexpected empty stack for %s", type);
 		}
-		return dynamic_cast<T &>(stack.top().get());
+		// the stack is keyed on T::GetType(), so it can only hold a T
+		return static_cast<T &>(stack.top().get());
 	}
 
 	template <typename T>
