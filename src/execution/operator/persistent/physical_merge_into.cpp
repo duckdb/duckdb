@@ -1,11 +1,12 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/persistent/merge_action_queue.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/execution/row_id_deduplicator.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -36,15 +37,62 @@ static string MergeActionName(MergeActionType action_type) {
 //===--------------------------------------------------------------------===//
 PhysicalMergeActionSource::PhysicalMergeActionSource(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                      idx_t estimated_cardinality, MergeActionCondition condition,
-                                                     MergeActionType action_type)
+                                                     MergeActionType action_type, bool parallel)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_ACTION_SOURCE, std::move(types),
                        estimated_cardinality),
-      condition(condition), action_type(action_type) {
+      condition(condition), action_type(action_type), parallel(parallel) {
+}
+
+PhysicalMergeActionSource::~PhysicalMergeActionSource() {
+}
+
+class MergeActionGlobalSourceState : public GlobalSourceState {
+public:
+	MergeActionGlobalSourceState(ClientContext &context, const PhysicalMergeActionSource &op) : queue(op.queue) {
+		if (!queue) {
+			throw InternalException("MERGE INTO action source has no queue - pipelines have not been built");
+		}
+		max_threads = op.parallel ? NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()) : 1;
+	}
+
+	idx_t MaxThreads() override {
+		return max_threads;
+	}
+
+	shared_ptr<MergeActionQueue> queue;
+	idx_t max_threads;
+};
+
+class MergeActionLocalSourceState : public LocalSourceState {
+public:
+	MergeActionQueueScanState scan_state;
+};
+
+unique_ptr<GlobalSourceState> PhysicalMergeActionSource::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<MergeActionGlobalSourceState>(context, *this);
+}
+
+unique_ptr<LocalSourceState> PhysicalMergeActionSource::GetLocalSourceState(ExecutionContext &context,
+                                                                            GlobalSourceState &gstate) const {
+	return make_uniq<MergeActionLocalSourceState>();
 }
 
 SourceResultType PhysicalMergeActionSource::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                             OperatorSourceInput &input) const {
-	throw InternalException("MERGE INTO action sources are fed by the merge into - they cannot be scanned");
+	auto &gstate = input.global_state.Cast<MergeActionGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<MergeActionLocalSourceState>();
+	return gstate.queue->Scan(chunk, lstate.scan_state, input.interrupt_state);
+}
+
+ProgressData PhysicalMergeActionSource::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<MergeActionGlobalSourceState>();
+	// we do not know how many rows the merge into will push into this action - report the rows we have consumed
+	// out of the rows that have been pushed so far
+	ProgressData result;
+	auto pushed = gstate.queue->RowsPushed();
+	result.done = double(pushed - gstate.queue->RowsBuffered());
+	result.total = double(MaxValue<idx_t>(pushed, estimated_cardinality));
+	return result;
 }
 
 InsertionOrderPreservingMap<string> PhysicalMergeActionSource::ParamsToString() const {
@@ -60,9 +108,10 @@ InsertionOrderPreservingMap<string> PhysicalMergeActionSource::ParamsToString() 
 PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &child,
                                      map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions_p,
                                      idx_t row_id_index, optional_idx source_marker, bool parallel_p,
-                                     bool return_chunk_p)
+                                     bool return_chunk_p, bool serialize_actions_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
-      row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p), return_chunk(return_chunk_p) {
+      row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p), return_chunk(return_chunk_p),
+      serialize_actions(serialize_actions_p) {
 	children.push_back(child);
 
 	map<MergeActionCondition, MergeActionRange> ranges;
@@ -100,8 +149,8 @@ void PhysicalMergeInto::PlanAction(PhysicalPlan &physical_plan, MergeActionCondi
 
 	auto &input = children[0].get();
 	auto &source = physical_plan.Make<PhysicalMergeActionSource>(input.types, input.estimated_cardinality, condition,
-	                                                             action.action_type);
-	action.source = source;
+	                                                             action.action_type, parallel);
+	action.source = source.Cast<PhysicalMergeActionSource>();
 
 	reference<PhysicalOperator> action_input = source;
 	if (!action.expressions.empty()) {
@@ -160,17 +209,11 @@ struct MergeSinkState {
 	optional_ptr<DataChunk> input_chunk;
 };
 
-//! Per-action state - the expression executors of the action, and the executor of the pipeline we push into
+//! Per-action state - the expression executors of the action
 struct MergeActionLocalState {
 	unique_ptr<ExpressionExecutor> condition_executor;
 	unique_ptr<ExpressionExecutor> expression_executor;
 	unique_ptr<DataChunk> expression_chunk;
-	//! Executor of the pipeline of this action - data is pushed directly into it
-	unique_ptr<PipelineExecutor> pipeline_executor;
-	//! The chunk that is pushed into the pipeline - operators may slice it, so it is kept separate from the input
-	unique_ptr<DataChunk> push_chunk;
-	//! Whether or not we are resuming a push that was previously blocked
-	bool resuming_push = false;
 };
 
 struct MatchResult {
@@ -187,7 +230,6 @@ struct MatchResult {
 class MergeIntoLocalState : public LocalSinkState {
 public:
 	MergeIntoLocalState(ExecutionContext &context, const PhysicalMergeInto &op) {
-		idx_t pipeline_idx = 0;
 		for (auto &action : op.actions) {
 			MergeActionLocalState state;
 			if (action->condition) {
@@ -202,13 +244,6 @@ public:
 				state.expression_chunk = make_uniq<DataChunk>();
 				state.expression_chunk->Initialize(context.client, expression_types);
 			}
-			if (action->op) {
-				auto &pipeline = op.action_pipelines[pipeline_idx++].get();
-				pipeline.PrepareExternalInput();
-				state.pipeline_executor = make_uniq<PipelineExecutor>(context.client, pipeline);
-				state.push_chunk = make_uniq<DataChunk>();
-				state.push_chunk->InitializeEmpty(action->source->types);
-			}
 			states.push_back(std::move(state));
 		}
 		for (idx_t i = 0; i < 3; i++) {
@@ -218,7 +253,6 @@ public:
 
 	MergeSinkState sink_state;
 	vector<MatchResult> match_results;
-	idx_t combine_idx = 0;
 	vector<MergeActionLocalState> states;
 	idx_t merged_count = 0;
 
@@ -276,30 +310,6 @@ public:
 		}
 		return result;
 	}
-
-	//! Push the input chunk into the pipeline of this action
-	SinkResultType PushToAction(MergeActionLocalState &action_state, DataChunk &input_chunk,
-	                            const InterruptState &interrupt_state) {
-		auto &pipeline_executor = *action_state.pipeline_executor;
-		pipeline_executor.SetInterruptState(interrupt_state);
-		if (pipeline_executor.IsFinishedProcessing()) {
-			// the sink no longer requires any input
-			action_state.resuming_push = false;
-			return SinkResultType::NEED_MORE_INPUT;
-		}
-		if (!action_state.resuming_push) {
-			// operators may slice the input chunk - keep our own wrapper around it
-			action_state.push_chunk->Reference(input_chunk);
-		}
-		auto result =
-		    pipeline_executor.PushExternal(*action_state.push_chunk, OperatorPartitionData(0), optional_idx());
-		if (result == PipelineExecuteResult::INTERRUPTED) {
-			action_state.resuming_push = true;
-			return SinkResultType::BLOCKED;
-		}
-		action_state.resuming_push = false;
-		return SinkResultType::NEED_MORE_INPUT;
-	}
 };
 
 class MergeIntoGlobalState : public GlobalSinkState {
@@ -307,6 +317,25 @@ public:
 	MergeIntoGlobalState(ClientContext &context, const PhysicalMergeInto &op)
 	    : op(op), matched_rows(context, GetRowIdTypes(op)) {
 		merged_count = 0;
+		for (auto &action : op.actions) {
+			shared_ptr<MergeActionQueue> queue;
+			if (action->source) {
+				queue = action->source->queue;
+				if (!queue) {
+					throw InternalException("MERGE INTO action has no queue - pipelines have not been built");
+				}
+			}
+			queues.push_back(std::move(queue));
+		}
+	}
+
+	~MergeIntoGlobalState() override {
+		// never leave a consumer waiting for data that is no longer coming
+		for (auto &queue : queues) {
+			if (queue) {
+				queue->Cancel();
+			}
+		}
 	}
 
 	static vector<LogicalType> GetRowIdTypes(const PhysicalMergeInto &op) {
@@ -319,6 +348,8 @@ public:
 	}
 
 	const PhysicalMergeInto &op;
+	//! The queue of every action - the queue is NULL for actions that have no operator to push data into
+	vector<shared_ptr<MergeActionQueue>> queues;
 	atomic<idx_t> merged_count;
 	//! Target row-ids already matched by a WHEN MATCHED modifying action, to detect a second action on a row.
 	mutex match_lock;
@@ -379,8 +410,8 @@ public:
 				input_chunk = nullptr;
 				continue;
 			}
-			// push the data into the pipeline of this action
-			auto result = local_state.PushToAction(action_state, *input_chunk, input.interrupt_state);
+			// push the data into the queue of this action - the pipeline of the action consumes it from there
+			auto result = queues[i]->Push(*input_chunk, input.interrupt_state);
 			if (result == SinkResultType::BLOCKED) {
 				return SinkResultType::BLOCKED;
 			}
@@ -388,26 +419,6 @@ public:
 			input_chunk = nullptr;
 		}
 		return SinkResultType::NEED_MORE_INPUT;
-	}
-
-	SinkCombineResultType Combine(ExecutionContext &context, MergeIntoLocalState &local_state,
-	                              OperatorSinkCombineInput &input) {
-		for (; local_state.combine_idx < local_state.states.size(); ++local_state.combine_idx) {
-			auto &action_state = local_state.states[local_state.combine_idx];
-			if (!action_state.pipeline_executor) {
-				continue;
-			}
-			auto &pipeline_executor = *action_state.pipeline_executor;
-			pipeline_executor.SetInterruptState(input.interrupt_state);
-			auto result = PipelineExecuteResult::NOT_FINISHED;
-			while (result == PipelineExecuteResult::NOT_FINISHED) {
-				result = pipeline_executor.FinishExternal(optional_idx());
-			}
-			if (result == PipelineExecuteResult::INTERRUPTED) {
-				return SinkCombineResultType::BLOCKED;
-			}
-		}
-		return SinkCombineResultType::FINISHED;
 	}
 };
 
@@ -532,18 +543,19 @@ SinkCombineResultType PhysicalMergeInto::Combine(ExecutionContext &context, Oper
 	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
 	auto &local_state = input.local_state.Cast<MergeIntoLocalState>();
 
-	auto result = global_state.Combine(context, local_state, input);
-	if (result == SinkCombineResultType::FINISHED) {
-		global_state.merged_count += local_state.merged_count;
-	}
-	return result;
+	global_state.merged_count += local_state.merged_count;
+	local_state.merged_count = 0;
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalMergeInto::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                              OperatorSinkFinalizeInput &input) const {
-	// all data has been pushed into the action pipelines - they can be finalized
-	for (auto &action_pipeline : action_pipelines) {
-		action_pipeline.get().CompleteExternalInput();
+	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
+	// all data has been pushed into the queues of the actions - their pipelines can finish up
+	for (auto &queue : global_state.queues) {
+		if (queue) {
+			queue->Finish();
+		}
 	}
 	return SinkFinalizeType::READY;
 }
@@ -568,21 +580,31 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
 void PhysicalMergeInto::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
-	// prepared statements can build the pipelines multiple times
-	action_pipelines.clear();
 
 	auto &state = meta_pipeline.GetState();
+	auto &context = current.GetClientContext();
+
+	// set up the queues that connect the merge into to the pipelines of the actions
+	// the queues are bounded - the merge into blocks if the pipeline of an action cannot keep up
+	// if the actions must run one after the other only the first action can stream: the rows of the other actions are
+	// buffered so that the merge into can always finish pushing them
+	auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	auto max_buffered_chunks = MaxValue<idx_t>(thread_count * 2, 8);
+	bool first_action = true;
+	for (auto &action : actions) {
+		if (!action->source) {
+			continue;
+		}
+		auto mode =
+		    serialize_actions && !first_action ? MergeActionQueueMode::MATERIALIZED : MergeActionQueueMode::BOUNDED;
+		action->source->queue =
+		    make_shared_ptr<MergeActionQueue>(context, action->source->types, mode, max_buffered_chunks);
+		first_action = false;
+	}
 
 	// build the pipelines that push data into the merge into
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	child_meta_pipeline.Build(children[0].get());
-
-	vector<shared_ptr<Pipeline>> producer_pipelines;
-	child_meta_pipeline.GetPipelines(producer_pipelines, false);
-	vector<reference<Pipeline>> producers;
-	for (auto &producer_pipeline : producer_pipelines) {
-		producers.push_back(*producer_pipeline);
-	}
 
 	// with RETURNING every action emits its own set of rows - create a pipeline per action to emit them
 	vector<reference<Pipeline>> result_pipelines;
@@ -598,8 +620,10 @@ void PhysicalMergeInto::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 		}
 	}
 
-	// set up the pipelines of the actions - these are fed directly by the merge into
+	// build the pipelines of the actions - these consume the data that the merge into pushes into their queue, and
+	// run concurrently with the pipelines that feed the merge into
 	idx_t action_idx = 0;
+	optional_ptr<shared_ptr<Pipeline>> previous_action_pipeline;
 	for (auto &action : actions) {
 		if (!action->op) {
 			continue;
@@ -607,8 +631,11 @@ void PhysicalMergeInto::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 		auto &action_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *action->op);
 		action_meta_pipeline.Build(action->op->children[0].get());
 		auto &action_pipeline = action_meta_pipeline.GetBasePipeline();
-		action_pipeline->SetExternalInput(producers);
-		action_pipelines.push_back(*action_pipeline);
+		if (serialize_actions && previous_action_pipeline) {
+			// the operators of the actions cannot append to the table concurrently - chain the pipelines
+			action_pipeline->AddDependency(*previous_action_pipeline);
+		}
+		previous_action_pipeline = action_pipeline;
 
 		if (!result_pipelines.empty()) {
 			// emit the RETURNING data of this action - the action operator is the source of the result pipeline

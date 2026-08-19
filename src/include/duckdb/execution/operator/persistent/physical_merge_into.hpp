@@ -12,31 +12,44 @@
 #include "duckdb/common/enums/merge_action_type.hpp"
 
 namespace duckdb {
+class MergeActionQueue;
 class MergeIntoLocalState;
-class Pipeline;
 
-//! The source of a MERGE INTO action pipeline - the merge into pushes the rows that belong to this action directly
-//! into the pipeline, this operator is never scanned
+//! The source of a MERGE INTO action pipeline - the merge into pushes the rows that belong to this action into the
+//! queue of the action, which this operator scans. The pipeline blocks while no data is available.
 class PhysicalMergeActionSource : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::MERGE_ACTION_SOURCE;
 
 public:
 	PhysicalMergeActionSource(PhysicalPlan &physical_plan, vector<LogicalType> types, idx_t estimated_cardinality,
-	                          MergeActionCondition condition, MergeActionType action_type);
+	                          MergeActionCondition condition, MergeActionType action_type, bool parallel);
+	~PhysicalMergeActionSource() override;
 
 	MergeActionCondition condition;
 	MergeActionType action_type;
+	//! Whether or not the rows of this action can be consumed by multiple threads
+	bool parallel;
+	//! The queue that the merge into pushes the rows of this action into - set up when building the pipelines
+	shared_ptr<MergeActionQueue> queue;
 
 public:
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;
 	}
 	bool ParallelSource() const override {
-		return true;
+		return parallel;
+	}
+	OrderPreservationType SourceOrder() const override {
+		//! rows are handed out to the consumers in whichever order they pick them up
+		return OrderPreservationType::NO_ORDER;
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -54,7 +67,7 @@ public:
 	//! actions that have an operator, and are only executed directly for the MERGE_ERROR action
 	vector<unique_ptr<Expression>> expressions;
 	//! The source that feeds `op` - set up by the PhysicalMergeInto
-	optional_ptr<PhysicalOperator> source;
+	optional_ptr<PhysicalMergeActionSource> source;
 	//! Projection that emits the RETURNING data of this action - set up by the PhysicalMergeInto
 	optional_ptr<PhysicalOperator> returning_projection;
 };
@@ -72,7 +85,7 @@ public:
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &child,
 	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index,
-	                  optional_idx source_marker, bool parallel, bool return_chunk);
+	                  optional_idx source_marker, bool parallel, bool return_chunk, bool serialize_actions = false);
 
 	//! List of all actions
 	vector<unique_ptr<MergeIntoOperator>> actions;
@@ -84,8 +97,9 @@ public:
 	optional_idx source_marker;
 	bool parallel;
 	bool return_chunk;
-	//! The pipelines of the actions that we push data into - set up when building the pipelines
-	vector<reference<Pipeline>> action_pipelines;
+	//! Whether the actions must run one after the other instead of concurrently - required when multiple actions
+	//! append to the same table, which their operators cannot do concurrently
+	bool serialize_actions;
 
 public:
 	// Source interface

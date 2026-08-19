@@ -119,9 +119,11 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 	}
 
 	bool parallel = append_count <= 1 && !op.return_chunk;
+	// multiple operators appending to the same table cannot run concurrently - run their actions one after the other
+	bool serialize_actions = append_count > 1;
 
 	return planner.Make<PhysicalMergeInto>(op.types, plan, std::move(actions), op.row_id_start, op.source_marker,
-	                                       parallel, op.return_chunk);
+	                                       parallel, op.return_chunk, serialize_actions);
 }
 
 PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
