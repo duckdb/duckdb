@@ -384,16 +384,15 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options, constant_string,
-			                                options, constant_pattern, dummy_names, struct_children);
+			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options,
+			                                constant_string, options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else if (group_or_options.type().id() == LogicalTypeId::VARCHAR) {
 			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
 		} else if (group_or_options.IsNull()) {
 			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
 			group_index = -1;
-		} 
-		else {
+		} else {
 			int32_t group_idx = group_or_options.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");
