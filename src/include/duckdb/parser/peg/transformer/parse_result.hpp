@@ -143,14 +143,8 @@ public:
 	void SetRule(const CompiledGrammarRule &rule_p) {
 		rule = rule_p;
 	}
-	bool HasRule() const {
-		return rule != nullptr;
-	}
-	const CompiledGrammarRule &GetRule() const {
-		if (!rule) {
-			throw InternalException("Parse result is not associated with a compiled grammar rule");
-		}
-		return *rule;
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
 	}
 
 	//! Returns the source location [offset, offset+length) of this parse result (length 0 when unknown)

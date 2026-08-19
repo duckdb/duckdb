@@ -203,7 +203,11 @@ public:
 public:
 	template <typename T>
 	T Transform(ParseResult &parse_result) {
-		auto &rule = parse_result.GetRule();
+		auto rule_p = parse_result.GetRule();
+		if (!rule_p) {
+			throw InternalException("No registered data exists for rule '%s'", parse_result.name);
+		}
+		auto &rule = *rule_p;
 		auto &func = options.debug_transformer_trampoline_style ? rule.trampoline_transform : rule.transform;
 		if (!func) {
 			throw NotImplementedException("No transformer function found for rule '%s'", parse_result.name);

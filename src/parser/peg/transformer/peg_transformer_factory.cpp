@@ -57,7 +57,11 @@ void PEGTransformerFactory::RegisterGeneratedTrampoline() {
 }
 
 const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
-	auto &rule = parse_result.GetRule();
+	auto rule_p = parse_result.GetRule();
+	if (!rule_p) {
+		throw InternalException("No registered data exists for rule '%s'", parse_result.name);
+	}
+	auto &rule = *rule_p;
 	if (!rule.trampoline_ops) {
 		throw NotImplementedException("No trampoline transformer for rule '%s'", rule.name);
 	}

@@ -945,10 +945,7 @@ class UseGramPreviewEmitter:
         lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
         lines.append("\tauto &choice_result = choice_pr.GetResult();")
         lines.append("\tframe.ReserveChildSlots(1);")
-        lines.append(
-            "\tauto trampoline_ops = "
-            "choice_result.HasRule() ? choice_result.GetRule().trampoline_ops.get() : nullptr;"
-        )
+        lines.append("\tauto trampoline_ops = choice_result.GetRule();")
         syntax_only_alternatives = self.choice_syntax_only_alternative_names(ast)
         child_cpp_types = set()
         for alternative in ast.alternatives:
@@ -1014,13 +1011,13 @@ class UseGramPreviewEmitter:
             lines.append("\t\treturn;")
             lines.append("\t}")
         else:
-            lines.append("\tif (!trampoline_ops) {")
+            lines.append("\tif (!trampoline_ops || !trampoline_ops->trampoline_ops.get()) {")
             lines.append(
                 "\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);"
             )
             lines.append("\t}")
         lines.append(
-            "\tstack.PushFrame(choice_result, *trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));"
+            "\tstack.PushFrame(choice_result, *trampoline_ops->trampoline_ops, TransformFrameResultTarget(frame.frame_index, 0));"
         )
         lines.append("}")
         return lines
