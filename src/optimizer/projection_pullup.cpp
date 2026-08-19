@@ -9,6 +9,19 @@
 
 namespace duckdb {
 
+static bool ReferencesVariableSizeColumn(const Expression &expression) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return !TypeIsConstantSize(expression.GetReturnType().InternalType());
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
+		if (!result && ReferencesVariableSizeColumn(child)) {
+			result = true;
+		}
+	});
+	return result;
+}
+
 void ProjectionPullup::PopParents(const LogicalOperator &op) {
 	// pop back elements until the last operator in the stack is THIS operator
 	while (!parents.empty() && &parents.back().get() != &op) {
@@ -287,6 +300,14 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op->Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
+		bool crosses_join = false;
+		for (auto &parent : parents) {
+			if (parent.get().type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+			    parent.get().type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+				crosses_join = true;
+				break;
+			}
+		}
 
 		// Check if all expressions are simple column refs
 		// Cannot pull this projection up safely if any expression is not a column ref
@@ -298,6 +319,13 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 				all_column_refs = false;
 			}
 			if (proj.expressions[i]->IsVolatile()) {
+				ProjectionPullup next(optimizer, root);
+				next.Optimize(proj.children[0]);
+				return; // bail
+			}
+			if (crosses_join && proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF &&
+			    (!TypeIsConstantSize(proj.expressions[i]->GetReturnType().InternalType()) ||
+			     ReferencesVariableSizeColumn(*proj.expressions[i]))) {
 				ProjectionPullup next(optimizer, root);
 				next.Optimize(proj.children[0]);
 				return; // bail
