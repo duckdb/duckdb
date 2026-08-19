@@ -461,23 +461,22 @@ public:
 	bool ScanWithReadAhead(ClientContext &context, TableFunctionInput &data_p, TableScanLocalState &l_state,
 	                       DataChunk &output) {
 		while (true) {
-			// acquire a job when none is held, or settle a parked job's completed I/O
-			if (!l_state.job || l_state.job->io_completion) {
-				const bool fresh_job = !l_state.job;
+			if (l_state.job && l_state.job->io_completion) {
+				// resuming after parking, the job's I/O has completed
+				read_ahead->WaitForJob(*l_state.job);
+			}
+			if (!l_state.job) {
+				unique_ptr<ScanReadAheadJob> claimed;
 				auto acquired = read_ahead->AcquireJob(
 				    context, data_p,
-				    [&](TableScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
-					    return ProduceJob(context, job, io_tasks);
-				    },
-				    l_state.job);
+				    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, io_tasks); }, claimed);
 				if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
 					return false;
 				}
-				if (fresh_job) {
-					l_state.rows_in_current_row_group = l_state.job->rows;
-					if (l_state.job->scan_state->table_state.row_group) {
-						l_state.row_groups_scanned++;
-					}
+				l_state.job = unique_ptr_cast<ScanReadAheadJob, TableScanJob>(std::move(claimed));
+				l_state.rows_in_current_row_group = l_state.job->rows;
+				if (l_state.job->scan_state->table_state.row_group) {
+					l_state.row_groups_scanned++;
 				}
 				if (acquired == ScanReadAheadAcquire::PARKED) {
 					return true;
@@ -506,7 +505,7 @@ public:
 			l_state.job_rows_scanned += job_scan.table_state.rows_scanned + job_scan.local_state.rows_scanned;
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;
-			read_ahead->PushState(std::move(l_state.job->scan_state));
+			PushState(std::move(l_state.job->scan_state));
 			l_state.job.reset();
 			context.InterruptCheck();
 		}
