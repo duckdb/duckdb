@@ -2416,6 +2416,10 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	for (auto &func : operator_set.functions) {
+		func.SetFallible();
+	}
 	return operator_set;
 }
 
@@ -2429,6 +2433,10 @@ ScalarFunctionSet EpochUsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	for (auto &func : operator_set.functions) {
+		func.SetFallible();
+	}
 	return operator_set;
 }
 
@@ -2447,6 +2455,10 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	for (auto &func : operator_set.functions) {
+		func.SetFallible();
+	}
 	return operator_set;
 }
 
@@ -2455,6 +2467,10 @@ ScalarFunctionSet MakeTimestampMsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	for (auto &func : operator_set.functions) {
+		func.SetFallible();
+	}
 	return operator_set;
 }
 

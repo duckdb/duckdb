@@ -1,4 +1,6 @@
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/group_by_node.hpp"
@@ -32,6 +34,14 @@ ParserCache &Parser::GetCache() {
 		local_cache = make_uniq<ParserCache>();
 	}
 	return *local_cache;
+}
+
+CompiledGrammar &Parser::GetGrammar() {
+	if (!compiled_grammar) {
+		auto &cache = GetCache();
+		compiled_grammar = cache.GetMatcher(nullptr);
+	}
+	return *compiled_grammar;
 }
 
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
@@ -269,8 +279,8 @@ void Parser::ParseQuery(const string &query_p) {
 	// how many bytes it consumed and we advance the token cursor past them.
 	auto owned_tokens = make_uniq<vector<MatcherToken>>();
 	ParserTokenizerBehavior behavior(query, *owned_tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	auto &tokenizer = GetGrammar().GetTokenizer();
+	tokenizer.TokenizeInput(behavior);
 	TokenIterator token_iterator(std::move(owned_tokens));
 	while (token_iterator.Current()) {
 		try {
@@ -352,18 +362,18 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
-	auto &cache = GetCache();
-	auto peg_matcher = cache.GetMatcher();
-	auto peg_factory = cache.GetTransformerFactory();
+	auto &compiled_grammar = GetGrammar();
+	auto &peg_factory = compiled_grammar.GetTransformerFactory();
 
-	return peg_factory->TransformTopLevelStatement(token_iterator, options, peg_matcher->TopLevelStatementMatcher());
+	return peg_factory.TransformTopLevelStatement(token_iterator, options, compiled_grammar.TopLevelStatementMatcher());
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	Tokenizer tokenizer(keyword_helper);
+	tokenizer.TokenizeInput(behavior);
 
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
@@ -539,7 +549,8 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	auto &helper = DuckDBKeywordHelper::Instance();
+
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -560,7 +571,8 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
-	return PEGKeywordHelper::Instance().KeywordList();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	return keyword_helper.KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {

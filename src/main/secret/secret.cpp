@@ -159,7 +159,7 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 
 	if (secret_match.HasMatch()) {
-		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+		secret = secret_match.GetSecret().Cast<KeyValueSecret>();
 		secret_entry = std::move(secret_match.secret_entry);
 	}
 }

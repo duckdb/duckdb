@@ -21,6 +21,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -360,6 +361,10 @@ unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, unique_ptr<Q
 	throw NotImplementedException("RemoteExecute(QueryNode) not supported by this catalog");
 }
 
+unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, unique_ptr<SQLStatement> statement) {
+	throw NotImplementedException("RemoteExecute(SQLStatement) not supported by this catalog");
+}
+
 unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, const string &sql) {
 	throw NotImplementedException("RemoteExecute(string) not supported by this catalog");
 }
@@ -373,6 +378,10 @@ bool Catalog::SupportsPushdown(const TableRef &ref) {
 }
 
 bool Catalog::SupportsPushdown(const QueryNode &node) {
+	return true;
+}
+
+bool Catalog::SupportsPushdown(const SQLStatement &statement) {
 	return true;
 }
 

@@ -1203,12 +1203,18 @@ def _matcher_override_expr(rule_name, override):
     suggestion = override.get("suggestion")
     if matcher == "identifier":
         if suggestion:
-            return f"allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::{suggestion}))"
+            return f"allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::{suggestion}, " "keyword_helper))"
     if matcher == "reserved_identifier":
         if suggestion:
-            return f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}))"
+            return (
+                f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}, "
+                "keyword_helper))"
+            )
     if matcher == "identifier_string":
-        return "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE))"
+        return (
+            "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, "
+            "keyword_helper))"
+        )
     if matcher == "number_literal":
         return "allocator.Allocate(make_uniq<NumberLiteralMatcher>())"
     if matcher == "string_literal":
