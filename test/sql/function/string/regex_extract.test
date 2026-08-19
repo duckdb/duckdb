@@ -159,6 +159,11 @@ SELECT regexp_extract('q u a c k', 'q..', CAST(NULL AS VARCHAR))
 ----
 (empty)
 
+statement error
+SELECT regexp_extract('abcdefg', 'A..', 'i', 'c');
+----
+Binder Error: Could not choose a best candidate function 
+
 # 'k' option: keep (return) the input on no match instead of an empty string
 query T
 SELECT regexp_extract('foobarbaz', '(zzz)', 1, 'k')
