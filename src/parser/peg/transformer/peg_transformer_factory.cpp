@@ -4,6 +4,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
@@ -64,7 +65,7 @@ const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &r
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
-                                                             const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
+                                                             const TokenIterator &token_iterator, ParseResult &stmt_pr,
                                                              optional_idx terminator_offset) {
 	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
 
@@ -79,50 +80,47 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	// Calculate location and length cleanly
 	if (stmt_pr.offset.IsValid()) {
 		auto start = stmt_pr.offset.GetIndex();
-		idx_t end_index =
-		    terminator_offset.IsValid() ? terminator_offset.GetIndex() : (tokens.back().offset + tokens.back().length);
+		idx_t end_index = terminator_offset.IsValid() ? terminator_offset.GetIndex() : token_iterator.EndOffset();
 		stmt->stmt_location = QueryLocation(start, end_index - start);
 	}
 
 	return stmt;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vector<MatcherToken> &tokens,
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           Matcher &root_matcher, idx_t &token_cursor) {
-	if (token_cursor >= tokens.size()) {
+                                                                           const Matcher &root_matcher) const {
+	if (!token_iterator.Current()) {
 		return nullptr;
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
-	idx_t max_token_index = token_cursor;
-	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case,
-	                 token_cursor, &packrat_cache);
+	idx_t max_token_index = token_iterator.Position();
+	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
+	                 options.preserve_identifier_case, &packrat_cache);
 	auto match_result = root_matcher.MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
-		string token_stream;
-		for (auto &token : tokens) {
-			token_stream += token.text + " ";
-		}
+		auto token_stream = token_iterator.ToString();
 		idx_t error_token_idx = state.GetMaxTokenIndex();
-		if (error_token_idx >= tokens.size()) {
-			error_token_idx = tokens.size() - 1;
+		if (error_token_idx >= token_iterator.Size()) {
+			error_token_idx = token_iterator.Size() - 1;
 		}
 		// Walk back past the EOI sentinel so the error message names a real token.
-		if (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
-		                            tokens[error_token_idx].type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
+		if (error_token_idx > 0 &&
+		    (token_iterator.GetToken(error_token_idx).type == TokenType::END_OF_INPUT ||
+		     token_iterator.GetToken(error_token_idx).type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
 			error_token_idx--;
 		}
-		auto &error_token = tokens[error_token_idx];
+		auto &error_token = token_iterator.GetToken(error_token_idx);
 		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message,
 		                                   QueryLocation(error_token.offset, error_token.length));
 	}
 
 	// Advance the caller's cursor past the consumed tokens.
-	token_cursor = state.token_index;
+	token_iterator.SetPosition(state.token_iterator);
 
 	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
 	//   child 0: Optional<Statement>
@@ -144,11 +142,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformerState transformer_state(tokens);
 	auto &transform_functions = GetTransformFunctions(options);
-	PEGTransformer transformer(transformer_allocator, transformer_state, transform_functions, parser.rules, options);
+	PEGTransformer transformer(transformer_allocator, transform_functions, parser.rules, options);
 
-	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
+	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
@@ -213,7 +210,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 }
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
-PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) const {
 	if (options.debug_transformer_trampoline_style) {
 		return trampoline_transform_functions;
 	}

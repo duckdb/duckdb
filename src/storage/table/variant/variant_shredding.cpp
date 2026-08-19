@@ -555,7 +555,7 @@ static vector<uint32_t> UnshreddedObjectChildren(UnifiedVariantVectorData &varia
 	for (uint32_t i = 0; i < nested_data.child_count; i++) {
 		auto keys_index = variant.GetKeysIndex(row, nested_data.children_idx + i);
 		auto &key = variant.GetKey(row, keys_index);
-		if (shredded_fields.count(key)) {
+		if (shredded_fields.count(key.GetString())) {
 			continue;
 		}
 		unshredded_children.emplace_back(i);

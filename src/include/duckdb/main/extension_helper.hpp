@@ -98,6 +98,9 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	//! Publishes the extensions linked into this binary onto the config. Generated at build time;
+	//! a build that links none (or an extension carrying its own DuckDB) registers nothing.
+	static void RegisterLinkedExtensions(DBConfig &config);
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,

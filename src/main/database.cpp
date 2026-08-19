@@ -1,7 +1,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
@@ -302,6 +302,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+	// publish what this binary links, unless the config already carries a set handed to us
+	ExtensionHelper::RegisterLinkedExtensions(config);
 
 	create_api_v1 = CreateAPIv1Wrapper;
 
@@ -477,6 +479,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	// carry over a capability set handed to us, so a database created by code with its own copy of
+	// DuckDB can be given the extensions the binary that created it links
+	config.linked_extensions = new_config.linked_extensions;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");

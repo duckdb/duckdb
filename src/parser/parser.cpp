@@ -1,9 +1,12 @@
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
@@ -31,6 +34,14 @@ ParserCache &Parser::GetCache() {
 		local_cache = make_uniq<ParserCache>();
 	}
 	return *local_cache;
+}
+
+CompiledGrammar &Parser::GetGrammar() {
+	if (!compiled_grammar) {
+		auto &cache = GetCache();
+		compiled_grammar = cache.GetMatcher(nullptr);
+	}
+	return *compiled_grammar;
 }
 
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
@@ -266,19 +277,19 @@ void Parser::ParseQuery(const string &query_p) {
 	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
 	// failure, hand the rest of the query to parse_function extensions; the extension reports
 	// how many bytes it consumed and we advance the token cursor past them.
-	vector<MatcherToken> tokens;
-	ParserTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
-	idx_t token_cursor = 0;
-	while (token_cursor < tokens.size()) {
+	auto owned_tokens = make_uniq<vector<MatcherToken>>();
+	ParserTokenizerBehavior behavior(query, *owned_tokens);
+	auto &tokenizer = GetGrammar().GetTokenizer();
+	tokenizer.TokenizeInput(behavior);
+	TokenIterator token_iterator(std::move(owned_tokens));
+	while (token_iterator.Current()) {
 		try {
-			auto stmt = ParseTopLevelStatement(tokens, token_cursor);
+			auto stmt = ParseTopLevelStatement(token_iterator);
 			if (stmt) {
 				statements.push_back(std::move(stmt));
 			}
 		} catch (ParserException &e) {
-			auto ext_stmt = TryParseExtensionStatement(tokens, token_cursor, query);
+			auto ext_stmt = TryParseExtensionStatement(token_iterator, query);
 			if (!ext_stmt) {
 				throw;
 			}
@@ -304,20 +315,16 @@ void Parser::ParseQuery(const string &query_p) {
 	}
 }
 
-unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
-                                                            const string &query) {
+unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(TokenIterator &token_iterator, const string &query) {
 	if (!options.extensions || !options.extensions->HasParserExtensions()) {
 		return nullptr;
 	}
-	idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+	auto current = token_iterator.Current();
+	idx_t failure_byte = current ? current->offset : query.size();
 	// SimpleToken view of the tail: text + classified type, in source order, so extensions can
 	// dispatch on the token stream without re-tokenizing. The extension reports how many of these
 	// tokens it consumed.
-	vector<SimpleToken> simple_tokens;
-	simple_tokens.reserve(tokens.size() - token_cursor);
-	for (idx_t i = token_cursor; i < tokens.size(); i++) {
-		simple_tokens.emplace_back(tokens[i].text, tokens[i].type);
-	}
+	auto simple_tokens = token_iterator.RemainingTokens();
 	for (auto &ext : options.extensions->ParserExtensions()) {
 		if (!ext.parse_function) {
 			continue;
@@ -339,33 +346,34 @@ unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken>
 		}
 		// The claimed region runs from the failure point to the end of the last consumed token;
 		// advancing the cursor by consumed_tokens lands on a token boundary.
-		auto &last_token = tokens[token_cursor + consumed - 1];
+		TokenIterator consumed_iterator(token_iterator);
+		consumed_iterator.Advance(consumed);
+		auto &last_token = consumed_iterator.Previous();
 		const idx_t end_byte = last_token.offset + last_token.length;
 		auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
 		estmt->stmt_location = QueryLocation(failure_byte, end_byte - failure_byte);
-		token_cursor += consumed;
+		token_iterator.SetPosition(consumed_iterator);
 		return std::move(estmt);
 	}
 	return nullptr;
 }
 
-unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor) {
-	if (token_cursor >= tokens.size()) {
+unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_iterator) {
+	if (!token_iterator.Current()) {
 		return nullptr;
 	}
-	auto &cache = GetCache();
-	auto peg_matcher = cache.GetMatcher();
-	auto peg_factory = cache.GetTransformerFactory();
+	auto &compiled_grammar = GetGrammar();
+	auto &peg_factory = compiled_grammar.GetTransformerFactory();
 
-	return peg_factory->TransformTopLevelStatement(tokens, options, peg_matcher->TopLevelStatementMatcher(),
-	                                               token_cursor);
+	return peg_factory.TransformTopLevelStatement(token_iterator, options, compiled_grammar.TopLevelStatementMatcher());
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(query, tokens);
-	Tokenizer tokenizer(behavior);
-	tokenizer.TokenizeInput();
+	Tokenizer tokenizer(keyword_helper);
+	tokenizer.TokenizeInput(behavior);
 
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
@@ -541,7 +549,8 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	auto &helper = DuckDBKeywordHelper::Instance();
+
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -562,7 +571,8 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
-	return PEGKeywordHelper::Instance().KeywordList();
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	return keyword_helper.KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {
