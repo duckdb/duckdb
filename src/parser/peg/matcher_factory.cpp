@@ -49,7 +49,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		throw InternalException("PEG matcher create error - found too many close brackets");
 	}
 	auto &root_bracket_matcher = matchers.back();
-	if (root_bracket_matcher.function_name.GetSize() == 0) {
+	if (!root_bracket_matcher.function_name) {
 		// not a function
 		auto &bracket_matcher = root_bracket_matcher.matcher;
 		// remove the last matcher from the stack
@@ -58,7 +58,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		AddMatcher(bracket_matcher);
 	} else {
 		// function matcher
-		auto &function_name = root_bracket_matcher.function_name;
+		auto &function_name = *root_bracket_matcher.function_name;
 		auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
 
 		// wrap the parameters in a list if there is more than one

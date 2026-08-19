@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
 
 namespace duckdb {
@@ -14,13 +15,14 @@ private:
 	struct MatcherList {
 	public:
 		struct Entry {
-			explicit Entry(Matcher &matcher) : matcher(matcher), function_name(string_t("")) {
+			explicit Entry(Matcher &matcher) : matcher(matcher), function_name() {
 			}
 			Entry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
 			}
 
 			Matcher &matcher;
-			string_t function_name;
+			//! Left empty for non-function entries
+			optional<string_t> function_name;
 		};
 
 	public:
