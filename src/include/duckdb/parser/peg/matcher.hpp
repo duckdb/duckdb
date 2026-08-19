@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
@@ -92,20 +93,6 @@ enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-struct MatcherToken {
-	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
-	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
-		length = text.length();
-	}
-
-	TokenType type;
-	string text;
-	idx_t offset = 0;
-	idx_t length = 0;
-	bool unterminated = false;
-};
-
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
 	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(keyword.suggestion_type) {
@@ -122,31 +109,30 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true,
 	           ParserPackratCache *packrat_cache_p = nullptr)
-	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
+	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
 	      packrat_cache(packrat_cache_p) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
+	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
+	      max_token_index(state.max_token_index), preserve_identifier_case(state.preserve_identifier_case),
+	      packrat_cache(state.packrat_cache) {
 	}
 
-	vector<MatcherToken> &tokens;
+	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
-	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
 	ParserPackratCache *packrat_cache;
 
 	void UpdateMaxTokenIndex() {
-		if (token_index > max_token_index) {
-			max_token_index = token_index;
+		if (token_iterator.Position() > max_token_index) {
+			max_token_index = token_iterator.Position();
 		}
 	}
 
