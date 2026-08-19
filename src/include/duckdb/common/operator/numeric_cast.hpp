@@ -48,12 +48,6 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 
 		// SRC is unsigned.
 		if (NumericLimits<SRC>::Digits() >= NumericLimits<DST>::Digits()) {
-			// the bounds of a floating point DST are infinite - converting them to SRC is UB,
-			// and every SRC value fits magnitude-wise anyway
-			if (!NumericLimits<DST>::IsIntegral()) {
-				result = static_cast<DST>(value);
-				return true;
-			}
 			if (value <= static_cast<SRC>(NumericLimits<DST>::Maximum())) {
 				result = static_cast<DST>(value);
 				return true;
@@ -70,12 +64,6 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 		return true;
 	}
 
-	// the bounds of a floating point DST are infinite - converting them to SRC is UB,
-	// and every SRC value fits magnitude-wise anyway
-	if (!NumericLimits<DST>::IsIntegral()) {
-		result = static_cast<DST>(value);
-		return true;
-	}
 	if (value < SRC(NumericLimits<DST>::Minimum()) || value > SRC(NumericLimits<DST>::Maximum())) {
 		return false;
 	}

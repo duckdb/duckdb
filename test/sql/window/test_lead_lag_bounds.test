@@ -43,3 +43,25 @@ SELECT i, lag(v, 1) OVER (ORDER BY i), lead(v, 1) OVER (ORDER BY i) FROM (VALUES
 1	NULL	20
 2	10	30
 3	20	NULL
+
+# the secondary-sort path (merge sort trees) saturates the same way
+# (no default argument can be combined with an in-argument ORDER BY, so the result is NULL)
+query II
+SELECT i, lag(v, (-9223372036854775807 - 1)::BIGINT ORDER BY i) OVER () FROM (VALUES (1, 10), (2, 20)) t(i, v) ORDER BY i
+----
+1	NULL
+2	NULL
+
+query II
+SELECT i, lead(v, 9223372036854775807::BIGINT ORDER BY i) OVER () FROM (VALUES (1, 10), (2, 20)) t(i, v) ORDER BY i
+----
+1	NULL
+2	NULL
+
+# the framing path (shared ordering) saturates the same way
+query II
+SELECT i, lead(v, (-9223372036854775807 - 1)::BIGINT, -1) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM (VALUES (1, 10), (2, 20), (3, 30)) t(i, v) ORDER BY i
+----
+1	-1
+2	-1
+3	-1

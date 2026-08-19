@@ -23,6 +23,30 @@ SELECT equi_width_bins(TIMESTAMP '2020-01-01', TIMESTAMP '2020-01-01 00:00:00.00
 ----
 bin count
 
+# double path: a denormal span underflows the step to 0
+# (this used to be an InternalException, but it is reachable from user input)
+statement error
+SELECT equi_width_bins(0.0, 5e-324, 2, false)
+----
+bin count
+
+statement error
+SELECT equi_width_bins(0.0, 5e-324, 2, true)
+----
+bin count
+
+# double path: a step that is too small to advance the boundary at this magnitude
+# (0 < step < ulp of the boundary) would loop forever - it must error instead of hanging
+statement error
+SELECT equi_width_bins(1.7976931348623155e308, 1.7976931348623157e308, 10, false)
+----
+bin count
+
+statement error
+SELECT equi_width_bins(1.7976931348623155e308, 1.7976931348623157e308, 10, true)
+----
+bin count
+
 # reasonable bin counts for the same range still work
 query I
 SELECT equi_width_bins(0, 1, 1, false)

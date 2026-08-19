@@ -196,6 +196,10 @@ struct EquiWidthBinsDouble {
 
 		const double round_multiplication = 10 / step_power_of_ten;
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
+			// a step too small to advance the boundary at this magnitude would never terminate the loop
+			if (bin_boundary - step == bin_boundary) {
+				throw InvalidInputException("equi_width_bins: bin count is too large for the range between min and max");
+			}
 			// because floating point addition adds inaccuracies, we add rounding at every step
 			double real_boundary = bin_boundary;
 			if (nice_rounding) {
