@@ -55,7 +55,6 @@ public:
 	DUCKDB_API void AddRule(const string &rule_definition, optional<RuleTransformData> transform_data = std::nullopt);
 	DUCKDB_API void ReplaceRule(const string &rule_definition,
 	                            optional<RuleTransformData> transform_data = std::nullopt);
-	DUCKDB_API void RemoveRule(const string &rule_name);
 	DUCKDB_API void SetTransform(const string &rule_name, RuleTransformData &&transform_data);
 	void SetTrampolineOps(const string &rule_name, const TransformFrameOps &ops);
 

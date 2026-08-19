@@ -113,12 +113,6 @@ void ParsedGrammar::ReplaceRule(const string &rule_definition, optional<RuleTran
 	entry->second = make_uniq<ParsedGrammarRule>(std::move(rule));
 }
 
-void ParsedGrammar::RemoveRule(const string &rule_name) {
-	if (rules.erase(rule_name) == 0) {
-		throw InvalidInputException("Grammar rule '%s' does not exist", rule_name);
-	}
-}
-
 void ParsedGrammar::SetTransform(const string &rule_name, RuleTransformData &&transform_data) {
 	auto &rule = GetMutableRule(rule_name);
 	rule.transform_data = std::move(transform_data);
