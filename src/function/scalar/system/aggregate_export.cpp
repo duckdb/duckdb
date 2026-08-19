@@ -261,10 +261,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 
 	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
 
-	// the bind callback can erase constant arguments (e.g. string_agg's separator) - in that case the original
-	// argument list holds the pre-erase arguments that the exported signature refers to
-	const auto &bound_args =
-	    bound_aggr.GetOriginalArguments().empty() ? bound_aggr.GetArguments() : bound_aggr.GetOriginalArguments();
+	const auto &bound_args = bound_aggr.GetArguments();
 	bool signature_matches = bound_args.size() == argument_types.size();
 	for (idx_t arg_idx = 0; signature_matches && arg_idx < bound_args.size(); arg_idx++) {
 		// an ANY argument in the function signature (e.g. string_agg's data argument) matches any requested type
@@ -537,21 +534,20 @@ void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_d
 void EncodeStateParameters(ExtensionTypeInfo &ext_info, const BoundAggregateFunction &bound_function,
                            const AggregateStateLayout &layout) {
 	ext_info.properties.emplace("function_name", bound_function.GetName());
-	auto &original_arguments = bound_function.GetOriginalArguments().empty() ? bound_function.GetArguments()
-	                                                                         : bound_function.GetOriginalArguments();
+	auto &call_arguments = bound_function.GetArguments();
 	vector<Value> arguments;
 	if (layout.constant_parameters.empty()) {
 		// all parameters are plain types - store the parameters as a list of types
-		for (auto &arg : original_arguments) {
+		for (auto &arg : call_arguments) {
 			arguments.push_back(Value::TYPE(arg));
 		}
 		ext_info.properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
 	} else {
 		// some parameters were bound to a constant (e.g. string_agg's separator) - store the parameters as a list of
 		// (type, value) pairs, where the value holds the constant the parameter must be re-bound with
-		for (idx_t arg_idx = 0; arg_idx < original_arguments.size(); arg_idx++) {
+		for (idx_t arg_idx = 0; arg_idx < call_arguments.size(); arg_idx++) {
 			child_list_t<Value> children;
-			children.emplace_back("type", Value::TYPE(original_arguments[arg_idx]));
+			children.emplace_back("type", Value::TYPE(call_arguments[arg_idx]));
 			auto constant_entry = layout.constant_parameters.find(arg_idx);
 			if (constant_entry == layout.constant_parameters.end()) {
 				children.emplace_back("value", Value(LogicalType::VARIANT()));

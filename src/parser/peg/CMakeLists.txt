@@ -8,6 +8,7 @@ add_library_unity(
   keyword_helper.cpp
   keyword_map.cpp
   matcher.cpp
+  matcher_factory.cpp
   parser_packrat.cpp
   peg_parser.cpp
   sql_formatter.cpp)
