@@ -252,7 +252,6 @@ TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 }
 #endif
 
-
 TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -420,7 +419,6 @@ TEST_CASE("Stable C++API: validity write round-trip", "[cpp_api]") {
 	REQUIRE(con.GetView().IsValid(0));
 }
 #endif
-
 
 TEST_CASE("Stable C++API: validity mask word-boundary rows", "[cpp_api]") {
 	using namespace duckdb::cxx;
