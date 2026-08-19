@@ -129,7 +129,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 	if (!deserialized_type.deserializer) {
 		throw InvalidConfigurationException(
-		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
+		    "Attempted to deserialize secret type %s which does not have a deserialization method", type);
 	}
 
 	return deserialized_type.deserializer(deserializer, BaseSecret(scope, type, provider, name));
@@ -268,7 +268,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	auto secret = function_lookup->function(context, function_input);
 
 	if (!secret) {
-		throw InternalException("CreateSecretFunction for type: '%s' and provider: '%s' did not return a secret!",
+		throw InternalException("CreateSecretFunction for type: %s and provider: %s did not return a secret!",
 		                        input.type, input.provider);
 	}
 
@@ -383,7 +383,7 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 		auto storage_lookup = GetSecretStorage(storage);
 
 		if (!storage_lookup) {
-			throw InvalidInputException("Unknown secret storage found: '%s'", storage);
+			throw InvalidInputException("Unknown secret storage found: %s", storage);
 		}
 
 		return storage_lookup->GetSecretByName(name, &transaction);
@@ -430,7 +430,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 	if (!storage.empty()) {
 		auto storage_lookup = GetSecretStorage(Identifier(storage));
 		if (!storage_lookup) {
-			throw InvalidInputException("Unknown storage type found for drop secret: '%s'", storage);
+			throw InvalidInputException("Unknown storage type found for drop secret: %s", storage);
 		}
 		matches.push_back(*storage_lookup.get());
 	} else {
@@ -483,7 +483,7 @@ SecretType SecretManager::LookupType(const string &type) {
 void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
 	auto lookup = secret_types.find(type.name);
 	if (lookup != secret_types.end()) {
-		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
+		throw InternalException("Attempted to register an already registered secret type: %s", type.name);
 	}
 	secret_types[type.name] = type;
 }
@@ -655,7 +655,7 @@ void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string 
 			error_message += "\n\nAlternatively, ";
 		}
 	} else {
-		error_message = StringUtil::Format("Secret type '%s' not found", type);
+		error_message = StringUtil::Format("Secret type %s not found", type);
 
 		if (!secret_path.empty()) {
 			error_message += ", ";
