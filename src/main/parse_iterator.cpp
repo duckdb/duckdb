@@ -1,11 +1,14 @@
 #include "duckdb/main/parse_iterator.hpp"
+#include "duckdb/main/database.hpp"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -89,21 +92,18 @@ bool ParseIterator::Peek() {
 	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
 	// at end means the input is exhausted.
-	auto at_end_of_real_tokens = [&]() {
-		return token_cursor >= tokens->size() || (*tokens)[token_cursor].type == TokenType::END_OF_INPUT;
-	};
 	while (true) {
-		if (at_end_of_real_tokens()) {
+		if (token_iterator->AtEnd()) {
 			exhausted = true;
 			return false;
 		}
 		unique_ptr<SQLStatement> stmt;
 		try {
-			stmt = parser->ParseTopLevelStatement(*tokens, token_cursor);
+			stmt = parser->ParseTopLevelStatement(*token_iterator);
 		} catch (ParserException &) {
 			// Mirror Parser::ParseQuery's parse_function-extension fallback so extensions like
 			// `quack` can claim a segment that PEG couldn't parse.
-			stmt = parser->TryParseExtensionStatement(*tokens, token_cursor, sql);
+			stmt = parser->TryParseExtensionStatement(*token_iterator, sql);
 			if (!stmt) {
 				throw;
 			}
@@ -116,8 +116,10 @@ bool ParseIterator::Peek() {
 			// (logging, error reporting, EXPLAIN) rely on that shape.
 			idx_t stmt_loc = stmt->stmt_location.offset;
 			idx_t end_loc = sql.size();
-			if (token_cursor < tokens->size() && (*tokens)[token_cursor].type != TokenType::END_OF_INPUT) {
-				end_loc = (*tokens)[token_cursor].offset;
+			if (auto current = token_iterator->Current()) {
+				if (current->type != TokenType::END_OF_INPUT) {
+					end_loc = current->offset;
+				}
 			}
 			stmt->query = sql.substr(stmt_loc, end_loc - stmt_loc);
 			stmt->stmt_location = QueryLocation(0, stmt->query.size());
@@ -128,7 +130,7 @@ bool ParseIterator::Peek() {
 			current_statement = std::move(stmt);
 			return true;
 		}
-		if (at_end_of_real_tokens()) {
+		if (token_iterator->AtEnd()) {
 			exhausted = true;
 			return false;
 		}
@@ -137,13 +139,15 @@ bool ParseIterator::Peek() {
 }
 
 void ParseIterator::EnsureTokenized() {
-	if (!tokens) {
-		// Tokenize the full input once. Subsequent Peek/HasMore calls walk through `tokens` via
-		// `token_cursor`; we never re-tokenize. Tokenization is grammar-free.
-		tokens = make_uniq<vector<MatcherToken>>();
-		ParserTokenizerBehavior behavior(sql, *tokens);
-		Tokenizer tokenizer(behavior);
-		tokenizer.TokenizeInput();
+	if (!token_iterator) {
+		// Tokenize the full input once. Subsequent Peek/HasMore calls walk through the iterator;
+		// we never re-tokenize. Tokenization is grammar-free.
+		auto owned_tokens = make_uniq<vector<MatcherToken>>();
+		ParserTokenizerBehavior behavior(sql, *owned_tokens);
+		auto compiled_grammar = CompiledGrammar::Get(context);
+		auto &tokenizer = compiled_grammar->GetTokenizer();
+		tokenizer.TokenizeInput(behavior);
+		token_iterator = make_uniq<TokenIterator>(std::move(owned_tokens));
 	}
 }
 
@@ -159,19 +163,10 @@ bool ParseIterator::HasMore() {
 	if (overridden_statements) {
 		return override_cursor < overridden_statements->size();
 	}
-	// PEG path: walk the token cursor without parsing. There is another statement iff a real token
-	// (neither a `;` separator nor the end-of-input sentinel) remains ahead of the cursor.
+	// PEG path: inspect the remaining tokens without parsing or advancing the committed position.
 	EnsureTokenized();
-	for (idx_t i = token_cursor; i < tokens->size(); i++) {
-		const auto type = (*tokens)[i].type;
-		if (type == TokenType::END_OF_INPUT) {
-			return false;
-		}
-		if (type != TokenType::TERMINATOR) {
-			return true;
-		}
-	}
-	return false;
+	TokenIterator lookahead(*token_iterator);
+	return lookahead.HasMoreStatements();
 }
 
 unique_ptr<SQLStatement> ParseIterator::GetStatement() {

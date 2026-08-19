@@ -334,6 +334,7 @@ public:
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
+	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
 	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
@@ -392,7 +393,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata,
 	                                                 const Identifier &name);
-	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const Identifier &name);
+	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, const ParquetUnionData &union_data,
+	                                                 const Identifier &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
