@@ -502,9 +502,11 @@ SELECT ascii(s) x FROM (SELECT s FROM tc GROUP BY s) GROUP BY 1
 # VARIANT keeps its payload in a fixed physical layout, so the types stored inside it are invisible to the
 # type check, while its comparator inherits their normalization: a VARIANT holding -0.0 compares equal to one
 # holding 0.0, and a VARCHAR cast tells them apart. Grouping by it also goes through a hidden
-# __collated_group aggregate expression that blocks the removal by itself
+# __collated_group aggregate expression that blocks the removal by itself.
+# The table is temporary because VARIANT columns cannot be stored in databases with an old storage version,
+# which the storage compatibility test config forces
 statement ok
-CREATE TABLE tvar(v variant);
+CREATE TEMP TABLE tvar(v variant);
 
 statement ok
 INSERT INTO tvar VALUES ((-(0.0::double))::variant), ((0.0::double)::variant);
