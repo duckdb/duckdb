@@ -1466,7 +1466,26 @@ ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes
 	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, row_start, index_append_mode, checkpoint_id);
 }
 
-void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start) {
+// The caller must hold entry.lock until it finishes using the returned index.
+static BoundIndex &GetIndexAppendRevertTarget(IndexEntry &entry, optional_idx append_checkpoint) {
+	auto &main_index = entry.index->Cast<BoundIndex>();
+	if (!append_checkpoint.IsValid() || !main_index.SupportsDeltaIndexes()) {
+		return main_index;
+	}
+
+	const bool checkpoint_merged = entry.last_written_checkpoint.IsValid() &&
+	                               entry.last_written_checkpoint.GetIndex() >= append_checkpoint.GetIndex();
+	if (checkpoint_merged) {
+		return main_index;
+	}
+	if (!entry.added_data_during_checkpoint) {
+		throw InternalException("Missing checkpoint delta index while reverting an index append");
+	}
+	return *entry.added_data_during_checkpoint;
+}
+
+void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start,
+                                  optional_idx append_checkpoint) {
 	D_ASSERT(IsMainTable());
 	if (info->indexes.Empty()) {
 		return;
@@ -1476,14 +1495,16 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	// now remove the entries from the indices
-	RevertIndexAppend(state, chunk, row_identifiers);
+	RevertIndexAppend(state, chunk, row_identifiers, append_checkpoint);
 }
 
-void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
+void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers,
+                                  optional_idx append_checkpoint) {
 	D_ASSERT(IsMainTable());
-	for (auto &index : info->indexes.Indexes()) {
-		auto &main_index = index.Cast<BoundIndex>();
-		main_index.Delete(chunk, row_identifiers);
+	for (auto &entry : info->indexes.IndexEntries()) {
+		lock_guard<mutex> guard(entry.lock);
+		auto &remove_index = GetIndexAppendRevertTarget(entry, append_checkpoint);
+		remove_index.Delete(chunk, row_identifiers);
 	}
 }
 
