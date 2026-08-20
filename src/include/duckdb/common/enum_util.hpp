@@ -602,6 +602,8 @@ enum class VariantStatsShreddingState : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
+enum class VectorPrepareState : uint8_t;
+
 enum class VectorType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
@@ -609,6 +611,8 @@ enum class VerifyExistenceType : uint8_t;
 enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
+
+enum class ViewSecurityType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -1477,6 +1481,9 @@ template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
+const char* EnumUtil::ToChars<VectorPrepareState>(VectorPrepareState value);
+
+template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
 
 template<>
@@ -1487,6 +1494,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -2360,6 +2370,9 @@ template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
+VectorPrepareState EnumUtil::FromString<VectorPrepareState>(const char *value);
+
+template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
 
 template<>
@@ -2370,6 +2383,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

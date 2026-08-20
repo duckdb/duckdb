@@ -27,10 +27,13 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -1647,5 +1650,18 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
+}
+
+void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("current_dialect setting cannot be NULL");
+	}
+	auto dialect_name = input.GetValue<string>();
+	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
+		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
+	}
+	if (info.db) {
+		info.db->GetParserCache().Invalidate();
+	}
 }
 } // namespace duckdb

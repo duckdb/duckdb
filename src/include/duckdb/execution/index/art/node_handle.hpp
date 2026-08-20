@@ -14,7 +14,7 @@
 namespace duckdb {
 
 class ART;
-class Node;
+class NodePtr;
 enum class NType : uint8_t;
 
 //! NodeHandle is a mutable wrapper to access and modify a node.
@@ -22,8 +22,8 @@ enum class NType : uint8_t;
 //! For read-only access, use ConstNodeHandle instead.
 class NodeHandle {
 public:
-	NodeHandle(ART &art, const Node node);
-	NodeHandle(FixedSizeAllocator &allocator, const Node node, NType type);
+	NodeHandle(ART &art, const NodePtr node);
+	NodeHandle(FixedSizeAllocator &allocator, const NodePtr node, NType type);
 
 	NodeHandle(const NodeHandle &) = delete;
 	NodeHandle &operator=(const NodeHandle &) = delete;
@@ -55,7 +55,7 @@ private:
 //! For mutable access, use NodeHandle instead.
 class ConstNodeHandle {
 public:
-	ConstNodeHandle(const ART &art, const Node node);
+	ConstNodeHandle(const ART &art, const NodePtr node);
 
 	ConstNodeHandle(const ConstNodeHandle &) = delete;
 	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;

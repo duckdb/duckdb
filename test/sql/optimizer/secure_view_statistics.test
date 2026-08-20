@@ -1,0 +1,108 @@
+# name: test/sql/optimizer/secure_view_statistics.test
+# description: Test that statistics do not propagate out of a secure view
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE integers AS SELECT i, ('v' || i) AS s FROM range(1000) t(i);
+
+statement ok
+CREATE VIEW regular_view AS SELECT * FROM integers;
+
+statement ok
+CREATE SECURE VIEW secure_view AS SELECT * FROM integers;
+
+# a regular view exposes the statistics of the underlying table
+query I
+SELECT stats(i)::VARCHAR FROM regular_view LIMIT 1
+----
+{'approx_unique': 1000, 'has_no_null': true, 'has_null': false, 'max': 999, 'min': 0}
+
+# a secure view exposes nothing: no min, no max, no distinct count, no null information
+query I
+SELECT stats(i)::VARCHAR FROM secure_view LIMIT 1
+----
+{'has_no_null': true, 'has_null': true}
+
+query I
+SELECT stats(s)::VARCHAR FROM secure_view LIMIT 1
+----
+{'has_no_null': true, 'has_null': true, 'has_unicode': true}
+
+# the same holds when the secure view only returns a subset of the rows - the statistics of the rows that are
+# filtered out must not become visible either
+statement ok
+CREATE SECURE VIEW filtered_secure_view AS SELECT * FROM integers WHERE i < 10;
+
+query I
+SELECT stats(i)::VARCHAR FROM filtered_secure_view LIMIT 1
+----
+{'has_no_null': true, 'has_null': true}
+
+# ... and when the secure view is wrapped in a regular view
+statement ok
+CREATE VIEW view_over_secure_view AS SELECT * FROM secure_view;
+
+query I
+SELECT stats(i)::VARCHAR FROM view_over_secure_view LIMIT 1
+----
+{'has_no_null': true, 'has_null': true}
+
+# statistics must not be used to prune filters placed on top of a secure view either - otherwise the plan itself
+# reveals whether any hidden row can satisfy the predicate
+query II
+EXPLAIN SELECT * FROM regular_view WHERE i > 100000
+----
+physical_plan	<REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM secure_view WHERE i > 100000
+----
+physical_plan	<!REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM secure_view WHERE i > 100000
+----
+physical_plan	<REGEX>:[\s\S]*FILTER[\s\S]*
+
+query I
+SELECT count(*) FROM secure_view WHERE i > 100000
+----
+0
+
+# Statistics are still propagated *within* the view definition, so the view body is optimized as usual. This is
+# deliberately not observable from the outside - neither the plan nor the metrics of the operators inside a secure
+# view are ever reported (see secure_view_explain.test) - so we verify the rule on the equivalent regular view.
+statement ok
+CREATE VIEW impossible_regular_view AS SELECT * FROM integers WHERE i > 100000;
+
+statement ok
+CREATE SECURE VIEW impossible_secure_view AS SELECT * FROM integers WHERE i > 100000;
+
+query II
+EXPLAIN SELECT * FROM impossible_regular_view
+----
+physical_plan	<REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM impossible_secure_view
+----
+physical_plan	<!REGEX>:[\s\S]*EMPTY_RESULT[\s\S]*
+
+query I
+SELECT count(*) FROM impossible_secure_view
+----
+0
+
+# blocking statistics does not change results
+query II
+SELECT * FROM secure_view WHERE i = 42
+----
+42	v42
+
+query I
+SELECT count(*) FROM secure_view JOIN integers USING (i) WHERE integers.i < 10
+----
+10
