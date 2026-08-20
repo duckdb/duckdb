@@ -60,7 +60,8 @@ public:
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CastFunctionData>();
-		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast;
+		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast &&
+		       bound_cast.IsUnchecked() == other.bound_cast.IsUnchecked();
 	}
 };
 
