@@ -98,7 +98,7 @@ LogicalType BindTypeByNameV2(ClientContext &context, const string &name, const v
 	EntryLookupInfo lookup(CatalogType::TYPE_ENTRY, QualifiedName(Identifier(name)));
 	CatalogEntryRetriever retriever(context);
 	optional_ptr<CatalogEntry> entry;
-	if (!DatabaseManager::Get(context).HasDefaultDatabase()) {
+	if (!DatabaseManager::Get(context).HasAttachedDatabase()) {
 		entry = retriever.GetEntry(
 		    EntryLookupInfo(lookup, QualifiedName(Identifier::SystemCatalog(), Identifier::InvalidSchema(),
 		                                          lookup.GetEntryIdentifier())));
