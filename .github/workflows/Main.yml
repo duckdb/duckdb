@@ -1142,7 +1142,7 @@ jobs:
             static-libs-windows-mingw.zip
 
  no-string-inline:
-    name: No String Inline / Destroy Unpinned Blocks
+    name: No String Inline / No RTTI / Destroy Unpinned Blocks
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     container:
@@ -1154,7 +1154,8 @@ jobs:
       CC: clang
       CXX: clang++
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-      DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
+      DISABLE_RTTI: 1
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1 DISABLE_RTTI=1 (-fno-rtti). Use require no_alternative_verify to skip.'
 
     steps:
       - name: "Checkout"
@@ -1192,48 +1193,6 @@ jobs:
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
-
- no-rtti:
-    name: No RTTI
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-rtti') }}
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    container:
-      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
-    needs:
-      - prepare
-      - linux-relassert
-    env:
-      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
-      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
-      DISABLE_RTTI: 1
-      EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
-      DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
-
-    steps:
-      - name: "Checkout"
-        uses: duckdb/duckdb-ci/.github/actions/checkout@main
-        with:
-          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-      - name: Build
-        uses: duckdb/duckdb-ci/build-duckdb@main
-        with:
-          build-type: release
-          build: python3 scripts/ci/retry.py -- make release
-          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
-          cache-suffix: no_rtti
-          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-      # Loadable extensions are the part a plain build cannot check: each one links its own
-      # copy of duckdb, so a type identity that is not stable across images only fails here.
-      - name: Test
-        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-        run: make unittest_release
 
  vector-sizes:
     name: Vector Sizes
@@ -1402,7 +1361,6 @@ jobs:
       - static-libs-osx
       - static-libs-windows-mingw
       - no-string-inline
-      - no-rtti
       - vector-sizes
       - threadsan
       - linux-configs
