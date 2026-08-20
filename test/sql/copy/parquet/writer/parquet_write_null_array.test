@@ -1,0 +1,60 @@
+# name: test/sql/copy/parquet/writer/parquet_write_null_array.test
+# description: Write NULL fixed-size arrays to Parquet
+# group: [writer]
+
+require parquet
+
+# NULL arrays emit one level record, while present arrays emit one per child
+statement ok
+COPY (SELECT * FROM (VALUES
+	([TRUE, FALSE]::BOOLEAN[2]),
+	(NULL::BOOLEAN[2]),
+	([FALSE, TRUE]::BOOLEAN[2]),
+	([NULL, NULL]::BOOLEAN[2])
+) t(c0)) TO '{TEST_DIR}/null_array.parquet' (FORMAT PARQUET);
+
+query II
+SELECT num_values, stats_null_count FROM parquet_metadata('{TEST_DIR}/null_array.parquet')
+----
+7	3
+
+query I
+SELECT c0 FROM read_parquet('{TEST_DIR}/null_array.parquet')
+----
+[true, false]
+NULL
+[false, true]
+[NULL, NULL]
+
+# Propagate NULLs through a struct parent without emitting array children
+statement ok
+COPY (SELECT * FROM (VALUES
+	(NULL::STRUCT(a BOOLEAN[2])),
+	({'a': NULL::BOOLEAN[2]}),
+	({'a': [TRUE, FALSE]::BOOLEAN[2]})
+) t(c0)) TO '{TEST_DIR}/null_array_struct.parquet' (FORMAT PARQUET);
+
+query II
+SELECT num_values, stats_null_count FROM parquet_metadata('{TEST_DIR}/null_array_struct.parquet')
+----
+4	2
+
+# Skip NULL array slots when arrays are nested in a list
+statement ok
+COPY (SELECT [[TRUE, FALSE]::BOOLEAN[2], NULL::BOOLEAN[2], [FALSE, TRUE]::BOOLEAN[2]] AS c0)
+TO '{TEST_DIR}/null_array_list.parquet' (FORMAT PARQUET);
+
+query II
+SELECT num_values, stats_null_count FROM parquet_metadata('{TEST_DIR}/null_array_list.parquet')
+----
+5	1
+
+# Skip NULL inner-array slots when arrays are nested in another array
+statement ok
+COPY (SELECT [NULL::BOOLEAN[2], [TRUE, FALSE]::BOOLEAN[2]]::BOOLEAN[2][2] AS c0)
+TO '{TEST_DIR}/null_array_nested.parquet' (FORMAT PARQUET);
+
+query II
+SELECT num_values, stats_null_count FROM parquet_metadata('{TEST_DIR}/null_array_nested.parquet')
+----
+3	1
