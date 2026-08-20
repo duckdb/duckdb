@@ -105,7 +105,7 @@ Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) 
 	auto lookup = secret_map.find(key);
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {
-			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
+			throw InternalException("Failed to fetch key %s from secret %s of type %s", key, name, type);
 		}
 		return Value();
 	}

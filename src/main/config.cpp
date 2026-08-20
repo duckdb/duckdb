@@ -133,7 +133,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
     DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(DelimJoinAsCteSetting),
-    DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
     DUCKDB_SETTING_CALLBACK(DialectCompatibilityModeSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
@@ -252,12 +251,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 30),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 30),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 131),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 130),
                                                      DUCKDB_SETTING_ALIAS("null_order", 62),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 154),
-                                                     DUCKDB_SETTING_ALIAS("user", 173),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 153),
+                                                     DUCKDB_SETTING_ALIAS("user", 172),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 171),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 170),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -866,7 +865,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 	}
 	duckdb::identifier_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
 	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
-		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+		throw InvalidInputException("Cannot include %s in allowed_configs", config_name);
 	}
 	// Validate that the config name refers to a known setting (built-in or extension)
 	// and resolve aliases to canonical names
@@ -888,7 +887,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 		options.allowed_configs.insert(config_name);
 		return;
 	}
-	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+	throw InvalidInputException("Unknown configuration option %s in allowed_configs", config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {

@@ -74,7 +74,6 @@ public:
 	Catalog &GetSystemCatalog();
 
 	static Identifier GetDefaultDatabase(ClientContext &context);
-	void SetDefaultDatabase(ClientContext &context, const Identifier &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
@@ -114,8 +113,9 @@ public:
 	idx_t NextOid() {
 		return next_oid++;
 	}
-	bool HasDefaultDatabase() {
-		return !default_database.empty();
+	bool HasAttachedDatabase() {
+		lock_guard<mutex> guard(databases_lock);
+		return !databases.empty();
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();

@@ -291,7 +291,7 @@ static void RegisterWindowClause(PEGTransformer &transformer, const Identifier &
                                  WindowExpression &window_function) {
 	auto it = transformer.window_clauses.find(window_name);
 	if (it != transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
+		throw ParserException("window %s is already defined", window_name);
 	}
 	transformer.window_clauses[window_name] =
 	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
@@ -1158,7 +1158,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		auto it = result.map.find(cte_name);
 		if (it != result.map.end()) {
 			// can't have two CTEs with same name
-			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
+			throw ParserException("Duplicate CTE name %s", cte_name);
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
@@ -1197,7 +1197,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampo
 		auto &cte_name = with_entry.first;
 		auto it = result.map.find(cte_name);
 		if (it != result.map.end()) {
-			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
+			throw ParserException("Duplicate CTE name %s", cte_name);
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}

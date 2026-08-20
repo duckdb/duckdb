@@ -846,17 +846,6 @@ struct DelimJoinAsCteSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DeprecatedUsingKeySyntaxSetting {
-	using RETURN_TYPE = DeprecatedUsingKeySyntax;
-	static constexpr const char *Name = "deprecated_using_key_syntax";
-	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "DEFAULT";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct DialectCompatibilityModeSetting {
 	using RETURN_TYPE = DialectCompatibilityMode;
 	static constexpr const char *Name = "dialect_compatibility_mode";

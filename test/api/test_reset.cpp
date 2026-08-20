@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
-#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/parser/dialect_extension.hpp"
@@ -70,7 +69,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
-	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
 	    {"table_function_identifier_conversion",
 	     {EnumUtil::ToString(TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING)}},
 	    {"dialect_compatibility_mode", {EnumUtil::ToString(DialectCompatibilityMode::SPARK)}},
