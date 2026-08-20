@@ -48,7 +48,9 @@ public:
 	QualifiedName GetQualifiedName() const {
 		return QualifiedName(catalog, schema, name);
 	}
-	void SetQualifiedName(QualifiedName qualified_name) {
+	//! NOTE(backport): DuckDB 2.0 takes the `QualifiedName` by value and moves it into the stored member; here the
+	//! separate string members are copied out of it, so a const reference avoids a pointless copy.
+	void SetQualifiedName(const QualifiedName &qualified_name) {
 		catalog = qualified_name.catalog;
 		schema = qualified_name.schema;
 		name = qualified_name.name;
