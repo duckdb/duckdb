@@ -189,7 +189,7 @@ jobs:
             extra_args=()
           fi
 
-          python3 scripts/regression/test_runner.py \
+          python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks "${{ matrix.benchmark }}" \
@@ -254,7 +254,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python3 scripts/regression/test_runner.py \
+          python scripts/regression/test_runner.py \
             --old build/base/release/benchmark/benchmark_runner \
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
@@ -312,7 +312,7 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python3 scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
 
   regression-test-storage:
     name: Storage Size Regression Test
@@ -351,7 +351,7 @@ jobs:
 
       - name: Regression Test
         run: |
-          python3 scripts/regression_test_storage_size.py --old build/base/release/duckdb --new build/current/release/duckdb
+          python scripts/regression_test_storage_size.py --old build/base/release/duckdb --new build/current/release/duckdb
 
   regression-test-binary-size:
     name: Regression test binary size
@@ -394,7 +394,7 @@ jobs:
 
       - name: Regression Test Extension binary size
         run: |
-          python3 scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
@@ -434,9 +434,9 @@ jobs:
       - name: Regression Test IMDB
         if: always()
         run: |
-          python3 scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
 
       - name: Regression Test TPCH
         if: always()
         run: |
-          python3 scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost
