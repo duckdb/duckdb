@@ -21,6 +21,9 @@
 
 namespace test_capi_v2 {
 
+// These tests almost always assume a vector is 2048 rows to write into, so only run them if that is the case
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
+
 TEST_CASE("V2: data_chunk_create basic", "[capi_v2][vector_write]") {
 	EnvFixture fx;
 	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
@@ -346,7 +349,6 @@ TEST_CASE("V2: vector_flat_get_validity_mutable rejects SEQUENCE vector", "[capi
 // ---------------------------------------------------------------------------
 // vector_constant_set_valid
 // ---------------------------------------------------------------------------
-
 TEST_CASE("V2: vector_constant_set_valid toggles validity", "[capi_v2][vector_write]") {
 	EnvFixture fx;
 	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
@@ -1377,5 +1379,5 @@ TEST_CASE("V2: nested cells round trip through set_value / get_value", "[capi_v2
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }
-
+#endif
 } // namespace test_capi_v2

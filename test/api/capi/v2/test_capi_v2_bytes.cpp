@@ -10,10 +10,16 @@
 namespace test_capi_v2 {
 namespace {
 
+#ifdef DUCKDB_DEBUG_NO_INLINE
+constexpr bool STRINGS_ARE_IS_INLINED = false;
+#else
+constexpr bool STRINGS_ARE_IS_INLINED = true;
+#endif
+
 // Direct field reads on the transparent layout. The length field overlaps in
 // both union members, so it is read through inlined regardless of form.
 bool StrInlined(const duckdb_v2_bytes *s) {
-	return s->value.inlined.length <= DUCKDB_V2_BYTES_INLINE_LENGTH;
+	return (s->value.inlined.length <= DUCKDB_V2_BYTES_INLINE_LENGTH) && STRINGS_ARE_IS_INLINED;
 }
 uint32_t StrLength(const duckdb_v2_bytes *s) {
 	return s->value.inlined.length;
@@ -114,8 +120,8 @@ TEST_CASE("V2 bytes layout: direct reads match V1 equivalents", "[capi_v2][bytes
 
 	// Pin expected values for the two rows.
 	{
-		REQUIRE(StrInlined(&arr[SelAt(qr.view.sel, 0)]));       // "short" fits inline
-		REQUIRE_FALSE(StrInlined(&arr[SelAt(qr.view.sel, 1)])); // 50-char string does not
+		REQUIRE((!STRINGS_ARE_IS_INLINED || StrInlined(&arr[SelAt(qr.view.sel, 0)]))); // "short" fits inline
+		REQUIRE_FALSE(StrInlined(&arr[SelAt(qr.view.sel, 1)]));                        // 50-char string does not
 
 		REQUIRE(StrLength(&arr[SelAt(qr.view.sel, 0)]) == 5);
 		REQUIRE(StrLength(&arr[SelAt(qr.view.sel, 1)]) == 50);

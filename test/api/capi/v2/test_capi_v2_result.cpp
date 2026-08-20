@@ -87,7 +87,7 @@ TEST_CASE("V2: statement_execute multi-column SELECT", "[capi_v2][query_result]"
 // are caller-owned, FINISHED is sticky, and out_chunk is written iff the
 // status is CHUNK.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: step loop drains a multi-chunk SELECT", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -153,12 +153,13 @@ TEST_CASE("V2: step loop drains a multi-chunk SELECT", "[capi_v2][query_result]"
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // Metadata is valid before the first step, during consumption, and after
 // the stream ends; it is prepare-time information.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: metadata valid before, during, and after consumption", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -197,7 +198,7 @@ TEST_CASE("V2: metadata valid before, during, and after consumption", "[capi_v2]
 
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 // ===========================================================================
 // DDL: CREATE / DROP report NOTHING; the stream yields no rows.
 // ===========================================================================
@@ -327,7 +328,7 @@ TEST_CASE("V2: NOTHING result exposes the synthetic Count column with zero rows"
 // result_fetch_chunk: the blocking convenience. Chunk, then NULL at
 // end-of-stream, idempotently.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: result_fetch_chunk drains and reports end-of-stream as NULL", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -360,11 +361,11 @@ TEST_CASE("V2: result_fetch_chunk drains and reports end-of-stream as NULL", "[c
 
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 // ===========================================================================
 // result_wait: unblocks stepping; no-op on terminal states.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: result_wait makes the step loop progress without busy-spinning", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -389,6 +390,7 @@ TEST_CASE("V2: result_wait makes the step loop progress without busy-spinning", 
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 TEST_CASE("V2: result_wait before the first step is safe", "[capi_v2][query_result]") {
 	EnvFixture fx;
@@ -466,7 +468,7 @@ TEST_CASE("V2: querying with a NULL statement is rejected", "[capi_v2][query_res
 // Error mid-stream: an execution-time failure surfaces from the steps as
 // a sticky error with nulled out-params.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: execution error mid-stream is sticky", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -527,12 +529,13 @@ TEST_CASE("V2: execution error mid-stream is sticky", "[capi_v2][query_result]")
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // Interrupt / cancellation. Decision 6: step reports the event as
 // status CANCELLED; fetch_chunk reports it as ERROR_RUNTIME_INTERRUPT.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: interrupt between steps surfaces as sticky CANCELLED status", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -562,7 +565,9 @@ TEST_CASE("V2: interrupt between steps surfaces as sticky CANCELLED status", "[c
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: interrupt during the pending phase maps to CANCELLED", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -582,7 +587,9 @@ TEST_CASE("V2: interrupt during the pending phase maps to CANCELLED", "[capi_v2]
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: fetch_chunk reports cancellation as ERROR_RUNTIME_INTERRUPT", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -607,7 +614,9 @@ TEST_CASE("V2: fetch_chunk reports cancellation as ERROR_RUNTIME_INTERRUPT", "[c
 
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: interrupt from a second thread cancels a blocked fetch", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -641,7 +650,7 @@ TEST_CASE("V2: interrupt from a second thread cancels a blocked fetch", "[capi_v
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 TEST_CASE("V2: interrupt with no active query is a no-op", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -673,6 +682,7 @@ TEST_CASE("V2: query_progress reports idle values when no query is active", "[ca
 	REQUIRE(duckdb_v2_query_progress_destroy(&already_null) == DUCKDB_V2_ERROR_NONE);
 }
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: query_progress advances while stepping a query", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -724,11 +734,12 @@ TEST_CASE("V2: query_progress advances while stepping a query", "[capi_v2][query
 
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 // ===========================================================================
 // Teardown discipline.
 // ===========================================================================
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: destroying a never-stepped result is clean", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -743,6 +754,8 @@ TEST_CASE("V2: destroying a never-stepped result is clean", "[capi_v2][query_res
 	duckdb_v2_result_destroy(&next);
 }
 
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: destroying a half-consumed result is clean", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -758,7 +771,8 @@ TEST_CASE("V2: destroying a half-consumed result is clean", "[capi_v2][query_res
 	REQUIRE(DrainRowCount(next) == 1);
 	duckdb_v2_result_destroy(&next);
 }
-
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_database_handle db = nullptr;
@@ -790,7 +804,7 @@ TEST_CASE("V2: a fetched chunk outlives result, connection, and database", "[cap
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }
-
+#endif
 // ===========================================================================
 // Lifetime: result_get_schema is a self-contained snapshot that outlives the
 // result it came from. (Borrow stability and out-of-range indices are covered
@@ -986,7 +1000,7 @@ TEST_CASE("V2: results are independent; destroying one leaves the other usable",
 // RESOURCE_IN_USE while a live result exists, and the connection is
 // freed by drain, destroy, interrupt-then-step, or a sticky error.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: statement_execute refuses while a live result exists", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1020,7 +1034,8 @@ TEST_CASE("V2: statement_execute refuses while a live result exists", "[capi_v2]
 	duckdb_v2_result_destroy(&second);
 	duckdb_v2_result_destroy(&live);
 }
-
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: destroying an undrained result frees the connection", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1035,6 +1050,8 @@ TEST_CASE("V2: destroying an undrained result frees the connection", "[capi_v2][
 	duckdb_v2_result_destroy(&second);
 }
 
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: a cancelled result frees the connection once the step observes it", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1055,6 +1072,7 @@ TEST_CASE("V2: a cancelled result frees the connection once the step observes it
 	duckdb_v2_result_destroy(&live);
 }
 
+#endif
 TEST_CASE("V2: a sticky execution error frees the connection", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1078,6 +1096,7 @@ TEST_CASE("V2: a sticky execution error frees the connection", "[capi_v2][query_
 	duckdb_v2_result_destroy(&live);
 }
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1095,7 +1114,7 @@ TEST_CASE("V2: a busy connection does not affect a second connection", "[capi_v2
 	duckdb_v2_result_destroy(&live);
 	duckdb_v2_disconnect(&conn2);
 }
-
+#endif
 // ===========================================================================
 // result_drain: run to completion, report the changed-row count.
 // ===========================================================================
@@ -1112,6 +1131,7 @@ idx_t QueryAndDrain(duckdb_v2_connection_handle conn, const char *sql) {
 }
 } // namespace
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: result_drain applies side effects and reports rows changed", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1128,7 +1148,9 @@ TEST_CASE("V2: result_drain applies side effects and reports rows changed", "[ca
 	REQUIRE(DrainRowCount(r) == 3);
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: result_drain edge and error paths", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1176,6 +1198,7 @@ TEST_CASE("V2: result_drain edge and error paths", "[capi_v2][query_result]") {
 	REQUIRE(DrainRowCount(r) == 1);
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // result_wait is guarded against engine state the wrapper doesn't
@@ -1183,6 +1206,7 @@ TEST_CASE("V2: result_drain edge and error paths", "[capi_v2][query_result]") {
 // surface an engine INTERNAL error.
 // ===========================================================================
 
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: result_wait after interrupt is clean", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1206,7 +1230,7 @@ TEST_CASE("V2: result_wait after interrupt is clean", "[capi_v2][query_result]")
 
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 // ===========================================================================
 // result_fetch_chunk on a CHANGED_ROWS result: the convenience path
 // yields the Count chunk, then end-of-stream.
@@ -1243,7 +1267,7 @@ TEST_CASE("V2: result_fetch_chunk drains a CHANGED_ROWS result", "[capi_v2][quer
 // consume and destroy after the connection (and database) handles are
 // gone.
 // ===========================================================================
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][query_result]") {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_database_handle db = nullptr;
@@ -1289,6 +1313,7 @@ TEST_CASE("V2: an undrained result survives disconnect and close", "[capi_v2][qu
 
 	duckdb_v2_destroy_environment(&env);
 }
+#endif
 
 // ===========================================================================
 // Statement expansion: preprocessing can turn one user statement into a
@@ -1328,7 +1353,7 @@ TEST_CASE("V2: PIVOT expands to a group and streams the pivoted rows", "[capi_v2
 
 	duckdb_v2_result_destroy(&r);
 }
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: ALTER with a non-constant DEFAULT expands and executes fully", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1361,7 +1386,7 @@ TEST_CASE("V2: ALTER with a non-constant DEFAULT expands and executes fully", "[
 	REQUIRE(DrainRowCount(r) == 1000);
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
 TEST_CASE("V2: result_drain runs an expanded group to completion", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1443,7 +1468,7 @@ TEST_CASE("V2: an error inside an expanded group is sticky and rolls back", "[ca
 	REQUIRE(DrainRowCount(r) == 1);
 	duckdb_v2_result_destroy(&r);
 }
-
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: interrupt during an expanded group cancels and rolls back", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1477,7 +1502,8 @@ TEST_CASE("V2: interrupt during an expanded group cancels and rolls back", "[cap
 	REQUIRE(DrainRowCount(r) == 1);
 	duckdb_v2_result_destroy(&r);
 }
-
+#endif
+#if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 TEST_CASE("V2: destroying a half-executed expanded group is clean", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
@@ -1502,6 +1528,7 @@ TEST_CASE("V2: destroying a half-executed expanded group is clean", "[capi_v2][q
 	REQUIRE(DrainRowCount(r) == 1);
 	duckdb_v2_result_destroy(&r);
 }
+#endif
 
 // ===========================================================================
 // result_get_schema: a result's output schema as one schema handle.

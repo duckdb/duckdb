@@ -335,6 +335,7 @@ TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]"
 #endif
 
 #if (STANDARD_VECTOR_SIZE > 2)
+#ifndef DUCKDB_DEBUG_NO_INLINE
 TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -370,6 +371,7 @@ TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_a
 	REQUIRE(blobs[bview.SelAt(1)].view() == long_str);
 	REQUIRE_FALSE(bview.IsValid(2));
 }
+#endif
 #endif
 
 #if (STANDARD_VECTOR_SIZE > 2)
