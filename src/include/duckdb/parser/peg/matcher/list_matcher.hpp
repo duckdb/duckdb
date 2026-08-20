@@ -27,35 +27,27 @@ public:
 		for (auto &child_matcher : matchers) {
 			auto current = list_state.token_iterator.Current();
 			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
-			if (at_autocomplete_cursor) {
-				if (suppress_suggestions) {
-					list_state.suggestions.erase(list_state.suggestions.begin() +
-					                                 NumericCast<int64_t>(saved_suggestion_size),
-					                             list_state.suggestions.end());
+			if (!at_autocomplete_cursor) {
+				auto child_result = child_matcher.get().MatchParseResult(list_state);
+				if (!child_result) {
+					DiscardSuggestions(list_state, saved_suggestion_size);
 					return nullptr;
 				}
-				if (child_matcher.get().AddSuggestion(list_state) == SuggestionType::MANDATORY) {
-					state.token_iterator.SetPosition(list_state.token_iterator);
-					return nullptr;
-				}
+				results.push_back(*child_result);
 				continue;
 			}
-			auto child_result = child_matcher.get().MatchParseResult(list_state);
-			if (!child_result) {
-				if (suppress_suggestions) {
-					list_state.suggestions.erase(list_state.suggestions.begin() +
-					                                 NumericCast<int64_t>(saved_suggestion_size),
-					                             list_state.suggestions.end());
-				}
+			if (suppress_suggestions) {
+				DiscardSuggestions(list_state, saved_suggestion_size);
 				return nullptr;
 			}
-			results.push_back(*child_result);
+			if (child_matcher.get().AddSuggestion(list_state) == SuggestionType::OPTIONAL) {
+				continue;
+			}
+			state.token_iterator.SetPosition(list_state.token_iterator);
+			return nullptr;
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
-		if (suppress_suggestions) {
-			state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
-			                        state.suggestions.end());
-		}
+		DiscardSuggestions(list_state, saved_suggestion_size);
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
 		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name, start_offset));
 	}
@@ -84,6 +76,15 @@ public:
 			result += matcher.get().GetName();
 		}
 		return "(" + result + ")";
+	}
+
+private:
+	void DiscardSuggestions(MatchState &state, idx_t saved_suggestion_size) const {
+		if (!suppress_suggestions) {
+			return;
+		}
+		state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
+		                        state.suggestions.end());
 	}
 
 public:
