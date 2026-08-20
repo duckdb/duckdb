@@ -23,6 +23,17 @@
 #elif defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))
 #define DUCKDB_POSIX
 #endif
+// On macOS, sys/cdefs.h doesn't contain c++:
+// #if __STDC_VERSION__ < 199901
+// #define __restrict
+// #else
+// #define __restrict      restrict
+// #endif
+#ifdef __APPLE__
+#undef __restrict
+#define __restrict __restrict__
+#endif
+
 
 namespace duckdb {
 

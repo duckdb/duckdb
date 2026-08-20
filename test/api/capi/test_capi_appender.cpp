@@ -120,7 +120,7 @@ TEST_CASE("Test appending into DECIMAL in C API", "[capi]") {
 	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("3245234.123123", expected, 19, 6);
 	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("3245234.123123", expected, 13, 6);
 	// Precision loss
-	expected.value.lower = 123124320;
+	expected.value.lower = 123124323;
 	expected.value.upper = 0;
 	TestAppendingSingleDecimalValue<float, &duckdb_append_float>(12.3124324f, expected, 9, 7);
 

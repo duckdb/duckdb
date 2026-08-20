@@ -118,7 +118,11 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
+	bool CanRegisterDirectConsumer(Pipeline &pipeline) const;
+	void RegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
+	vector<reference<Pipeline>> GetProducerPipelines() const;
+	void SetPipelineSelectionResolved();
 	bool ShouldUseBufferedConsumer(Pipeline &pipeline) const;
 	void RegisterBufferedConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	void RegisterMaterializedConsumer(idx_t consumer_idx);

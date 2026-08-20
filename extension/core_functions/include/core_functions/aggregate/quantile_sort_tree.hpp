@@ -27,11 +27,14 @@ namespace duckdb {
 template <typename INPUT_TYPE>
 struct QuantileCursor {
 	explicit QuantileCursor(const WindowPartitionInput &partition) : inputs(*partition.inputs) {
-		D_ASSERT(partition.column_ids.size() == 1);
-		inputs.InitializeScan(scan, partition.column_ids);
+		// the quantile parameter is folded into the bind data by the bind, but stays part of the expression tree -
+		// only the leading input column is paged in
+		D_ASSERT(!partition.column_ids.empty());
+		vector<column_t> input_ids {partition.column_ids[0]};
+		inputs.InitializeScan(scan, input_ids);
 		inputs.InitializeScanChunk(scan, page);
 
-		D_ASSERT(partition.all_valid.size() == 1);
+		D_ASSERT(!partition.all_valid.empty());
 		cannot_have_null = partition.all_valid[0];
 	}
 
@@ -313,7 +316,10 @@ struct QuantileSortTree {
 		auto &interrupt = partition.interrupt_state;
 		ColumnDataScanState scan;
 		DataChunk sort;
-		inputs.InitializeScan(scan, partition.column_ids);
+		// only the leading input column is sorted on - see QuantileCursor
+		D_ASSERT(!partition.column_ids.empty());
+		vector<column_t> input_ids {partition.column_ids[0]};
+		inputs.InitializeScan(scan, input_ids);
 		inputs.InitializeScanChunk(scan, sort);
 
 		// Sort on the single argument

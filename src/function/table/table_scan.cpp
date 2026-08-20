@@ -31,6 +31,7 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -320,19 +321,71 @@ public:
 		return std::move(l_state);
 	}
 
-	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
-		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
+	//! How TableScanFunc's loop proceeds after a persistent scan iteration
+	enum class PersistentScanResult { YIELD, NEXT_VECTOR, EXHAUSTED };
 
-		do {
-			if (bind_data.is_create_index) {
-				storage.CreateIndexScan(l_state.scan_state, output);
-			} else if (CanRemoveFilterColumns()) {
+	//! Prepares the next vector, schedules its I/O and decodes it, draining local storage when exhausted
+	PersistentScanResult ScanPersistentStorage(ClientContext &context, TableFunctionInput &data_p,
+	                                           TableScanLocalState &l_state, DataChunk &output) {
+		// persistent storage phase, prepare the next vector and schedule its I/O before decoding
+		auto &table_state = l_state.scan_state.table_state;
+		vector<unique_ptr<AsyncTask>> io_tasks;
+		if (!table_state.PrepareScanIO(tx, io_tasks)) {
+			// we are done, scan drains any claimed local storage rows
+			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
 				storage.Scan(tx, l_state.all_columns, l_state.scan_state);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
 				storage.Scan(tx, output, l_state.scan_state);
+			}
+			return PersistentScanResult::EXHAUSTED;
+		}
+		auto io_result = AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
+		// on resume the prepared vector is decoded without registering I/O again
+		if (io_result.GetResultType() == AsyncResultType::BLOCKED && data_p.HandleBlocked(io_result)) {
+			return PersistentScanResult::YIELD;
+		}
+		if (CanRemoveFilterColumns()) {
+			l_state.all_columns.Reset();
+			table_state.ProcessPreparedScan(tx, l_state.all_columns);
+			output.ReferenceColumns(l_state.all_columns, projection_ids);
+		} else {
+			table_state.ProcessPreparedScan(tx, output);
+		}
+		if (output.size() > 0) {
+			return PersistentScanResult::YIELD;
+		}
+		// the prepared vector was filtered out entirely, go the next vector
+		context.InterruptCheck();
+		return PersistentScanResult::NEXT_VECTOR;
+	}
+
+	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
+		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
+		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+		{
+			AsyncResult test_result;
+			if (AsyncResult::TryGenerateTestResult(test_result) && data_p.HandleBlocked(test_result)) {
+				return;
+			}
+		}
+#endif
+
+		do {
+			if (bind_data.is_create_index) {
+				storage.CreateIndexScan(l_state.scan_state, output);
+			} else {
+				switch (ScanPersistentStorage(context, data_p, l_state, output)) {
+				case PersistentScanResult::YIELD:
+					return;
+				case PersistentScanResult::NEXT_VECTOR:
+					continue;
+				case PersistentScanResult::EXHAUSTED:
+					break;
+				}
 			}
 			if (output.size() > 0) {
 				return;

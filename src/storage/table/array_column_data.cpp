@@ -27,10 +27,9 @@ void ArrayColumnData::SetDataType(ColumnDataType data_type) {
 	validity->SetDataType(data_type);
 }
 
-FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	// FIXME: There is nothing preventing us from supporting this, but it's not implemented yet.
-	// table filters are not supported yet for fixed size list columns
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                                    optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	return CheckValidityZonemap(state, filter, checked_segment, *validity);
 }
 
 void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {

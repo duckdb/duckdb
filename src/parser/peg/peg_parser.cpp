@@ -1,4 +1,8 @@
 #include "duckdb/parser/peg/peg_parser.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/inlined_grammar.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {

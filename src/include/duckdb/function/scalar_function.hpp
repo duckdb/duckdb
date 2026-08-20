@@ -242,6 +242,9 @@ public: // Properties
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
 
+	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
+	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
+
 	auto GetAutoVectorized() const -> bool { return properties.autovectorized; }
 	auto SetAutoVectorized(bool value) -> void { properties.autovectorized = value; }
 

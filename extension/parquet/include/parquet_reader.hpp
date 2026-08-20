@@ -54,6 +54,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "parquet_column_schema.hpp"
 #include "thrift/protocol/TProtocol.h"
+#include "reader/string_column_reader.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -121,6 +122,13 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 
 template <>
 ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
+
+template <>
+const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value);
+
+template <>
+StringColumnReader::Utf8ValidationOption
+EnumUtil::FromString<StringColumnReader::Utf8ValidationOption>(const char *value);
 
 struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
@@ -270,6 +278,8 @@ struct ParquetOptions {
 	idx_t explicit_cardinality = 0;
 	bool can_have_nan = false; // if floats or doubles can contain NaN values
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
+	StringColumnReader::Utf8ValidationOption utf8_validation_option =
+	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 };
 
 struct ParquetOptionsSerialization {
@@ -334,6 +344,7 @@ public:
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
+	bool can_use_metadata_statistics = false;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
 	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
@@ -392,7 +403,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata,
 	                                                 const Identifier &name);
-	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const Identifier &name);
+	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, const ParquetUnionData &union_data,
+	                                                 const Identifier &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,

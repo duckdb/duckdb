@@ -113,13 +113,13 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                            const std::string &stats) {
-	Value result;
 	string error;
 	auto stats_val = ConvertValueInternal(type, schema_ele, stats);
-	if (!stats_val.DefaultTryCastAs(type, result, &error)) {
+	auto result = stats_val.DefaultTryCastAs(type, &error);
+	if (!result) {
 		return Value(type);
 	}
-	return result;
+	return std::move(*result);
 }
 Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                    const std::string &stats) {
@@ -611,13 +611,13 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
                                                                              bool can_have_nan) {
 	// Not supported types
 	auto &type = schema.type;
-	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP) {
+	if (type.id() == LogicalTypeId::ARRAY) {
 		return nullptr;
 	}
 
 	unique_ptr<BaseStatistics> row_group_stats;
 
-	if (type.id() == LogicalTypeId::LIST) {
+	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto list_stats = ListStats::CreateUnknown(type);
 		auto &child_schema = schema.children[0];
 		auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);

@@ -78,24 +78,36 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
 
+	auto is_duck_table = table.IsDuckTable();
+	if (is_duck_table) {
+		// Bind the row id before the table columns so it remains the first delete expression.
+		BindRowIdColumns(table, get, del->expressions);
+	}
+
 	// Add columns to the scan to avoid fetching by row ID in PhysicalDelete:
 	// - If RETURNING: add all physical columns (for RETURNING projection)
 	// - Else if unique indexes exist: add only indexed columns (for delete index tracking)
 	if (!node.returning_list.empty()) {
 		// Add all physical columns for RETURNING
-		BindDeleteReturningColumns(table, get, del->return_columns);
-	} else if (table.IsDuckTable()) {
+		if (is_duck_table) {
+			BindDeleteReturningColumns(table, get, del->return_columns, del->expressions, get);
+		} else {
+			BindDeleteReturningColumns(table, get, del->return_columns);
+		}
+	} else if (is_duck_table) {
 		// Only optimize for DuckDB tables (not attached external tables like SQLite)
 		auto &storage = table.GetStorage();
 		if (storage.HasUniqueIndexes()) {
-			BindDeleteIndexColumns(table, get, del->return_columns);
+			BindDeleteIndexColumns(table, get, del->return_columns, del->expressions, get);
 		}
 	}
 
 	del->AddChild(std::move(root));
 
-	// bind the row id columns and add them to the projection list
-	BindRowIdColumns(table, get, del->expressions);
+	if (!is_duck_table) {
+		// Bind external table row IDs after the returning columns to preserve their scan layout.
+		BindRowIdColumns(table, get, del->expressions);
+	}
 
 	if (!node.returning_list.empty()) {
 		del->return_chunk = true;

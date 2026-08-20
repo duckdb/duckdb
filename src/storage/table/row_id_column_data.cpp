@@ -15,7 +15,9 @@ idx_t RowIdColumnData::GetRowStart(ColumnScanState &state) {
 	return state.parent->row_group->GetRowStart();
 }
 
-FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                                    optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	checked_segment = nullptr;
 	auto row_start = GetRowStart(state);
 	return RowGroup::CheckRowIdFilter(filter, row_start, row_start + count);
 }

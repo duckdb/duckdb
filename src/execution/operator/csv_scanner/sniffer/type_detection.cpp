@@ -309,11 +309,10 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 		return true;
 	default: {
 		// We do Value Try Cast for non-basic types.
-		Value new_value;
 		string error_message;
 		Value str_value(value);
-		bool success = str_value.TryCastAs(context, type, new_value, &error_message, true);
-		return success && error_message.empty();
+		auto new_value = str_value.TryCastAs(context, type, &error_message, true);
+		return new_value.has_value() && error_message.empty();
 	}
 	}
 }

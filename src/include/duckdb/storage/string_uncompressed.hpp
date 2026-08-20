@@ -245,6 +245,15 @@ public:
 
 			auto str_ptr = char_ptr_cast(dict_pos);
 			return string_t(str_ptr, string_length);
+		} else if (string_length == 0) {
+			// NULL values are stored as a copy of the previous entry's dictionary offset (see
+			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
+			// negative, so the NULL inherits that negative offset even though it references no
+			// overflow data (its computed length is 0). Return an empty string here instead of
+			// following the marker into ReadOverflowString - otherwise every NULL that trails a big
+			// string re-reads and re-allocates the entire overflow string (O(num_nulls * big_size)
+			// memory, tagged OVERFLOW_STRINGS). The value is masked NULL by the caller regardless.
+			return string_t(char_ptr_cast(base_ptr), 0);
 		} else {
 			// read overflow string
 			block_id_t block_id;

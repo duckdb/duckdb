@@ -50,7 +50,7 @@ public:
 		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		qualified_name = QualifiedName(std::move(new_catalog), qualified_name.Schema(), qualified_name.Name());
+		qualified_name = qualified_name.WithCatalog(std::move(new_catalog));
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

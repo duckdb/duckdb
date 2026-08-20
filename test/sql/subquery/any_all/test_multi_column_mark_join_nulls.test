@@ -101,20 +101,20 @@ SELECT row(NULL::INT, 4001) IN (SELECT a, b FROM mark_join_rhs),
 ----
 false	true
 
-# Nested equality must preserve UNKNOWN instead of treating nested NULLs as values.
+# Nested equality must treat nested NULLs as values.
 query I
 SELECT row([1, NULL::INT], 0) IN (
 	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 query I
 SELECT row([1, NULL::INT], 0) IN (
 	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
 )
 ----
-NULL
+True
 
 # A nested build NULL requires refinement for a non-NULL probe.
 query I
@@ -122,7 +122,7 @@ SELECT row([1, 2], 0) IN (
 	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 # Build-side nested NULL tracking covers the supported nested physical types.
 query IIII
@@ -140,28 +140,28 @@ SELECT row(array_value(1, 2), 0) IN (
 	       FROM (VALUES (union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
        )
 ----
-NULL	NULL	NULL	NULL
+false	false	false	NULL
 
 query I
 SELECT row(array_value(1, NULL::INT), 0) IN (
 	SELECT * FROM (VALUES (array_value(1, 2), 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 query I
 SELECT row(map([1, 2], [1, NULL::INT]), 0) IN (
 	SELECT * FROM (VALUES (map([1, 2], [1, 2]), 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 query I
 SELECT row({'a': 1, 'b': NULL::INT}, 0) IN (
 	SELECT * FROM (VALUES ({'a': 1, 'b': 2}, 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 query I
 SELECT row(union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0) IN (
@@ -212,7 +212,7 @@ SELECT row(1, 2) = ANY (
 	SELECT s FROM (VALUES (row(1, NULL::INT))) rhs(s)
 )
 ----
-NULL
+false
 
 # A tuple-valued condition must continue after UNKNOWN to find a later mismatch.
 query I
@@ -227,7 +227,7 @@ SELECT row(NULL::INT, 2) = ANY (
 	SELECT s FROM (VALUES (row(1, 2))) rhs(s)
 )
 ----
-NULL
+false
 
 # Exercise the specialized external empty-hash and nested refinement paths.
 statement ok
@@ -248,7 +248,7 @@ SELECT row([1, NULL::INT], 0) IN (
 	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
 )
 ----
-NULL
+false
 
 statement ok
 SET debug_force_external=false;

@@ -17,6 +17,7 @@ whitelist = [
     '@GLIBC',
     '@GCC',
     '@CXXABI',
+    '__cxa_call_terminate',
     '__gnu_cxx::',
     'std::',
     'N6duckdb',

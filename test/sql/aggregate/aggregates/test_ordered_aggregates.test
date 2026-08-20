@@ -217,3 +217,14 @@ statement error
 SELECT percentile_cont(frac := 0.5) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
 ----
 <REGEX>:Binder Error:.*No function matches.*
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# direct aggregate callbacks retain the first/last rewrite
+query II
+EXPLAIN (FORMAT JSON)
+SELECT first(i ORDER BY j), last(i ORDER BY j), any_value(i ORDER BY j)
+FROM (VALUES (1, 2)) t(i, j);
+----
+logical_opt	<REGEX>:.*create_sort_key\(j, 'ASC NULLS LAST'\).*arg_min_null\(i, #[0-9]+\).*arg_max_null\(i, #[0-9]+\).*arg_min\(i, #[0-9]+\).*

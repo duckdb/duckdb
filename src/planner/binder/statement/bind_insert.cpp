@@ -290,7 +290,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
-				throw BinderException("Duplicate column name \"%s\" in INSERT", columns[i]);
+				throw BinderException("Duplicate column name %s in INSERT", columns[i]);
 			}
 			auto column_index = table.GetColumnIndex(columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {

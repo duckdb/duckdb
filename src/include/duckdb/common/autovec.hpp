@@ -59,10 +59,19 @@ inline bool CpuBenefitsFromAutoVec() {
 #if !DUCKDB_AUTOVEC
 	return false; // not compiled in
 #elif defined(__aarch64__)
-	return true;       // NEON is always available
+	return true; // NEON is always available
 #else
 	static const bool enabled = __builtin_cpu_supports("avx2") && !getenv("DUCKDB_DISABLE_AVX2"); // cached
 	return enabled;
+#endif
+}
+//! Whether kernels compiled for the widened ISA may run at all. Only x86 can lack it at runtime (pre-AVX2);
+//! elsewhere the flat loops are plain code and are always reachable.
+inline bool CpuCanRunAutoVecKernels() {
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+	return CpuBenefitsFromAutoVec();
+#else
+	return true;
 #endif
 }
 inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width) {

@@ -49,7 +49,7 @@ CSVWriterOptions::CSVWriterOptions(CSVReaderOptions &options)
                        options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline) {
 }
 
-CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
+CSVWriter::CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool shared)
     : writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                      options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
       write_stream(stream), should_initialize(true), shared(shared) {

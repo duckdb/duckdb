@@ -95,6 +95,15 @@ FlattenDependentJoins::SubtreeAccess FlattenDependentJoins::GetSubtreeAccess(Log
 		return entry->second;
 	}
 	SubtreeAccess result;
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		auto &dependent_join = op.Cast<LogicalDependentJoin>();
+		for (auto &column : dependent_join.correlated_columns) {
+			if (correlated_aliases.find(column.binding) != correlated_aliases.end()) {
+				result.correlated = true;
+				break;
+			}
+		}
+	}
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op.Cast<LogicalCTERef>();
 		if (cteref.correlated_columns > 0) {

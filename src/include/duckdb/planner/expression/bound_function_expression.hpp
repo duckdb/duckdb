@@ -48,6 +48,7 @@ public:
 	bool &IsOperatorMutable() {
 		return is_operator;
 	}
+	bool RequiresOrderedExecution() const;
 
 	bool IsVolatile() const override;
 	bool IsConsistent() const override;

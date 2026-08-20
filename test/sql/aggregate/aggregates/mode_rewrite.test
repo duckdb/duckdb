@@ -1,0 +1,322 @@
+# name: test/sql/aggregate/aggregates/mode_rewrite.test
+# description: MODE aggregate logical rewrites
+# group: [aggregates]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET debug_force_external=true;
+
+statement ok
+CREATE TABLE mode_rewrite(g INTEGER, v VARCHAR, ord INTEGER, keep BOOLEAN);
+
+statement ok
+INSERT INTO mode_rewrite VALUES
+	(1, 'b', 1, true),
+	(1, 'a', 2, true),
+	(1, 'a', 3, false),
+	(1, 'b', 4, true),
+	(1, 'a', 5, false),
+	(2, 'z', 1, true),
+	(2, 'y', 2, true),
+	(3, NULL, 1, true),
+	(3, 'q', 2, false);
+
+# grouped mode and aggregate ordering
+query ITT
+SELECT g, mode(v ORDER BY ord), mode(v ORDER BY ord DESC)
+FROM mode_rewrite
+GROUP BY g
+ORDER BY g;
+----
+1	a	a
+2	z	y
+3	q	q
+
+# aggregate filters retain groups with no qualifying value
+query IT
+SELECT g, mode(v) FILTER (WHERE keep)
+FROM mode_rewrite
+WHERE g <> 2
+GROUP BY g
+ORDER BY g;
+----
+1	b
+3	NULL
+
+# ties without aggregate ordering may return either candidate
+query II
+SELECT mode(v) IN ('y', 'z'), count(*)
+FROM mode_rewrite
+WHERE g = 2;
+----
+1	2
+
+# DISTINCT mode uses one vote per value and retains aggregate ordering
+query TT
+SELECT mode(DISTINCT v ORDER BY v), mode(DISTINCT v ORDER BY v DESC)
+FROM mode_rewrite
+WHERE g = 1;
+----
+a	b
+
+# ordered ties retain the first value according to the complete order specification
+query TTT
+WITH d(v, ord) AS (
+	VALUES ('a', NULL), ('a', 4), ('b', 3), ('b', 5)
+)
+SELECT mode(v ORDER BY ord ASC NULLS LAST),
+	mode(v ORDER BY ord DESC NULLS FIRST),
+	mode(v ORDER BY ord DESC NULLS LAST)
+FROM d;
+----
+b	a	b
+
+# mixed frequency, distinct and regular branches
+query TII
+SELECT mode(v), count(DISTINCT ord), sum(ord)
+FROM mode_rewrite
+WHERE g = 1;
+----
+a	5	15
+
+# frequency-based aggregates over the same input share their count stage
+query TII
+SELECT mode(v), round(entropy(v), 6), round(entropy(DISTINCT v), 6)
+FROM mode_rewrite
+WHERE g = 1;
+----
+a	0.970951	1.000000
+
+# frequency buckets use DuckDB equality, including NaN equality
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
+
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::FLOAT), ('nan'::FLOAT), ('nan'::FLOAT), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
+
+# window and list paths use the same frequency-bucket equality
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v) OVER ()::VARCHAR, round(entropy(v) OVER (), 6)::VARCHAR
+FROM d
+LIMIT 1;
+----
+nan	0.970951
+
+query IT
+WITH d(i, v) AS (
+	VALUES (1, 'nan'::DOUBLE), (2, 'nan'::DOUBLE), (3, 1.0), (4, 1.0), (5, 'nan'::DOUBLE)
+)
+SELECT i, mode(v) OVER (ORDER BY i ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)::VARCHAR
+FROM d
+ORDER BY i;
+----
+1	nan
+2	nan
+3	nan
+4	1.0
+5	1.0
+
+query TT
+SELECT list_mode(values)::VARCHAR, round(list_entropy(values), 6)::VARCHAR
+FROM (VALUES (['nan'::DOUBLE, 'nan'::DOUBLE, 'nan'::DOUBLE, 1.0, 1.0])) t(values);
+----
+nan	0.970951
+
+# groups with only NULL or filtered-out inputs are retained
+query III
+SELECT g,
+	mode(v ORDER BY ord) FILTER (WHERE keep),
+	mode(ord) FILTER (WHERE false)
+FROM mode_rewrite
+GROUP BY g
+ORDER BY g;
+----
+1	b	NULL
+2	z	NULL
+3	NULL	NULL
+
+# empty ungrouped input produces one NULL result
+query T
+SELECT mode(v) FROM mode_rewrite WHERE false;
+----
+NULL
+
+# nested values use the same rewrite
+query II
+SELECT mode([v]), mode({'v': v})
+FROM mode_rewrite
+WHERE g = 1;
+----
+[a]	{'v': a}
+
+# HAVING and ORDER BY bindings refer to the rewritten result
+query IT
+SELECT g, mode(v) AS m
+FROM mode_rewrite
+GROUP BY g
+HAVING mode(v) = 'a'
+ORDER BY mode(v);
+----
+1	a
+
+# grouping sets are expanded before frequency aggregates
+query ITI
+SELECT g, mode(v), GROUPING(g)
+FROM mode_rewrite
+WHERE g IN (1, 3)
+GROUP BY CUBE(g)
+ORDER BY GROUPING(g), g;
+----
+1	a	0
+3	q	0
+NULL	a	1
+
+# window mode and list_mode keep their dedicated implementations
+query TT
+SELECT mode(v) OVER (), list_mode(list(v ORDER BY ord) OVER ())
+FROM mode_rewrite
+WHERE g = 1
+ORDER BY ord
+LIMIT 1;
+----
+a	a
+
+statement ok
+CREATE TABLE mode_rewrite_errors(value VARCHAR, keep BOOLEAN);
+
+statement ok
+INSERT INTO mode_rewrite_errors VALUES ('bad', false), ('1', true);
+
+# FILTER does not suppress evaluation errors in aggregate arguments
+statement error
+SELECT mode(value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
+----
+<REGEX>:Conversion Error:.*
+
+# FILTER does not suppress evaluation errors in aggregate ordering
+statement error
+SELECT mode(value ORDER BY value::INTEGER) FILTER (WHERE keep) FROM mode_rewrite_errors;
+----
+<REGEX>:Conversion Error:.*
+
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+CREATE SEQUENCE mode_rewrite_seq START 1;
+
+# volatile arguments are staged before aggregate fan-out
+query II
+SELECT m BETWEEN 1 AND 4, total
+FROM (
+	SELECT mode(nextval('mode_rewrite_seq')) AS m, sum(i) AS total
+	FROM range(4) tbl(i)
+);
+----
+1	6
+
+query I
+SELECT currval('mode_rewrite_seq');
+----
+4
+
+statement ok
+CREATE SEQUENCE mode_rewrite_order_seq START 1;
+
+# volatile aggregate ordering is evaluated once per input row
+query I
+SELECT mode(v ORDER BY nextval('mode_rewrite_order_seq'))
+FROM (VALUES ('b'), ('a')) tbl(v);
+----
+b
+
+query I
+SELECT currval('mode_rewrite_order_seq');
+----
+2
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# ordinary mode is represented by two visible aggregate stages
+query II
+EXPLAIN (FORMAT JSON)
+SELECT g, mode(v), entropy(v) FROM mode_rewrite GROUP BY g;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s*"count_star\(\)".*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*sum\(.*log2.*COALESCE.*
+
+statement ok
+SET disabled_optimizers='distinct_aggregate_rewrite';
+
+# mandatory aggregate lowering is independent from the DISTINCT strategy gate
+query II
+EXPLAIN (FORMAT JSON)
+SELECT mode(v), count(DISTINCT ord) FROM mode_rewrite;
+----
+logical_opt	<REGEX>:.*count_star\(\).*arg_max\(#[0-9]+, #[0-9]+\).*count\(DISTINCT ord\).*
+
+statement ok
+SET disabled_optimizers='';
+
+statement ok
+SET enable_optimizer=false;
+
+# mandatory lowering preserves DuckDB equality when optional optimization is disabled
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
+
+# ordinary mode, entropy and histogram never use their map states
+query II
+EXPLAIN (FORMAT JSON)
+SELECT mode(v), entropy(v), histogram(v) FROM mode_rewrite;
+----
+logical_opt	<REGEX>:.*count_star\(\).*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*map_from_entries.*
+
+# grouping sets are lowered before mandatory aggregate recipes
+query ITI
+SELECT g, mode(v), GROUPING(g)
+FROM mode_rewrite
+WHERE g IN (1, 3)
+GROUP BY CUBE(g)
+ORDER BY GROUPING(g), g;
+----
+1	a	0
+3	q	0
+NULL	a	1
+
+statement ok
+SET enable_optimizer=true;
+
+# rewritten aggregates survive logical plan serialization
+statement ok
+SET debug_verify_serializer=true;
+
+query TI
+SELECT mode(v), round(entropy(v), 6)
+FROM mode_rewrite
+WHERE g = 1;
+----
+a	0.970951
+
+statement ok
+SET debug_verify_serializer=false;

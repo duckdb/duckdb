@@ -251,7 +251,8 @@ void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, b
 	}
 }
 
-void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &value, vector<string> &expected_names) {
+void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &value,
+                                     const vector<Identifier> &expected_names) {
 	if (SetBaseOption(loption, value)) {
 		return;
 	}
@@ -540,7 +541,7 @@ string CSVReaderOptions::ToString(const String &current_file_path) const {
 	return error;
 }
 
-static Value StringVectorToValue(const vector<string> &vec) {
+static Value StringVectorToValue(const vector<Identifier> &vec) {
 	vector<Value> content;
 	content.reserve(vec.size());
 	for (auto &item : vec) {
@@ -667,7 +668,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 		D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
 
 		// Parse into temporary lists first
-		vector<string> parsed_names;
+		vector<Identifier> parsed_names;
 		vector<LogicalType> parsed_types;
 		identifier_map_t<idx_t> parsed_types_per_column;
 		for (idx_t i = 0; i < struct_children.size(); i++) {
@@ -717,7 +718,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 			auto_type_candidates.emplace_back(candidate_type.second);
 		}
 	} else if (key == "column_names" || key == "names") {
-		unordered_set<string> column_names;
+		identifier_set_t column_names;
 		if (!name_list.empty()) {
 			throw BinderException("read_csv column_names/names can only be supplied once");
 		}
@@ -729,11 +730,11 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 			if (child.IsNull()) {
 				throw BinderException("read_csv %s parameter cannot have a NULL value", key);
 			}
-			name_list.push_back(StringValue::Get(child));
+			name_list.emplace_back(StringValue::Get(child));
 		}
 		for (auto &name : name_list) {
 			bool empty = true;
-			for (auto &c : name) {
+			for (auto &c : name.GetIdentifierName()) {
 				if (!StringUtil::CharacterIsSpace(c)) {
 					empty = false;
 					break;
@@ -743,7 +744,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 				throw BinderException("read_csv %s cannot have empty (or all whitespace) value", key);
 			}
 			if (column_names.find(name) != column_names.end()) {
-				throw BinderException("read_csv %s must have unique values. \"%s\" is repeated.", key, name);
+				throw BinderException("read_csv %s must have unique values. %s is repeated.", key, name);
 			}
 			column_names.insert(name);
 		}

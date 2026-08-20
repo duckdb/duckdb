@@ -36,6 +36,8 @@ public:
 public:
 	void SetDataType(ColumnDataType data_type) override;
 	idx_t GetMaxEntry() override;
+	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                   optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;

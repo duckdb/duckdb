@@ -271,7 +271,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationT
 	}
 	if (&db != modified_database.get()) {
 		throw TransactionException(
-		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
+		    "Attempting to write to database %s in a transaction that has already modified database %s - a "
 		    "single transaction can only write to a single attached database.",
 		    db.GetName(), modified_database->GetName());
 	}

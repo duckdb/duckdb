@@ -16,16 +16,16 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}
-	Value min = NumericStats::Min(input);
-	Value max = NumericStats::Max(input);
-	if (!min.DefaultTryCastAs(target) || !max.DefaultTryCastAs(target)) {
+	auto min = NumericStats::Min(input).DefaultTryCastAs(target);
+	auto max = NumericStats::Max(input).DefaultTryCastAs(target);
+	if (!min || !max) {
 		// overflow in cast: bailout
 		return nullptr;
 	}
 	auto result = NumericStats::CreateEmpty(target);
 	result.CopyBase(input);
-	NumericStats::SetMin(result, min);
-	NumericStats::SetMax(result, max);
+	NumericStats::SetMin(result, *min);
+	NumericStats::SetMax(result, *max);
 	return result.ToUnique();
 }
 

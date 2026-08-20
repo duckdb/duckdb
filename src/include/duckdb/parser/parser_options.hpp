@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
+#include "duckdb/common/enums/identifier_case_mode.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
@@ -19,7 +20,7 @@ class ParserExtension;
 struct ParserCache;
 
 struct ParserOptions {
-	bool preserve_identifier_case = true;
+	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	bool integer_division = false;
 	bool debug_transformer_trampoline_style = false;
 	RegexMatchOperatorSemantics regex_match_operator_semantics = RegexMatchOperatorSemantics::PARTIAL;

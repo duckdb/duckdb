@@ -2092,6 +2092,10 @@ ScalarFunctionSet GreatestCommonDivisorFun::GetFunctions() {
 	funcs.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
+	// negating the minimum value overflows, so the failure must be reportable
+	for (auto &func : funcs.functions) {
+		func.SetFallible();
+	}
 	return funcs;
 }
 

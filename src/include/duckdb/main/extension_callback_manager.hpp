@@ -17,6 +17,7 @@ namespace duckdb {
 
 class ClientContext;
 class DatabaseInstance;
+class DialectExtension;
 class ExtensionCallback;
 class OperatorExtension;
 class OptimizerExtension;
@@ -42,6 +43,7 @@ public:
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
 
 	void Register(ParserExtension extension);
+	void Register(DialectExtension extension);
 	void Register(PlannerExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
@@ -52,11 +54,13 @@ public:
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
+	ExtensionCallbackIteratorHelper<DialectExtension> DialectExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
 	bool HasParserExtensions() const;
+	bool HasDialectExtension(const string &name) const;
 
 private:
 	mutex registry_lock;

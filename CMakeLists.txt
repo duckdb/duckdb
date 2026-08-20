@@ -693,6 +693,17 @@ if(DISABLE_ASSERTIONS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_ASSERTIONS")
 endif()
 
+# Build without C++ RTTI. A dependency that cannot build this way can re-enable it for its
+# own targets, but only if its class hierarchy is self-contained: a type deriving from a
+# duckdb type needs the base's typeinfo, which this build never emits.
+if(DISABLE_RTTI)
+  if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  endif()
+endif()
+
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
 endif()

@@ -34,6 +34,8 @@ public:
 	DuckTableEntry &table;
 	idx_t insert_count;
 	ColumnDataCollection return_collection;
+	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
+	vector<PhysicalIndex> unmerged_collections;
 };
 
 class InsertLocalState : public LocalSinkState {

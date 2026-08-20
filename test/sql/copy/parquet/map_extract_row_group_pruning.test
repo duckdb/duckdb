@@ -1,0 +1,20 @@
+# name: test/sql/copy/parquet/map_extract_row_group_pruning.test
+# description: Parquet map value extracts use value-field statistics for row-group pruning
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT MAP {'k': i} AS m FROM range(6144) t(i))
+TO '{TEST_DIR}/map_extract_row_group_pruning.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/map_extract_row_group_pruning.parquet'
+WHERE m['k'] BETWEEN 2900 AND 3100;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/map_extract_row_group_pruning.parquet' WHERE m['k'] BETWEEN 2900 AND 3100;
+----
+201

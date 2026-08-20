@@ -374,8 +374,11 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 	    materialized.GetStatementProperties().return_type == StatementReturnType::CHANGED_ROWS) {
 		// update total changes
 		auto row_changes = materialized.GetValue(0, 0);
-		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
-			result->deprecated_rows_changed = NumericCast<idx_t>(row_changes.GetValue<int64_t>());
+		if (!row_changes.IsNull()) {
+			auto cast_row_changes = row_changes.DefaultTryCastAs(LogicalType::BIGINT);
+			if (cast_row_changes) {
+				result->deprecated_rows_changed = NumericCast<idx_t>(cast_row_changes->GetValue<int64_t>());
+			}
 		}
 	}
 

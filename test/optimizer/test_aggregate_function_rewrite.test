@@ -50,6 +50,40 @@ EXPLAIN SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers
 ----
 logical_opt	<REGEX>:.*sum_no_overflow\(i\).*
 
+query II
+EXPLAIN WITH d AS MATERIALIZED (SELECT i FROM integers) SELECT SUM(i) FROM d
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(i\).*
+
+query II
+EXPLAIN WITH d AS MATERIALIZED (SELECT i FROM integers) SELECT COUNT(i) FROM d
+----
+logical_opt	<REGEX>:.*count_star\(\).*
+
+# the rewrite needs the cardinality of the CTE definition, so it only fires when the sum provably
+# fits in an int64
+statement ok
+CREATE TABLE small_vals(v BIGINT);
+
+statement ok
+INSERT INTO small_vals SELECT (i * 1000000000)::BIGINT FROM range(1000) s(i);
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM small_vals) SELECT sum(v) FROM c
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(v\).*
+
+statement ok
+CREATE TABLE big_vals(v BIGINT);
+
+statement ok
+INSERT INTO big_vals SELECT 4000000000000000000::BIGINT FROM range(5) s(i);
+
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT v FROM big_vals) SELECT sum(v) FROM c
+----
+logical_opt	<!REGEX>:.*sum_no_overflow.*
+
 # test rewrite with HUGEINT
 statement ok
 CREATE TABLE T(a HUGEINT);

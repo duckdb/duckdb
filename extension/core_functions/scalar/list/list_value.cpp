@@ -267,6 +267,12 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 
+	auto &function_args = bound_function.GetArguments();
+	function_args.clear();
+	function_args.reserve(arguments.size());
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		function_args.push_back(child_type);
+	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

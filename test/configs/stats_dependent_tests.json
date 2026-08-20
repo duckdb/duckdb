@@ -43,6 +43,7 @@
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/function/numeric/test_random.test",
+        "test/sql/prepared/prepared_statistics_optimization.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
@@ -52,8 +53,9 @@
         "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
         "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
         "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
-        "test/sql/types/geo/geometry_vertex_extract.test"
+        "test/sql/types/geo/geometry_vertex_extract.test",
+        "test/sql/optimizer/secure_view_statistics.test"
       ]
     }
-    ]
+  ]
 }

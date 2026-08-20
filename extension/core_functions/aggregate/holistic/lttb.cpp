@@ -21,7 +21,7 @@ namespace {
 //! order-sensitive aggregates, the points are expected to arrive ordered by x (use "lttb(x, y, n ORDER BY x)").
 struct LTTBState : ListAggState {};
 
-//! Holds the (erased) constant target point count.
+//! Holds the constant target point count folded into the bind data.
 struct LTTBBindData : FunctionData {
 	idx_t n;
 
@@ -79,8 +79,10 @@ auto LTTBPackPoints(Vector inputs[], idx_t count, Vector &packed) -> bool {
 	return any_null;
 }
 
+//! The number of points is folded into the bind data by the bind, but stays part of the expression tree - only the
+//! leading x and y arguments are consumed
 void LTTBUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states, idx_t count) {
-	D_ASSERT(input_count == 2);
+	D_ASSERT(input_count >= 2);
 	if (count == 0) {
 		return;
 	}
@@ -92,9 +94,10 @@ void LTTBUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t inpu
 	}
 }
 
+//! The clustered variant of LTTBUpdate
 void LTTBClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                        const ClusteredAggr &clustered, idx_t count) {
-	D_ASSERT(input_count == 2);
+	D_ASSERT(input_count >= 2);
 	if (count == 0) {
 		return;
 	}
@@ -339,7 +342,6 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 
 auto LTTBBind(BindAggregateFunctionInput &input) -> unique_ptr<FunctionData> {
 	auto &context = input.GetClientContext();
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 3);
 
@@ -357,7 +359,6 @@ auto LTTBBind(BindAggregateFunctionInput &input) -> unique_ptr<FunctionData> {
 	if (n < 2) {
 		throw BinderException("lttb: the number of points must be at least 2");
 	}
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_uniq<LTTBBindData>(NumericCast<idx_t>(n));
 }
 
@@ -372,7 +373,7 @@ auto LTTBDeserialize(Deserializer &ser, BoundAggregateFunction &) -> unique_ptr<
 }
 
 //! Exports the buffered points as a LIST(STRUCT(x, y)), reusing the generic list-state export.
-//! Records the erased constant "n" so the exported state can be re-bound.
+//! Records the folded constant "n" so the exported state can be re-bound.
 auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 	auto &function = input.function;
 	using ST = LTTBState::STATE_TYPE;
@@ -386,7 +387,7 @@ auto LTTBStateLayout(AggregateLayoutInput &input) -> AggregateStateLayout {
 	layout.total_state_size = AlignValue<idx_t>(sizeof(LTTBState));
 	layout.field = BuildStateField<ST>();
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-	if (function.GetOriginalArguments().size() == 3) {
+	if (function.GetArguments().size() == 3) {
 		auto &bind_data = input.bind_data->Cast<LTTBBindData>();
 		layout.constant_parameters.emplace(2, Value::BIGINT(NumericCast<int64_t>(bind_data.n)));
 	}

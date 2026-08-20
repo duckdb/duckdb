@@ -18,6 +18,7 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
 #include <cmath>
@@ -76,9 +77,6 @@ public:
 	// move assignment
 	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
-	inline LogicalType &GetTypeMutable() {
-		return type_;
-	}
 	inline const LogicalType &type() const { // NOLINT
 		return type_;
 	}
@@ -250,20 +248,18 @@ public:
 	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in "new_value"
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          Value &new_value, string *error_message, bool strict = false) const;
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value,
-	                          string *error_message, bool strict = false) const;
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
-	                                 bool strict = false) const;
-	//! Tries to cast this value to another type, and stores the result in THIS value again
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
-	                          bool strict = false);
-	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
-	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
+	//! Tries to cast this value to another type - returns the result, or nullopt if the cast is not possible.
+	//! Never throws on a failed cast; pass "error_message" to obtain the reason for the failure
+	DUCKDB_API optional<Value> TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input,
+	                                     const LogicalType &target_type, string *error_message = nullptr,
+	                                     bool strict = false) const;
+	DUCKDB_API optional<Value> TryCastAs(ClientContext &context, const LogicalType &target_type,
+	                                     string *error_message = nullptr, bool strict = false) const;
+	DUCKDB_API optional<Value> DefaultTryCastAs(const LogicalType &target_type, string *error_message = nullptr,
+	                                            bool strict = false) const;
 
-	DUCKDB_API void Reinterpret(LogicalType new_type);
+	//! Returns a copy of this value with its type replaced - the underlying value is reinterpreted, not cast
+	DUCKDB_API Value WithType(LogicalType new_type) const;
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;

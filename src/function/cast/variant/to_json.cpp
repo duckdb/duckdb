@@ -1,15 +1,10 @@
-#include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/function/cast/default_casts.hpp"
 #include "yyjson.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
 
 using namespace duckdb_yyjson; // NOLINT

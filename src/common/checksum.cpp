@@ -66,11 +66,10 @@ hash_t ChecksumRemainder(const void *ptr, size_t len) noexcept {
 
 uint64_t Checksum(const uint8_t *buffer, size_t size) {
 	uint64_t result = 5381;
-	auto ptr = reinterpret_cast<const uint64_t *>(buffer);
 	size_t i;
 	// for efficiency, we first checksum uint64_t values
 	for (i = 0; i < size / 8; i++) {
-		result ^= Checksum(ptr[i]);
+		result ^= Checksum(Load<uint64_t>(buffer + i * 8));
 	}
 	if (size > i * 8) {
 		// the remaining 0-7 bytes we hash using a string hash

@@ -126,6 +126,104 @@ SELECT k, v FROM t;
 1	1
 NULL	0
 
+# Null-safe equality uses the complete-key probe and matches NULL keys.
+query II
+EXPLAIN WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (NULL::INTEGER, 0), (1, 0)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k IS NOT DISTINCT FROM n.k
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (NULL::INTEGER, 0), (1, 0)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k IS NOT DISTINCT FROM n.k
+	WHERE n.v < 1
+)
+SELECT k, v FROM t;
+----
+1	1
+NULL	1
+
+# Reordered composite predicates retain their individual NULL semantics.
+query II
+EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, NULL::INTEGER, 0), (NULL, 2, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n
+	JOIN recurring.t r ON r.k2 IS NOT DISTINCT FROM n.k2 AND r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, NULL::INTEGER, 0), (1, 2, 0), (NULL, 2, 0), (NULL, NULL, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n
+	JOIN recurring.t r ON r.k2 IS NOT DISTINCT FROM n.k2 AND r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	2	1
+1	NULL	1
+NULL	2	0
+NULL	NULL	0
+
+# Mixed null-safe probes agree with a forced recurring-state scan.
+query I
+WITH RECURSIVE
+fast(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, NULL::INTEGER, 0), (1, 2, 0), (NULL, 2, 0), (NULL, NULL, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fast n
+	JOIN recurring.fast r ON r.k2 IS NOT DISTINCT FROM n.k2 AND r.k1 = n.k1
+	WHERE n.v < 1
+),
+fallback(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, NULL::INTEGER, 0), (1, 2, 0), (NULL, 2, 0), (NULL, NULL, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fallback n
+	JOIN (SELECT * FROM recurring.fallback WHERE v >= 0) r
+	  ON r.k2 IS NOT DISTINCT FROM n.k2 AND r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT count(*) FROM (
+	(SELECT * FROM fast EXCEPT ALL SELECT * FROM fallback)
+	UNION ALL
+	(SELECT * FROM fallback EXCEPT ALL SELECT * FROM fast)
+);
+----
+0
+
+# Null-safe collated probes use the recurring table's normalized key identity.
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT 'a' COLLATE nocase, 0
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM (SELECT upper(k) AS k, v FROM t) n
+	JOIN recurring.t r ON r.k IS NOT DISTINCT FROM n.k
+	WHERE n.v < 1
+)
+SELECT k, v FROM t;
+----
+a	1
+
 # Missing lookups are filtered without inserting new hash-table groups.
 query II rowsort
 WITH RECURSIVE t(k, v) USING KEY (k) AS (
@@ -295,6 +393,62 @@ EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
 SELECT * FROM t;
 ----
 physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+# Null-safe equality uses the partial-key index and matches NULL subsets.
+query II
+EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (NULL::INTEGER, 1, 0), (1, 1, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 IS NOT DISTINCT FROM n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (NULL::INTEGER, 10, 0), (NULL, 20, 0), (1, 10, 0), (1, 20, 0), (2, 10, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 IS NOT DISTINCT FROM n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	10	1
+1	20	1
+2	10	1
+NULL	10	1
+NULL	20	1
+
+# Null-safe partial probes agree with a forced recurring-state scan.
+query I
+WITH RECURSIVE
+fast(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (NULL::INTEGER, 10, 0), (NULL, 20, 0), (1, 10, 0), (1, 20, 0), (2, 10, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fast n JOIN recurring.fast r ON r.k1 IS NOT DISTINCT FROM n.k1
+	WHERE n.v < 1
+),
+fallback(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (NULL::INTEGER, 10, 0), (NULL, 20, 0), (1, 10, 0), (1, 20, 0), (2, 10, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fallback n
+	JOIN (SELECT * FROM recurring.fallback WHERE v >= 0) r
+	  ON r.k1 IS NOT DISTINCT FROM n.k1
+	WHERE n.v < 1
+)
+SELECT count(*) FROM (
+	(SELECT * FROM fast EXCEPT ALL SELECT * FROM fallback)
+	UNION ALL
+	(SELECT * FROM fallback EXCEPT ALL SELECT * FROM fast)
+);
+----
+0
 
 # Partial probes preserve one-to-many matches and reordered key positions.
 query III rowsort

@@ -521,18 +521,24 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 			lvalue = Value(sql_type);
 			converted_lvalue = true;
 		} else {
-			lvalue = Value(lvalue_str);
-			if (lvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_lvalue = Value(lvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_lvalue) {
+				lvalue = std::move(*cast_lvalue);
 				converted_lvalue = true;
+			} else {
+				lvalue = Value(lvalue_str);
 			}
 		}
 		if (rvalue_str == "NULL") {
 			rvalue = Value(sql_type);
 			converted_rvalue = true;
 		} else {
-			rvalue = Value(rvalue_str);
-			if (rvalue.TryCastAs(*runner.con->context, sql_type)) {
+			auto cast_rvalue = Value(rvalue_str).TryCastAs(*runner.con->context, sql_type);
+			if (cast_rvalue) {
+				rvalue = std::move(*cast_rvalue);
 				converted_rvalue = true;
+			} else {
+				rvalue = Value(rvalue_str);
 			}
 		}
 		if (converted_lvalue && converted_rvalue) {

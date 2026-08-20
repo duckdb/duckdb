@@ -1,0 +1,74 @@
+# name: test/issues/general/test_24806.test
+# description: List-backed aggregate states preserve join multiplicity during partial aggregate pushdown
+# group: [general]
+
+# The original issue reproducer
+statement ok
+CREATE TABLE issue_24806(i INTEGER, g INTEGER, d INTEGER, txt INTEGER, chr INTEGER)
+
+statement ok
+INSERT INTO issue_24806 VALUES
+    (1, 1, 1, 1, 0),
+    (1, 1, 1, 1, 0),
+    (42, 1, 2, 3, 9),
+    (42, 1, 1, 2, 2),
+    (NULL, -7, 1, 0, 0),
+    (42, NULL, 3, NULL, 3)
+
+query IR rowsort
+SELECT t1.g, median(t3.i)
+FROM issue_24806 t1
+INNER JOIN issue_24806 t2 ON t1.d = t2.d
+INNER JOIN issue_24806 t3 ON t2.txt = t3.chr
+GROUP BY t1.g;
+----
+-7	1.0
+1	1.0
+
+# A two-table reduction exercises every list-backed aggregate affected by the same bug
+statement ok
+CREATE TABLE issue_24806_multiplicity(k INTEGER, g INTEGER)
+
+statement ok
+INSERT INTO issue_24806_multiplicity VALUES (1, 1), (1, 1), (1, 1), (2, 1), (2, 1)
+
+statement ok
+CREATE TABLE issue_24806_values(k INTEGER, v INTEGER)
+
+statement ok
+INSERT INTO issue_24806_values VALUES (1, 1), (1, 1), (2, 42), (2, 42)
+
+statement ok
+ANALYZE
+
+query IRRRT
+SELECT
+    m.g,
+    median(v.v),
+    quantile_cont(v.v, 0.5),
+    mad(v.v),
+    list_sort(list(v.v))
+FROM issue_24806_multiplicity m
+INNER JOIN issue_24806_values v USING (k)
+GROUP BY m.g;
+----
+1	1.0	1.0	0.0	[1, 1, 1, 1, 1, 1, 42, 42, 42, 42]
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query IRRRT
+SELECT
+    m.g,
+    median(v.v),
+    quantile_cont(v.v, 0.5),
+    mad(v.v),
+    list_sort(list(v.v))
+FROM issue_24806_multiplicity m
+INNER JOIN issue_24806_values v USING (k)
+GROUP BY m.g;
+----
+1	1.0	1.0	0.0	[1, 1, 1, 1, 1, 1, 42, 42, 42, 42]
+
+statement ok
+RESET disabled_optimizers

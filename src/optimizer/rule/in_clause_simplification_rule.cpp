@@ -49,7 +49,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		if (!new_constant) {
 			return nullptr;
 		} else {
-			auto new_constant_expr = make_uniq<BoundConstantExpression>(constant_value);
+			auto new_constant_expr = make_uniq<BoundConstantExpression>(std::move(*new_constant));
 			cast_list.push_back(std::move(new_constant_expr));
 		}
 	}

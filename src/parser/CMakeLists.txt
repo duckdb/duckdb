@@ -23,6 +23,7 @@ add_library_unity(
   query_error_context.cpp
   query_node.cpp
   result_modifier.cpp
+  token_iterator.cpp
   tableref.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser>

@@ -119,6 +119,16 @@ void RegisterOffsetSum(Connection &con) {
 	    [&]() { Catalog::GetSystemCatalog(*con.context).CreateFunction(*con.context, info); });
 }
 
+void RegisterOffsetSumWithoutCombine(Connection &con) {
+	AggregateFunction fn("offset_sum_no_combine", {LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                     OffsetSumSize, OffsetSumInit, OffsetSumUpdate, nullptr, OffsetSumFinalize,
+	                     FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OffsetSumBind);
+	fn.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	CreateAggregateFunctionInfo info(fn);
+	con.context->RunFunctionInTransaction(
+	    [&]() { Catalog::GetSystemCatalog(*con.context).CreateFunction(*con.context, info); });
+}
+
 } // namespace
 
 TEST_CASE("Aggregate state size and init callbacks receive bind data", "[api][aggregate_function]") {
@@ -162,4 +172,17 @@ TEST_CASE("Aggregate state size and init callbacks receive bind data", "[api][ag
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->GetValue(0, 0) == Value::BIGINT(10)); // 7 + (1 + 2)
 	}
+}
+
+TEST_CASE("USING KEY UNION falls back for an aggregate without combine", "[api][aggregate_function][recursive_cte]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	RegisterOffsetSumWithoutCombine(con);
+
+	auto result = con.Query("WITH RECURSIVE t(k, v) USING KEY (k, offset_sum_no_combine(v, 0) AS v) AS ("
+	                        "VALUES (1::BIGINT, 1::BIGINT) UNION SELECT k, v + 1 FROM t WHERE v < 4) TABLE t");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 1);
+	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(1));
+	REQUIRE(result->GetValue(1, 0) == Value::BIGINT(7));
 }

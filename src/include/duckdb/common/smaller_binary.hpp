@@ -56,6 +56,14 @@
 #define DUCKDB_SB_FEATURE_unary_executor_flat DUCKDB_SB_DEFAULT // group: vector_specialization
 #endif
 
+#ifndef DUCKDB_SB_FEATURE_unary_executor_select_flat
+#define DUCKDB_SB_FEATURE_unary_executor_select_flat DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
+#ifndef DUCKDB_SB_FEATURE_unary_executor_select_flags
+#define DUCKDB_SB_FEATURE_unary_executor_select_flags DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
 #ifndef DUCKDB_SB_FEATURE_binary_executor_flat
 #define DUCKDB_SB_FEATURE_binary_executor_flat DUCKDB_SB_DEFAULT // group: vector_specialization
 #endif
@@ -66,6 +74,22 @@
 
 #ifndef DUCKDB_SB_FEATURE_binary_executor_select_flags
 #define DUCKDB_SB_FEATURE_binary_executor_select_flags DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
+#ifndef DUCKDB_SB_FEATURE_binary_executor_generic_nullable
+#define DUCKDB_SB_FEATURE_binary_executor_generic_nullable DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
+#ifndef DUCKDB_SB_FEATURE_variadic_executor_select_flat
+#define DUCKDB_SB_FEATURE_variadic_executor_select_flat DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
+#ifndef DUCKDB_SB_FEATURE_variadic_executor_flat
+#define DUCKDB_SB_FEATURE_variadic_executor_flat DUCKDB_SB_DEFAULT // group: vector_specialization
+#endif
+
+#ifndef DUCKDB_SB_FEATURE_variadic_executor_select_flags
+#define DUCKDB_SB_FEATURE_variadic_executor_select_flags DUCKDB_SB_DEFAULT // group: vector_specialization
 #endif
 
 #ifndef DUCKDB_SB_FEATURE_aggregate_executor_flat

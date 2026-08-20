@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -19,7 +20,9 @@ class RecursiveCTEKeyJoinLayout {
 public:
 	RecursiveCTEKeyJoinLayout(PhysicalRecursiveCTEStateScan &state_scan, PhysicalOperator &probe, bool state_on_left,
 	                          vector<idx_t> state_key_indices, vector<idx_t> probe_key_indices,
-	                          vector<idx_t> left_projection_map, vector<idx_t> right_projection_map);
+	                          vector<ExpressionType> key_comparisons,
+	                          vector<unique_ptr<Expression>> probe_key_normalizers, vector<idx_t> left_projection_map,
+	                          vector<idx_t> right_projection_map);
 
 	PhysicalRecursiveCTEStateScan &StateScan() const {
 		return state_scan;
@@ -33,6 +36,12 @@ public:
 	}
 	const vector<idx_t> &ProbeKeyIndices() const {
 		return probe_key_indices;
+	}
+	const vector<ExpressionType> &KeyComparisons() const {
+		return key_comparisons;
+	}
+	bool HasNullSafeComparisons() const {
+		return has_null_safe_comparisons;
 	}
 	const vector<idx_t> &LeftProjectionMap() const {
 		return left_projection_map;
@@ -52,6 +61,12 @@ public:
 	const vector<LogicalType> &ProbeKeyTypes() const {
 		return probe_key_types;
 	}
+	const vector<LogicalType> &RawProbeKeyTypes() const {
+		return raw_probe_key_types;
+	}
+	const vector<unique_ptr<Expression>> &ProbeKeyNormalizers() const {
+		return probe_key_normalizers;
+	}
 	const vector<LogicalType> &PayloadTypes() const {
 		return payload_types;
 	}
@@ -61,16 +76,20 @@ private:
 	bool state_on_left;
 	vector<idx_t> state_key_indices;
 	vector<idx_t> probe_key_indices;
+	vector<ExpressionType> key_comparisons;
+	bool has_null_safe_comparisons = false;
 	vector<idx_t> left_projection_map;
 	vector<idx_t> right_projection_map;
+	vector<unique_ptr<Expression>> probe_key_normalizers;
 	vector<idx_t> state_key_map;
 	vector<idx_t> state_payload_map;
 	vector<LogicalType> key_types;
 	vector<LogicalType> probe_key_types;
+	vector<LogicalType> raw_probe_key_types;
 	vector<LogicalType> payload_types;
 };
 
-//! Probes a frozen USING KEY recursive state using a complete or indexed partial equality key.
+//! Probes a frozen USING KEY recursive state using a complete or indexed partial key.
 class PhysicalRecursiveCTEKeyJoin : public CachingPhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_KEY_JOIN;
@@ -78,8 +97,9 @@ public:
 	PhysicalRecursiveCTEKeyJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                            PhysicalRecursiveCTEStateScan &state_scan, bool state_on_left,
 	                            vector<idx_t> state_key_indices, vector<idx_t> probe_key_indices,
-	                            vector<idx_t> left_projection_map, vector<idx_t> right_projection_map,
-	                            idx_t estimated_cardinality);
+	                            vector<ExpressionType> key_comparisons,
+	                            vector<unique_ptr<Expression>> probe_key_normalizers, vector<idx_t> left_projection_map,
+	                            vector<idx_t> right_projection_map, idx_t estimated_cardinality);
 
 	PhysicalRecursiveCTEStateScan &StateScan() const {
 		return layout.StateScan();

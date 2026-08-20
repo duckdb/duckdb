@@ -49,6 +49,43 @@ select interval '28 days 432000 seconds' = interval '1 month 3 days';
 ----
 True
 
+# Borrow left when carrying leaves a negative field
+query I
+select interval '1 month' - interval '4 days' = interval '26 days';
+----
+True
+
+query I
+select interval '26 days' < (interval '1 month' - interval '4 days');
+----
+False
+
+query I
+select interval '1 day' - interval '1 hour' = interval '23 hours';
+----
+True
+
+query I
+select interval '2 months' - interval '40 days' = interval '20 days';
+----
+True
+
+query I
+select interval '-1 month' + interval '4 days' = interval '-26 days';
+----
+True
+
+# Normalising the extremes saturates instead of overflowing the borrowed field
+query I
+select normalized_interval(interval '-2147483648 months -2147483648 days -9223372036854775807 microseconds');
+----
+-178956970 years -8 months -2147483648 days -2562047788:00:54.775808
+
+query I
+select normalized_interval(interval '2147483647 months 2147483647 days 9223372036854775807 microseconds');
+----
+178956970 years 7 months 2147483647 days 2562047788:00:54.775807
+
 # Sorting with normalisation
 statement ok
 CREATE TABLE issue14384(i INTERVAL);

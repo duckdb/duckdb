@@ -94,7 +94,7 @@ public:
 	//! Create a coordinate system within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                          CreateCoordinateSystemInfo &info) {
-		throw NotImplementedException("Coordinate systems are not supported in schema '%s'", name);
+		throw NotImplementedException("Coordinate systems are not supported in schema %s", name);
 	}
 
 	//! Create a enum within the given schema

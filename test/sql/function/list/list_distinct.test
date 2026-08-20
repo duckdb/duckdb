@@ -156,6 +156,13 @@ SELECT list_distinct([NULL::{type}])
 
 endloop
 
+# NaN values compare equal for distinctness
+query T
+SELECT unnest(list_sort(list_distinct([1.0, 'nan'::DOUBLE, 'nan'::DOUBLE])))::VARCHAR;
+----
+1.0
+nan
+
 # TEMPORAL types
 
 # date

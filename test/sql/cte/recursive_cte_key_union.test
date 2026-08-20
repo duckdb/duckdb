@@ -1,0 +1,733 @@
+# name: test/sql/cte/recursive_cte_key_union.test
+# description: USING KEY UNION emits finalized rows only for effectively changed keys
+# group: [cte]
+
+statement ok
+SET threads=1;
+
+# Reproducing the current value produces an empty delta and terminates recursion.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+1	0
+
+# Inferior and duplicate candidates are still aggregate inputs, but do not remain recursive work.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 5)
+	UNION
+	SELECT k, v + delta
+	FROM t, (VALUES (0), (0), (1), (2)) offsets(delta)
+)
+TABLE t;
+----
+1	5
+
+# New keys and changed finalized values form the next working table.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 10)
+	UNION
+	SELECT k + 1, v + 10 FROM t WHERE k < 4
+)
+TABLE t;
+----
+1	10
+2	20
+3	30
+4	40
+
+# New-group candidates are only reused when the aggregate returns its direct input unchanged.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k, min(abs(v)) AS v) AS (
+	VALUES (1, -5)
+	UNION
+	SELECT k + 1, -v FROM t WHERE k < 2
+)
+TABLE t;
+----
+1	5
+2	5
+
+# Changes in later payload columns are detected after earlier columns narrow the candidate rows.
+query III rowsort
+WITH RECURSIVE t(k, a, b) USING KEY (k) AS (
+	VALUES (1, 0, 0), (2, 0, 0)
+	UNION
+	SELECT k,
+	       CASE WHEN k = 1 THEN 1 ELSE a END,
+	       CASE WHEN k = 2 THEN b + 1 ELSE b END
+	FROM t
+	WHERE (k = 1 AND a = 0) OR (k = 2 AND b < 2)
+)
+TABLE t;
+----
+1	1	0
+2	0	2
+
+# Aggregate output types are visible through the recursive CTE name.
+query I
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1::INTEGER)
+	UNION
+	SELECT k, 1 FROM t WHERE total < 3
+)
+SELECT total FROM t;
+----
+3
+
+query IIT
+WITH RECURSIVE t(k, total, recursive_type) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1::INTEGER, 'anchor')
+	UNION
+	SELECT k, 1, typeof(total) FROM t WHERE total < 2
+)
+SELECT k, total, recursive_type FROM t;
+----
+1	2	HUGEINT
+
+# Multiple candidates for a new key are all applied before its finalized row is emitted.
+query II
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	VALUES (1, 1), (1, 2)
+	UNION
+	SELECT k, 0 FROM t WHERE false
+)
+TABLE t;
+----
+1	3
+
+# Preaggregation combines duplicate-sensitive and extremum states for the same epoch groups.
+query IIIII
+WITH RECURSIVE t(k, total, n, lo, hi)
+USING KEY (k, sum(total), count(n) AS n, min(lo), max(hi)) AS (
+	VALUES (1, 1::BIGINT, 1::BIGINT, 10, 10), (1, 2::BIGINT, 1::BIGINT, 9, 11)
+	UNION
+	SELECT k, x, 1, x, x
+	FROM t, (VALUES (8), (12)) candidates(x)
+	WHERE n = 2
+)
+TABLE t;
+----
+1	23	4	8	12
+
+# Arena-backed aggregate state transferred from an epoch remains valid after that epoch table is destroyed.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, repeat('z', 32))
+	UNION
+	SELECT k, repeat(chr(ascii(v[1]) - 1), 32)
+	FROM t
+	WHERE v > repeat('w', 32)
+)
+TABLE t;
+----
+1	wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+
+# NULL payloads are compared with IS DISTINCT FROM semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, NULL::INTEGER)
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+1	NULL
+
+# NaN and signed zero use the same SQL observable-equality semantics.
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 'NaN'::DOUBLE), (2, -0e0::DOUBLE)
+	UNION
+	SELECT k, CASE WHEN k = 1 THEN 'NaN'::DOUBLE ELSE 0e0::DOUBLE END
+	FROM t
+)
+SELECT count(*), count_if(isnan(v)), count_if(signbit(v)) FROM t;
+----
+2	1	0
+
+# With only key columns, an existing key cannot produce an observable change.
+query I
+WITH RECURSIVE t(k) USING KEY (k) AS (
+	VALUES (1)
+	UNION
+	SELECT k FROM t
+)
+TABLE t;
+----
+1
+
+# A transient aggregate-state change that returns to the old value produces no work.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, bit_xor(v)) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, 1 FROM t, range(2) duplicates(_)
+)
+TABLE t;
+----
+1	0
+
+# Hidden aggregate-state changes do not form work when the finalized value is unchanged.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, avg(v) AS v) AS (
+	VALUES (1, 0), (1, 2)
+	UNION
+	SELECT k, x
+	FROM t, (VALUES (0), (2)) values_(x)
+)
+TABLE t;
+----
+1	1.0
+
+# Explicit order-dependent aggregates retain candidate order instead of preaggregating states.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, first(v) AS v) AS (
+	VALUES (1, 10)
+	UNION
+	SELECT k, v + 1 FROM t WHERE v = 10
+)
+TABLE t;
+----
+1	10
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, string_agg(v, '') AS v) AS (
+	VALUES (1, 'a')
+	UNION
+	SELECT k, v || 'b' FROM t WHERE length(v) < 4
+)
+TABLE t;
+----
+1	aabaabb
+
+# One order-dependent payload keeps the complete aggregate set on the candidate-update path.
+query III
+WITH RECURSIVE t(k, lo, latest) USING KEY (k, min(lo)) AS (
+	VALUES (1, 5, 0)
+	UNION
+	SELECT k, lo - 1, latest + 1 FROM t WHERE lo > 3
+)
+TABLE t;
+----
+1	3	2
+
+# Direct delta tracking snapshots an existing group only once across candidate chunks.
+query II
+WITH RECURSIVE t(k, lo, latest) USING KEY (k, min(lo)) AS (
+	VALUES (1, 100000::BIGINT, 0::BIGINT)
+	UNION
+	SELECT k, i, i
+	FROM t, range(current_setting('standard_vector_size')::BIGINT * 2 + 1) r(i)
+	WHERE lo = 100000
+)
+SELECT count(*), min(lo) FROM t;
+----
+1	0
+
+# Address tracking is cleared between wide and narrow epochs without retaining stale groups.
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0::BIGINT FROM range(1, 101) r(i)
+	UNION
+	(
+		SELECT k, 1 FROM t WHERE v = 0
+		UNION ALL
+		SELECT k, v + 1 FROM t WHERE k = 1 AND v IN (1, 3)
+		UNION ALL
+		SELECT i, 3 FROM t, range(1, 101) r(i) WHERE t.k = 1 AND t.v = 2
+	)
+)
+SELECT count(*), sum(v)::BIGINT, max(v) FROM t;
+----
+100	301	4
+
+# Composite and NULL keys use the keyed hash table's NOT DISTINCT lookup semantics.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
+	VALUES (1, NULL::INTEGER, 5), (1, 2, 10)
+	UNION
+	SELECT k1, k2, v FROM t
+)
+TABLE t;
+----
+1	2	10
+1	NULL	5
+
+# Nested payload equality uses SQL value semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, [1, NULL]::INTEGER[])
+	UNION
+	SELECT k, [1, NULL]::INTEGER[] FROM t
+)
+TABLE t;
+----
+1	[1, NULL]
+
+# An empty anchor terminates without executing a recursive epoch.
+query I
+WITH RECURSIVE t(k) USING KEY (k) AS (
+	SELECT i FROM range(0) r(i)
+	UNION
+	SELECT k FROM t
+)
+SELECT count(*) FROM t;
+----
+0
+
+# Correlated invocations construct and terminate their deltas independently.
+query II rowsort
+SELECT limit_value, final_value
+FROM range(4) limits(limit_value), LATERAL (
+	WITH RECURSIVE t(k, v) USING KEY (k) AS (
+		VALUES (1, 0)
+		UNION
+		SELECT k, v + 1 FROM t WHERE v < limit_value
+	)
+	SELECT v AS final_value FROM t
+);
+----
+0	0
+1	1
+2	2
+3	3
+
+# Complete-key probes over recurring state remain eligible for the specialized join.
+query II
+WITH RECURSIVE t(k, total) USING KEY (k, sum(total)) AS (
+	SELECT i, 1 FROM range(100) r(i)
+	UNION
+	SELECT n.k, r.total * 0 + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.total < 3
+)
+SELECT count(*), sum(total) FROM t;
+----
+100	300
+
+# Plain UNION retains partial-key probes and updates the index for newly finalized keys.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
+	VALUES (1, 1, 1)
+	UNION
+	SELECT n.k1, n.k2 + 1, n.v
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 < 3
+)
+TABLE t;
+----
+1	1	1
+1	2	1
+1	3	2
+
+# Nested invocations own independent touched-key and lookup state.
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k, v) USING KEY (k) AS (
+			SELECT a, 0 FROM outer_cte WHERE b < 4
+			UNION
+			SELECT k, v FROM inner_cte
+		)
+		SELECT k, b + 1
+		FROM inner_cte, outer_cte
+		WHERE b < 4
+	)
+)
+TABLE outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+# USING KEY still combines both inputs when neither side references the CTE.
+statement ok
+SET threads=1;
+
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 1), (1, 2)
+	UNION
+	VALUES (1, 3)
+)
+SELECT count(*), min(v) = max(v), min(v) IN (2, 3) FROM t;
+----
+1	true	true
+
+# Delta equality follows SQL collation semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT 1, 'a' COLLATE nocase
+	UNION
+	SELECT CASE ascii(v) WHEN 97 THEN 1 ELSE 2 END, upper(v) FROM t
+)
+TABLE t;
+----
+1	A
+
+statement ok
+SET default_collation='nocase';
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 'a')
+	UNION
+	SELECT CASE ascii(v) WHEN 97 THEN 1 ELSE 2 END, upper(v) FROM t
+)
+TABLE t;
+----
+1	A
+
+statement ok
+PREPARE collated_delta AS
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 'a')
+	UNION
+	SELECT CASE ascii(v) WHEN 97 THEN 1 ELSE 2 END, upper(v) FROM t
+)
+TABLE t;
+
+statement ok
+SET default_collation='';
+
+query II
+EXECUTE collated_delta;
+----
+1	A
+
+statement ok
+DEALLOCATE collated_delta;
+
+# Nested collations use the same equality transformation as bound comparisons.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT 1, ['a' COLLATE nocase]
+	UNION
+	SELECT CASE ascii(v[1]) WHEN 97 THEN 1 ELSE 2 END, ['A' COLLATE nocase] FROM t
+)
+TABLE t;
+----
+1	[A]
+
+# A collated later payload is compared only for rows that matched earlier payloads.
+query III rowsort
+WITH RECURSIVE t(k, n, v) USING KEY (k) AS (
+	SELECT * FROM (VALUES (1, 0, 'a' COLLATE nocase), (2, 0, 'a' COLLATE nocase))
+	UNION
+	SELECT CASE ascii(v) WHEN 97 THEN k ELSE k + 10 END,
+	       CASE WHEN ascii(v) = 97 AND k = 1 THEN 1 ELSE n END,
+	       upper(v)
+	FROM t
+	WHERE k < 10
+)
+TABLE t;
+----
+1	1	A
+11	1	A
+2	0	A
+
+# Aggregate multiplicity and output column order survive the non-recursive lowering.
+query III rowsort
+WITH RECURSIVE t(v, k2, k1) USING KEY (k1, k2, sum(v)) AS (
+	VALUES (1, 20, 10), (2, 20, 10)
+	UNION
+	VALUES (3, 20, 10), (4, 21, 10)
+)
+TABLE t;
+----
+4	21	10
+6	20	10
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, sum(v)) AS (
+	VALUES (1, 1), (1, 1)
+	UNION
+	VALUES (1, 1)
+)
+TABLE t;
+----
+1	3
+
+# Collated keys use GROUP BY equality in the non-recursive lowering.
+query ITI
+WITH RECURSIVE t(k, v) USING KEY (k, sum(v)) AS (
+	SELECT 'a' COLLATE nocase, 1
+	UNION
+	SELECT 'A' COLLATE nocase, 2
+)
+SELECT count(*), min(lower(k)), sum(v) FROM t;
+----
+1	a	3
+
+statement ok
+PRAGMA disable_optimizer;
+
+query ITI
+WITH RECURSIVE t(k, v) USING KEY (k, sum(v)) AS (
+	SELECT 'a' COLLATE nocase, 1
+	UNION
+	SELECT 'A' COLLATE nocase, 2
+)
+SELECT count(*), min(lower(k)), sum(v) FROM t;
+----
+1	a	3
+
+statement ok
+PRAGMA enable_optimizer;
+
+query II
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v)) AS (
+	SELECT * FROM (VALUES ('a' COLLATE nocase, 1, 1), ('A' COLLATE nocase, 1, 2))
+	UNION
+	SELECT 'A' COLLATE nocase, 2, 4
+)
+SELECT count(*), sum(v) FROM t;
+----
+2	7
+
+statement ok
+SET default_collation='nocase';
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, sum(v)) AS (
+	VALUES ('a', 1)
+	UNION
+	VALUES ('A', 2)
+)
+SELECT count(*), sum(v) FROM t;
+----
+1	3
+
+statement ok
+SET default_collation='';
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, sum(v)) AS (
+	SELECT ['a' COLLATE nocase], 1
+	UNION
+	SELECT ['A' COLLATE nocase], 2
+)
+SELECT count(*), sum(v) FROM t;
+----
+1	3
+
+# Recurring keyed state uses the same normalized identity while retaining an original key representative.
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION ALL
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT (NULL::VARCHAR) COLLATE nocase, 1
+	UNION
+	SELECT k, v FROM t
+)
+TABLE t;
+----
+NULL	1
+
+# Default collations are bound into prepared recursive key normalizers.
+statement ok
+SET default_collation='nocase';
+
+statement ok
+PREPARE collated_recurring_key AS
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES ('a', 2)
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+
+statement ok
+SET default_collation='';
+
+query TI
+EXECUTE collated_recurring_key;
+----
+a	0
+
+statement ok
+DEALLOCATE collated_recurring_key;
+
+# First-column LIST and ARRAY hashes publish their cardinality for recurring-state lookups.
+query IIT
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT ['a' COLLATE nocase], 2
+	UNION
+	SELECT ['A' COLLATE nocase], v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), min(v), min(k[1]) FROM t;
+----
+1	0	a
+
+query IIT
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT array_value('a' COLLATE nocase), 2
+	UNION
+	SELECT array_value('A' COLLATE nocase), v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), min(v), min(k[1]) FROM t;
+----
+1	0	a
+
+# Normalized identity composes with uncollated and NULL key columns.
+query IIIT
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
+	SELECT * FROM (VALUES ('a' COLLATE nocase, NULL::INTEGER, 2), ('A' COLLATE nocase, 1, 3))
+	UNION
+	SELECT upper(k1), k2, v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), sum(v), count(*) FILTER (WHERE k2 IS NULL), min(lower(k1)) FROM t;
+----
+2	0	1	a
+
+# Epoch preaggregation groups differently represented copies of one recurring key together.
+query ITI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT CASE WHEN i % 2 = 0 THEN upper(k) ELSE k END, v - 1
+	FROM t, range(current_setting('standard_vector_size')::BIGINT * 4) r(i)
+	WHERE v > 0
+)
+SELECT count(*), min(lower(k)), min(v) FROM t;
+----
+1	a	0
+
+# Complete and partial direct probes normalize collated probe keys before using the recurring hash table.
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(n.k), r.v - 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v > 0
+)
+TABLE t;
+----
+a	0
+
+query ITI
+WITH RECURSIVE t(label, id, v) USING KEY (label, id, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 1, 2
+	UNION
+	SELECT upper(n.label), n.id, r.v - 1
+	FROM t n JOIN recurring.t r ON r.label = n.label
+	WHERE n.v > 0
+)
+SELECT count(*), min(lower(label)), min(v) FROM t;
+----
+1	a	0
+
+# Preaggregation and partial-key probes share stable recurring group addresses.
+query III
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, min(v)) AS (
+	SELECT i, i % 4, 2
+	FROM range(current_setting('standard_vector_size')::BIGINT) r(i), range(8) duplicates(_)
+	UNION
+	SELECT n.k1, n.k2, r.v - 1
+	FROM (SELECT t.*, duplicates._ FROM t, range(8) duplicates(_)) n
+	JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v > 0
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT, sum(v), max(v) FROM t;
+----
+1	0	0
+
+# UNION ALL retains candidate-frontier semantics.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 3
+)
+TABLE t;
+----
+1	3
+
+# Delta construction remains correct when candidate production is parallel.
+statement ok
+SET threads=4;
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT i, 100 FROM range(10000) r(i)
+	UNION
+	SELECT k, v - delta
+	FROM t, range(2) offsets(delta)
+	WHERE v > 98
+)
+SELECT count(*), sum(v) FROM t;
+----
+10000	980000
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT CASE WHEN i % 2 = 0 THEN 'a' ELSE 'A' END COLLATE nocase, 2
+	FROM range(10000) r(i)
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+SELECT count(*), sum(v) FROM t;
+----
+1	0
+
+# The existing logical union flag preserves the new behavior through serializer verification.
+statement ok
+SET debug_verify_serializer=true;
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 5)
+	UNION
+	SELECT k, v + 1 FROM t
+)
+TABLE t;
+----
+1	5
+
+query TI
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT 'a' COLLATE nocase, 2
+	UNION
+	SELECT upper(k), v - 1 FROM t WHERE v > 0
+)
+TABLE t;
+----
+a	0
+
+statement ok
+SET debug_verify_serializer=false;
+
+# The temporary compatibility setting was removed with the implementation of UNION semantics.
+statement error
+SET deprecated_using_key_syntax='UNION_AS_UNION_ALL';
+----
+<REGEX>:.*unrecognized configuration parameter.*deprecated_using_key_syntax.*

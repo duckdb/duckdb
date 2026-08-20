@@ -167,16 +167,6 @@ void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 }
 
 //===----------------------------------------------------------------------===//
-// Deprecated Using Key Syntax
-//===----------------------------------------------------------------------===//
-void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
-	}
-	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Dialect Compatibility Mode
 //===----------------------------------------------------------------------===//
 void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -265,6 +255,16 @@ void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value 
 		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
 	}
 	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Show Behavior
+//===----------------------------------------------------------------------===//
+void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("show_behavior setting cannot be NULL");
+	}
+	EnumUtil::FromString<ShowBehaviorType>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

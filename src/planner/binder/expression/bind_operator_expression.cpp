@@ -133,9 +133,10 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
 			    !i_exp->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (const_exp.GetValueMutable().TryCastAs(context, LogicalType::UINTEGER)) {
+				auto uinteger_value = const_exp.GetValue().TryCastAs(context, LogicalType::UINTEGER);
+				if (uinteger_value) {
 					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
-					auto index = UIntegerValue::Get(const_exp.GetValueMutable());
+					auto index = UIntegerValue::Get(*uinteger_value);
 					const_exp.GetValueMutable() = StringUtil::Format("$[%lld]", index);
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				} else if (const_exp.GetReturnType().id() == LogicalType::VARCHAR) {

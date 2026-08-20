@@ -165,7 +165,7 @@ SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'i'}, {'v1':
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR), {'v1': 'i'}, NULL);
 ----
-<REGEX>:.*Binder Error.*Missing target value v2.*
+<REGEX>:.*Binder Error.*Missing target value "v2".*
 
 statement error
 SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, struct_val)

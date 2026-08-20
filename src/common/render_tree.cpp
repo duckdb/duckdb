@@ -19,6 +19,8 @@ struct PipelineRenderNode {
 
 namespace {
 
+using duckdb::LogicalOperator;
+using duckdb::LogicalOperatorType;
 using duckdb::MaxValue;
 using duckdb::PhysicalDelimJoin;
 using duckdb::PhysicalOperator;
@@ -27,14 +29,40 @@ using duckdb::PhysicalPositionalScan;
 using duckdb::PipelineRenderNode;
 using duckdb::RenderTreeNode;
 
+//! Secure views must not expose anything about their contents - the operators inside the view are never rendered,
+//! regardless of the output format. For the profiling tree the subtree has already been folded into the boundary
+//! node by the query profiler, so there is nothing left to hide there.
+template <class T>
+static bool HidesChildren(const T &op) {
+	return false;
+}
+
+template <>
+bool HidesChildren(const LogicalOperator &op) {
+	return op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW;
+}
+
+template <>
+bool HidesChildren(const PhysicalOperator &op) {
+	return op.type == PhysicalOperatorType::SECURE_VIEW;
+}
+
+template <>
+bool HidesChildren(const PipelineRenderNode &op) {
+	return HidesChildren(op.op);
+}
+
 class TreeChildrenIterator {
 public:
 	template <class T>
 	static bool HasChildren(const T &op) {
-		return !op.children.empty();
+		return !HidesChildren(op) && !op.children.empty();
 	}
 	template <class T>
 	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
+		if (HidesChildren(op)) {
+			return;
+		}
 		for (auto &child : op.children) {
 			callback(*child);
 		}
@@ -43,11 +71,14 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	return !op.GetChildren().empty();
+	return !HidesChildren(op) && !op.GetChildren().empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
                                    const std::function<void(const PhysicalOperator &child)> &callback) {
+	if (HidesChildren(op)) {
+		return;
+	}
 	for (auto &child : op.GetChildren()) {
 		callback(child);
 	}
@@ -55,13 +86,13 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PipelineRenderNode &op) {
-	return op.child.get();
+	return !HidesChildren(op) && op.child.get();
 }
 
 template <>
 void TreeChildrenIterator::Iterate(const PipelineRenderNode &op,
                                    const std::function<void(const PipelineRenderNode &child)> &callback) {
-	if (op.child) {
+	if (op.child && !HidesChildren(op)) {
 		callback(*op.child);
 	}
 }

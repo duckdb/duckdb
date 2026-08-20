@@ -46,7 +46,7 @@ unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindI
 			auto compression_str = ParseStringOption(option_values[0], option_name);
 			result->compression_type = FileCompressionTypeFromString(compression_str);
 		} else {
-			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): %s", option_name);
+			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): %s", SQLIdentifier(option_name));
 		}
 	}
 

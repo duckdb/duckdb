@@ -105,7 +105,7 @@ Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) 
 	auto lookup = secret_map.find(key);
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {
-			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
+			throw InternalException("Failed to fetch key %s from secret %s of type %s", key, name, type);
 		}
 		return Value();
 	}
@@ -159,7 +159,7 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 
 	if (secret_match.HasMatch()) {
-		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+		secret = secret_match.GetSecret().Cast<KeyValueSecret>();
 		secret_entry = std::move(secret_match.secret_entry);
 	}
 }

@@ -97,7 +97,7 @@ SELECT * FROM read_parquet('{TEST_DIR}/encrypted256.parquet', encryption_config=
 ----
 42
 
-# encrypted parquet metadata cache hits must initialize the reader encryption state
+# encrypted parquet metadata cache hits must initialize encryption state and not skip encryption checks
 statement ok
 SET parquet_metadata_cache=true
 
@@ -113,6 +113,59 @@ query I
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key256'})
 ----
 84
+
+query III
+SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet',
+	encryption_config={footer_key: 'key256'})
+----
+1	84	84
+
+# with the correct key, the cached metadata can still be used for metadata statistics
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet',
+	encryption_config={footer_key: 'key256'})
+----
+physical_plan	<REGEX>:.*Column Data Scan.*
+
+# without a key, cached metadata statistics must not be used to answer the aggregate
+statement error
+SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet')
+----
+<REGEX>:.*Invalid Input Error: File '.*encrypted_metadata_cache.parquet' is encrypted, but 'encryption_config' was not set.*
+
+# with the wrong key, cached metadata statistics must not be used to answer the aggregate
+statement error
+SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet',
+	encryption_config={footer_key: 'key192'})
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+# a wrong key must fail before cached row group statistics can prune the scan
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})
+WHERE i > 100
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+statement ok
+COPY (SELECT 168 i) TO '{TEST_DIR}/plain_metadata_cache.parquet'
+
+query III
+SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet')
+----
+1	168	168
+
+# plain parquet metadata cache hits must still support row group scans
+query I
+SELECT * FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet')
+----
+168
+
+statement error
+SELECT count(*), min(i), max(i) FROM read_parquet('{TEST_DIR}/plain_metadata_cache.parquet',
+	encryption_config={footer_key: 'key256'})
+----
+<REGEX>:.*Invalid Input Error: File '.*plain_metadata_cache.parquet' is not encrypted, but 'encryption_config' was set.*
 
 statement error
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})

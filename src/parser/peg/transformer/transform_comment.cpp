@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		column_name = Identifier(identifier.back());
 		identifier.pop_back();
 		if (identifier.empty()) {
-			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
+			throw ParserException("Invalid column reference: %s", SQLIdentifier(column_name));
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
 		info = make_uniq<SetColumnCommentInfo>(qualified_name.Catalog(), qualified_name.Schema(), qualified_name.Name(),

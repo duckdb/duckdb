@@ -43,7 +43,7 @@ LogicalType::LogicalType() : LogicalType(LogicalTypeId::INVALID) {
 LogicalType::LogicalType(LogicalTypeId id) : id_(id) {
 	physical_type_ = GetInternalType();
 }
-LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p)
+LogicalType::LogicalType(LogicalTypeId id, shared_ptr<const ExtraTypeInfo> type_info_p)
     : id_(id), type_info_(std::move(type_info_p)) {
 	physical_type_ = GetInternalType();
 }
@@ -1288,7 +1288,7 @@ void LogicalType::Serialize(Serializer &serializer) const {
 		serialized_id = LogicalTypeId::STRUCT;
 	}
 	serializer.WriteProperty<LogicalTypeId>(100, "id", serialized_id);
-	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
+	serializer.WritePropertyWithDefault<shared_ptr<const ExtraTypeInfo>>(101, "type_info", type_info_);
 }
 
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
@@ -1335,12 +1335,25 @@ LogicalType LogicalType::DeepCopy() const {
 	return copy;
 }
 
-void LogicalType::SetAlias(string alias) {
+LogicalType LogicalType::WithAlias(string alias) const {
 	if (!type_info_) {
-		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
-	} else {
-		type_info_->alias = std::move(alias);
+		if (alias.empty()) {
+			// a type without type info is equivalent to a generic type info with an empty alias
+			return *this;
+		}
+		LogicalType result = *this;
+		result.type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
+		return result;
 	}
+	if (type_info_->alias == alias) {
+		// avoid copying the (potentially expensive) type info if the alias does not change
+		return *this;
+	}
+	auto new_info = type_info_->Copy();
+	new_info->alias = std::move(alias);
+	LogicalType result = *this;
+	result.type_info_ = std::move(new_info);
+	return result;
 }
 
 string LogicalType::GetAlias() const {
@@ -1371,18 +1384,13 @@ optional_ptr<const ExtensionTypeInfo> LogicalType::GetExtensionInfo() const {
 	return nullptr;
 }
 
-optional_ptr<ExtensionTypeInfo> LogicalType::GetExtensionInfo() {
-	if (type_info_ && type_info_->extension_info) {
-		return type_info_->extension_info.get();
-	}
-	return nullptr;
-}
-
-void LogicalType::SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info) {
-	if (!type_info_) {
-		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
-	}
-	type_info_->extension_info = std::move(info);
+LogicalType LogicalType::WithExtensionInfo(unique_ptr<ExtensionTypeInfo> info) const {
+	auto new_info =
+	    type_info_ ? type_info_->Copy() : make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+	new_info->extension_info = std::move(info);
+	LogicalType result = *this;
+	result.type_info_ = std::move(new_info);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1679,9 +1687,7 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 // JSON Type
 //===--------------------------------------------------------------------===//
 LogicalType LogicalType::JSON() {
-	auto json_type = LogicalType(LogicalTypeId::VARCHAR);
-	json_type.SetAlias(JSON_TYPE_NAME);
-	return json_type;
+	return LogicalType(LogicalTypeId::VARCHAR).WithAlias(JSON_TYPE_NAME);
 }
 
 bool LogicalType::IsJSONType() const {
@@ -1807,8 +1813,7 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
-	Value copy = literal_info.constant_value;
-	return copy.DefaultTryCastAs(target);
+	return literal_info.constant_value.DefaultTryCastAs(target).has_value();
 }
 
 LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
@@ -1885,7 +1890,7 @@ bool GeoType::HasCRS(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
 		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
-		// type that was created without a CRS (SetAlias attaches a generic type info)
+		// type that was created without a CRS (WithAlias attaches a generic type info)
 		return false;
 	}
 	const auto &geo_info = info->Cast<GeoTypeInfo>();

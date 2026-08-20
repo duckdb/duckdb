@@ -70,7 +70,7 @@ void ExtensionLoader::CreateSchema(const Identifier &name) const {
 void ExtensionLoader::UseDefaultSchema(const Identifier &name) {
 	if (loader_info.extension_schema != DEFAULT_SCHEMA && name != DEFAULT_SCHEMA &&
 	    loader_info.extension_schema != name) {
-		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
+		throw InvalidInputException("Cannot set extension schema to %s, schema is already set to %s", name,
 		                            loader_info.extension_schema);
 	}
 	if (name == "pg_catalog") {

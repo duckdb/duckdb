@@ -9,18 +9,19 @@
 
 namespace duckdb {
 
-RecursiveCTEKeyJoinLayout::RecursiveCTEKeyJoinLayout(PhysicalRecursiveCTEStateScan &state_scan_p,
-                                                     PhysicalOperator &probe, bool state_on_left_p,
-                                                     vector<idx_t> state_key_indices_p,
-                                                     vector<idx_t> probe_key_indices_p,
-                                                     vector<idx_t> left_projection_map_p,
-                                                     vector<idx_t> right_projection_map_p)
+RecursiveCTEKeyJoinLayout::RecursiveCTEKeyJoinLayout(
+    PhysicalRecursiveCTEStateScan &state_scan_p, PhysicalOperator &probe, bool state_on_left_p,
+    vector<idx_t> state_key_indices_p, vector<idx_t> probe_key_indices_p, vector<ExpressionType> key_comparisons_p,
+    vector<unique_ptr<Expression>> probe_key_normalizers_p, vector<idx_t> left_projection_map_p,
+    vector<idx_t> right_projection_map_p)
     : state_scan(state_scan_p), state_on_left(state_on_left_p), state_key_indices(std::move(state_key_indices_p)),
-      probe_key_indices(std::move(probe_key_indices_p)), left_projection_map(std::move(left_projection_map_p)),
-      right_projection_map(std::move(right_projection_map_p)),
+      probe_key_indices(std::move(probe_key_indices_p)), key_comparisons(std::move(key_comparisons_p)),
+      left_projection_map(std::move(left_projection_map_p)), right_projection_map(std::move(right_projection_map_p)),
+      probe_key_normalizers(std::move(probe_key_normalizers_p)),
       state_key_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX),
       state_payload_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX) {
 	if (state_key_indices.empty() || state_key_indices.size() != probe_key_indices.size() ||
+	    state_key_indices.size() != key_comparisons.size() ||
 	    state_key_indices.size() > state_scan.distinct_idx.size() ||
 	    !std::is_sorted(state_key_indices.begin(), state_key_indices.end()) ||
 	    std::adjacent_find(state_key_indices.begin(), state_key_indices.end()) != state_key_indices.end()) {
@@ -28,20 +29,41 @@ RecursiveCTEKeyJoinLayout::RecursiveCTEKeyJoinLayout(PhysicalRecursiveCTEStateSc
 	}
 	for (idx_t key_idx = 0; key_idx < state_scan.distinct_idx.size(); key_idx++) {
 		const auto state_idx = state_scan.distinct_idx[key_idx];
-		if (state_idx >= state_scan.GetTypes().size()) {
+		if (state_idx >= state_scan.GetTypes().size() || key_idx >= state_scan.hash_key_types.size()) {
 			throw InternalException("Invalid USING KEY state key ordinal");
 		}
 		state_key_map[state_idx] = key_idx;
-		key_types.push_back(state_scan.GetTypes()[state_idx]);
+		key_types.push_back(state_scan.hash_key_types[key_idx]);
 	}
 	for (idx_t join_key_idx = 0; join_key_idx < state_key_indices.size(); join_key_idx++) {
 		const auto state_key_idx = state_key_indices[join_key_idx];
 		const auto probe_key_idx = probe_key_indices[join_key_idx];
-		if (state_key_idx >= key_types.size() || probe_key_idx >= probe.GetTypes().size() ||
-		    key_types[state_key_idx] != probe.GetTypes()[probe_key_idx]) {
+		if (state_key_idx >= key_types.size() || probe_key_idx >= probe.GetTypes().size()) {
 			throw InternalException("Invalid USING KEY join key ordinal");
 		}
+		const auto state_column_idx = state_scan.distinct_idx[state_key_idx];
+		const auto &raw_probe_type = state_scan.GetTypes()[state_column_idx];
+		if (raw_probe_type != probe.GetTypes()[probe_key_idx]) {
+			throw InternalException("Invalid USING KEY join key type");
+		}
+		if (key_comparisons[join_key_idx] != ExpressionType::COMPARE_EQUAL &&
+		    key_comparisons[join_key_idx] != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			throw InternalException("Invalid USING KEY join comparison");
+		}
+		has_null_safe_comparisons =
+		    has_null_safe_comparisons || key_comparisons[join_key_idx] == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		raw_probe_key_types.push_back(raw_probe_type);
 		probe_key_types.push_back(key_types[state_key_idx]);
+	}
+	if (!probe_key_normalizers.empty()) {
+		if (probe_key_normalizers.size() != probe_key_types.size()) {
+			throw InternalException("Invalid USING KEY probe key normalizers");
+		}
+		for (idx_t key_idx = 0; key_idx < probe_key_normalizers.size(); key_idx++) {
+			if (probe_key_normalizers[key_idx]->GetReturnType() != probe_key_types[key_idx]) {
+				throw InternalException("Invalid USING KEY normalized probe key type");
+			}
+		}
 	}
 	for (idx_t payload_idx = 0; payload_idx < state_scan.payload_idx.size(); payload_idx++) {
 		const auto state_idx = state_scan.payload_idx[payload_idx];
@@ -72,11 +94,13 @@ bool RecursiveCTEKeyJoinLayout::IsPartial() const {
 PhysicalRecursiveCTEKeyJoin::PhysicalRecursiveCTEKeyJoin(
     PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &probe,
     PhysicalRecursiveCTEStateScan &state_scan_p, bool state_on_left_p, vector<idx_t> state_key_indices_p,
-    vector<idx_t> probe_key_indices_p, vector<idx_t> left_projection_map_p, vector<idx_t> right_projection_map_p,
-    idx_t estimated_cardinality)
+    vector<idx_t> probe_key_indices_p, vector<ExpressionType> key_comparisons_p,
+    vector<unique_ptr<Expression>> probe_key_normalizers_p, vector<idx_t> left_projection_map_p,
+    vector<idx_t> right_projection_map_p, idx_t estimated_cardinality)
     : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_KEY_JOIN, op.types, estimated_cardinality),
       layout(state_scan_p, probe, state_on_left_p, std::move(state_key_indices_p), std::move(probe_key_indices_p),
-             std::move(left_projection_map_p), std::move(right_projection_map_p)) {
+             std::move(key_comparisons_p), std::move(probe_key_normalizers_p), std::move(left_projection_map_p),
+             std::move(right_projection_map_p)) {
 	children.push_back(probe);
 }
 
@@ -101,16 +125,24 @@ struct RecursiveCTEKeyJoinHashTableState {
 class RecursiveCTEKeyJoinState : public CachingOperatorState {
 public:
 	RecursiveCTEKeyJoinState(ClientContext &context, const PhysicalRecursiveCTEKeyJoin &op)
-	    : non_null_sel(STANDARD_VECTOR_SIZE), found_key_sel(STANDARD_VECTOR_SIZE),
+	    : valid_probe_sel(STANDARD_VECTOR_SIZE), found_key_sel(STANDARD_VECTOR_SIZE),
 	      matched_input_sel(STANDARD_VECTOR_SIZE), candidate_input_sel(STANDARD_VECTOR_SIZE),
 	      candidate_match_sel(STANDARD_VECTOR_SIZE), candidate_addresses(LogicalType::POINTER),
 	      matched_addresses(LogicalType::POINTER), probe_hashes(LogicalType::HASH),
 	      key_formats(op.Layout().ProbeKeyTypes().size()), arena(Allocator::Get(context)), row_state(arena) {
 		probe_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
+		if (!op.Layout().ProbeKeyNormalizers().empty()) {
+			probe_key_executor = make_uniq<ExpressionExecutor>(context);
+			raw_probe_keys.Initialize(Allocator::Get(context), op.Layout().RawProbeKeyTypes());
+			for (auto &normalizer : op.Layout().ProbeKeyNormalizers()) {
+				probe_key_executor->AddExpression(*normalizer);
+			}
+		}
 		lookup_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
 		candidate_keys.Initialize(Allocator::Get(context), op.Layout().KeyTypes());
 		state_keys.Initialize(Allocator::Get(context), op.Layout().KeyTypes());
-		payload_rows.Initialize(Allocator::Get(context), op.Layout().PayloadTypes());
+		aggregate_rows.Initialize(Allocator::Get(context), op.Layout().StateScan().aggregate_types);
+		state_rows.Initialize(Allocator::Get(context), op.Layout().StateScan().GetTypes());
 	}
 
 	OperatorResultType Execute(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
@@ -135,17 +167,19 @@ private:
 	                                           RecursiveCTEState &recursive_state);
 	RecursiveCTEKeyJoinResult ProbePartialKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
 	                                          RecursiveCTEState &recursive_state);
-	void FinalizePayload(const RecursiveCTEKeyJoinLayout &layout, RecursiveCTEState &recursive_state,
-	                     idx_t match_count);
+	void ExtractProbeKeys(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout);
+	void FinalizeStateRows(RecursiveCTEState &recursive_state, idx_t match_count);
 	void EmitResult(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout, idx_t match_count);
 
 private:
 	DataChunk probe_keys;
+	DataChunk raw_probe_keys;
 	DataChunk lookup_keys;
 	DataChunk candidate_keys;
 	DataChunk state_keys;
-	DataChunk payload_rows;
-	SelectionVector non_null_sel;
+	DataChunk aggregate_rows;
+	DataChunk state_rows;
+	SelectionVector valid_probe_sel;
 	SelectionVector found_key_sel;
 	SelectionVector matched_input_sel;
 	SelectionVector candidate_input_sel;
@@ -154,11 +188,12 @@ private:
 	Vector matched_addresses;
 	Vector probe_hashes;
 	vector<UnifiedVectorFormat> key_formats;
+	unique_ptr<ExpressionExecutor> probe_key_executor;
 	unique_ptr<RecursiveCTEKeyJoinHashTableState> hash_table_state;
 	ArenaAllocator arena;
 	RowOperationsState row_state;
-	idx_t non_null_position = 0;
-	idx_t non_null_count = 0;
+	idx_t valid_probe_position = 0;
+	idx_t valid_probe_count = 0;
 	idx_t current_probe_input = 0;
 	idx_t current_entry = DConstants::INVALID_INDEX;
 	bool partial_input_initialized = false;
@@ -186,6 +221,34 @@ static idx_t SelectNonNullKeys(DataChunk &keys, vector<UnifiedVectorFormat> &for
 	return result_count;
 }
 
+static idx_t SelectValidProbeKeys(DataChunk &keys, const RecursiveCTEKeyJoinLayout &layout,
+                                  vector<UnifiedVectorFormat> &formats, SelectionVector &result) {
+	const auto &comparisons = layout.KeyComparisons();
+	D_ASSERT(keys.ColumnCount() == comparisons.size());
+	if (!layout.HasNullSafeComparisons()) {
+		return SelectNonNullKeys(keys, formats, result);
+	}
+	for (idx_t key_idx = 0; key_idx < keys.ColumnCount(); key_idx++) {
+		if (comparisons[key_idx] == ExpressionType::COMPARE_EQUAL) {
+			keys.data[key_idx].ToUnifiedFormat(formats[key_idx]);
+		}
+	}
+	idx_t result_count = 0;
+	for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
+		bool valid = true;
+		for (idx_t key_idx = 0; key_idx < comparisons.size(); key_idx++) {
+			if (comparisons[key_idx] == ExpressionType::COMPARE_EQUAL) {
+				auto &format = formats[key_idx];
+				valid = valid && format.validity.RowIsValid(format.sel->get_index(row_idx));
+			}
+		}
+		if (valid) {
+			result.set_index(result_count++, row_idx);
+		}
+	}
+	return result_count;
+}
+
 void RecursiveCTEKeyJoinState::BindHashTable(GroupedAggregateHashTable &hash_table) {
 	if (hash_table_state && hash_table_state->hash_table.get() == &hash_table &&
 	    hash_table_state->layout.get() == &hash_table.GetLayout()) {
@@ -200,28 +263,23 @@ void RecursiveCTEKeyJoinState::BindHashTable(GroupedAggregateHashTable &hash_tab
 RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &input,
                                                                      const RecursiveCTEKeyJoinLayout &layout,
                                                                      RecursiveCTEState &recursive_state) {
-	const auto &probe_key_indices = layout.ProbeKeyIndices();
-	probe_keys.Reset();
-	for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
-		probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
-	}
-	probe_keys.CheckCardinality(input.size());
-	const auto current_non_null_count = SelectNonNullKeys(probe_keys, key_formats, non_null_sel);
-	if (current_non_null_count == 0) {
+	ExtractProbeKeys(input, layout);
+	const auto current_probe_count = SelectValidProbeKeys(probe_keys, layout, key_formats, valid_probe_sel);
+	if (current_probe_count == 0) {
 		return {0, OperatorResultType::NEED_MORE_INPUT};
 	}
 
 	lookup_keys.Reset();
-	if (current_non_null_count == input.size()) {
+	if (current_probe_count == input.size()) {
 		lookup_keys.Reference(probe_keys);
 	} else {
-		lookup_keys.Slice(probe_keys, non_null_sel, current_non_null_count);
+		lookup_keys.Slice(probe_keys, valid_probe_sel, current_probe_count);
 	}
 	auto &lookup_state = hash_table_state->lookup_state;
 	auto &hash_table = recursive_state.GetHashTable();
 	const auto match_count = hash_table.LookupGroups(lookup_keys, lookup_state, found_key_sel);
 	if (recursive_state.GetMetrics().Enabled()) {
-		recursive_state.GetMetrics().RecordDirectProbeRows(current_non_null_count);
+		recursive_state.GetMetrics().RecordDirectProbeRows(current_probe_count);
 		recursive_state.GetMetrics().RecordDirectProbeMatches(match_count);
 	}
 	if (match_count == 0) {
@@ -234,7 +292,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &
 	for (idx_t match_idx = 0; match_idx < match_count; match_idx++) {
 		const auto lookup_idx = found_key_sel.get_index_unsafe(match_idx);
 		const auto input_idx =
-		    current_non_null_count == input.size() ? lookup_idx : non_null_sel.get_index_unsafe(lookup_idx);
+		    current_probe_count == input.size() ? lookup_idx : valid_probe_sel.get_index_unsafe(lookup_idx);
 		matched_input_sel.set_index(match_idx, input_idx);
 		matched_address_data[match_idx] = lookup_addresses[lookup_idx];
 	}
@@ -246,31 +304,26 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
                                                                     const RecursiveCTEKeyJoinLayout &layout,
                                                                     RecursiveCTEState &recursive_state) {
 	const auto &state_key_indices = layout.StateKeyIndices();
-	const auto &probe_key_indices = layout.ProbeKeyIndices();
 	auto &index = recursive_state.GetPartialKeyIndex(state_key_indices);
 	auto &match_chunk_state = hash_table_state->match_chunk_state;
 	auto &partial_matcher = hash_table_state->partial_matcher;
 	const auto collect_metrics = recursive_state.GetMetrics().Enabled();
 	if (!partial_input_initialized) {
-		probe_keys.Reset();
-		for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
-			probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
-		}
-		probe_keys.CheckCardinality(input.size());
-		non_null_count = SelectNonNullKeys(probe_keys, key_formats, non_null_sel);
-		if (non_null_count == 0) {
+		ExtractProbeKeys(input, layout);
+		valid_probe_count = SelectValidProbeKeys(probe_keys, layout, key_formats, valid_probe_sel);
+		if (valid_probe_count == 0) {
 			return {0, OperatorResultType::NEED_MORE_INPUT};
 		}
 		probe_keys.Hash(probe_hashes);
-		non_null_position = 0;
+		valid_probe_position = 0;
 		active_probe = false;
 		partial_input_initialized = true;
 		if (collect_metrics) {
-			recursive_state.GetMetrics().RecordDirectProbeRows(non_null_count);
+			recursive_state.GetMetrics().RecordDirectProbeRows(valid_probe_count);
 		}
 	}
 	if (!hash_table_state->partial_matcher_initialized) {
-		vector<ExpressionType> predicates(state_key_indices.size(), ExpressionType::COMPARE_EQUAL);
+		const auto &predicates = layout.KeyComparisons();
 		vector<column_t> columns;
 		for (auto key_idx : state_key_indices) {
 			columns.push_back(key_idx);
@@ -288,10 +341,10 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		const auto hash_data = probe_hashes.Values<hash_t>();
 		while (candidate_count < STANDARD_VECTOR_SIZE) {
 			if (!active_probe) {
-				if (non_null_position >= non_null_count) {
+				if (valid_probe_position >= valid_probe_count) {
 					break;
 				}
-				current_probe_input = non_null_sel.get_index_unsafe(non_null_position++);
+				current_probe_input = valid_probe_sel.get_index_unsafe(valid_probe_position++);
 				current_entry = index.GetHead(hash_data[current_probe_input].GetValue());
 				active_probe = true;
 			}
@@ -313,7 +366,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		if (active_probe && current_entry == DConstants::INVALID_INDEX) {
 			active_probe = false;
 		}
-		const bool has_more = active_probe || non_null_position < non_null_count;
+		const bool has_more = active_probe || valid_probe_position < valid_probe_count;
 		if (candidate_count == 0) {
 			if (collect_metrics) {
 				recursive_state.GetMetrics().RecordPartialProbeChainVisits(chain_visits);
@@ -367,14 +420,28 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 	}
 }
 
-void RecursiveCTEKeyJoinState::FinalizePayload(const RecursiveCTEKeyJoinLayout &layout,
-                                               RecursiveCTEState &recursive_state, idx_t match_count) {
-	payload_rows.Reset();
-	payload_rows.SetChildCardinality(match_count);
-	if (layout.PayloadTypes().empty()) {
+void RecursiveCTEKeyJoinState::ExtractProbeKeys(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout) {
+	probe_keys.Reset();
+	const auto &probe_key_indices = layout.ProbeKeyIndices();
+	if (layout.ProbeKeyNormalizers().empty()) {
+		for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
+			probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
+		}
+		probe_keys.CheckCardinality(input.size());
 		return;
 	}
-	recursive_state.FinalizePayload(row_state, matched_addresses, payload_rows, 0);
+	raw_probe_keys.Reset();
+	for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
+		raw_probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
+	}
+	raw_probe_keys.CheckCardinality(input.size());
+	D_ASSERT(probe_key_executor);
+	probe_key_executor->Execute(raw_probe_keys, probe_keys);
+}
+
+void RecursiveCTEKeyJoinState::FinalizeStateRows(RecursiveCTEState &recursive_state, idx_t match_count) {
+	state_keys.CheckCardinality(match_count);
+	recursive_state.FinalizeStateRows(row_state, matched_addresses, state_keys, aggregate_rows, state_rows);
 }
 
 void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
@@ -387,14 +454,7 @@ void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, c
 	};
 	auto emit_state = [&](const vector<idx_t> &projection_map) {
 		for (auto state_idx : projection_map) {
-			const auto key_idx = layout.StateKeyMap()[state_idx];
-			if (key_idx != DConstants::INVALID_INDEX) {
-				output.data[output_idx++].Reference(state_keys.data[key_idx]);
-				continue;
-			}
-			const auto payload_idx = layout.StatePayloadMap()[state_idx];
-			D_ASSERT(payload_idx != DConstants::INVALID_INDEX);
-			output.data[output_idx++].Reference(payload_rows.data[payload_idx]);
+			output.data[output_idx++].Reference(state_rows.data[state_idx]);
 		}
 	};
 	if (layout.StateOnLeft()) {
@@ -444,17 +504,17 @@ OperatorResultType RecursiveCTEKeyJoinState::ExecuteInternal(DataChunk &input, D
 		    std::chrono::duration_cast<std::chrono::nanoseconds>(gather_end - gather_start).count()));
 	}
 	if constexpr (COLLECT_METRICS) {
-		if (!layout.PayloadTypes().empty()) {
+		if (!layout.StateScan().aggregate_types.empty()) {
 			const auto finalize_start = std::chrono::steady_clock::now();
-			FinalizePayload(layout, recursive_state, result.match_count);
+			FinalizeStateRows(recursive_state, result.match_count);
 			const auto finalize_end = std::chrono::steady_clock::now();
 			recursive_state.GetEpochMetrics().RecordDirectProbePayloadFinalize(NumericCast<idx_t>(
 			    std::chrono::duration_cast<std::chrono::nanoseconds>(finalize_end - finalize_start).count()));
 		} else {
-			FinalizePayload(layout, recursive_state, result.match_count);
+			FinalizeStateRows(recursive_state, result.match_count);
 		}
 	} else {
-		FinalizePayload(layout, recursive_state, result.match_count);
+		FinalizeStateRows(recursive_state, result.match_count);
 	}
 	EmitResult(input, output, layout, result.match_count);
 	return result.result_type;

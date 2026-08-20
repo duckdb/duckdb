@@ -200,3 +200,13 @@ statement error
 SELECT regexp_matches(s, p) FROM regex
 ----
 <REGEX>:.*Invalid Input Error.*missing.*
+
+statement error
+SELECT regexp_full_match(s, p) FROM regex
+----
+<REGEX>:.*Invalid Input Error.*missing.*
+
+statement error
+SELECT regexp_full_match(s, p, 'c') FROM regex
+----
+<REGEX>:.*Invalid Input Error.*missing.*

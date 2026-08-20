@@ -258,6 +258,9 @@ struct BitwiseShiftLeftOperator {
 		if (shift == 0) {
 			return input;
 		}
+		if (input == 0) {
+			return 0;
+		}
 		TA max_value = UnsafeNumericCast<TA>((TA(1) << (max_shift - shift - 1)));
 		if (input >= max_value) {
 			throw OutOfRangeException("Overflow in left shift (%s << %s)", NumericHelper::ToString(input),

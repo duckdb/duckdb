@@ -135,6 +135,13 @@
         "type": "ParquetPrefetchStrategyOption",
         "default": "ParquetPrefetchStrategyOption::AUTO",
         "property": "parquet_options.prefetch_strategy"
+      },
+      {
+        "id": 109,
+        "name": "utf8_validation",
+        "type": "StringColumnReader::Utf8ValidationOption",
+        "default": "StringColumnReader::Utf8ValidationOption::STRICT_UTF8",
+        "property": "parquet_options.utf8_validation_option"
       }
     ],
     "pointer_type": "none"

@@ -265,6 +265,18 @@
     ]
   },
   {
+    "class": "LogicalSecureView",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SECURE_VIEW",
+    "members": [
+      {
+        "id": 200,
+        "name": "view_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",

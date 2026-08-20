@@ -47,10 +47,8 @@ string TypeCatalogEntry::ToSQL() const {
 	ss << SQLIdentifier(name);
 	ss << " AS ";
 
-	auto user_type_copy = user_type;
-
 	// Strip off the potential alias so ToString doesn't just output the alias
-	user_type_copy.SetAlias("");
+	auto user_type_copy = user_type.WithAlias("");
 	D_ASSERT(user_type_copy.GetAlias().empty());
 
 	ss << user_type_copy.ToString();

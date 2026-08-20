@@ -157,6 +157,9 @@ struct JSONReaderScanState {
 	bool is_first_scan = false;
 	//! Whether this is the last batch of the file
 	bool is_last = false;
+	//! Whether the remainder of the file is deliberately not read (everything after a FeatureCollection's
+	//! "features" array), i.e. no further buffers should be read even if the file has more data
+	bool skip_remainder_of_file = false;
 	//! Buffer to reconstruct split values
 	optional_idx batch_index;
 
@@ -292,6 +295,10 @@ private:
 	//! If we have auto-detected, this is the buffer read by the auto-detection
 	AllocatedData auto_detect_data;
 	idx_t auto_detect_data_size = 0;
+
+	//! Whether this file is a GeoJSON FeatureCollection, i.e. the rows live in its "features" array rather than at
+	//! the top level. The array itself is then read using the regular JSONFormat::ARRAY handling
+	bool skip_feature_collection_prefix = false;
 
 	//! The first error we found in the file (if any)
 	unique_ptr<JSONError> error;

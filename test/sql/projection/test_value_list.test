@@ -133,7 +133,7 @@ hello
 statement error
 INSERT INTO varchars VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
 ----
-<REGEX>:.*Binder Error.*table varchars has 1 columns.*
+<REGEX>:.*Binder Error.*table "varchars" has 1 columns.*
 
 statement error
 INSERT INTO varchars (v) VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);

@@ -7,8 +7,10 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
@@ -20,7 +22,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.internal_types);
+	const auto &working_types = !op.key_targets.empty() && !op.union_all ? op.types : op.internal_types;
+	auto working_table = make_shared_ptr<ColumnDataCollection>(context, working_types);
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
@@ -48,6 +51,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	vector<LogicalType> distinct_types, payload_types;
 	vector<idx_t> distinct_idx, payload_idx;
 	vector<unique_ptr<Expression>> payload_aggregates;
+	vector<unique_ptr<Expression>> payload_comparisons;
 
 	// create a group for each target, these are the columns that should be grouped
 	unordered_map<idx_t, idx_t> group_by_references;
@@ -79,6 +83,53 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		}
 	}
 
+	vector<LogicalType> hash_key_types;
+	vector<LogicalType> aggregate_types = payload_types;
+	vector<unique_ptr<Expression>> key_normalizers;
+	vector<bool> key_requires_normalization;
+	vector<idx_t> key_representative_indices(distinct_types.size(), DConstants::INVALID_INDEX);
+	bool has_key_normalizers = false;
+	FunctionBinder function_binder(context);
+	for (idx_t key_idx = 0; key_idx < distinct_types.size(); key_idx++) {
+		unique_ptr<Expression> normalizer = make_uniq<BoundReferenceExpression>(distinct_types[key_idx], key_idx);
+		const auto requires_normalization =
+		    ExpressionBinder::PushCollation(context, normalizer, distinct_types[key_idx]);
+		has_key_normalizers = has_key_normalizers || requires_normalization;
+		key_requires_normalization.push_back(requires_normalization);
+		hash_key_types.push_back(normalizer->GetReturnType());
+		key_normalizers.push_back(std::move(normalizer));
+		if (!requires_normalization) {
+			continue;
+		}
+
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundReferenceExpression>(distinct_types[key_idx], distinct_idx[key_idx]));
+		auto representative = function_binder.BindAggregateFunction(
+		    FirstFunctionGetter::GetFunction(distinct_types[key_idx]), std::move(children));
+		key_representative_indices[key_idx] = payload_aggregates.size();
+		aggregate_types.push_back(representative->GetReturnType());
+		payload_aggregates.push_back(std::move(representative));
+	}
+	if (!has_key_normalizers) {
+		key_normalizers.clear();
+	}
+	if (!op.union_all) {
+		for (idx_t i = 0; i < payload_types.size(); i++) {
+			unique_ptr<Expression> previous = make_uniq<BoundReferenceExpression>(payload_types[i], i);
+			unique_ptr<Expression> current =
+			    make_uniq<BoundReferenceExpression>(payload_types[i], payload_types.size() + i);
+			const auto normalize_previous = ExpressionBinder::PushCollation(context, previous, payload_types[i]);
+			const auto normalize_current = ExpressionBinder::PushCollation(context, current, payload_types[i]);
+			D_ASSERT(normalize_previous == normalize_current);
+			if (normalize_previous) {
+				payload_comparisons.push_back(BoundComparisonExpression::Create(
+				    ExpressionType::COMPARE_DISTINCT_FROM, std::move(previous), std::move(current)));
+			} else {
+				payload_comparisons.push_back(nullptr);
+			}
+		}
+	}
+
 	// If the key variant has been used, a recurring table will be created.
 	auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 	recurring_cte_tables[op.table_index] = recurring_table;
@@ -87,6 +138,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		planning_info.using_key = true;
 		planning_info.distinct_indices = distinct_idx;
 		planning_info.payload_indices = payload_idx;
+		planning_info.hash_key_types = hash_key_types;
+		planning_info.aggregate_types = aggregate_types;
+		planning_info.key_requires_normalization = key_requires_normalization;
 	}
 
 	planning_recursive_cte_depth++;
@@ -97,10 +151,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
+	cast_cte.payload_comparisons = std::move(payload_comparisons);
+	cast_cte.key_normalizers = std::move(key_normalizers);
+	cast_cte.key_representative_indices = std::move(key_representative_indices);
 	cast_cte.distinct_idx = distinct_idx;
 	cast_cte.distinct_types = distinct_types;
+	cast_cte.hash_key_types = std::move(hash_key_types);
 	cast_cte.payload_idx = payload_idx;
 	cast_cte.payload_types = payload_types;
+	cast_cte.aggregate_types = std::move(aggregate_types);
 	cast_cte.internal_types = op.internal_types;
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
@@ -175,6 +234,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 		                       .Cast<PhysicalRecursiveCTEStateScan>();
 		state_scan.distinct_idx = planning_entry->second.distinct_indices;
 		state_scan.payload_idx = planning_entry->second.payload_indices;
+		state_scan.hash_key_types = planning_entry->second.hash_key_types;
+		state_scan.aggregate_types = planning_entry->second.aggregate_types;
+		state_scan.key_requires_normalization = planning_entry->second.key_requires_normalization;
 		planning_entry->second.state_scans.push_back(state_scan);
 		return state_scan;
 	}

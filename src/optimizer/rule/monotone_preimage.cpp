@@ -187,8 +187,12 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, c) || c.IsNull()) {
 		return nullptr;
 	}
-	if (c.type() != func.GetReturnType() && !c.DefaultTryCastAs(func.GetReturnType())) {
-		return nullptr;
+	if (c.type() != func.GetReturnType()) {
+		auto cast = c.DefaultTryCastAs(func.GetReturnType());
+		if (!cast) {
+			return nullptr;
+		}
+		c = std::move(*cast);
 	}
 
 	// normalize the comparison so the function is on the left: f(col) OP c

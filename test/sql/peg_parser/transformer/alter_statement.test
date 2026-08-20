@@ -60,7 +60,7 @@ ALTER TABLE person ADD COLUMN c STRUCT(
     current_mood mood
 );
 ----
-Catalog Error: Column with name c already exists!
+Catalog Error: Column with name "c" already exists!
 
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;

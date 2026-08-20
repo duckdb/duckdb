@@ -117,8 +117,9 @@ struct StringAggFunction {
 	}
 };
 
+//! Binds the separator into the bind data. It stays part of the expression tree, and the aggregate is handed it
+//! along with the input - the update callback only consumes the leading input argument
 unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
 		// single argument: default to comma
@@ -138,7 +139,6 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 	} else {
 		separator_string = separator_val.ToString();
 	}
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_uniq<StringAggBindData>(std::move(separator_string));
 }
 
@@ -160,7 +160,7 @@ AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
 	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(StringAggState));
 	layout.field = BuildStateField<ST>();
-	if (function.GetOriginalArguments().size() == 2) {
+	if (function.GetArguments().size() == 2) {
 		// record the value of the separator if explicitly provided
 		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
 	}

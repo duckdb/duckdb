@@ -154,28 +154,36 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/include/duckdb.h src/include/duckdb_extension.h
-
           mkdir build/release_arm64 build/release_amd64
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
           lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
 
-          zip -j duckdb_cli-osx-universal.zip build/release/duckdb
-          zip -j duckdb_cli-osx-arm64.zip build/release_arm64/duckdb
-          zip -j duckdb_cli-osx-amd64.zip build/release_amd64/duckdb
+          make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
+          make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
+          make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
+          make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-universal SHARED_LIBRARIES="build/release/src/libduckdb*.dylib"
 
-          gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
-          gzip -9 -k -n -c build/release_arm64/duckdb > duckdb_cli-osx-arm64.gz
-          gzip -9 -k -n -c build/release_amd64/duckdb > duckdb_cli-osx-amd64.gz
-
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz duckdb_cli-osx-arm64.zip duckdb_cli-osx-arm64.gz duckdb_cli-osx-amd64.zip duckdb_cli-osx-amd64.gz
+          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: duckdb-binaries-osx
-          path: |
-            libduckdb-osx-universal.zip
-            duckdb_cli-osx-universal.zip
+          path: duckdb-cli-osx-universal.tar.gz
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: duckdb-cli-osx-arm64.tar.gz
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: duckdb-cli-osx-amd64.tar.gz
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: duckdb-shared-libs-osx-universal.tar.gz
+          archive: false
 
       - name: Unit Test
         shell: bash

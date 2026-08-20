@@ -81,7 +81,8 @@ public:
 	LogicalType type;
 
 public:
-	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment);
 
 	BlockManager &GetBlockManager() const {
 		return block_manager;
@@ -256,6 +257,11 @@ protected:
 	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+
+	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+	                                           ColumnData &validity_column);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);

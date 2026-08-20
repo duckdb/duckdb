@@ -48,9 +48,6 @@ public:
 	const char *GetType() const override {
 		return "coptic";
 	}
-	bool IsEra0CountingBackward() const override {
-		return true;
-	}
 	unique_ptr<Calendar> Copy() const override {
 		return unique_ptr<Calendar>(new CopticCalendar(*this));
 	}

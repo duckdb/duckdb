@@ -48,8 +48,8 @@ public:
 	uint8_t right_bit_width; // 'right' & 'left' refer to the respective parts of the floating numbers after splitting
 	uint8_t left_bit_width;
 	uint16_t exceptions_count;
-	uint8_t right_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
-	uint8_t left_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 8];
+	uint32_t right_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 2];
+	uint16_t left_parts_encoded[AlpRDConstants::ALP_VECTOR_SIZE * 4];
 	uint16_t left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
 	uint16_t exceptions[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpRDConstants::ALP_VECTOR_SIZE];
@@ -198,10 +198,10 @@ struct AlpRDCompression {
 
 		if (!EMPTY) {
 			// Bitpacking Left and Right parts
-			BitpackingPrimitives::PackBuffer<uint16_t, false>(compression_data.left_parts_encoded, left_parts, n_values,
-			                                                  compression_data.left_bit_width);
-			BitpackingPrimitives::PackBuffer<uint64_t, false>(compression_data.right_parts_encoded, right_parts,
-			                                                  n_values, compression_data.right_bit_width);
+			BitpackingPrimitives::PackBuffer<uint16_t, false>(data_ptr_cast(compression_data.left_parts_encoded),
+			                                                  left_parts, n_values, compression_data.left_bit_width);
+			BitpackingPrimitives::PackBuffer<uint64_t, false>(data_ptr_cast(compression_data.right_parts_encoded),
+			                                                  right_parts, n_values, compression_data.right_bit_width);
 		}
 
 		compression_data.left_bit_packed_size = left_bit_packed_size;
@@ -217,26 +217,25 @@ struct AlpRDDecompression {
 	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,
 	                       const uint16_t *exceptions, const uint16_t *exceptions_positions, uint8_t left_bit_width,
 	                       uint8_t right_bit_width) {
-		uint8_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
-		uint8_t right_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
+		uint16_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
+		EXACT_TYPE right_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
 
 		// Bitunpacking left and right parts
-		BitpackingPrimitives::UnPackBuffer<uint16_t>(left_decoded, left_encoded, values_count, left_bit_width);
-		BitpackingPrimitives::UnPackBuffer<EXACT_TYPE>(right_decoded, right_encoded, values_count, right_bit_width);
-
-		uint16_t *left_parts = reinterpret_cast<uint16_t *>(data_ptr_cast(left_decoded));
-		EXACT_TYPE *right_parts = reinterpret_cast<EXACT_TYPE *>(data_ptr_cast(right_decoded));
+		BitpackingPrimitives::UnPackBuffer<uint16_t>(data_ptr_cast(left_decoded), left_encoded, values_count,
+		                                             left_bit_width);
+		BitpackingPrimitives::UnPackBuffer<EXACT_TYPE>(data_ptr_cast(right_decoded), right_encoded, values_count,
+		                                               right_bit_width);
 
 		// Decoding
 		for (idx_t i = 0; i < values_count; i++) {
-			uint16_t left = left_parts_dict[left_parts[i]];
-			EXACT_TYPE right = right_parts[i];
+			uint16_t left = left_parts_dict[left_decoded[i]];
+			EXACT_TYPE right = right_decoded[i];
 			output[i] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}
 
 		// Exceptions Patching (exceptions only occur in left parts)
 		for (idx_t i = 0; i < exceptions_count; i++) {
-			EXACT_TYPE right = right_parts[exceptions_positions[i]];
+			EXACT_TYPE right = right_decoded[exceptions_positions[i]];
 			uint16_t left = exceptions[i];
 			output[exceptions_positions[i]] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}

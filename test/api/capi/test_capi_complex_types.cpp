@@ -292,9 +292,8 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	connection->BeginTransaction();
 
 	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}};
-	auto id = LogicalType::STRUCT(children);
 	auto type_name = "test_type";
-	id.SetAlias(type_name);
+	auto id = LogicalType::STRUCT(children).WithAlias(type_name);
 	CreateTypeInfo info(type_name, id);
 
 	auto catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
@@ -323,6 +322,33 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 
 		duckdb_destroy_logical_type(&logical_type);
 	}
+}
+
+TEST_CASE("duckdb_logical_type_set_alias does not affect other types", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// a LIST type has extra type info - the two logical types below are copies that share it
+	auto result = tester.Query("SELECT [1, 2, 3] AS l");
+	REQUIRE(NO_FAIL(*result));
+
+	auto first = duckdb_column_logical_type(&result->InternalResult(), 0);
+	auto second = duckdb_column_logical_type(&result->InternalResult(), 0);
+	REQUIRE(first);
+	REQUIRE(second);
+
+	duckdb_logical_type_set_alias(first, "MY_ALIAS");
+
+	auto alias = duckdb_logical_type_get_alias(first);
+	REQUIRE(alias);
+	REQUIRE(string(alias) == "MY_ALIAS");
+	duckdb_free(alias);
+
+	// setting the alias on "first" must not have modified "second"
+	REQUIRE(duckdb_logical_type_get_alias(second) == nullptr);
+
+	duckdb_destroy_logical_type(&first);
+	duckdb_destroy_logical_type(&second);
 }
 
 TEST_CASE("duckdb_create_value", "[capi]") {

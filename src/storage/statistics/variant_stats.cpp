@@ -558,6 +558,20 @@ unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseS
 	copy.Copy(base_variant);
 	copy.child_stats[1] = BaseStatistics::CreateUnknown(extracted_field.GetType());
 	copy.child_stats[1].Copy(extracted_field);
+	// The extraction can produce NULL when the field's typed value is NULL, even if the input
+	// variant is not - descend through the shredding STRUCTs to the typed value.
+	const BaseStatistics *effective = &extracted_field;
+	bool can_have_null = false;
+	while (true) {
+		can_have_null |= effective->CanHaveNull();
+		if (effective->GetType().id() != LogicalTypeId::STRUCT) {
+			break;
+		}
+		effective = &VariantStats::GetTypedStats(*effective);
+	}
+	if (can_have_null) {
+		copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
 	return copy.ToUnique();
 }
 

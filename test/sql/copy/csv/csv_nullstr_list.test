@@ -30,25 +30,25 @@ Thijs	26	none
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = []);
 ----
-CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
 
 # Test nullstr = ['a', NULL]
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['a', NULL]);
 ----
-CSV Reader function option nullstr does not accept NULL values as a valid nullstr option
+CSV Reader function option "nullstr" does not accept NULL values as a valid nullstr option
 
 # Test nullstr = NULL
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL);
 ----
-CSV Reader function option nullstr requires a string or a list as input
+CSV Reader function option "nullstr" requires a string or a list as input
 
 # Test nullstr = [42]
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = [42]);
 ----
-CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
 
 # Test Null Strings equal to delim quote escape
 statement error
@@ -123,7 +123,7 @@ NULL
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
 ----
-force_not_null expected to find dont_exist, but it was not found in the table
+"force_not_null" expected to find dont_exist, but it was not found in the table
 
 # Lests add a few tests with copy from
 statement ok
@@ -140,12 +140,12 @@ NULL is not supported
 statement error
 COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr [NULL], HEADER 1);
 ----
-Binder Error: CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+Binder Error: CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
 
 statement error
 COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr [42], HEADER 1);
 ----
-Binder Error: CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+Binder Error: CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
 
 query III
 FROM data
@@ -157,4 +157,4 @@ Thijs	26	NULL
 statement error
 COPY data TO '{TEMP_DIR}/multiple_nulls.csv' (nullstr ['a', 'b']);
 ----
-CSV Writer function option nullstr only accepts one nullstr value.
+CSV Writer function option "nullstr" only accepts one nullstr value.

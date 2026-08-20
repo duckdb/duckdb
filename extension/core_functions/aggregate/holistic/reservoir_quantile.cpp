@@ -301,8 +301,9 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 	return quantile;
 }
 
+//! Binds the quantile parameter and the sample size into the bind data. They stay part of the expression tree, and
+//! the aggregate is handed them along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() >= 2);
 	Value quantile_val = input.GetConstant(1);
@@ -316,12 +317,6 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 	}
 
 	if (arguments.size() == 2) {
-		// remove the quantile argument so we can use the unary aggregate
-		if (function.GetArguments().size() == 2) {
-			Function::EraseArgument(function, arguments, arguments.size() - 1);
-		} else {
-			arguments.pop_back();
-		}
 		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192ULL);
 	}
 	auto sample_size_val = input.GetNonNullConstant(2);
@@ -331,21 +326,19 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 		throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
 	}
 
-	// remove the quantile arguments so we can use the unary aggregate
-	if (function.GetArguments().size() == arguments.size()) {
-		Function::EraseArgument(function, arguments, arguments.size() - 1);
-		Function::EraseArgument(function, arguments, arguments.size() - 1);
-	} else {
-		arguments.pop_back();
-		arguments.pop_back();
-	}
 	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+	// the implementation is unary - restore the quantile arguments that ReplaceImplementation drops, they are only
+	// folded into the bind data below
+	auto declared_arguments = function.GetArguments();
 	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
+	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
+		function.GetArguments().push_back(declared_arguments[i]);
+	}
 	auto bind_data = BindReservoirQuantile(input);
 	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);

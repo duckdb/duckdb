@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
@@ -27,9 +28,33 @@ struct PipelineScheduleStage {
 	vector<idx_t> dependencies;
 };
 
+struct PipelineScheduleExternalInputDependency {
+	PipelineScheduleExternalInputDependency(idx_t dependent_p, idx_t dependency_index_p, Pipeline &consumer_p)
+	    : dependent(dependent_p), dependency_index(dependency_index_p), consumer(consumer_p) {
+	}
+
+	idx_t dependent;
+	idx_t dependency_index;
+	reference<Pipeline> consumer;
+};
+
+struct PipelineScheduleEdge {
+	PipelineScheduleEdge(idx_t dependent_p, idx_t dependency_p, optional_ptr<Pipeline> external_input_consumer_p)
+	    : dependent(dependent_p), dependency(dependency_p), external_input_consumer(external_input_consumer_p) {
+	}
+
+	idx_t dependent;
+	idx_t dependency;
+	optional_ptr<Pipeline> external_input_consumer;
+};
+
 struct PipelineSchedule {
 	vector<PipelineScheduleStage> stages;
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
+	vector<PipelineScheduleExternalInputDependency> external_input_dependencies;
+
+	bool HasCycle() const;
+	vector<PipelineScheduleEdge> GetCycle() const;
 };
 
 unique_ptr<PipelineSchedule> BuildPipelineSchedule(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,

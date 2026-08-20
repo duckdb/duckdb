@@ -48,3 +48,39 @@ restart
 
 statement ok
 checkpoint;
+
+# A differently cased field is not the field named by a forced shredding schema
+# and must remain in the untyped overlay.
+
+statement ok
+drop table test_structs;
+
+statement ok
+set force_variant_shredding = 'STRUCT("Foo" INTEGER)';
+
+statement ok
+create table forced_case(v variant);
+
+statement ok
+insert into forced_case values ({'foo': 2}::variant);
+
+statement ok
+checkpoint;
+
+restart
+
+query III
+select v::varchar,
+       variant_extract(v, 'foo')::varchar,
+       variant_extract(v, 'Foo')::varchar
+from forced_case;
+----
+{'foo': 2}	2	NULL
+
+# The same field must be reachable through an isolated pushdown (exercises
+# FindShreddedColumnInternal's exact field-name match).
+query I
+select count(*) from forced_case where v.foo = 2
+----
+1
+

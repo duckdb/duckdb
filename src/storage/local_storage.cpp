@@ -2,9 +2,11 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/row_group.hpp"
@@ -155,6 +157,22 @@ void LocalTableStorage::FlushBlocks() {
 		optimistic_writer.WriteUnflushedRowGroups(*row_groups);
 	}
 	optimistic_writer.FinalFlush();
+}
+
+bool LocalTableStorage::WritesToDisk() const {
+	return optimistic_writer.CanWriteToDisk();
+}
+
+bool LocalTableStorage::HasFlushedRowGroups() const {
+	return !row_groups->flushed_row_groups.empty();
+}
+
+bool LocalTableStorage::IsBulkAppend() const {
+	if (is_dropped || deleted_rows != 0) {
+		return false;
+	}
+	auto &collection = *row_groups->collection;
+	return collection.GetTotalRows() >= collection.GetRowGroupSize();
 }
 
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
@@ -325,6 +343,16 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 reference_map_t<DataTable, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
 	lock_guard<mutex> l(table_storage_lock);
 	return std::move(table_storage);
+}
+
+vector<shared_ptr<LocalTableStorage>> LocalTableManager::GetEntries() const {
+	lock_guard<mutex> l(table_storage_lock);
+	vector<shared_ptr<LocalTableStorage>> result;
+	result.reserve(table_storage.size());
+	for (auto &entry : table_storage) {
+		result.push_back(entry.second);
+	}
+	return result;
 }
 
 idx_t LocalTableManager::EstimatedSize() const {
@@ -577,13 +605,16 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	}
 
 	auto append_count = storage.GetCollection().GetTotalRows() - storage.deleted_rows;
-	const auto row_group_size = storage.GetCollection().GetRowGroupSize();
 
 	TableAppendState append_state;
 	table.AppendLock(transaction, append_state);
-	if ((append_state.row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
-	    storage.deleted_rows == 0) {
-		// table is currently empty OR we are bulk appending: move over the storage directly
+	if (storage.IsBulkAppend() ||
+	    (append_state.row_start == 0 && storage.deleted_rows == 0 && !storage.WritesToDisk())) {
+		// bulk append (at least one full row group, no deletes): move over the storage directly.
+		// Appends to an empty table are also merged directly if the table cannot be written to
+		// disk (temporary / in-memory / read-only, e.g. WAL replay of a read-only attach) -
+		// there are no optimistically written blocks to manage, and merging avoids re-appending
+		// row by row.
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
 		// Append to the indexes.
@@ -594,6 +625,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// check if we have written data
 		// if we have, we cannot merge to disk after all
 		// so we need to revert the data we have already written
+		// this only happens for transactions that deleted rows after bulk-appending: a pure bulk
+		// append always takes the merge path above, using its pre-flushed blocks as written
+		D_ASSERT(!storage.HasFlushedRowGroups() || storage.deleted_rows > 0);
 		storage.Rollback();
 		// append to the indexes
 		storage.AppendToIndexes(transaction, append_state);
@@ -608,6 +642,24 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	// Verify that our index memory is stable.
 	table.VerifyIndexBuffers();
 #endif
+}
+
+void LocalStorage::FlushBulkAppendBlocksAndSync(AttachedDatabase &db) {
+	bool requires_sync = false;
+	for (auto &storage : table_manager.GetEntries()) {
+		if (storage->IsBulkAppend()) {
+			// Flush() is guaranteed to take the bulk path - the blocks will be used as written
+			storage->FlushBlocks();
+			requires_sync |= storage->HasFlushedRowGroups();
+		}
+	}
+	if (requires_sync) {
+		// the WAL will reference the flushed row groups (flushed just now or already during the
+		// statement, e.g. by batch inserts) - persist them now so that the commit does not have
+		// to FileSync while holding the WAL lock
+		db.GetStorageManager().GetBlockManager().FileSync();
+		synced_flushed_blocks = true;
+	}
 }
 
 void LocalStorage::Commit(optional_ptr<StorageCommitState> commit_state) {

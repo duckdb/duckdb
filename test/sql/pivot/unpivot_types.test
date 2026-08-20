@@ -13,3 +13,22 @@ SELECT column_name, column_type FROM (DESCRIBE unpivot ( select {n : 1 }) on col
 ----
 name	VARCHAR
 value	STRUCT(n INTEGER)
+
+# issue #24441
+query II
+SELECT unpivot_list(1, 2.5), typeof(unpivot_list(1, 2.5))
+----
+[1.0, 2.5]	DECIMAL(11,1)[]
+
+query II
+SELECT unpivot_list(1.2::DECIMAL(2,1), 1.23::DECIMAL(3,2)), typeof(unpivot_list(1.2::DECIMAL(2,1), 1.23::DECIMAL(3,2)))
+----
+[1.20, 1.23]	DECIMAL(3,2)[]
+
+query II
+UNPIVOT (SELECT 1::INTEGER AS i, 2.5::DECIMAL(2,1) AS d)
+ON i, d
+INTO NAME source_column VALUE value
+----
+i	1.0
+d	2.5

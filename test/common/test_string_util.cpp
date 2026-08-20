@@ -527,3 +527,16 @@ TEST_CASE("Test JSON Parsing", "[string_util]") {
 	}
 	)JSON_LITERAL");
 }
+
+TEST_CASE("Test CIHash is independent of char signedness", "[string_util]") {
+	// bytes >= 0x80 must be zero-extended before hashing so the result is identical
+	// on platforms where char is signed (x86) and where it is unsigned (ARM)
+	const char high_byte[] = {(char)0xC3, 0};
+	REQUIRE(StringUtil::CIHash(high_byte, 1) == 2242087697ULL);
+
+	const char cafe_utf8[] = "Caf\xC3\xA9";
+	REQUIRE(StringUtil::CIHash(cafe_utf8, strlen(cafe_utf8)) == 2425794034ULL);
+
+	// ASCII is unaffected
+	REQUIRE(StringUtil::CIHash("hello") == StringUtil::CIHash("HeLLo"));
+}

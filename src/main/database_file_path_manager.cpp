@@ -46,15 +46,13 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseMan
 				if (attached_in_this_system) {
 					return InsertDatabasePathResult::ALREADY_EXISTS;
 				}
-				throw BinderException(
-				    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is in "
-				    "the process of being detached",
-				    name, path);
+				throw BinderException("Unique file handle conflict: Cannot attach %s - the database file \"%s\" is in "
+				                      "the process of being detached",
+				                      name, path);
 			}
-			throw BinderException(
-			    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-			    "attached by database \"%s\"",
-			    name, path, existing.name);
+			throw BinderException("Unique file handle conflict: Cannot attach %s - the database file \"%s\" is already "
+			                      "attached by database \"%s\"",
+			                      name, path, existing.name);
 		}
 	}
 	options.stored_database_path = make_uniq<StoredDatabasePath>(manager, *this, path, name);

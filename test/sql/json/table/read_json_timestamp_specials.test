@@ -1,0 +1,70 @@
+# name: test/sql/json/table/read_json_timestamp_specials.test
+# description: JSON timestamp auto-detection with infinite / epoch specials
+# group: [table]
+
+require json
+
+# Infinite timestamps are valid for TIMESTAMP and TIMESTAMPTZ and provide no offset evidence.
+statement ok
+copy (select * from (values
+	('{"plain_ts":"2024-01-01T00:00:00","offset_ts":"2024-01-01T00:00:00Z"}'),
+	('{"plain_ts":"infinity","offset_ts":"infinity"}'),
+	('{"plain_ts":"-infinity","offset_ts":"-infinity"}')
+)) to '{TEMP_DIR}/timestamp_specials.json' (format csv, quote '', header 0)
+
+query II
+select typeof(plain_ts), typeof(offset_ts)
+from read_json_auto('{TEMP_DIR}/timestamp_specials.json')
+limit 1
+----
+TIMESTAMP	TIMESTAMP WITH TIME ZONE
+
+# Reviewer repro as a single field
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}'),
+	('{"ts":"-infinity"}')
+)) to '{TEMP_DIR}/timestamp_specials_plain.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/timestamp_specials_plain.json')
+where ts = TIMESTAMP '2024-01-01 00:00:00'
+----
+TIMESTAMP	2024-01-01 00:00:00
+
+# True mix remains VARCHAR
+statement ok
+copy (select * from (values
+	('{"ts":"2024-01-01T00:00:00Z"}'),
+	('{"ts":"2024-01-01T00:00:00"}'),
+	('{"ts":"infinity"}')
+)) to '{TEMP_DIR}/timestamp_specials_mixed.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/timestamp_specials_mixed.json') limit 1
+----
+VARCHAR
+
+# epoch is a date special that also sets the reused has_offset flag
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00"}')
+)) to '{TEMP_DIR}/timestamp_specials_epoch_plain.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/timestamp_specials_epoch_plain.json') limit 1
+----
+TIMESTAMP
+
+statement ok
+copy (select * from (values
+	('{"ts":"epoch"}'),
+	('{"ts":"2024-01-01T00:00:00Z"}')
+)) to '{TEMP_DIR}/timestamp_specials_epoch_offset.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEMP_DIR}/timestamp_specials_epoch_offset.json') limit 1
+----
+TIMESTAMP WITH TIME ZONE

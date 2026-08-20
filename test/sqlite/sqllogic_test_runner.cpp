@@ -1103,11 +1103,11 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				if (token.parameters.size() != 2) {
 					parser.Fail("set seed requires a single seed value");
 				}
-				Value seed(token.parameters[1]);
-				if (!seed.DefaultTryCastAs(LogicalType::DOUBLE)) {
+				auto seed = Value(token.parameters[1]).DefaultTryCastAs(LogicalType::DOUBLE);
+				if (!seed) {
 					parser.Fail("set seed requires a floating point parameter");
 				}
-				auto res = con->Query("SELECT SETSEED(" + seed.ToString() + ")");
+				auto res = con->Query("SELECT SETSEED(" + seed->ToString() + ")");
 				if (res->HasError()) {
 					parser.Fail("Failed to set seed: %s", res->GetError());
 				}

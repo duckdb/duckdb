@@ -405,10 +405,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				auto &ret_type = result->returned_types[idx];
 				auto &col_name = result->names[idx];
 				if (bind_return_types[idx] != ret_type) {
-					throw SerializationException(
-					    "Table function deserialization failure in function \"%s\" - column with "
-					    "name %s was serialized with type %s, but now has type %s",
-					    function.name, col_name, ret_type, bind_return_types[idx]);
+					throw SerializationException("Table function deserialization failure in function %s - column with "
+					                             "name %s was serialized with type %s, but now has type %s",
+					                             function.name, col_name, ret_type, bind_return_types[idx]);
 				}
 			}
 		}

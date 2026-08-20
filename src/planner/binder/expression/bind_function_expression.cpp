@@ -262,7 +262,7 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
-			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
+			                      "Function %s is a table function but it was used as a scalar function. This "
 			                      "function has to be called in a FROM clause (similar to a table).",
 			                      function.FunctionName());
 		}
@@ -285,7 +285,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		break;
 	default:
 		if (function.Distinct() || function.Filter() || !function.OrderBy()->orders.empty()) {
-			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+			throw InvalidInputException("Function %s is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 			                            "applicable to window and aggregate functions.",
 			                            function.FunctionName(), CatalogTypeToString(func.type));
 		}

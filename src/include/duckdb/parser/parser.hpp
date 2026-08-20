@@ -20,7 +20,9 @@
 namespace duckdb {
 
 struct ParserCache;
+struct CompiledGrammar;
 struct MatcherToken;
+class TokenIterator;
 class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
@@ -48,22 +50,21 @@ public:
 	//! variable.
 	void ParseQuery(const string &query);
 
-	//! Parse a single TopLevelStatement from an already-tokenized stream starting at
-	//! `token_cursor`. On success advances `token_cursor` past the consumed tokens and returns
+	//! Parse a single TopLevelStatement from an already-tokenized stream. On success advances
+	//! `token_iterator` past the consumed tokens and returns
 	//! the SQLStatement. Returns nullptr at end-of-input or when the matched TLS was a
 	//! separator-only run (no statement). Throws ParserException on syntax error.
 	//!
 	//! Does NOT populate `stmt->query` — the caller owns the source string and can slice it
 	//! using `stmt->stmt_location` if needed.
-	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor);
+	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(TokenIterator &token_iterator);
 
-	//! Run the `parse_function` extensions over the tail of `query` starting at `token_cursor`,
+	//! Run the `parse_function` extensions over the unconsumed tail of `query`,
 	//! the way `ParseQuery` does in its catch handler. Returns the produced `ExtensionStatement`
-	//! and advances `token_cursor` past the bytes the extension claimed. Returns nullptr if no
+	//! and advances `token_iterator` past the bytes the extension claimed. Returns nullptr if no
 	//! extension claims the segment. Used by both `ParseQuery` and the lazy `ParseIterator`
 	//! so the two paths handle PEG failures identically.
-	DUCKDB_API unique_ptr<SQLStatement> TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
-	                                                               const string &query);
+	DUCKDB_API unique_ptr<SQLStatement> TryParseExtensionStatement(TokenIterator &token_iterator, const string &query);
 
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(const string &query);
@@ -106,8 +107,10 @@ public:
 
 private:
 	ParserCache &GetCache();
+	CompiledGrammar &GetGrammar();
 
 	ParserOptions options;
 	unique_ptr<ParserCache> local_cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 } // namespace duckdb

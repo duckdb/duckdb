@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-GroupingSetsOptimizer::GroupingSetsOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
+GroupingSetsOptimizer::GroupingSetsOptimizer(Optimizer &optimizer_p, bool mandatory_aggregate_lowering_p)
+    : optimizer(optimizer_p), mandatory_aggregate_lowering(mandatory_aggregate_lowering_p) {
 }
 
 namespace {
@@ -222,6 +223,20 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 	auto &aggr = op->Cast<LogicalAggregate>();
 	if (aggr.grouping_sets.size() < 2 || aggr.expressions.empty()) {
 		// the rewrite is only beneficial when multiple grouping sets are computed
+		return false;
+	}
+	if (mandatory_aggregate_lowering) {
+		for (auto &expr : aggr.expressions) {
+			if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+				return false;
+			}
+			auto &aggregate = expr->Cast<BoundAggregateExpression>();
+			if (aggregate.Function().HasRewriteCallback() &&
+			    aggregate.Function().GetRewritePolicy() == AggregateRewritePolicy::MANDATORY &&
+			    aggregate.StateExportMode() != AggregateStateExportMode::STATE_EXPORT) {
+				return TryExpandGroupingSets(op);
+			}
+		}
 		return false;
 	}
 	bool can_cascade = true;

@@ -1,0 +1,385 @@
+# name: test/sql/cte/materialized/test_cte_hash_join_exchange.test
+# description: Test materialized CTE exchange input for hash joins
+# group: [materialized]
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+PRAGMA threads=4;
+
+# A CTE can directly feed the hash join build side.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM range(10000) l(i) JOIN c ON l.i=c.i;
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM range(10000) l(i) JOIN c ON l.i=c.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+# Probe input is delayed until the independent hash build has finalized.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c JOIN range(10000) r(i) ON c.i=r.i;
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c JOIN range(10000) r(i) ON c.i=r.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+# Small fanouts remain materialized so their consumers can run independently.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+10000
+
+query II
+EXPLAIN ANALYZE WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*
+
+# Existing materialization is reused instead of serializing hash fanout.
+query III
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT i FROM c ORDER BY i LIMIT 1),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i)),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+0	10000	10000
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT i FROM c ORDER BY i LIMIT 1),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i)),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: MATERIALIZED.*Materialized Consumers: 3.*
+
+# A pipelined consumer does not force a small hash consumer into serialized direct fanout.
+query II
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT sum(i) FROM c),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+49995000	10000
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT (SELECT sum(i) FROM c),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
+
+# Preserve hash join semantics for NULLs, duplicates and adjacent join types while directly feeding each join.
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c INNER JOIN b ON c.i=b.i;
+----
+2
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c LEFT JOIN b ON c.i=b.i;
+----
+4
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c RIGHT JOIN b ON c.i=b.i;
+----
+4
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c FULL JOIN b ON c.i=b.i;
+----
+6
+
+query II
+EXPLAIN ANALYZE
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c FULL JOIN b ON c.i=b.i;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 1.*CTE Mode: DIRECT.*
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c SEMI JOIN b ON c.i=b.i;
+----
+2
+
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (2), (NULL)), b(i) AS (VALUES (2), (3), (NULL))
+SELECT count(*) FROM c ANTI JOIN b ON c.i=b.i;
+----
+2
+
+# Empty producers still finish externally fed hash builds.
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(0) t(i))
+SELECT count(*) FROM range(10) l(i) LEFT JOIN c ON l.i=c.i;
+----
+10
+
+# Multiple CTE producer pipelines can feed an unordered hash build.
+query I
+WITH c AS MATERIALIZED (
+  SELECT i FROM range(1000) t(i)
+  UNION ALL
+  SELECT i + 1000 FROM range(1000) t(i)
+)
+SELECT count(*) FROM range(2000) l(i) JOIN c ON l.i=c.i;
+----
+2000
+
+# External input bindings can form an acyclic producer chain.
+query I
+WITH a AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     b AS MATERIALIZED (SELECT i FROM a)
+SELECT count(*) FROM range(10000) r(i) JOIN b ON r.i=b.i;
+----
+10000
+
+# Small aligned fanouts remain materialized instead of serializing their hash joins.
+query I
+WITH l AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     r AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM (
+  SELECT l.i FROM l JOIN r USING (i)
+  UNION ALL
+  SELECT l.i FROM l JOIN r USING (i)
+);
+----
+20000
+
+query II
+EXPLAIN ANALYZE
+WITH l AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     r AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM (
+  SELECT l.i FROM l JOIN r USING (i)
+  UNION ALL
+  SELECT l.i FROM l JOIN r USING (i)
+);
+----
+analyzed_plan	<REGEX>:.*CTE Name: l.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*CTE Name: r.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*
+
+# Small mixed-orientation fanouts are materialized by the cost selection.
+query I
+WITH l AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     r AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM (
+  SELECT l.i FROM l JOIN r USING (i)
+  UNION ALL
+  SELECT l.i FROM r JOIN l USING (i)
+);
+----
+20000
+
+query II
+EXPLAIN ANALYZE
+WITH l AS MATERIALIZED (SELECT i FROM range(10000) t(i)),
+     r AS MATERIALIZED (SELECT i FROM range(10000) t(i))
+SELECT count(*) FROM (
+  SELECT l.i FROM l JOIN r USING (i)
+  UNION ALL
+  SELECT l.i FROM r JOIN l USING (i)
+);
+----
+analyzed_plan	<REGEX>:.*CTE Name: l.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*CTE Name: r.*Execution Mode: MATERIALIZED.*Materialized Consumers: 2.*
+
+# MARK joins preserve three-valued logic when their build is fed directly.
+query III
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (NULL))
+SELECT count(*) FILTER (WHERE marker IS TRUE),
+       count(*) FILTER (WHERE marker IS FALSE),
+       count(*) FILTER (WHERE marker IS NULL)
+FROM (
+  SELECT i IN (SELECT i FROM c) marker
+  FROM (VALUES (1), (3), (NULL)) o(i)
+);
+----
+1	0	2
+
+query II
+EXPLAIN ANALYZE
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (NULL))
+SELECT count(*) FILTER (WHERE marker IS TRUE)
+FROM (
+  SELECT i IN (SELECT i FROM c) marker
+  FROM (VALUES (1), (3), (NULL)) o(i)
+);
+----
+analyzed_plan	<REGEX>:.*Join Type: MARK.*CTE Mode: DIRECT.*
+
+# SINGLE joins preserve correlated scalar-subquery semantics.
+query I
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (NULL))
+SELECT sum((SELECT i FROM c WHERE c.i=o.i))
+FROM (VALUES (1), (3)) o(i);
+----
+1
+
+query II
+EXPLAIN ANALYZE
+WITH c(i) AS MATERIALIZED (VALUES (1), (2), (NULL))
+SELECT sum((SELECT i FROM c WHERE c.i=o.i))
+FROM (VALUES (1), (3)) o(i);
+----
+analyzed_plan	<REGEX>:.*Join Type: SINGLE.*CTE Mode: DIRECT.*
+
+statement ok
+CREATE SEQUENCE cte_hash_sequence;
+
+# Side-effecting producers retain their run-to-completion ordering.
+query I
+WITH c AS MATERIALIZED (
+  SELECT nextval('cte_hash_sequence') AS i FROM range(3)
+)
+SELECT count(*) FROM c JOIN range(1, 4) r(i) ON c.i=r.i;
+----
+3
+
+query I
+SELECT currval('cte_hash_sequence');
+----
+3
+
+statement ok
+PREPARE cte_hash_join AS
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c JOIN range(1000) r(i) ON c.i=r.i;
+
+loop i 0 2
+
+query I
+EXECUTE cte_hash_join;
+----
+1000
+
+endloop
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+SET memory_limit='64MB';
+
+statement ok
+SET operator_memory_limit='256KB';
+
+# Materialization pressure keeps a mixed pipelined/hash fanout fully streaming.
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
+)
+SELECT (SELECT sum(length(payload)) FROM c),
+       (SELECT count(*) FROM c JOIN range(10000) r(i) USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
+
+# Materialization pressure first selects direct fanout, then a required cycle falls back one consumer.
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
+)
+SELECT count(*), sum(length(l.payload))
+FROM c l JOIN c r USING (i);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
+
+# Cycle fallback only materializes a consumer whose external edge closes the cycle.
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
+)
+SELECT (SELECT sum(length(l.payload)) FROM c l JOIN c r USING (i)),
+       (SELECT sum(length(c.payload)) FROM range(10000) x(i) JOIN c USING (i));
+----
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 2.*Materialized Consumers: 1.*
+
+# Direct consumers get independent chunk wrappers when one hash join slices its probe input while spilling.
+statement ok
+SET debug_force_external=true;
+
+query III
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
+)
+SELECT branch, count(*), sum(v)
+FROM (
+  SELECT 1 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
+  UNION ALL
+  SELECT 2 branch, length(c.payload) v FROM c JOIN range(10000) r(i) USING (i)
+)
+GROUP BY branch
+ORDER BY branch;
+----
+1	10000	320000
+2	10000	320000
+
+query II
+EXPLAIN ANALYZE
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 32) payload FROM range(10000) t(i)
+)
+SELECT count(*)
+FROM (
+  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
+  UNION ALL
+  SELECT c.i FROM c JOIN range(10000) r(i) USING (i)
+);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Direct Consumers: 2.*CTE Mode: DIRECT.*
+
+statement ok
+SET debug_force_external=false;
+
+# Saturated estimates do not hide a second materialization that exceeds the budget.
+statement ok
+CREATE TABLE cte_empty_stats AS SELECT i FROM range(1000) t(i);
+
+statement ok
+DELETE FROM cte_empty_stats;
+
+query II
+EXPLAIN ANALYZE
+WITH huge AS MATERIALIZED (
+  SELECT h.i FROM range(9223372036854775807) h(i), cte_empty_stats e
+),
+large AS MATERIALIZED (
+  SELECT h.i FROM range(2000000) h(i), cte_empty_stats e
+)
+SELECT (SELECT count(*) FROM huge l JOIN huge r USING (i)),
+       (SELECT count(*) FROM large l JOIN large r USING (i));
+----
+analyzed_plan	<REGEX>:.*CTE Name: huge.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*CTE Name: large.*Execution Mode: HYBRID_FANOUT.*Direct Consumers: 1.*Materialized Consumers: 1.*
+
+statement ok
+RESET memory_limit;
+
+statement ok
+RESET operator_memory_limit;
+
+query I
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c l JOIN c r USING (i);
+----
+1000
+
+statement ok
+RESET disabled_optimizers;
