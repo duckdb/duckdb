@@ -733,8 +733,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
                                                                                     bool propagate_null_values) {
 	auto state = PushDownCorrelatedNode(plan, propagate_null_values, {});
 	if (!replacement_map.empty()) {
-		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
-		RewriteCountAggregates::Rewrite(*plan, replacement_map);
+		RewriteCorrelatedAggregates::Rewrite(*plan, replacement_map);
 	}
 	if (!parent) {
 		ColumnBindingResolver::Verify(binder.context, *plan);
@@ -861,24 +860,57 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		join->conditions.push_back(std::move(cond));
 	}
+	vector<ColumnBinding> aggregate_bindings;
+	vector<unique_ptr<Expression>> empty_aggregates;
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
+		auto &aggregate = aggr.expressions[i]->Cast<BoundAggregateExpression>();
+		if (aggregate.Function().GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
+			aggregate_bindings.emplace_back(aggr.aggregate_index, ProjectionIndex(i));
+			empty_aggregates.push_back(aggregate.Copy());
+		}
+	}
+	unique_ptr<LogicalOperator> empty_aggregate;
+	if (!empty_aggregates.empty()) {
+		auto marker_index = ProjectionIndex(aggr.expressions.size());
+		BoundAggregateFunction marker_function(CountStarFun::GetFunction());
+		aggr.expressions.push_back(make_uniq<BoundAggregateExpression>(std::move(marker_function),
+		                                                               vector<unique_ptr<Expression>>(), nullptr,
+		                                                               nullptr, AggregateType::NON_DISTINCT));
 
-		auto count_fun = CountFunctionBase::GetFunction();
-		auto count_star_fun = CountStarFun::GetFunction();
+		auto empty_input_index = binder.GenerateTableIndex();
+		vector<LogicalType> empty_input_types;
+		column_binding_map_t<ColumnBinding> empty_input_map;
+		for (auto &empty_expression : empty_aggregates) {
+			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+			    empty_expression, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+				    auto entry = empty_input_map.find(colref.Binding());
+				    if (entry == empty_input_map.end()) {
+					    auto new_binding = ColumnBinding(empty_input_index, ProjectionIndex(empty_input_types.size()));
+					    entry = empty_input_map.emplace(colref.Binding(), new_binding).first;
+					    empty_input_types.push_back(colref.GetReturnType());
+				    }
+				    colref.BindingMutable() = entry->second;
+				    colref.DepthMutable() = 0;
+			    });
+		}
+		auto empty_input = make_uniq<LogicalEmptyResult>(
+		    empty_input_types, LogicalOperator::GenerateColumnBindings(empty_input_index, empty_input_types.size()));
+		auto empty_aggregate_index = binder.GenerateTableIndex();
+		empty_aggregate = make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), empty_aggregate_index,
+		                                              std::move(empty_aggregates));
+		empty_aggregate->children.push_back(std::move(empty_input));
 
-		const auto is_count_func =
-		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
-
-		const auto is_count_star_func =
-		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
-
-		if (is_count_func || is_count_star_func) {
-			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
+		auto marker_binding = ColumnBinding(aggr.aggregate_index, marker_index);
+		for (idx_t i = 0; i < aggregate_bindings.size(); i++) {
+			replacement_map[aggregate_bindings[i]] =
+			    make_pair(marker_binding, ColumnBinding(empty_aggregate_index, ProjectionIndex(i)));
 		}
 	}
 	plan = std::move(join);
+	if (empty_aggregate) {
+		plan = LogicalCrossProduct::Create(std::move(plan), std::move(empty_aggregate));
+	}
 	result.bindings = CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
 	return result;
 }
