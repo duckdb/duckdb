@@ -577,6 +577,40 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 	}
 }
 
+TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B');
+	EFCTestFileGuard test_file("test_efc_no_validation_freshness.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		REQUIRE(cached_file->validation_info.cache_valid_until != nullopt);
+		// Assign a past timestamp to the freshness deadline so cache won't be used.
+		cached_file->validation_info.cache_valid_until =
+		    timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+	}
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
+}
+
 TEST_CASE("File with freshness deadline is invalidated when the file size changes", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
