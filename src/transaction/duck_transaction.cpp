@@ -35,10 +35,10 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                                 transaction_t transaction_id, idx_t catalog_version_p)
-    : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
-      storage(make_uniq<LocalStorage>(context_p, *this)) {
+                                 transaction_t unique_start_time, transaction_t transaction_id, idx_t catalog_version_p)
+    : Transaction(manager, context_p), start_time(start_time), unique_start_time(unique_start_time),
+      transaction_id(transaction_id), commit_id(0), catalog_version(catalog_version_p), awaiting_cleanup(false),
+      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -287,6 +287,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
+			commit_info.wal_sync_offset = commit_state->GetWALSyncOffset();
 		}
 		drop_state.FinalizeCommit();
 		return ErrorData();

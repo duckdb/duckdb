@@ -11,7 +11,7 @@ namespace duckdb {
 
 struct StandardInsertOperator {
 	static bool UseInsertedVersion(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
-		return id < start_time || id == transaction_id;
+		return VisibleToSnapshot(id, start_time) || id == transaction_id;
 	}
 };
 
@@ -30,7 +30,7 @@ struct StandardDeleteOperator {
 struct CommittedDeleteOperator {
 	static bool IsDeleted(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
 		// check if this row was deleted before the given start time
-		return id < min_start_time;
+		return VisibleToSnapshot(id, min_start_time);
 	}
 };
 
@@ -515,8 +515,9 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(transaction_t lowes
 					rows_alive = true;
 					continue;
 				}
-				if (deleted[i] >= lowest_active_start) {
-					// deleted, but the delete is not yet visible to all transactions
+				if (!VisibleToSnapshot(deleted[i], lowest_active_start)) {
+					// deleted, but the delete is not yet visible to all transactions - the ids can
+					// compress once the lowest active start advances past the delete id
 					deletes_pending = true;
 					if (deleted[i] >= TRANSACTION_ID_START) {
 						// the delete is not even committed yet - the array must be kept
@@ -561,7 +562,7 @@ VersionCompressionResult ChunkVectorInfo::CompressVersionIds(transaction_t lowes
 			auto segment = allocator.GetHandle(GetInsertedPointer());
 			auto inserted = segment.GetPtr<transaction_t>();
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-				if (inserted[i] >= lowest_active_start) {
+				if (!VisibleToSnapshot(inserted[i], lowest_active_start)) {
 					// the insert is not yet visible to all transactions
 					can_compress = false;
 					break;
@@ -629,16 +630,14 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 		auto segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = segment.GetPtr<transaction_t>();
 
+		// from 1: index 0 holds the first append, which carries the lowest insert id
 		for (idx_t idx = 1; idx < STANDARD_VECTOR_SIZE; idx++) {
-			if (inserted[idx] > lowest_transaction) {
-				// transaction was inserted after the lowest transaction start
-				// we still need to use an older version - cannot compress
+			if (!VisibleToSnapshot(inserted[idx], lowest_transaction)) {
+				// not yet visible to every current and future snapshot - cannot compress
 				return false;
 			}
 		}
-	} else if (ConstantInsertId() > lowest_transaction) {
-		// transaction was inserted after the lowest transaction start
-		// we still need to use an older version - cannot compress
+	} else if (!VisibleToSnapshot(ConstantInsertId(), lowest_transaction)) {
 		return false;
 	}
 	return true;

@@ -31,16 +31,22 @@ struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
+	//! WAL offset covering the commit's flush marker (0 if no WAL was written)
+	idx_t wal_sync_offset = 0;
 };
 
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id, idx_t catalog_version);
+	                transaction_t unique_start_time, transaction_t transaction_id, idx_t catalog_version);
 	~DuckTransaction() override;
 
-	//! The start timestamp of this transaction
+	//! The start timestamp of this transaction: a visibility watermark, not an identifier - a
+	//! durability cap can give several transactions the same one
 	transaction_t start_time;
+	//! The start timestamp as drawn, before any durability cap. Unique per transaction, so this is
+	//! the one to use as an identifier (e.g. what txid_current reports)
+	transaction_t unique_start_time;
 	//! The transaction id of this transaction
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed

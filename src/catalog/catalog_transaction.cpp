@@ -36,7 +36,7 @@ CatalogTransaction CatalogTransaction::GetSystemCatalogTransaction(ClientContext
 }
 
 CatalogTransaction CatalogTransaction::GetSystemTransaction(DatabaseInstance &db) {
-	return CatalogTransaction(db, 1, 1);
+	return CatalogTransaction(db, SYSTEM_TRANSACTION_TIMESTAMP, SYSTEM_TRANSACTION_TIMESTAMP);
 }
 
 } // namespace duckdb
