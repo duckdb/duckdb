@@ -61,6 +61,8 @@ struct CMHelper {
 
 	static unique_ptr<LogicalProjection> CreateProjection(const Optimizer &optimizer, const LogicalOperator &source,
 	                                                      vector<unique_ptr<Expression>> projections);
+	static unique_ptr<Expression> CreateUncheckedCast(ClientContext &context, unique_ptr<Expression> input,
+	                                                  const LogicalType &target_type);
 
 	static void RemapBindingMap(CompressedMaterializationInfo &info,
 	                            const vector<ReplacementBinding> &replacement_bindings);
@@ -119,6 +121,17 @@ unique_ptr<LogicalProjection> CMHelper::CreateProjection(const Optimizer &optimi
 		projection->SetEstimatedCardinality(source.estimated_cardinality);
 	}
 	return projection;
+}
+
+unique_ptr<Expression> CMHelper::CreateUncheckedCast(ClientContext &context, unique_ptr<Expression> input,
+                                                     const LogicalType &target_type) {
+	auto result = BoundCastExpression::AddCastToType(context, std::move(input), target_type);
+	D_ASSERT(BoundCastExpression::IsCast(*result));
+	if (BoundCastExpression::IsCast(*result)) {
+		auto &cast = result->Cast<BoundFunctionExpression>();
+		BoundCastExpression::GetBoundCastMutable(cast).TrySetUnchecked();
+	}
+	return result;
 }
 
 void CMHelper::RemapBindingMap(CompressedMaterializationInfo &info,
@@ -294,7 +307,7 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralCastCompress(ClientContex
                                                                     unique_ptr<Expression> input,
                                                                     const LogicalType &target_type,
                                                                     const BaseStatistics &stats) {
-	auto compress_expr = BoundCastExpression::AddCastToType(context, std::move(input), target_type);
+	auto compress_expr = CreateUncheckedCast(context, std::move(input), target_type);
 	auto compress_stats = CreateIntegralCastStats(target_type, stats);
 	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
 	                                     CompressedMaterializationType::CAST);
@@ -530,7 +543,7 @@ unique_ptr<Expression> CompressedMaterialization::CreateRestoreExpression(unique
 	case CompressedMaterializationType::FUNCTION:
 		return GetDecompressExpression(std::move(input), binding_info.type, stats);
 	case CompressedMaterializationType::CAST:
-		return BoundCastExpression::AddCastToType(context, std::move(input), binding_info.type);
+		return CMHelper::CreateUncheckedCast(context, std::move(input), binding_info.type);
 	default:
 		throw InternalException("Invalid compressed materialization type");
 	}

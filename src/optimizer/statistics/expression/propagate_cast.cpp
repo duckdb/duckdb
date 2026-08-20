@@ -269,6 +269,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateCast(BoundFunctionExpr
 	}
 	auto result_stats =
 	    TryPropagateCast(*child_stats, BoundCastExpression::Child(cast).GetReturnType(), cast.GetReturnType());
+	if (result_stats) {
+		BoundCastExpression::GetBoundCastMutable(cast).TrySetUnchecked();
+	}
 	if (BoundCastExpression::IsTryCast(cast) && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}

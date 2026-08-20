@@ -137,14 +137,34 @@ public:
 	//! Whether this is the fallback cast used when no cast exists between the types
 	//! It throws for any non-NULL value, regardless of the types involved
 	bool IsNullCast() const;
+	//! Register an unchecked implementation of this cast
+	void SetUncheckedFunction(cast_function_t new_function) {
+		unchecked_function = new_function;
+	}
+	//! Switch to the unchecked implementation, if one is available
+	bool TrySetUnchecked() {
+		if (!unchecked_function) {
+			return false;
+		}
+		function = unchecked_function;
+		is_unchecked = true;
+		return true;
+	}
+	bool IsUnchecked() const {
+		return is_unchecked;
+	}
 	void SetFunction(cast_function_t new_function) {
 		function = new_function;
+		unchecked_function = nullptr;
+		is_unchecked = false;
 	}
 
 private:
 	cast_function_t function;
+	cast_function_t unchecked_function = nullptr;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
+	bool is_unchecked = false;
 };
 
 struct BindCastInput {

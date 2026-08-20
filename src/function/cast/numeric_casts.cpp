@@ -4,30 +4,48 @@
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/types/bignum.hpp"
 
+#include <type_traits>
+
 namespace duckdb {
+
+struct UncheckedNumericCast {
+	template <class SRC, class DST>
+	static DST Operation(SRC input) {
+		return static_cast<DST>(input);
+	}
+};
+
+template <class SRC, class DST>
+static BoundCastInfo GetNumericCast() {
+	auto result = BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, DST, duckdb::NumericTryCast>);
+	if constexpr (std::is_integral<SRC>::value && std::is_integral<DST>::value) {
+		result.SetUncheckedFunction(&VectorCastHelpers::TemplatedCastLoop<SRC, DST, UncheckedNumericCast>);
+	}
+	return result;
+}
 
 template <class SRC>
 static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const LogicalType &target) {
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, bool, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, bool>();
 	case LogicalTypeId::TINYINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, int8_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, int8_t>();
 	case LogicalTypeId::SMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, int16_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, int16_t>();
 	case LogicalTypeId::INTEGER:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, int32_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, int32_t>();
 	case LogicalTypeId::BIGINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, int64_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, int64_t>();
 	case LogicalTypeId::UTINYINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, uint8_t>();
 	case LogicalTypeId::USMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, uint16_t>();
 	case LogicalTypeId::UINTEGER:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, uint32_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, uint32_t>();
 	case LogicalTypeId::UBIGINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, uint64_t, duckdb::NumericTryCast>);
+		return GetNumericCast<SRC, uint64_t>();
 	case LogicalTypeId::HUGEINT:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>);
 	case LogicalTypeId::UHUGEINT:
