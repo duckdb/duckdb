@@ -155,7 +155,7 @@ SELECT regexp_extract('how much good would a good duck duck if a good duck could
 goo
 
 statement error
-SELECT regexp_extract('foobarbaz', 'B..', 0, NULL);
+SELECT regexp_extract('foobarbaz', 'B..', CAST(NULL as CHAR))
 ----
 must not be NULL
 

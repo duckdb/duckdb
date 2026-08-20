@@ -387,7 +387,7 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			regexp_util::ParseGroupNameList(bound_function.GetName().GetIdentifierName(), group_or_options,
 			                                constant_string, options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
-		} else if (group_or_options.type().id() == LogicalTypeId::VARCHAR) {
+		} else if (group_or_options.type() == LogicalType::VARCHAR) {
 			ParseRegexOptions(group_or_options, options, nullptr, &no_match_returns_input);
 		} else if (group_or_options.IsNull()) {
 			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
