@@ -427,8 +427,9 @@ struct CheckpointOnDetachSetting {
 	using RETURN_TYPE = CheckpointOnDetach;
 	static constexpr const char *Name = "checkpoint_on_detach";
 	static constexpr const char *Description =
-	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
-	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	    "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint "
+	    "does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT "
+	    "defers to the global checkpoint_on_shutdown setting.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -844,17 +845,6 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct DeprecatedUsingKeySyntaxSetting {
-	using RETURN_TYPE = DeprecatedUsingKeySyntax;
-	static constexpr const char *Name = "deprecated_using_key_syntax";
-	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "DEFAULT";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DialectCompatibilityModeSetting {
@@ -1906,6 +1896,19 @@ struct SecretDirectorySetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ShowBehaviorSetting {
+	using RETURN_TYPE = ShowBehaviorType;
+	static constexpr const char *Name = "show_behavior";
+	static constexpr const char *Description =
+	    "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), "
+	    "'table' (always a table), or 'setting' (always a setting)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct StandardVectorSizeSetting {

@@ -192,8 +192,6 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
-enum class DeprecatedUsingKeySyntax : uint8_t;
-
 enum class DestroyBufferUpon : uint8_t;
 
 enum class DialectCompatibilityMode : uint8_t;
@@ -495,6 +493,8 @@ enum class SetScope : uint8_t;
 enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
+
+enum class ShowBehaviorType : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -864,9 +864,6 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
-
-template<>
-const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
@@ -1322,6 +1319,9 @@ template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
+
+template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
 
 template<>
@@ -1753,9 +1753,6 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
-
-template<>
-DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
@@ -2209,6 +2206,9 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
+
+template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);

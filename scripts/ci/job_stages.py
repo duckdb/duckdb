@@ -21,6 +21,7 @@ COMMON_JOBS = [
     "swift",
     "windows",
     "no-string-inline",
+    "no-rtti",
     "vector-sizes",
     "threadsan",
     "linux-configs",

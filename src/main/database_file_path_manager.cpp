@@ -47,12 +47,12 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseMan
 					return InsertDatabasePathResult::ALREADY_EXISTS;
 				}
 				throw ResourceInUseException(
-				    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is in "
+				    "Unique file handle conflict: Cannot attach %s - the database file \"%s\" is in "
 				    "the process of being detached",
 				    name, path);
 			}
 			throw ResourceInUseException(
-			    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
+			    "Unique file handle conflict: Cannot attach %s - the database file \"%s\" is already "
 			    "attached by database \"%s\"",
 			    name, path, existing.name);
 		}

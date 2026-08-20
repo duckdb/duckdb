@@ -578,6 +578,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
+	table_function.named_parameters["utf8_validation"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
@@ -641,6 +642,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identif
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(values[0]));
 		return true;
 	}
+	if (key == "utf8_validation") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet utf8_validation cannot be empty!");
+		}
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(values[0]));
+		return true;
+	}
 	return false;
 }
 
@@ -696,6 +704,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "prefetch_strategy") {
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(val));
+		return true;
+	}
+	if (key == "utf8_validation") {
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(val));
 		return true;
 	}
 	return false;

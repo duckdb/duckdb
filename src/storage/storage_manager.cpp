@@ -778,9 +778,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			}
 			// A non-initial database can be detached and reattached, so scope invalidation to this db.
 			db.Invalidate(error.RawMessage());
-			throw IOException("Checkpoint failed for database \"%s\". The database has been invalidated. Original "
+			throw IOException("Checkpoint failed for database %s. The database has been invalidated. Original "
 			                  "error: %s",
-			                  db.GetName().GetIdentifierName(), error.RawMessage());
+			                  db.GetName(), error.RawMessage());
 		}
 	}
 
