@@ -11,6 +11,8 @@ add_library_unity(
   duckdb_optimizer
   OBJECT
   aggregate_function_rewriter.cpp
+  aggregate_reuse.cpp
+  materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
   column_binding_replacer.cpp

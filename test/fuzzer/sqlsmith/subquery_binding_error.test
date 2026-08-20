@@ -2,9 +2,6 @@
 # description: Fuzzer #57: subquery binding error
 # group: [sqlsmith]
 
-# FIXME
-mode skip flaky
-
 statement ok
 CREATE TABLE all_types("varchar" VARCHAR);
 

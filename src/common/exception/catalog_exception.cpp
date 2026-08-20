@@ -49,7 +49,7 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const Identifi
 }
 
 CatalogException CatalogException::MissingEntry(const string &type, const Identifier &name,
-                                                const vector<string> &suggestions, QueryErrorContext context) {
+                                                const vector<Identifier> &suggestions, QueryErrorContext context) {
 	auto extra_info = Exception::InitializeExtraInfo("MISSING_ENTRY", context.query_location);
 	extra_info["error_subtype"] = "MISSING_ENTRY";
 	extra_info["name"] = name.GetIdentifierName();
@@ -57,9 +57,10 @@ CatalogException CatalogException::MissingEntry(const string &type, const Identi
 	if (!suggestions.empty()) {
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
-	return CatalogException(extra_info, StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
-	                                                       StringUtil::CandidatesErrorMessage(
-	                                                           suggestions, name.GetIdentifierName(), "Did you mean")));
+	return CatalogException(
+	    extra_info, StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
+	                                   StringUtil::CandidatesErrorMessage(IdentifiersToStrings(suggestions),
+	                                                                      name.GetIdentifierName(), "Did you mean")));
 }
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const Identifier &name,

@@ -31,6 +31,9 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (width_value.IsNull()) {
 			throw BinderException("DECIMAL type width cannot be NULL");
 		}
+		if (!width_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type width must be an integral type");
+		}
 		if (width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			width = width_value.GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
@@ -43,6 +46,9 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		auto scale_value = modifiers[1].GetValue();
 		if (scale_value.IsNull()) {
 			throw BinderException("DECIMAL type scale cannot be NULL");
+		}
+		if (!scale_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type scale must be an integral type");
 		}
 		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			scale = scale_value.GetValueUnsafe<uint8_t>();

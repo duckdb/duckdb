@@ -167,6 +167,8 @@ struct ParquetWriterOptions {
 	optional_idx dictionary_size_limit;
 	//! The maximum bytes of string-data to put into the dictionary, per column/field
 	idx_t string_dictionary_page_size_limit;
+	//! The maximum uncompressed size of a data page
+	idx_t data_page_size_limit;
 	//! Whether to use bloom filters or not
 	bool enable_bloom_filters;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
@@ -230,6 +232,9 @@ public:
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
 		return options.string_dictionary_page_size_limit;
+	}
+	idx_t DataPageSizeLimit() const {
+		return options.data_page_size_limit;
 	}
 	bool EnableBloomFilters() const {
 		return options.enable_bloom_filters;

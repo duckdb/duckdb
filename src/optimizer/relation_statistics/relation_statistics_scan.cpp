@@ -238,6 +238,16 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	auto cardinality_after_filters = cardinality;
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RelationStatisticsHelper::InspectTableFilter");
 	auto &expr = *expr_filter.expr;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expr.Cast<BoundFunctionExpression>();
+		if (function.Function().GetName() == "!~~" && !base_stats.CanHaveNull()) {
+			if (cardinality == 0) {
+				return 0;
+			}
+			return MaxValue<idx_t>(
+			    LossyNumericCast<idx_t>(static_cast<double>(cardinality) * (1.0 - DEFAULT_SELECTIVITY)), 1);
+		}
+	}
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.GetChildren()) {

@@ -56,7 +56,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 }
 
 TEST_CASE("Test allowed options", "[api]") {
-	case_insensitive_map_t<Value> config_dict;
+	identifier_map_t<Value> config_dict;
 	string option;
 
 	SECTION("allowed_directories") {

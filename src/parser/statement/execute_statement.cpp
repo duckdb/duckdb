@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 
+#include "duckdb/common/sql_identifier.hpp"
+
 namespace duckdb {
 
 ExecuteStatement::ExecuteStatement() : SQLStatement(StatementType::EXECUTE_STATEMENT) {
@@ -19,7 +21,7 @@ unique_ptr<SQLStatement> ExecuteStatement::Copy() const {
 string ExecuteStatement::ToString() const {
 	string result = "";
 	result += "EXECUTE";
-	result += " " + name;
+	result += " " + SQLIdentifier(name);
 	vector<string> stringified;
 	for (auto &val : named_values) {
 		stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second->ToString()));

@@ -101,9 +101,9 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 
 // FIXME: use serialization scripts?
 unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer, const string &secret_path) {
-	auto type = deserializer.ReadProperty<string>(100, "type");
-	auto provider = deserializer.ReadProperty<string>(101, "provider");
-	auto name = deserializer.ReadProperty<string>(102, "name");
+	auto type = deserializer.ReadProperty<Identifier>(100, "type");
+	auto provider = deserializer.ReadProperty<Identifier>(101, "provider");
+	auto name = deserializer.ReadProperty<Identifier>(102, "name");
 	vector<string> scope;
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
@@ -113,8 +113,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether
 	case SecretSerializationType::KEY_VALUE_SECRET:
-		return KeyValueSecret::Deserialize<KeyValueSecret>(
-		    deserializer, BaseSecret(scope, Identifier(type), Identifier(provider), Identifier(name)));
+		return KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
 	// Continues below: we need to do a type lookup to find the secret deserialize method
 	case SecretSerializationType::CUSTOM:
 		break;
@@ -125,7 +124,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 	SecretType deserialized_type;
 	if (!TryLookupTypeInternal(type, deserialized_type)) {
-		ThrowTypeNotFoundError(Identifier(type), secret_path);
+		ThrowTypeNotFoundError(type, secret_path);
 	}
 
 	if (!deserialized_type.deserializer) {
@@ -133,8 +132,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
-	return deserialized_type.deserializer(deserializer,
-	                                      BaseSecret(scope, Identifier(type), Identifier(provider), Identifier(name)));
+	return deserialized_type.deserializer(deserializer, BaseSecret(scope, type, provider, name));
 }
 
 void SecretManager::RegisterSecretType(SecretType &type) {
@@ -232,7 +230,7 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const I
 
 	// Try autoloading
 	lck.unlock();
-	AutoloadExtensionForFunction(type.GetIdentifierName(), provider.GetIdentifierName());
+	AutoloadExtensionForFunction(type, provider);
 	lck.lock();
 
 	lookup = secret_functions.find(type);
@@ -261,7 +259,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Lookup function
 	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
 	if (!function_lookup) {
-		ThrowProviderNotFoundError(input.type.GetIdentifierName(), input.provider.GetIdentifierName());
+		ThrowProviderNotFoundError(input.type, input.provider);
 	}
 
 	// Call the function
@@ -298,7 +296,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	auto function = LookupFunctionInternal(type, provider);
 
 	if (!function) {
-		ThrowProviderNotFoundError(info.type.GetIdentifierName(), info.provider.GetIdentifierName(), default_provider);
+		ThrowProviderNotFoundError(info.type, info.provider, default_provider);
 	}
 
 	auto bound_info = info;
@@ -488,9 +486,9 @@ void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
 	secret_types[type.name] = type;
 }
 
-bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_out) {
+bool SecretManager::TryLookupTypeInternal(const Identifier &type, SecretType &type_out) {
 	unique_lock<mutex> lck(manager_lock);
-	auto lookup = secret_types.find(Identifier(type));
+	auto lookup = secret_types.find(type);
 	if (lookup != secret_types.end()) {
 		type_out = lookup->second;
 		return true;
@@ -501,7 +499,7 @@ bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_o
 	AutoloadExtensionForType(type);
 	lck.lock();
 
-	lookup = secret_types.find(Identifier(type));
+	lookup = secret_types.find(type);
 	if (lookup != secret_types.end()) {
 		type_out = lookup->second;
 		return true;
@@ -512,7 +510,7 @@ bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_o
 
 SecretType SecretManager::LookupTypeInternal(const Identifier &type) {
 	SecretType return_value;
-	if (!TryLookupTypeInternal(type.GetIdentifierName(), return_value)) {
+	if (!TryLookupTypeInternal(type, return_value)) {
 		ThrowTypeNotFoundError(type);
 	}
 	return return_value;
@@ -630,13 +628,17 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 	}
 }
 
-void SecretManager::AutoloadExtensionForType(const string &type) {
-	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
+//! EXTENSION_SECRET_PROVIDERS is keyed on the composite "type/provider" name
+static Identifier SecretProviderKey(const Identifier &type, const Identifier &provider) {
+	return Identifier(type + "/" + provider);
+}
+
+void SecretManager::AutoloadExtensionForType(const Identifier &type) {
+	ExtensionHelper::TryAutoloadFromEntry(*db, type, EXTENSION_SECRET_TYPES);
 }
 
 void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string &secret_path) {
-	auto entry =
-	    ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type.GetIdentifierName()), EXTENSION_SECRET_TYPES);
+	auto entry = ExtensionHelper::FindExtensionInEntries(type, EXTENSION_SECRET_TYPES);
 	string error_message;
 
 	if (!entry.empty() && db) {
@@ -661,23 +663,21 @@ void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string 
 	throw InvalidInputException(error_message);
 }
 
-void SecretManager::AutoloadExtensionForFunction(const string &type, const string &provider) {
-	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type) + "/" + StringUtil::Lower(provider),
-	                                      EXTENSION_SECRET_PROVIDERS);
+void SecretManager::AutoloadExtensionForFunction(const Identifier &type, const Identifier &provider) {
+	ExtensionHelper::TryAutoloadFromEntry(*db, SecretProviderKey(type, provider), EXTENSION_SECRET_PROVIDERS);
 }
 
-void SecretManager::ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default) {
-	auto entry = ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type) + "/" + StringUtil::Lower(provider),
-	                                                     EXTENSION_SECRET_PROVIDERS);
+void SecretManager::ThrowProviderNotFoundError(const Identifier &type, const Identifier &provider, bool was_default) {
+	auto entry = ExtensionHelper::FindExtensionInEntries(SecretProviderKey(type, provider), EXTENSION_SECRET_PROVIDERS);
 	if (!entry.empty() && db) {
 		string error_message = was_default ? "Default secret provider" : "Secret provider";
-		error_message +=
-		    " '" + provider + "' for type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
+		error_message += StringUtil::Format(" %s for type %s does not exist, but it exists in the %s extension.",
+		                                    provider, type, entry);
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		throw InvalidInputException(error_message);
 	}
-	throw InvalidInputException("Secret provider '%s' not found for type '%s'", provider, type);
+	throw InvalidInputException("Secret provider %s not found for type %s", provider, type);
 }
 
 optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const Identifier &name) {

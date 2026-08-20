@@ -1,0 +1,170 @@
+# name: test/sql/explain/explain_formats.test
+# description: Every EXPLAIN output format, over a plan deep enough to exercise the tree renderers
+# group: [explain]
+
+# Picked from the published fast-suite coverage report (https://duckdb.github.io/duckdb-ci/coverage/):
+# the non-text tree renderers are the least covered rendering code in the tree -
+# graphviz 50.0%, yaml 44.8%, mermaid 56.4%, json 48.8%, html 68.4%, text 69.1% - because only a
+# handful of tests ever ask for a format other than the default. Probing this surface immediately
+# turned up two INTERNAL errors, pinned at the bottom of this file.
+
+statement ok
+CREATE TABLE renderer_t AS SELECT i AS i, i % 7 AS g, 'v' || (i % 3)::VARCHAR AS s FROM range(200) t(i)
+
+# a plan with a top-n over a window over an aggregate over a join over two filtered scans, so the
+# renderers have to walk a multi-level tree with several children and long expression strings
+statement ok
+CREATE VIEW renderer_plan AS
+SELECT a.g, count(*) AS c, sum(sum(a.i)) OVER () AS w
+FROM renderer_t a JOIN renderer_t b ON a.i = b.i
+WHERE a.i > 2 AND b.s <> 'v9'
+GROUP BY a.g
+ORDER BY a.g
+LIMIT 3
+
+query II
+EXPLAIN (FORMAT text) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:.*Top N.*Hash Join.*
+
+query II
+EXPLAIN (FORMAT json) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:(?s).*"name": "TOP_N".*"children".*"HASH_JOIN".*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:(?s).*- name: "TOP_N".*children:.*HASH_JOIN.*
+
+query II
+EXPLAIN (FORMAT html) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:(?s).*<!DOCTYPE html>.*TOP_N.*HASH_JOIN.*</html>.*
+
+query II
+EXPLAIN (FORMAT graphviz) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:(?s).*digraph G \{.*TOP_N.*HASH_JOIN.*->.*\}.*
+
+query II
+EXPLAIN (FORMAT mermaid) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:(?s).*flowchart TD.*TOP_N.*HASH_JOIN.*
+
+# the aliases of the text renderer
+query II
+EXPLAIN (FORMAT default) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:.*Top N.*
+
+query II
+EXPLAIN (FORMAT query_tree) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:.*Top N.*
+
+query II
+EXPLAIN (FORMAT query_tree_optimizer) SELECT * FROM renderer_plan
+----
+physical_plan	<REGEX>:.*Top N.*
+
+# the format that deliberately renders nothing
+query II
+EXPLAIN (FORMAT no_output) SELECT * FROM renderer_plan
+----
+physical_plan	(empty)
+
+# format names are case insensitive, and accept a quoted string as well as a bare identifier
+query II
+EXPLAIN (FORMAT JSON) SELECT 42
+----
+physical_plan	<REGEX>:(?s).*"name":.*
+
+query II
+EXPLAIN (FORMAT 'graphviz') SELECT 42
+----
+physical_plan	<REGEX>:.*digraph G.*
+
+# EXPLAIN ANALYZE runs the query and renders the profiling tree instead of the plan
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM renderer_plan
+----
+analyzed_plan	<REGEX>:(?s).*"operator":.*"type": "RESULT_COLLECTOR".*
+
+query II
+EXPLAIN ANALYZE (FORMAT graphviz) SELECT * FROM renderer_plan
+----
+analyzed_plan	<REGEX>:.*digraph G.*
+
+query II
+EXPLAIN ANALYZE (FORMAT yaml) SELECT * FROM renderer_plan
+----
+analyzed_plan	<REGEX>:.*- name:.*
+
+query II
+EXPLAIN ANALYZE (FORMAT mermaid) SELECT * FROM renderer_plan
+----
+analyzed_plan	<REGEX>:.*flowchart TD.*
+
+query II
+EXPLAIN ANALYZE (FORMAT html) SELECT * FROM renderer_plan
+----
+analyzed_plan	<REGEX>:(?s).*<!DOCTYPE html>.*
+
+# renderers must also survive a plan with a single node and no children
+query II
+EXPLAIN (FORMAT graphviz) SELECT 1
+----
+physical_plan	<REGEX>:.*digraph G.*
+
+query II
+EXPLAIN (FORMAT mermaid) SELECT 1
+----
+physical_plan	<REGEX>:.*flowchart TD.*
+
+# ... and one whose expressions contain characters each format has to escape
+statement ok
+CREATE TABLE renderer_escapes("we<i>rd ""col""" VARCHAR)
+
+query II
+EXPLAIN (FORMAT html) SELECT "we<i>rd ""col""" FROM renderer_escapes
+----
+physical_plan	<REGEX>:(?s).*<!DOCTYPE html>.*
+
+query II
+EXPLAIN (FORMAT json) SELECT "we<i>rd ""col""" FROM renderer_escapes
+----
+physical_plan	<REGEX>:(?s).*"name":.*
+
+# --- error paths -------------------------------------------------------------------------------------
+
+statement error
+EXPLAIN (FORMAT bogus) SELECT 42
+----
+<REGEX>:Invalid Input Error.*"bogus" is not a valid FORMAT argument, valid options are:.*
+
+statement error
+EXPLAIN (FORMAT json, FORMAT yaml) SELECT 42
+----
+Invalid Input Error: FORMAT can not be provided more than once
+
+statement error
+EXPLAIN (WHATEVER) SELECT 42
+----
+<REGEX>:Not implemented Error.*Unimplemented explain type: whatever.*
+
+# Regression: both of these used to raise
+# "INTERNAL Error: Attempted to access index 0 within vector of size 0" from the EXPLAIN transformer,
+# because the FORMAT option carried no constant child. FORMAT with no argument at all is now a
+# regular user error, and a bare DEFAULT keyword (which parses as a DefaultExpression, not an
+# identifier) selects the default renderer, as the list in the "not a valid FORMAT argument"
+# message promises.
+statement error
+EXPLAIN (FORMAT) SELECT 42
+----
+Invalid Input Error: FORMAT requires a single format name, e.g. FORMAT json
+
+statement error
+EXPLAIN (FORMAT 1 + 1) SELECT 42
+----
+Invalid Input Error: FORMAT requires a single format name, e.g. FORMAT json

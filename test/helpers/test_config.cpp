@@ -769,7 +769,7 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 		for (const auto &value : list_children) {
 			auto &struct_children = StructValue::GetChildren(value);
 			ConfigSetting config_setting;
-			config_setting.name = StringValue::Get(struct_children[0]);
+			config_setting.name = struct_children[0].GetValue<Identifier>();
 			config_setting.value = StringValue::Get(struct_children[1]);
 			result.push_back(std::move(config_setting));
 		}

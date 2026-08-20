@@ -5,7 +5,7 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "yyjson_utils.hpp"
+#include "yyjson_memory.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -487,30 +487,25 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
                               idx_t offset, idx_t count, optional_idx row) {
 	auto &error = conversion_data.error;
 
-	ConvertedJSONHolder json_holder;
+	ConvertedJSONHolder holder(Allocator::DefaultAllocator());
 
 	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
+		const auto row_index = row.IsValid() ? row.GetIndex() : i;
+		const auto json_val =
+		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
 			return false;
 		}
 
-		size_t len;
-		json_holder.stringified_json =
-		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!json_holder.stringified_json) {
-			error = "Could not serialize the JSON to string, yyjson failed";
+		const auto serialized = holder.Serialize(json_val, error);
+		if (!serialized) {
 			return false;
 		}
-		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data.WriteValue(res);
-		free(json_holder.stringified_json);
-		json_holder.stringified_json = nullptr;
+
+		result_data.WriteValue(*serialized);
+		holder.Reset();
 	}
 
 	return true;

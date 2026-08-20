@@ -147,6 +147,7 @@
         "test/fuzzer/sqlsmith/interval_multiply_overflow.test",
         "test/fuzzer/sqlsmith/mad_overflow.test",
         "test/fuzzer/sqlsmith/makedate_overflow.test",
+        "test/fuzzer/sqlsmith/statistics_assertion_trigger.test",
         "test/fuzzer/sqlsmith/timestamp_overflow.test",
         "test/fuzzer/sqlsmith/timestamptz_double_cast.test",
         "test/fuzzer/sqlsmith/window-list-value.test",

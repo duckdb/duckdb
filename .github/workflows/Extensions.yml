@@ -173,12 +173,6 @@ jobs:
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
             extra_toolchains: rust
-          - name: External Extensions
-            artifact_prefix: external-extensions
-            exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
-            opt_in_archs: ''
-            extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
-            extra_toolchains: rust
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       # We piggy-back extension-template to build the extensions in extension_config

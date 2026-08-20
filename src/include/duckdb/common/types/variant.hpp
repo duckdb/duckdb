@@ -21,6 +21,7 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 class Vector;
+class VariantNode;
 struct ValidityMask;
 struct UnifiedVariantVector;
 struct RecursiveUnifiedVectorFormat;
@@ -209,6 +210,8 @@ struct VariantCasts {
 	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
 	                                                           const UnifiedVariantVectorData &source, idx_t row,
 	                                                           uint32_t values_idx);
+	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
+	                                                           const VariantNode &source, bool sort_object_keys = true);
 };
 
 } // namespace duckdb

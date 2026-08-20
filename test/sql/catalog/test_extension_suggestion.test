@@ -9,4 +9,4 @@ require no_extension_autoloading "EXPECTED: This tests what happens when extensi
 statement error
 SELECT from_json('{DATA_DIR}/json/array_of_empty_arrays.json');
 ----
-Catalog Error: Scalar Function with name "from_json" is not in the catalog, but it exists in the json extension.
+Catalog Error: Scalar Function with name from_json is not in the catalog, but it exists in the json extension.

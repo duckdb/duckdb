@@ -59,7 +59,7 @@ public:
 	bool Match(ExpressionType type) override {
 		return type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 		       type == ExpressionType::COMPARE_LESSTHANOREQUALTO || type == ExpressionType::COMPARE_LESSTHAN ||
-		       type == ExpressionType::COMPARE_GREATERTHAN;
+		       type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	}
 };
 } // namespace duckdb

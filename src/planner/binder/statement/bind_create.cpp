@@ -444,11 +444,16 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Constant-fold all default parameter expressions
+		identifier_set_t integer_literal_defaults;
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
 			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				auto &value = param_expr->Cast<ConstantExpression>().GetValue();
+				if (value.type().IsIntegral() && !value.IsNull()) {
+					integer_literal_defaults.insert(param_name);
+				}
 				continue;
 			}
 
@@ -481,7 +486,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
+				auto &value = it->second->Cast<ConstantExpression>().GetValue();
+				auto val_type = value.type();
+				if (integer_literal_defaults.find(param_name) != integer_literal_defaults.end()) {
+					val_type = LogicalType::INTEGER_LITERAL(value);
+				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",

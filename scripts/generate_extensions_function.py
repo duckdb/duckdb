@@ -813,6 +813,12 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_STORAGE_EXTENSIONS[] = {
+    {"arn", "aws"},
+}; // END_OF_EXTENSION_STORAGE_EXTENSIONS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
     {"af", "icu"},    {"am", "icu"},    {"ar", "icu"},     {"ar_sa", "icu"}, {"as", "icu"},    {"az", "icu"},
     {"be", "icu"},    {"bg", "icu"},    {"bn", "icu"},     {"bo", "icu"},    {"br", "icu"},    {"bs", "icu"},

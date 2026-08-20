@@ -397,18 +397,24 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-	if (StorageExtension::Find(config, extension_name)) {
+	auto storage_extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (StorageExtension::Find(config, storage_extension_name)) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
+	auto extension_name =
+	    ExtensionHelper::FindExtensionInEntries(Identifier(storage_extension_name), EXTENSION_STORAGE_EXTENSIONS);
+	if (extension_name.empty()) {
+		//! Couldn't find a mapping, assume that the storage extension name is also the extension name
+		extension_name = storage_extension_name;
+	}
 
 	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
-	if (!Catalog::TryAutoLoad(context, options.db_type)) {
+	if (!Catalog::TryAutoLoad(context, extension_name)) {
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, {options.db_type});
+		ExtensionHelper::LoadExternalExtension(context, {extension_name});
 	}
 }
 

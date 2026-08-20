@@ -193,7 +193,7 @@ void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, co
 	config.options.allowed_configs.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
-		config.AddAllowedConfig(val.GetValue<string>());
+		config.AddAllowedConfig(val.GetValue<Identifier>());
 	}
 }
 

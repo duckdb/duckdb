@@ -11,8 +11,8 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 	Settings::Set(context, setting_index, scope, std::move(target_value));
 }
 
-void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
-                                       SetScope scope, const Value &value) {
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, SetScope scope,
+                                       const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
 	if (extension_option.set_function) {
@@ -59,19 +59,20 @@ SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScop
 SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                               OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
+	Identifier option_name(name.ToStdString());
 	// check if we are allowed to change the configuration option
-	config.CheckLock(name);
-	auto option = DBConfig::GetOptionByName(name);
+	config.CheckLock(option_name);
+	auto option = DBConfig::GetOptionByName(option_name);
 	if (!option) {
 		ExtensionOption extension_option;
 		// check if this is an extra extension variable
-		if (!config.TryGetExtensionOption(name, extension_option)) {
-			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			if (!config.TryGetExtensionOption(name, extension_option)) {
+		if (!config.TryGetExtensionOption(option_name, extension_option)) {
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, option_name);
+			if (!config.TryGetExtensionOption(option_name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
-		SetExtensionVariable(context.client, extension_option, name, scope, value);
+		SetExtensionVariable(context.client, extension_option, scope, value);
 		return SourceResultType::FINISHED;
 	}
 	SetScope variable_scope = GetSettingScope(*option, scope);

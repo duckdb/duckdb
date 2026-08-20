@@ -558,3 +558,34 @@ statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
 ----
 Parser Error: Increment should be passed at most once
+
+# NULL is not a valid value for sequence options
+statement error
+CREATE SEQUENCE wrongseq START NULL;
+----
+<REGEX>:.*Parser Error.*START value must not be NULL.*
+
+statement error
+CREATE SEQUENCE wrongseq START WITH NULL;
+----
+<REGEX>:.*Parser Error.*START value must not be NULL.*
+
+statement error
+CREATE SEQUENCE wrongseq MINVALUE NULL;
+----
+<REGEX>:.*Parser Error.*MINVALUE must not be NULL.*
+
+statement error
+CREATE SEQUENCE wrongseq MAXVALUE NULL;
+----
+<REGEX>:.*Parser Error.*MAXVALUE must not be NULL.*
+
+statement error
+CREATE SEQUENCE wrongseq INCREMENT BY NULL;
+----
+<REGEX>:.*Parser Error.*INCREMENT must not be NULL.*
+
+statement error
+CREATE SEQUENCE wrongseq CYCLE START NULL;
+----
+<REGEX>:.*Parser Error.*START value must not be NULL.*
