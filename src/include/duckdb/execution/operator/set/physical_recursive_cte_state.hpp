@@ -43,8 +43,9 @@ public:
 	RecursiveCTEPartialKeyIndex(Allocator &allocator, const vector<LogicalType> &full_key_types,
 	                            vector<idx_t> key_indices);
 
-	void AddGroups(DataChunk &full_keys, const SelectionVector &new_groups, Vector &new_group_addresses,
-	               idx_t new_group_count);
+	//! Key and address selections can differ when addresses have already been compacted.
+	void AddGroups(DataChunk &full_keys, const SelectionVector &key_selection, Vector &group_addresses,
+	               const SelectionVector &address_selection, idx_t group_count);
 	idx_t GetHead(hash_t hash) const;
 	const Entry &GetEntry(idx_t entry_idx) const;
 	idx_t Count() const;

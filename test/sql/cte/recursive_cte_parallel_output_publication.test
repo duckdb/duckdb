@@ -1,5 +1,5 @@
 # name: test/sql/cte/recursive_cte_parallel_output_publication.test
-# description: Parallel recursive workers publish private output without binding a shared append state
+# description: Parallel correlated recursive workers publish private output without binding a shared append state
 # group: [cte]
 
 require vector_size 2048
@@ -10,19 +10,39 @@ SET threads=2;
 statement ok
 SET max_execution_time=10000;
 
-# Keep the real parallel correlated shape while bounding the number of candidate obstacles.
 statement ok
-SET VARIABLE aoc_sql = (
-	SELECT replace(
-		content,
-		'candidates(vx,vy) as (select * from part1pos, startpos where vx<>x or vy<>y)',
-		'candidate_pool(vx,vy) as (select * from part1pos, startpos where vx<>x or vy<>y), ' ||
-		'candidates(vx,vy) as (select * from candidate_pool order by vx, vy limit 3072)'
-	)
-	FROM read_text('benchmark/aoc24/queries/day06.sql')
-);
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
 
 query II
-SELECT * FROM query(getvariable('aoc_sql'));
+WITH candidates AS MATERIALIZED (
+	SELECT i FROM range(8192) r(i)
+)
+SELECT count(*), sum(i)
+FROM candidates c
+WHERE EXISTS (
+	WITH RECURSIVE t(v) AS (
+		VALUES (0)
+		UNION ALL
+		SELECT v + 1 FROM t WHERE v < c.i % 4
+	)
+	SELECT 1 FROM t WHERE v = c.i % 4
+);
 ----
-5131	1154
+8192	33550336
+
+statement ok
+CALL disable_logging();
+
+# Multiple workers must actually publish local recursive output for this to cover the append-state path.
+query I
+SELECT count(*)
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics'
+  AND info.epochs::UBIGINT = 4
+  AND info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+  AND info.scheduled_tasks::UBIGINT >= info.scheduled_workers::UBIGINT;
+----
+1

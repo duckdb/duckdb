@@ -484,7 +484,7 @@ idx_t RecursiveCTEState::FinalizeUsingKeyDelta(bool update_partial_indexes, bool
 			    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			for (auto &index : partial_key_indexes) {
 				index->AddGroups(delta.key_scan_rows, *FlatVector::IncrementalSelectionVector(), group_addresses,
-				                 row_count);
+				                 *FlatVector::IncrementalSelectionVector(), row_count);
 			}
 			if (collect_metrics) {
 				const auto index_end = std::chrono::steady_clock::now();
