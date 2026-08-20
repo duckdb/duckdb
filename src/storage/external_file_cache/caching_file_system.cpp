@@ -282,8 +282,9 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 			}
 			// A successful validator check refreshes freshness. Without validators, preserve the original deadline.
 			const bool revalidated = cache_is_valid && ExternalFileCache::HasValidationMetadata(validation_info);
-			const auto valid_until = (!cache_is_valid || revalidated) ? validation_info.cache_valid_until
-			                                                          : cached_file->validation_info.cache_valid_until;
+			const auto valid_until = (first_access || !cache_is_valid || revalidated)
+			                             ? validation_info.cache_valid_until
+			                             : cached_file->validation_info.cache_valid_until;
 			cached_file->validation_info = validation_info;
 			cached_file->validation_info.cache_valid_until = valid_until;
 			cached_file->can_seek = file_handle->CanSeek();
