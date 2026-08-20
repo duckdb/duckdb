@@ -587,7 +587,7 @@ LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vecto
 		if (params.empty()) {
 			return LogicalType(entry->type);
 		} else {
-			throw InvalidInputException("Type '%s' does not take any type parameters", name);
+			throw InvalidInputException("Type %s does not take any type parameters", name);
 		}
 	}
 

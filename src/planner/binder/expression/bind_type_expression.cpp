@@ -77,7 +77,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	if (!type_entry.bind_function) {
 		if (!unbound_parameters.empty()) {
 			// This type does not support type parameters
-			throw BinderException(type_expr, "Type '%s' does not take any type parameters", type_name);
+			throw BinderException(type_expr, "Type %s does not take any type parameters", type_name);
 		}
 
 		// Otherwise, return the user type directly!

@@ -310,8 +310,8 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	for (auto &dependency : dependencies.Set()) {
 		if (dependency.catalog != object.ParentCatalog().GetName()) {
 			throw DependencyException(
-			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
+			    "Error adding dependency for object %s - dependency %s is in catalog "
+			    "%s, which does not match the catalog %s.\nCross catalog dependencies are not supported.",
 			    object.name, dependency.entry.name, dependency.catalog, object.ParentCatalog().GetName());
 		}
 	}
@@ -416,61 +416,61 @@ static string EntryToString(CatalogEntryInfo &info) {
 	auto type = info.type;
 	switch (type) {
 	case CatalogType::TABLE_ENTRY: {
-		return StringUtil::Format("table \"%s\"", info.name);
+		return StringUtil::Format("table %s", info.name);
 	}
 	case CatalogType::SCHEMA_ENTRY: {
-		return StringUtil::Format("schema \"%s\"", info.name);
+		return StringUtil::Format("schema %s", info.name);
 	}
 	case CatalogType::VIEW_ENTRY: {
-		return StringUtil::Format("view \"%s\"", info.name);
+		return StringUtil::Format("view %s", info.name);
 	}
 	case CatalogType::INDEX_ENTRY: {
-		return StringUtil::Format("index \"%s\"", info.name);
+		return StringUtil::Format("index %s", info.name);
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		return StringUtil::Format("sequence \"%s\"", info.name);
+		return StringUtil::Format("sequence %s", info.name);
 	}
 	case CatalogType::COLLATION_ENTRY: {
-		return StringUtil::Format("collation \"%s\"", info.name);
+		return StringUtil::Format("collation %s", info.name);
 	}
 	case CatalogType::COORDINATE_SYSTEM_ENTRY: {
-		return StringUtil::Format("coordinate system \"%s\"", info.name);
+		return StringUtil::Format("coordinate system %s", info.name);
 	}
 	case CatalogType::TYPE_ENTRY: {
-		return StringUtil::Format("type \"%s\"", info.name);
+		return StringUtil::Format("type %s", info.name);
 	}
 	case CatalogType::TABLE_FUNCTION_ENTRY: {
-		return StringUtil::Format("table function \"%s\"", info.name);
+		return StringUtil::Format("table function %s", info.name);
 	}
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		return StringUtil::Format("scalar function \"%s\"", info.name);
+		return StringUtil::Format("scalar function %s", info.name);
 	}
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
-		return StringUtil::Format("aggregate function \"%s\"", info.name);
+		return StringUtil::Format("aggregate function %s", info.name);
 	}
 	case CatalogType::PRAGMA_FUNCTION_ENTRY: {
-		return StringUtil::Format("pragma function \"%s\"", info.name);
+		return StringUtil::Format("pragma function %s", info.name);
 	}
 	case CatalogType::COPY_FUNCTION_ENTRY: {
-		return StringUtil::Format("copy function \"%s\"", info.name);
+		return StringUtil::Format("copy function %s", info.name);
 	}
 	case CatalogType::MACRO_ENTRY: {
-		return StringUtil::Format("macro function \"%s\"", info.name);
+		return StringUtil::Format("macro function %s", info.name);
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		return StringUtil::Format("table macro function \"%s\"", info.name);
+		return StringUtil::Format("table macro function %s", info.name);
 	}
 	case CatalogType::SECRET_ENTRY: {
-		return StringUtil::Format("secret \"%s\"", info.name);
+		return StringUtil::Format("secret %s", info.name);
 	}
 	case CatalogType::SECRET_TYPE_ENTRY: {
-		return StringUtil::Format("secret type \"%s\"", info.name);
+		return StringUtil::Format("secret type %s", info.name);
 	}
 	case CatalogType::SECRET_FUNCTION_ENTRY: {
-		return StringUtil::Format("secret function \"%s\"", info.name);
+		return StringUtil::Format("secret function %s", info.name);
 	}
 	case CatalogType::TRIGGER_ENTRY: {
-		return StringUtil::Format("trigger \"%s\"", info.name);
+		return StringUtil::Format("trigger %s", info.name);
 	}
 	default:
 		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
@@ -529,7 +529,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	}
 
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
-		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
+		throw DependencyException("Could not commit creation of dependency, subject %s has been deleted",
 		                          object.SourceInfo().name);
 	}
 	// The subject still exists by name - check if it is the same object the dependency was created against
@@ -557,7 +557,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			// Which differentiates between objects that we were already aware of (and will subsequently be dropped) and
 			// objects that were introduced inbetween, which should cause this error:
 			throw DependencyException(
-			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    "Could not commit DROP of %s because a dependency was created after the transaction started",
 			    object.name);
 		}
 	});
@@ -572,7 +572,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			// transaction. Only objects that were introduced by other transactions, that this transaction could not
 			// see, should cause this error:
 			throw DependencyException(
-			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    "Could not commit DROP of %s because a dependency was created after the transaction started",
 			    object.name);
 		}
 	});
@@ -606,7 +606,7 @@ catalog_entry_set_t DependencyManager::CheckDropDependencies(CatalogTransaction 
 	});
 	if (!blocking_dependents.empty()) {
 		string error_string =
-		    StringUtil::Format("Cannot drop entry \"%s\" because there are entries that depend on it.\n", object.name);
+		    StringUtil::Format("Cannot drop entry %s because there are entries that depend on it.\n", object.name);
 		error_string += CollectDependents(transaction, blocking_dependents, info);
 		error_string += "Use DROP...CASCADE to drop all dependents.";
 		throw DependencyException(error_string);
@@ -736,7 +736,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			break;
 		}
 		if (disallow_alter) {
-			throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
+			throw DependencyException("Cannot alter entry %s because there are entries that "
 			                          "depend on it.",
 			                          old_obj.name);
 		}

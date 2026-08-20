@@ -23,4 +23,4 @@ DROP INDEX idx;
 statement error
 EXECUTE stmt
 ----
-index 'idx' was not found
+index "idx" was not found
