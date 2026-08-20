@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -298,6 +299,22 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
+		CatalogTransaction catalog_transaction(duck_catalog.GetDatabase(), transaction.transaction_id,
+		                                       transaction.start_time);
+		if (new_entry.type == CatalogType::TABLE_ENTRY && old_entry.type == CatalogType::TABLE_ENTRY) {
+			new_entry.Cast<DuckTableEntry>().ValidateTriggerColumnRename();
+		}
+		if (new_entry.type == CatalogType::TRIGGER_ENTRY) {
+			auto &trigger = new_entry.Cast<TriggerCatalogEntry>();
+			if (trigger.bound_table) {
+				if (!trigger.bound_table->set->IsCurrentEntry(catalog_transaction, *trigger.bound_table)) {
+					throw TransactionException("Catalog write-write conflict on create with \"%s\": table \"%s\" "
+					                           "was altered by a concurrent transaction",
+					                           trigger.name, trigger.base_table->Table());
+				}
+				trigger.bound_table = nullptr;
+			}
+		}
 		// Set the timestamp of the catalog entry to the given commit_id, marking it as committed
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
