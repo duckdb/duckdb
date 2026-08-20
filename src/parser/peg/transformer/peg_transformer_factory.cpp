@@ -89,7 +89,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           Matcher &root_matcher) {
+                                                                           const Matcher &root_matcher) const {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -210,7 +210,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 }
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
-PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) const {
 	if (options.debug_transformer_trampoline_style) {
 		return trampoline_transform_functions;
 	}
@@ -299,8 +299,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
 				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"",
-					                      child.GetExpression().GetAlias().GetIdentifierName());
+					throw BinderException("Duplicate struct entry name %s", child.GetExpression().GetAlias());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {

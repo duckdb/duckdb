@@ -39,7 +39,8 @@ private:
 	};
 
 public:
-	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
+	MatcherFactory(MatcherAllocator &allocator, const PEGKeywordHelper &keyword_helper)
+	    : allocator(allocator), keyword_helper(keyword_helper) {
 	}
 	virtual ~MatcherFactory() = default;
 
@@ -74,6 +75,7 @@ private:
 
 private:
 	MatcherAllocator &allocator;
+	const PEGKeywordHelper &keyword_helper;
 	string_map_t<reference<Matcher>> matchers;
 	mutable case_insensitive_map_t<reference<KeywordMatcher>> keywords;
 	case_insensitive_map_t<KeywordInfo> keyword_overrides;

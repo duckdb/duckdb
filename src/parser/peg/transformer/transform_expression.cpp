@@ -323,7 +323,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			}
 			lowercase_name = "mode";
 		} else {
-			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.Name());
+			throw ParserException("Unknown ordered aggregate %s.", qualified_function.Name());
 		}
 	}
 	auto result = make_uniq<FunctionExpression>(

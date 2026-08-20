@@ -33,23 +33,20 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: unknown field %s in path", field_types[i].first);
 		}
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			throw BinderException("index_key: path field '%s' cannot be NULL",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be NULL", field_types[i].first);
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("index_key: path field '%s' must be VARCHAR",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s must be VARCHAR", field_types[i].first);
 		}
 
 		auto value = StringValue::Get(field_value);
 		if (value.empty()) {
-			throw BinderException("index_key: path field '%s' cannot be empty",
-			                      field_types[i].first.GetIdentifierName());
+			throw BinderException("index_key: path field %s cannot be empty", field_types[i].first);
 		}
 		fields[field_name] = value;
 	}
@@ -92,12 +89,12 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 	}
 
 	if (available.empty()) {
-		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-		                       index_name.GetIdentifierName(), qualified_table);
+		throw CatalogException("index_key: index %s was not found on table %s. No indexes found on this table.",
+		                       index_name, qualified_table);
 	}
 	auto available_list = StringUtil::Join(available, ", ");
-	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s",
-	                       index_name.GetIdentifierName(), qualified_table, available_list);
+	throw CatalogException("index_key: index %s was not found on table %s. Available indexes: %s", index_name,
+	                       qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
