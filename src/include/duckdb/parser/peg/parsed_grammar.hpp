@@ -51,10 +51,10 @@ public:
 	DUCKDB_API optional_ptr<const ParsedGrammarRule> GetRule(const string &rule_name) const;
 	DUCKDB_API void AddRule(const string &rule_definition, grammar_transform_function_t transform = nullptr);
 	DUCKDB_API void AddChoice(const string &rule_name, const string &choice,
-	                          grammar_cursor_function_t find_cursor = nullptr);
+	                          const grammar_cursor_function_t &find_cursor = nullptr);
 	DUCKDB_API void PrependChoice(const string &rule_name, const string &choice,
-	                              grammar_cursor_function_t find_cursor = nullptr);
-	DUCKDB_API void RemoveChoice(const string &rule_name, grammar_cursor_function_t find_cursor);
+	                              const grammar_cursor_function_t &find_cursor = nullptr);
+	DUCKDB_API void RemoveChoice(const string &rule_name, const grammar_cursor_function_t &find_cursor);
 	DUCKDB_API void ReplaceRule(const string &rule_definition, grammar_transform_function_t transform = nullptr);
 	DUCKDB_API void SetTransform(const string &rule_name, grammar_transform_function_t transform);
 	DUCKDB_API void AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory);
@@ -65,7 +65,7 @@ private:
 	friend class PEGTransformerFactory;
 
 	void AddParsedRule(ParsedGrammarRule rule);
-	void InsertChoice(const string &rule_name, const string &choice, grammar_cursor_function_t find_cursor,
+	void InsertChoice(const string &rule_name, const string &choice, const grammar_cursor_function_t &find_cursor,
 	                  bool prepend);
 	void RegisterStrings(PEGRule &rule);
 	ParsedGrammarRule &GetMutableRule(const string &rule_name);

@@ -129,8 +129,8 @@ static idx_t FindChoiceCursor(const ParsedGrammarRule &rule, const grammar_curso
 	return FindChoice(rule, find_cursor) + (prepend ? 0 : 1);
 }
 
-void ParsedGrammar::InsertChoice(const string &rule_name, const string &choice, grammar_cursor_function_t find_cursor,
-                                 bool prepend) {
+void ParsedGrammar::InsertChoice(const string &rule_name, const string &choice,
+                                 const grammar_cursor_function_t &find_cursor, bool prepend) {
 	auto choice_definition = StringUtil::Format("Choice <- %s", choice);
 	auto choice_rule = ParseSingleRule(choice_definition);
 	auto &rule = GetMutableRule(rule_name);
@@ -155,16 +155,17 @@ void ParsedGrammar::InsertChoice(const string &rule_name, const string &choice, 
 	rule.recipe.expression.children = std::move(children);
 }
 
-void ParsedGrammar::AddChoice(const string &rule_name, const string &choice, grammar_cursor_function_t find_cursor) {
+void ParsedGrammar::AddChoice(const string &rule_name, const string &choice,
+                              const grammar_cursor_function_t &find_cursor) {
 	InsertChoice(rule_name, choice, std::move(find_cursor), false);
 }
 
 void ParsedGrammar::PrependChoice(const string &rule_name, const string &choice,
-                                  grammar_cursor_function_t find_cursor) {
+                                  const grammar_cursor_function_t &find_cursor) {
 	InsertChoice(rule_name, choice, std::move(find_cursor), true);
 }
 
-void ParsedGrammar::RemoveChoice(const string &rule_name, grammar_cursor_function_t find_cursor) {
+void ParsedGrammar::RemoveChoice(const string &rule_name, const grammar_cursor_function_t &find_cursor) {
 	if (!find_cursor) {
 		throw InvalidInputException("RemoveChoice requires a choice cursor");
 	}

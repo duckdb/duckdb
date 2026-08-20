@@ -157,7 +157,7 @@ private:
 	}
 };
 
-static PEGExpression BuildExpression(vector<PEGToken> &&tokens) {
+static PEGExpression BuildExpression(vector<PEGToken> tokens) {
 	PEGExpressionParser parser(tokens);
 	return parser.Parse();
 }

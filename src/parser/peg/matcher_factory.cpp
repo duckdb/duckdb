@@ -24,7 +24,7 @@ bool MatcherFactory::MatcherConstructionState::HasScheduled() const {
 }
 
 string_t MatcherFactory::MatcherConstructionState::TakeNext() {
-	auto rule_name = std::move(pending.front());
+	auto rule_name = pending.front();
 	pending.pop();
 	scheduled.erase(rule_name);
 	return rule_name;
