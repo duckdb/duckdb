@@ -182,18 +182,21 @@ jobs:
             jq -nc --arg image_version "$image_version" \
               '{
                 manylinux_amd64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:" + $image_version),
+                manylinux_arm64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_main:" + $image_version),
+                alpine_amd64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_main:" + $image_version),
+                alpine_arm64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_aarch64_main:" + $image_version),
                 ubuntu_24_04_amd64_lint: ("ghcr.io/duckdb/duckdb-ci/ubuntu_24_04_amd64_lint:" + $image_version)
               }'
           )
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
-              '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
+              '[{runner: $runner, arch: "amd64", image: "manylinux_amd64_main"}]'
           )
 
           linux_musl_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_arm64" \
-              '[{runner: $runner, arch: "arm64"}]'
+              '[{runner: $runner, arch: "arm64", image: "alpine_arm64_main"}]'
           )
 
           static_libs_linux_matrix=$(
@@ -204,12 +207,12 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
               jq -c --arg runner "$runner_linux_arm64" \
-                '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
+                '. += [{runner: $runner, arch: "arm64", image: "manylinux_arm64_main"}]' <<<"$linux_cli_matrix"
             )
 
             linux_musl_cli_matrix=$(
               jq -c --arg runner "$runner_linux_x64" \
-                '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
+                '. |= [{runner: $runner, arch: "amd64", image: "alpine_amd64_main"}] + .' <<<"$linux_musl_cli_matrix"
             )
           fi
 
@@ -607,6 +610,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -618,49 +623,24 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
         fetch_depth: 0
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Install pytest
-      timeout-minutes: 10
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: |
-        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
-
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
-      run: |
-        docker run                                                             \
-        -v"$PWD:$PWD"                                                          \
-        -e GEN=ninja                                                           \
-        -e CC='ccache gcc'                                                     \
-        -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR="$PWD/.ccache"                                           \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
-        -e BUILD_BENCHMARK=1                                                   \
-        -e FORCE_WARN_UNUSED=1                                                 \
-        -e OVERRIDE_GIT_DESCRIBE                                               \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
-        bash -c "
-          set -e
-          cat /etc/os-release
-          dnf install -y \
-            ccache       \
-            ninja-build  \
-            python3.12   \
-            perl-IPC-Cmd
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
-        "
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        BUILD_BENCHMARK: 1
+        FORCE_WARN_UNUSED: 1
+      with:
+        build: make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: linux-cli-${{ matrix.config.arch }}-glibc
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: CLI check
       shell: bash
@@ -746,6 +726,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_musl_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -757,47 +739,24 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
         fetch_depth: 0
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
-      shell: bash
-      run: |
-        docker run                                                          \
-        -v"$PWD:$PWD"                                                       \
-        -e GEN=ninja                                                        \
-        -e CC='ccache gcc'                                                  \
-        -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR="$PWD/.ccache"                                        \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
-        -e BUILD_BENCHMARK=1                                                \
-        -e FORCE_WARN_UNUSED=1                                              \
-        -e OVERRIDE_GIT_DESCRIBE                                            \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add   \
-            ccache  \
-            cmake   \
-            g++     \
-            git     \
-            make    \
-            python3 \
-            samurai
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
-        "
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        BUILD_BENCHMARK: 1
+        FORCE_WARN_UNUSED: 1
+      with:
+        build: make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: linux-cli-${{ matrix.config.arch }}-musl
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Deploy
       shell: bash
@@ -826,31 +785,17 @@ jobs:
       env:
         RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
-        docker run   \
-        -v"$PWD:$PWD" \
-        -e CI=1      \
-        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add      \
-            make       \
-            python3    \
-            py3-pytest
-          cd \"$PWD\"
-          echo Release tests
-          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
-            make alltest_release_tag
-          else
-            make test_release_tag
-          fi
-          echo Tools Tests
-          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-          echo Examples
-          build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
-          build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
-        "
+        echo Release tests
+        if [[ "$RUN_SLOW_TESTS" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
+        echo Tools Tests
+        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+        echo Examples
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
