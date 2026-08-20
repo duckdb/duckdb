@@ -91,8 +91,6 @@ struct AutoCompleteSuggestion {
 	char extra_char;
 };
 
-enum class MatchResultType { SUCCESS, FAIL };
-
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
 struct MatcherSuggestion {
@@ -164,8 +162,7 @@ public:
 	}
 	virtual ~Matcher() = default;
 
-	//! Match
-	virtual MatchResultType Match(MatchState &state) const = 0;
+	//! Match and construct the parse result
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const;
 	virtual optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;

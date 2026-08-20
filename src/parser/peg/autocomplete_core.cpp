@@ -214,7 +214,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		// run the root matcher
 		TokenIterator token_iterator(tokens);
 		MatchState state(token_iterator, suggestions, parse_allocator, max_token_index);
-		compiled_grammar->ProgramMatcher().Match(state);
+		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}
 	if (suggestions.empty()) {
 		return {};

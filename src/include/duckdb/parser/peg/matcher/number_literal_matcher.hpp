@@ -15,15 +15,6 @@ public:
 		name = "NumberLiteral";
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		if (!MatchNumberLiteral(state)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
-		return MatchResultType::SUCCESS;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
@@ -35,6 +26,7 @@ public:
 		if (!MatchNumberLiteral(state)) {
 			return nullptr;
 		}
+		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text, start_offset, token_length));
 		result->name = name;
 		return result;

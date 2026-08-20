@@ -15,22 +15,6 @@ public:
 		name = "StringLiteral";
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		auto token = state.token_iterator.Current();
-		if (!token) {
-			return MatchResultType::FAIL;
-		}
-
-		auto &token_text = token->text;
-		auto string_info = GetSpecialStringInfo(token_text);
-
-		if (!MatchStringLiteral(state, string_info)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
-		return MatchResultType::SUCCESS;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
@@ -44,6 +28,7 @@ public:
 		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
+		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
 
 		idx_t suffix_len = 1;
 		if (token->text.length() < string_info.prefix_len + suffix_len) {

@@ -13,16 +13,6 @@ public:
 	EndOfInputMatcher() : Matcher(TYPE) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		auto current = state.token_iterator.Current();
-		if (current && current->type == TokenType::END_OF_INPUT) {
-			state.token_iterator.Advance();
-			state.UpdateMaxTokenIndex();
-			return MatchResultType::SUCCESS;
-		}
-		return MatchResultType::FAIL;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto current = state.token_iterator.Current();
 		if (current && current->type == TokenType::END_OF_INPUT) {

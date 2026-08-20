@@ -14,13 +14,6 @@ public:
 	    : Matcher(TYPE), keyword(std::move(keyword_p)), info(info) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchKeyword(state)) {
-			return MatchResultType::FAIL;
-		}
-		return MatchResultType::SUCCESS;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {

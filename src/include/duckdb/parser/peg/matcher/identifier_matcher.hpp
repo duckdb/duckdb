@@ -45,14 +45,6 @@ public:
 		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchIdentifier(state)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(GetTokenType());
-		return MatchResultType::SUCCESS;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
@@ -64,6 +56,7 @@ public:
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
 
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
@@ -200,14 +193,6 @@ public:
 	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchReservedIdentifier(state)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(GetTokenType());
-		return MatchResultType::SUCCESS;
-	}
-
 	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
@@ -219,6 +204,7 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
