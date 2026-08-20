@@ -275,13 +275,14 @@ AggregateStateLayout GetCountStateType(AggregateLayoutInput &input) {
 	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(state_input)));
 }
 
-unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
+unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateFunction &function,
+                                               bool is_distinct, vector<unique_ptr<Expression>> &children,
                                                AggregateStatisticsInput &input) {
-	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
+	if (!is_distinct && !input.child_stats[0].CanHaveNull()) {
 		// count on a column without null values: use count star
-		expr.FunctionMutable().ReplaceImplementation(CountStarFun::GetFunction());
-		expr.FunctionMutable().SetName("count_star");
-		expr.GetChildrenMutable().clear();
+		function.ReplaceImplementation(CountStarFun::GetFunction());
+		function.SetName("count_star");
+		children.clear();
 	}
 	return nullptr;
 }

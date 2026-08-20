@@ -19,7 +19,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 		return nullptr;
 	}
 	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
-	return aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
+	return aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr.FunctionMutable(), aggr.IsDistinct(),
+	                                                              aggr.GetChildrenMutable(), input);
 }
 
 } // namespace duckdb

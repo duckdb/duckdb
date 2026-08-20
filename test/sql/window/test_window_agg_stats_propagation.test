@@ -1,0 +1,31 @@
+# name: test/sql/window/test_window_agg_stats_propagation.test
+# description: stats-dependent aggregates (BITSTRING_AGG) must work as window aggregates (issue #23663)
+# group: [window]
+
+statement ok
+CREATE TABLE bt AS SELECT * FROM (VALUES (1)) AS v(id);
+
+# regular aggregate infers the required min/max from statistics
+query I
+SELECT BITSTRING_AGG(id)::VARCHAR AS regular FROM bt;
+----
+1
+
+# same one-argument aggregate as a window aggregate (was: Binder Error could not retrieve statistics)
+query II
+SELECT id, BITSTRING_AGG(id) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)::VARCHAR AS w
+FROM bt
+ORDER BY id;
+----
+1	1
+
+statement ok
+CREATE TABLE bt3 AS SELECT * FROM (VALUES (1),(2),(3)) AS v(id);
+
+# a whole-partition window aggregate equals the regular aggregate
+query II
+SELECT id, BITSTRING_AGG(id) OVER ()::VARCHAR AS w FROM bt3 ORDER BY id;
+----
+1	111
+2	111
+3	111
