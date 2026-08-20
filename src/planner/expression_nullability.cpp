@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_nullability.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -12,6 +13,7 @@
 #include <algorithm>
 
 namespace duckdb {
+
 
 NotNullExpressionAnalyzer::NotNullExpressionAnalyzer(ClientContext &context_p,
                                                      optional_ptr<LogicalOperator> plan_root_p)

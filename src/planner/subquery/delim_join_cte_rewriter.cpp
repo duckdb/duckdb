@@ -17,7 +17,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -1212,6 +1211,9 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join, 
 		if (!cond.IsComparison()) {
 			return false;
 		}
+		if (cond.GetLHS().GetReturnType().IsNested()) {
+			return false;
+		}
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 
 		auto lhs_generated_idx = FindGeneratedOutputBinding(cond.GetLHS(), *dedup_ref);
@@ -1360,6 +1362,9 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 		}
 
 		auto comparison_type = expr.GetExpressionType();
+		if (lhs.GetReturnType().IsNested()) {
+			return false;
+		}
 		if (lhs_dedup) {
 			if (!replacement_bindings.TryAdd(ReplacementBinding(lhs_colref.Binding(), rhs_colref.Binding()))) {
 				return false;
