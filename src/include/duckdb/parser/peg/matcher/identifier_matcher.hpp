@@ -11,7 +11,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
+	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
+	    : Matcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -163,7 +164,6 @@ public:
 
 private:
 	bool IsAllowedKeyword(const string &token_text) const {
-		auto &keyword_helper = PEGKeywordHelper::Instance();
 		if (!keyword_helper.IsKeyword(token_text)) {
 			return true;
 		}
@@ -188,6 +188,7 @@ private:
 	}
 
 	SuggestionState suggestion_type;
+	const PEGKeywordHelper &keyword_helper;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {
@@ -195,7 +196,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit ReservedIdentifierMatcher(SuggestionState suggestion_type) : IdentifierMatcher(suggestion_type) {
+	ReservedIdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper)
+	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {

@@ -20,6 +20,7 @@
 namespace duckdb {
 
 struct ParserCache;
+struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
 class GroupByNode;
@@ -106,8 +107,10 @@ public:
 
 private:
 	ParserCache &GetCache();
+	CompiledGrammar &GetGrammar();
 
 	ParserOptions options;
 	unique_ptr<ParserCache> local_cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 } // namespace duckdb

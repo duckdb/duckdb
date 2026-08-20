@@ -13,10 +13,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -177,6 +179,13 @@ public:
 	void SetName(string name_p) {
 		name = std::move(name_p);
 	}
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+		name = rule_p.name;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
 	bool HasName() const {
 		return !name.empty();
 	}
@@ -214,6 +223,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	optional_ptr<const CompiledGrammarRule> rule;
 };
 
 class KeywordInfo {
@@ -243,38 +253,6 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
-};
-
-struct PEGMatcher {
-	MatcherAllocator allocator;
-
-	Matcher &ProgramMatcher() {
-		return *program_matcher;
-	}
-	Matcher &TopLevelStatementMatcher() {
-		return *top_level_statement_matcher;
-	}
-
-	static shared_ptr<PEGMatcher> Get(ClientContext &context);
-	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
-
-private:
-	friend struct ParserCache;
-	optional_ptr<Matcher> program_matcher;
-	optional_ptr<Matcher> top_level_statement_matcher;
-};
-
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
-struct ParserCache {
-	shared_ptr<PEGMatcher> GetMatcher();
-	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	void Invalidate();
-
-private:
-	std::mutex mutex;
-	shared_ptr<PEGMatcher> matcher;
-	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
 } // namespace duckdb

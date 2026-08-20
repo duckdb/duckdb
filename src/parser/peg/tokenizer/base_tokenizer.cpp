@@ -4,12 +4,10 @@
 
 namespace duckdb {
 
-TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens)
-    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
+TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
 }
 
-Tokenizer::Tokenizer(TokenizerBehavior &behavior)
-    : sql(behavior.sql), tokens(behavior.tokens), keyword_helper(PEGKeywordHelper::Instance()), behavior(behavior) {
+Tokenizer::Tokenizer(const PEGKeywordHelper &keyword_helper_p) : keyword_helper(keyword_helper_p) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -22,7 +20,7 @@ static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op
 	return true;
 }
 
-bool Tokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
+bool Tokenizer::IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const {
 	const char *op_start = sql.c_str() + pos;
 	if (pos + 2 < sql.size()) {
 		if (OperatorEquals(op_start, "->>", 3, op_len)) {
@@ -225,19 +223,20 @@ bool Tokenizer::IsUnterminatedState(TokenizeState state) {
 	}
 }
 
-bool Tokenizer::CanAutocomplete() const {
-	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
-}
-
-void Tokenizer::TokenizeInput() {
-	if (TokenizeInputInternal()) {
+bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
+	auto &sql = behavior.sql;
+	auto &tokens = behavior.tokens;
+	if (TokenizeInputInternal(behavior)) {
 		tokens.emplace_back("", sql.size(), behavior.GetTerminator());
 	} else {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
+	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 }
 
-bool Tokenizer::TokenizeInputInternal() {
+bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
+	auto &sql = behavior.sql;
+	auto &tokens = behavior.tokens;
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	bool escape_string = false;
@@ -321,7 +320,7 @@ bool Tokenizer::TokenizeInputInternal() {
 				break;
 			}
 			idx_t op_len;
-			if (IsSpecialOperator(i, op_len)) {
+			if (IsSpecialOperator(sql, i, op_len)) {
 				// special operator - push the special operator
 				tokens.emplace_back(sql.substr(i, op_len), last_pos, TokenType::OPERATOR);
 				i += op_len - 1;
@@ -553,7 +552,7 @@ bool Tokenizer::TokenizeInputInternal() {
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	behavior.OnLastToken(state, std::move(last_word), last_pos);
+	behavior.OnLastToken(*this, state, std::move(last_word), last_pos);
 	return true;
 }
 
@@ -561,12 +560,12 @@ void TokenizerBehavior::OnStatementEnd(idx_t pos) {
 	// Default: Do nothing
 }
 
-void TokenizerBehavior::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+void TokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word, idx_t last_pos) {
 	if (last_word.empty()) {
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+		state = tokenizer.keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
 	}
 
 	bool is_unterminated = Tokenizer::IsUnterminatedState(state);

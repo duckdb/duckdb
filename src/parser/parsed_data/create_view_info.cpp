@@ -114,9 +114,8 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 	for (auto &entry : column_comments_map) {
 		auto it = std::find_if(names.begin(), names.end(), [&](const Identifier &n) { return entry.first == n; });
 		if (it == names.end()) {
-			throw InternalException(
-			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names",
-			    GetViewName(), entry.first.GetIdentifierName());
+			throw InternalException("While serializing comments for view %s - did not find column %s in list of names",
+			                        GetViewName(), entry.first);
 		}
 		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
 	}

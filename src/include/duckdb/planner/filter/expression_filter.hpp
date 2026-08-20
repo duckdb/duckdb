@@ -28,9 +28,12 @@ public:
 
 public:
 	explicit ExpressionFilter(unique_ptr<Expression> expr);
+	ExpressionFilter(unique_ptr<Expression> expr, vector<ProjectionIndex> column_indexes);
 
 	//! The expression to evaluate
 	unique_ptr<Expression> expr;
+	//! For multi-column filters, maps BoundReferenceExpression indexes to scan projection indexes
+	vector<ProjectionIndex> column_indexes;
 
 public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val) const;
@@ -52,6 +55,11 @@ public:
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);
 	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
 	                                                       const Expression &expr, const BaseStatistics &stats);
+	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr,
+	                                                       array_ptr<const BaseStatistics> input_stats);
+	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
+	                                                       const Expression &expr,
+	                                                       array_ptr<const BaseStatistics> input_stats);
 	//! Derive statistics for an expression over one or more input columns
 	static unique_ptr<BaseStatistics> TryGetExpressionStatistics(ClientContext &context, const Expression &expr,
 	                                                             array_ptr<const BaseStatistics> input_stats);
