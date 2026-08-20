@@ -600,8 +600,7 @@ TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "
 		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
 		REQUIRE(cached_file->validation_info.cache_valid_until != nullopt);
 		// Assign a past timestamp to the freshness deadline so cache won't be used.
-		cached_file->validation_info.cache_valid_until =
-		    timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
 	}
 
 	WriteTestContent(test_file.GetPath(), content_b);
