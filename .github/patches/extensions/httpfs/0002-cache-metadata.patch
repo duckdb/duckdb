@@ -1,11 +1,11 @@
-commit a9f19c95cf32f362399c0e0beb39516ebd5a0a0e
+commit 9d56d03a4df01b6dfe7419023a372a98fe363b0b
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..5ea7b24 100644
+index 2efd0fa..021e262 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -242,19 +242,21 @@ index 2efd0fa..5ea7b24 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -750,6 +924,11 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +924,13 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
 +	cache_valid_until = HTTPFileSystem::ComputeCacheValidUntil(response.headers, request_time, response_time);
-+	cache_no_store = HasCacheControlDirective(response.headers, "no-store");
-+	if (cache_no_store) {
++	// TODO(hjiang): `Vary` header indicates that the response should be served separately based on the request headers,
++	// currently it's not cached.
++	cache_reuse_disabled = HasCacheControlDirective(response.headers, "no-store") || response.headers.HasHeader("Vary");
++	if (cache_reuse_disabled) {
 +		cache_valid_until = timestamp_t::ninfinity();
 +	}
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -769,9 +948,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -769,9 +950,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -268,7 +270,7 @@ index 2efd0fa..5ea7b24 100644
  	}
  }
  
-@@ -791,6 +972,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +974,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -276,7 +278,7 @@ index 2efd0fa..5ea7b24 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +983,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +985,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -284,12 +286,12 @@ index 2efd0fa..5ea7b24 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1051,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1053,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
 -		if (should_write_cache) {
-+		if (should_write_cache && !cache_no_store) {
++		if (should_write_cache && !cache_reuse_disabled) {
  			cache->Insert(path, GetCacheEntry());
  		}
  	}
@@ -326,7 +328,7 @@ index 1c6e500..ab35bcd 100644
  		return true;
  	}
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
-index 6d19b18..1991b95 100644
+index 6d19b18..dbf32ae 100644
 --- a/src/include/http/httpfs.hpp
 +++ b/src/include/http/httpfs.hpp
 @@ -2,6 +2,7 @@
@@ -360,8 +362,8 @@ index 6d19b18..1991b95 100644
 +	//! Unset means no freshness information; positive/negative infinity mean always valid/invalid.
 +	//! Used to bound how long cached file data may be served.
 +	optional<timestamp_t> cache_valid_until;
-+	//! Whether the response includes Cache-Control: no-store.
-+	bool cache_no_store = false;
++	//! Whether response metadata or data must not be reused across handles.
++	bool cache_reuse_disabled = false;
  	bool force_full_download;
  	bool initialized = false;
  	bool auto_fallback_to_full_file_download = true;

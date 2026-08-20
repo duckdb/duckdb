@@ -721,6 +721,32 @@ TEST_CASE("File marked as not cacheable does not retain cached blocks", "[extern
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
+TEST_CASE("Explicit cache reuse prohibition is honored under NO_VALIDATION", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto policy_fs = make_uniq<CachePolicyFileSystem>();
+	policy_fs->cache_valid_until = timestamp_t::ninfinity();
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(block_size, 'A');
+	const string content_b(block_size, 'B');
+	EFCTestFileGuard test_file("test_efc_no_reuse_no_validation.bin", content_a);
+	CachingFileSystem cfs(*policy_fs, *db.instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_b);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
 TEST_CASE("Expired freshness deadline is not served from cache", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
