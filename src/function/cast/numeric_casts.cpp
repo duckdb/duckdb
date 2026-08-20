@@ -1,13 +1,16 @@
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/bignum.hpp"
 
 #include <type_traits>
 
 namespace duckdb {
 
+#if !DUCKDB_SMALLER_BINARY(unchecked_numeric_casts)
 struct UncheckedNumericCast {
 	template <class SRC, class DST>
 	static DST Operation(SRC input) {
@@ -16,11 +19,25 @@ struct UncheckedNumericCast {
 };
 
 template <class SRC, class DST>
+static unique_ptr<BaseStatistics> PropagateNumericCastStatistics(CastStatisticsInput &input) {
+	input.SetFunction(&VectorCastHelpers::TryCastLoop<SRC, DST, duckdb::NumericTryCast>);
+	auto result = CastStatistics::TryPropagate(input.child_stats, input.source_type, input.target_type);
+	if (result) {
+		input.SetFunction(&VectorCastHelpers::TemplatedCastLoop<SRC, DST, UncheckedNumericCast>);
+	}
+	return result;
+}
+#endif
+
+template <class SRC, class DST>
 static BoundCastInfo GetNumericCast() {
 	auto result = BoundCastInfo(&VectorCastHelpers::TryCastLoop<SRC, DST, duckdb::NumericTryCast>);
-	if constexpr (std::is_integral<SRC>::value && std::is_integral<DST>::value) {
-		result.SetUncheckedFunction(&VectorCastHelpers::TemplatedCastLoop<SRC, DST, UncheckedNumericCast>);
+#if !DUCKDB_SMALLER_BINARY(unchecked_numeric_casts)
+	if constexpr (std::is_integral<SRC>::value && std::is_integral<DST>::value && !std::is_same<SRC, bool>::value &&
+	              !std::is_same<DST, bool>::value) {
+		result.SetStatisticsCallback(PropagateNumericCastStatistics<SRC, DST>);
 	}
+#endif
 	return result;
 }
 

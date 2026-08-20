@@ -1,4 +1,5 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 #include "duckdb/main/settings.hpp"
 
@@ -52,7 +53,9 @@ CollationBinding &CollationBinding::Get(DatabaseInstance &db) {
 BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const LogicalType &target,
                                                GetCastFunctionInput &get_input) {
 	if (source == target) {
-		return DefaultCasts::NopCast;
+		BoundCastInfo result(DefaultCasts::NopCast);
+		result.SetStatisticsCallback(CastStatistics::Propagate);
+		return result;
 	}
 	// the first function is the default
 	// we iterate the set of bind functions backwards
@@ -62,6 +65,9 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
 		if (result.HasFunction()) {
+			if (i == 1 && !result.HasStatisticsCallback()) {
+				result.SetStatisticsCallback(CastStatistics::Propagate);
+			}
 			// found a cast function! return it
 			return result;
 		}
