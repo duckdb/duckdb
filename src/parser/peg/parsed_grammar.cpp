@@ -157,12 +157,12 @@ void ParsedGrammar::InsertChoice(const string &rule_name, const string &choice,
 
 void ParsedGrammar::AddChoice(const string &rule_name, const string &choice,
                               const grammar_cursor_function_t &find_cursor) {
-	InsertChoice(rule_name, choice, std::move(find_cursor), false);
+	InsertChoice(rule_name, choice, find_cursor, false);
 }
 
 void ParsedGrammar::PrependChoice(const string &rule_name, const string &choice,
                                   const grammar_cursor_function_t &find_cursor) {
-	InsertChoice(rule_name, choice, std::move(find_cursor), true);
+	InsertChoice(rule_name, choice, find_cursor, true);
 }
 
 void ParsedGrammar::RemoveChoice(const string &rule_name, const grammar_cursor_function_t &find_cursor) {

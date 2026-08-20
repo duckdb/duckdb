@@ -157,9 +157,10 @@ private:
 	}
 };
 
-static PEGExpression BuildExpression(vector<PEGToken> tokens) {
+static PEGExpression BuildExpression(vector<PEGToken> &tokens) {
 	PEGExpressionParser parser(tokens);
 	return parser.Parse();
+	tokens.clear();
 }
 
 } // namespace
@@ -196,7 +197,7 @@ void PEGParser::ParseRules(const char *grammar) {
 		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) &&
 		    bracket_count == 0 && !in_or_clause && !tokens.empty()) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
-			auto new_rule = PEGRule(std::move(parameters), BuildExpression(std::move(tokens)));
+			auto new_rule = PEGRule(std::move(parameters), BuildExpression(tokens));
 			AddRule(rule_name, std::move(new_rule));
 			rule_name = string_t();
 			// look for the subsequent rule
@@ -360,7 +361,7 @@ void PEGParser::ParseRules(const char *grammar) {
 		if (tokens.empty()) {
 			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
 		}
-		auto new_rule = PEGRule(std::move(parameters), BuildExpression(std::move(tokens)));
+		auto new_rule = PEGRule(std::move(parameters), BuildExpression(tokens));
 		AddRule(rule_name, std::move(new_rule));
 	}
 }
