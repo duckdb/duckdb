@@ -1168,7 +1168,7 @@ def generate_table_and_register(all_registrations):
         + entries
         + "\t};\n"
         + "\tfor (const auto &rule : builtin_transform_rules) {\n"
-        + "\t\tsql_transform_functions[rule.name] = rule.transform;\n"
+        + "\t\tgrammar.SetTransform(rule.name, rule.transform);\n"
         + "\t}\n"
         + "}\n"
     )
@@ -1203,17 +1203,20 @@ def _matcher_override_expr(rule_name, override):
     suggestion = override.get("suggestion")
     if matcher == "identifier":
         if suggestion:
-            return f"allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::{suggestion}, " "keyword_helper))"
+            return (
+                f"allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::{suggestion}, "
+                "compiled.GetKeywordHelper()))"
+            )
     if matcher == "reserved_identifier":
         if suggestion:
             return (
                 f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}, "
-                "keyword_helper))"
+                "compiled.GetKeywordHelper()))"
             )
     if matcher == "identifier_string":
         return (
             "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, "
-            "keyword_helper))"
+            "compiled.GetKeywordHelper()))"
         )
     if matcher == "number_literal":
         return "allocator.Allocate(make_uniq<NumberLiteralMatcher>())"
