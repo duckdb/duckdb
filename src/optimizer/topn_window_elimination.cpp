@@ -119,6 +119,18 @@ bool HasExternalCTEReferences(const LogicalOperator &op) {
 	return false;
 }
 
+bool HasProjectionMaps(const LogicalOperator &op) {
+	if (op.HasProjectionMap()) {
+		return true;
+	}
+	for (const auto &child : op.children) {
+		if (HasProjectionMaps(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST: {
@@ -249,11 +261,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	unique_ptr<LogicalOperator> late_mat_lhs = nullptr;
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
-		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
+		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload, params);
 		if (late_mat_lhs && aggregate_payload.size() == 1) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
 	}
+	const bool used_late_materialization = late_mat_lhs != nullptr;
 
 	// Optimize window children
 	window.children[0] = Optimize(std::move(window.children[0]));
@@ -264,7 +277,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_UNNEST);
 
-	if (late_mat_lhs) {
+	if (used_late_materialization) {
 		op = ConstructJoin(std::move(late_mat_lhs), std::move(op), group_projection_idxs.size(), params);
 	}
 
@@ -273,7 +286,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	replacer.stop_operator = op.get();
 
-	if (!HasExternalCTEReferences(*op)) {
+	// Preserve the post-rewrite pruning used before late-materialized INNER reconstruction was introduced. A plan
+	// with active positional projection maps cannot safely be pruned a second time if a selected binding disappears.
+	if (!used_late_materialization && !HasExternalCTEReferences(*op) && !HasProjectionMaps(*op)) {
 		RemoveUnusedColumns unused_optimizer(optimizer);
 		unused_optimizer.VisitOperator(*op);
 	}
@@ -891,7 +906,8 @@ bool TopNWindowElimination::ExtractSingleBinding(unique_ptr<Expression> *expr, C
 
 bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
                                                       vector<idx_t> &lhs_projections,
-                                                      vector<reference<LogicalOperator>> &stack) {
+                                                      vector<reference<LogicalOperator>> &stack,
+                                                      TopNWindowEliminationParameters &params) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
 
@@ -941,6 +957,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			if (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI &&
 			    join.join_type != JoinType::ANTI) {
 				return false;
+			}
+			if (join.join_type == JoinType::INNER) {
+				// An inner join can produce the same base-table row more than once. The selected row IDs must then
+				// be joined back using an inner join to preserve their multiplicity.
+				params.row_ids_may_have_duplicates = true;
 			}
 
 			// If there is a join, we only allow late materialization if the projected output stems from a single table.
@@ -1068,11 +1089,12 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	return true;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window,
-                                                                                 vector<unique_ptr<Expression>> &args) {
+unique_ptr<LogicalOperator>
+TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
+                                                     TopNWindowEliminationParameters &params) {
 	vector<idx_t> lhs_projections;
 	vector<reference<LogicalOperator>> stack;
-	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack);
+	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack, params);
 	if (!use_late_materialization) {
 		return nullptr;
 	}
@@ -1200,35 +1222,45 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
                                                                  const idx_t aggregate_offset,
                                                                  const TopNWindowEliminationParameters &params) {
 	lhs->ResolveOperatorTypes();
+	rhs->ResolveOperatorTypes();
+
+	if (!HasExternalCTEReferences(*rhs)) {
+		RemoveUnusedColumns unused_optimizer(optimizer);
+		unused_optimizer.VisitOperator(*rhs);
+		rhs->ResolveOperatorTypes();
+	}
 
 	const idx_t rowid_column_count =
 	    params.include_row_number ? rhs->types.size() - (aggregate_offset + 1) : rhs->types.size() - aggregate_offset;
-	const idx_t rhs_binding_offset =
-	    rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
-	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	const auto rhs_bindings = rhs->GetColumnBindings();
+	const bool use_inner_reconstruction = params.row_ids_may_have_duplicates || params.include_row_number;
+
+	auto join = make_uniq<LogicalComparisonJoin>(use_inner_reconstruction ? JoinType::INNER : JoinType::SEMI);
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
-		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
 		const auto lhs_column = GetLHSColumnInfo(lhs, lhs_rowid_idx);
 
 		JoinCondition condition;
 		condition.comparison = ExpressionType::COMPARE_EQUAL;
 		condition.left = make_uniq<BoundColumnRefExpression>(lhs_column.name, lhs_column.type, lhs_column.binding);
-		condition.right = make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[aggregate_offset + i],
-		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
+		const idx_t rhs_rowid_idx = aggregate_offset + i;
+		condition.right = make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[rhs_rowid_idx],
+		                                                      rhs_bindings[rhs_rowid_idx]);
 		join->conditions.push_back(std::move(condition));
 	}
 
 	if (params.include_row_number) {
-		// Add row_number to join result
-		join->join_type = JoinType::INNER;
 		join->right_projection_map.push_back(rhs->types.size() - 1);
+	} else if (use_inner_reconstruction) {
+		// An empty projection map exposes every RHS column for an inner join. Project a narrow join key instead;
+		// UpdateTopmostBindings adds a projection that removes it from the final result.
+		join->right_projection_map.push_back(aggregate_offset);
 	}
 
-	// Remove the row_numbers from the LHS projection map
+	// Project the semantic LHS columns, excluding the row IDs used for reconstruction.
 	for (idx_t i = 0; i < lhs->types.size() - rowid_column_count; ++i) {
-		join->left_projection_map.emplace_back(i);
+		join->left_projection_map.push_back(i);
 	}
 
 	join->children.push_back(std::move(lhs));

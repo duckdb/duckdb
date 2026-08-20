@@ -30,6 +30,8 @@ struct TopNWindowEliminationParameters {
 	bool can_be_null = false;
 	//! The number of semantic window partitions
 	idx_t partition_count = 0;
+	//! Whether operators below the window can produce the same base-table row ID more than once
+	bool row_ids_may_have_duplicates = false;
 };
 
 class TopNWindowElimination : public BaseColumnPruner {
@@ -71,13 +73,14 @@ private:
 
 	// Semi-join reduction methods
 	unique_ptr<LogicalOperator> TryPrepareLateMaterialization(const LogicalWindow &window,
-	                                                          vector<unique_ptr<Expression>> &args);
+	                                                          vector<unique_ptr<Expression>> &args,
+	                                                          TopNWindowEliminationParameters &params);
 	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const;
-	static unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
-	                                                 idx_t rhs_rowid_idx,
-	                                                 const TopNWindowEliminationParameters &params);
+	unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
+	                                          idx_t aggregate_offset, const TopNWindowEliminationParameters &params);
 	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
-	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack);
+	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack,
+	                               TopNWindowEliminationParameters &params);
 	bool ExtractSingleBinding(unique_ptr<Expression> *expr, ColumnBinding &binding,
 	                          bool require_direct_column_ref = false);
 
