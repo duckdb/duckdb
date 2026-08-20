@@ -105,6 +105,14 @@
       ]
     },
     {
+      "reason": "Recipe callbacks reference objects by unqualified name: the internal connection running them uses the default catalog, not this config's attached one.",
+      "paths": [
+        "test/sql/attach/attach_to_external_resource.test",
+        "test/sql/attach/external_resource_option_collision.test",
+        "test/sql/attach/external_resource_attach_failure.test"
+      ]
+    },
+    {
       "reason": "CREATE SECURE VIEW requires storage version v2.0.0 but encrypted databases use an older default storage version",
       "paths": [
         "test/sql/catalog/view/secure_view.test",

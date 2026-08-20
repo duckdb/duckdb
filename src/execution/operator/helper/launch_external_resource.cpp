@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/launch_external_resource.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -30,7 +31,7 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 	Connection con(DatabaseInstance::GetDatabase(client));
 	// resource_name is forwarded only for observability (it labels the recipe-call log entries).
 	auto name_arg = resource_name.empty() ? string() : ", resource_name := " + Value(resource_name).ToSQLString();
-	// A handle triggers the adopt path (skip create, resolve the given handle).
+	// A handle skips create and resolves the given one instead (REGISTER).
 	auto handle_arg = adopt_handle.IsNull() ? string() : ", handle := " + adopt_handle.ToSQLString();
 	auto sql = "SELECT uri, attached_db_type, result, deleter_function, deleter_payload "
 	           "FROM create_external_resource(" +
@@ -53,7 +54,7 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 	if (uri_val.IsNull()) {
 		// A resource without an endpoint is legal (it just cannot be attached), but one provisioned
 		// solely in order to attach to it is useless now, so reap it rather than strand it. Only ever
-		// reap what we created: an adopted handle names a resource the caller merely borrows, and
+		// reap what we created: a registered handle names a resource the caller merely borrows, and
 		// destroying it would tear down something someone else owns. Best-effort, so a teardown failure
 		// is logged rather than masking the error below.
 		if (adopt_handle.IsNull()) {
@@ -70,10 +71,23 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 	return out;
 }
 
+//! The statement's options are already in place, so a key the resource also supplies would silently
+//! overrule what the user wrote. The resource dictates how it is reached, so refuse instead.
+static void RejectOptionCollision(const AttachInfo &info, const string &key) {
+	for (auto &entry : info.options) {
+		if (StringUtil::CIEquals(entry.first, key)) {
+			throw InvalidInputException("EXTERNAL RESOURCE: the resource supplies \"%s\", so it cannot also be given "
+			                            "as an option on the statement",
+			                            key);
+		}
+	}
+}
+
 void ApplyLaunchedResource(const LaunchedResource &launched, AttachInfo &info) {
 	info.path = launched.uri;
 	// A NULL/empty db type falls back to the extension prefix extracted from the uri.
 	if (!launched.attached_db_type.empty()) {
+		RejectOptionCollision(info, "type");
 		info.options["type"] = Value(launched.attached_db_type);
 	}
 	// The remaining connect options (e.g. token) flow through as attach options.
@@ -83,6 +97,14 @@ void ApplyLaunchedResource(const LaunchedResource &launched, AttachInfo &info) {
 			auto key = StringValue::Get(kv[0]);
 			if (key == "uri" || key == "attached_db_type") {
 				continue;
+			}
+			RejectOptionCollision(info, key);
+			// No option takes NULL: consumers cast and unwrap without checking, so it reads as a value
+			// (read_only would come out true). A recipe meaning "no value" omits the key.
+			if (kv[1].IsNull()) {
+				throw InvalidInputException("EXTERNAL RESOURCE: NULL is not supported as a valid option for \"%s\"; "
+				                            "omit the key rather than returning NULL",
+				                            key);
 			}
 			info.options[key] = kv[1];
 		}

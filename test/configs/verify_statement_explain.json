@@ -37,6 +37,14 @@
         "test/sql/copy_database/copy_database_simple.test",
         "test/sql/copy_database/copy_database_errors.test"
       ]
+    },
+    {
+      "reason": "Recipe callbacks run on an internal connection; under statement verification the statement is already inside a transaction, so that connection cannot start one.",
+      "paths": [
+        "test/sql/attach/external_resource_lifecycle.test",
+        "test/sql/attach/attach_to_external_resource.test",
+        "test/sql/attach/external_resource_logging.test"
+      ]
     }
   ]
 }

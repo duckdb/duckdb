@@ -21,6 +21,7 @@ class StorageManager;
 class TransactionManager;
 class StorageExtension;
 class DatabaseManager;
+class ResourceDeleter;
 
 struct AttachInfo;
 struct StoredDatabasePath;
@@ -90,6 +91,17 @@ struct AttachOptions {
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): on detach, `<deleter_function>(<deleter_payload>)`
+	//! runs to tear down the external resource the attachment owns.
+	string deleter_function;
+	Value deleter_payload;
+	//! Type and name of the owned resource, for teardown logging only. The name is the database alias,
+	//! or empty where there is none (CONNECT).
+	string deleter_resource_type;
+	string deleter_resource_name;
+	//! Registered resource this attachment BORROWS (from `ATTACH/CONNECT TO EXTERNAL RESOURCE <name>`): it binds
+	//! no deleter and does not block DESTROY, it only lets DESTROY report what it invalidated. Empty if none.
+	string borrowed_resource_name;
 	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
 };
@@ -137,6 +149,9 @@ public:
 	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
+	//! Move the deleter binding out, if any. Call once the attachment is out of the databases map and
+	//! held exclusively, and run the deleter only with no lock held -- it executes SQL.
+	unique_ptr<ResourceDeleter> ExtractDeleter();
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -153,6 +168,10 @@ public:
 	//! True for attachments created implicitly by `CONNECT '<uri>'`; DISCONNECT detaches them.
 	bool IsEphemeral() const {
 		return ephemeral;
+	}
+	//! The registered external resource this attachment borrows, or empty if it borrows none.
+	const string &GetBorrowedResourceName() const {
+		return borrowed_resource_name;
 	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
@@ -193,6 +212,13 @@ private:
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 	optional<string> original_path;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): moved out via ExtractDeleter on detach.
+	string deleter_function;
+	Value deleter_payload;
+	string deleter_resource_type;
+	string deleter_resource_name;
+	//! Registered resource this attachment borrows without owning; see AttachOptions.
+	string borrowed_resource_name;
 
 private:
 	//! Clean any (shared) resources held by the database.

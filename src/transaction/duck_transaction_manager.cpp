@@ -443,6 +443,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	CleanupTransactions();
 
+	// A failed commit rolls back inline, queueing teardowns as RollbackTransaction does. Drain here too,
+	// so the call that fills the queue is the one that empties it.
+	DatabaseManager::Get(db.GetDatabase()).DrainPendingTeardowns();
+
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
 	if (checkpoint_decision.can_checkpoint) {
@@ -490,6 +494,10 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	}
 
 	CleanupTransactions();
+
+	// Run external-resource teardowns the rollback queued (see RollbackState): they execute SQL, so
+	// they can only run here, after the transaction lock is released.
+	DatabaseManager::Get(db.GetDatabase()).DrainPendingTeardowns();
 
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
