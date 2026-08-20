@@ -250,26 +250,6 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 	}
 }
 
-void RemoveUnusedColumns::GatherReferencesAbove(LogicalOperator &op, const LogicalOperator &stop) {
-	if (&op == &stop) {
-		// everything below here is what we are about to prune, its own references must not keep it alive
-		return;
-	}
-	VisitOperatorExpressions(op);
-	for (auto &child : op.children) {
-		GatherReferencesAbove(*child, stop);
-	}
-}
-
-void RemoveUnusedColumns::VisitSubtree(unique_ptr<LogicalOperator> &op, LogicalOperator &plan) {
-	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
-	D_ASSERT(&plan != op.get());
-	everything_referenced = false;
-	// collect the expressions above the subtree that reference it, so that pruning a column can rewrite them
-	GatherReferencesAbove(plan, *op);
-	VisitOperator(op);
-}
-
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	const bool analyze = mode == RemoveUnusedColumnsMode::ANALYZE;
 	auto &op = *op_ref;

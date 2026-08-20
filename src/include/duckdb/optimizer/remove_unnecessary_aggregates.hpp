@@ -47,7 +47,7 @@ private:
 	Optimizer &optimizer;
 	//! The plan we are optimizing. It is never an aggregate we remove (the query result depends on the duplicate
 	//! rows of the topmost operator), so this stays valid for the whole traversal
-	optional_ptr<LogicalOperator> plan_root;
+	optional_ptr<unique_ptr<LogicalOperator>> plan_root;
 	//! Every column binding referenced anywhere in the plan, including the plan's own output
 	column_binding_set_t column_references;
 };

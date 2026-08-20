@@ -172,17 +172,18 @@ RemoveUnnecessaryAggregates::RemoveUnnecessaryAggregates(Optimizer &optimizer) :
 }
 
 void RemoveUnnecessaryAggregates::GatherColumnReferences() {
+	auto &root = **plan_root;
 	column_references.clear();
 	// the plan's own output is referenced by whoever consumes the query result
-	for (auto &binding : plan_root->GetColumnBindings()) {
+	for (auto &binding : root.GetColumnBindings()) {
 		column_references.insert(binding);
 	}
 	ColumnBindingGatherer gatherer(column_references);
-	gatherer.VisitOperator(*plan_root);
+	gatherer.VisitOperator(root);
 }
 
 void RemoveUnnecessaryAggregates::Optimize(unique_ptr<LogicalOperator> &op) {
-	plan_root = op.get();
+	plan_root = op;
 	GatherColumnReferences();
 
 	VisitOperator(op, AggregateDistinctDependent::DISTINCT_DEPENDENT, OperatorPath());
@@ -326,9 +327,10 @@ void RemoveUnnecessaryAggregates::ReplaceAggregateWithProjection(unique_ptr<Logi
 	// unreferenced groups are dead expressions of this projection, but they still reference the operators
 	// below. Clearing them can drop the last reference to an aggregate expression further down, which leaves
 	// that aggregate a pure duplicate eliminator, so this has to happen before we descend and decide about it.
-	// VisitSubtree is what also prunes the columns of the projection itself
+	// The pass has to start at the plan root: it treats every output of the operator it starts on as needed,
+	// which is only true there - started on this projection it would keep exactly the dead groups
 	RemoveUnusedColumns unused_optimizer(optimizer);
-	unused_optimizer.VisitSubtree(op_ref, *plan_root);
+	unused_optimizer.VisitOperator(*plan_root);
 	GatherColumnReferences();
 }
 

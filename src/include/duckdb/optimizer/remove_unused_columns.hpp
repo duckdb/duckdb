@@ -137,11 +137,6 @@ public:
 	RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
-	//! Like VisitOperator, but also prunes the columns of `op` itself, keeping only the ones that are still
-	//! referenced in `plan`. VisitOperator keeps all of them, because it cannot know what its caller needs.
-	//! The readers are found by scanning the expressions above `op`, so no operator in between may pass
-	//! columns through positionally (e.g. a set operation)
-	void VisitSubtree(unique_ptr<LogicalOperator> &op, LogicalOperator &plan);
 
 private:
 	Optimizer &optimizer;
@@ -159,7 +154,6 @@ private:
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
-	void GatherReferencesAbove(LogicalOperator &op, const LogicalOperator &stop);
 	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
