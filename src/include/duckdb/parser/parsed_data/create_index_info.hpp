@@ -26,6 +26,22 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The name of the index
 	string index_name;
 
+	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
+	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
+	//! spelled exactly as they are on the 2.0 branch.
+	const string &GetIndexName() const {
+		return index_name;
+	}
+	void SetIndexName(string name_p) {
+		index_name = std::move(name_p);
+	}
+	const string &GetEntryName() const override {
+		return index_name;
+	}
+	void SetEntryName(string name_p) override {
+		index_name = std::move(name_p);
+	}
+
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;
 

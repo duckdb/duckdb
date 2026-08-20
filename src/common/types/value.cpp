@@ -1,6 +1,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -147,6 +148,9 @@ Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
 
 Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 	value_.double_ = val;
+}
+
+Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
 }
 
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
@@ -1365,6 +1369,11 @@ DUCKDB_API interval_t Value::GetValue() const {
 template <>
 DUCKDB_API Value Value::GetValue() const {
 	return Value(*this);
+}
+
+template <>
+DUCKDB_API Identifier Value::GetValue() const {
+	return Identifier(GetValue<string>());
 }
 
 uintptr_t Value::GetPointer() const {

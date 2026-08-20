@@ -63,6 +63,22 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	//! NOTE(backport): on DuckDB 2.0 vectors carry their own size, so setting the cardinality of a chunk has to resize
+	//! its child vectors as well. Here vectors have no size of their own, so this is exactly SetCardinality - it only
+	//! exists so that code written against DuckDB 2.0 compiles and behaves the same.
+	inline void SetChildCardinality(idx_t count_p) {
+		SetCardinality(count_p);
+	}
+	//! NOTE(backport): the "unsafe" variant skips resizing the child vectors, which is a no-op here - see above.
+	inline void SetCardinalityUnsafe(idx_t count_p) {
+		SetCardinality(count_p);
+	}
+	//! NOTE(backport): on DuckDB 2.0 this verifies that the child vectors already have the given size and then drops
+	//! the chunk's own cardinality, which is derived from them. Here the count is the only size there is, so it sets it
+	//! instead - the same observable result, except that the mismatch 2.0 throws on cannot be detected here.
+	inline void CheckCardinality(idx_t count_p) {
+		SetCardinality(count_p);
+	}
 	inline idx_t GetCapacity() const {
 		return capacity;
 	}

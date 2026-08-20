@@ -23,6 +23,22 @@ public:
 public:
 	//! View name
 	string view_name;
+
+	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
+	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
+	//! spelled exactly as they are on the 2.0 branch.
+	const string &GetViewName() const {
+		return view_name;
+	}
+	void SetViewName(string name_p) {
+		view_name = std::move(name_p);
+	}
+	const string &GetEntryName() const override {
+		return view_name;
+	}
+	void SetEntryName(string name_p) override {
+		view_name = std::move(name_p);
+	}
 	//! Aliases of the view
 	vector<string> aliases;
 	//! Return types

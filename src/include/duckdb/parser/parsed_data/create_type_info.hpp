@@ -56,6 +56,22 @@ struct CreateTypeInfo : public CreateInfo {
 
 	//! Name of the Type
 	string name;
+
+	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
+	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
+	//! spelled exactly as they are on the 2.0 branch.
+	const string &GetTypeName() const {
+		return name;
+	}
+	void SetTypeName(string name_p) {
+		name = std::move(name_p);
+	}
+	const string &GetEntryName() const override {
+		return name;
+	}
+	void SetEntryName(string name_p) override {
+		name = std::move(name_p);
+	}
 	//! Logical Type
 	LogicalType type;
 	//! Used by create enum from query

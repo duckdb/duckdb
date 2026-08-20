@@ -23,6 +23,7 @@
 namespace duckdb {
 
 class String;
+class Identifier;
 class CastFunctionSet;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
@@ -52,7 +53,8 @@ public:
 	//! Create a DOUBLE value
 	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val);       // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const Identifier &val); // NOLINT: Allow implicit conversion from `Identifier`
 	//! Create a NULL value
 	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
@@ -587,6 +589,10 @@ template <>
 DUCKDB_API interval_t Value::GetValue() const;
 template <>
 DUCKDB_API Value Value::GetValue() const;
+// Not a logical type like the specializations above, but a semantic wrapper around the string value. It mirrors the
+// implicit Value(const Identifier &) constructor, so identifiers can round-trip through a Value.
+template <>
+DUCKDB_API Identifier Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;

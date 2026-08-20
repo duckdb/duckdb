@@ -32,6 +32,22 @@ struct CreateSequenceInfo : public CreateInfo {
 
 	//! Sequence name to create
 	string name;
+
+	//! NOTE(backport): DuckDB 2.0 stores catalog/schema/name in a single `QualifiedName` on `CreateInfo`; here they are
+	//! separate strings and the name lives on the subclass. These accessors only exist so that call sites can be
+	//! spelled exactly as they are on the 2.0 branch.
+	const string &GetSequenceName() const {
+		return name;
+	}
+	void SetSequenceName(string name_p) {
+		name = std::move(name_p);
+	}
+	const string &GetEntryName() const override {
+		return name;
+	}
+	void SetEntryName(string name_p) override {
+		name = std::move(name_p);
+	}
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

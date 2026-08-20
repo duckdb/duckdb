@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/types/string.hpp"
 
@@ -381,6 +382,20 @@ public:
 	                   const string &name, QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry =
 		    GetEntry<T>(context, catalog_name, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		return *entry;
+	}
+
+	//! Look up an entry by its (optionally qualified) name - the 2.0 spelling of the catalog/schema/name overloads
+	//! above.
+	template <class T>
+	static optional_ptr<T> GetEntry(ClientContext &context, const QualifiedName &name, OnEntryNotFound if_not_found,
+	                                QueryErrorContext error_context = QueryErrorContext()) {
+		return GetEntry<T>(context, name.catalog, name.schema, name.name, if_not_found, error_context);
+	}
+	template <class T>
+	static T &GetEntry(ClientContext &context, const QualifiedName &name,
+	                   QueryErrorContext error_context = QueryErrorContext()) {
+		auto entry = GetEntry<T>(context, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 		return *entry;
 	}
 

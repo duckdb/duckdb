@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -63,6 +64,22 @@ public:
 	bool allow_internal;
 	//! New dependencies for the altered entry (set during binding)
 	unique_ptr<LogicalDependencyList> new_dependencies;
+
+public:
+	//! NOTE(backport): see the note on CreateInfo::GetQualifiedName - assembled on demand, returned by value.
+	QualifiedName GetQualifiedName() const {
+		return QualifiedName(catalog, schema, name);
+	}
+	//! NOTE(backport): DuckDB 2.0 takes the `QualifiedName` by value and moves it into the stored member; here the
+	//! separate string members are copied out of it, so a const reference avoids a pointless copy.
+	void SetQualifiedName(const QualifiedName &qualified_name) {
+		catalog = qualified_name.catalog;
+		schema = qualified_name.schema;
+		name = qualified_name.name;
+	}
+	void SetQualifiedName(string catalog_p, string schema_p, string name_p) {
+		SetQualifiedName(QualifiedName(std::move(catalog_p), std::move(schema_p), std::move(name_p)));
+	}
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

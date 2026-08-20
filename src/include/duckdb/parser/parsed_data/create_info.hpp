@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -50,6 +51,46 @@ public:
 	Value comment;
 	//! Key-value tags with additional metadata
 	InsertionOrderPreservingMap<string> tags;
+
+public:
+	//! NOTE(backport): DuckDB 2.0 stores a single `QualifiedName` here and `GetQualifiedName()` hands out a reference
+	//! to it. Here the catalog/schema are separate members and the name lives on the subclass, so the QualifiedName has
+	//! to be assembled on demand and is returned by value. `GetQualifiedNameMutable()` therefore cannot be provided -
+	//! there is nothing to hand out a reference to.
+	QualifiedName GetQualifiedName() const {
+		return QualifiedName(catalog, schema, GetEntryName());
+	}
+	//! NOTE(backport): DuckDB 2.0 takes the `QualifiedName` by value and moves it into the stored member; here the
+	//! separate string members are copied out of it, so a const reference avoids a pointless copy.
+	void SetQualifiedName(const QualifiedName &qualified_name) {
+		catalog = qualified_name.catalog;
+		schema = qualified_name.schema;
+		SetEntryName(qualified_name.name);
+	}
+	void SetQualifiedName(string catalog_p, string schema_p, string name_p) {
+		SetQualifiedName(QualifiedName(std::move(catalog_p), std::move(schema_p), std::move(name_p)));
+	}
+
+	//! The name of the created entry. Overridden by every subclass that has a name of its own - the base
+	//! implementation covers the CreateInfo types that have none (e.g. CREATE SCHEMA).
+	virtual const string &GetEntryName() const {
+		static const string EMPTY_NAME;
+		return EMPTY_NAME;
+	}
+	virtual void SetEntryName(string name_p) { // NOLINT: unused in the base - see above
+		throw InternalException("SetEntryName not supported for this type of CreateInfo: '%s'",
+		                        CatalogTypeToString(type));
+	}
+
+public:
+	//! NOTE(backport): DuckDB 2.0 writes these through the `QualifiedName`; here they write the separate members
+	//! directly. They exist so that call sites can be spelled exactly as they are on the 2.0 branch.
+	void SetCatalog(string catalog_p) {
+		catalog = std::move(catalog_p);
+	}
+	void SetSchema(string schema_p) {
+		schema = std::move(schema_p);
+	}
 
 public:
 	void Serialize(Serializer &serializer) const override;
