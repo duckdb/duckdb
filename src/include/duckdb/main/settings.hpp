@@ -846,17 +846,6 @@ struct DelimJoinAsCteSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DeprecatedUsingKeySyntaxSetting {
-	using RETURN_TYPE = DeprecatedUsingKeySyntax;
-	static constexpr const char *Name = "deprecated_using_key_syntax";
-	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
-	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "DEFAULT";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
 struct DialectCompatibilityModeSetting {
 	using RETURN_TYPE = DialectCompatibilityMode;
 	static constexpr const char *Name = "dialect_compatibility_mode";
@@ -1906,6 +1895,19 @@ struct SecretDirectorySetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ShowBehaviorSetting {
+	using RETURN_TYPE = ShowBehaviorType;
+	static constexpr const char *Name = "show_behavior";
+	static constexpr const char *Description =
+	    "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), "
+	    "'table' (always a table), or 'setting' (always a setting)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct StandardVectorSizeSetting {

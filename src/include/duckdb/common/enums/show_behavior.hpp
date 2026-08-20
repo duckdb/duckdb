@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/deprecated_using_key_syntax.hpp
+// duckdb/common/enums/show_behavior.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
-enum class DeprecatedUsingKeySyntax : uint8_t { DEFAULT = 0, UNION_AS_UNION_ALL = 1 };
+//! Controls how "SHOW name" resolves an identifier - as a table to describe or as a setting value.
+enum class ShowBehaviorType : uint8_t { AUTO = 0, SETTING = 1, TABLE = 2 };
 
 } // namespace duckdb
