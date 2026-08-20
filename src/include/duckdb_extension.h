@@ -728,6 +728,13 @@ typedef struct {
 	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+	idx_t (*duckdb_error_data_extra_info_count)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_extra_info_key)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_value)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_get)(duckdb_error_data error_data, const char *key);
+	duckdb_error_data (*duckdb_result_error_data)(duckdb_result *result);
+#endif
 	// capigen:end appended
 } duckdb_ext_api_v1;
 
@@ -2351,6 +2358,21 @@ typedef struct {
 #endif
 #if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 #define duckdb_get_timestamp_tz_ns duckdb_ext_api.duckdb_get_timestamp_tz_ns
+#endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+#define duckdb_error_data_extra_info_count duckdb_ext_api.duckdb_error_data_extra_info_count
+#endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+#define duckdb_error_data_extra_info_key duckdb_ext_api.duckdb_error_data_extra_info_key
+#endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+#define duckdb_error_data_extra_info_value duckdb_ext_api.duckdb_error_data_extra_info_value
+#endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+#define duckdb_error_data_extra_info_get duckdb_ext_api.duckdb_error_data_extra_info_get
+#endif
+#if DUCKDB_API_ALLOW_UNSTABLE
+#define duckdb_result_error_data duckdb_ext_api.duckdb_result_error_data
 #endif
 // capigen:end appended
 //===--------------------------------------------------------------------===//

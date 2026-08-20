@@ -287,6 +287,91 @@ functions:
     description: |
       Returns whether the error data contains an error or not.
     return_description: True, if the error data contains an exception, else false.
+  error_data_extra_info_count:
+    offset: 546
+    lifecycle:
+      - ["unstable", "v1.5.6", "2026-08-14"]
+    parameters:
+      error_data:
+        type: error_data
+        description: The error data.
+    return_type: idx
+    description: |
+      Returns the number of ExtraInfo key/value pairs attached to the error data.
+    return_description: The number of ExtraInfo entries, or 0 if error_data is NULL.
+  error_data_extra_info_key:
+    offset: 547
+    lifecycle:
+      - ["unstable", "v1.5.6", "2026-08-14"]
+    parameters:
+      error_data:
+        type: error_data
+        description: The error data.
+      index:
+        type: idx
+        description: The ExtraInfo entry index.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the ExtraInfo key at the given index. Must not be freed.
+      The returned pointer is invalidated by `duckdb_destroy_error_data`.
+    return_description: The key at the given index, or NULL if the index is out of range or error_data is NULL.
+  error_data_extra_info_value:
+    offset: 548
+    lifecycle:
+      - ["unstable", "v1.5.6", "2026-08-14"]
+    parameters:
+      error_data:
+        type: error_data
+        description: The error data.
+      index:
+        type: idx
+        description: The ExtraInfo entry index.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the ExtraInfo value at the given index. Must not be freed.
+      The returned pointer is invalidated by `duckdb_destroy_error_data`.
+    return_description: The value at the given index, or NULL if the index is out of range or error_data is NULL.
+  error_data_extra_info_get:
+    offset: 549
+    lifecycle:
+      - ["unstable", "v1.5.6", "2026-08-14"]
+    parameters:
+      error_data:
+        type: error_data
+        description: The error data.
+      key:
+        type: char
+        indirection: 1
+        const: true
+        description: The ExtraInfo key to look up.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the ExtraInfo value for the given key (for example "status_code"). Must not be freed.
+      The returned pointer is invalidated by `duckdb_destroy_error_data`.
+    return_description: The value for the key, or NULL if the key is absent or error_data/key is NULL.
+  result_error_data:
+    offset: 550
+    lifecycle:
+      - ["unstable", "v1.5.6", "2026-08-14"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+        description: The result object to fetch the error from.
+    return_type: error_data
+    description: |
+      Returns a copy of the full error data contained within the result, including ExtraInfo.
+      The error is only set if `duckdb_query` returns `DuckDBError`.
+
+      Must be destroyed with `duckdb_destroy_error_data`. Prefer this over `duckdb_result_error` /
+      `duckdb_result_error_type` when structured error details are needed.
+    return_description: An owned duckdb_error_data on error, or NULL if the result has no error.
   malloc:
     offset: 24
     lifecycle:

@@ -635,6 +635,11 @@ typedef struct {
 	                                                       idx_t str_len);
 	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
+	idx_t (*duckdb_error_data_extra_info_count)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_extra_info_key)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_value)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_get)(duckdb_error_data error_data, const char *key);
+	duckdb_error_data (*duckdb_result_error_data)(duckdb_result *result);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -1190,6 +1195,11 @@ inline duckdb_ext_api_v1 CreateAPIv1(void) {
 	result.duckdb_unsafe_vector_assign_string_element_len = duckdb_unsafe_vector_assign_string_element_len;
 	result.duckdb_create_timestamp_tz_ns = duckdb_create_timestamp_tz_ns;
 	result.duckdb_get_timestamp_tz_ns = duckdb_get_timestamp_tz_ns;
+	result.duckdb_error_data_extra_info_count = duckdb_error_data_extra_info_count;
+	result.duckdb_error_data_extra_info_key = duckdb_error_data_extra_info_key;
+	result.duckdb_error_data_extra_info_value = duckdb_error_data_extra_info_value;
+	result.duckdb_error_data_extra_info_get = duckdb_error_data_extra_info_get;
+	result.duckdb_result_error_data = duckdb_result_error_data;
 	return result;
 }
 
