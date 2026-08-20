@@ -1,11 +1,11 @@
-commit 82427d21c7fbbe8dac740c64524515d2f43fef70
+commit 48ce1e63582f23da0c601378dea00bba5c3e3ca7
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
     Consider HTTP cache
 
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index a4ae59f..efd18b4 100644
+index 2efd0fa..058d241 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
