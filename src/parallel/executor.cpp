@@ -304,10 +304,7 @@ void Executor::CancelTasks() {
 					continue;
 				}
 			}
-			auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
-			if (res == TaskExecutionResult::TASK_BLOCKED) {
-				task_from_producer->Deschedule();
-			}
+			// No execute the task dequeued, directly discard.
 			task_from_producer.reset();
 		}
 	}
