@@ -30,6 +30,8 @@ template <class T>
 struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 	explicit TypedTransformResult(T value_p) : value(std::move(value_p)) {
 	}
+	TypedTransformResult(const TypedTransformResult &) = delete;
+	TypedTransformResult &operator=(const TypedTransformResult &) = delete;
 
 	void *GetValuePointer(const char *type_name) override {
 		auto expected = TransformResultTypeName<T>();
