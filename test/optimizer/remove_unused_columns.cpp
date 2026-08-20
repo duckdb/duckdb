@@ -1,14 +1,18 @@
 #include "catch.hpp"
 
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 using namespace duckdb;
 
@@ -39,6 +43,28 @@ static void ApplyColumnPruning(Connection &connection, unique_ptr<LogicalOperato
 		remove_unused.VisitOperator(plan);
 	}
 	connection.Rollback();
+}
+
+static unique_ptr<LogicalOperator> PlanUnusedColumnsQuery(Connection &connection, const string &query) {
+	Parser parser(connection.context->GetParserOptions());
+	parser.ParseQuery(query);
+	REQUIRE(parser.statements.size() == 1);
+	Planner planner(*connection.context);
+	planner.CreatePlan(std::move(parser.statements[0]));
+	return std::move(planner.plan);
+}
+
+static optional_ptr<LogicalOperator> FindUnusedColumnsOperator(LogicalOperator &op, LogicalOperatorType type) {
+	if (op.type == type) {
+		return op;
+	}
+	for (auto &child : op.children) {
+		auto result = FindUnusedColumnsOperator(*child, type);
+		if (result) {
+			return result;
+		}
+	}
+	return nullptr;
 }
 
 TEST_CASE("Column pruning removes dead projection map entries", "[optimizer][unused_columns]") {
@@ -157,4 +183,44 @@ TEST_CASE("Column pruning retains a minimum layout for removed projection map en
 	        vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0)),
 	                               ColumnBinding(child_table, ProjectionIndex(1))});
 	REQUIRE(filter_ref.GetColumnBindings() == vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0))});
+}
+
+TEST_CASE("Recursive CTE pruning does not reapply projection map replacements", "[optimizer][unused_columns]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+
+	auto plan = PlanUnusedColumnsQuery(connection, R"(
+		WITH RECURSIVE t(unused, a, b) AS (
+			SELECT 100, 1, 10
+			UNION ALL
+			SELECT 100, 4, b + 10 FROM t WHERE a < 3
+		)
+		SELECT b FROM t
+	)");
+	auto recursive = FindUnusedColumnsOperator(*plan, LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+	REQUIRE(recursive);
+	auto filter = FindUnusedColumnsOperator(*recursive->children[1], LogicalOperatorType::LOGICAL_FILTER);
+	REQUIRE(filter);
+	auto &filter_ref = filter->Cast<LogicalFilter>();
+	REQUIRE(filter_ref.children[0]->GetColumnBindings().size() == 3);
+	filter_ref.projection_map = {ProjectionIndex(2)};
+
+	ResolveTypes(*plan);
+	ColumnBindingResolver initial_resolver(true);
+	REQUIRE_NOTHROW(initial_resolver.VisitOperator(*plan));
+	{
+		auto binder = Binder::CreateBinder(*connection.context);
+		Optimizer optimizer(*binder, *connection.context);
+		RemoveUnusedColumns remove_unused(optimizer);
+		remove_unused.VisitOperator(plan);
+	}
+
+	plan->ResolveOperatorTypes();
+	ColumnBindingResolver resolver(true);
+	REQUIRE_NOTHROW(resolver.VisitOperator(*plan));
+	REQUIRE(filter_ref.projection_map == vector<ProjectionIndex> {ProjectionIndex(1)});
+	REQUIRE(filter_ref.children[0]->GetColumnBindings().size() == 2);
+
+	connection.Rollback();
 }

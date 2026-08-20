@@ -158,17 +158,17 @@ void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
 	rec.column_count = entries.size();
 }
 
-void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
-                                                        const unordered_set<ProjectionIndex> &required_columns) {
+vector<ReplacementBinding>
+RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+                                                   const unordered_set<ProjectionIndex> &required_columns) {
 	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
 	cte_ref_pruner.VisitOperator(*rec.children[1]);
-	for (auto &replacement : cte_ref_pruner.binding_replacements) {
-		root.projection_map_replacements[replacement.old_binding] = {replacement.new_binding};
-	}
+	auto binding_replacements = std::move(cte_ref_pruner.binding_replacements);
 	ColumnBindingReplacer column_binding_replacer;
-	column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
+	column_binding_replacer.replacement_bindings = binding_replacements;
 	column_binding_replacer.VisitOperator(*rec.children[1]);
+	return binding_replacements;
 }
 
 bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
@@ -183,10 +183,13 @@ bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
 		return false;
 	}
 	ApplyRecursiveProjections(rec, required_columns);
-	RewriteRecursiveCTEReferences(rec, required_columns);
+	auto reference_replacements = RewriteRecursiveCTEReferences(rec, required_columns);
 	for (auto &child : rec.children) {
 		RemoveUnusedColumns remove(*this, true);
 		remove.VisitOperator(child);
+	}
+	for (auto &replacement : reference_replacements) {
+		root.projection_map_replacements[replacement.old_binding] = {replacement.new_binding};
 	}
 	return true;
 }

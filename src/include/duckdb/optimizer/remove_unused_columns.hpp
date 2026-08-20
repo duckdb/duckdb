@@ -164,8 +164,8 @@ private:
 	                                 unordered_set<ProjectionIndex> &recursive_dependencies);
 	bool ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec, unordered_set<ProjectionIndex> &required_columns);
 	void ApplyRecursiveProjections(LogicalRecursiveCTE &rec, const unordered_set<ProjectionIndex> &required_columns);
-	void RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
-	                                   const unordered_set<ProjectionIndex> &required_columns);
+	vector<ReplacementBinding> RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+	                                                         const unordered_set<ProjectionIndex> &required_columns);
 	bool TryPruneRecursiveCTE(LogicalRecursiveCTE &rec);
 	void VisitPrunableChildren(LogicalOperator &op);
 	void WritePushdownExtractColumns(
