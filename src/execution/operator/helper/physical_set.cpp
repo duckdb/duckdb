@@ -88,7 +88,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
-			throw CatalogException("option \"%s\" cannot be set globally", name);
+			throw CatalogException("option %s cannot be set globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context);
 		config.SetOption(&db, *option, input_val);
@@ -96,7 +96,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 	}
 	case SetScope::SESSION:
 		if (!option->set_local) {
-			throw CatalogException("option \"%s\" cannot be set locally", name);
+			throw CatalogException("option %s cannot be set locally", name);
 		}
 		option->set_local(context, input_val);
 		break;
