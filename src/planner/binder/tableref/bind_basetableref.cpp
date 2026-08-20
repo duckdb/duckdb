@@ -222,9 +222,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
 			throw BinderException(error_context,
-			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
-			                      ref.Table().GetIdentifierName());
+			                      ref.Table());
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed

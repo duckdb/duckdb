@@ -744,7 +744,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key
 				throw BinderException("read_csv %s cannot have empty (or all whitespace) value", key);
 			}
 			if (column_names.find(name) != column_names.end()) {
-				throw BinderException("read_csv %s must have unique values. \"%s\" is repeated.", key, name);
+				throw BinderException("read_csv %s must have unique values. %s is repeated.", key, name);
 			}
 			column_names.insert(name);
 		}

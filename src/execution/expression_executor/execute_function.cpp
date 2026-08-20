@@ -173,7 +173,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i) && result_validity.IsValid(i)) {
 			throw InternalException(
-			    "VerifyNullHandling failed for scalar function \"%s\": row %d has a NULL argument but the result is "
+			    "VerifyNullHandling failed for scalar function %s: row %d has a NULL argument but the result is "
 			    "not NULL - functions with default NULL handling should return NULL for any NULL input",
 			    expr.Function().GetName(), i);
 		}

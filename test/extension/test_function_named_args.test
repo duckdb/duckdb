@@ -290,13 +290,13 @@ SELECT test_named_inspect();
 statement error
 SELECT test_named_inspect(b := 2);
 ----
-<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+<REGEX>:Binder Error:.*Missing value for parameter "a".*
 
 # A named vararg cannot satisfy a required positional parameter
 statement error
 SELECT test_named_varargs(x := 5);
 ----
-<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+<REGEX>:Binder Error:.*Missing value for parameter "a".*
 
 # Unknown parameter name on a function without varargs -> no candidate overload
 statement error
@@ -376,7 +376,7 @@ SELECT test_named_agg_inspect(x, c := 9) FROM (VALUES (5)) t(x);
 statement error
 SELECT test_named_agg_inspect(b := 2);
 ----
-<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+<REGEX>:Binder Error:.*Missing value for parameter "a".*
 
 ###===--------------------------------------------------------------------===#
 ## Automatic capturing of aliases as named arguments

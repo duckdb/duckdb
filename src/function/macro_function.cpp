@@ -20,7 +20,7 @@ MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
 string FormatMacroFunction(const MacroFunction &function, const Identifier &name) {
-	auto result = name + "(";
+	auto result = SQLIdentifier::ToString(name.GetIdentifierName()) + "(";
 	string parameters;
 	for (idx_t param_idx = 0; param_idx < function.parameters.size(); param_idx++) {
 		if (!parameters.empty()) {
@@ -196,7 +196,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		string error;
 		if (result_indices.empty()) {
 			// No matching function found
-			error = StringUtil::Format("Macro %s() does not support the supplied arguments.", name);
+			error = StringUtil::Format("Macro %s() does not support the supplied arguments.", SQLIdentifier(name));
 			error += " You might need to add explicit type casts.\n";
 			error += "Candidate macros:";
 			for (auto &function : functions) {
@@ -204,7 +204,8 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			}
 		} else {
 			// Multiple matching functions found
-			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments.\n", name);
+			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments.\n",
+			                           SQLIdentifier(name));
 			error += "In order to select one, please supply all arguments by name, and/or add explicit type casts.\n";
 			error += "Candidate macros:";
 			for (const auto &result_idx : result_indices) {

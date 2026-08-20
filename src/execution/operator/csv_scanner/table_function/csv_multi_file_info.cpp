@@ -231,7 +231,7 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 		}
 		for (auto &force_name : options.force_not_null_names) {
 			if (column_names.find(Identifier(force_name)) == column_names.end()) {
-				throw BinderException("force_not_null expected to find %s, but it was not found in the table",
+				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
 				                      force_name);
 			}
 		}
