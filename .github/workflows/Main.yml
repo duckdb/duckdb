@@ -616,10 +616,6 @@ jobs:
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
       with:
@@ -1380,14 +1376,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
