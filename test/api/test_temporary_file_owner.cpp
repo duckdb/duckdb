@@ -24,6 +24,9 @@ TEST_CASE("Test temporary file owners", "[api]") {
 				REQUIRE(parsed == written);
 				REQUIRE(TryParseTemporaryFileOwner(prefix + "block-7.block", parsed));
 				REQUIRE(parsed == written);
+				// the marker is swept like any other file of a dead owner, so it must parse too
+				REQUIRE(TryParseTemporaryFileOwner(TemporaryOwnerMarkerName(written), parsed));
+				REQUIRE(parsed == written);
 			}
 		}
 		// no two owners share a prefix, so no instance can reach another's files

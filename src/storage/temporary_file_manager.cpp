@@ -720,6 +720,10 @@ string TemporaryFilePrefix(const TemporaryFileOwner &owner) {
 	return TEMPORARY_FILE_PREFIX + to_string(owner.pid) + "_" + to_string(owner.instance) + "_";
 }
 
+string TemporaryOwnerMarkerName(const TemporaryFileOwner &owner) {
+	return TemporaryFilePrefix(owner) + "owner";
+}
+
 //! Only unsigned decimal, so nothing a version naming its files differently wrote can parse
 static bool TryParseDecimal(const string &text, uint64_t &result) {
 	if (text.empty() || text.size() > 19) {
@@ -854,30 +858,37 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 void TemporaryDirectoryHandle::ClaimOwner() {
 	auto &fs = FileSystem::GetFileSystem(db);
 	owner.pid = CurrentProcessId();
-	unordered_set<idx_t> ids_in_use;
-	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
-		TemporaryFileOwner found;
-		if (!is_dir && TryParseTemporaryFileOwner(name, found) && found.pid == owner.pid) {
-			ids_in_use.insert(found.instance);
-		}
-	});
-	// A process that held our id before us counted from zero just as we do, so its files carry the
-	// name we are about to take, and FILE_CREATE adopts a file rather than failing on it. Step over
-	// them instead: our pid is live, so nothing may delete under it, and they are reaped once we exit.
-	do {
+	// Creating the marker is what claims the id, because it is the only step that is atomic against
+	// an instance that shares our pid but not our counter - two copies of duckdb in one process each
+	// count from zero. It is not locked, and nothing ever opens anybody else's: existing is its job.
+	for (;;) {
 		owner.instance = NextInstanceId();
-	} while (ids_in_use.find(owner.instance) != ids_in_use.end());
+		try {
+			auto marker = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)),
+			                          FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+			marker->Close();
+			break;
+		} catch (std::exception &) {
+			// taken, by a live instance or by one that died holding it - either way not ours
+		}
+	}
 	file_prefix = TemporaryFilePrefix(owner);
 }
 
 vector<string> TemporaryDirectoryHandle::ListOwnFiles() {
 	auto &fs = FileSystem::GetFileSystem(db);
+	auto marker_name = TemporaryOwnerMarkerName(owner);
 	vector<string> result;
 	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
 		TemporaryFileOwner found;
-		if (!is_dir && TryParseTemporaryFileOwner(name, found) && found == owner) {
-			result.push_back(fs.JoinPath(temp_directory, name));
+		if (is_dir || !TryParseTemporaryFileOwner(name, found) || !(found == owner)) {
+			return;
 		}
+		if (name == marker_name) {
+			// the claim itself, removed on its own once everything it reserves is gone
+			return;
+		}
+		result.push_back(fs.JoinPath(temp_directory, name));
 	});
 	return result;
 }
@@ -926,8 +937,11 @@ void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	// only our own: we are their owner, so no process has to be judged to know they are free. What
-	// others left behind is the startup sweep's business
+	// others left behind is the first-spill sweep's business
 	fs.RemoveFiles(ListOwnFiles());
+	// the claim goes last - while it stands nobody can take our id and create a file under our name
+	// that we would then delete out from under them
+	fs.TryRemoveFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)));
 	if (created_directory) {
 		// only if nothing else is in it: another instance may have joined us here, and removing the
 		// directory is recursive - it would take their files with it
