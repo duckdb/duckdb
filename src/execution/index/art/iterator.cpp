@@ -1,7 +1,11 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/bit_utils.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
@@ -15,6 +19,48 @@ namespace duckdb {
 
 //! Limit sorted duplicate lookups to the final capacity slots.
 static constexpr idx_t SORTED_DUPLICATE_SEARCH_WINDOW = 16;
+
+//! Limit the temporary bitmap to larger inputs and one quarter of the Row-ID array.
+static constexpr idx_t BITMAP_MIN_ROW_COUNT = static_cast<idx_t>(STANDARD_VECTOR_SIZE) * 4;
+static constexpr idx_t BITMAP_MAX_BYTES_PER_ROW_ID = sizeof(row_t) / 4;
+
+static bool TryGetBitmapLayout(const unsafe_vector<row_t> &row_ids, row_t &min_row_id, idx_t &span, idx_t &word_count) {
+	const auto row_count = row_ids.size();
+	if (row_count < BITMAP_MIN_ROW_COUNT) {
+		return false;
+	}
+
+	const auto minmax = std::minmax_element(row_ids.begin(), row_ids.end());
+	min_row_id = *minmax.first;
+	if (min_row_id < 0) {
+		return false;
+	}
+	const auto max_row_id = *minmax.second;
+	const auto unsigned_min = static_cast<uint64_t>(min_row_id);
+	const auto unsigned_max = static_cast<uint64_t>(max_row_id);
+	uint64_t unsigned_span;
+	if (!TryAddOperator::Operation<uint64_t, uint64_t, uint64_t>(unsigned_max - unsigned_min, 1, unsigned_span) ||
+	    unsigned_span > NumericLimits<idx_t>::Maximum()) {
+		return false;
+	}
+	span = static_cast<idx_t>(unsigned_span);
+
+	word_count = span / 64;
+	if (span % 64 != 0 && !TryAddOperator::Operation<idx_t, idx_t, idx_t>(word_count, 1, word_count)) {
+		return false;
+	}
+
+	idx_t bitmap_bytes;
+	if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(word_count, sizeof(uint64_t), bitmap_bytes)) {
+		return false;
+	}
+
+	idx_t relative_limit;
+	if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(row_count, BITMAP_MAX_BYTES_PER_ROW_ID, relative_limit)) {
+		relative_limit = NumericLimits<idx_t>::Maximum();
+	}
+	return bitmap_bytes <= relative_limit;
+}
 
 ARTRowIdCollection::ARTRowIdCollection(const idx_t capacity_p) : capacity(capacity_p) {
 	row_ids.reserve(MinValue<idx_t>(capacity, STANDARD_VECTOR_SIZE));
@@ -56,8 +102,33 @@ void ARTRowIdCollection::Normalize() {
 		std::reverse(row_ids.begin(), row_ids.end());
 		row_ids.erase(std::unique(row_ids.begin(), row_ids.end()), row_ids.end());
 	} else {
-		duckdb_pdqsort::pdqsort_branchless(row_ids.begin(), row_ids.end());
-		row_ids.erase(std::unique(row_ids.begin(), row_ids.end()), row_ids.end());
+		row_t min_row_id;
+		idx_t span;
+		idx_t word_count;
+		if (TryGetBitmapLayout(row_ids, min_row_id, span, word_count)) {
+			unsafe_vector<uint64_t> bitmap(word_count, 0);
+			const auto unsigned_min = static_cast<uint64_t>(min_row_id);
+			for (const auto row_id : row_ids) {
+				const auto offset = static_cast<idx_t>(static_cast<uint64_t>(row_id) - unsigned_min);
+				D_ASSERT(offset < span);
+				bitmap[offset >> 6] |= uint64_t(1) << (offset & 63);
+			}
+
+			idx_t result_count = 0;
+			for (idx_t word_idx = 0; word_idx < bitmap.size(); word_idx++) {
+				auto word = bitmap[word_idx];
+				while (word != 0) {
+					const auto bit_offset = CountZeros<uint64_t>::Trailing(word);
+					const auto offset = (word_idx << 6) + bit_offset;
+					row_ids[result_count++] = static_cast<row_t>(unsigned_min + offset);
+					word &= word - 1;
+				}
+			}
+			row_ids.resize(result_count);
+		} else {
+			duckdb_pdqsort::pdqsort_branchless(row_ids.begin(), row_ids.end());
+			row_ids.erase(std::unique(row_ids.begin(), row_ids.end()), row_ids.end());
+		}
 	}
 
 	non_decreasing = true;

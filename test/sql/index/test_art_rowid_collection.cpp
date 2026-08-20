@@ -1,9 +1,17 @@
 #include "catch.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 
 using namespace duckdb;
+
+static unsafe_vector<row_t> SortedUniqueCopy(const unsafe_vector<row_t> &row_ids) {
+	auto result = row_ids;
+	std::sort(result.begin(), result.end());
+	result.erase(std::unique(result.begin(), result.end()), result.end());
+	return result;
+}
 
 static ARTScanResult ScanBaseline(set<row_t> &row_ids, const idx_t capacity, const unsafe_vector<row_t> &input,
                                   const idx_t begin, const idx_t end) {
@@ -50,6 +58,13 @@ TEST_CASE("Test ART row ID collection finalization paths", "[art]") {
 	// Small unordered values use the comparison-sort fallback.
 	RequireFinalized({64, 0, 31, 63, 1, 2, 3, 4, 5}, {0, 1, 2, 3, 4, 5, 31, 63, 64});
 
+	// Four vectors of dense unordered values exercise bitmap ordering across many words.
+	unsafe_vector<row_t> dense_unordered;
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE * 4; i++) {
+		dense_unordered.push_back(UnsafeNumericCast<row_t>((i * 4051) % (STANDARD_VECTOR_SIZE * 4)));
+	}
+	RequireFinalized(dense_unordered, SortedUniqueCopy(dense_unordered));
+
 	// Block-local order does not imply global Row-ID order.
 	unsafe_vector<row_t> block_ordered;
 	unsafe_vector<row_t> block_ordered_expected;
@@ -64,6 +79,22 @@ TEST_CASE("Test ART row ID collection finalization paths", "[art]") {
 		block_ordered_expected.push_back(row_id);
 	}
 	RequireFinalized(block_ordered, block_ordered_expected);
+
+	// Large inputs with extreme spans must reject the bitmap without overflowing layout arithmetic.
+	unsafe_vector<row_t> extreme_span(STANDARD_VECTOR_SIZE * 4, 0);
+	extreme_span[0] = MAX_ROW_ID - 1;
+	for (idx_t i = 1; i < extreme_span.size(); i++) {
+		extreme_span[i] = UnsafeNumericCast<row_t>(i);
+	}
+	RequireFinalized(extreme_span, SortedUniqueCopy(extreme_span));
+
+	unsafe_vector<row_t> signed_extreme_span(STANDARD_VECTOR_SIZE * 4, 0);
+	signed_extreme_span[0] = NumericLimits<row_t>::Maximum();
+	signed_extreme_span[1] = NumericLimits<row_t>::Minimum();
+	for (idx_t i = 2; i < signed_extreme_span.size(); i++) {
+		signed_extreme_span[i] = UnsafeNumericCast<row_t>(i);
+	}
+	RequireFinalized(signed_extreme_span, SortedUniqueCopy(signed_extreme_span));
 }
 
 TEST_CASE("Test ART row ID collection capacity semantics", "[art]") {
