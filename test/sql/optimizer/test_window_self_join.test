@@ -319,3 +319,24 @@ FROM (
 ) AS b;
 ----
 1	10.0
+
+statement ok 
+CREATE OR REPLACE SEQUENCE seq;
+
+statement ok 
+CREATE OR REPLACE TABLE t AS SELECT * FROM range(6) tt(i);
+
+query III
+SELECT g, n, sum(n) OVER (PARTITION BY g) s 
+FROM (
+	SELECT nextval('seq') g, i n 
+	FROM t
+) 
+ORDER BY n;
+----
+1	0	0
+2	1	1
+3	2	2
+4	3	3
+5	4	4
+6	5	5

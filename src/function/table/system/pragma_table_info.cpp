@@ -49,7 +49,7 @@ static Value DefaultValue(const ColumnDefinition &def) {
 }
 
 struct PragmaTableInfoHelper {
-	static void GetSchema(vector<LogicalType> &return_types, vector<string> &names) {
+	static void GetSchema(vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("cid");
 		return_types.emplace_back(LogicalType::INTEGER);
 
@@ -102,7 +102,7 @@ struct PragmaTableInfoHelper {
 };
 
 struct PragmaShowHelper {
-	static void GetSchema(vector<LogicalType> &return_types, vector<string> &names) {
+	static void GetSchema(vector<LogicalType> &return_types, vector<Identifier> &names) {
 		names.emplace_back("column_name");
 		return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -160,7 +160,7 @@ struct PragmaShowHelper {
 
 template <bool IS_PRAGMA_TABLE_INFO>
 static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (IS_PRAGMA_TABLE_INFO) {
 		PragmaTableInfoHelper::GetSchema(return_types, names);
 	} else {

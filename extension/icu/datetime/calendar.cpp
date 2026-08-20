@@ -832,6 +832,7 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 	switch (field) {
 	case CAL_ERA: {
 		const auto era = GetChecked(CAL_ERA);
+		const auto year = GetChecked(CAL_YEAR);
 		if (failed) {
 			return;
 		}
@@ -842,18 +843,35 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 		}
 		Set(CAL_ERA, sum);
 		PinField(CAL_ERA);
+		// keep the same year within the new era
+		Set(CAL_YEAR, year);
+		PinField(CAL_DATE);
 		return;
 	}
-	case CAL_YEAR:
-	case CAL_YEAR_WOY:
-		// in an era that counts backwards, later years have smaller numbers
-		if (GetChecked(CAL_ERA) == 0 && IsEra0CountingBackward()) {
-			if (!TryMultiply(amount, -1, amount)) {
-				Fail();
-				return;
-			}
+	case CAL_YEAR: {
+		// extended years continue across era boundaries
+		const auto year = GetChecked(CAL_EXTENDED_YEAR);
+		int32_t sum;
+		if (failed || !TryAdd(year, amount, sum)) {
+			Fail();
+			return;
 		}
-		DUCKDB_EXPLICIT_FALLTHROUGH;
+		Set(CAL_EXTENDED_YEAR, sum);
+		PinField(CAL_DATE);
+		return;
+	}
+	case CAL_YEAR_WOY: {
+		// week-based year numbers continue across era boundaries
+		const auto year = GetChecked(CAL_YEAR_WOY);
+		int32_t sum;
+		if (failed || !TryAdd(year, amount, sum)) {
+			Fail();
+			return;
+		}
+		Set(CAL_YEAR_WOY, sum);
+		PinField(CAL_DATE);
+		return;
+	}
 	case CAL_EXTENDED_YEAR:
 	case CAL_MONTH:
 	case CAL_ORDINAL_MONTH: {
@@ -1049,6 +1067,37 @@ int32_t FieldCalendar::FieldDifference(int64_t target, CalendarField field) {
 	failed = false;
 	int32_t min = 0;
 	const auto start = GetTimeChecked();
+	if (field == CAL_ERA) {
+		// eras can start partway through a year, so only count complete eras between the two dates
+		const auto start_era = GetChecked(CAL_ERA);
+		SetTimeChecked(target);
+		const auto target_era = GetChecked(CAL_ERA);
+		const auto difference = int64_t(target_era) - start_era;
+		if (failed) {
+			return 0;
+		}
+		if (difference < NumericLimits<int32_t>::Minimum() || difference > NumericLimits<int32_t>::Maximum()) {
+			Fail();
+			return 0;
+		}
+		// start by applying the difference between the two era numbers
+		auto result = int32_t(difference);
+		SetTimeChecked(start);
+		AddChecked(field, result);
+		const auto reached = GetTimeChecked();
+		if (failed) {
+			return 0;
+		}
+		// check whether applying the era number difference reaches the target without overshooting it
+		if (reached == target || (start < target ? reached < target : reached > target)) {
+			return result;
+		}
+		result += start < target ? -1 : 1;
+		// leave the calendar at the date reached by the returned difference
+		SetTimeChecked(start);
+		AddChecked(field, result);
+		return failed ? 0 : result;
+	}
 
 	// most differences are close to what the average length of the field predicts, which saves
 	// the search below from having to bracket the answer from scratch

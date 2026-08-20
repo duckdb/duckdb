@@ -121,6 +121,9 @@ struct AlpCompression {
 			return ExactNumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
 		}
 		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
+		if (IsImpossibleToEncode(n)) {
+			return ExactNumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
+		}
 		return LossyNumericCast<int64_t>(n);
 	}
 

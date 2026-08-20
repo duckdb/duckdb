@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -75,23 +76,124 @@ idx_t RecursiveCTEPartialKeyIndex::SizeInBytes() const {
 	return heads.capacity() * sizeof(idx_t) + entries.capacity() * sizeof(Entry);
 }
 
+void RecursiveCTEMetricDistribution::Add(idx_t value) {
+	const auto bucket = value == 0 ? idx_t(0) : BIT_COUNT - CountZeros<uint64_t>::Leading(value);
+	D_ASSERT(bucket < buckets.size());
+	buckets[bucket]++;
+	count++;
+	maximum = MaxValue(maximum, value);
+}
+
+idx_t RecursiveCTEMetricDistribution::MedianUpperBound() const {
+	if (count == 0) {
+		return 0;
+	}
+	const auto target = count / 2 + count % 2;
+	idx_t cumulative = 0;
+	for (idx_t bucket = 0; bucket < buckets.size(); bucket++) {
+		cumulative += buckets[bucket];
+		if (cumulative < target) {
+			continue;
+		}
+		if (bucket == 0) {
+			return 0;
+		}
+		if (bucket == BIT_COUNT) {
+			return ~idx_t(0);
+		}
+		return (idx_t(1) << bucket) - 1;
+	}
+	throw InternalException("Recursive CTE metric distribution is inconsistent");
+}
+
+void RecursiveCTEEpochMetrics::Record(idx_t frontier_rows_p, idx_t workers_p, idx_t tasks_p, idx_t elapsed_us_p,
+                                      idx_t frontier_storage_bytes, idx_t frontier_allocation_bytes) {
+	frontier_rows.Add(frontier_rows_p);
+	workers.Add(workers_p);
+	tasks.Add(tasks_p);
+	elapsed_us.Add(elapsed_us_p);
+	frontier_storage_byte_epochs += frontier_storage_bytes;
+	peak_frontier_storage_bytes = MaxValue(peak_frontier_storage_bytes, frontier_storage_bytes);
+	frontier_allocation_byte_epochs += frontier_allocation_bytes;
+	peak_frontier_allocation_bytes = MaxValue(peak_frontier_allocation_bytes, frontier_allocation_bytes);
+}
+
+void RecursiveCTEEpochMetrics::RecordDirectProbeLookup(idx_t elapsed_ns) {
+	direct_probe_lookup_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordDirectProbeKeyGather(idx_t elapsed_ns) {
+	direct_probe_key_gather_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordDirectProbePayloadFinalize(idx_t elapsed_ns) {
+	direct_probe_payload_finalize_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordKeyedHashCommit(idx_t elapsed_ns) {
+	keyed_hash_commit_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
+	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordRecurringScan(idx_t elapsed_ns) {
+	recurring_scan_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordFinalStateDrain(idx_t elapsed_ns) {
+	final_state_drain_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns) {
+	D_ASSERT(inserted_rows <= candidate_rows);
+	distinct_candidate_rows.fetch_add(candidate_rows);
+	distinct_inserted_rows.fetch_add(inserted_rows);
+	distinct_grouping_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns) {
+	switch (metric_type) {
+	case RecursiveCTEPipelineMetricType::RECURSIVE:
+		recursive_pipeline_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	case RecursiveCTEPipelineMetricType::INVARIANT_BUILD:
+		invariant_build_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	case RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION:
+		invariant_cte_materialization_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	}
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
-    : op(op_p), logger(context.logger),
+    : logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
+	if (enabled) {
+		identity = make_uniq<RecursiveCTELogIdentity>(op_p.type, op_p.NextMetricsInvocation());
+		for (const auto &entry : op_p.ParamsToString()) {
+			identity->operator_parameters.emplace_back(entry.first, entry.second);
+		}
+	}
 }
 
 void RecursiveCTEMetrics::RecordTasks(idx_t count) {
 	scheduled_tasks.fetch_add(count);
 }
 
+idx_t RecursiveCTEMetrics::TaskCount() const {
+	return scheduled_tasks.load();
+}
+
 void RecursiveCTEMetrics::RecordEpoch(idx_t workers, idx_t elapsed_us_p, idx_t frontier_rows_p, idx_t frontier_chunks_p,
-                                      idx_t frontier_storage_bytes_p) {
+                                      idx_t scheduler_input_rows_p) {
 	epochs++;
 	scheduled_workers += workers;
 	elapsed_us += elapsed_us_p;
 	frontier_rows += frontier_rows_p;
 	frontier_chunks += frontier_chunks_p;
-	frontier_storage_bytes += frontier_storage_bytes_p;
+	scheduler_input_rows += scheduler_input_rows_p;
 }
 
 void RecursiveCTEMetrics::RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows) {
@@ -117,8 +219,8 @@ void RecursiveCTEMetrics::RecordDirectProbeMatches(idx_t rows) {
 	direct_probe_matches.fetch_add(rows);
 }
 
-void RecursiveCTEMetrics::RecordPartialProbeChainVisit() {
-	partial_probe_chain_visits.fetch_add(1);
+void RecursiveCTEMetrics::RecordPartialProbeChainVisits(idx_t count) {
+	partial_probe_chain_visits.fetch_add(count);
 }
 
 void RecursiveCTEMetrics::RecordPartialIndexBuild(idx_t elapsed_us_p) {
@@ -145,8 +247,11 @@ void RecursiveCTEMetrics::LogDistinctPromotion(idx_t partitions, idx_t migrated_
 	if (!enabled) {
 		return;
 	}
-	DUCKDB_LOG(logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "DistinctPromoted",
-	           {{"partitions", to_string(partitions)},
+	D_ASSERT(identity);
+	DUCKDB_LOG(logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters,
+	           "PhysicalRecursiveCTE", "DistinctPromoted",
+	           {{"invocation_id", to_string(identity->invocation_id)},
+	            {"partitions", to_string(partitions)},
 	            {"migrated_rows", to_string(migrated_rows)},
 	            {"elapsed_us", to_string(elapsed_us_p)}});
 }
@@ -155,20 +260,23 @@ void RecursiveCTEMetrics::Log(const vector<unique_ptr<RecursiveCTEPartialKeyInde
 	if (!enabled) {
 		return;
 	}
+	D_ASSERT(identity);
 	idx_t partial_index_rows = 0;
 	idx_t partial_index_bytes = 0;
 	for (auto &index : partial_key_indexes) {
 		partial_index_rows += index->Count();
 		partial_index_bytes += index->SizeInBytes();
 	}
-	DUCKDB_LOG(logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "RuntimeMetrics",
-	           {{"epochs", to_string(epochs)},
+	DUCKDB_LOG(logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters,
+	           "PhysicalRecursiveCTE", "RuntimeMetrics",
+	           {{"invocation_id", to_string(identity->invocation_id)},
+	            {"epochs", to_string(epochs)},
 	            {"scheduled_workers", to_string(scheduled_workers)},
 	            {"scheduled_tasks", to_string(scheduled_tasks.load())},
 	            {"elapsed_us", to_string(elapsed_us)},
 	            {"frontier_rows", to_string(frontier_rows)},
 	            {"frontier_chunks", to_string(frontier_chunks)},
-	            {"frontier_storage_bytes", to_string(frontier_storage_bytes)},
+	            {"scheduler_input_rows", to_string(scheduler_input_rows)},
 	            {"sink_lock_wait_ns", to_string(sink_wait_ns.load())},
 	            {"sink_lock_work_ns", to_string(sink_work_ns.load())},
 	            {"sink_lock_rows", to_string(sink_rows.load())},
@@ -185,6 +293,49 @@ void RecursiveCTEMetrics::Log(const vector<unique_ptr<RecursiveCTEPartialKeyInde
 	            {"retained_build_executions", to_string(retained_build_executions)},
 	            {"retained_cte_materializations", to_string(retained_cte_materializations)},
 	            {"retained_cte_reuses", to_string(retained_cte_reuses)}});
+}
+
+void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const {
+	if (!enabled) {
+		return;
+	}
+	D_ASSERT(identity);
+	const auto distinct_candidate_rows = epoch_metrics.distinct_candidate_rows.load();
+	const auto distinct_inserted_rows = epoch_metrics.distinct_inserted_rows.load();
+	D_ASSERT(distinct_inserted_rows <= distinct_candidate_rows);
+	DUCKDB_LOG(
+	    logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters, "PhysicalRecursiveCTE",
+	    "EpochSummary",
+	    {{"invocation_id", to_string(identity->invocation_id)},
+	     {"epochs", to_string(epoch_metrics.frontier_rows.count)},
+	     {"frontier_rows_p50_upper_bound", to_string(epoch_metrics.frontier_rows.MedianUpperBound())},
+	     {"frontier_rows_max", to_string(epoch_metrics.frontier_rows.maximum)},
+	     {"workers_p50_upper_bound", to_string(epoch_metrics.workers.MedianUpperBound())},
+	     {"workers_max", to_string(epoch_metrics.workers.maximum)},
+	     {"tasks_p50_upper_bound", to_string(epoch_metrics.tasks.MedianUpperBound())},
+	     {"tasks_max", to_string(epoch_metrics.tasks.maximum)},
+	     {"elapsed_us_p50_upper_bound", to_string(epoch_metrics.elapsed_us.MedianUpperBound())},
+	     {"elapsed_us_max", to_string(epoch_metrics.elapsed_us.maximum)},
+	     {"frontier_storage_byte_epochs", to_string(epoch_metrics.frontier_storage_byte_epochs)},
+	     {"peak_frontier_storage_bytes", to_string(epoch_metrics.peak_frontier_storage_bytes)},
+	     {"frontier_allocation_byte_epochs", to_string(epoch_metrics.frontier_allocation_byte_epochs)},
+	     {"peak_frontier_allocation_bytes", to_string(epoch_metrics.peak_frontier_allocation_bytes)},
+	     {"direct_probe_lookup_work_ns", to_string(epoch_metrics.direct_probe_lookup_work_ns.load())},
+	     {"direct_probe_key_gather_work_ns", to_string(epoch_metrics.direct_probe_key_gather_work_ns.load())},
+	     {"direct_probe_payload_finalize_work_ns",
+	      to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())},
+	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
+	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
+	     {"recurring_scan_work_ns", to_string(epoch_metrics.recurring_scan_work_ns.load())},
+	     {"final_state_drain_work_ns", to_string(epoch_metrics.final_state_drain_work_ns.load())},
+	     {"distinct_grouping_work_ns", to_string(epoch_metrics.distinct_grouping_work_ns.load())},
+	     {"distinct_candidate_rows", to_string(distinct_candidate_rows)},
+	     {"distinct_inserted_rows", to_string(distinct_inserted_rows)},
+	     {"distinct_duplicate_rows", to_string(distinct_candidate_rows - distinct_inserted_rows)},
+	     {"recursive_pipeline_execute_work_ns", to_string(epoch_metrics.recursive_pipeline_execute_work_ns.load())},
+	     {"invariant_build_execute_work_ns", to_string(epoch_metrics.invariant_build_execute_work_ns.load())},
+	     {"invariant_cte_materialization_execute_work_ns",
+	      to_string(epoch_metrics.invariant_cte_materialization_execute_work_ns.load())}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

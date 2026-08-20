@@ -903,6 +903,11 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				continue;
 			}
 			auto &column_id = get.GetColumnIndex(column_binding);
+			if (column_id.IsPushdownExtract()) {
+				//! We already pushed down an extract for this column, so a new path is relative to that
+				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+				continue;
+			}
 			auto logical_column_index = LogicalIndex(column_id.GetPrimaryIndex());
 			if (!get.function.supports_pushdown_extract || get.function.statistics) {
 				//! Either 'statistics_extended' needs to be set or 'statistics' needs to be NULL
@@ -1042,7 +1047,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			if (logical_column_id.IsPushdownExtract()) {
 				//! RemoveUnusedColumns is also used by other optimizers,
 				//! so we have to deal with this case and preserve the PushdownExtract we created earlier
-				D_ASSERT(entry->second.child_columns.empty());
+				D_ASSERT(entry->second.child_columns.empty() ||
+				         entry->second.supports_pushdown_extract == PushdownExtractSupport::DISABLED);
 				new_column_ids.emplace_back(logical_column_id);
 			} else {
 				ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
@@ -1102,6 +1108,33 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		get.table_filters = std::move(remapped_filters);
 	}
 
+	if (get.function.filter_prune) {
+		// Now set the projection cols by matching the "selection vector" that excludes filter columns
+		// with the "selection vector" that includes filter columns
+		idx_t col_idx = 0;
+		get.projection_ids.clear();
+		vector<ProjectionIndex> filtered_original_ids;
+		//! Find matching indices between the proj_sel and the col_sel
+		for (auto to_keep : proj_sel) {
+			for (; col_idx < col_sel.size(); col_idx++) {
+				if (to_keep == col_sel[col_idx]) {
+					filtered_original_ids.push_back(to_keep);
+					break;
+				}
+			}
+		}
+		col_idx = 0;
+		for (auto col : filtered_original_ids) {
+			for (; col_idx < original_ids.size(); col_idx++) {
+				if (original_ids[col_idx] == col) {
+					get.projection_ids.push_back(ProjectionIndex(col_idx));
+				} else if (original_ids[col_idx] > col) {
+					break;
+				}
+			}
+		}
+	}
+
 	if (has_pushdown_extract && !filter_expressions.empty()) {
 		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
 		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
@@ -1114,35 +1147,15 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		// try to push filters back into the table scan
 		FilterPushdown pushdown(optimizer);
 		op_ref = pushdown.Rewrite(std::move(filter));
-		return;
-	}
-
-	if (!get.function.filter_prune) {
-		return;
-	}
-	// Now set the projection cols by matching the "selection vector" that excludes filter columns
-	// with the "selection vector" that includes filter columns
-	idx_t col_idx = 0;
-	get.projection_ids.clear();
-	vector<ProjectionIndex> filtered_original_ids;
-	//! Find matching indices between the proj_sel and the col_sel
-	for (auto to_keep : proj_sel) {
-		for (; col_idx < col_sel.size(); col_idx++) {
-			if (to_keep == col_sel[col_idx]) {
-				filtered_original_ids.push_back(to_keep);
-				break;
-			}
+		// if the filters could not be pushed back into the scan, the columns referenced by the
+		// remaining filter have to be included in the output of the scan. Since the projection can
+		// only prune columns when it projects out fewer columns than are scanned (see
+		// TableFunctionInitInput::CanRemoveFilterColumns), we fall back to outputting all columns
+		// in scan order
+		if (op_ref->type == LogicalOperatorType::LOGICAL_FILTER) {
+			get.projection_ids.clear();
 		}
-	}
-	col_idx = 0;
-	for (auto col : filtered_original_ids) {
-		for (; col_idx < original_ids.size(); col_idx++) {
-			if (original_ids[col_idx] == col) {
-				get.projection_ids.push_back(ProjectionIndex(col_idx));
-			} else if (original_ids[col_idx] > col) {
-				break;
-			}
-		}
+		return;
 	}
 }
 

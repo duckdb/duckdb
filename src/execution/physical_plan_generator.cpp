@@ -198,6 +198,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op)
 		return CreatePlan(op.Cast<LogicalPivot>());
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		return CreatePlan(op.Cast<LogicalSecureView>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return CreatePlan(op.Cast<LogicalUpdateExtensions>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {

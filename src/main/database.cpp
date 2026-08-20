@@ -1,7 +1,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
@@ -70,7 +70,7 @@ DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	}
 }
 
-DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+DBConfig::DBConfig(const identifier_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
 	SetOptionsByName(config_dict);
 }
 
@@ -236,10 +236,10 @@ void DatabaseInstance::CreateMainDatabase() {
 	con.Commit();
 }
 
-static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
+static void ThrowExtensionSetUnrecognizedOptions(const identifier_map_t<Value> &unrecognized_options) {
 	D_ASSERT(!unrecognized_options.empty());
 
-	vector<string> options;
+	vector<duckdb::Identifier> options;
 	for (auto &kv : unrecognized_options) {
 		options.push_back(kv.first);
 	}
@@ -260,7 +260,6 @@ void DatabaseInstance::LoadExtensionSettings() {
 		Connection con(*this);
 		con.BeginTransaction();
 
-		vector<string> extension_options;
 		for (auto &option : unrecognized_options_copy) {
 			auto &name = option.first;
 			auto &value = option.second;
@@ -281,8 +280,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
-			extension_options.push_back(name);
+			PhysicalSet::SetExtensionVariable(context, extension_option, SetScope::GLOBAL, value);
 		}
 
 		con.Commit();
@@ -304,6 +302,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+	// publish what this binary links, unless the config already carries a set handed to us
+	ExtensionHelper::RegisterLinkedExtensions(config);
 
 	create_api_v1 = CreateAPIv1Wrapper;
 
@@ -479,6 +479,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 	config.user_settings = new_config.user_settings;
+	// carry over a capability set handed to us, so a database created by code with its own copy of
+	// DuckDB can be given the extensions the binary that created it links
+	config.linked_extensions = new_config.linked_extensions;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
@@ -588,7 +591,7 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Value &result) const {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const Identifier &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	return db_config.TryGetCurrentSetting(key, result);

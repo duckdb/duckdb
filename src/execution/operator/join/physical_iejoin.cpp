@@ -1359,6 +1359,8 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	auto result_count = lpayload.size();
 	auto tail_count = result_count;
 	auto match_sel = &true_sel;
+	left_keys.Reset();
+	right_keys.Reset();
 	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
 		auto &left = left_keys.data[cmp_idx];
 		left_executor.ExecuteExpression(cmp_idx, left);

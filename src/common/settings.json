@@ -257,6 +257,18 @@
         ]
     },
     {
+        "name": "current_dialect",
+        "description": "The SQL dialect used by the parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "duckdb",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
+    },
+    {
         "name": "current_transaction_invalidation_policy",
         "description": "Which types of exceptions invalidate the database for the current transaction",
         "type": "VARCHAR",
@@ -780,6 +792,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "external_file_cache_spill",
+        "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "external_threads",

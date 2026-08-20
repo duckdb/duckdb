@@ -412,6 +412,9 @@ ScalarFunctionSet RegexpFun::GetFunctions() {
 	    {{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}, {"options", LogicalType::VARCHAR}},
 	    LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>, RegexpMatchesBind, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	for (auto &func : regexp_full_match.functions) {
+		func.SetFallible();
+	}
 	return (regexp_full_match);
 }
 
