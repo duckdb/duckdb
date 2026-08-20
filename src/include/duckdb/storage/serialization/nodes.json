@@ -972,7 +972,7 @@
       {
         "id": 133,
         "name": "name_list",
-        "type": "vector<string>",
+        "type": "vector<Identifier>",
         "property": "options.name_list"
       },
       {
