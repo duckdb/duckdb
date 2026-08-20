@@ -19,6 +19,21 @@ using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
 using EFCNoMetadataFileSystem = NoValidationMetadataFileSystem;
 
+class CachePolicyFileSystem : public SimpleTrackingFileSystem {
+public:
+	FileMetadata Stats(FileHandle &handle) override {
+		stats_count++;
+		auto metadata = SimpleTrackingFileSystem::Stats(handle);
+		metadata.version_tag = version_tag;
+		metadata.cache_valid_until = cache_valid_until;
+		return metadata;
+	}
+
+	string version_tag = "v1";
+	timestamp_t cache_valid_until = timestamp_t::infinity();
+	idx_t stats_count = 0;
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -518,6 +533,245 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 	auto &object_cache = db_instance.GetObjectCache();
 	EvictObjectCache(object_cache);
 	REQUIRE(cache.GetCachedFileCount() == 0);
+}
+
+TEST_CASE("File with freshness deadline but no validators is cached and reused", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
+	EFCTestFileGuard test_file("test_efc_freshness_reuse.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+
+	// First read populates the cache.
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	optional<timestamp_t> original_valid_until;
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		original_valid_until = cached_file->validation_info.cache_valid_until;
+	}
+
+	// Overwrite with same-size content. Within the freshness deadline the cached content is still served,
+	// because the file provides no validators to detect the change.
+	WriteTestContent(test_file.GetPath(), content_b);
+	fresh_fs->max_age_micros *= 2;
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		REQUIRE(cached_file->validation_info.cache_valid_until == original_valid_until);
+	}
+}
+
+TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B');
+	EFCTestFileGuard test_file("test_efc_no_validation_freshness.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		REQUIRE(cached_file->validation_info.cache_valid_until != nullopt);
+		// Assign a past timestamp to the freshness deadline so cache won't be used.
+		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+	}
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
+}
+
+TEST_CASE("File with freshness deadline is invalidated when the file size changes", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE * 2, 'B');
+	EFCTestFileGuard test_file("test_efc_freshness_size_change.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+
+	// Overwrite with larger content: the size mismatch invalidates the cache despite the freshness deadline.
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->GetFileSize() == content_b.size());
+		REQUIRE(ReadFull(*handle, content_b.size()) == content_b);
+	}
+	REQUIRE(TotalCachedBytes(cache) == content_b.size());
+}
+
+TEST_CASE("Long-lived handle does not use cache after the freshness deadline", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B');
+	EFCTestFileGuard test_file("test_efc_freshness_long_lived_handle.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+	}
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+}
+
+TEST_CASE("Long-lived handle with validators stops using cache after the freshness deadline", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto validating_fs = make_uniq<CachePolicyFileSystem>();
+	validating_fs->cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + 600 * 1000000LL);
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(block_size, 'A');
+	const string content_b(block_size, 'B');
+	EFCTestFileGuard test_file("test_efc_validator_freshness_long_lived_handle.bin", content_a);
+
+	CachingFileSystem cfs(*validating_fs, *db.instance);
+	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(ReadFull(*handle, block_size) == content_a);
+	REQUIRE(validating_fs->stats_count == 1);
+
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+	}
+	WriteTestContent(test_file.GetPath(), content_b);
+
+	REQUIRE(ReadFull(*handle, block_size) == content_b);
+	REQUIRE(validating_fs->stats_count == 1);
+}
+
+TEST_CASE("File marked as not cacheable does not retain cached blocks", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto policy_fs = make_uniq<CachePolicyFileSystem>();
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(block_size, 'A');
+	const string content_b(block_size, 'B');
+	EFCTestFileGuard test_file("test_efc_no_store.bin", content_a);
+	CachingFileSystem cfs(*policy_fs, *db.instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	policy_fs->cache_valid_until = timestamp_t::ninfinity();
+	policy_fs->version_tag = "v2";
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_b);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("Explicit cache reuse prohibition is honored under NO_VALIDATION", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto policy_fs = make_uniq<CachePolicyFileSystem>();
+	policy_fs->cache_valid_until = timestamp_t::ninfinity();
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(block_size, 'A');
+	const string content_b(block_size, 'B');
+	EFCTestFileGuard test_file("test_efc_no_reuse_no_validation.bin", content_a);
+	CachingFileSystem cfs(*policy_fs, *db.instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content_b);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("Expired freshness deadline is not served from cache", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+	fresh_fs->max_age_micros = -1000000; // deadline is always in the past
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
+	EFCTestFileGuard test_file("test_efc_freshness_expired.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+
+	// Overwrite with same-size content: the expired deadline prevents serving stale cached data.
+	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
 }
 
 TEST_CASE("No-metadata file is not cached and always returns fresh content", "[external_file_cache]") {

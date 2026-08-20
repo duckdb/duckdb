@@ -44,6 +44,20 @@ void HTTPHeaders::Insert(string key, string value) {
 	headers.insert(make_pair(std::move(key), std::move(value)));
 }
 
+void HTTPHeaders::Append(string key, string value) {
+	auto entry = headers.find(key);
+	if (entry == headers.end()) {
+		headers.insert(make_pair(std::move(key), std::move(value)));
+		return;
+	}
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry == repeated_headers.end()) {
+		repeated_headers.insert(make_pair(std::move(key), header_values_t {entry->second, std::move(value)}));
+	} else {
+		repeated_entry->second.push_back(std::move(value));
+	}
+}
+
 bool HTTPHeaders::HasHeader(const string &key) const {
 	return headers.find(key) != headers.end();
 }
@@ -56,6 +70,14 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 	return entry->second;
 }
 
+HTTPHeaders::header_values_t HTTPHeaders::GetHeaderValues(const string &key) const {
+	auto repeated_entry = repeated_headers.find(key);
+	if (repeated_entry != repeated_headers.end()) {
+		return repeated_entry->second;
+	}
+	return {GetHeaderValue(key)};
+}
+
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
@@ -65,7 +87,7 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 	} else {
 		result->request_error = to_string(res.error());
@@ -242,7 +264,7 @@ private:
 		result->body = response.body;
 		result->reason = response.reason;
 		for (auto &entry : response.headers) {
-			result->headers.Insert(entry.first, entry.second);
+			result->headers.Append(entry.first, entry.second);
 		}
 		return result;
 	}
