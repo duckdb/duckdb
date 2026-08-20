@@ -398,7 +398,8 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToUpper(static_cast<char>(c)); });
 	return (copy);
 }
 
