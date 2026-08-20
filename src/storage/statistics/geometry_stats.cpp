@@ -325,14 +325,21 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
+	auto result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	if (lhs_is_const) {
-		return CheckIntersectionFilter(data, lhs.Cast<BoundConstantExpression>().value);
+		result = CheckIntersectionFilter(data, lhs.Cast<BoundConstantExpression>().value);
+	} else if (rhs_is_const) {
+		result = CheckIntersectionFilter(data, rhs.Cast<BoundConstantExpression>().value);
 	}
-	if (rhs_is_const) {
-		return CheckIntersectionFilter(data, rhs.Cast<BoundConstantExpression>().value);
+
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && (stats.CanHaveNull() || data.flags.HasEmptyGeometry())) {
+		// the predicate matches every row that is represented in the extent, but rows that are not
+		// represented in it do not match: NULL values (the predicate evaluates to NULL for them) and
+		// empty geometries (which contribute no vertices, but never intersect anything).
+		// If either can be present we cannot prune the filter away
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	// Else, no constant argument
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	return result;
 }
 
 } // namespace duckdb
