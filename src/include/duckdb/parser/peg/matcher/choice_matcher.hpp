@@ -15,7 +15,7 @@ public:
 	explicit ChoiceMatcher(vector<reference<Matcher>> &&matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		optional_idx start_offset;
 		if (auto current = state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
@@ -23,14 +23,16 @@ public:
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			MatchState choice_state(state);
 			auto child_result = matchers[i].get().MatchParseResult(choice_state);
-			if (child_result != nullptr) {
+			if (child_result.IsSuccess()) {
 				// we matched this child - propagate upwards
 				state.token_iterator.SetPosition(choice_state.token_iterator);
-				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(*child_result, i, start_offset));
-				return result;
+				if (!child_result.HasParseResult()) {
+					return MatcherResult::Success();
+				}
+				return state.AllocateParseResult<ChoiceParseResult>(*child_result.GetParseResult(), i, start_offset);
 			}
 		}
-		return nullptr;
+		return MatcherResult::Failure();
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

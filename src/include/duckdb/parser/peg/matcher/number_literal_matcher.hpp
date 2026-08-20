@@ -15,20 +15,22 @@ public:
 		name = "NumberLiteral";
 	}
 
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchNumberLiteral(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
-		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text, start_offset, token_length));
-		result->name = name;
+		auto result = state.AllocateParseResult<NumberParseResult>(token_text, start_offset, token_length);
+		if (result.HasParseResult()) {
+			result.GetParseResult()->name = name;
+		}
 		return result;
 	}
 

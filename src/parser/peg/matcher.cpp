@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-optional_ptr<ParseResult> Matcher::MatchParseResult(MatchState &state) const {
+MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 	if (state.packrat_cache && IsPackratMemoized()) {
 		return state.packrat_cache->Match(*this, state);
 	}

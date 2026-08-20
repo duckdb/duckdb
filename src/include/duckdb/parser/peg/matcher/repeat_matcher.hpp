@@ -12,7 +12,7 @@ public:
 	explicit RepeatMatcher(Matcher &element_p) : Matcher(TYPE), element(element_p) {
 	}
 
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		MatchState repeat_state(state);
 		vector<reference<ParseResult>> results;
 
@@ -23,11 +23,13 @@ public:
 
 		// First, we MUST match the element at least once.
 		auto first_result = element.MatchParseResult(repeat_state);
-		if (!first_result) {
+		if (!first_result.IsSuccess()) {
 			// The first match failed, so the whole repeat fails.
-			return nullptr;
+			return MatcherResult::Failure();
 		}
-		results.push_back(*first_result);
+		if (first_result.HasParseResult()) {
+			results.push_back(*first_result.GetParseResult());
+		}
 
 		// After the first success, the overall result is a success.
 		// Now, we continue matching the element as many times as possible.
@@ -43,14 +45,16 @@ public:
 
 			// Try to match the element again.
 			auto next_result = element.MatchParseResult(repeat_state);
-			if (!next_result) {
+			if (!next_result.IsSuccess()) {
 				break;
 			}
-			results.push_back(*next_result);
+			if (next_result.HasParseResult()) {
+				results.push_back(*next_result.GetParseResult());
+			}
 		}
 
 		// Return all collected results in a RepeatParseResult.
-		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results), start_offset));
+		return state.AllocateParseResult<RepeatParseResult>(std::move(results), start_offset);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

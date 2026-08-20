@@ -45,18 +45,21 @@ public:
 		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		const auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchIdentifier(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		state.token_iterator.SetPreviousTokenType(GetTokenType());
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
+		}
 
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
@@ -69,7 +72,7 @@ public:
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
+		return state.AllocateParseResult<IdentifierParseResult>(result_text, start_offset, token_length);
 	}
 
 	TokenType GetTokenType() const {
@@ -193,18 +196,21 @@ public:
 	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchReservedIdentifier(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		state.token_iterator.SetPreviousTokenType(GetTokenType());
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
+		}
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
@@ -212,7 +218,7 @@ public:
 		} else if (!state.preserve_identifier_case) {
 			result_text = StringUtil::Lower(result_text);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
+		return state.AllocateParseResult<IdentifierParseResult>(result_text, start_offset, token_length);
 	}
 
 private:
