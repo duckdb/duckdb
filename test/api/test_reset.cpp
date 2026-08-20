@@ -111,7 +111,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
 	    {"partitioned_write_flush_threshold", {123}},
-	    {"preserve_identifier_case", {false}},
+	    {"preserve_identifier_case", {"lowercase"}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
 	    {"profiling_mode", {"standard"}},

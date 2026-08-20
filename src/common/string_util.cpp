@@ -398,7 +398,8 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToUpper(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -445,7 +446,8 @@ uint64_t StringUtil::CIHash(const string &str) {
 uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
 	for (idx_t i = 0; i < size; i++) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
+		// convert through uint8_t so the hash is identical on platforms with signed and unsigned char
+		hash += static_cast<uint32_t>(static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(str[i]))));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}

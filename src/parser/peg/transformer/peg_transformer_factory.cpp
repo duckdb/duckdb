@@ -91,8 +91,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
-	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 options.preserve_identifier_case, &packrat_cache);
+	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index, options.identifier_case_mode,
+	                 &packrat_cache);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()

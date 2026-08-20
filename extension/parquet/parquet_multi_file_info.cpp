@@ -601,7 +601,7 @@ unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(Client
 }
 
 bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                           BaseFileReaderOptions &file_options, vector<string> &expected_names,
+                                           BaseFileReaderOptions &file_options, vector<Identifier> &expected_names,
                                            vector<LogicalType> &expected_types) {
 	auto &parquet_options = file_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
