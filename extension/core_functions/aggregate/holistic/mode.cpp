@@ -298,14 +298,31 @@ struct ModeState {
 		}
 	}
 
-	void ModeRm(idx_t frame) {
-		const auto &key = GetCell(frame);
-		auto &attr = (*frequency_map)[key];
+	template <class INCLUDED>
+	void ModeRm(idx_t row, const SubFrames &frames, INCLUDED &included) {
+		const auto &key = GetCell(row);
+		auto entry = frequency_map->find(key);
+		D_ASSERT(entry != frequency_map->end());
+		auto &attr = entry->second;
 		auto old_count = attr.count;
 		nonzero -= size_t(old_count == 1);
 
 		attr.count -= 1;
-		if (count == old_count && TYPE_OP::IsEqual(key, *mode)) {
+		if (attr.count && attr.first_row == row) {
+			attr.first_row = std::numeric_limits<idx_t>::max();
+			for (const auto &frame : frames) {
+				for (auto candidate = frame.start; candidate < frame.end; ++candidate) {
+					if (included(candidate) && TYPE_OP::IsEqual(entry->first, GetCell(candidate))) {
+						attr.first_row = candidate;
+						break;
+					}
+				}
+				if (attr.first_row != std::numeric_limits<idx_t>::max()) {
+					break;
+				}
+			}
+		}
+		if (count == old_count && TYPE_OP::IsEqual(entry->first, *mode)) {
 			valid = false;
 		}
 	}
@@ -462,8 +479,10 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 	struct UpdateWindowState {
 		STATE &state;
 		ModeIncluded<STATE> &included;
+		const SubFrames &frames;
 
-		inline UpdateWindowState(STATE &state, ModeIncluded<STATE> &included) : state(state), included(included) {
+		inline UpdateWindowState(STATE &state, ModeIncluded<STATE> &included, const SubFrames &frames)
+		    : state(state), included(included), frames(frames) {
 		}
 
 		inline void Neither(idx_t begin, idx_t end) {
@@ -472,7 +491,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		inline void Left(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeRm(begin);
+					state.ModeRm(begin, frames, included);
 				}
 			}
 		}
@@ -508,7 +527,6 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		ModeIncluded<STATE> included(fmask, state);
 
 		using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
-		Updater updater(state, included);
 
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
@@ -529,6 +547,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 					}
 				}
 			} else {
+				Updater updater(state, included, frames);
 				AggregateExecutor::IntersectFrames(prevs, frames, updater);
 			}
 

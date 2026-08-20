@@ -172,6 +172,25 @@ NULL	NULL	0
 
 endloop
 
+statement ok
+PRAGMA debug_window_mode='window'
+
+query II
+WITH t(id, x) AS (
+	VALUES (1, 'A'), (2, 'B'), (3, 'A'), (4, 'B'), (5, 'A')
+)
+SELECT id, MODE(x ORDER BY id) OVER (
+	ORDER BY id ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+) AS actual
+FROM t
+ORDER BY id
+----
+1	A
+2	A
+3	A
+4	A
+5	B
+
 query I
 WITH src(x) AS (
   VALUES (0), (2)
