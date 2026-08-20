@@ -138,6 +138,7 @@ ScalarFunction InvokeFun::GetFunction() {
 	fun.SetInitStateCallback(LambdaInvokeState::Init);
 	fun.SetSerializeCallback(LambdaInvokeData::Serialize);
 	fun.SetDeserializeCallback(LambdaInvokeData::Deserialize);
+	fun.SetFallible();
 	return fun;
 }
 
