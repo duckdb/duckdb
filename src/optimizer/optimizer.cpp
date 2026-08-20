@@ -16,6 +16,7 @@
 #include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
+#include "duckdb/optimizer/filter_statistics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/grouping_sets_optimizer.hpp"
@@ -256,6 +257,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
 
+	if (!CTEContainsDML(*plan)) {
+		FilterStatisticsOptimizer filter_statistics(*this);
+		filter_statistics.Optimize(plan);
+	}
+
 	// derive and push filters into materialized CTEs
 	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
 		CTEFilterPusher cte_filter_pusher(*this);
@@ -426,12 +432,27 @@ void Optimizer::RunBuiltInOptimizers() {
 	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
+	bool filter_bindings_changed = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
+			filter_bindings_changed = propagator.FilterBindingsChanged();
 			propagated_statistics = true;
+		});
+	}
+	if (filter_bindings_changed) {
+		RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
+			FilterPushdown filter_pushdown(*this);
+			unordered_set<TableIndex> top_bindings;
+			filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
+			plan = filter_pushdown.Rewrite(std::move(plan));
+		});
+		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
 		});
 	}
 	if (propagated_statistics) {

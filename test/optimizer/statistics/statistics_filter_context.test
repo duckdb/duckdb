@@ -1,0 +1,209 @@
+# name: test/optimizer/statistics/statistics_filter_context.test
+# description: Simplify statistics-derived constants using filter truth semantics
+# group: [statistics]
+
+statement ok
+CREATE TABLE filter_context_address(k INTEGER, zip VARCHAR, state VARCHAR);
+
+statement ok
+INSERT INTO filter_context_address VALUES
+	(1, '10000', 'NY'),
+	(2, '20000', 'CA'),
+	(3, NULL, 'NY'),
+	(4, '80000', 'NY');
+
+statement ok
+CREATE TABLE filter_context_sales(k INTEGER, price INTEGER);
+
+statement ok
+INSERT INTO filter_context_sales VALUES
+	(1, 10),
+	(2, NULL),
+	(3, NULL),
+	(4, 20);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# price > 100 is FALSE or NULL from statistics. In filter context it cannot make the OR pass, so the
+# address-only predicate is pushed below the join before the large IN clause becomes a MARK join.
+query II
+EXPLAIN SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+logical_opt	<!REGEX>:.*constant_or_null.*
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+2
+
+# PropagateExpression can remove a NOT NULL impossible branch before SimplifyFilter sees the conjunction.
+statement ok
+CREATE TABLE filter_context_sales_not_null(k INTEGER, price INTEGER NOT NULL);
+
+statement ok
+INSERT INTO filter_context_sales_not_null VALUES (1, 10), (2, 20), (3, 15), (4, 20);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+2
+
+# The early statistics pass is selected by relation dependencies, not by a comparison expression shape.
+query II
+EXPLAIN SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR price IS NULL;
+----
+logical_opt	<REGEX>:.*INNER.*IN \(\.\.\.\).*MARK.*filter_context_address.*
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR price IS NULL;
+----
+1
+
+# Projection context must retain the NULL produced by the impossible comparison.
+query II
+SELECT k, state = 'CA' OR price > 100
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+ORDER BY k;
+----
+1	false
+2	true
+3	NULL
+4	false
+
+query II
+EXPLAIN SELECT state = 'CA' OR price > 100
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k);
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+# Do not apply positive filter-context simplification through NOT.
+query I
+SELECT k
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+WHERE NOT (state = 'CA' OR price > 100)
+ORDER BY k;
+----
+1
+4
+
+# Join conditions are not row filters: preserve false-or-NULL branches for join-specific NULL semantics.
+statement ok
+CREATE TABLE join_filter_left(k INTEGER, flag BOOLEAN);
+
+statement ok
+INSERT INTO join_filter_left VALUES (1, false), (2, true);
+
+statement ok
+CREATE TABLE join_filter_right(v INTEGER);
+
+statement ok
+INSERT INTO join_filter_right VALUES (10), (NULL);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN SELECT *
+FROM join_filter_left
+LEFT JOIN join_filter_right ON flag OR v > 100;
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+query III
+SELECT *
+FROM join_filter_left
+LEFT JOIN join_filter_right ON flag OR v > 100
+ORDER BY k, v;
+----
+1	false	NULL
+2	true	10
+2	true	NULL
+
+# Compare the original result against the optimizer-disabled reference.
+statement ok
+PRAGMA disable_optimizer;
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+2
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR state = 'CA'
+	OR price > 100;
+----
+2
+
+query I
+SELECT count(*)
+FROM filter_context_address address
+JOIN filter_context_sales_not_null sales USING (k)
+WHERE substring(zip, 1, 5) IN ('10000', '30000', '40000', '50000', '60000', '70000')
+	OR price IS NULL;
+----
+1
+
+statement ok
+PRAGMA enable_optimizer;
