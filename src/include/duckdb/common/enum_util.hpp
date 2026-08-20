@@ -192,8 +192,6 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
-enum class DeprecatedUsingKeySyntax : uint8_t;
-
 enum class DestroyBufferUpon : uint8_t;
 
 enum class DialectCompatibilityMode : uint8_t;
@@ -496,6 +494,8 @@ enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
 
+enum class ShowBehaviorType : uint8_t;
+
 enum class ShowType : uint8_t;
 
 enum class SimplifiedTokenType : uint8_t;
@@ -611,6 +611,8 @@ enum class VerifyExistenceType : uint8_t;
 enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
+
+enum class ViewSecurityType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -862,9 +864,6 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
-
-template<>
-const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
@@ -1320,6 +1319,9 @@ template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
+
+template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
 
 template<>
@@ -1492,6 +1494,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1748,9 +1753,6 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
-
-template<>
-DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
@@ -2206,6 +2208,9 @@ template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
+
+template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
 
 template<>
@@ -2378,6 +2383,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

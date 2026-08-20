@@ -3,6 +3,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
@@ -13,6 +14,7 @@ namespace duckdb {
 class Logger;
 class RecursiveCTELocalState;
 struct RecursiveCTEDistinctPartition;
+struct RecursiveCTEKeyDeltaState;
 
 struct RecursiveExecutorPool {
 	mutex lock;
@@ -103,7 +105,11 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
 	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
 	void RecordKeyedHashCommit(idx_t elapsed_ns);
+	void RecordKeyPreaggregationClassification(idx_t elapsed_ns);
+	void RecordKeyPreaggregation(idx_t candidate_rows, idx_t groups, idx_t elapsed_ns);
+	void RecordKeyPreaggregationCombine(idx_t elapsed_ns);
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
+	void RecordKeyDelta(idx_t candidate_rows, idx_t touched_keys, idx_t new_keys, idx_t changed_keys, idx_t elapsed_ns);
 	void RecordRecurringScan(idx_t elapsed_ns);
 	void RecordFinalStateDrain(idx_t elapsed_ns);
 	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
@@ -121,7 +127,18 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> direct_probe_key_gather_work_ns {0};
 	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
 	atomic<idx_t> keyed_hash_commit_work_ns {0};
+	atomic<idx_t> key_preaggregation_classification_work_ns {0};
+	atomic<idx_t> key_preaggregation_work_ns {0};
+	atomic<idx_t> key_preaggregation_combine_work_ns {0};
+	atomic<idx_t> key_preaggregation_candidate_rows {0};
+	atomic<idx_t> key_preaggregation_groups {0};
 	atomic<idx_t> partial_index_maintenance_work_ns {0};
+	atomic<idx_t> key_delta_work_ns {0};
+	atomic<idx_t> key_delta_candidate_rows {0};
+	atomic<idx_t> key_delta_touched_keys {0};
+	atomic<idx_t> key_delta_new_keys {0};
+	atomic<idx_t> key_delta_changed_keys {0};
+	atomic<idx_t> key_delta_unchanged_keys {0};
 	atomic<idx_t> recurring_scan_work_ns {0};
 	atomic<idx_t> final_state_drain_work_ns {0};
 	atomic<idx_t> distinct_grouping_work_ns {0};
@@ -235,7 +252,10 @@ public:
 	void SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state);
 	void SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state, bool emit_rows = true,
 	                  bool record_sink_metrics = true);
-	void FinalizePayload(RowOperationsState &row_state, Vector &addresses, DataChunk &payload, idx_t payload_idx);
+	void FinalizeStateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &keys, DataChunk &aggregates,
+	                       DataChunk &result);
+	void FinalizeAggregateRows(RowOperationsState &row_state, Vector &addresses, DataChunk &aggregates, idx_t count);
+	void AssembleStateRows(DataChunk &keys, DataChunk &aggregates, DataChunk &result) const;
 
 	const PhysicalRecursiveCTE &GetOperator() const {
 		return op;
@@ -286,6 +306,19 @@ public:
 private:
 	template <bool COLLECT_METRICS>
 	void CommitUsingKeyUpdatesInternal();
+	template <bool COLLECT_METRICS>
+	void CommitPreaggregatedUsingKeyUpdatesInternal();
+	unique_ptr<GroupedAggregateHashTable> CreateUsingKeyHashTable() const;
+	void ExtractUsingKeyKeys(DataChunk &input);
+	bool ShouldPreaggregateUsingKeyUpdates(idx_t candidate_count);
+	void SnapshotUsingKeyDelta(const Vector &group_addresses, const SelectionVector &new_groups, idx_t new_group_count,
+	                           idx_t row_count);
+	void SnapshotPreaggregatedUsingKeyDeltaGroups(DataChunk &keys);
+	void SnapshotExistingUsingKeyDeltaAddresses(Vector &addresses, idx_t count, bool defer_append = false);
+	void AppendPreviousUsingKeyDeltaRows(Vector &addresses, idx_t count);
+	void ValidateDeferredUsingKeyCandidateReuse(DataChunk &candidates);
+	bool TryReuseChangedGroupCandidates(idx_t candidate_count);
+	idx_t FinalizeUsingKeyDelta(bool update_partial_indexes, bool collect_metrics);
 	unique_ptr<GroupedAggregateHashTable> ht;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
@@ -312,7 +345,7 @@ private:
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
 	DataChunk source_result;
 	DataChunk update_rows;
-	DataChunk source_payload_rows;
+	DataChunk source_aggregate_rows;
 	DataChunk source_distinct_rows;
 	AggregateHTScanState ht_scan_state;
 
@@ -321,6 +354,19 @@ private:
 	bool invariant_meta_pipelines_materialized = false;
 	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active
 	unique_ptr<RecursiveCTEEpochMetrics> epoch_metrics;
+
+	//! State used only by USING KEY recursive CTEs. Keep this after the regular-recursion hot state.
+	unique_ptr<RecursiveCTEKeyDeltaState> key_delta;
+	ClientContext &context;
+	vector<AggregateObject> payload_aggregate_objects;
+	unique_ptr<ExpressionExecutor> key_executor;
+	Vector preaggregation_hashes;
+	vector<unique_ptr<ExpressionExecutor>> payload_comparison_executors;
+	DataChunk raw_distinct_rows;
+	bool has_payload_comparison_executors = false;
+	bool can_preaggregate_using_key = false;
+	bool can_reuse_new_group_candidates = false;
+	bool can_reuse_changed_group_candidates = false;
 
 	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
 	template <bool COLLECT_METRICS>

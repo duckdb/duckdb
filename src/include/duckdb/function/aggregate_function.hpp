@@ -334,6 +334,9 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	bool single_value_identity = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -375,6 +378,10 @@ public: // Properties
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
 	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
+
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
+	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -760,31 +767,34 @@ public:
 		AggregateExecutor::NullaryClustUpdate<STATE, OP>(aggr_input_data, clustered, count);
 	}
 
+	//! Update callbacks consume their leading arguments. They can be handed more: a bind may fold trailing
+	//! arguments into its bind data (e.g. the separator of string_agg), and those stay part of the argument list and
+	//! are still evaluated into the payload - they are simply not read here.
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               Vector &states, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, aggr_input_data, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                        idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::ExecuteUnaryClustered<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                Vector &states, idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], states,
 		                                                            count);
 	}
@@ -792,7 +802,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], state, count);
 	}
 

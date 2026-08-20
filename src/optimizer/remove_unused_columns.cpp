@@ -903,6 +903,11 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				continue;
 			}
 			auto &column_id = get.GetColumnIndex(column_binding);
+			if (column_id.IsPushdownExtract()) {
+				//! We already pushed down an extract for this column, so a new path is relative to that
+				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+				continue;
+			}
 			auto logical_column_index = LogicalIndex(column_id.GetPrimaryIndex());
 			if (!get.function.supports_pushdown_extract || get.function.statistics) {
 				//! Either 'statistics_extended' needs to be set or 'statistics' needs to be NULL
@@ -1020,6 +1025,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		//! Now visit the filter to add to the 'column_references'
 		VisitExpression(&filter_expressions.back());
 	}
+	for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+		const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::VisitGet");
+		for (const auto &filter_idx : expression_filter.column_indexes) {
+			const auto &col_id = get.GetColumnIndex(filter_idx);
+			auto column_type = get.GetColumnType(col_id);
+			ColumnBinding filter_binding(get.table_index, filter_idx);
+			unique_ptr<Expression> column_ref =
+			    make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
+			VisitExpression(&column_ref);
+		}
+	}
 
 	//! Check with the LogicalGet whether pushdown-extract is supported
 	CheckPushdownExtract(get);
@@ -1042,7 +1058,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			if (logical_column_id.IsPushdownExtract()) {
 				//! RemoveUnusedColumns is also used by other optimizers,
 				//! so we have to deal with this case and preserve the PushdownExtract we created earlier
-				D_ASSERT(entry->second.child_columns.empty());
+				D_ASSERT(entry->second.child_columns.empty() ||
+				         entry->second.supports_pushdown_extract == PushdownExtractSupport::DISABLED);
 				new_column_ids.emplace_back(logical_column_id);
 			} else {
 				ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
@@ -1084,7 +1101,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	get.SetColumnIds(std::move(new_column_ids));
 
 	// remap table filters so they point towards the new set of ids
-	if (get.table_filters.HasFilters()) {
+	if (get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters()) {
 		// Build a mapping from old ProjectionIndex -> new ProjectionIndex using original_ids
 		unordered_map<ProjectionIndex, ProjectionIndex> old_to_new_pos;
 		old_to_new_pos.reserve(original_ids.size());
@@ -1098,6 +1115,19 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 				throw InternalException("RemoveUnusedColumns: removed a filter column");
 			}
 			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+			auto remapped_filter =
+			    ExpressionFilter::GetExpressionFilter(*filter, "RemoveUnusedColumns::RemoveColumnsFromLogicalGet")
+			        .Copy();
+			for (auto &column_index : remapped_filter->column_indexes) {
+				auto it = old_to_new_pos.find(column_index);
+				if (it == old_to_new_pos.end()) {
+					throw InternalException("RemoveUnusedColumns: removed a multi-column filter column");
+				}
+				column_index = it->second;
+			}
+			remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 		}
 		get.table_filters = std::move(remapped_filters);
 	}

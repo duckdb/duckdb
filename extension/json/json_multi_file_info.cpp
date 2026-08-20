@@ -215,7 +215,7 @@ static void JSONCheckSingleParameter(const Identifier &key, const vector<Value> 
 }
 
 bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
+                                        BaseFileReaderOptions &options_p, vector<Identifier> &expected_names,
                                         vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
@@ -286,7 +286,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 
 	auto &options = json_data.options;
-	names = StringsToIdentifiers(options.name_list);
+	names = options.name_list;
 	return_types = options.sql_type_list;
 	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
 		// More than one specified column implies records
@@ -385,7 +385,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 }
 
 void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
-                                         const vector<string> &expected_names,
+                                         const vector<Identifier> &expected_names,
                                          const vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;

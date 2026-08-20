@@ -35,7 +35,9 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 unique_ptr<FunctionData> ListAggregatesBindFailure(BoundScalarFunction &bound_function) {
 	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
-	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
+	// no bind data, like the other path that binds nothing: the bind data of this function is always a
+	// ListAggregatesBindData, so anything else here cannot be told apart from one
+	return nullptr;
 }
 
 struct ListAggregatesBindData : public FunctionData {
@@ -66,7 +68,10 @@ struct ListAggregatesBindData : public FunctionData {
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                              const BoundScalarFunction &function) {
-		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
+		const ListAggregatesBindData *bind_data = nullptr;
+		if (bind_data_p) {
+			bind_data = &bind_data_p->Cast<ListAggregatesBindData>();
+		}
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
@@ -249,6 +254,20 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// selection vector pointing to the data
 	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);
+
+	// the aggregate's trailing arguments (e.g. the separator of string_agg) are constants that its bind folded into
+	// the bind data - they are still part of its argument list, so they are passed along as constant vectors
+	auto update_states = [&](idx_t update_count) {
+		vector<Vector> inputs;
+		inputs.reserve(aggr.GetChildren().size());
+		inputs.emplace_back(child_vector, sel_vector, update_count);
+		for (idx_t child_idx = 1; child_idx < aggr.GetChildren().size(); child_idx++) {
+			auto &constant = aggr.GetChildren()[child_idx]->Cast<BoundConstantExpression>().GetValue();
+			inputs.emplace_back(constant, count_t(update_count));
+		}
+		aggr.Function().GetStateUpdateCallback()(inputs.data(), aggr_input_data, inputs.size(), state_vector_update,
+		                                         update_count);
+	};
 	idx_t states_idx = 0;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -275,8 +294,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 				// update the aggregate state(s)
-				Vector slice(child_vector, sel_vector, states_idx);
-				aggr.Function().GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+				update_states(states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -291,8 +309,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
-		Vector slice(child_vector, sel_vector, states_idx);
-		aggr.Function().GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+		update_states(states_idx);
 	}
 
 	if (IS_AGGR) {
@@ -404,11 +421,16 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 	if (IS_AGGR) {
 		bound_function.SetReturnType(bound_aggr_function->Function().GetReturnType());
 	}
-	// check if the aggregate function consumed all the extra input arguments
-	if (bound_aggr_function->GetChildren().size() > 1) {
-		throw InvalidInputException(
-		    "Aggregate function %s is not supported for list_aggr: extra arguments were not removed during bind",
-		    bound_aggr_function->ToString());
+	// the extra arguments are passed to the aggregate as constant vectors, so they have to be constant
+	auto &aggr_children = bound_aggr_function->GetChildrenMutable();
+	for (idx_t child_idx = 1; child_idx < aggr_children.size(); child_idx++) {
+		auto &child = aggr_children[child_idx];
+		if (!child->IsFoldable()) {
+			throw InvalidInputException(
+			    "Aggregate function %s is not supported for list_aggr: extra arguments must be constant",
+			    bound_aggr_function->ToString());
+		}
+		child = make_uniq<BoundConstantExpression>(ExpressionExecutor::EvaluateScalar(context, *child));
 	}
 
 	return make_uniq<ListAggregatesBindData>(bound_function.GetReturnType(), std::move(bound_aggr_function));
