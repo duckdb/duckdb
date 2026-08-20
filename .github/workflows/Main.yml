@@ -260,9 +260,11 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: clang
+      CXX: clang++
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -282,21 +284,6 @@ jobs:
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Fix ASan runtime
-      shell: bash
-      run: |
-        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
-        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
-        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
-        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
-          sudo mkdir -p "${asan_static_dir}"
-          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
-        fi
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -330,6 +317,8 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
 
     steps:
     - name: "Checkout"
@@ -337,10 +326,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
@@ -1168,12 +1153,14 @@ jobs:
     name: No String Inline / Destroy Unpinned Blocks
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: clang
+      CXX: clang++
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1183,10 +1170,6 @@ jobs:
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1222,6 +1205,8 @@ jobs:
     name: No RTTI
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-rtti') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
@@ -1238,10 +1223,6 @@ jobs:
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1266,6 +1247,8 @@ jobs:
     name: Vector Sizes
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
@@ -1281,10 +1264,6 @@ jobs:
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1304,10 +1283,12 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
+      CC: clang
+      CXX: clang++
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
@@ -1316,10 +1297,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
