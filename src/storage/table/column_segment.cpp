@@ -506,7 +506,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		} else {
 			approved_tuple_count = new_sel.Intersect(sel, matched, approved_tuple_count, scan_count);
 		}
-		sel.Initialize(new_sel);
+		std::swap(sel, new_sel); // the caller's old buffers stay behind as scratch for the next chunk
 		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}

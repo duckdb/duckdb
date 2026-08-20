@@ -7,19 +7,6 @@
 
 namespace duckdb {
 
-namespace {
-bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
-	auto autovec_arith = DUCKDB_AUTOVEC && CpuBenefitsFromAutoVec();
-	auto name = expr.Function().GetName();
-	autovec_arith &= (name == "+" || name == "-" || name == "*");
-	autovec_arith &= BitmapCmpTypeSupported(expr.GetReturnType().InternalType());
-	for (auto &child : expr.GetChildren()) {
-		autovec_arith &= BitmapCmpTypeSupported(child->GetReturnType().InternalType());
-	}
-	return autovec_arith;
-}
-
-} // namespace
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// cached bitmap select shape
@@ -37,7 +24,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
-		safe_autovec_arith = IsSafeAutoVecArithmetic(bound_function);
+		dense_autovec_capable = bound_function.Function().GetAutoVectorized() && CpuBenefitsFromAutoVec();
 		auto &children = bound_function.GetChildren();
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
@@ -50,7 +37,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			}
 			dictionary_input_indices.push_back(child_idx);
 		}
-		if (dictionary_input_indices.size() > 1 && !safe_autovec_arith) {
+		if (dictionary_input_indices.size() > 1 && !dense_autovec_capable) {
 			dictionary_input_indices.clear(); // only the dense path can evaluate several dictionaries
 		}
 		if (!dictionary_input_indices.empty()) {
@@ -64,6 +51,55 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 }
 
 ExecuteFunctionState::~ExecuteFunctionState() {
+}
+
+//! Evaluate the function once per dictionary entry when every non-constant input indexes the same dictionary.
+//! An auto-vectorized kernel computes the whole (small) dictionary for less than the per-row work it replaces.
+bool ExecuteFunctionState::TryExecuteDenseFunction(const BoundFunctionExpression &expr, DataChunk &args,
+                                                   ExpressionState &state, Vector &result) {
+	if (!dense_autovec_capable || !input_col_idx.IsValid() || !AutoVecCountPaysOff(args.size())) {
+		return false;
+	}
+	const auto &unary_input = args.data[input_col_idx.GetIndex()];
+	if (unary_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	const auto dictionary_size_opt = DictionaryVector::DictionarySize(unary_input);
+	if (!dictionary_size_opt.IsValid()) {
+		return false;
+	}
+	const auto dictionary_size = dictionary_size_opt.GetIndex();
+	if (dictionary_size > STANDARD_VECTOR_SIZE ||
+	    !DenseAutoVecPaysOff(args.size(), dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
+		return false;
+	}
+	auto &input_sel = DictionaryVector::SelVector(unary_input);
+	for (idx_t i = 1; i < dictionary_input_indices.size(); i++) { // every input must index the same dictionary
+		const auto &input = args.data[dictionary_input_indices[i]];
+		const auto sz = input.GetVectorType() == VectorType::DICTIONARY_VECTOR ? DictionaryVector::DictionarySize(input)
+		                                                                       : optional_idx();
+		if (!sz.IsValid() || sz.GetIndex() != dictionary_size ||
+		    !SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
+			return false;
+		}
+	}
+	if (!output_dictionary || output_dictionary->data.size() != dictionary_size) {
+		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), dictionary_size);
+		output_dictionary->id.clear(); // reused result has no stable dictionary id
+	}
+	if (dictionary_input_chunk.data.empty()) {
+		dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // reused across chunks
+	}
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		dictionary_input_chunk.data[i].Reference(args.data[i]); // constants stay as-is
+	}
+	for (auto idx : dictionary_input_indices) {
+		dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
+	}
+	dictionary_input_chunk.SetChildCardinality(dictionary_size);
+	expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
+	result.Dictionary(output_dictionary, input_sel, args.size());
+	return true;
 }
 
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
@@ -87,38 +123,6 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	auto &input_sel = DictionaryVector::SelVector(unary_input);
-	if (safe_autovec_arith && AutoVecCountPaysOff(args.size()) && // dense dictionary arithmetic
-	    input_dictionary_size <= STANDARD_VECTOR_SIZE &&
-	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
-		for (idx_t i = 1; i < dictionary_input_indices.size(); i++) { // every input must index the same dictionary
-			const auto &input = args.data[dictionary_input_indices[i]];
-			const auto sz = input.GetVectorType() == VectorType::DICTIONARY_VECTOR
-			                    ? DictionaryVector::DictionarySize(input)
-			                    : optional_idx();
-			if (!sz.IsValid() || sz.GetIndex() != input_dictionary_size ||
-			    !SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
-				return false;
-			}
-		}
-		if (!output_dictionary || output_dictionary->data.size() != input_dictionary_size) {
-			output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
-			output_dictionary->id.clear(); // reused result has no stable dictionary id
-		}
-		if (dictionary_input_chunk.data.empty()) {
-			dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // reused across chunks
-		}
-		for (idx_t i = 0; i < args.ColumnCount(); i++) {
-			dictionary_input_chunk.data[i].Reference(args.data[i]); // constants stay as-is
-		}
-		for (auto idx : dictionary_input_indices) {
-			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
-		}
-		dictionary_input_chunk.SetChildCardinality(input_dictionary_size);
-		expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
-		result.Dictionary(output_dictionary, input_sel, args.size());
-		return true;
-	}
-
 	const auto &input_dictionary_id = DictionaryVector::DictionaryId(unary_input); // storage dictionary cache path
 	if (dictionary_input_indices.size() != 1 || input_dictionary_id.empty() ||
 	    input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
@@ -279,7 +283,8 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
-	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+	                           (execute_function_state.TryExecuteDenseFunction(expr, arguments, *state, result) ||
+	                            execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result));
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
 			expr.Function().Execute(arguments, *state, result);
@@ -364,7 +369,8 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	if (expr.Function().HasFunctionCallback()) {
 		Vector result(LogicalType::BOOLEAN);
-		if (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
+		if (execute_function_state.TryExecuteDenseFunction(expr, arguments, *state, result) ||
+		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 		}
 	}

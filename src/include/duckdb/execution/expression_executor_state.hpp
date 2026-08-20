@@ -77,6 +77,10 @@ public:
 		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
 
+	//! Evaluate the function over the dictionary itself when all inputs share one selection (auto-vectorized kernels)
+	bool TryExecuteDenseFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+	                             Vector &result);
+	//! Evaluate the function over a storage dictionary once and cache the result per dictionary id
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
 
@@ -89,7 +93,8 @@ public:
 	SelectionResult tmp_sel1, tmp_sel2;
 
 private:
-	bool safe_autovec_arith = false;
+	//! The function's kernel auto-vectorizes, so it may be evaluated densely over a dictionary
+	bool dense_autovec_capable = false;
 	//! The column index of the "unary" input column that may be a dictionary vector
 	//! Only valid when the expression is eligible for the dictionary expression optimization
 	//! This is the case when the input is "practically unary", i.e., only one non-const input column

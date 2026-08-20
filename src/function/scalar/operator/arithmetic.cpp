@@ -244,8 +244,11 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		auto &func = expr.FunctionMutable();
 		// both arguments are bound to the same physical type, so a single-width kernel suffices
 		D_ASSERT(lstats.GetType().InternalType() == rstats.GetType().InternalType());
-		func.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		const auto return_type = expr.GetReturnType().InternalType();
+		func.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(return_type));
 		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
+		// lanes of at most 8 bytes auto-vectorize; the hugeint kernels stay scalar
+		func.SetAutoVectorized(GetTypeIdSize(return_type) <= sizeof(int64_t));
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -710,6 +713,8 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT));
 	}
 	decimal_type.Verify();
+	// lanes of at most 8 bytes auto-vectorize; the hugeint kernel stays scalar
+	bound_function.SetAutoVectorized(width <= Decimal::MAX_WIDTH_INT64);
 	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
 	return nullptr;

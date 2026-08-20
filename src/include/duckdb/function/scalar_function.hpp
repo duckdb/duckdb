@@ -242,6 +242,9 @@ public: // Properties
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
 
+	auto GetAutoVectorized() const -> bool { return properties.autovectorized; }
+	auto SetAutoVectorized(bool value) -> void { properties.autovectorized = value; }
+
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)

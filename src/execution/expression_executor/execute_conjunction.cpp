@@ -117,8 +117,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			if (bitmap_sel) {
 				std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse
 			} else {
-				state.intersect_acc.SwapInto(*true_sel);
-				true_sel->Flatten(); // plain callers need an index selection
+				state.intersect_acc.SwapInto(*true_sel); // materializes: plain callers need indices
 			}
 			return result_count;
 		}

@@ -935,7 +935,7 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 		} else if (count != max_count) {
 			sel.Initialize(state.valid_sel);
 		} else {
-			sel.Initialize(nullptr);
+			sel.Reset();
 		}
 		//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 		auto adaptive_filter = filter_info.GetAdaptiveFilter();

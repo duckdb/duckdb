@@ -473,6 +473,13 @@ public:
 		capture_argument_aliases = value;
 	}
 
+	auto GetAutoVectorized() const -> bool {
+		return autovectorized;
+	}
+	auto SetAutoVectorized(bool value) -> void {
+		autovectorized = value;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -496,6 +503,9 @@ public:
 	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
 	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
 	bool capture_argument_aliases = false;
+	//! Whether the kernel is a branch-free fixed-width loop that the compiler auto-vectorizes. This makes it
+	//! profitable to evaluate the function densely (e.g. over an entire dictionary) instead of per selected row.
+	bool autovectorized = false;
 };
 
 class BoundSimpleFunction {
