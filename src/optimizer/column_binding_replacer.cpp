@@ -339,4 +339,8 @@ void ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t c
 	}
 }
 
+void ColumnBindingReplacer::VisitOperatorExpressionsOnly(LogicalOperator &op) {
+	VisitOperatorExpressions(op);
+}
+
 } // namespace duckdb

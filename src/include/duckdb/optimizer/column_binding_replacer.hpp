@@ -75,6 +75,7 @@ public:
 	//! Do not recurse further than this operator (optional)
 	optional_ptr<LogicalOperator> stop_operator;
 
+	void VisitOperatorExpressionsOnly(LogicalOperator &op);
 	//! Contains all bindings that need to be updated
 	vector<ReplacementBinding> replacement_bindings;
 };
