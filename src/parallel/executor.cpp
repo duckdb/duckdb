@@ -304,7 +304,7 @@ void Executor::CancelTasks() {
 					continue;
 				}
 			}
-			// No execute the task dequeued, directly discard.
+			// Discard the dequeued task without executing it.
 			task_from_producer.reset();
 		}
 	}
@@ -313,8 +313,7 @@ void Executor::CancelTasks() {
 		WorkOnTasks();
 	}
 #endif
-	// Now safe to destroy pipelines, events and states — no tasks reference them.
-	// Acquiring `executor_lock` also synchronizes with the final `UnregisterTask`, which notifies under it.
+	// Now safe to destroy pipelines, events and states — no tasks reference them
 	lock_guard<mutex> elock(executor_lock);
 	for (auto &rec_cte_ref : recursive_ctes) {
 		auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
