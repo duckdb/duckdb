@@ -1,4 +1,4 @@
-commit 9d56d03a4df01b6dfe7419023a372a98fe363b0b
+commit 411e553539493c9a06331538568dade8569a5e7a
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -387,3 +387,13 @@ index 6d19b18..dbf32ae 100644
  	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
  	void Seek(FileHandle &handle, idx_t location) override;
  	idx_t SeekPosition(FileHandle &handle) override;
+diff --git a/test/sql/metadata_stats.test b/test/sql/metadata_stats.test
+index dfe7a26..27cb0a6 100644
+--- a/test/sql/metadata_stats.test
++++ b/test/sql/metadata_stats.test
+@@ -18,4 +18,4 @@ SET force_download=false;
+ query II
+ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
+ ----
+-analyzed_plan	<REGEX>:.*GET: 1.*
++analyzed_plan	<REGEX>:.*GET: 2.*
