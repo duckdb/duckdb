@@ -36,7 +36,7 @@ unique_ptr<SecretEntry> TransactionSecretStorage::StoreSecret(unique_ptr<const B
 	if (entry != secrets.end()) {
 		switch (on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw InvalidInputException("Transaction secret with name '%s' already exists!", secret->GetName());
+			throw InvalidInputException("Transaction secret with name %s already exists!", secret->GetName());
 		case OnCreateConflict::IGNORE_ON_CONFLICT:
 			return nullptr;
 		case OnCreateConflict::REPLACE_ON_CONFLICT:
@@ -133,7 +133,7 @@ unique_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const Ba
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			string persist_string = persistent ? "Persistent" : "Temporary";
 			string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
-			throw InvalidInputException("%s secret with name '%s' already exists%s!", persist_string, secret->GetName(),
+			throw InvalidInputException("%s secret with name %s already exists%s!", persist_string, secret->GetName(),
 			                            storage_string);
 		} else if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			return nullptr;

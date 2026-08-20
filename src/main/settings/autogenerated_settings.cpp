@@ -167,16 +167,6 @@ void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 }
 
 //===----------------------------------------------------------------------===//
-// Deprecated Using Key Syntax
-//===----------------------------------------------------------------------===//
-void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
-	}
-	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Dialect Compatibility Mode
 //===----------------------------------------------------------------------===//
 void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

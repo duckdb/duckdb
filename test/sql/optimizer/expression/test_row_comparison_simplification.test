@@ -64,7 +64,7 @@ SELECT count(*) FROM rows WHERE (a, b) = (c, d);
 statement ok
 RESET disabled_optimizers;
 
-# Scalarized key equality is visible before recursive physical planning.
+# Scalarized key equality is visible to recursive physical planning.
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
@@ -86,4 +86,23 @@ cc(node, comp) USING KEY (node) AS (
 )
 SELECT * FROM cc;
 ----
-physical_plan	<REGEX>:.*REC_REC_CTE_SCAN.*
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+# The specialized probe preserves the scalarized row-comparison semantics.
+query II rowsort
+WITH RECURSIVE
+edges(here, there) AS (
+	VALUES (0, 1), (1, 0)
+),
+cc(node, comp) USING KEY (node) AS (
+	VALUES (0, 0), (1, 1)
+	UNION ALL
+	SELECT current.node, changed.comp
+	FROM cc changed, edges edge, recurring.cc current
+	WHERE (edge.here, edge.there) = (current.node, changed.node)
+	  AND changed.comp < current.comp
+)
+SELECT * FROM cc;
+----
+0	0
+1	0

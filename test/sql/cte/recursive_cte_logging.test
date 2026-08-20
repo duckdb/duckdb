@@ -612,3 +612,107 @@ FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
 1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Key-delta metrics distinguish aggregate candidates from observable state changes.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	VALUES (1, 5), (1, 6), (2, 10)
+	UNION
+	SELECT k, CASE k WHEN 1 THEN v + 1 ELSE v - 1 END
+	FROM t
+	WHERE (k = 1 AND v = 5) OR (k = 2 AND v = 10)
+)
+TABLE t;
+----
+1	5
+2	9
+
+statement ok
+CALL disable_logging();
+
+query IIIIIIIIII
+SELECT info.key_delta_work_ns::UBIGINT > 0,
+       info.key_delta_candidate_rows::UBIGINT = 5,
+       info.key_delta_touched_keys::UBIGINT = 4,
+       info.key_delta_new_keys::UBIGINT = 2,
+       info.key_delta_changed_keys::UBIGINT = 1,
+       info.key_delta_unchanged_keys::UBIGINT = 1,
+	   info.key_preaggregation_work_ns::UBIGINT = 0,
+	   info.key_preaggregation_combine_work_ns::UBIGINT = 0,
+	   info.key_preaggregation_candidate_rows::UBIGINT = 0,
+	   info.key_preaggregation_groups::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Duplicate-heavy epochs activate preaggregation.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k, min(v)) AS (
+	SELECT i, 3
+	FROM range(current_setting('standard_vector_size')::BIGINT) r(i), range(8) duplicates(_)
+	UNION
+	SELECT k, v - 1 FROM t, range(8) duplicates(_) WHERE v > 0
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT, max(v) FROM t;
+----
+1	0
+
+statement ok
+CALL disable_logging();
+
+query IIIIIII
+SELECT info.key_preaggregation_classification_work_ns::UBIGINT > 0,
+	   info.key_preaggregation_work_ns::UBIGINT > 0,
+	   info.key_preaggregation_combine_work_ns::UBIGINT > 0,
+	   info.key_preaggregation_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 32,
+	   info.key_preaggregation_groups::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 4,
+	   info.key_delta_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 32,
+	   info.key_delta_touched_keys::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 4
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# The default order-dependent last aggregate retains the candidate-update path.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	VALUES (1, 0)
+	UNION
+	SELECT k, v + 1 FROM t WHERE v < 1
+)
+TABLE t;
+----
+1	1
+
+statement ok
+CALL disable_logging();
+
+query IIIII
+SELECT info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.key_preaggregation_work_ns::UBIGINT = 0,
+       info.key_preaggregation_combine_work_ns::UBIGINT = 0,
+       info.key_preaggregation_candidate_rows::UBIGINT = 0,
+       info.key_preaggregation_groups::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1

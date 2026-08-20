@@ -536,13 +536,6 @@
         "default_value": "true"
     },
     {
-        "name": "deprecated_using_key_syntax",
-        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<DeprecatedUsingKeySyntax>",
-        "default_scope": "local",
-        "default_value": "DEFAULT"
-    },
-    {
         "name": "dialect_compatibility_mode",
         "description": "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)",
         "type": "ENUM<DialectCompatibilityMode>",
