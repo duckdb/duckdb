@@ -142,6 +142,14 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	if (wexpr.Distinct()) {
 		return false;
 	}
+	if (wexpr.AggregateFunction()->GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT &&
+	    wexpr.ArgOrders().empty()) {
+		for (const auto &order : wexpr.OrderBy()) {
+			if (order.expression->IsVolatile()) {
+				return false;
+			}
+		}
+	}
 
 	//	COUNT(*) is already handled efficiently by segment trees.
 	if (wexpr.GetChildren().empty()) {
