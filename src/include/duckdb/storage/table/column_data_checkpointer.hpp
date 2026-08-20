@@ -62,18 +62,29 @@ class ColumnDataCheckpointer {
 public:
 	ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &states, StorageManager &storage_manager,
 	                       const RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info);
+	~ColumnDataCheckpointer();
 
 public:
 	void Checkpoint();
 	void FinalizeCheckpoint();
 
 private:
-	void ScanSegments(const std::function<void(Vector &)> &callback);
+	struct BaseSegmentCheckpointPlan;
+
+	void ScanSegments(const ColumnData &column_data, const std::function<void(Vector &)> &callback);
+	void ScanSegment(const ColumnData &column_data, SegmentNode<ColumnSegment> &segment,
+	                 const std::function<void(Vector &)> &callback);
+	vector<unique_ptr<AnalyzeState>> InitAnalyze(idx_t checkpoint_state_idx);
+	void AnalyzeVector(idx_t checkpoint_state_idx, vector<unique_ptr<AnalyzeState>> &states, Vector &scan_vector);
+	CheckpointAnalyzeResult FinalizeAnalyze(idx_t checkpoint_state_idx, vector<unique_ptr<AnalyzeState>> states,
+	                                        CompressionType forced_method);
+	unique_ptr<BaseSegmentCheckpointPlan> TryBuildBaseSegmentPlan();
 	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
 	void WriteToDisk();
+	void WriteBaseSegments();
+	void WriteValidity(CheckpointAnalyzeResult &analyze_result);
 	void WritePersistentSegments(ColumnCheckpointState &state);
-	bool HasChanges(ColumnData &col_data);
-	void InitAnalyze();
+	void PreserveUnchangedValidity();
 	void DropSegments();
 	bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result);
 
@@ -87,8 +98,7 @@ private:
 	bool has_changes = false;
 	//! For every column data that is being checkpointed, the applicable functions
 	vector<vector<optional_ptr<const CompressionFunction>>> compression_functions;
-	//! For every column data that is being checkpointed, the analyze state of functions being tried
-	vector<vector<unique_ptr<AnalyzeState>>> analyze_states;
+	unique_ptr<BaseSegmentCheckpointPlan> base_segment_plan;
 };
 
 } // namespace duckdb

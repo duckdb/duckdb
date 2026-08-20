@@ -1,0 +1,412 @@
+# name: test/sql/storage/compression/reuse_explicit_compression_segments_edge_cases.test
+# description: Test update and statistics edge cases for persistent segment reuse
+# group: [compression]
+
+require noforcestorage
+
+require no_alternative_verify
+
+require vector_size 2048
+
+load {TEST_DIR}/reuse_explicit_compression_segments_edge_cases.db readwrite v1.2.0
+
+statement ok
+SET checkpoint_threshold='9999GB'
+
+statement ok
+SET debug_verify_blocks=true
+
+# A 16 KiB Uncompressed BIGINT segment holds 2047 rows, so its second Segment
+# contains both the last tuple of vector 0 and the first tuple of vector 1.
+statement ok
+ATTACH '{TEST_DIR}/reuse_vector_boundary.db' AS boundary_db
+    (STORAGE_VERSION 'v1.2.0', BLOCK_SIZE 16384)
+
+statement ok
+CREATE TABLE boundary_db.vector_boundary_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO boundary_db.vector_boundary_t SELECT i, i FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query I
+SELECT count(*)
+FROM pragma_storage_info('boundary_db.vector_boundary_t')
+WHERE column_name='v' AND segment_type='BIGINT' AND start=2047 AND count=2047
+----
+1
+
+# Updating the right Segment at rows 2047/2048 covers both sides of a vector boundary.
+statement ok
+CREATE TEMP TABLE vector_start_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('boundary_db.vector_boundary_t')
+WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-id WHERE id IN (2047, 2048)
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query III
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('boundary_db.vector_boundary_t')
+    WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+)
+SELECT count(*) FILTER (WHERE before.start=0
+                         AND before.block_id=after.block_id
+                         AND before.block_offset=after.block_offset),
+	       count(*) FILTER (WHERE before.start=2047
+                         AND (before.block_id!=after.block_id
+                              OR before.block_offset!=after.block_offset)),
+       (SELECT count(*) FROM boundary_db.vector_boundary_t
+	        WHERE v IS DISTINCT FROM CASE WHEN id IN (2047, 2048) THEN -id ELSE id END)
+FROM vector_start_before before
+JOIN after_segments after USING (start, count)
+----
+1	1	0
+
+# Updating the last tuple of the left Segment must not dirty the right Segment.
+statement ok
+CREATE TEMP TABLE vector_end_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('boundary_db.vector_boundary_t')
+WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-id WHERE id=2046
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query III
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('boundary_db.vector_boundary_t')
+    WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+)
+SELECT count(*) FILTER (WHERE before.start=0
+                         AND (before.block_id!=after.block_id
+                              OR before.block_offset!=after.block_offset)),
+	       count(*) FILTER (WHERE before.start=2047
+                         AND before.block_id=after.block_id
+                         AND before.block_offset=after.block_offset),
+       (SELECT count(*) FROM boundary_db.vector_boundary_t
+	        WHERE v IS DISTINCT FROM CASE WHEN id IN (2046, 2047, 2048) THEN -id ELSE id END)
+FROM vector_end_before before
+JOIN after_segments after USING (start, count)
+----
+1	1	0
+
+# A first no-op update does not create an UpdateSegment entry.
+statement ok
+CREATE TEMP TABLE noop_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('boundary_db.vector_boundary_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=v WHERE id=4096
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('boundary_db.vector_boundary_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT count(*) FILTER (WHERE before.block_id=after.block_id
+                         AND before.block_offset=after.block_offset)=count(*),
+	       (SELECT count(*) FROM boundary_db.vector_boundary_t
+	        WHERE v IS DISTINCT FROM CASE WHEN id IN (2046, 2047, 2048) THEN -id ELSE id END)
+FROM noop_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+true	0
+
+# Rollback may leave a conservative dirty marker, but it must never publish the rolled-back value.
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-6145 WHERE id=6144
+
+statement ok
+ROLLBACK
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query I
+SELECT count(*) FROM boundary_db.vector_boundary_t
+WHERE v IS DISTINCT FROM CASE WHEN id IN (2046, 2047, 2048) THEN -id ELSE id END
+----
+0
+
+# Multiple updates of one tuple keep one sorted tuple id and checkpoint the latest value.
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-4096 WHERE id=4096
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-4097 WHERE id=4096
+
+statement ok
+UPDATE boundary_db.vector_boundary_t SET v=-4097 WHERE id=4096
+
+statement ok
+COMMIT
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query I
+SELECT count(*) FROM boundary_db.vector_boundary_t
+WHERE v IS DISTINCT FROM CASE
+	    WHEN id IN (2046, 2047, 2048) THEN -id
+    WHEN id=4096 THEN -4097
+    ELSE id END
+----
+0
+
+# The root UpdateInfo keeps the sorted union of tuple ids across committed
+# versions. Exact range checks must find both sides of a Segment boundary.
+statement ok
+CREATE TABLE boundary_db.version_chain_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO boundary_db.version_chain_t SELECT i, i FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+statement ok
+CREATE TEMP TABLE version_chain_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('boundary_db.version_chain_t')
+WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE boundary_db.version_chain_t SET v=-12046 WHERE id=2046
+
+statement ok
+COMMIT
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE boundary_db.version_chain_t SET v=-12047 WHERE id=2047
+
+statement ok
+COMMIT
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query III
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('boundary_db.version_chain_t')
+    WHERE column_name='v' AND segment_type='BIGINT' AND start IN (0, 2047)
+)
+SELECT count(*) FILTER (WHERE before.block_id!=after.block_id
+                         OR before.block_offset!=after.block_offset),
+       count(*),
+       (SELECT count(*) FROM boundary_db.version_chain_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id=2046 THEN -12046
+            WHEN id=2047 THEN -12047
+            ELSE id END)
+FROM version_chain_before before
+JOIN after_segments after USING (start, count)
+----
+2	2	0
+
+# Hiding the old minimum and maximum only changes validity; every base Segment is reusable.
+statement ok
+CREATE TABLE validity_stats_t(
+    id BIGINT,
+    v BIGINT USING COMPRESSION UNCOMPRESSED)
+
+statement ok
+INSERT INTO validity_stats_t SELECT i, i FROM range(122880) t(i)
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+CREATE TEMP TABLE validity_stats_before AS
+SELECT start, count, block_id, block_offset
+FROM pragma_storage_info('validity_stats_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE validity_stats_t SET v=NULL WHERE id IN (0, 122879)
+
+statement ok
+FORCE CHECKPOINT
+
+query I
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('validity_stats_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)=count(*))::INTEGER
+FROM validity_stats_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1
+
+query IIII
+SELECT min(v), max(v), count(*) FILTER (WHERE v IS NULL), count(*) FILTER (WHERE v IS NOT NULL)
+FROM validity_stats_t
+----
+1	122878	2	122878
+
+query IIIII
+SELECT count(*) FILTER (WHERE v=0),
+       count(*) FILTER (WHERE v=1),
+       count(*) FILTER (WHERE v=122879),
+       count(*) FILTER (WHERE v<2),
+       count(*) FILTER (WHERE v>=122878)
+FROM validity_stats_t
+----
+0	1	0	1	1
+
+# Restoring NULLs outside the old range rewrites only the affected base Segments.
+statement ok
+CREATE TEMP TABLE validity_restore_before AS
+SELECT start, count, block_id, block_offset,
+	       start=0 AS dirty
+FROM pragma_storage_info('validity_stats_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE validity_stats_t SET v=-1000 WHERE id=0
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+    SELECT start, count, block_id, block_offset
+    FROM pragma_storage_info('validity_stats_t')
+    WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)
+            = count(*) FILTER (WHERE NOT before.dirty))::INTEGER,
+       (count(*) FILTER (WHERE before.dirty
+                          AND before.block_id=after.block_id
+                          AND before.block_offset=after.block_offset)=0)::INTEGER
+FROM validity_restore_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	1
+
+statement ok
+CREATE TEMP TABLE validity_restore_max_before AS
+SELECT start, count, block_id, block_offset,
+	       start+count=122880 AS dirty
+FROM pragma_storage_info('validity_stats_t')
+WHERE column_name='v' AND segment_type='BIGINT'
+
+statement ok
+UPDATE validity_stats_t SET v=999999 WHERE id=122879
+
+statement ok
+FORCE CHECKPOINT
+
+query II
+WITH after_segments AS (
+	SELECT start, count, block_id, block_offset
+	FROM pragma_storage_info('validity_stats_t')
+	WHERE column_name='v' AND segment_type='BIGINT'
+)
+SELECT (count(*) FILTER (WHERE NOT before.dirty
+	                      AND before.block_id=after.block_id
+	                      AND before.block_offset=after.block_offset)
+	        = count(*) FILTER (WHERE NOT before.dirty))::INTEGER,
+	   (count(*) FILTER (WHERE before.dirty
+	                      AND before.block_id=after.block_id
+	                      AND before.block_offset=after.block_offset)=0)::INTEGER
+FROM validity_restore_max_before before
+LEFT JOIN after_segments after USING (start, count)
+----
+1	1
+
+query IIIIII
+SELECT min(v), max(v),
+       count(*) FILTER (WHERE v=-1000),
+       count(*) FILTER (WHERE v=999999),
+       count(*) FILTER (WHERE v<0),
+       count(*) FILTER (WHERE v>122879)
+FROM validity_stats_t
+----
+-1000	999999	1	1	1	1
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/reuse_vector_boundary.db' AS boundary_db
+
+statement ok
+SET debug_verify_blocks=true
+
+statement ok
+FORCE CHECKPOINT
+
+statement ok
+FORCE CHECKPOINT boundary_db
+
+query II
+SELECT (SELECT count(*) FROM boundary_db.vector_boundary_t
+        WHERE v IS DISTINCT FROM CASE
+	            WHEN id IN (2046, 2047, 2048) THEN -id
+            WHEN id=4096 THEN -4097
+            ELSE id END),
+       (SELECT count(*) FROM validity_stats_t
+        WHERE v IS DISTINCT FROM CASE
+            WHEN id=0 THEN -1000
+            WHEN id=122879 THEN 999999
+            ELSE id END)
+----
+0	0
+
+query I
+SELECT count(*) FROM boundary_db.version_chain_t
+WHERE v IS DISTINCT FROM CASE
+    WHEN id=2046 THEN -12046
+    WHEN id=2047 THEN -12047
+    ELSE id END
+----
+0
+
+query IIIIII
+SELECT min(v), max(v),
+       count(*) FILTER (WHERE v=-1000),
+       count(*) FILTER (WHERE v=999999),
+       count(*) FILTER (WHERE v BETWEEN 1 AND 2),
+       count(*) FILTER (WHERE v IS NULL)
+FROM validity_stats_t
+----
+-1000	999999	1	1	2	0

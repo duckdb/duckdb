@@ -7,6 +7,17 @@
 
 namespace duckdb {
 
+struct PersistentSegmentBlockMarker : public BlockIdVisitor {
+	explicit PersistentSegmentBlockMarker(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsCheckpointed(block_id);
+	}
+
+	BlockManager &manager;
+};
+
 ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
                                              PartialBlockManager &partial_block_manager)
     : row_group(row_group), original_column(original_column), partial_block_manager(partial_block_manager),
@@ -19,6 +30,22 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	D_ASSERT(global_stats);
 	return std::move(global_stats);
+}
+
+void ColumnCheckpointState::AppendPersistentSegmentReference(shared_ptr<ColumnSegment> segment, idx_t row_start) {
+	D_ASSERT(segment);
+	if (segment->GetSegmentType() != ColumnSegmentType::PERSISTENT) {
+		throw InternalException("Cannot reference a transient segment from a checkpoint");
+	}
+
+	auto &result = GetResultColumn();
+	auto &result_tree = result.GetSegmentTree();
+	auto result_lock = result_tree.Lock();
+	PersistentSegmentBlockMarker marker(partial_block_manager.GetBlockManager());
+	segment->VisitBlockIds(marker);
+	global_stats->Merge(segment->GetStats());
+	data_pointers.push_back(segment->GetDataPointer(row_start));
+	result_tree.AppendSegment(result_lock, std::move(segment), row_start);
 }
 
 shared_ptr<ColumnData> ColumnCheckpointState::CreateEmptyColumnData() {

@@ -45,6 +45,7 @@ public:
 	virtual shared_ptr<ColumnData> GetFinalResult();
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
+	void AppendPersistentSegmentReference(shared_ptr<ColumnSegment> segment, idx_t row_start);
 
 	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);
