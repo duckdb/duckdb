@@ -56,7 +56,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-	                     BaseFileReaderOptions &options, vector<string> &expected_names,
+	                     BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
 	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
