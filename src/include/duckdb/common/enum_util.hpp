@@ -294,8 +294,6 @@ enum class KeywordCase : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
-enum class Kind : uint8_t;
-
 enum class LambdaSyntax : uint8_t;
 
 enum class LambdaSyntaxType : uint8_t;
@@ -1021,9 +1019,6 @@ const char* EnumUtil::ToChars<KeywordCase>(KeywordCase value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
-
-template<>
-const char* EnumUtil::ToChars<Kind>(Kind value);
 
 template<>
 const char* EnumUtil::ToChars<LambdaSyntax>(LambdaSyntax value);
@@ -1916,9 +1911,6 @@ KeywordCase EnumUtil::FromString<KeywordCase>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
-
-template<>
-Kind EnumUtil::FromString<Kind>(const char *value);
 
 template<>
 LambdaSyntax EnumUtil::FromString<LambdaSyntax>(const char *value);

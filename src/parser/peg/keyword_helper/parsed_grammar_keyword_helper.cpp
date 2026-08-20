@@ -12,11 +12,11 @@ static void PopulateKeywordMap(const ParsedGrammar &grammar, const string &root_
 static void ExpressionToKeyword(const ParsedGrammar &grammar, const string &root_rule_name, const string &rule_name,
                                 const PEGExpression &expression, case_insensitive_set_t &keyword_map,
                                 case_insensitive_set_t &active_rules) {
-	if (expression.kind == PEGExpression::Kind::LITERAL) {
+	if (expression.type == PEGExpression::Type::LITERAL) {
 		keyword_map.insert(StringUtil::Lower(expression.text.GetString()));
-	} else if (expression.kind == PEGExpression::Kind::REFERENCE) {
+	} else if (expression.type == PEGExpression::Type::REFERENCE) {
 		PopulateKeywordMap(grammar, root_rule_name, expression.text.GetString(), keyword_map, active_rules);
-	} else if (expression.kind == PEGExpression::Kind::CHOICE) {
+	} else if (expression.type == PEGExpression::Type::CHOICE) {
 		for (auto &child : expression.children) {
 			ExpressionToKeyword(grammar, root_rule_name, rule_name, child, keyword_map, active_rules);
 		}

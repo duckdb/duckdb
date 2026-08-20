@@ -42,11 +42,11 @@ static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
 static void CheckReference(const ParsedGrammar &grammar, const ParsedGrammarRule &parsed_rule,
                            const PEGExpression &expression) {
 	do {
-		if (expression.kind != PEGExpression::Kind::REFERENCE &&
-		    expression.kind != PEGExpression::Kind::FUNCTION_CALL) {
+		if (expression.type != PEGExpression::Type::REFERENCE &&
+		    expression.type != PEGExpression::Type::FUNCTION_CALL) {
 			break;
 		}
-		if (expression.kind == PEGExpression::Kind::REFERENCE && parsed_rule.recipe.parameters.count(expression.text)) {
+		if (expression.type == PEGExpression::Type::REFERENCE && parsed_rule.recipe.parameters.count(expression.text)) {
 			break;
 		}
 		if (StringUtil::CIEquals(expression.text.GetString(), "EndOfInput")) {

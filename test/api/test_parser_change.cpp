@@ -45,13 +45,9 @@ public:
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
-		RuleTransformData atom_transform;
-		atom_transform.transform = TransformParserChangeTestAtom;
-		atom_transform.trampoline_transform = TransformParserChangeTestAtom;
-		grammar.AddRule("ParserChangeTestAtom <- ParserChangeTestValue", std::move(atom_transform));
-
-		grammar.PrependChoice("SelectAtom", "ParserChangeTestAtom", [](const PEGToken &token) {
-			return token.type == PEGTokenType::REFERENCE && token.text.GetString() == "SelectParens";
+		grammar.AddRule("ParserChangeTestAtom <- ParserChangeTestValue", TransformParserChangeTestAtom);
+		grammar.PrependChoice("SelectAtom", "ParserChangeTestAtom", [](const PEGExpression &expression) {
+			return expression.type == PEGExpression::Type::REFERENCE && expression.text.GetString() == "SelectParens";
 		});
 	}
 };
@@ -77,17 +73,17 @@ TEST_CASE("Parser changes apply in registration order", "[api][parser_change]") 
 TEST_CASE("Grammar choices support cursor placement", "[api][parser_change]") {
 	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'last'");
 	grammar.AddChoice("CursorRule", "'second'", [](const PEGExpression &expression) {
-		return expression.kind == PEGExpression::Kind::LITERAL && expression.text.GetString() == "first";
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "first";
 	});
 	grammar.PrependChoice("CursorRule", "'third'", [](const PEGExpression &expression) {
-		return expression.kind == PEGExpression::Kind::LITERAL && expression.text.GetString() == "last";
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "last";
 	});
 
 	vector<string> choices;
 	auto rule = grammar.GetRule("CursorRule");
 	REQUIRE(rule);
 	for (auto &expression : rule->recipe.expression.children) {
-		if (expression.kind == PEGExpression::Kind::LITERAL) {
+		if (expression.type == PEGExpression::Type::LITERAL) {
 			choices.push_back(expression.text.GetString());
 		}
 	}
@@ -97,24 +93,24 @@ TEST_CASE("Grammar choices support cursor placement", "[api][parser_change]") {
 TEST_CASE("Grammar choices can be removed", "[api][parser_change]") {
 	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'second' / 'last'");
 	grammar.RemoveChoice("CursorRule", [](const PEGExpression &expression) {
-		return expression.kind == PEGExpression::Kind::LITERAL && expression.text.GetString() == "second";
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "second";
 	});
 
 	auto rule = grammar.GetRule("CursorRule");
 	REQUIRE(rule);
-	REQUIRE(rule->recipe.expression.kind == PEGExpression::Kind::CHOICE);
+	REQUIRE(rule->recipe.expression.type == PEGExpression::Type::CHOICE);
 	REQUIRE(rule->recipe.expression.children.size() == 2);
 	REQUIRE(rule->recipe.expression.children[0].text.GetString() == "first");
 	REQUIRE(rule->recipe.expression.children[1].text.GetString() == "last");
 
 	REQUIRE_THROWS(grammar.RemoveChoice("CursorRule", [](const PEGExpression &expression) {
-		return expression.kind == PEGExpression::Kind::LITERAL && expression.text.GetString() == "missing";
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "missing";
 	}));
 
 	grammar.RemoveChoice("CursorRule", [](const PEGExpression &expression) {
-		return expression.kind == PEGExpression::Kind::LITERAL && expression.text.GetString() == "first";
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "first";
 	});
-	REQUIRE(rule->recipe.expression.kind == PEGExpression::Kind::LITERAL);
+	REQUIRE(rule->recipe.expression.type == PEGExpression::Type::LITERAL);
 	REQUIRE(rule->recipe.expression.text.GetString() == "last");
 }
 

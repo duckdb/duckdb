@@ -167,10 +167,7 @@ public:
 
 	void Apply(ParsedGrammar &grammar) const override {
 		grammar.AddChoice("ReservedKeyword", "'EXTEND'");
-		RuleTransformData pipe_transform;
-		pipe_transform.transform = TransformPipeSelectAtom;
-		pipe_transform.trampoline_transform = TransformPipeSelectAtom;
-		grammar.AddRule("PipeSelectAtom <- PipeSource PipeStage+", std::move(pipe_transform));
+		grammar.AddRule("PipeSelectAtom <- PipeSource PipeStage+", TransformPipeSelectAtom);
 		grammar.AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens");
 		grammar.AddRule("PipeStage <- '|>' PipeOperator");
 		grammar.AddRule(

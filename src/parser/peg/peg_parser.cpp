@@ -64,7 +64,7 @@ private:
 		if (!IsOp('/')) {
 			return first;
 		}
-		PEGExpression choice(PEGExpression::Kind::CHOICE);
+		PEGExpression choice(PEGExpression::Type::CHOICE);
 		choice.children.push_back(std::move(first));
 		while (IsOp('/')) {
 			Advance();
@@ -75,7 +75,7 @@ private:
 
 	// sequence := postfix*
 	PEGExpression ParseSequence() {
-		PEGExpression seq(PEGExpression::Kind::SEQUENCE);
+		PEGExpression seq(PEGExpression::Type::SEQUENCE);
 		while (HasNext() && !IsOp('/') && !IsOp(')')) {
 			seq.children.push_back(ParsePostfix());
 		}
@@ -90,19 +90,19 @@ private:
 		auto node = ParsePrimary();
 		if (IsOp('?')) {
 			Advance();
-			PEGExpression n(PEGExpression::Kind::OPTIONAL);
+			PEGExpression n(PEGExpression::Type::OPTIONAL);
 			n.children.push_back(std::move(node));
 			return n;
 		}
 		if (IsOp('*')) {
 			Advance();
-			PEGExpression n(PEGExpression::Kind::OPTIONAL_REPEAT);
+			PEGExpression n(PEGExpression::Type::OPTIONAL_REPEAT);
 			n.children.push_back(std::move(node));
 			return n;
 		}
 		if (IsOp('+')) {
 			Advance();
-			PEGExpression n(PEGExpression::Kind::REPEAT);
+			PEGExpression n(PEGExpression::Type::REPEAT);
 			n.children.push_back(std::move(node));
 			return n;
 		}
@@ -118,10 +118,10 @@ private:
 				throw InternalException("Expected closing ')' in PEG rule");
 			}
 			Advance();
-			if (inner.kind == PEGExpression::Kind::SEQUENCE) {
+			if (inner.type == PEGExpression::Type::SEQUENCE) {
 				return inner;
 			}
-			PEGExpression group(PEGExpression::Kind::SEQUENCE);
+			PEGExpression group(PEGExpression::Type::SEQUENCE);
 			group.children.push_back(std::move(inner));
 			return group;
 		}
@@ -136,11 +136,11 @@ private:
 		auto &token = Advance();
 		switch (token.type) {
 		case PEGTokenType::LITERAL:
-			return PEGExpression(PEGExpression::Kind::LITERAL, token.text);
+			return PEGExpression(PEGExpression::Type::LITERAL, token.text);
 		case PEGTokenType::REFERENCE:
-			return PEGExpression(PEGExpression::Kind::REFERENCE, token.text);
+			return PEGExpression(PEGExpression::Type::REFERENCE, token.text);
 		case PEGTokenType::FUNCTION_CALL: {
-			PEGExpression fn(PEGExpression::Kind::FUNCTION_CALL, token.text);
+			PEGExpression fn(PEGExpression::Type::FUNCTION_CALL, token.text);
 			auto body = ParseChoice(); // same "consume until close" as '(' does
 			if (!IsOp(')')) {
 				throw InternalException("Expected closing ')' after function call '%s'", token.text.GetString());
@@ -150,7 +150,7 @@ private:
 			return fn;
 		}
 		case PEGTokenType::REGEX:
-			return PEGExpression(PEGExpression::Kind::REGEX, token.text);
+			return PEGExpression(PEGExpression::Type::REGEX, token.text);
 		default:
 			throw InternalException("unrecognized peg token type");
 		}

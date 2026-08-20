@@ -32,10 +32,10 @@ string_t MatcherFactory::MatcherConstructionState::TakeNext() {
 
 Matcher &MatcherFactory::CreateMatcher(const PEGExpression &expression, const string_map_t<idx_t> &parameter_map,
                                        vector<reference<Matcher>> &parameters) {
-	switch (expression.kind) {
-	case PEGExpression::Kind::LITERAL:
+	switch (expression.type) {
+	case PEGExpression::Type::LITERAL:
 		return Keyword(expression.text.GetString());
-	case PEGExpression::Kind::REFERENCE: {
+	case PEGExpression::Type::REFERENCE: {
 		auto parameter = parameter_map.find(expression.text);
 		if (parameter != parameter_map.end()) {
 			return parameters[parameter->second].get();
@@ -47,7 +47,7 @@ Matcher &MatcherFactory::CreateMatcher(const PEGExpression &expression, const st
 		}
 		return CreateMatcher(expression.text);
 	}
-	case PEGExpression::Kind::FUNCTION_CALL: {
+	case PEGExpression::Type::FUNCTION_CALL: {
 		if (expression.children.size() != 1) {
 			throw InternalException("Function call '%s' expected a single argument", expression.text.GetString());
 		}
@@ -55,40 +55,40 @@ Matcher &MatcherFactory::CreateMatcher(const PEGExpression &expression, const st
 		function_parameters.push_back(CreateMatcher(expression.children[0], parameter_map, parameters));
 		return CreateMatcher(expression.text, function_parameters);
 	}
-	case PEGExpression::Kind::SEQUENCE: {
+	case PEGExpression::Type::SEQUENCE: {
 		vector<reference<Matcher>> children;
 		for (auto &child : expression.children) {
 			children.push_back(CreateMatcher(child, parameter_map, parameters));
 		}
 		return List(std::move(children));
 	}
-	case PEGExpression::Kind::CHOICE: {
+	case PEGExpression::Type::CHOICE: {
 		vector<reference<Matcher>> children;
 		for (auto &child : expression.children) {
 			children.push_back(CreateMatcher(child, parameter_map, parameters));
 		}
 		return Choice(std::move(children));
 	}
-	case PEGExpression::Kind::OPTIONAL:
-	case PEGExpression::Kind::REPEAT:
-	case PEGExpression::Kind::OPTIONAL_REPEAT: {
+	case PEGExpression::Type::OPTIONAL:
+	case PEGExpression::Type::REPEAT:
+	case PEGExpression::Type::OPTIONAL_REPEAT: {
 		if (expression.children.size() != 1) {
 			throw InternalException("PEG postfix expression expected a single child");
 		}
 		auto &child = CreateMatcher(expression.children[0], parameter_map, parameters);
-		if (expression.kind == PEGExpression::Kind::OPTIONAL) {
+		if (expression.type == PEGExpression::Type::OPTIONAL) {
 			return Optional(child);
 		}
 		auto &repeat = Repeat(child);
-		if (expression.kind == PEGExpression::Kind::OPTIONAL_REPEAT) {
+		if (expression.type == PEGExpression::Type::OPTIONAL_REPEAT) {
 			return Optional(repeat);
 		}
 		return repeat;
 	}
-	case PEGExpression::Kind::REGEX:
+	case PEGExpression::Type::REGEX:
 		throw InternalException("REGEX operator not supported in PEG grammar");
 	default:
-		throw InternalException("Unrecognized PEG expression kind");
+		throw InternalException("Unrecognized PEG expression type");
 	}
 }
 
@@ -126,7 +126,7 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 		                                    rule_name.GetString(), rule.parameters.size(), parameters.size());
 	}
 	auto &expression_matcher = CreateMatcher(rule.expression, rule.parameters, parameters);
-	if (rule.expression.kind == PEGExpression::Kind::SEQUENCE) {
+	if (rule.expression.type == PEGExpression::Type::SEQUENCE) {
 		matcher.matchers = std::move(expression_matcher.Cast<ListMatcher>().matchers);
 	} else {
 		matcher.matchers.push_back(expression_matcher);

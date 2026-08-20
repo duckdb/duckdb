@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct PEGExpression {
-	enum class Kind : uint8_t {
+	enum class Type : uint8_t {
 		LITERAL,         // keyword/string literal
 		REFERENCE,       // reference to a parameter or another rule
 		FUNCTION_CALL,   // function-call marker wrapping a child
@@ -21,13 +21,13 @@ struct PEGExpression {
 	};
 
 public:
-	explicit PEGExpression(Kind kind_p) : kind(kind_p), text(string_t("")) {
+	explicit PEGExpression(Type type_p) : type(type_p), text(string_t("")) {
 	}
-	PEGExpression(Kind kind_p, string_t text_p) : kind(kind_p), text(std::move(text_p)) {
+	PEGExpression(Type type_p, string_t text_p) : type(type_p), text(std::move(text_p)) {
 	}
 
 public:
-	Kind kind;
+	Type type;
 	//! literal text / reference name / function name
 	string_t text;
 	//! used by SEQUENCE, CHOICE, OPTIONAL, REPEAT*, FUNCTION_CALL

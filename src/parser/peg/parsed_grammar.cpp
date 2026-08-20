@@ -135,9 +135,9 @@ void ParsedGrammar::InsertChoice(const string &rule_name, const string &choice, 
 	auto choice_rule = ParseSingleRule(choice_definition);
 	auto &rule = GetMutableRule(rule_name);
 	RegisterStrings(choice_rule.recipe);
-	if (rule.recipe.expression.kind != PEGExpression::Kind::CHOICE) {
+	if (rule.recipe.expression.type != PEGExpression::Type::CHOICE) {
 		//! Wrap in CHOICE beforehand
-		PEGExpression choice_expression(PEGExpression::Kind::CHOICE, "/");
+		PEGExpression choice_expression(PEGExpression::Type::CHOICE, "/");
 		choice_expression.children.push_back(rule.recipe.expression);
 		rule.recipe.expression = std::move(choice_expression);
 	}
@@ -169,7 +169,7 @@ void ParsedGrammar::RemoveChoice(const string &rule_name, grammar_cursor_functio
 		throw InvalidInputException("RemoveChoice requires a choice cursor");
 	}
 	auto &rule = GetMutableRule(rule_name);
-	if (rule.recipe.expression.kind != PEGExpression::Kind::CHOICE) {
+	if (rule.recipe.expression.type != PEGExpression::Type::CHOICE) {
 		throw InvalidInputException("Grammar rule '%s' does not contain a choice", rule.name);
 	}
 	auto &children = rule.recipe.expression.children;
