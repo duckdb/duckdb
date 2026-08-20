@@ -1,150 +1,174 @@
 #include "core_functions/aggregate/variant_functions.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/variant/variant_builder.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/aggregate_state_layout.hpp"
-#include "duckdb/function/function.hpp"
-
 namespace duckdb {
 
 namespace {
 
-//===--------------------------------------------------------------------===//
-// State
-//===--------------------------------------------------------------------===//
-
-// TODO: can we reference the input vector so we don't need to copy over any data?
-struct AggregateState {
-	static constexpr const char *STATE_NAMES[] = {"map"};
-	using STATE_TYPE = StructStateType<>;
-
-	// TODO: verify performance implications for OrderedOwningStringMap
-	OwningStringMap<idx_t> *map;
-};
-
-//===--------------------------------------------------------------------===//
-// Operation
-//===--------------------------------------------------------------------===//
-
-struct AggregateOperation {
-	static bool IgnoreNull() {
-		return true;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
-		if (!source.map) {
-			return;
-		}
-		if (!target.map) {
-			target.map = new OwningStringMap<idx_t>(input.allocator);
-		}
-
-		for (auto &[key, idx] : *source.map) {
-			target.map->emplace(make_pair(key, idx));
-		}
-	}
-};
-
-void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
-                         idx_t count) {
-	D_ASSERT(input_count == 2);
-	const auto &keys = inputs[0];
-	const auto &values = inputs[1];
-
-	UnifiedVectorFormat key_data, value_data, state_data;
-	keys.ToUnifiedFormat(key_data);
-	values.ToUnifiedFormat(value_data);
-	states.ToUnifiedFormat(state_data);
-
-	const auto key_data_ptr = UnifiedVectorFormat::GetData<string_t>(key_data);
-
-	for (idx_t i = 0; i < count; i++) {
-		const auto key_idx = key_data.sel->get_index(i);
-		const auto state_idx = state_data.sel->get_index(i);
-
-		const auto lkey = key_data_ptr[key_idx];
-		auto lstate = ((AggregateState **)state_data.data)[state_idx];
-		if (!lstate->map) {
-			lstate->map = new OwningStringMap<idx_t>(aggr_input_data.allocator);
-		}
-
-		auto idx = lstate->map->size();
-		lstate->map->insert(make_pair(lkey, idx));
-	}
-
-	// AggregateBinaryInput input(aggr_input_data, key_data.validity, bvalidity);
+static LogicalType GetInternalBufferType() {
+	return LogicalType::STRUCT({{"key", LogicalType::VARCHAR}, {"value", LogicalType::VARIANT()}});
 }
 
-class AggregateSource {
-public:
-	AggregateSource(idx_t count, AggregateState &state) : count(count), state(state) {
+struct VariantObjAggState : ListAggState {};
+
+struct VariantObjFun {
+	//! TODO: what does this function do exactly, and is this type valid?
+	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
+		return GetInternalBufferType();
+	}
+};
+
+void PackPair(Vector inputs[], idx_t count, Vector &packed) {
+	auto &entries = StructVector::GetEntries(packed);
+	auto &key = entries[0];
+	auto &value = entries[1];
+
+	key.Reference(inputs[0]);
+	value.Reference(inputs[1]);
+	FlatVector::SetSize(packed, count);
+
+	const auto key_validity = key.Validity();
+	const auto value_validity = value.Validity();
+	if (key_validity.CannotHaveNull() && value_validity.CannotHaveNull()) {
+		return;
 	}
 
-public:
-	bool Emit(idx_t row_idx, VariantBuilder &builder) const {
-		vector<string_t> children;
-		children.reserve(state.map->size());
+	for (idx_t i = 0; i < count; i++) {
+		if (!key_validity.IsValid(i)) {
+			throw InvalidInputException("variant_group_object key cannot be NULL");
+		}
+	}
+}
 
-		for (const auto &child : *state.map) {
-			children.push_back(child.first);
+void VariantObjUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+                      idx_t count) {
+	D_ASSERT(input_count == 2);
+	if (count == 0) {
+		return;
+	}
+
+	Vector packed(GetInternalBufferType(), count);
+	PackPair(inputs, count, packed);
+	ListUpdateFunction<false>(&packed, aggr_input_data, 1, states, count);
+}
+
+class VariantObjSource {
+public:
+	VariantObjSource(const VectorIterator<VariantObjAggState *> &states, const ListSegmentFunctions &functions,
+	                 Allocator &allocator)
+	    : states(states), functions(functions), allocator(allocator) {
+	}
+
+	bool Emit(idx_t row, VariantBuilder &builder) {
+		const auto &state = *states[row].GetValue();
+		auto v = state.linked_list.total_capacity;
+		if (v == 0) {
+			return true;
 		}
 
-		builder.EmitObject(
-		    state.map->size(), [&](idx_t i) { return children[i]; },
-		    [&](idx_t i) {
-			    //auto byte_offset = NumericCast<uint32_t>(builder.blob.size());
-			    //builder.EmitPrimitive(Value::BOOLEAN(true), byte_offset);
-			    builder.EmitNull();
-		    });
+		Vector packed(GetInternalBufferType(), v);
+		functions.BuildListVector(state.linked_list, packed, 0);
+		FlatVector::SetSize(packed, v);
 
+		auto &entries = StructVector::GetEntries(packed);
+		const auto &keys = entries[0];
+		const auto &values = entries[1];
+
+		if (const auto duplicate = HasDuplicateKeys(keys)) {
+			throw InvalidInputException("variant_group_object contains duplicate key \"%s\"", *duplicate);
+		}
+
+		VariantIterator value_it(values);
+		const auto key_it = keys.Values<string_t>();
+
+		builder.EmitObject(
+		    keys.size(), [&](idx_t child_idx) { return key_it.GetValueUnsafe(child_idx); },
+		    [&](idx_t child_idx) {
+			    const auto node = value_it.Root(child_idx);
+			    if (node.IsNull()) {
+				    builder.EmitNull();
+				    return;
+			    }
+			    EmitIterator(node, builder);
+		    });
 		return false;
 	}
 
 private:
-	idx_t count;
-	AggregateState &state;
+	optional<string> HasDuplicateKeys(const Vector &keys) {
+		PrimitiveDictionary<string_t> seen_keys(allocator, MaxValue(keys.size(), idx_t(1)), 1);
+		auto key_iterator = keys.Values<string_t>();
+
+		for (const auto &entry : key_iterator) {
+			auto key = entry.GetValueUnsafe();
+			auto old_size = seen_keys.GetSize();
+
+			seen_keys.Insert(key);
+
+			if (seen_keys.GetSize() == old_size) {
+				return key.GetString();
+			}
+		}
+
+		return nullopt;
+	}
+
+private:
+	Allocator &allocator;
+	const VectorIterator<VariantObjAggState *> &states;
+	const ListSegmentFunctions &functions;
 };
 
-void StateFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
-                   idx_t offset) {
-	// TODO: How can states be something different?
-	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		const auto state_data = ConstantVector::GetData<AggregateState *>(states);
+void VariantObjFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result, idx_t count, idx_t offset) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
 
-		AggregateSource source(count, **state_data);
-		BuildVariant(source, count, result);
+	const auto struct_type = GetInternalBufferType();
 
+	ListSegmentFunctions functions;
+	GetSegmentDataFunctions(functions, struct_type);
+
+	const auto states = vec.Values<VariantObjAggState *>();
+	Vector tmp(LogicalType::VARIANT(), count);
+
+	VariantObjSource source(states, functions, data.allocator.GetAllocator());
+	BuildVariant(source, count, tmp);
+
+	VectorOperations::Copy(tmp, result, count, 0, offset);
+	FlatVector::SetSize(result, offset + count);
+}
+
+void VariantObjClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+                             const ClusteredAggr &clustered, idx_t count) {
+	D_ASSERT(input_count == 2);
+	if (count == 0) {
 		return;
 	}
-	if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
-		auto state_data = FlatVector::GetData<AggregateState *>(states);
 
-		AggregateSource source(count, *state_data[0]);
-		BuildVariant(source, count, result);
-
-		return;
-	}
-
-	throw InternalException("Not compatible!");
+	Vector packed(GetInternalBufferType(), count);
+	PackPair(inputs, count, packed);
+	ListClusterUpdate<false>(&packed, aggr_input_data, 1, clustered, count);
 }
 
 } // namespace
 
 AggregateFunction VariantGroupObjectFun::GetFunction() {
-	auto func =
-	    AggregateFunction({LogicalType::VARCHAR, LogicalType::VARIANT()}, LogicalType::VARIANT(),
-	                      AggregateFunction::StateSize<AggregateState>,
-	                      AggregateFunction::StateInitialize<AggregateState, AggregateOperation>, BinaryScatterUpdate,
-	                      AggregateFunction::StateCombine<AggregateState, AggregateOperation>, StateFinalize,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	return func;
+	return AggregateFunction({LogicalType::VARCHAR, LogicalType::VARIANT()}, LogicalType::VARIANT(),
+	                         AggregateFunction::StateSize<VariantObjAggState>,
+	                         AggregateFunction::StateInitialize<VariantObjAggState, VariantObjFun>, VariantObjUpdate,
+	                         ListCombineFunction<VariantObjFun>, VariantObjFinalize, VariantObjClusterUpdate);
 }
 
 } // namespace duckdb
