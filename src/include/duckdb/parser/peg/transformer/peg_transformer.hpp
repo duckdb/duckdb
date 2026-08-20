@@ -120,8 +120,8 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		if (!result_value) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
@@ -131,7 +131,7 @@ struct TransformStackFrame {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
 		}
-		auto result = std::move(typed_result->value);
+		auto result = std::move(*result_value);
 		child_results[slot].reset();
 		return result;
 	}
@@ -141,12 +141,12 @@ struct TransformStackFrame {
 		if (slot >= child_results.size() || !child_results[slot]) {
 			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
 		}
-		auto *typed_result = TryCastTransformResult<T>(child_results[slot].get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*child_results[slot]);
+		if (!result_value) {
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
 		}
-		return typed_result->value;
+		return *result_value;
 	}
 
 	const transform_frame_index_t frame_index;
@@ -168,11 +168,11 @@ public:
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
 		auto base_result = ExecuteInternal(parse_result, ops);
-		auto *typed_result = TryCastTransformResult<T>(base_result.get());
-		if (!typed_result) {
+		auto *result_value = TryGetTransformResult<T>(*base_result);
+		if (!result_value) {
 			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
 		}
-		return std::move(typed_result->value);
+		return std::move(*result_value);
 	}
 
 	TransformStackFrame &GetFrame(transform_frame_index_t frame_index);
@@ -220,8 +220,8 @@ public:
 			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
 		}
 
-		auto *typed_result_ptr = TryCastTransformResult<T>(base_result.get());
-		if (!typed_result_ptr) {
+		auto *result_value = TryGetTransformResult<T>(*base_result);
+		if (!result_value) {
 			// allow transparent bridging between string-typed and Identifier-typed rules
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
@@ -232,7 +232,7 @@ public:
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
-		auto result = std::move(typed_result_ptr->value);
+		auto result = std::move(*result_value);
 		SetResultLocation(result, parse_result.GetLocation());
 		return result;
 	}
@@ -342,8 +342,8 @@ inline unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(Transfo
 template <>
 inline unique_ptr<TypedTransformResult<string>>
 TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
-	if (auto *ident = TryCastTransformResult<Identifier>(base_result)) {
-		return make_uniq<TypedTransformResult<string>>(ident->value.GetIdentifierName());
+	if (auto *ident = TryGetTransformResult<Identifier>(base_result)) {
+		return make_uniq<TypedTransformResult<string>>(ident->GetIdentifierName());
 	}
 	return nullptr;
 }
@@ -351,8 +351,8 @@ TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<Identifier>>
 TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
-	if (auto *str = TryCastTransformResult<string>(base_result)) {
-		return make_uniq<TypedTransformResult<Identifier>>(Identifier(str->value));
+	if (auto *str = TryGetTransformResult<string>(base_result)) {
+		return make_uniq<TypedTransformResult<Identifier>>(Identifier(*str));
 	}
 	return nullptr;
 }
@@ -360,8 +360,8 @@ TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
 template <>
 inline unique_ptr<TypedTransformResult<vector<string>>>
 TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result) {
-	if (auto *idents = TryCastTransformResult<vector<Identifier>>(base_result)) {
-		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(idents->value));
+	if (auto *idents = TryGetTransformResult<vector<Identifier>>(base_result)) {
+		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(*idents));
 	}
 	return nullptr;
 }
@@ -369,8 +369,8 @@ TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result)
 template <>
 inline unique_ptr<TypedTransformResult<vector<Identifier>>>
 TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_result) {
-	if (auto *strs = TryCastTransformResult<vector<string>>(base_result)) {
-		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(strs->value));
+	if (auto *strs = TryGetTransformResult<vector<string>>(base_result)) {
+		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(*strs));
 	}
 	return nullptr;
 }
