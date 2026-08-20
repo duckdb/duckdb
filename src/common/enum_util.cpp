@@ -43,6 +43,7 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
+#include "duckdb/common/enums/identifier_case_mode.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
@@ -2895,6 +2896,25 @@ const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value) {
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
 	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetIdentifierCaseModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IdentifierCaseMode::PRESERVE_CASE), "PRESERVE_CASE" },
+		{ static_cast<uint32_t>(IdentifierCaseMode::LOWERCASE), "LOWERCASE" },
+		{ static_cast<uint32_t>(IdentifierCaseMode::UPPERCASE), "UPPERCASE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value) {
+	return StringUtil::EnumToString(GetIdentifierCaseModeValues(), 3, "IdentifierCaseMode", static_cast<uint32_t>(value));
+}
+
+template<>
+IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value) {
+	return static_cast<IdentifierCaseMode>(StringUtil::StringToEnum(GetIdentifierCaseModeValues(), 3, "IdentifierCaseMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {

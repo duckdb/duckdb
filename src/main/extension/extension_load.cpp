@@ -833,7 +833,7 @@ string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
 	D_ASSERT(extension.size() > 1);
 	// needs to be alphanumeric
 	for (auto &ch : extension) {
-		if (!isalnum(ch) && ch != '_') {
+		if (!isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
 			return "";
 		}
 	}
