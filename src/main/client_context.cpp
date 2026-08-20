@@ -510,11 +510,15 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 			optimize = false;
 		}
 	}
-	if (optimize && logical_plan->RequireOptimizer()) {
+	if (logical_plan->RequireOptimizer()) {
 		{
 			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
 			Optimizer optimizer(*logical_planner.binder, *this);
-			logical_plan = optimizer.Optimize(std::move(logical_plan));
+			if (optimize) {
+				logical_plan = optimizer.Optimize(std::move(logical_plan));
+			} else {
+				logical_plan = optimizer.LowerMandatoryAggregateRewrites(std::move(logical_plan));
+			}
 			D_ASSERT(logical_plan);
 		}
 #ifdef DEBUG
@@ -611,7 +615,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(
-			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
+			    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
 		meta_transaction.ModifyDatabase(*entry, it.second.modifications);

@@ -103,11 +103,12 @@ static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		return DBConfig::ParseMemoryLimit(arg.ToString());
 	}
-	if (!arg.DefaultTryCastAs(LogicalType::UBIGINT)) {
+	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (!cast_arg) {
 		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
 		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	return arg.GetValue<idx_t>();
+	return cast_arg->GetValue<idx_t>();
 }
 
 struct CopyToParsedOptions {
@@ -266,16 +267,16 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
 	}
 	if (options.UserSetUseTmpFile() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITIONED BY for COPY");
 	}
 	if (options.UserSetUseTmpFile() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER BY for COPY");
 	}
 	if (options.PerThreadOutput() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITIONED BY for COPY");
 	}
 	if (options.PerThreadOutput() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER BY for COPY");
 	}
 	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
 		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
@@ -286,10 +287,10 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
 		}
 		if (options.Partitioned()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITIONED BY");
 		}
 		if (!options.order_columns.empty()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER BY");
 		}
 	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
@@ -771,14 +772,14 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					}
 				}
 
-				Value new_value;
-				if (!can_cast || !original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
+				auto new_value = can_cast ? original_value.TryCastAs(context, copy_option.type) : nullopt;
+				if (!new_value) {
 					throw InvalidInputException("Copy option %s expected an argument of type %s - the argument "
 					                            "\"%s\" of type %s could not be cast as this type",
 					                            provided_option, copy_option.type, original_value.ToString(),
 					                            original_value.type());
 				}
-				original_value = std::move(new_value);
+				original_value = std::move(*new_value);
 			}
 		}
 	}

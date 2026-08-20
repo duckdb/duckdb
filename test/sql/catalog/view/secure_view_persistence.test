@@ -1,0 +1,68 @@
+# name: test/sql/catalog/view/secure_view_persistence.test
+# description: Test that the secure flag of a view survives a restart
+# group: [view]
+
+load {TEST_DIR}/secure_view_persistence.db
+
+statement ok
+CREATE TABLE integers AS SELECT i, i % 10 AS j FROM range(10000) t(i);
+
+statement ok
+CREATE SECURE VIEW sv AS SELECT * FROM integers;
+
+statement ok
+CREATE VIEW rv AS SELECT * FROM integers;
+
+restart
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'sv'
+----
+CREATE SECURE VIEW sv AS SELECT * FROM integers;
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'rv'
+----
+CREATE VIEW rv AS SELECT * FROM integers;
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# the view is still a barrier after being read back from disk
+query II
+EXPLAIN SELECT * FROM sv WHERE i = 42
+----
+physical_plan	<REGEX>:[\s\S]*FILTER[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM rv WHERE i = 42
+----
+physical_plan	<!REGEX>:[\s\S]*FILTER[\s\S]*
+
+query II
+SELECT * FROM sv WHERE i = 42
+----
+42	2
+
+# secure views cannot be created in databases using an older storage format
+load {TEST_DIR}/secure_view_old_storage.db readwrite v1.4.4
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(10) t(i);
+
+statement error
+CREATE SECURE VIEW sv AS SELECT * FROM integers
+----
+<REGEX>:Binder Error.*storage versions v2.0.0 and higher.*
+
+statement ok
+CREATE VIEW rv AS SELECT * FROM integers
+
+# temporary secure views are fine - they are never written to disk
+statement ok
+CREATE TEMP SECURE VIEW tv AS SELECT * FROM integers
+
+query I
+SELECT count(*) FROM tv
+----
+10

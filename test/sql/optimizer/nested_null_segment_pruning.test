@@ -1,0 +1,53 @@
+# name: test/sql/optimizer/nested_null_segment_pruning.test
+# description: Segment pruning for IS NULL on STRUCT/LIST/ARRAY columns
+# group: [optimizer]
+
+require json
+
+require no_force_storage
+
+require vector_size 2048
+
+statement ok
+CREATE TABLE nested_nulls AS
+SELECT CASE WHEN i >= 99999 THEN NULL ELSE {'v': i} END AS s,
+       CASE WHEN i >= 99999 THEN NULL ELSE [i] END AS l
+FROM range(100000) t(i)
+
+statement ok
+CREATE TABLE array_nulls AS
+SELECT [i, i, i]::INTEGER[3] AS a
+FROM range(99999) t(i)
+
+statement ok
+INSERT INTO array_nulls VALUES (NULL)
+
+query II
+SELECT (SELECT count(*) FROM nested_nulls WHERE l IS NULL),
+       (SELECT count(*) FROM array_nulls WHERE a IS NULL)
+----
+1	1
+
+statement ok
+PRAGMA enable_profiling = 'json'
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/nested_null_profile.json'
+
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned']
+
+query I
+SELECT count(*) FROM nested_nulls WHERE s IS NULL
+----
+1
+
+statement ok
+PRAGMA disable_profiling
+
+# Last validity segment is 54944 rows. A full scan is 100000.
+query I
+SELECT query.total_rows_scanned
+FROM '{TEST_DIR}/nested_null_profile.json'
+----
+54944

@@ -78,7 +78,8 @@ public:
 						return;
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
-					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
+					auto buf =
+					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
 
 					lk.lock();
@@ -342,9 +343,10 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		const annotated_lock_guard<annotated_mutex> meta_guard(current_cached_file->meta_lock);
 		if (!ExternalFileCache::IsValid(true, current_cached_file->version_tag, current_cached_file->last_modified,
 		                                current_version_tag, current_last_modified)) {
-			for (auto &block : blocks) {
-				block->Reinit();
-			}
+			// Do not reset blocks in place: another reader may already have pinned the same blocks and still need their
+			// byte counts. Removing only the matching map entries preserves those readers while forcing future reads
+			// to fetch fresh blocks.
+			external_file_cache.RetireBlocks(*current_cached_file, first_block, blocks);
 		}
 	}
 

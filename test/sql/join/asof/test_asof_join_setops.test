@@ -1,0 +1,94 @@
+# name: test/sql/join/asof/test_asof_join_setops.test
+# description: Test AsOf joins whose children are EXCEPT ALL / INTERSECT ALL (internal issue #24672)
+# group: [asof]
+
+statement ok
+CREATE TABLE a(d INTEGER);
+
+statement ok
+INSERT INTO a VALUES (1), (2);
+
+statement ok
+CREATE TABLE b(d INTEGER);
+
+statement ok
+CREATE TABLE r AS SELECT * FROM a;
+
+# Compare the NLJ optimisation to the AsOf operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = {threshold};
+
+# EXCEPT ALL / INTERSECT ALL append a ROW_NUMBER column during physical planning. That column must not leak into the types of the AsOf join's children.
+
+# Set operation on the probe (LHS) side
+query II
+SELECT * FROM (SELECT * FROM a EXCEPT ALL SELECT * FROM b) t0
+ASOF LEFT JOIN r t1 ON t0.d >= t1.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+query II
+SELECT * FROM (SELECT * FROM a INTERSECT ALL SELECT * FROM a) t0
+ASOF LEFT JOIN r t1 ON t0.d >= t1.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+# Set operation on the build (RHS) side
+query II
+SELECT * FROM r t1
+ASOF LEFT JOIN (SELECT * FROM a EXCEPT ALL SELECT * FROM b) t0 ON t1.d >= t0.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+query II
+SELECT * FROM r t1
+ASOF LEFT JOIN (SELECT * FROM a INTERSECT ALL SELECT * FROM a) t0 ON t1.d >= t0.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+# Set operations on both sides
+query II
+SELECT * FROM (SELECT * FROM a EXCEPT ALL SELECT * FROM b) t0
+ASOF LEFT JOIN (SELECT * FROM a INTERSECT ALL SELECT * FROM a) t1 ON t0.d >= t1.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+# INNER AsOf join
+query II
+SELECT * FROM (SELECT * FROM a EXCEPT ALL SELECT * FROM b) t0
+ASOF JOIN r t1 ON t0.d >= t1.d
+ORDER BY ALL;
+----
+1	1
+2	2
+
+# Non-comparison predicate forces the NLJ path
+query II
+SELECT * FROM (SELECT * FROM a EXCEPT ALL SELECT * FROM b) t0
+ASOF LEFT JOIN r t1 ON t0.d >= t1.d AND (t0.d + t1.d) > 1
+ORDER BY ALL;
+----
+1	1
+2	2
+
+# EXCEPT ALL that actually removes rows
+query II
+SELECT * FROM (SELECT * FROM a EXCEPT ALL SELECT 1) t0
+ASOF LEFT JOIN r t1 ON t0.d >= t1.d
+ORDER BY ALL;
+----
+2	2
+
+endloop

@@ -14,6 +14,12 @@ PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transforme
 	return generic_copy_option;
 }
 
+vector<GenericCopyOption>
+PEGTransformerFactory::TransformCopyGenericOptionList(PEGTransformer &transformer,
+                                                      const vector<GenericCopyOption> &copy_generic_option) {
+	return copy_generic_option;
+}
+
 static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
@@ -77,11 +83,10 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 	return CreateRowFunction(std::move(children));
 }
 
-GenericCopyOption
-PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
-                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+static GenericCopyOption BuildGenericCopyOption(const Identifier &generic_copy_option_name,
+                                                optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
+	copy_option.name = Identifier(StringUtil::Lower(generic_copy_option_name.GetIdentifierName()));
 	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
 		return copy_option;
 	}
@@ -99,7 +104,7 @@ PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, c
 		if (copy_option.name == "ORDER_BY") {
 			copy_option.expression = CreateOrderByRowFunction(orders);
 		} else if (has_order_modifier) {
-			throw ParserException("ORDER BY modifiers are only supported in the ORDER_BY option");
+			throw ParserException("ORDER BY modifiers are only supported in the ORDER BY option");
 		} else if (orders.size() == 1) {
 			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
@@ -109,6 +114,24 @@ PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, c
 		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value->expression));
 	}
 	return copy_option;
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
+                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(copy_option_name, std::move(generic_copy_option_value));
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformOrderByCopyOption(PEGTransformer &transformer,
+                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(Identifier("order_by"), std::move(generic_copy_option_value));
+}
+
+GenericCopyOption
+PEGTransformerFactory::TransformPartitionedByCopyOption(PEGTransformer &transformer,
+                                                        optional<GenericCopyOptionValue> generic_copy_option_value) {
+	return BuildGenericCopyOption(Identifier("partition_by"), std::move(generic_copy_option_value));
 }
 
 GenericCopyOptionValue PEGTransformerFactory::TransformGenericCopyOptionOrderList(

@@ -15,7 +15,15 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <cmath>
+
 namespace duckdb {
+
+// Descending order is encoded as a negative quantile parameter. A zero fraction
+// is stored as negative zero, so use the sign bit to detect that case as well.
+static bool QuantileDescending(const Value &q) {
+	return std::signbit(q.GetValue<double>());
+}
 
 template <class INPUT_TYPE>
 struct IndirectLess {
@@ -67,7 +75,7 @@ QuantileBindData::QuantileBindData() {
 }
 
 QuantileBindData::QuantileBindData(const Value &quantile_p)
-    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
+    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(QuantileDescending(quantile_p)) {
 }
 
 QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
@@ -77,7 +85,7 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	for (idx_t i = 0; i < quantiles_p.size(); ++i) {
 		const auto &q = quantiles_p[i];
 		pos += (q > 0);
-		neg += (q < 0);
+		neg += QuantileDescending(q);
 		normalised.push_back(QuantileAbs(q));
 		order.push_back(i);
 	}
@@ -230,9 +238,11 @@ struct QuantileScalarOperation : public QuantileOperation {
 };
 
 //! Buffers the sort key of each input row in the state's linked list - NULL inputs are skipped
+//! The quantile parameter is folded into the bind data by the bind, but stays part of the expression tree - only the
+//! leading input argument is consumed
 static void QuantileSortKeyUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                   Vector &states, idx_t count) {
-	D_ASSERT(input_count == 1);
+	D_ASSERT(input_count >= 1);
 	Vector sort_keys(LogicalType::BLOB);
 	const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(inputs[0], sort_keys, modifiers, count);
@@ -603,8 +613,9 @@ static Value CheckQuantile(const Value &quantile_val) {
 	return quantile_val;
 }
 
+//! Binds the quantile parameter into the bind data. It stays part of the expression tree, and the aggregate is
+//! handed it along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() < 2) {
 		throw BinderException("QUANTILE requires a range argument between [0, 1]");
@@ -627,7 +638,6 @@ unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
 		break;
 	}
 
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_uniq<QuantileBindData>(quantiles);
 }
 
