@@ -1,0 +1,49 @@
+# name: test/sql/aggregate/variant/variant_group_object.test
+# group: [variant]
+
+## Constant arguments
+
+query I
+select variant_group_object('duck', 'goose'::VARIANT);
+----
+{'duck': goose}
+
+query I
+select variant_group_object('duck', NULL::VARIANT);
+----
+{'duck': NULL}
+
+query I
+select variant_group_object('duck', NULL);
+----
+{'duck': NULL}
+
+statement error
+select variant_group_object(NULL, 'goose'::VARIANT);
+----
+<REGEX>:Invalid Input Error.*variant_group_object key cannot be NULL.*
+
+## Non-constant arguments
+
+statement ok
+create table base (k VARCHAR, v VARIANT);
+
+statement ok
+insert into base values ('duck', {'nested': 12}::VARIANT), ('goose', [1,2,3,4]::VARIANT), ('pond', 26::VARIANT);
+
+# Values can have different VARIANT structures
+
+query I
+select variant_group_object(k, v) from base;
+----
+{'duck': {'nested': 12}, 'goose': [1, 2, 3, 4], 'pond': 26}
+
+# Duplicates are invalid
+
+statement ok
+insert into base values ('duck', 1::VARIANT);
+
+statement error
+select variant_group_object(k, v) from base;
+----
+<REGEX>:Invalid Input Error.*variant_group_object contains duplicate key.*
