@@ -10564,6 +10564,10 @@ void PEGTransformerFactory::InitializeTypeFuncKeywordTrampoline(PEGTransformer &
 	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
 		return;
 	}
+	if (ops_entry == ops_map.end() &&
+	    (choice_result.name == "TypeNameKeyword" || choice_result.name == "FuncNameKeyword")) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -10604,6 +10608,12 @@ void PEGTransformerFactory::InitializeColLabelTrampoline(PEGTransformer &transfo
 	auto ops_entry = ops_map.find(choice_result.name);
 	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
 	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
+	if (ops_entry == ops_map.end() &&
+	    (choice_result.name == "ReservedKeyword" || choice_result.name == "UnreservedKeyword" ||
+	     choice_result.name == "ColumnNameKeyword" || choice_result.name == "FuncNameKeyword" ||
+	     choice_result.name == "TypeNameKeyword")) {
 		return;
 	}
 	if (ops_entry == ops_map.end()) {
