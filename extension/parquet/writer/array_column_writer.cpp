@@ -51,8 +51,9 @@ static idx_t GetConsecutiveChildArray(Vector &array, Vector &result, idx_t count
 void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &array_child = ArrayVector::GetChildMutable(vector);
-	auto array_size = ArrayType::GetSize(vector.GetType());
-	GetChildWriter().Analyze(*state.child_state, &state_p, array_child, array_size * count);
+	Vector child_array(Vector::Ref(array_child));
+	auto child_count = GetConsecutiveChildArray(vector, child_array, count);
+	GetChildWriter().Analyze(*state.child_state, &state_p, child_array, child_count);
 }
 
 void ArrayColumnWriter::WriteArrayState(ListColumnWriterState &state, idx_t array_size, uint16_t first_repeat_level,
