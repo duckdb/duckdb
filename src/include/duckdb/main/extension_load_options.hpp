@@ -21,6 +21,9 @@ struct ExtensionLoadOptions {
 
 	string extension_name;
 	Identifier alias;
+	//! The repository named in the FROM clause the extension is loaded from (e.g. LOAD httpfs FROM core). Empty for a
+	//! bare LOAD, which only resolves core and community extensions
+	string repository;
 };
 
 } // namespace duckdb

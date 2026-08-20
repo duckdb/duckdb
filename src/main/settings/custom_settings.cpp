@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -142,6 +143,56 @@ void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &inp
 void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allow Extension Repositories
+//===----------------------------------------------------------------------===//
+// How permissive an access level is, independent of the enum's numeric values. Higher is more permissive
+static int ExtensionRepositoryPermissiveness(ExtensionRepositoryAccess access) {
+	switch (access) {
+	case ExtensionRepositoryAccess::ALLOWED:
+		return 2;
+	case ExtensionRepositoryAccess::UNDECIDED:
+		return 1;
+	default: // FORBIDDEN
+		return 0;
+	}
+}
+
+void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	// validate the value
+	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
+	if (!info.db) {
+		// the value is set before the database is running (startup) - any value is allowed
+		return;
+	}
+	// while the database is running the setting can only be tightened, never loosened. Trusting a new signing key is at
+	// least as consequential as re-enabling unsigned or community extensions, so - mirroring allow_unsigned_extensions
+	// and allow_community_extensions - extension repositories can only be enabled at startup. This also makes the
+	// 'forbidden' state a one-way ratchet within a session
+	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
+	if (ExtensionRepositoryPermissiveness(new_access) > ExtensionRepositoryPermissiveness(current_access)) {
+		throw InvalidInputException(
+		    "allow_extension_repositories can only be made more restrictive while the database is running; enabling "
+		    "extension repositories is only possible at startup");
+	}
+}
+
+void ExtensionRepositoryDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		// set before the database is running (startup) - always allowed
+		return;
+	}
+	// The repository directory is the trust anchor for user-provided repositories: it determines which signing keys
+	// are trusted. While signature checking is enabled it must be fixed at startup, so that a runtime connection
+	// cannot point it at a directory of attacker-controlled keys and thereby bypass the opt-in. When unsigned
+	// extensions are already allowed the signature-trust model is off, so there is nothing to protect
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(*info.db)) {
+		throw InvalidInputException(
+		    "extension_repository_directory can only be set at startup while signature checking "
+		    "is enabled (allow_unsigned_extensions=false)");
 	}
 }
 
