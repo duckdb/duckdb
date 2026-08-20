@@ -10,6 +10,30 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
+
+// min/max style functions with an N argument store N as the aggregate heap
+// capacity. The segment tree builds range states from leaves and recursively
+// combines them into higher levels, so varying N values inside those ranges can
+// create incompatible non-leaf states. Only allow the segment tree when N is
+// constant/foldable.
+static bool HasFoldableMinMaxNArgument(const BoundWindowExpression &wexpr) {
+	const auto &aggr = *wexpr.AggregateFunction();
+	const auto &children = wexpr.GetChildren();
+	const auto &name = aggr.GetName();
+
+	if ((name == "min" || name == "max") && children.size() == 2) {
+		return !children[1]->HasParameter() && children[1]->IsFoldable();
+	}
+
+	if ((name == "arg_min" || name == "arg_max" || name == "argmin" || name == "argmax" || name == "min_by" ||
+	     name == "max_by" || name == "arg_min_nulls_last" || name == "arg_max_nulls_last") &&
+	    children.size() == 3) {
+		return !children[2]->HasParameter() && children[2]->IsFoldable();
+	}
+
+	return true;
+}
+
 bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 	if (!wexpr.AggregateFunction()) {
 		return false;
@@ -21,6 +45,10 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 
 	//	Don't use segment trees for custom windowing
 	if (wexpr.AggregateFunction()->CanWindow()) {
+		return false;
+	}
+
+	if (!HasFoldableMinMaxNArgument(wexpr)) {
 		return false;
 	}
 
