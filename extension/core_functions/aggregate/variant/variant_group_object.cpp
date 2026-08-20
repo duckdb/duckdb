@@ -18,6 +18,7 @@ namespace duckdb {
 
 namespace {
 
+// Pack the key and value of a row together so they are considered one entry in the list aggregate state.
 static LogicalType GetInternalBufferType() {
 	return LogicalType::STRUCT({{"key", LogicalType::VARCHAR}, {"value", LogicalType::VARIANT()}});
 }
@@ -25,7 +26,6 @@ static LogicalType GetInternalBufferType() {
 struct VariantObjAggState : ListAggState {};
 
 struct VariantObjFun {
-	//! TODO: what does this function do exactly, and is this type valid?
 	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
 		return GetInternalBufferType();
 	}
@@ -48,6 +48,7 @@ void PackPair(Vector inputs[], idx_t count, Vector &packed) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!key_validity.IsValid(i)) {
+			// Similar to JSON, we do not accept NULL key values.
 			throw InvalidInputException("variant_group_object key cannot be NULL");
 		}
 	}
@@ -72,21 +73,23 @@ public:
 	    : states(states), functions(functions), allocator(allocator) {
 	}
 
+	// Invoked for each aggregate group in the result
 	bool Emit(idx_t row, VariantBuilder &builder) {
 		const auto &state = *states[row].GetValue();
-		auto v = state.linked_list.total_capacity;
-		if (v == 0) {
+		auto logical_count = state.linked_list.total_capacity;
+		if (logical_count == 0) {
 			return true;
 		}
 
-		Vector packed(GetInternalBufferType(), v);
+		Vector packed(GetInternalBufferType(), logical_count);
 		functions.BuildListVector(state.linked_list, packed, 0);
-		FlatVector::SetSize(packed, v);
+		FlatVector::SetSize(packed, logical_count);
 
 		auto &entries = StructVector::GetEntries(packed);
 		const auto &keys = entries[0];
 		const auto &values = entries[1];
 
+		// The VARIANT type does not support duplicate keys
 		if (const auto duplicate = HasDuplicateKeys(keys)) {
 			throw InvalidInputException("variant_group_object contains duplicate key \"%s\"", *duplicate);
 		}
@@ -104,6 +107,7 @@ public:
 			    }
 			    EmitIterator(node, builder);
 		    });
+
 		return false;
 	}
 
@@ -135,10 +139,8 @@ private:
 void VariantObjFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result, idx_t count, idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
 
-	const auto struct_type = GetInternalBufferType();
-
 	ListSegmentFunctions functions;
-	GetSegmentDataFunctions(functions, struct_type);
+	GetSegmentDataFunctions(functions, GetInternalBufferType());
 
 	const auto states = vec.Values<VariantObjAggState *>();
 	Vector tmp(LogicalType::VARIANT(), count);
