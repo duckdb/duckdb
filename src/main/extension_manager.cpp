@@ -91,8 +91,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	if (!options.alias.empty()) {
 		if (loaded_extensions_info.find(options.alias) != loaded_extensions_info.end()) {
 			auto &info = loaded_extensions_info[options.alias];
-			throw InvalidInputException("Alias %s already exists for extension '%s'", options.alias,
-			                            info->orig_ext_name);
+			throw InvalidInputException("Alias %s already exists for extension %s", options.alias, info->orig_ext_name);
 		}
 	}
 
@@ -124,7 +123,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 			for (auto &loaded_extension : loaded_extensions_info) {
 				auto loaded_ext_info = loaded_extension.second.get();
 				if (loaded_ext_info->orig_ext_name == original_extension_name) {
-					throw InvalidInputException("Extension '%s' already exists under alias '%s'. If you want to load "
+					throw InvalidInputException("Extension %s already exists under alias %s. If you want to load "
 					                            "the extension twice, you can do this by specifying an alias.",
 					                            original_extension_name, loaded_ext_info->alias);
 				}

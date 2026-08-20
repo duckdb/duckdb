@@ -103,15 +103,16 @@ public:
 	static void RegisterLinkedExtensions(DBConfig &config);
 
 	//! Install an extension - the extension can be a logical name or a full path to an extension binary
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
-	                                                         ExtensionInstallOptions &options);
+	static unique_ptr<ExtensionInstallInfo>
+	InstallExtension(ClientContext &context, const string &extension_name_or_path, ExtensionInstallOptions &options);
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
-	                                                         const string &extension, ExtensionInstallOptions &options);
+	                                                         const string &extension_name_or_path,
+	                                                         ExtensionInstallOptions &options);
 	//! Install an extension by name
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const Identifier &extension,
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const Identifier &extension_name,
 	                                                         ExtensionInstallOptions &options);
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
-	                                                         const Identifier &extension,
+	                                                         const Identifier &extension_name,
 	                                                         ExtensionInstallOptions &options);
 	//! Load an extension - the options can hold a logical name or a full path to an extension binary
 	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
@@ -257,17 +258,18 @@ public:
 	static const string GetVersionDirectoryName();
 
 	static bool IsRelease(const string &version_tag);
-	static bool CreateSuggestions(const Identifier &extension_name, string &message);
+	static bool CreateSuggestions(const string &extension_name_or_path, string &message);
 	static string ExtensionInstallDocumentationLink(const Identifier &extension_name);
 
 private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
-	                                                                 const string &local_path, const string &extension,
+	                                                                 const string &local_path,
+	                                                                 const string &extension_name_or_path,
 	                                                                 ExtensionInstallOptions &options,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static vector<string> DefaultExtensionFolders(FileSystem &fs);
-	static bool AllowAutoInstall(const Identifier &extension);
+	static bool AllowAutoInstall(const string &extension_name_or_path);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension_name_or_path,
 	                           ExtensionInitResult &result, string &error);

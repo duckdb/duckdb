@@ -498,7 +498,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
-		bool exact_match = ExtensionHelper::CreateSuggestions(Identifier(extension_name_or_path), message);
+		bool exact_match = ExtensionHelper::CreateSuggestions(extension_name_or_path, message);
 		if (exact_match) {
 			message += "\nInstall it first using \"INSTALL " + extension_name_or_path + "\".";
 		}
@@ -611,7 +611,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 	ExtensionInitResult result;
 	if (!TryInitialLoad(db, fs, extension_name_or_path, result, error)) {
 		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) ||
-		    !ExtensionHelper::AllowAutoInstall(Identifier(extension_name_or_path))) {
+		    !ExtensionHelper::AllowAutoInstall(extension_name_or_path)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension

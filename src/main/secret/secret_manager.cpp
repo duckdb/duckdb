@@ -648,7 +648,8 @@ void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string 
 	string error_message;
 
 	if (!entry.empty() && db) {
-		error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
+		error_message =
+		    StringUtil::Format("Secret type %s does not exist, but it exists in the %s extension.", type, entry);
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		if (!secret_path.empty()) {

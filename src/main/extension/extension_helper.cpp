@@ -170,8 +170,8 @@ static const char *const auto_install[] = {
     nullptr};
 
 // TODO: unify with new autoload mechanism
-bool ExtensionHelper::AllowAutoInstall(const Identifier &extension) {
-	auto extension_name = ApplyExtensionAlias(extension);
+bool ExtensionHelper::AllowAutoInstall(const string &extension_name_or_path) {
+	auto extension_name = ApplyExtensionAlias(Identifier(extension_name_or_path));
 	for (idx_t i = 0; auto_install[i]; i++) {
 		if (extension_name == auto_install[i]) {
 			return true;
