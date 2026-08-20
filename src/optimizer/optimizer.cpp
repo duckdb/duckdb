@@ -432,27 +432,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
-	bool filter_bindings_changed = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
-			filter_bindings_changed = propagator.FilterBindingsChanged();
 			propagated_statistics = true;
-		});
-	}
-	if (filter_bindings_changed) {
-		RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
-			FilterPushdown filter_pushdown(*this);
-			unordered_set<TableIndex> top_bindings;
-			filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
-			plan = filter_pushdown.Rewrite(std::move(plan));
-		});
-		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-			StatisticsPropagator propagator(*this, *plan);
-			propagator.PropagateStatistics(plan);
-			statistics_map = propagator.GetStatisticsMap();
 		});
 	}
 	if (propagated_statistics) {

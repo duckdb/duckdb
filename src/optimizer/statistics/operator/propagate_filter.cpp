@@ -295,10 +295,15 @@ bool StatisticsPropagator::SimplifyFilter(unique_ptr<Expression> &condition) {
 }
 
 FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
-	auto original_bindings = GetFilterBindings(*condition);
+	unordered_set<TableIndex> original_bindings;
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		original_bindings = GetFilterBindings(*condition);
+	}
 	PropagateExpression(condition);
-	SimplifyFilter(condition);
-	filter_bindings_changed |= original_bindings != GetFilterBindings(*condition);
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		SimplifyFilter(condition);
+		filter_bindings_changed |= original_bindings != GetFilterBindings(*condition);
+	}
 	auto prune_result = ClassifyFilter(*condition);
 	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 		// cannot prune this filter: propagate statistics from the filter
