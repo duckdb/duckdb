@@ -228,6 +228,9 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 		auto current_binding = ColumnBinding(table_idx, ProjectionIndex(col_idx + offset));
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
+			if (replace) {
+				root.projection_map_replacements[current_binding].clear();
+			}
 			// this entry is not referred to, erase it from the set of expressions
 			list.erase_at(col_idx);
 			offset++;
@@ -1284,6 +1287,7 @@ void CTERefPruner::VisitOperator(LogicalOperator &op) {
 					projection_map_replacements[source_binding] = {target_binding};
 				}
 			} else {
+				projection_map_replacements[ColumnBinding(cte_ref.table_index, ProjectionIndex(i))].clear();
 				skipped++;
 			}
 		}

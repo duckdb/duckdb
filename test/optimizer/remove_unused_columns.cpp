@@ -36,12 +36,17 @@ static void ResolveTypes(LogicalOperator &op) {
 static void ApplyColumnPruning(Connection &connection, unique_ptr<LogicalOperator> &plan) {
 	connection.BeginTransaction();
 	ResolveTypes(*plan);
+	ColumnBindingResolver initial_resolver(true);
+	REQUIRE_NOTHROW(initial_resolver.VisitOperator(*plan));
 	{
 		auto binder = Binder::CreateBinder(*connection.context);
 		Optimizer optimizer(*binder, *connection.context);
 		RemoveUnusedColumns remove_unused(optimizer);
 		remove_unused.VisitOperator(plan);
 	}
+	plan->ResolveOperatorTypes();
+	ColumnBindingResolver resolver(true);
+	REQUIRE_NOTHROW(resolver.VisitOperator(*plan));
 	connection.Rollback();
 }
 
@@ -185,6 +190,37 @@ TEST_CASE("Column pruning retains a minimum layout for removed projection map en
 	REQUIRE(filter_ref.GetColumnBindings() == vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0))});
 }
 
+TEST_CASE("Column pruning distinguishes removed projection map entries from shifted bindings",
+          "[optimizer][unused_columns]") {
+	DuckDB db;
+	Connection connection(db);
+	const auto child_table = TableIndex(1000);
+	const auto output_table = TableIndex(1001);
+
+	auto child = CreatePrunableProjection(child_table);
+	auto filter = make_uniq<LogicalFilter>(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, ColumnBinding(child_table, ProjectionIndex(0))));
+	filter->expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, ColumnBinding(child_table, ProjectionIndex(2))));
+	filter->projection_map = {ProjectionIndex(1)};
+	filter->children.push_back(std::move(child));
+	auto &filter_ref = *filter;
+
+	vector<unique_ptr<Expression>> output_expressions;
+	output_expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
+	auto output = make_uniq<LogicalProjection>(output_table, std::move(output_expressions));
+	output->children.push_back(std::move(filter));
+	unique_ptr<LogicalOperator> plan = std::move(output);
+
+	ApplyColumnPruning(connection, plan);
+
+	REQUIRE(filter_ref.projection_map == vector<ProjectionIndex> {ProjectionIndex(0)});
+	REQUIRE(filter_ref.children[0]->GetColumnBindings() ==
+	        vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0)),
+	                               ColumnBinding(child_table, ProjectionIndex(1))});
+	REQUIRE(filter_ref.GetColumnBindings() == vector<ColumnBinding> {ColumnBinding(child_table, ProjectionIndex(0))});
+}
+
 TEST_CASE("Recursive CTE pruning does not reapply projection map replacements", "[optimizer][unused_columns]") {
 	DuckDB db;
 	Connection connection(db);
@@ -205,6 +241,47 @@ TEST_CASE("Recursive CTE pruning does not reapply projection map replacements", 
 	auto &filter_ref = filter->Cast<LogicalFilter>();
 	REQUIRE(filter_ref.children[0]->GetColumnBindings().size() == 3);
 	filter_ref.projection_map = {ProjectionIndex(2)};
+
+	ResolveTypes(*plan);
+	ColumnBindingResolver initial_resolver(true);
+	REQUIRE_NOTHROW(initial_resolver.VisitOperator(*plan));
+	{
+		auto binder = Binder::CreateBinder(*connection.context);
+		Optimizer optimizer(*binder, *connection.context);
+		RemoveUnusedColumns remove_unused(optimizer);
+		remove_unused.VisitOperator(plan);
+	}
+
+	plan->ResolveOperatorTypes();
+	ColumnBindingResolver resolver(true);
+	REQUIRE_NOTHROW(resolver.VisitOperator(*plan));
+	REQUIRE(filter_ref.projection_map == vector<ProjectionIndex> {ProjectionIndex(1)});
+	REQUIRE(filter_ref.children[0]->GetColumnBindings().size() == 2);
+
+	connection.Rollback();
+}
+
+TEST_CASE("Recursive CTE pruning distinguishes removed projection map entries from shifted bindings",
+          "[optimizer][unused_columns]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+
+	auto plan = PlanUnusedColumnsQuery(connection, R"(
+		WITH RECURSIVE t(a, unused, b) AS (
+			SELECT 1, 100, 10
+			UNION ALL
+			SELECT 4, 100, b + 10 FROM t WHERE a < 3
+		)
+		SELECT b FROM t
+	)");
+	auto recursive = FindUnusedColumnsOperator(*plan, LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+	REQUIRE(recursive);
+	auto filter = FindUnusedColumnsOperator(*recursive->children[1], LogicalOperatorType::LOGICAL_FILTER);
+	REQUIRE(filter);
+	auto &filter_ref = filter->Cast<LogicalFilter>();
+	REQUIRE(filter_ref.children[0]->GetColumnBindings().size() == 3);
+	filter_ref.projection_map = {ProjectionIndex(1), ProjectionIndex(2)};
 
 	ResolveTypes(*plan);
 	ColumnBindingResolver initial_resolver(true);
