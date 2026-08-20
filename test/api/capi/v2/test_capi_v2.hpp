@@ -190,6 +190,8 @@ inline duckdb_v2_bytes MakeString(duckdb_v2_arena_handle heap, const char *data,
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return storage;
 	}
+	D_ASSERT(bytes != nullptr);
+	D_ASSERT(data != nullptr);
 	std::memcpy(bytes, data, len);
 
 	storage.value.pointer.length = static_cast<uint32_t>(len);
