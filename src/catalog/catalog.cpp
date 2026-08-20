@@ -106,7 +106,7 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(ClientContext &context, const Ide
 Catalog &Catalog::GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name) {
 	auto catalog = Catalog::GetCatalogEntry(retriever, catalog_name);
 	if (!catalog) {
-		throw BinderException("Catalog \"%s\" does not exist!", catalog_name.GetIdentifierName());
+		throw BinderException("Catalog %s does not exist!", catalog_name);
 	}
 	return *catalog;
 }
@@ -485,7 +485,7 @@ static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction 
 	auto entry = parent.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, name);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", name.GetIdentifierName());
+			throw CatalogException("Schema with name %s does not exist!", name);
 		}
 		return nullptr;
 	}
@@ -1042,11 +1042,13 @@ static void ThrowDefaultTableAmbiguityException(CatalogEntryLookup &base_lookup,
 	auto entry_type = CatalogTypeToString(base_lookup.entry->type);
 	string fully_qualified_name_hint;
 	if (base_lookup.schema) {
-		fully_qualified_name_hint = StringUtil::Format(": '%s.%s.%s'", base_lookup.schema->catalog.GetName(),
-		                                               base_lookup.schema->name, base_lookup.entry->name);
+		fully_qualified_name_hint =
+		    StringUtil::Format(": '%s.%s.%s'", SQLIdentifier(base_lookup.schema->catalog.GetName()),
+		                       SQLIdentifier(base_lookup.schema->name), SQLIdentifier(base_lookup.entry->name));
 	}
-	string fully_qualified_catalog_name_hint = StringUtil::Format(
-	    ": '%s.%s.%s'", default_table.schema->catalog.GetName(), default_table.schema->name, default_table.entry->name);
+	string fully_qualified_catalog_name_hint =
+	    StringUtil::Format(": '%s.%s.%s'", SQLIdentifier(default_table.schema->catalog.GetName()),
+	                       SQLIdentifier(default_table.schema->name), SQLIdentifier(default_table.entry->name));
 	throw CatalogException(
 	    "Ambiguity detected for '%s': this could either refer to the '%s' '%s', or the "
 	    "attached catalog '%s' which has a default table. To avoid this error, either detach the catalog and "

@@ -96,8 +96,8 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 		}
 		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
+			    "Ambiguous reference to catalog or schema %s - use a fully qualified path like '%s.%s'", schema,
+			    SQLIdentifier(catalog_name), SQLIdentifier(schema));
 		}
 	}
 	catalog = schema;
@@ -457,7 +457,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				continue;
 			}
 
-			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter '%s'", param_name));
+			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter %s", param_name));
 			auto default_expr = param_expr->Copy();
 			auto bound_default = binder.Bind(default_expr);
 			if (!bound_default->IsFoldable()) {
@@ -760,7 +760,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		auto bound_body = body_binder->Bind(*body_copy);
 		validation_binder->GetActiveBinders().pop_back();
 		if (body_binder->correlated_columns.empty()) {
-			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW or OLD "
+			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
 			                      create_trigger_info.GetTriggerName(), table.name);
 		}

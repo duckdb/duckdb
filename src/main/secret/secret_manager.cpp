@@ -129,7 +129,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 	if (!deserialized_type.deserializer) {
 		throw InvalidConfigurationException(
-		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
+		    "Attempted to deserialize secret type %s which does not have a deserialization method", type);
 	}
 
 	return deserialized_type.deserializer(deserializer, BaseSecret(scope, type, provider, name));
@@ -268,7 +268,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	auto secret = function_lookup->function(context, function_input);
 
 	if (!secret) {
-		throw InternalException("CreateSecretFunction for type: '%s' and provider: '%s' did not return a secret!",
+		throw InternalException("CreateSecretFunction for type: %s and provider: %s did not return a secret!",
 		                        input.type, input.provider);
 	}
 
@@ -308,15 +308,15 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	for (const auto &param : info.options) {
 		auto matched_param = function->named_parameters.find(Identifier(param.first));
 		if (matched_param == function->named_parameters.end()) {
-			throw BinderException("Unknown parameter '%s' for secret type '%s' with %sprovider '%s'", param.first, type,
-			                      default_string, provider);
+			throw BinderException("Unknown parameter %s for secret type %s with %sprovider %s", Identifier(param.first),
+			                      type, default_string, provider);
 		}
 
 		// Cast the provided value to the expected type
 		string error_msg;
 		auto cast_value = param.second.DefaultTryCastAs(matched_param->second, &error_msg);
 		if (!cast_value) {
-			throw BinderException("Failed to cast option '%s' to type '%s': '%s'", matched_param->first,
+			throw BinderException("Failed to cast option %s to type '%s': '%s'", matched_param->first,
 			                      matched_param->second.ToString(), error_msg);
 		}
 
@@ -383,7 +383,7 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 		auto storage_lookup = GetSecretStorage(storage);
 
 		if (!storage_lookup) {
-			throw InvalidInputException("Unknown secret storage found: '%s'", storage);
+			throw InvalidInputException("Unknown secret storage found: %s", storage);
 		}
 
 		return storage_lookup->GetSecretByName(name, &transaction);
@@ -415,7 +415,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 			return transaction_storage->DropSecretByName(name, on_entry_not_found, &transaction);
 		}
 		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw InvalidInputException("Failed to remove non-existent transaction secret with name '%s'", name);
+			throw InvalidInputException("Failed to remove non-existent transaction secret with name %s", name);
 		}
 		return;
 	}
@@ -430,7 +430,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 	if (!storage.empty()) {
 		auto storage_lookup = GetSecretStorage(Identifier(storage));
 		if (!storage_lookup) {
-			throw InvalidInputException("Unknown storage type found for drop secret: '%s'", storage);
+			throw InvalidInputException("Unknown storage type found for drop secret: %s", storage);
 		}
 		matches.push_back(*storage_lookup.get());
 	} else {
@@ -457,7 +457,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 		list_of_matches.pop_back(); // trailing comma
 
 		throw InvalidInputException(
-		    "Ambiguity found for secret name '%s', secret occurs in multiple storages: [%s] Please specify which "
+		    "Ambiguity found for secret name %s, secret occurs in multiple storages: [%s] Please specify which "
 		    "secret to drop using: 'DROP <PERSISTENT|TEMPORARY> SECRET [FROM <storage>]'.",
 		    name, list_of_matches);
 	}
@@ -468,7 +468,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const Ident
 			if (!storage.empty()) {
 				storage_str = " for storage '" + storage + "'";
 			}
-			throw InvalidInputException("Failed to remove non-existent secret with name '%s'%s", name, storage_str);
+			throw InvalidInputException("Failed to remove non-existent secret with name %s%s", name, storage_str);
 		}
 		// Do nothing on OnEntryNotFound::RETURN_NULL...
 	} else {
@@ -483,7 +483,7 @@ SecretType SecretManager::LookupType(const string &type) {
 void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
 	auto lookup = secret_types.find(type.name);
 	if (lookup != secret_types.end()) {
-		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
+		throw InternalException("Attempted to register an already registered secret type: %s", type.name);
 	}
 	secret_types[type.name] = type;
 }
@@ -655,7 +655,7 @@ void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string 
 			error_message += "\n\nAlternatively, ";
 		}
 	} else {
-		error_message = StringUtil::Format("Secret type '%s' not found", type);
+		error_message = StringUtil::Format("Secret type %s not found", type);
 
 		if (!secret_path.empty()) {
 			error_message += ", ";

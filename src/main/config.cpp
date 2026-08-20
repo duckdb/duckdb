@@ -865,7 +865,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 	}
 	duckdb::identifier_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
 	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
-		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+		throw InvalidInputException("Cannot include %s in allowed_configs", config_name);
 	}
 	// Validate that the config name refers to a known setting (built-in or extension)
 	// and resolve aliases to canonical names
@@ -887,7 +887,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 		options.allowed_configs.insert(config_name);
 		return;
 	}
-	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+	throw InvalidInputException("Unknown configuration option %s in allowed_configs", config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {
