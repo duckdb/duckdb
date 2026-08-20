@@ -33,6 +33,12 @@ OpenFileInfo MakeValidatingOpenFileInfo(const string &path) {
 	return info;
 }
 
+OpenFileInfo MakeDeferredTestOpenFileInfo(const string &path) {
+	auto info = MakeTestOpenFileInfo(path);
+	info.extended_info->options["defer_file_info"] = Value::BOOLEAN(true);
+	return info;
+}
+
 string MakeTestContent(idx_t size) {
 	string content(size, '\0');
 	for (idx_t i = 0; i < size; i++) {
@@ -332,6 +338,31 @@ TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[ext
 	CachingFileSystem cfs(*tracking_fs, db_instance);
 
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(handle->GetFileSize() == content_a.size());
+	REQUIRE(cache.GetCachedFileCount() == 1);
+
+	cache.SetEnabled(false);
+	REQUIRE(cache.GetCachedFileCount() == 0);
+	WriteTestContent(test_file.GetPath(), content_b);
+
+	cache.SetEnabled(true);
+	REQUIRE(handle->GetFileSize() == content_b.size());
+	REQUIRE(cache.GetCachedFileCount() == 1);
+}
+
+TEST_CASE("Re-enabled external file cache refreshes deferred live handle metadata", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const string content_a(64, 'A');
+	const string content_b(128, 'B');
+	EFCTestFileGuard test_file("test_efc_reenabled_deferred_live_handle_metadata.bin", content_a);
+
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+
+	auto handle = cfs.OpenFile(MakeDeferredTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(handle->GetFileSize() == content_a.size());
 	REQUIRE(cache.GetCachedFileCount() == 1);
 

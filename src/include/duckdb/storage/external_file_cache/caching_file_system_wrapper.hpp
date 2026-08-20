@@ -65,6 +65,8 @@ public:
 	DUCKDB_API void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	DUCKDB_API void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	DUCKDB_API int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	DUCKDB_API bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len,
+	                              SuffixReadResult &result) override;
 	DUCKDB_API int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	DUCKDB_API bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
 

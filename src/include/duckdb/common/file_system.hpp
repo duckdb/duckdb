@@ -82,6 +82,14 @@ struct NetworkThroughputEstimate {
 	double bandwidth_bytes_per_s = 0;
 };
 
+//! Result of an optional suffix read. The returned bytes cover
+//! [start_offset, start_offset + bytes_read) in a file of [file_size] bytes.
+struct SuffixReadResult {
+	idx_t bytes_read = 0;
+	idx_t file_size = 0;
+	idx_t start_offset = 0;
+};
+
 struct FileHandle {
 public:
 	DUCKDB_API FileHandle(FileSystem &file_system, string path, FileOpenFlags flags);
@@ -92,6 +100,9 @@ public:
 	// File offset will be changed, which advances for number of bytes read.
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
+	//! Try to read up to [buffer_len] bytes from the end of the file without first obtaining its size.
+	//! Returns false when the filesystem does not support this optional operation.
+	DUCKDB_API bool TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
@@ -185,6 +196,9 @@ public:
 	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the
 	//! amount of bytes read.
 	DUCKDB_API virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	//! Optional suffix read. Filesystems that do not support it return false.
+	DUCKDB_API virtual bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len,
+	                                      SuffixReadResult &result);
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
 	//! Excise a range of the file. The OS can drop pages from the page-cache, and the file-system is free to deallocate
