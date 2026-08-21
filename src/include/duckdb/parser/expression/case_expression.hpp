@@ -50,6 +50,7 @@ public:
 	}
 
 	unique_ptr<CaseExpression> GetLegacyCaseExpression() const;
+	unique_ptr<CaseExpression> GetLegacyCaseExpression(vector<unique_ptr<ParsedExpression>> case_operands) const;
 	bool UseLegacySerialization() const;
 	void LegacySerialize(Serializer &serializer) const;
 
