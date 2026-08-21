@@ -13,8 +13,6 @@
 
 namespace duckdb {
 class Matcher;
-class MatcherResult;
-struct MatchState;
 class ParseResult;
 
 struct ParserPackratKey {
@@ -42,7 +40,8 @@ public:
 	ParserPackratCache();
 	~ParserPackratCache();
 
-	MatcherResult Match(const Matcher &matcher, MatchState &state);
+	optional_ptr<const ParserPackratEntry> Lookup(const Matcher &matcher, idx_t token_index) const;
+	void Store(const Matcher &matcher, idx_t token_index, ParserPackratEntry entry);
 
 private:
 	unordered_map<ParserPackratKey, ParserPackratEntry, ParserPackratKeyHash> entries;
