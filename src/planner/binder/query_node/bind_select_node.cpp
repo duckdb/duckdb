@@ -38,6 +38,18 @@
 
 namespace duckdb {
 
+static ProjectionIndex CreateCollatedGroupAggregate(Binder &binder, BoundSelectNode &result,
+                                                    unique_ptr<Expression> uncollated_expr) {
+	auto first_fun = FirstFunctionGetter::GetFunction(uncollated_expr->GetReturnType());
+	vector<unique_ptr<Expression>> first_children;
+	first_children.push_back(std::move(uncollated_expr));
+
+	FunctionBinder function_binder(binder);
+	auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+	function->SetAlias("__collated_group");
+	return ColumnBinding::PushExpression(result.aggregates, std::move(function));
+}
+
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
 	// we treat the distinct list as an ORDER BY
 	auto bound_expr = order_binder.Bind(std::move(expr));
@@ -575,16 +587,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			if (!contains_subquery && requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
-
-				auto first_fun = FirstFunctionGetter::GetFunction(uncollated_expr->GetReturnType());
-				vector<unique_ptr<Expression>> first_children;
-				first_children.push_back(std::move(uncollated_expr));
-
-				FunctionBinder function_binder(*this);
-				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				function->SetAlias("__collated_group");
-
-				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
+				auto collated_idx = CreateCollatedGroupAggregate(*this, result, std::move(uncollated_expr));
 				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
@@ -697,11 +700,17 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result.select_list[group_by_all_index];
-		auto &return_type = expr->GetReturnType();
+		auto return_type = expr->GetReturnType();
+		auto uncollated_expr = expr->HasSubquery() ? nullptr : expr->Copy();
+		bool requires_collation = ExpressionBinder::PushCollation(context, expr, return_type);
 		auto group_proj_idx = ColumnBinding::PushExpression(result.groups.group_expressions, std::move(expr));
-		auto group_ref =
-		    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
-		expr = std::move(group_ref);
+		if (uncollated_expr && requires_collation) {
+			auto collated_idx = CreateCollatedGroupAggregate(*this, result, std::move(uncollated_expr));
+			expr =
+			    make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.aggregate_index, collated_idx));
+		} else {
+			expr = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(result.group_index, group_proj_idx));
+		}
 	}
 	set<ProjectionIndex> group_by_all_indexes_set;
 	if (!group_by_all_indexes.empty()) {
