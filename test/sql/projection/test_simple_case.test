@@ -79,7 +79,7 @@ SELECT CASE (SELECT 2) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END
 
 # Generated invoke composes with an enclosing user-written lambda.
 query I
-SELECT list_transform([1, 2], lambda x: CASE x + 0 WHEN 1 THEN 10 WHEN 2 THEN x * 10 ELSE 0 END)[2]
+SELECT list_transform([1, 2], lambda x: CASE x + random() * 0 WHEN 1 THEN 10 WHEN 2 THEN x * 10 ELSE 0 END)[2]
 ----
 20
 
@@ -114,7 +114,7 @@ FROM (
 
 # The generated lambda parameter must not shadow a user column.
 query I
-SELECT CASE i + 0 WHEN 1 THEN __duckdb_simple_case_subject WHEN 2 THEN 0 ELSE 0 END
+SELECT CASE i + random() * 0 WHEN 1 THEN __duckdb_simple_case_subject WHEN 2 THEN 0 ELSE 0 END
 FROM (VALUES (1, 42), (2, 99)) tbl(i, __duckdb_simple_case_subject)
 ORDER BY i
 ----
@@ -133,7 +133,7 @@ statement ok
 CREATE MACRO invoke(x, y) AS 999
 
 query I
-SELECT CASE 1 + 0 WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
+SELECT CASE 1 + random() * 0 WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
 ----
 42
 
@@ -179,6 +179,42 @@ EXECUTE simple_case_parameter(1)
 ----
 2
 
+# Deterministic operands retain the legacy lowering after semantic binding.
+query I
+SELECT CASE i + 0 WHEN 1 THEN (SELECT 2) WHEN 2 THEN 3 ELSE 0 END
+FROM (VALUES (1), (2)) tbl(i)
+ORDER BY i
+----
+2
+3
+
+query I
+SELECT CASE CAST(i AS BIGINT) WHEN 1 THEN (SELECT 2) WHEN 2 THEN 3 ELSE 0 END
+FROM (VALUES (1), (2)) tbl(i)
+ORDER BY i
+----
+2
+3
+
+query I
+SELECT CASE i % 3 WHEN 1 THEN unnest([2]) WHEN 2 THEN 3 ELSE 0 END
+FROM (VALUES (1), (2)) tbl(i)
+ORDER BY i
+----
+2
+3
+
+statement ok
+CREATE MACRO simple_case_deterministic_operand(x) AS x + 0
+
+query I
+SELECT CASE simple_case_deterministic_operand(i) WHEN 1 THEN simple_case_subquery() WHEN 2 THEN 3 ELSE 0 END
+FROM (VALUES (1), (2)) tbl(i)
+ORDER BY i
+----
+2
+3
+
 # A single comparison contains only one operand reference and does not require invoke.
 statement ok
 CREATE SEQUENCE simple_case_single_subquery_seq START 1
@@ -218,7 +254,11 @@ statement ok
 CREATE SEQUENCE simple_case_multi_subquery_seq START 2
 
 statement error
-SELECT CASE nextval('simple_case_multi_subquery_seq') WHEN 1 THEN (SELECT 2) WHEN 2 THEN 3 ELSE 0 END
+SELECT CASE CAST(nextval('simple_case_multi_subquery_seq') AS BIGINT)
+	WHEN 1 THEN (SELECT 2)
+	WHEN 2 THEN 3
+	ELSE 0
+END
 ----
 <REGEX>:Binder Error:.*subqueries in lambda expressions are not supported.*
 
@@ -233,8 +273,11 @@ SELECT CASE nextval('simple_case_multi_unnest_seq') WHEN 1 THEN unnest([2]) WHEN
 statement ok
 CREATE SEQUENCE simple_case_multi_macro_subquery_seq START 2
 
+statement ok
+CREATE MACRO simple_case_volatile_operand() AS nextval('simple_case_multi_macro_subquery_seq')
+
 statement error
-SELECT CASE nextval('simple_case_multi_macro_subquery_seq')
+SELECT CASE simple_case_volatile_operand()
 	WHEN 1 THEN simple_case_subquery()
 	WHEN 2 THEN 3
 	ELSE 0
