@@ -18,6 +18,7 @@ add_library_unity(
   test_parse_expression.cpp
   test_parse_load_statement.cpp
   test_parse_logical_type.cpp
+  test_parse_memory_limit_slurm.cpp
   test_recursive_cte_metrics.cpp
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp

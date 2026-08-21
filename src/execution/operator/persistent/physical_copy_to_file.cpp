@@ -1528,7 +1528,7 @@ void CopyFileLifecycleExecutor::WaitAll(CopyFileLifecycleWaitMode mode) {
 		ThrowError();
 		return;
 	}
-	while (pending_tasks.load(std::memory_order_relaxed) > 0) {
+	while (pending_tasks.load(std::memory_order_acquire) > 0) {
 		context.InterruptCheck();
 		WorkOnTaskOrYield();
 	}
