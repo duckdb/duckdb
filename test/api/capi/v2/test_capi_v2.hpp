@@ -176,7 +176,13 @@ inline duckdb_v2_bytes MakeString(duckdb_v2_arena_handle heap, const char *data,
                                   duckdb_v2_error_info_handle *err) {
 	duckdb_v2_bytes storage {};
 	rc = DUCKDB_V2_ERROR_NONE;
-#ifndef DUCKDB_DEBUG_NO_INLINE
+#ifdef DUCKDB_DEBUG_NO_INLINE
+	if (len == 0 || data == nullptr) {
+		storage.value.pointer.length = 0;
+		storage.value.pointer.ptr = nullptr;
+		return storage;
+	}
+#else
 	if (len <= DUCKDB_V2_BYTES_INLINE_LENGTH) {
 		storage.value.inlined.length = static_cast<uint32_t>(len);
 		if (len > 0) {
@@ -185,6 +191,7 @@ inline duckdb_v2_bytes MakeString(duckdb_v2_arena_handle heap, const char *data,
 		return storage;
 	}
 #endif
+
 	uint8_t *bytes = nullptr;
 	rc = duckdb_v2_arena_allocate(heap, len, &bytes, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
