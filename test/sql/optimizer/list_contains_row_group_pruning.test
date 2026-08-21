@@ -10,7 +10,7 @@ USE db;
 
 statement ok
 CREATE TABLE lists AS
-SELECT [i] AS l
+SELECT [i] AS l, 3000::BIGINT AS needle
 FROM range(6144) tbl(i);
 
 query II
@@ -27,6 +27,17 @@ query II
 EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE contains(l, 3000);
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# Prune using statistics from a non-constant needle expression
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(l, needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(l, needle);
+----
+1
 
 # Zero-padded so lexicographic min/max matches numeric order
 statement ok
