@@ -1,0 +1,18 @@
+# name: test/issues/general/test_24623.test
+# description: Preserve unmatched rows when simplifying an outer join
+# group: [general]
+
+statement ok
+CREATE TABLE issue_24623(c1 BOOLEAN, c2 BOOLEAN);
+
+statement ok
+INSERT INTO issue_24623 VALUES (false, true);
+
+query I
+SELECT issue_24623.c1
+FROM issue_24623
+RIGHT JOIN (SELECT NOT c2 AS col0 FROM issue_24623) sub0
+ON sub0.col0 BETWEEN true AND issue_24623.c1
+WHERE issue_24623.c1 IS NULL;
+----
+NULL
