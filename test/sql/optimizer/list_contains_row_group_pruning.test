@@ -10,7 +10,13 @@ USE db;
 
 statement ok
 CREATE TABLE lists AS
-SELECT [i] AS l, 3000::BIGINT AS needle
+SELECT [i] AS l,
+       3000::BIGINT AS needle,
+       CASE WHEN i % 2 = 0 THEN 3000 ELSE 3001 END AS range_needle,
+       CASE WHEN i % 2 = 0 THEN i + 1 ELSE i - 1 END AS overlapping_needle,
+       CASE WHEN i % 2 = 0 THEN 3000 ELSE NULL END AS nullable_needle,
+       CASE WHEN i % 2 = 0 THEN [i] ELSE NULL END AS nullable_list,
+       '3000' AS cast_needle
 FROM range(6144) tbl(i);
 
 query II
@@ -39,10 +45,66 @@ SELECT count(*) FROM lists WHERE list_contains(l, needle);
 ----
 1
 
+# Prune using a non-constant needle range
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(l, range_needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(l, range_needle);
+----
+2
+
+# Overlapping statistics cannot prove that list_contains is false
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(l, overlapping_needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(l, overlapping_needle);
+----
+0
+
+# NULL values in the needle or list preserve false-or-NULL pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(l, nullable_needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(l, nullable_needle);
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(nullable_list, needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(nullable_list, needle);
+----
+1
+
+# Preserve casts when deriving needle statistics
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lists WHERE list_contains(l, cast_needle::BIGINT);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM lists WHERE list_contains(l, cast_needle::BIGINT);
+----
+1
+
 # Zero-padded so lexicographic min/max matches numeric order
 statement ok
 CREATE TABLE string_lists AS
-SELECT [lpad(i::VARCHAR, 4, '0')] AS l
+SELECT [lpad(i::VARCHAR, 4, '0')] AS l,
+       CASE WHEN i % 2 = 0 THEN '3000' ELSE '3001' END AS needle,
+       lpad((CASE WHEN i % 2 = 0 THEN i + 1 ELSE i - 1 END)::VARCHAR, 4, '0') AS overlapping_needle
 FROM range(6144) tbl(i);
 
 query II
@@ -59,3 +121,59 @@ query II
 EXPLAIN ANALYZE SELECT count(*) FROM string_lists WHERE contains(l, '3000');
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# Prune using an exact, non-constant needle range
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM string_lists WHERE list_contains(l, needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM string_lists WHERE list_contains(l, needle);
+----
+2
+
+# Overlapping exact string ranges cannot be pruned
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM string_lists WHERE list_contains(l, overlapping_needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM string_lists WHERE list_contains(l, overlapping_needle);
+----
+0
+
+# Exercise string-stat pruning for BLOB values
+statement ok
+CREATE TABLE blob_lists AS
+SELECT [lpad(i::VARCHAR, 4, '0')::BLOB] AS l,
+       (CASE WHEN i % 2 = 0 THEN '3000' ELSE '3001' END)::BLOB AS needle
+FROM range(6144) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM blob_lists WHERE list_contains(l, needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM blob_lists WHERE list_contains(l, needle);
+----
+2
+
+# Truncated string statistics cannot prove that the ranges do not overlap
+statement ok
+CREATE TABLE long_string_lists AS
+SELECT [repeat('a', 20) || lpad(i::VARCHAR, 4, '0')] AS l,
+       repeat('a', 20) || '9999' AS needle
+FROM range(6144) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM long_string_lists WHERE list_contains(l, needle);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM long_string_lists WHERE list_contains(l, needle);
+----
+0
