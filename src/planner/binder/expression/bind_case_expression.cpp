@@ -11,6 +11,19 @@
 
 namespace duckdb {
 
+static bool IsTriviallyDuplicableCaseOperand(const ParsedExpression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::CONSTANT:
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::PARAMETER:
+	case ExpressionClass::POSITIONAL_REFERENCE:
+	case ExpressionClass::LAMBDA_REF:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpression &expr, idx_t lambda_index) {
 	auto parameter_name = expr.CaseOperand()->GetName();
 	auto case_body = make_uniq<CaseExpression>();
@@ -40,28 +53,15 @@ static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpress
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	if (expr.CaseOperand()) {
-		if (expr.CaseChecks().size() == 1 || !SupportsLambdaFunctions()) {
+		if (expr.CaseChecks().size() == 1 || IsTriviallyDuplicableCaseOperand(*expr.CaseOperand())) {
 			auto legacy_case = expr.GetLegacyCaseExpression();
 			return BindExpression(*legacy_case, depth);
 		}
 
 		auto lambda_index = lambda_bindings ? lambda_bindings->size() : 0;
 		auto invoke_expr = CreateCaseInvokeExpression(expr, lambda_index);
-		auto initial_bound_column_count = bound_columns.size();
-		try {
-			auto result = BindExpression(invoke_expr, depth);
-			if (!result.HasError() || !BinderException::IsUnsupportedLambdaExpression(result.error)) {
-				return result;
-			}
-		} catch (const BinderException &ex) {
-			if (!BinderException::IsUnsupportedLambdaExpression(ErrorData(ex))) {
-				throw;
-			}
-		}
-
-		TruncateBoundColumns(initial_bound_column_count);
-		auto legacy_case = expr.GetLegacyCaseExpression();
-		return BindExpression(*legacy_case, depth);
+		// FIXME: Support subqueries and UNNEST without falling back to repeated operand evaluation.
+		return BindExpression(invoke_expr, depth);
 	}
 
 	// first try to bind the children of the case expression
