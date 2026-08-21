@@ -25,6 +25,7 @@ class BoundQueryNode;
 class ColumnRefExpression;
 class SubqueryRef;
 class LogicalGet;
+class SchemaCatalogEntry;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class StandardEntry;
@@ -173,12 +174,14 @@ enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };
 struct CTEBinding;
 
 struct CTEBindState {
-	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<Identifier> &aliases);
+	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<Identifier> &aliases,
+	             optional_ptr<SchemaCatalogEntry> binding_schema);
 	~CTEBindState();
 
 	Binder &parent_binder;
 	QueryNode &cte_def;
 	const vector<Identifier> &aliases;
+	optional_ptr<SchemaCatalogEntry> binding_schema;
 	idx_t active_binder_count;
 	shared_ptr<Binder> query_binder;
 	BoundStatement query;
