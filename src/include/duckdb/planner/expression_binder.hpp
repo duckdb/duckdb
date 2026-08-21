@@ -86,6 +86,9 @@ public:
 	virtual bool IsLateralBinder() const {
 		return false;
 	}
+	virtual bool SupportsLambdaFunctions() const {
+		return true;
+	}
 
 	Binder &GetBinder() const {
 		return binder;

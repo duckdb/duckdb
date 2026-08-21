@@ -488,16 +488,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	try {
-		CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.LambdaExprMutable(), capture_bind_lambda,
-		                     override_bind_lambda_context, capture_child_types);
-	} catch (const BinderException &ex) {
-		auto error = ErrorData(ex);
-		if (!function.IsGeneratedSimpleCase() || !BinderException::IsUnsupportedLambdaExpression(error)) {
-			throw;
-		}
-		throw BinderException::UnsupportedLambdaExpression(error.RawMessage(), true);
-	}
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.LambdaExprMutable(), capture_bind_lambda,
+	                     override_bind_lambda_context, capture_child_types);
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =

@@ -466,9 +466,28 @@ static void ConvertSimpleCaseToLegacy(unique_ptr<ParsedExpression> &expr) {
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ConvertSimpleCaseToLegacy(child); });
 }
 
+static bool ContainsSimpleCase(const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::CASE && expr.Cast<CaseExpression>().CaseOperand()) {
+		return true;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		return true;
+	}
+	bool result = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		if (!result) {
+			result = ContainsSimpleCase(child);
+		}
+	});
+	return result;
+}
+
 Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
+	}
+	if (!ContainsSimpleCase(expr)) {
+		return expr.GetName();
 	}
 	auto name_expr = expr.Copy();
 	ConvertSimpleCaseToLegacy(name_expr);
