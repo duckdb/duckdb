@@ -190,6 +190,21 @@ void MetaTransaction::Rollback() {
 }
 
 void MetaTransaction::Finalize() {
+	bool attachments_committed = false;
+	for (auto &transaction : transactions) {
+		if (transaction.first.get().IsSystem() && transaction.second.state == TransactionState::COMMITTED) {
+			attachments_committed = true;
+			break;
+		}
+	}
+	if (attachments_committed) {
+		for (auto &database : replacement_databases) {
+			database.get().SetPendingReplacement(false);
+		}
+		for (auto &database : replaced_databases) {
+			database.get().OnDetach(context);
+		}
+	}
 	// Try to checkpoint any attached databases potentially still held by this transaction.
 	for (auto &database : referenced_databases) {
 		// If the use count is down to one, then we already detached the database.
@@ -229,9 +244,12 @@ shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const 
 	return nullptr;
 }
 
-void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
+void MetaTransaction::ReplaceDatabase(shared_ptr<AttachedDatabase> &database) {
 	lock_guard<mutex> guard(referenced_database_lock);
-	used_databases.erase(database.GetName());
+	auto &database_ref = *database;
+	used_databases.erase(database_ref.GetName());
+	referenced_databases.emplace(reference<AttachedDatabase>(database_ref), database);
+	replaced_databases.push_back(database_ref);
 }
 
 AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &database) {
@@ -248,6 +266,12 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
 	}
+	return db_ref;
+}
+
+AttachedDatabase &MetaTransaction::AttachDatabase(shared_ptr<AttachedDatabase> &database) {
+	auto &db_ref = UseDatabase(database);
+	replacement_databases.push_back(db_ref);
 	return db_ref;
 }
 
