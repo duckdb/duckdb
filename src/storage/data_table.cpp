@@ -677,8 +677,7 @@ static bool IsAppend(VerifyExistenceType verify_type) {
 	return verify_type == VerifyExistenceType::APPEND_FK;
 }
 
-void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-                                           const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
                                            DataChunk &chunk, VerifyExistenceType verify_type) {
 	reference<const vector<PhysicalIndex>> src_keys_ptr = bound_foreign_key.info.fk_keys;
 	reference<const vector<PhysicalIndex>> dst_keys_ptr = bound_foreign_key.info.pk_keys;
@@ -724,17 +723,20 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
-	data_table.info->indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
+	auto &local_storage = LocalStorage::Get(context, db);
+	// The rows we look up live in the referenced table, so the deletes to skip are from that table, not the current
+	// table.
+	auto referenced_storage = local_storage.GetStorage(data_table);
+	data_table.info->indexes.VerifyForeignKey(referenced_storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
-	auto &local_storage = LocalStorage::Get(context, db);
 	bool local_error = false;
 	auto local_verification = local_storage.Find(data_table);
 
 	// Local constraint verification.
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
-		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
+		local_indexes.VerifyForeignKey(referenced_storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
 		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
 	// Global constraint verification.
@@ -808,16 +810,14 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 }
 
-void DataTable::VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-                                                 const BoundForeignKeyConstraint &bound_foreign_key,
+void DataTable::VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key,
                                                  ClientContext &context, DataChunk &chunk) {
-	VerifyForeignKeyConstraint(storage, bound_foreign_key, context, chunk, VerifyExistenceType::APPEND_FK);
+	VerifyForeignKeyConstraint(bound_foreign_key, context, chunk, VerifyExistenceType::APPEND_FK);
 }
 
-void DataTable::VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
-                                                 const BoundForeignKeyConstraint &bound_foreign_key,
+void DataTable::VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key,
                                                  ClientContext &context, DataChunk &chunk) {
-	VerifyForeignKeyConstraint(storage, bound_foreign_key, context, chunk, VerifyExistenceType::DELETE_FK);
+	VerifyForeignKeyConstraint(bound_foreign_key, context, chunk, VerifyExistenceType::DELETE_FK);
 }
 
 void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
@@ -961,7 +961,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 		case ConstraintType::FOREIGN_KEY: {
 			auto &bound_foreign_key = constraint->Cast<BoundForeignKeyConstraint>();
 			if (bound_foreign_key.info.IsAppendConstraint()) {
-				VerifyAppendForeignKeyConstraint(storage, bound_foreign_key, context, chunk);
+				VerifyAppendForeignKeyConstraint(bound_foreign_key, context, chunk);
 			}
 			break;
 		}
@@ -1545,7 +1545,7 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 		case ConstraintType::FOREIGN_KEY: {
 			auto &bound_foreign_key = constraint->Cast<BoundForeignKeyConstraint>();
 			if (bound_foreign_key.info.IsDeleteConstraint()) {
-				VerifyDeleteForeignKeyConstraint(storage, bound_foreign_key, context, chunk);
+				VerifyDeleteForeignKeyConstraint(bound_foreign_key, context, chunk);
 			}
 			break;
 		}
