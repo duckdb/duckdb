@@ -18,11 +18,16 @@
 namespace duckdb {
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
-	auto result = state.packrat_cache && IsPackratMemoized() ? state.packrat_cache->Match(*this, state)
-	                                                         : MatchParseResultInternal(state);
+	auto result = MatcherResult::Failure();
+	if (state.packrat_cache && IsPackratMemoized()) {
+		result = state.packrat_cache->Match(*this, state);
+	} else {
+		result = MatchParseResultInternal(state);
+	}
 	if (result.HasParseResult() && rule) {
-		result.GetParseResult()->SetRule(*rule);
-		result.GetParseResult()->name = rule->name;
+		auto parse_result = result.GetParseResult();
+		parse_result->SetRule(*rule);
+		parse_result->name = rule->name;
 	}
 	return result;
 }
