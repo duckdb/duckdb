@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -528,14 +527,13 @@ public:
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				bind_data.interface->FinishReading(context, *gstate.global_state, *job.reader_scan_state);
+				bind_data.interface->FinishReading(context, *gstate.global_state, *job.scan_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                                                  *job.reader_scan_state)) {
+				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.scan_state)) {
 					job.reader = current_reader_data.reader;
 					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
@@ -545,7 +543,7 @@ public:
 					job.batch_index = gstate.batch_index++;
 					job.file_index = gstate.file_index;
 					parallel_lock.unlock();
-					job.reader->PrepareScan(context, *gstate.global_state, *job.reader_scan_state);
+					job.reader->PrepareScan(context, *gstate.global_state, *job.scan_state);
 					return true;
 				} else {
 					// Set state to the next file
@@ -595,7 +593,7 @@ public:
 		}
 
 		result->job.batch_index = 0;
-		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
+		result->job.scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
 
 		if (!ClaimNextJob(context.client, bind_data, gstate, result->job)) {
 			return nullptr;
@@ -606,11 +604,10 @@ public:
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate) {
-		if (!bind_data.interface->SupportsReadAhead(bind_data) ||
-		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
+		if (!bind_data.interface->SupportsReadAhead(bind_data)) {
 			return;
 		}
-		gstate.read_ahead = MultiFileReadAhead::Create(context);
+		gstate.read_ahead = ScanReadAhead::Create(context);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
@@ -761,7 +758,7 @@ public:
 			// keep. Hence, we only reset if we are not resuming from a blocked scan.
 			scan_chunk.Reset();
 		}
-		auto res = data.job.reader->Scan(context, *gstate.global_state, *data.job.reader_scan_state, scan_chunk);
+		auto res = data.job.reader->Scan(context, *gstate.global_state, *data.job.scan_state, scan_chunk);
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
@@ -789,90 +786,75 @@ public:
 		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
-	//! Try to produce one job into the read-ahead queue.
-	static bool TryProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
-	                          MultiFileGlobalState &gstate) {
-		return gstate.read_ahead->TryProduceJob([&](MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
-			// jobs recycle finished scan states, create a fresh one when none was available
-			if (!job.reader_scan_state) {
-				job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
-			}
-			if (!ClaimNextJob(context, bind_data, gstate, job)) {
-				return false;
-			}
-			auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.reader_scan_state);
-			if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
-				// if we got blocked, we have tasks for the pool
-				io_tasks = scheduled.ExtractAsyncTasks();
-			}
-			return true;
-		});
+	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
+	//! Returns null when there are no more jobs to produce.
+	static unique_ptr<MultiFileScanJob> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
+	                                               MultiFileGlobalState &gstate,
+	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<MultiFileScanJob>();
+		// jobs recycle finished scan states, create a fresh one when none was available
+		job->scan_state = gstate.TryPopState();
+		if (!job->scan_state) {
+			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		}
+		if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+			return nullptr;
+		}
+		auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->scan_state);
+		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
+			// if we got blocked, we have tasks for the pool
+			io_tasks = scheduled.ExtractAsyncTasks();
+		}
+		return job;
 	}
 
-	static MultiFileAcquireResult AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
-	                                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-	                                                   MultiFileBindData &bind_data) {
+	static ScanReadAheadAcquire AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
+	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                 MultiFileBindData &bind_data) {
 		if (lstate.job_state == MultiFileJobState::NONE) {
 			if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
-				return MultiFileAcquireResult::EXHAUSTED;
+				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 			lstate.job_state = MultiFileJobState::SCHEDULE;
 		}
 		if (lstate.job_state == MultiFileJobState::SCHEDULE) {
-			auto scheduled =
-			    lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.reader_scan_state);
+			auto scheduled = lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.scan_state);
 			lstate.job_state = MultiFileJobState::DECODE;
 			if (scheduled.GetResultType() == AsyncResultType::BLOCKED && input.HandleBlocked(scheduled)) {
-				return MultiFileAcquireResult::PARKED;
+				return ScanReadAheadAcquire::PARKED;
 			}
 		}
-		return MultiFileAcquireResult::ACQUIRED;
+		return ScanReadAheadAcquire::ACQUIRED;
 	}
 
-	static MultiFileAcquireResult AcquireNextReadAhead(ClientContext &context, TableFunctionInput &data_p,
-	                                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-	                                                   MultiFileBindData &bind_data) {
+	static ScanReadAheadAcquire AcquireNextReadAhead(ClientContext &context, TableFunctionInput &data_p,
+	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                 MultiFileBindData &bind_data) {
 		auto &read_ahead = *gstate.read_ahead;
 		if (lstate.job_state == MultiFileJobState::WAIT_IO) {
+			// resuming after parking, the job's I/O has completed
 			read_ahead.WaitForJob(lstate.job);
 			lstate.job_state = MultiFileJobState::DECODE;
-			return MultiFileAcquireResult::ACQUIRED;
+			return ScanReadAheadAcquire::ACQUIRED;
 		}
-		while (true) {
-			while (TryProduceJob(context, bind_data, gstate)) {
+		unique_ptr<ScanReadAheadJob> claimed;
+		auto acquired = read_ahead.AcquireJob(
+		    context, data_p,
+		    [&](vector<unique_ptr<AsyncTask>> &io_tasks) { return ProduceJob(context, bind_data, gstate, io_tasks); },
+		    claimed);
+		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
+			// finish scan states left in the recycle pool so per-file accounting completes
+			unique_lock<mutex> parallel_lock(gstate.lock);
+			for (auto &state : gstate.state_pool) {
+				bind_data.interface->FinishReading(context, *gstate.global_state, *state);
 			}
-			auto job = read_ahead.ClaimJob();
-			if (!job && read_ahead.IsDone() && !read_ahead.HasActiveProducers()) {
-				job = read_ahead.ClaimJob();
-				if (!job) {
-					// finish scan states left in the recycle pool so per-file accounting completes
-					unique_lock<mutex> parallel_lock(gstate.lock);
-					while (auto state = read_ahead.TryPopState()) {
-						bind_data.interface->FinishReading(context, *gstate.global_state, *state);
-					}
-					return MultiFileAcquireResult::EXHAUSTED;
-				}
-			}
-			if (job) {
-				lstate.job = std::move(*job);
-				// park until the job's scheduled I/O completes
-				if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR &&
-				    data_p.interrupt_state && lstate.job.io_completion->TryPark(*data_p.interrupt_state)) {
-					lstate.job_state = MultiFileJobState::WAIT_IO;
-					data_p.async_result = AsyncResultType::BLOCKED;
-					return MultiFileAcquireResult::PARKED;
-				}
-				// parking is not available to this caller or the I/O has already completed
-				read_ahead.WaitForJob(lstate.job);
-				lstate.job_state = MultiFileJobState::DECODE;
-				return MultiFileAcquireResult::ACQUIRED;
-			}
-			// stop spinning if the query was interrupted
-			if (context.IsInterrupted()) {
-				throw InterruptException();
-			}
-			TaskScheduler::YieldThread();
+			gstate.state_pool.clear();
+			return acquired;
 		}
+		lstate.job = std::move(claimed->Cast<MultiFileScanJob>());
+		lstate.job_state =
+		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
+		return acquired;
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -890,12 +872,12 @@ public:
 				auto acquired = gstate.read_ahead ? AcquireNextReadAhead(context, data_p, data, gstate, bind_data)
 				                                  : AcquireNextPerThread(context, data_p, data, gstate, bind_data);
 				switch (acquired) {
-				case MultiFileAcquireResult::PARKED:
+				case ScanReadAheadAcquire::PARKED:
 					return;
-				case MultiFileAcquireResult::EXHAUSTED:
+				case ScanReadAheadAcquire::EXHAUSTED:
 					data_p.async_result = SourceResultType::FINISHED;
 					return;
-				case MultiFileAcquireResult::ACQUIRED:
+				case ScanReadAheadAcquire::ACQUIRED:
 					break;
 				}
 			}
@@ -907,7 +889,7 @@ public:
 			case MultiFileDecodeResult::JOB_FINISHED: {
 				if (gstate.read_ahead) {
 					// hand the scan state back so learned reader state carries over to jobs created later
-					gstate.read_ahead->PushState(std::move(data.job.reader_scan_state));
+					gstate.PushState(std::move(data.job.scan_state));
 				}
 				data.job_state = MultiFileJobState::NONE;
 				// emit any trailing chunk, then loop to acquire the next job
