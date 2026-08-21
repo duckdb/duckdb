@@ -8,7 +8,11 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -18,10 +22,33 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
+void TableScanState::Initialize(DatabaseInstance &db, vector<StorageIndex> column_ids_p,
+                                optional_ptr<ClientContext> context, optional_ptr<TableFilterSet> table_filters,
+                                optional_ptr<SampleOptions> table_sampling, idx_t estimated_table_row_count) {
+	InitializeInternal(db, std::move(column_ids_p), context, table_filters, table_sampling, estimated_table_row_count);
+}
+
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
                                 optional_ptr<TableFilterSet> table_filters, optional_ptr<SampleOptions> table_sampling,
                                 idx_t estimated_table_row_count) {
+	InitializeInternal(nullptr, std::move(column_ids_p), context, table_filters, table_sampling,
+	                   estimated_table_row_count);
+}
+
+void TableScanState::InitializeInternal(optional_ptr<DatabaseInstance> db, vector<StorageIndex> column_ids_p,
+                                        optional_ptr<ClientContext> context, optional_ptr<TableFilterSet> table_filters,
+                                        optional_ptr<SampleOptions> table_sampling, idx_t estimated_table_row_count) {
 	this->column_ids = std::move(column_ids_p);
+	// scan_target_size_bytes is GLOBAL_LOCAL: a session-local value overrides the global default, 0 means unset.
+	// Scans started without a ClientContext (commit-time flush, index rebuild, checkpoint, ALTER) only have the
+	// global value; deciding it here keeps every entry point budgeted instead of relying on each call site.
+	options.scan_target_size_bytes = db ? DBConfig::GetConfig(*db).options.scan_target_size_bytes : 0;
+	if (context) {
+		auto local_budget = ClientConfig::GetConfig(*context).scan_target_size_bytes;
+		if (local_budget != 0) {
+			options.scan_target_size_bytes = local_budget;
+		}
+	}
 	if (table_filters) {
 		filters.Initialize(*context, *table_filters, column_ids);
 	}
@@ -228,6 +255,83 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 		return reorderer->GetNextRowGroup(row_group);
 	}
 	return row_groups.GetNextSegment(row_group);
+}
+
+//===----------------------------------------------------------------------===//
+// ScanSizePredictor
+//===----------------------------------------------------------------------===//
+
+//! Worst-case materialized bytes for one column: exact width for fixed-size types; for VARCHAR the
+//! string_t slot plus the row group's max string length (no row exceeds it), so a batch sized by this
+//! bound can never overshoot the byte budget. Unknown variable-size types fall back to the default.
+static double WorstCaseBytesPerRow(PhysicalType physical_type, optional_ptr<BaseStatistics> stats) {
+	if (TypeIsConstantSize(physical_type)) {
+		return static_cast<double>(GetTypeIdSize(physical_type));
+	}
+	if (stats && physical_type == PhysicalType::VARCHAR && StringStats::HasMaxStringLength(*stats)) {
+		return static_cast<double>(GetTypeIdSize(PhysicalType::VARCHAR)) +
+		       static_cast<double>(StringStats::MaxStringLength(*stats));
+	}
+	return ScanSizePredictor::DEFAULT_BYTES_PER_ROW;
+}
+
+idx_t ScanSizePredictor::ApplyBudget(idx_t target_bytes, idx_t max_rows) {
+	total_batches++;
+	if (worst_case_bytes_per_row <= 0) {
+		last_safe_rows = 0;
+		return max_rows;
+	}
+	auto safe_count = static_cast<idx_t>(static_cast<double>(target_bytes) / worst_case_bytes_per_row);
+	last_safe_rows = safe_count;
+	if (safe_count < max_rows) {
+		total_safe_clamped_batches++;
+	}
+	return MaxValue<idx_t>(1, MinValue<idx_t>(max_rows, safe_count));
+}
+
+idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
+                                          RowGroup &row_group) {
+	if (!initialized) {
+		// Cold start: sum the worst-case per-row width over the scanned columns.
+		worst_case_bytes_per_row = 0;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto stats = row_group.GetStatistics(column_ids[i]);
+			if (!stats) {
+				worst_case_bytes_per_row += DEFAULT_BYTES_PER_ROW;
+				continue;
+			}
+			worst_case_bytes_per_row += WorstCaseBytesPerRow(stats->GetType().InternalType(), stats.get());
+		}
+		initialized = true;
+	}
+	return ApplyBudget(target_bytes, max_rows);
+}
+
+idx_t ScanSizePredictor::PredictBatchSizeSingle(idx_t target_bytes, idx_t max_rows, const LogicalType &type,
+                                                optional_ptr<BaseStatistics> stats) {
+	if (!initialized) {
+		worst_case_bytes_per_row = WorstCaseBytesPerRow(type.InternalType(), stats);
+		initialized = true;
+	}
+	return ApplyBudget(target_bytes, max_rows);
+}
+
+void ScanSizePredictor::LogStats(ClientContext &context) const {
+	if (total_batches == 0) {
+		return;
+	}
+	DUCKDB_LOG_TRACE(context, "ScanSizePredictor: total_batches=%llu worst_bpr=%.1f safe_clamped_batches=%llu",
+	                 total_batches, worst_case_bytes_per_row, total_safe_clamped_batches);
+}
+
+void ScanSizePredictor::LogBatch(optional_ptr<ClientContext> context, idx_t target_bytes, idx_t max_rows,
+                                 idx_t scan_count) const {
+	if (!context) {
+		return;
+	}
+	DUCKDB_LOG_TRACE(
+	    *context, "ScanSizePredictor batch: target_bytes=%llu max_rows=%llu worst_bpr=%.1f safe=%llu scan_count=%llu",
+	    target_bytes, max_rows, worst_case_bytes_per_row, last_safe_rows, scan_count);
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)

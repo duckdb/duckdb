@@ -93,6 +93,15 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &c
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
+	// The checkpoint read runs without a ClientContext, so it takes the global byte budget. When set, each
+	// STANDARD_VECTOR_SIZE window is split into byte-budgeted sub-batches so large blobs are not materialized
+	// a full 2048 rows at a time. Budget 0 (default) keeps the original fixed 2048-row stepping.
+	auto target_bytes = DBConfig::GetConfig(col_data.GetDatabase()).options.scan_target_size_bytes;
+	bool sub_batch = target_bytes > 0;
+	ScanSizePredictor predictor;
+	// the column's own statistics, which are also correct for a nested sub-column
+	auto stats = sub_batch ? col_data.GetStatistics() : nullptr;
+
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
@@ -101,15 +110,21 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &c
 		segment.InitializeScan(scan_state);
 
 		auto &scan_vector = intermediate.data[0];
-		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
+		idx_t base_row_index = 0;
+		while (base_row_index < segment.count) {
 			intermediate.Reset();
 
-			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			idx_t max_count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			idx_t count = sub_batch ? predictor.PredictBatchSizeSingle(target_bytes, max_count, scan_vector.GetType(),
+			                                                           stats.get())
+			                        : max_count;
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			scan_vector.BufferMutable().SetVectorSize(count);
 			callback(scan_vector);
+
+			base_row_index += count;
 		}
 	}
 }

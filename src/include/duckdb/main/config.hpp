@@ -87,6 +87,10 @@ struct DBConfigOptions {
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
+	//! Global default byte budget for large-column read sub-batches (scan_target_size_bytes); 0 = disabled.
+	//! Covers checkpoint / commit (WAL write) / rollback reads, which run without a client context. Query
+	//! scans read a session-local override if set, otherwise fall back to this global value.
+	idx_t scan_target_size_bytes = 0;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory

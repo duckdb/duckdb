@@ -11,6 +11,12 @@
       ]
     },
     {
+      "reason": "Scan byte budget depends on which columns projection pushdown leaves in the scan.",
+      "paths": [
+        "test/sql/storage/scan_batch_size_distributions.test"
+      ]
+    },
+    {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
         "test/sql/optimizer/nested_null_segment_pruning.test",

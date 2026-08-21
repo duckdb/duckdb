@@ -15,6 +15,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -252,14 +253,14 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
                                const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
 	auto &local_storage = LocalStorage::Get(transaction);
-	state.Initialize(column_ids, context, table_filters);
+	state.Initialize(db.GetDatabase(), column_ids, context, table_filters);
 	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
-	state.Initialize(column_ids);
+	state.Initialize(db.GetDatabase(), column_ids);
 	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
 
@@ -402,7 +403,7 @@ void DataTable::RebuildIndexes() {
 
 		CreateIndexScanState state;
 		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
-		state.Initialize(scan_column_ids, nullptr);
+		state.Initialize(db.GetDatabase(), scan_column_ids, nullptr);
 		QueryContext context;
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
 		row_groups->InitializeCreateIndexScan(state);
@@ -1252,6 +1253,29 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 		idx_t end_row = current_row + chunk.size();
 		// start of chunk is current_row
 		// end of chunk is end_row
+		if (end_row <= row_start) {
+			// The scan begins at the vector-aligned boundary <= row_start, so the leading vector covers rows
+			// before row_start. A full 2048-row vector always straddles row_start, so the front-trim slice
+			// below is valid:
+			//   aligned                 row_start                       end
+			//   |------------------------|-------- append ---------------|
+			//   |<-- full vector (2048 rows), straddles row_start ------>|   chunk_end > chunk_start  OK
+			//
+			// But with sub-batching (scan_target_size_bytes) that vector is split, and a leading sub-batch can
+			// land entirely before row_start:
+			//   aligned                 row_start                       end
+			//   |------------------------|-------- append ---------------|
+			//   |--b0--|--b1--|--b2--|--b3--|... sub-batches ...          |
+			//   |--b0--|                                                     end_row <= row_start
+			//     ^ chunk_start = max(current_row,row_start) = row_start
+			//       chunk_end   = min(end_row,end)           = end_row  (< row_start)
+			//       chunk_count = chunk_end - chunk_start  ==> UNDERFLOW (huge alloc / crash)
+			//
+			// Such sub-batches are entirely pre-row_start rows, not part of this append: skip them.
+			current_row = end_row;
+			chunk.Reset();
+			continue;
+		}
 		// figure out if we need to write the entire chunk or just part of it
 		idx_t chunk_start = MaxValue<idx_t>(current_row, row_start);
 		idx_t chunk_end = MinValue<idx_t>(end_row, end);

@@ -1,0 +1,161 @@
+# name: test/sql/storage/vacuum/vacuum_rebuild_indexes_scan_target_size_bytes.test
+# description: The index-rebuild scan after a vacuum produces the same index whether or not it is byte-budgeted
+# group: [vacuum]
+
+# DataTable::RebuildIndexes re-scans the indexed columns plus the row IDs after a vacuum shifted row IDs.
+# It runs inside the checkpoint, without a ClientContext, so it only ever sees the GLOBAL
+# scan_target_size_bytes -- and it used to see nothing at all, scanning a full vector at a time.
+#
+# Unlike the other byte-budgeted paths this one cannot be covered by a memory test: the rebuild scan reads
+# only the indexed columns, and making those wide enough to be buffer-manager-tracked (>= 262144 bytes per
+# value) would mean building an ART over block-sized keys, which is not practical. What is testable is that
+# sub-batching does not change the result: this is a differential test over two identical databases that
+# differ only in the budget in force during the vacuum checkpoint. A budget of 1024 bytes over an
+# INTEGER key plus the row ID (12 bytes per row) yields ~85-row sub-batches, which divide neither the
+# 2048-row vector nor the 8192-row row group, so key/row-ID pairing is exercised across ragged boundaries.
+#
+# REBUILD is the legacy vacuum index strategy; it is only chosen when incremental remapping is unavailable,
+# hence STORAGE_VERSION 'v1.5.0' (which cannot persist row ID gaps) plus an explicit
+# vacuum_rebuild_indexes threshold above the table's row count. ROW_GROUP_SIZE 8192 keeps the row counts
+# small enough for a fast test.
+
+require noforcestorage
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_idx_budget_off.db' AS db_off (STORAGE_VERSION 'v1.5.0', vacuum_rebuild_indexes 40960, ROW_GROUP_SIZE 8192);
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_idx_budget_on.db' AS db_on (STORAGE_VERSION 'v1.5.0', vacuum_rebuild_indexes 40960, ROW_GROUP_SIZE 8192);
+
+# force point lookups through the index so the assertions below read the rebuilt ART, not the base table
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+CREATE TABLE db_off.t(i INTEGER);
+
+statement ok
+CREATE INDEX idx_off ON db_off.t(i);
+
+statement ok
+CREATE TABLE db_on.t(i INTEGER);
+
+statement ok
+CREATE INDEX idx_on ON db_on.t(i);
+
+# 3 full row groups of 8192 rows each
+statement ok
+INSERT INTO db_off.t SELECT i FROM range(24576) t(i);
+
+statement ok
+INSERT INTO db_on.t SELECT i FROM range(24576) t(i);
+
+statement ok
+CHECKPOINT db_off;
+
+statement ok
+CHECKPOINT db_on;
+
+query II
+SELECT (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_off.t')),
+       (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_on.t'));
+----
+3	3
+
+# empty out the first row group in both, so the vacuum drops it and shifts every remaining row ID down
+statement ok
+DELETE FROM db_off.t WHERE i < 8192;
+
+statement ok
+DELETE FROM db_on.t WHERE i < 8192;
+
+# --- the only difference between the two databases: the budget during the vacuum checkpoint ---
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+CHECKPOINT db_off;
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024;
+
+statement ok
+CHECKPOINT db_on;
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+# the empty row group was dropped in both
+query II
+SELECT (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_off.t')),
+       (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_on.t'));
+----
+2	2
+
+# the rebuilt indexes are still used
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM db_on.t WHERE i = 8192
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# every (key, row ID) pair agrees between the budgeted and unbudgeted rebuild, in both directions
+query I
+SELECT COUNT(*) FROM ((SELECT i, rowid FROM db_off.t) EXCEPT (SELECT i, rowid FROM db_on.t));
+----
+0
+
+query I
+SELECT COUNT(*) FROM ((SELECT i, rowid FROM db_on.t) EXCEPT (SELECT i, rowid FROM db_off.t));
+----
+0
+
+# index lookups resolve to the shifted row IDs: the dropped group's 8192 rows are gone, so key k maps to k-8192.
+# Probes sit on the first and last live row, the surviving row-group boundary, and a few offsets that fall
+# inside a sub-batch rather than on one of its edges.
+query II
+SELECT i, rowid FROM db_on.t WHERE i IN (8192, 8277, 8278, 10000, 16383, 16384, 24574, 24575) ORDER BY i;
+----
+8192	0
+8277	85
+8278	86
+10000	1808
+16383	8191
+16384	8192
+24574	16382
+24575	16383
+
+query II
+SELECT i, rowid FROM db_off.t WHERE i IN (8192, 8277, 8278, 10000, 16383, 16384, 24574, 24575) ORDER BY i;
+----
+8192	0
+8277	85
+8278	86
+10000	1808
+16383	8191
+16384	8192
+24574	16382
+24575	16383
+
+query II
+SELECT (SELECT COUNT(*) FROM db_off.t), (SELECT COUNT(*) FROM db_on.t);
+----
+16384	16384
+
+# the rebuilt indexes survive a reopen of the checkpointed files
+statement ok
+DETACH db_off;
+
+statement ok
+DETACH db_on;
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_idx_budget_on.db' AS db_on (STORAGE_VERSION 'v1.5.0', vacuum_rebuild_indexes 40960, ROW_GROUP_SIZE 8192);
+
+query II
+SELECT i, rowid FROM db_on.t WHERE i = 24575;
+----
+24575	16383

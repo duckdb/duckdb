@@ -1,0 +1,116 @@
+# name: test/sql/storage/checkpoint_blob_memory.test_slow
+# description: CHECKPOINT of a large-blob table stays within a scan_target_size_bytes byte budget
+# group: [storage]
+
+# ColumnDataCheckpointer::ScanSegments reads each column STANDARD_VECTOR_SIZE (2048) rows at a time. With
+# 300KB blobs a single such vector holds ~600MB, which overflows a small memory_limit and aborts the
+# checkpoint unless scan_target_size_bytes splits the read into byte-budgeted sub-batches. This test guards
+# both directions: budget=0 keeps the old (failing) behavior, a non-zero budget lets it complete correctly.
+#
+# Blob width matters for *which* memory the read consumes. Values >= the 262144-byte block size are stored
+# as overflow strings, and reading one pins a buffer-manager block that stays pinned in the result vector,
+# so a full-vector read really trips memory_limit. Values below the block size are instead copied into the
+# vector's own untracked heap and would silently pass even without the byte budget.
+#
+# Note: a plain blob scan (the verification queries) also materializes ~600MB vectors, so memory_limit is
+# raised for data setup + verification and only dropped around the CHECKPOINT calls.
+#
+# This is the only coverage of ScanSizePredictor::PredictBatchSizeSingle, and it is necessarily at the
+# memory level rather than the log level: ScanSegments runs without a ClientContext (which is also why it
+# reads the budget from the global config), so it cannot emit the per-batch TRACE lines that
+# scan_batch_size_distributions.test asserts on for the row-group scan path.
+
+# the ~600MB full-vector read that trips the limit only exists at a 2048-row vector size
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+# --- negative guard: no byte budget -> full 2048-row vector -> cannot pin under 300MB ---
+# The guard gets its own database file, which is abandoned rather than reopened: a failed CHECKPOINT
+# invalidates the database, so the limit cannot be lifted before recovery would replay the WAL, and that
+# replay materializes the same full 2048-row vectors the checkpoint just failed on.
+load {TEST_DIR}/checkpoint_blob_memory_guard.db
+
+statement ok
+SET memory_limit='20GB';
+
+# keep the CTAS data in the WAL/in-memory until our explicit CHECKPOINT
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+# 2500 rows x 300KB blob. Per-row-distinct content (unique 10-digit prefix) so the values cannot be
+# dictionary-deduplicated: the checkpoint read must materialize 2048 distinct 300KB blobs (~600MB).
+statement ok
+CREATE TABLE t AS SELECT i AS id, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB AS b FROM range(2500) tbl(i);
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2500	750000000
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement error
+CHECKPOINT;
+----
+<REGEX>:.*Failed to create checkpoint because of error: failed to pin block.*
+
+# --- positive: 16MB budget -> sub-batches of ~54 rows -> peak well under 300MB -> success ---
+# A fresh (empty) database: opening it replays nothing, so the 300MB limit left over from the guard is
+# harmless until it is lifted for the data setup below.
+load {TEST_DIR}/checkpoint_blob_memory.db
+
+statement ok
+SET memory_limit='20GB';
+
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE t AS SELECT i AS id, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB AS b FROM range(2500) tbl(i);
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2500	750000000
+
+# The setting is UBIGINT (raw byte count); it does not parse human-readable strings like '16MB'.
+# Global scope: the checkpoint read has no session to take a local value from.
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2500	750000000
+
+# data survives a clean restart from the checkpointed file
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2500	750000000

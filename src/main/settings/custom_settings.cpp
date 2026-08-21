@@ -1500,6 +1500,35 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Scan Target Size Bytes
+//===----------------------------------------------------------------------===//
+void ScanTargetSizeBytesSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.scan_target_size_bytes = input.GetValue<idx_t>();
+}
+
+void ScanTargetSizeBytesSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).scan_target_size_bytes = ClientConfig().scan_target_size_bytes;
+}
+
+void ScanTargetSizeBytesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.scan_target_size_bytes = input.GetValue<idx_t>();
+}
+
+void ScanTargetSizeBytesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.scan_target_size_bytes = DBConfigOptions().scan_target_size_bytes;
+}
+
+Value ScanTargetSizeBytesSetting::GetSetting(const ClientContext &context) {
+	// a local override wins when set; 0 means "unset" and falls back to the global default
+	auto local = ClientConfig::GetConfig(context).scan_target_size_bytes;
+	if (local != 0) {
+		return Value::UBIGINT(local);
+	}
+	return Value::UBIGINT(DBConfig::GetConfig(context).options.scan_target_size_bytes);
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

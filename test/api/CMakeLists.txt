@@ -26,6 +26,7 @@ set(TEST_API_OBJECTS
     test_prepared_api.cpp
     test_table_info.cpp
     test_appender_api.cpp
+    test_wide_blob_scan_oom.cpp
     test_lifecycle_hooks.cpp
     test_extension_schema_api.cpp
     test_pending_query.cpp

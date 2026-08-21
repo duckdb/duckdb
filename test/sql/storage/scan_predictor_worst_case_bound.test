@@ -1,0 +1,146 @@
+# name: test/sql/storage/scan_predictor_worst_case_bound.test
+# description: worst_case_bytes_per_row bounds per-batch materialized memory on skewed data
+# group: [storage]
+
+# A/B is derived from the per-batch predictor TRACE log within a single run: the logged `max_rows` is
+# what a batch would scan WITHOUT the byte bound (the full remaining vector), the logged `scan_count`
+# is WITH it. Peak materialized bytes for either is bounded by rows * worst_bpr.
+
+require noforcestorage
+
+# byte-budgeted sub-batching only engages when a full 2048-row vector is large enough to OOM
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+load {TEST_DIR}/scan_predictor_worst_case_bound.db
+
+statement ok
+PRAGMA threads=1
+
+# ============================================================
+# TC1: Skewed distribution (sparse -> cluster) within one row group.
+#   Vectors 0,1 = 4096 rows x 10-byte strings (sparse); vector 2 = 2048 rows x 100000-byte blobs
+#   (cluster). Target=2MB. worst_bpr = 16 (string_t slot) + 100000 (MaxStringLength) = 100016.
+#   safe_count = 2097152 / 100016 = 20.
+#
+#   An average-tracking predictor cannot foresee the transition: it would size the first cluster batch
+#   off the sparse average and materialize a full 2048 * 100016 ~= 195MB (~97x the 2MB budget) => the
+#   OOM. Sizing by the row-group-wide MaxStringLength clamps every batch to 20 rows instead.
+# ============================================================
+
+statement ok
+CREATE TABLE t_skew(s VARCHAR)
+
+# Single ordered INSERT so all 6144 rows land in ONE row group (separate INSERTs get split into
+# distinct row groups, which would isolate the sparse/cluster stats and defeat the scenario). The
+# row-group-wide MaxStringLength=100000 then applies worst_bpr=100016 across every vector, including
+# the sparse ones that precede the cluster.
+statement ok
+INSERT INTO t_skew SELECT CASE WHEN i < 4096 THEN repeat('s', 10) ELSE repeat('L', 100000) END FROM range(6144) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=2097152
+
+# duckdb_logs accumulates for the whole session, so each TC truncates first and its assertions then
+# cover only its own batches.
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+# Force materialization of the VARCHAR column (count(*) would project it away).
+query I
+SELECT SUM(LENGTH(s)) FROM t_skew
+----
+204840960
+
+statement ok
+set enable_logging=false
+
+# The byte bound actively shrank batches below a full vector read.
+query I
+SELECT CASE
+    WHEN message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT > 0 THEN 'OK'
+    ELSE concat('FAIL: ', message)
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# A (no bound): scanning the full remaining vector, landing on cluster rows (worst_bpr each), would
+# materialize far more than the byte budget -- this is the batch the bound must prevent.
+query I
+SELECT CASE
+    WHEN MAX(message.split('max_rows=')[2].split(' ')[1]::BIGINT
+             * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE) > 2097152 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# B (bounded): every actually-scanned batch, bounded by worst_bpr, stays within the byte budget.
+query I
+SELECT CASE
+    WHEN MAX(message.split('scan_count=')[2]::BIGINT
+             * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE) <= 2097152 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# Effectiveness margin: the bound shrinks the largest batch by at least 10x (2048 -> 20 rows).
+query I
+SELECT CASE
+    WHEN MAX(message.split('max_rows=')[2].split(' ')[1]::BIGINT)
+         >= 10 * MAX(message.split('scan_count=')[2]::BIGINT) THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# ============================================================
+# TC2: Uniform contrast. 2048 rows x 100000-byte blobs, same target/worst_bpr.
+#   Here every row IS the worst case, so the bound is exact rather than conservative. TC1 only shows
+#   the bound is never exceeded; this shows it is not needlessly pessimistic either -- every batch is
+#   sized to exactly safe_count=20, so the scan runs at the budget instead of below it.
+# ============================================================
+
+statement ok
+CREATE TABLE t_uniform(s VARCHAR)
+
+statement ok
+INSERT INTO t_uniform SELECT repeat('L', 100000) FROM range(2048)
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(s)) FROM t_uniform
+----
+204800000
+
+statement ok
+set enable_logging=false
+
+# Exactly 20 rows per batch: 2097152 / 100016 = 20. The only smaller batch is the tail of the
+# 2048-row vector (2048 = 102 * 20 + 8), which is limited by max_rows, not by the bound.
+query I
+SELECT CASE
+    WHEN MAX(message.split('scan_count=')[2]::BIGINT) = 20
+     AND MIN(message.split('scan_count=')[2]::BIGINT) >= 8 THEN 'OK'
+    ELSE 'FAIL: min=' || MIN(message.split('scan_count=')[2]::BIGINT)
+             || ' max=' || MAX(message.split('scan_count=')[2]::BIGINT)
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK

@@ -93,10 +93,10 @@ idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 }
 
 void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t sel_count) {
+                             SelectionVector &sel, idx_t sel_count, idx_t batch_count) {
 	bool is_supported = !child_column->type.IsNested() && child_column->type.InternalType() != PhysicalType::VARCHAR;
 	if (!is_supported) {
-		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count, batch_count);
 		return;
 	}
 	// the below specialized Select implementation selects only the required arrays, and skips over non-required data
@@ -122,8 +122,6 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 		consecutive_ranges++;
 	}
 
-	auto target_count = GetVectorCount(vector_index);
-
 	// experimentally, we want to allow around one consecutive range every ~2 array size
 	// for array size = 10, we allow 5 consecutive ranges
 	// for array size = 100, we allow 50 consecutive ranges
@@ -131,7 +129,7 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	auto allowed_ranges = array_size / 2;
 	if (allowed_ranges < consecutive_ranges) {
 		// fallback to select + filter
-		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count, batch_count);
 		return;
 	}
 
@@ -163,9 +161,10 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 		current_offset += scan_count;
 		current_position = end_idx;
 	}
-	// if there is any remaining at the end - skip any trailing rows
-	if (current_position < target_count) {
-		idx_t skip_amount = target_count - current_position;
+	// the cursor must always advance by batch_count rows (== full vector unless sub-batching), so that the other
+	// columns of this batch stay aligned - skip any trailing rows that were not selected
+	if (current_position < batch_count) {
+		idx_t skip_amount = batch_count - current_position;
 		validity->Skip(state.child_states[0], skip_amount);
 		child_column->Skip(state.child_states[1], skip_amount * array_size);
 	}

@@ -1,0 +1,151 @@
+# name: test/sql/storage/vacuum/vacuum_scan_target_size_bytes.test_slow
+# description: Vacuum merge-read of large-blob row groups stays within a scan_target_size_bytes byte budget
+# group: [vacuum]
+
+# During a full checkpoint, VacuumTask merges adjacent sparse row groups (after deletes) by scanning the
+# old groups and re-appending the live rows. VacuumTask previously never set the read byte budget, so its
+# merge-read materialized a whole 2048-row vector at once.
+#
+# Blob width matters for *which* memory the read consumes. Strings/blobs >= the block size (262144 bytes)
+# are stored as overflow strings; reading each one calls buffer_manager.Allocate(OVERFLOW_STRINGS) and
+# keeps the handle pinned in the result vector. So a full-vector read of 2048 x 300KB overflow blobs holds
+# ~600MB of *buffer-manager-tracked* memory at once and really fails to pin under a 300MB
+# memory_limit. (Narrower strings instead copy into the vector's own untracked heap and never trip the
+# limit -- which is why widths below the block size do NOT exercise this path.) scan_target_size_bytes
+# splits the read into ~50-row sub-batches, each ~16MB, released between batches -> peak stays well under
+# the limit.
+#
+# The row groups are sized at 4 vectors (ROW_GROUP_SIZE 8192) and the deletes are *clustered*: the first
+# 2048 rows of each group stay live (one full vector -> the big read), the other three vectors are fully
+# deleted (skipped by the scan). This keeps each group's live count at 2048 so two groups merge into one,
+# while forcing a genuine full-vector read of the survivors. Scattered deletes would instead make every
+# vector a cheap sparse (partial) read and never exercise the full-vector path.
+#
+# budget=0 keeps the old (failing) behavior; a non-zero budget lets the vacuum checkpoint complete with
+# correct data. Note: plain blob scans (the verification queries) also materialize large vectors, so
+# memory_limit is raised for setup + verification and only dropped around the vacuum CHECKPOINT.
+#
+# The table lives in an attached catalog "db" (ROW_GROUP_SIZE is an ATTACH-only option) and is always
+# referenced qualified as db.t. We never USE db: restart re-applies the recorded catalog search path after
+# reloading only the default catalog, so a search path pointing into the (not-yet-re-attached) db would
+# fail. Keeping the search path at the default and re-ATTACHing after each restart avoids that.
+
+require noforcestorage
+
+# the ~600MB full-vector merge-read that trips the limit only exists at a 2048-row vector size
+require vector_size 2048
+
+# large-BLOB tables (multiple GB) exceed the 32-bit address space
+require 64bit
+
+statement ok
+ATTACH '{TEST_DIR}/vacuum_scan_target_size_bytes.db' AS db (ROW_GROUP_SIZE 8192)
+
+statement ok
+SET memory_limit='20GB';
+
+# keep everything in the WAL/in-memory until our explicit CHECKPOINT calls
+statement ok
+SET checkpoint_threshold='1TB';
+
+# threads=1 so the CTAS lays rows out in id order -> deterministic group / vector boundaries
+statement ok
+SET threads=1;
+
+# 16384 rows x 300KB blob -> 2 full row groups of 8192 rows (4 vectors each).
+# Per-row-distinct content (unique 10-digit prefix) so the blobs cannot be dictionary-deduplicated: a
+# merge-read vector must materialize 2048 distinct 300KB values (~600MB flat), which is what the read-side
+# budget bounds. (Identical blobs would collapse to a shared payload and never stress the read path.)
+statement ok
+CREATE TABLE db.t AS SELECT i AS id, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB AS b FROM range(16384) tbl(i);
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+# first checkpoint: writes 2 full groups, nothing to vacuum yet
+statement ok
+CHECKPOINT db;
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM db.t;
+----
+16384	4915200000
+
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('db.t');
+----
+2
+
+# clustered delete: keep only the first 2048 rows (vector 0) of each 8192-row group live.
+# each group now has 2048 live rows -> the two groups merge into one; the survivors form one full vector.
+statement ok
+DELETE FROM db.t WHERE (id % 8192) >= 2048;
+
+query II
+SELECT count(*), sum(id) FROM db.t;
+----
+4096	20969472
+
+# --- negative guard: no byte budget -> full 2048-row merge-read vector -> OOM under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement error
+CHECKPOINT db;
+----
+<REGEX>:.*Checkpoint failed for database.*Original error: failed to pin block.*
+
+# the OOM invalidates the DB; restart, re-attach and replay the WAL to recover the (un-vacuumed) data
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/vacuum_scan_target_size_bytes.db' AS db (ROW_GROUP_SIZE 8192)
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(id) FROM db.t;
+----
+4096	20969472
+
+# --- positive: 16MB budget -> sub-batches of ~54 rows -> peak well under 300MB -> vacuum succeeds ---
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+CHECKPOINT db;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(id) FROM db.t;
+----
+4096	20969472
+
+# the vacuum merged the two sparse groups: 4096 live rows now fit in a single row group
+query I
+SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('db.t');
+----
+1
+
+# data survives a clean restart from the checkpointed file
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/vacuum_scan_target_size_bytes.db' AS db (ROW_GROUP_SIZE 8192)
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(id) FROM db.t;
+----
+4096	20969472

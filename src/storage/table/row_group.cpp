@@ -396,11 +396,15 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
+	state.sub_vector_state.Reset();
 	if (state.max_row_group_row == 0) {
 		// exceeded row groups to scan
 		return false;
 	}
 	D_ASSERT(!state.column_scans.empty());
+	// Invalidate the predictor at each row group boundary so the next PredictBatchSize re-computes its
+	// cold-start estimate — string length distributions can vary significantly across row groups.
+	state.size_predictor.Reset();
 	return true;
 }
 
@@ -647,6 +651,10 @@ void RowGroup::CommitDrop() {
 }
 
 void RowGroup::FinishVector(CollectionScanState &state) {
+	// Advancing to the next vector assumes the column cursors sit at a vector boundary, so this must never run
+	// mid-sub-batch (offset in (0, vector_max_count)) or the rows already consumed would be skipped twice.
+	D_ASSERT(!state.sub_vector_state.InProgress());
+	state.sub_vector_state.Reset();
 	state.vector_index++;
 	state.prepared_vector.Reset();
 }
@@ -863,6 +871,7 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	auto &prepared = state.prepared_vector;
 	if (prepared.prepare_state != VectorPrepareState::NONE) {
+		// the vector is already prepared: its I/O is still pending, or sub-batching left it mid-vector
 		return true;
 	}
 	while (true) {
@@ -924,6 +933,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		prepared.visible_count = count;
 		prepared.has_sample_selection = has_sample_selection;
 		prepared.sample_count = sample_count;
+		state.sub_vector_state.BeginVector(max_count, count);
 		return true;
 	}
 }
@@ -933,6 +943,7 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 	auto &filter_info = state.GetFilterInfo();
 	auto &transaction = options.transaction;
 	auto &prepared = state.prepared_vector;
+	auto &svs = state.sub_vector_state;
 	D_ASSERT(prepared.prepare_state != VectorPrepareState::NONE);
 	idx_t max_count = prepared.max_count;
 	idx_t count = prepared.visible_count;
@@ -940,22 +951,46 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 	idx_t sample_count = prepared.sample_count;
 	auto &sample_sel = prepared.sample_sel;
 
+	auto target_bytes = state.GetOptions().scan_target_size_bytes;
+	// Only sub-batch mode can leave a vector in progress, and a vector that is in progress must stay on the
+	// sub-batch path: it is the only one that honours svs.offset and the valid_sel cursor.
+	D_ASSERT(!svs.InProgress() || SubVectorScanState::IsActive(target_bytes));
+	// A fresh vector sub-batches when the budget is set and the vector is not sampled. Deletes
+	// (count < max_count) are supported by windowing valid_sel per batch, pending transactional updates by
+	// windowing FetchUpdates per batch.
+	bool use_sub_batch = svs.InProgress() || (SubVectorScanState::IsActive(target_bytes) && !has_sample_selection);
+
+	// physical rows to scan this call: the whole remaining vector unless sub-batching (then a byte-budgeted batch)
+	idx_t scan_count = svs.RemainingRows();
+	if (use_sub_batch) {
+		scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.RemainingRows(), column_ids, *this);
+		// PredictBatchSize clamps to the remaining rows (vector_max_count - offset), which is <= max_count
+		D_ASSERT(scan_count <= max_count);
+		// on resume (offset > 0) the remaining rows are strictly < max_count, so demotion to the full path
+		// below can only ever happen on a fresh vector — never mid-vector
+		D_ASSERT(scan_count < max_count || !svs.InProgress());
+		if (scan_count == max_count) {
+			// the whole vector fits the byte budget: not a sub-batch, use the original full path
+			use_sub_batch = false;
+		}
+		state.size_predictor.LogBatch(state.context.GetClientContext(), target_bytes, svs.RemainingRows(), scan_count);
+	}
+
 	bool has_filters = filter_info.HasFilters();
+	idx_t emit_count;
 	if (count == max_count && !has_filters) {
 		// scan all vectors completely: full scan without deletions or table filters
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			const auto &column = column_ids[i];
 			auto &col_data = GetColumn(column);
 			state.column_scans[i].update_scan_type = options.update_type;
-			// pass max_count explicitly, concurrent inserts can grow the column past the count captured at scan init
-			col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
+			// pass scan_count explicitly, concurrent inserts can grow the column past the count captured at scan init
+			col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
 			if (has_sample_selection) {
 				result.data[i].Slice(sample_sel, sample_count);
 			}
 		}
-		if (has_sample_selection) {
-			count = sample_count;
-		}
+		emit_count = has_sample_selection ? sample_count : scan_count;
 	} else {
 		// partial scan: we have deletions or table filters
 		idx_t approved_tuple_count = count;
@@ -972,9 +1007,19 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 			approved_tuple_count = sample_count;
 			sel.Initialize(sample_sel);
 		} else if (count != max_count) {
-			sel.Initialize(state.valid_sel);
+			if (use_sub_batch) {
+				// delete sub-batch: window valid_sel to this batch and rebase into batch-sized coordinates.
+				// sel keeps batch_sel's buffer alive (shared selection_data) after this scope ends.
+				SelectionVector batch_sel(scan_count);
+				approved_tuple_count = svs.WindowValidSelection(state.valid_sel, scan_count, batch_sel);
+				sel.Initialize(batch_sel);
+			} else {
+				sel.Initialize(state.valid_sel);
+			}
 		} else {
 			sel.Initialize(nullptr);
+			// clean case: only this batch's physical rows are approved before filtering
+			approved_tuple_count = scan_count;
 		}
 		//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 		auto adaptive_filter = filter_info.GetAdaptiveFilter();
@@ -996,12 +1041,12 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 				auto &result_vector = result.data[scan_idx];
 				if (approved_tuple_count == 0) {
 					auto &col_data = GetColumn(column_idx);
-					col_data.Skip(state.column_scans[scan_idx]);
+					col_data.Skip(state.column_scans[scan_idx], scan_count);
 					continue;
 				}
 				auto &col_data = GetColumn(column_idx);
 				col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
-				                approved_tuple_count, filter.filter, table_filter_state);
+				                approved_tuple_count, filter.filter, table_filter_state, scan_count);
 			}
 			for (auto &table_filter : filter_list) {
 				if (table_filter.IsAlwaysTrue()) {
@@ -1011,46 +1056,57 @@ void RowGroup::ProcessPreparedScan(ScanOptions options, CollectionScanState &sta
 			}
 		}
 		if (approved_tuple_count == 0) {
-			// all rows were filtered out by the table filters
-			D_ASSERT(has_filters);
+			// no rows to emit: either the table filters rejected them all, or a delete sub-batch landed
+			// entirely on deleted rows
+			D_ASSERT(has_filters || use_sub_batch);
 			result.Reset();
-			// skip this vector in all the scans that were not scanned yet
+			// skip this batch in all the scans that were not scanned yet
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				auto &col_idx = column_ids[i];
 				if (has_filters && filter_info.ColumnHasFilters(i)) {
 					continue;
 				}
 				auto &col_data = GetColumn(col_idx);
-				col_data.Skip(state.column_scans[i]);
+				col_data.Skip(state.column_scans[i], scan_count);
 			}
 			filter_info.EndFilter(filter_state);
-			FinishVector(state);
-			return;
-		}
-		//! Now we use the selection vector to fetch data for the other columns.
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			if (has_filters && filter_info.ColumnHasFilters(i)) {
-				// column has already been scanned as part of the filtering process
-				continue;
+			emit_count = 0;
+		} else {
+			//! Now we use the selection vector to fetch data for the other columns.
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (has_filters && filter_info.ColumnHasFilters(i)) {
+					// column has already been scanned as part of the filtering process
+					continue;
+				}
+				auto &column = column_ids[i];
+				auto &col_data = GetColumn(column);
+				state.column_scans[i].update_scan_type = options.update_type;
+				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+				                approved_tuple_count, scan_count);
 			}
-			auto &column = column_ids[i];
-			auto &col_data = GetColumn(column);
-			state.column_scans[i].update_scan_type = options.update_type;
-			col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-			                approved_tuple_count);
+			filter_info.EndFilter(filter_state);
+			emit_count = approved_tuple_count;
 		}
-		filter_info.EndFilter(filter_state);
-
-		D_ASSERT(approved_tuple_count > 0);
-		count = approved_tuple_count;
 	}
-	result.SetChildCardinality(count);
-	FinishVector(state);
+
+	// advance by the physical rows consumed this batch; once the whole vector is consumed, move on to the next
+	if (svs.Advance(scan_count)) {
+		FinishVector(state);
+	}
+	if (emit_count == 0) {
+		// this batch was fully filtered out - the caller continues with the next sub-batch or vector
+		result.Reset();
+		return;
+	}
+	result.SetChildCardinality(emit_count);
 }
 
 void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
 	while (PrepareScan(options, state)) {
-		PrefetchScanIO(state, state.prepared_vector.max_count);
+		if (!state.sub_vector_state.InProgress()) {
+			// I/O for the whole vector is scheduled once, when its first batch starts
+			PrefetchScanIO(state, state.prepared_vector.max_count);
+		}
 		ProcessPreparedScan(options, state, result);
 		if (result.size() > 0) {
 			return;

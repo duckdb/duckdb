@@ -1,0 +1,144 @@
+# name: test/sql/storage/scan_table_segment_wal_memory.test_slow
+# description: Commit-time WAL write of a large-blob append stays within a scan_target_size_bytes byte budget
+# group: [storage]
+
+# On commit, DataTable::WriteToLog scans the newly appended rows via ScanTableSegment to write them to the
+# WAL. For a large-blob table whose row group is not full, there is no optimistic row-group snapshot, so this
+# falls back to ScanTableSegment, which reads STANDARD_VECTOR_SIZE (2048) rows at a time. With 300KB blobs a
+# single such vector is ~600MB. The append itself fits under a small memory_limit because buffer blocks spill
+# to the temp directory, but the ~600MB materialized commit vector cannot spill -> OOM unless
+# scan_target_size_bytes splits the commit read into byte-budgeted sub-batches. This guards ScanTableSegment
+# specifically (distinct from the checkpoint read path covered by checkpoint_blob_memory.test).
+#
+# Blob width matters for *which* memory the read consumes: values >= the 262144-byte block size are held as
+# overflow strings whose buffer-manager handles stay pinned in the result vector, so a full-vector read really
+# trips memory_limit. Narrower values are copied into the vector's own untracked heap and would pass anyway.
+
+# the ~600MB full-vector read that trips the limit only exists at a 2048-row vector size
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+load {TEST_DIR}/scan_table_segment_wal_memory.db
+
+# keep the appended data in the WAL (no checkpoint) so commit exercises the WAL-write path
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE t(id INTEGER, b BLOB);
+
+# --- negative guard: no byte budget -> commit materializes a full 2048-row vector -> cannot pin under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+BEGIN TRANSACTION;
+
+# 8 x 256 rows = 2048 rows accumulated in one row group; each INSERT peaks at ~77MB, well under the limit,
+# and the accumulated blocks spill to the temp directory so the append succeeds. The id ranges are disjoint
+# so all 2048 blobs are distinct and cannot be deduplicated into a shared payload.
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(0, 256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(256, 512) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(512, 768) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(768, 1024) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1024, 1280) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1280, 1536) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1536, 1792) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1792, 2048) tbl(i);
+
+statement error
+COMMIT;
+----
+<REGEX>:.*Failed to commit: failed to pin block.*
+
+# the OOM invalidates the DB; the uncommitted transaction is gone after restart
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query I
+SELECT count(*) FROM t;
+----
+0
+
+# --- positive: 16MB budget -> commit sub-batches to ~54 rows -> peak well under 300MB -> success ---
+# The setting is UBIGINT (raw byte count); it does not parse human-readable strings like '16MB'.
+# Global scope: the commit-time WAL write has no session to take a local value from.
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(0, 256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(256, 512) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(512, 768) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(768, 1024) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1024, 1280) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1280, 1536) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1536, 1792) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1792, 2048) tbl(i);
+
+statement ok
+COMMIT;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2048	614400000
+
+# data survives a clean restart (WAL replay of the committed insert)
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2048	614400000

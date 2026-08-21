@@ -1,0 +1,79 @@
+# name: test/sql/storage/scan_table_segment_wal_unaligned.test_slow
+# description: Commit-time WAL write from a non-vector-aligned row_start must not underflow the sub-batch slice
+# group: [storage]
+
+# DataTable::ScanTableSegment starts scanning at the vector-aligned boundary <= row_start and front-trims
+# the rows before row_start. With a full 2048-row vector the first chunk always straddles row_start, so the
+# trim is valid. With scan_target_size_bytes enabled the leading vector is emitted as small sub-batches, and
+# a sub-batch lying entirely before row_start made chunk_count = chunk_end - chunk_start underflow (huge
+# allocation / crash). This forces that case: a first commit leaves a non-2048-aligned row count, then a
+# second commit's append is logged from a non-aligned row_start.
+
+# the sub-batch / row_start interleaving under test depends on the 2048-row vector boundary
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+load {TEST_DIR}/scan_table_segment_wal_unaligned.db
+
+# keep appended data in the WAL (no checkpoint) so commit exercises the WAL-write path
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+# 16MB budget -> ~54-row sub-batches for 300KB blobs, far smaller than the ~1000-row alignment gap below,
+# so a leading sub-batch falls entirely before row_start. UBIGINT raw byte count (not '16MB').
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+CREATE TABLE t(id INTEGER, b BLOB);
+
+# --- first commit: 1000 rows -> table now has a non-2048-aligned row count (next append starts at row 1000) ---
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1000) tbl(i);
+
+# --- second commit: append starts at row_start=1000 (aligned boundary = 0, gap = 1000 > sub-batch ~54) ---
+# WriteToLog scans vector 0 = rows [0,2048) as sub-batches; the leading sub-batches [0,54),[54,108),...
+# lie entirely before row_start=1000. Before the fix chunk_count underflowed here.
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1000, 1500) tbl(i);
+
+# both appends are intact and correctly bounded (no rows before row_start were re-logged, none dropped)
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+1500	450000000
+
+# data survives a clean restart (WAL replay of both committed inserts)
+restart
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+1500	450000000
+
+# --- also exercise a non-aligned append that spans past a vector boundary (row_start=1500 -> 2600) ---
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+INSERT INTO t SELECT i, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB FROM range(1500, 2600) tbl(i);
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2600	780000000
+
+restart
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2600	780000000
