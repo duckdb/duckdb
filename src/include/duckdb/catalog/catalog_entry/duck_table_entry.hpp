@@ -78,6 +78,7 @@ public:
 	bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade);
 
 private:
+	unique_ptr<CatalogEntry> RenameTable(ClientContext &context, RenameTableInfo &info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> RenameField(ClientContext &context, RenameFieldInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
