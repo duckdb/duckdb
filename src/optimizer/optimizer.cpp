@@ -26,6 +26,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_unnecessary_aggregates.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/row_group_pruner.hpp"
 #include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
@@ -356,6 +357,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
 		RemoveUnusedColumns unused(*this);
 		unused.VisitOperator(plan);
+	});
+
+	// removes aggregates that only eliminate duplicate rows nothing above them can observe
+	RunOptimizer(OptimizerType::UNNECESSARY_AGGREGATES, [&]() {
+		RemoveUnnecessaryAggregates remove_aggregates(*this);
+		remove_aggregates.Optimize(plan);
 	});
 
 	// Remove duplicate groups from aggregates
