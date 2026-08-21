@@ -60,6 +60,15 @@ build_loadable_extension_directory(
   ${PARAMETERS}
   loadable_extension_demo_alt.cpp)
 
+build_loadable_extension_directory(
+  loadable_secret_refresh_demo
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  loadable_secret_refresh_demo.cpp)
+
 if(NOT WIN32 AND NOT SUN)
   add_definitions(-DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
 

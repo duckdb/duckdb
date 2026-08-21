@@ -272,9 +272,104 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 		                        input.type, input.provider);
 	}
 
+	// Whatever the function declared transient is held outside the secret map from here on, so that
+	// registering the secret does not write it to the secret storage
+	auto kv_secret = dynamic_cast<KeyValueSecret *>(secret.get());
+	if (kv_secret) {
+		kv_secret->InstallDeclaredTransientValues();
+	}
+
 	// Register the secret at the secret_manager
 	return RegisterSecretInternal(transaction, std::move(secret), input.on_conflict, input.persist_type,
 	                              input.storage_type);
+}
+
+CreateSecretInput SecretManager::GenerateRefreshInput(const KeyValueSecret &secret, const Value &refresh_info) {
+	CreateSecretInput result;
+	result.type = secret.GetType();
+	result.name = secret.GetName();
+	result.provider = secret.GetProvider();
+	result.scope = secret.GetScope();
+
+	// the recipe is stored as a STRUCT of the named parameters the secret was created with. It is
+	// set by the user, so it cannot be assumed to have the right shape
+	if (refresh_info.type().id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Secret '%s' has a 'refresh_info' of type %s, expected a STRUCT", secret.GetName(),
+		                            refresh_info.type().ToString());
+	}
+	auto child_count = StructType::GetChildCount(refresh_info.type());
+	auto children = StructValue::GetChildren(refresh_info);
+	D_ASSERT(children.size() == child_count);
+	for (idx_t i = 0; i < child_count; i++) {
+		auto &key = StructType::GetChildName(refresh_info.type(), i);
+		result.options[Identifier(key).GetIdentifierName()] = children[i];
+	}
+
+	return result;
+}
+
+bool SecretManager::TryRefreshSecret(ClientContext &context, const KeyValueSecret &secret) {
+	// the recipe is always the secret's own value: it is never itself derived
+	auto refresh_lookup = secret.secret_map.find("refresh_info");
+	if (refresh_lookup == secret.secret_map.end()) {
+		return false;
+	}
+
+	auto &derived_state = secret.GetDerivedState();
+	lock_guard<mutex> refresh_guard(derived_state.refresh_lock);
+
+	if (!secret.MustRefresh() && !secret.NeedsDerivation()) {
+		// another caller refreshed while we waited for the lock
+		return true;
+	}
+
+	// Entering the refresh before running the recipe rather than after it completes means a create
+	// function that looks this same secret up again sees a refresh in flight instead of a secret
+	// that still wants refreshing, and so does not deadlock on the lock we are holding.
+	derived_state.EnterRefresh();
+
+	shared_ptr<const SecretDerivedValues> snapshot;
+	try {
+		auto refresh_input = GenerateRefreshInput(secret, refresh_lookup->second);
+		if (refresh_input.provider.empty()) {
+			auto secret_type = LookupTypeInternal(refresh_input.type);
+			refresh_input.provider = Identifier(secret_type.default_provider);
+		}
+
+		// Note: the create function is called directly rather than through CreateSecret, so that the
+		// catalog entry is not replaced. Lock ordering: a secret's refresh_lock is taken before
+		// manager_lock, never the other way around.
+		auto function_lookup = LookupFunctionInternal(refresh_input.type, refresh_input.provider);
+		if (!function_lookup) {
+			ThrowProviderNotFoundError(refresh_input.type, refresh_input.provider);
+		}
+
+		auto refreshed = function_lookup->function(context, refresh_input);
+		if (!refreshed) {
+			throw InternalException("CreateSecretFunction for type: '%s' and provider: '%s' did not return a secret!",
+			                        refresh_input.type, refresh_input.provider);
+		}
+
+		// Only the keys the secret declared transient are installed: the rest of the re-created
+		// secret is discarded, since the catalog entry it would belong to is not being replaced.
+		auto &refreshed_kv = refreshed->Cast<KeyValueSecret>();
+		refreshed_kv.InstallDeclaredTransientValues();
+		snapshot = refreshed_kv.GetDerivedState().GetSnapshot();
+	} catch (...) {
+		derived_state.AbortRefresh();
+		throw;
+	}
+
+	if (!snapshot) {
+		// the provider derives nothing, so there is nothing to install. Not an error: the caller is
+		// told the refresh did not happen, and the secret is left valid rather than retrying the
+		// recipe on every subsequent lookup
+		derived_state.FinishRefresh();
+		return false;
+	}
+	derived_state.SetSnapshot(std::move(snapshot));
+	derived_state.FinishRefresh();
+	return true;
 }
 
 BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info) {
@@ -354,11 +449,24 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 		}
 	}
 
-	if (best_match) {
-		return SecretMatch(*best_match, best_match_score);
+	if (!best_match) {
+		return SecretMatch();
 	}
 
-	return SecretMatch();
+	// A secret is re-derived before it is handed out when a consumer rejected its transient values,
+	// or when they were never persisted and so are missing entirely. The derived values live in
+	// state shared with the catalog entry, so deriving here is visible to every other copy.
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(best_match->secret.get());
+	if (kv_secret &&
+	    (kv_secret->MustRefresh() || kv_secret->NeedsDerivation() || kv_secret->RefreshInFlightElsewhere())) {
+		// The create function needs a client context. A lookup made without one, for example from a
+		// background operation, hands the secret out as it is rather than failing.
+		if (transaction.context) {
+			TryRefreshSecret(*transaction.context, *kv_secret);
+		}
+	}
+
+	return SecretMatch(*best_match, best_match_score);
 }
 
 unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,

@@ -130,6 +130,12 @@ public:
 	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info);
 	//! Lookup the best matching secret by matching the secret scopes to the path
 	DUCKDB_API SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type);
+	//! Re-derive the transient values of a secret in place, by re-running the recipe stored in its
+	//! 'refresh_info'. The catalog entry is left untouched: the re-derived values are installed in the
+	//! state shared by every copy of the secret, so no secret storage is written and no manager lock is
+	//! needed. Concurrent callers for the same secret derive exactly once. Returns false when the secret
+	//! carries no recipe, or when re-running it produced no derived values.
+	DUCKDB_API bool TryRefreshSecret(ClientContext &context, const KeyValueSecret &secret);
 	//! Get a secret by name, optionally from a specific storage
 	DUCKDB_API unique_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name,
 	                                                   const string &storage = "");
@@ -173,6 +179,8 @@ private:
 	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
 	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const Identifier &type, const Identifier &provider);
+	//! Turn the 'refresh_info' recipe of a secret back into the input that can re-create it
+	static CreateSecretInput GenerateRefreshInput(const KeyValueSecret &secret, const Value &refresh_info);
 	//! Register a new Secret
 	unique_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
 	                                               OnCreateConflict on_conflict, SecretPersistType persist_type,

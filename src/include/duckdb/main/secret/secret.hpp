@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -173,31 +176,122 @@ public:
 	}
 };
 
+//! An immutable set of values derived for a secret, for example credentials fetched from a credential
+//! provider. Derived values shadow the secret's own values and are never serialized: they are
+//! re-derived on demand instead of being written to the secret storage.
+struct SecretDerivedValues {
+	//! the derived key -> value map, overlaid on top of the secret's own map
+	identifier_tree_t<Value> values;
+};
+
+//! Whether a secret's derived values can still be handed out
+enum class SecretRefreshState : uint8_t {
+	//! The derived values are believed to be usable
+	VALID,
+	//! A consumer found the derived values to be rejected, they have to be re-derived
+	MUST_REFRESH,
+	//! A re-derivation is in flight
+	IN_REFRESH
+};
+
+//! State shared by every copy of a secret. A secret is deep-copied on every lookup, so anything that
+//! has to stay in sync with the catalog entry - the derived values, the refresh state, the lock that
+//! makes concurrent lookups derive exactly once - lives behind this shared pointer.
+struct SecretDerivedState {
+public:
+	SecretDerivedState() : refresh_state(SecretRefreshState::VALID) {
+	}
+
+public:
+	//! Returns the currently installed snapshot, or nullptr when nothing has been derived yet
+	shared_ptr<const SecretDerivedValues> GetSnapshot() const {
+		lock_guard<mutex> guard(snapshot_lock);
+		return current;
+	}
+	//! Installs a new snapshot. Note that the refresh flag is cleared before the values are
+	//! re-derived, not here, so that a request to refresh arriving mid-derivation is not lost
+	void SetSnapshot(shared_ptr<const SecretDerivedValues> snapshot) {
+		lock_guard<mutex> guard(snapshot_lock);
+		current = std::move(snapshot);
+	}
+
+	//! Marks the derived values as rejected. A refresh that is in flight is superseded rather than
+	//! left to complete, since it was started before the values were known to be bad
+	void MarkMustRefresh() {
+		refresh_state = SecretRefreshState::MUST_REFRESH;
+	}
+	//! Enters a refresh. Only called while holding refresh_lock, having established that the values
+	//! do need re-deriving
+	void EnterRefresh() {
+		refreshing_thread = ThreadUtil::GetThreadId();
+		refresh_state = SecretRefreshState::IN_REFRESH;
+	}
+	//! Whether a refresh is in flight on another thread. A lookup made by the thread that is
+	//! deriving is the recipe looking up the secret it is refreshing, and must not wait for itself
+	bool RefreshInFlightElsewhere() const {
+		return refresh_state == SecretRefreshState::IN_REFRESH && refreshing_thread != ThreadUtil::GetThreadId();
+	}
+	//! Leaves a refresh that produced new values. A request to refresh that arrived while we were
+	//! deriving supersedes the values we just produced, so it is left standing
+	void FinishRefresh() {
+		auto expected = SecretRefreshState::IN_REFRESH;
+		refresh_state.compare_exchange_strong(expected, SecretRefreshState::VALID);
+	}
+	//! Leaves a refresh that failed: the values stay marked so that the next lookup retries rather
+	//! than handing out credentials the backend has already rejected
+	void AbortRefresh() {
+		auto expected = SecretRefreshState::IN_REFRESH;
+		refresh_state.compare_exchange_strong(expected, SecretRefreshState::MUST_REFRESH);
+	}
+	SecretRefreshState GetRefreshState() const {
+		return refresh_state;
+	}
+
+public:
+	//! Held while re-deriving, so that concurrent lookups derive exactly once
+	mutex refresh_lock;
+	//! Whether the derived values can still be handed out
+	atomic<SecretRefreshState> refresh_state;
+	//! The thread that is re-deriving, meaningful only while the state is IN_REFRESH
+	atomic<thread_id> refreshing_thread;
+
+private:
+	//! Guards `current`: C++17 has no atomic shared_ptr
+	mutable mutex snapshot_lock;
+	shared_ptr<const SecretDerivedValues> current;
+};
+
 //! The KeyValueSecret is a class that implements a Secret as a set of key -> values. This class can be used
 //! for most use-cases of secrets as secrets generally tend to fit in a key value map.
 class KeyValueSecret : public BaseSecret {
 public:
 	KeyValueSecret(const vector<string> &prefix_paths, const Identifier &type, const Identifier &provider,
 	               const Identifier &name)
-	    : BaseSecret(prefix_paths, type, provider, name) {
+	    : BaseSecret(prefix_paths, type, provider, name), derived_state(make_shared_ptr<SecretDerivedState>()) {
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
 	explicit KeyValueSecret(const BaseSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()),
+	      derived_state(make_shared_ptr<SecretDerivedState>()) {
 		serializable = true;
 	};
+	//! Note: copies share the derived state by pointer - see SecretDerivedState
 	KeyValueSecret(const KeyValueSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()),
+	      derived_state(secret.derived_state) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
+		transient_keys = secret.transient_keys;
 		serializable = true;
 	};
 	KeyValueSecret(KeyValueSecret &&secret) noexcept
 	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider),
-	                 std::move(secret.name)) {
+	                 std::move(secret.name)),
+	      derived_state(std::move(secret.derived_state)) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
+		transient_keys = std::move(secret.transient_keys);
 		serializable = true;
 	};
 
@@ -233,14 +327,78 @@ public:
 		return make_uniq<KeyValueSecret>(*this);
 	}
 
-	// Get a value from the secret
+	// Get a value from the secret, preferring a derived value over the secret's own
 	bool TryGetValue(const Identifier &key, Value &result) const {
+		auto snapshot = derived_state->GetSnapshot();
+		if (snapshot) {
+			auto derived_lookup = snapshot->values.find(key);
+			if (derived_lookup != snapshot->values.end()) {
+				result = derived_lookup->second;
+				return true;
+			}
+		}
 		auto lookup = secret_map.find(key);
 		if (lookup == secret_map.end()) {
 			return false;
 		}
 		result = lookup->second;
 		return true;
+	}
+
+	//! Install a set of derived values, visible to every copy of this secret
+	void SetDerivedValues(identifier_tree_t<Value> values) const {
+		auto snapshot = make_shared_ptr<SecretDerivedValues>();
+		snapshot->values = std::move(values);
+		derived_state->SetSnapshot(std::move(snapshot));
+	}
+	//! Whether any derived values are currently installed
+	bool HasDerivedValues() const {
+		return derived_state->GetSnapshot() != nullptr;
+	}
+	//! Whether the secret carries a recipe that can re-derive its transient values
+	bool HasRefreshRecipe() const {
+		return secret_map.find("refresh_info") != secret_map.end();
+	}
+	//! Whether the transient values have to be derived before the secret can be used. A secret that
+	//! declared transient values had them moved into the snapshot when it was created, and the
+	//! snapshot is not persisted, so a secret read back from storage is missing them
+	bool NeedsDerivation() const {
+		return HasRefreshRecipe() && !HasDerivedValues();
+	}
+	//! Whether a lookup should wait for a re-derivation that another thread is already running,
+	//! rather than being handed the values that thread is in the middle of replacing
+	bool RefreshInFlightElsewhere() const {
+		return derived_state->RefreshInFlightElsewhere();
+	}
+	//! Moves the values the create function declared transient out of the secret map and into the
+	//! snapshot. They are then held only in the state shared between copies, which is never
+	//! serialized, so they are re-derived rather than persisted
+	void InstallDeclaredTransientValues() {
+		if (transient_keys.empty()) {
+			return;
+		}
+		auto snapshot = make_shared_ptr<SecretDerivedValues>();
+		for (const auto &key : transient_keys) {
+			auto lookup = secret_map.find(key);
+			if (lookup != secret_map.end()) {
+				snapshot->values[key] = lookup->second;
+				secret_map.erase(lookup);
+			}
+		}
+		derived_state->SetSnapshot(std::move(snapshot));
+	}
+	//! Flag the derived values as rejected, forcing a re-derivation on the next lookup
+	void MarkMustRefresh() const {
+		derived_state->MarkMustRefresh();
+	}
+	//! Whether the derived values have to be re-derived before being handed out again. False while a
+	//! refresh is already in flight, so that a lookup made from within a refresh does not recurse
+	bool MustRefresh() const {
+		return derived_state->GetRefreshState() == SecretRefreshState::MUST_REFRESH;
+	}
+	//! The state shared by every copy of this secret
+	SecretDerivedState &GetDerivedState() const {
+		return *derived_state;
 	}
 
 	bool TrySetValue(const Identifier &key, const CreateSecretInput &input) {
@@ -256,6 +414,13 @@ public:
 	identifier_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	identifier_set_t redact_keys;
+	//! keys whose values were derived by running the secret's recipe, for example credentials
+	//! fetched from a credential provider. These are never persisted: they are re-derived instead
+	identifier_set_t transient_keys;
+
+private:
+	//! Shared by every copy of this secret, never serialized - see SecretDerivedState
+	shared_ptr<SecretDerivedState> derived_state;
 };
 
 // Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct
