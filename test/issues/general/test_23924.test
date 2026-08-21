@@ -1,0 +1,45 @@
+# name: test/issues/general/test_23924.test
+# description: Issue 23924 - COUNT DISTINCT uses VARIANT comparison semantics
+# group: [general]
+
+query TI
+WITH x(v) AS (
+	VALUES (1::INTEGER::VARIANT), (1::BIGINT::VARIANT)
+)
+SELECT min(v = 1::INTEGER::VARIANT), count(DISTINCT v) FROM x;
+----
+true	1
+
+# Equivalent numeric values use one NUMBER comparison class; SQL NULL is ignored.
+query I
+WITH x(v) AS (
+	VALUES (1::TINYINT::VARIANT), (1::BIGINT::VARIANT), (1.00::DECIMAL(4, 2)::VARIANT),
+	       (2::INTEGER::VARIANT), (NULL::VARIANT)
+)
+SELECT count(DISTINCT v) FROM x;
+----
+2
+
+# The native distinct-aggregate hash table must use the same keys as the logical rewrite.
+statement ok
+SET disabled_optimizers = 'distinct_aggregate_rewrite';
+
+query I
+WITH x(v) AS (
+	VALUES (1::INTEGER::VARIANT), (1::BIGINT::VARIANT)
+)
+SELECT count(DISTINCT v) FROM x;
+----
+1
+
+statement ok
+SET disabled_optimizers = '';
+
+# Windowed COUNT DISTINCT is bound through a separate path.
+query I
+WITH x(v) AS (
+	VALUES (1::INTEGER::VARIANT), (1::BIGINT::VARIANT)
+)
+SELECT DISTINCT count(DISTINCT v) OVER () FROM x;
+----
+1

@@ -358,6 +358,9 @@ public:
 	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
 	bool is_holistic = false;
 
+	//! Whether DISTINCT arguments can be replaced by their collation keys
+	bool collate_distinct_arguments = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -407,6 +410,10 @@ public: // Properties
 	//! Whether the aggregate is holistic.
 	auto IsHolistic() const -> bool { return properties.is_holistic; }
 	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
+	//! Whether DISTINCT arguments can be replaced by their collation keys
+	auto CollateDistinctArguments() const -> bool { return properties.collate_distinct_arguments; }
+	auto SetCollateDistinctArguments(bool value) -> void { properties.collate_distinct_arguments = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
