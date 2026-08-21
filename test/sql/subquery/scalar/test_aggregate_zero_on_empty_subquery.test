@@ -1,0 +1,99 @@
+# name: test/sql/subquery/scalar/test_aggregate_zero_on_empty_subquery.test
+# description: Aggregates that return 0 for zero rows must also return 0 in correlated subqueries
+# group: [scalar]
+
+statement ok
+CREATE TABLE foo (a INT, b INT);
+
+statement ok
+CREATE TABLE bar (c INT, d INT);
+
+statement ok
+INSERT INTO foo SELECT range, range + 1 FROM range(1, 21);
+
+statement ok
+INSERT INTO bar SELECT range % 6 + 1, range + 2 FROM range(1, 21);
+
+# foo.a = 7..20 has no matching group in bar, so the subquery must return 0 instead of NULL
+query I
+SELECT count(*) FROM foo
+WHERE a > (SELECT regr_count(bar.c, bar.d) FROM bar WHERE foo.a = bar.c);
+----
+17
+
+query II
+SELECT foo.a, (SELECT regr_count(bar.c, bar.d) FROM bar WHERE foo.a = bar.c) AS rc
+FROM foo
+WHERE foo.a >= 5
+ORDER BY foo.a;
+----
+5	3
+6	3
+7	0
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+17	0
+18	0
+19	0
+20	0
+
+statement ok
+CREATE TABLE t1 (k INT);
+
+statement ok
+INSERT INTO t1 VALUES (1), (99);
+
+statement ok
+CREATE TABLE t2 (k INT, v INT);
+
+statement ok
+INSERT INTO t2 VALUES (1, 10), (1, 20);
+
+# empty input returns 0 for these aggregates
+query IIIII
+SELECT count(*), count(v), regr_count(k, v), approx_count_distinct(v), entropy(v) FROM t2 WHERE k = 99;
+----
+0	0	0	0	0.0
+
+# a correlated subquery over an empty group must return the same values
+query IIIIII
+SELECT k,
+	(SELECT count(*) FROM t2 WHERE t2.k = t1.k),
+	(SELECT count(t2.v) FROM t2 WHERE t2.k = t1.k),
+	(SELECT regr_count(t2.k, t2.v) FROM t2 WHERE t2.k = t1.k),
+	(SELECT approx_count_distinct(t2.v) FROM t2 WHERE t2.k = t1.k),
+	(SELECT entropy(t2.v) FROM t2 WHERE t2.k = t1.k)
+FROM t1
+ORDER BY k;
+----
+1	2	2	2	2	1.0
+99	0	0	0	0	0.0
+
+# aggregates that return NULL for zero rows must keep returning NULL
+query III
+SELECT k,
+	(SELECT sum(t2.v) FROM t2 WHERE t2.k = t1.k),
+	(SELECT list(t2.v) FROM t2 WHERE t2.k = t1.k)
+FROM t1
+ORDER BY k;
+----
+1	30	[10, 20]
+99	NULL	NULL
+
+# DISTINCT and FILTER modifiers keep the 0 semantics
+query III
+SELECT k,
+	(SELECT regr_count(DISTINCT t2.k, t2.v) FROM t2 WHERE t2.k = t1.k),
+	(SELECT count(t2.v) FILTER (WHERE t2.v > 100) FROM t2 WHERE t2.k = t1.k)
+FROM t1
+ORDER BY k;
+----
+1	2	0
+99	0	0

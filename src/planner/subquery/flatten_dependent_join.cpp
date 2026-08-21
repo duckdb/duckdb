@@ -5,7 +5,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/main/settings.hpp"
@@ -801,6 +801,41 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownProjection(
 	return result;
 }
 
+//! The result of an aggregate for zero input rows, obtained by finalizing a freshly initialized state
+//! Returns NULL for volatile aggregates and for aggregates that cannot be finalized without aggregating rows
+static Value AggregateEmptyResult(const BoundAggregateExpression &aggr) {
+	auto &func = aggr.Function();
+	// finalizing a volatile aggregate can have observable effects - it may only be evaluated during execution
+	if (func.GetStability() == FunctionStability::VOLATILE) {
+		return Value(func.GetReturnType());
+	}
+	if (!func.HasStateSizeCallback() || !func.HasStateInitCallback() || !func.HasStateFinalizeCallback()) {
+		return Value(func.GetReturnType());
+	}
+	auto bind_data = aggr.BindInfo().get();
+	AggregateStateInput state_input(func, bind_data);
+	auto state = make_unsafe_uniq_array_uninitialized<data_t>(func.GetStateSizeCallback()(state_input));
+	data_ptr_t state_ptr = state.get();
+	func.GetStateInitCallback()(state_input, &state_ptr, 1);
+
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	Vector state_vector(Value::POINTER(CastPointerToValue(state_ptr)), count_t(1));
+	state_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	Vector result(func.GetReturnType());
+	// finalizing a state that never aggregated a row yields the result for zero input rows
+	AggregateFinalizeInputData finalize_input(func, bind_data, allocator);
+	func.GetStateFinalizeCallback()(state_vector, finalize_input, result, 1, 0);
+	FlatVector::SetSize(result, count_t(1));
+	auto empty_result = result.GetValue(0);
+
+	auto destructor = func.GetStateDestructorCallback();
+	if (destructor) {
+		AggregateInputData destructor_input(func, bind_data, allocator);
+		destructor(state_vector, destructor_input, 1);
+	}
+	return empty_result;
+}
+
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(unique_ptr<LogicalOperator> &plan,
                                                                                bool propagate_null_values,
                                                                                vector<ColumnBinding> state) {
@@ -835,13 +870,20 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		return result;
 	}
 
+	// aggregates that produce a non-NULL result for zero rows need a row for every delim key
+	vector<Value> empty_results;
+	for (auto &aggr_exp : aggr.expressions) {
+		auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
+		empty_results.push_back(AggregateEmptyResult(b_aggr_exp));
+	}
+
 	JoinType join_type = JoinType::INNER;
 	if (any_join || !propagate_null_values) {
 		join_type = JoinType::LEFT;
 	}
-	for (auto &aggr_exp : aggr.expressions) {
-		auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-		if (!b_aggr_exp.PropagatesNullValues()) {
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		auto &b_aggr_exp = aggr.expressions[i]->Cast<BoundAggregateExpression>();
+		if (!b_aggr_exp.PropagatesNullValues() || !empty_results[i].IsNull()) {
 			join_type = JoinType::LEFT;
 			break;
 		}
@@ -862,21 +904,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		join->conditions.push_back(std::move(cond));
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
-
-		auto count_fun = CountFunctionBase::GetFunction();
-		auto count_star_fun = CountStarFun::GetFunction();
-
-		const auto is_count_func =
-		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
-
-		const auto is_count_star_func =
-		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
-
-		if (is_count_func || is_count_star_func) {
-			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
+		if (empty_results[i].IsNull()) {
+			continue;
 		}
+		// the LEFT join emits NULL for delim keys without a matching group - rewrite it back into the empty result
+		replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = empty_results[i];
 	}
 	plan = std::move(join);
 	result.bindings = CreateContiguousState(ColumnBinding(left_index, ProjectionIndex(0)));
