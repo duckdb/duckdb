@@ -27,9 +27,6 @@ public:
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
-	bool SupportsLambdaFunctions() const override {
-		return false;
-	}
 
 	BindResult BindCheckColumn(ColumnRefExpression &expr);
 
