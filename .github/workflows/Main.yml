@@ -683,7 +683,7 @@ jobs:
 
     - name: Tools Tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -779,21 +779,23 @@ jobs:
         path: duckdb-shared-libs-linux-${{ matrix.config.arch }}-musl.tar.gz
         archive: false
 
-    - name: Test
+    - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
-      env:
-        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
-        echo Release tests
-        if [[ "$RUN_SLOW_TESTS" == "true" ]]; then
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
           make alltest_release_tag
         else
           make test_release_tag
         fi
-        echo Tools Tests
-        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-        echo Examples
+
+    - name: Tools Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: Examples
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
