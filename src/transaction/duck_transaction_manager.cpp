@@ -585,13 +585,14 @@ void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb
 	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
 }
 
-void DuckTransactionManager::PushAttach(Transaction &transaction_p, AttachedDatabase &attached_db) {
+void DuckTransactionManager::PushAttach(Transaction &transaction_p, AttachedDatabase &attached_db,
+                                        optional_ptr<AttachedDatabase> replaced_database) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	if (!db.IsSystem()) {
 		throw InternalException("Can only ATTACH in the system catalog");
 	}
 	transaction.catalog_version = ++last_uncommitted_catalog_version;
-	transaction.PushAttach(attached_db);
+	transaction.PushAttach(attached_db, replaced_database);
 }
 
 } // namespace duckdb

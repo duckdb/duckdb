@@ -85,11 +85,11 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 }
 
-void DuckTransaction::PushAttach(AttachedDatabase &db) {
-	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::ATTACHED_DATABASE, sizeof(AttachedDatabase *));
+void DuckTransaction::PushAttach(AttachedDatabase &db, optional_ptr<AttachedDatabase> replaced_database) {
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::ATTACHED_DATABASE, sizeof(AttachedDatabase *) * 2);
 	auto ptr = undo_entry.GetDataMutable();
-	// store the pointer to the database
-	Store<CatalogEntry *>(&db, ptr);
+	Store<AttachedDatabase *>(&db, ptr);
+	Store<AttachedDatabase *>(replaced_database.get(), ptr + sizeof(AttachedDatabase *));
 }
 
 void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx, row_t rows[],
