@@ -10,6 +10,7 @@ add_library_unity(
   buffered_file_reader.cpp
   buffered_file_writer.cpp
   memory_stream.cpp
+  message_serializer.cpp
   serialization_data.cpp
   serializer.cpp)
 set(ALL_OBJECT_FILES
