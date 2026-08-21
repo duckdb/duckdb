@@ -565,6 +565,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 	}
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
+	function.SetWindowStateCombineSafe(!arguments[1]->HasParameter() && arguments[1]->IsFoldable());
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
