@@ -891,6 +891,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
 	const auto arg_type = arguments[1]->GetReturnType().InternalType();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
+	function.SetWindowStateCombineSafe(!arguments[2]->HasParameter() && arguments[2]->IsFoldable());
 
 	// Specialize the function based on the input types
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING, NULLS_LAST);

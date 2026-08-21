@@ -1,0 +1,39 @@
+# name: test/issues/general/test_24449.test
+# description: Dynamic N values in min/max window aggregates
+# group: [general]
+
+query II
+SELECT bool_and(min_result = [i]), bool_and(arg_min_result = [i])
+FROM (
+	SELECT i,
+		min(i, CASE WHEN i < 16 THEN 1 ELSE 2 END) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) min_result,
+		arg_min(i, i, CASE WHEN i < 16 THEN 1 ELSE 2 END) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) arg_min_result
+	FROM range(17) t(i)
+);
+----
+true	true
+
+query II
+SELECT bool_and(min_result = [i]), bool_and(arg_min_result = [i])
+FROM (
+	SELECT i,
+		min(DISTINCT i, CASE WHEN i < 16 THEN 1 ELSE 2 END) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) min_result,
+		arg_min(DISTINCT i, i, CASE WHEN i < 16 THEN 1 ELSE 2 END)
+			OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) arg_min_result
+	FROM range(17) t(i)
+);
+----
+true	true
+
+statement ok
+PRAGMA threads=4;
+
+query I
+SELECT result
+FROM (
+	SELECT min(i, CASE WHEN i < 2500 THEN 1 ELSE 2 END) OVER () result
+	FROM range(5000) t(i)
+)
+LIMIT 1;
+----
+[0]
