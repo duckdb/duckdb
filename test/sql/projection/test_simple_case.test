@@ -88,12 +88,29 @@ query II
 SELECT count(*) FILTER (WHERE a = b), count(*)
 FROM (
 	SELECT
-		CASE 1 WHEN 1 THEN random() ELSE 0 END a,
-		CASE 1 WHEN 1 THEN random() ELSE 0 END b
+		CASE 1 WHEN 1 THEN random() WHEN 2 THEN 0 ELSE 0 END a,
+		CASE 1 WHEN 1 THEN random() WHEN 2 THEN 0 ELSE 0 END b
 	FROM range(10000)
 )
 ----
 0	10000
+
+# A volatile branch must execute once per row even when the CASE operand is constant.
+statement ok
+CREATE SEQUENCE simple_case_constant_seq START 1
+
+query I
+SELECT count(DISTINCT v)
+FROM (
+	SELECT CASE 1
+		WHEN 1 THEN nextval('simple_case_constant_seq')
+		WHEN 2 THEN 0
+		ELSE 0
+	END v
+	FROM range(10000)
+)
+----
+10000
 
 # The generated lambda parameter must not shadow a user column.
 query I
