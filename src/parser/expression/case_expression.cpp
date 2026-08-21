@@ -17,11 +17,25 @@ string CaseExpression::ToString() const {
 
 unique_ptr<CaseExpression> CaseExpression::GetLegacyCaseExpression() const {
 	D_ASSERT(case_operand);
+	vector<unique_ptr<ParsedExpression>> case_operands;
+	case_operands.reserve(case_checks.size());
+	for (idx_t i = 0; i < case_checks.size(); i++) {
+		case_operands.push_back(case_operand->Copy());
+	}
+	return GetLegacyCaseExpression(std::move(case_operands));
+}
+
+unique_ptr<CaseExpression>
+CaseExpression::GetLegacyCaseExpression(vector<unique_ptr<ParsedExpression>> case_operands) const {
+	D_ASSERT(case_operands.size() == case_checks.size());
 	auto result = make_uniq<CaseExpression>();
-	for (auto &check : case_checks) {
+	for (idx_t i = 0; i < case_checks.size(); i++) {
+		auto &check = case_checks[i];
 		CaseCheck legacy_check;
-		legacy_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, case_operand->Copy(),
-		                                                         check.when_expr->Copy());
+		auto operand_location = case_operands[i]->GetQueryLocation();
+		legacy_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+		                                                         std::move(case_operands[i]), check.when_expr->Copy());
+		legacy_check.when_expr->SetQueryLocation(operand_location);
 		legacy_check.then_expr = check.then_expr->Copy();
 		result->CaseChecksMutable().push_back(std::move(legacy_check));
 	}
