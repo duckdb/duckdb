@@ -1,7 +1,9 @@
 #include "duckdb/function/cast/cast_statistics.hpp"
 
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
