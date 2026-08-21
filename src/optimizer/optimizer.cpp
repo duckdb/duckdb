@@ -34,6 +34,7 @@
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
+#include "duckdb/optimizer/aggregate_fn_pushdown.hpp"
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
@@ -496,6 +497,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::SCALAR_FN_PUSHDOWN, [&] {
 		ScalarFnPushdown fn_pushdown(context);
 		plan = fn_pushdown.Optimize(std::move(plan));
+	});
+
+	// Push UNGROUPED_AGGREGATE's of form agg(T) and count_star() into GET.
+	RunOptimizer(OptimizerType::AGGREGATE_FN_PUSHDOWN, [&] {
+		AggregateFnPushdown aggregate_fn_pushdown(context);
+		plan = aggregate_fn_pushdown.Optimize(std::move(plan));
 	});
 }
 
