@@ -61,8 +61,8 @@ public:
 	                                          const Identifier &name, const vector<LogicalType> &arguments,
 	                                          const vector<pair<Identifier, LogicalType>> &named_arguments,
 	                                          const vector<string> &candidates);
-	static BinderException UnsupportedLambdaExpression(const string &message, bool generated_simple_case = false);
-	static bool IsUnsupportedLambdaExpression(const ErrorData &error, bool require_generated_simple_case = false);
+	static BinderException UnsupportedLambdaExpression(const string &message);
+	static bool IsUnsupportedLambdaExpression(const ErrorData &error);
 	static BinderException Unsupported(ParsedExpression &expr, const string &message);
 };
 

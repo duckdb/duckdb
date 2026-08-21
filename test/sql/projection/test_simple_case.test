@@ -35,6 +35,12 @@ SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
 ----
 hit
 
+# Comparison errors retain the original operand name and location.
+statement error
+SELECT CASE random() WHEN DATE '2020-01-01' THEN 1 WHEN DATE '2020-01-02' THEN 2 ELSE 0 END
+----
+<REGEX>:Conversion Error:.*source column random\(\).*
+
 # Simple CASE retains its historical implicit result-column name.
 query I
 SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END"
@@ -71,6 +77,12 @@ SELECT CASE (SELECT 2) WHEN 1 THEN 1 WHEN 2 THEN 2 ELSE 0 END
 ----
 2
 
+# Generated invoke composes with an enclosing user-written lambda.
+query I
+SELECT list_transform([1, 2], lambda x: CASE x WHEN 1 THEN 10 WHEN 2 THEN 20 ELSE 0 END)[2]
+----
+20
+
 # Volatile branches of a deterministic simple CASE remain visible to the optimizer.
 query II
 SELECT count(*) FILTER (WHERE a = b), count(*)
@@ -85,7 +97,7 @@ FROM (
 
 # The generated lambda parameter must not shadow a user column.
 query I
-SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
+SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject WHEN 2 THEN 0 ELSE 0 END
 FROM (VALUES (1, 42), (2, 99)) tbl(i, __duckdb_simple_case_subject)
 ORDER BY i
 ----
@@ -98,13 +110,13 @@ CREATE SEQUENCE invoke_shadow_seq START 1
 
 statement ok
 CREATE VIEW invoke_shadow_view AS
-	SELECT CASE nextval('invoke_shadow_seq') WHEN 1 THEN 42 ELSE 0 END
+	SELECT CASE nextval('invoke_shadow_seq') WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
 
 statement ok
 CREATE MACRO invoke(x, y) AS 999
 
 query I
-SELECT CASE 1 WHEN 1 THEN 42 ELSE 0 END
+SELECT CASE 1 WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
 ----
 42
 
@@ -183,26 +195,46 @@ SELECT CASE nextval('simple_case_single_macro_unnest_seq') WHEN 1 THEN simple_ca
 ----
 2
 
-# Do not silently use repeated-evaluation semantics for multiple comparisons.
-statement error
-SELECT CASE random() WHEN 0 THEN (SELECT 2) WHEN 1 THEN 3 ELSE 0 END
-----
-Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+# Lambda-incompatible bodies retain the historical searched-CASE fallback.
+statement ok
+CREATE SEQUENCE simple_case_multi_subquery_seq START 2
 
-statement error
-SELECT CASE random() WHEN 0 THEN unnest([2]) WHEN 1 THEN 3 ELSE 0 END
+query I
+SELECT CASE nextval('simple_case_multi_subquery_seq') WHEN 1 THEN (SELECT 2) WHEN 2 THEN 3 ELSE 0 END
 ----
-Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+0
 
-statement error
-SELECT CASE random() WHEN 0 THEN simple_case_subquery() WHEN 1 THEN 3 ELSE 0 END
-----
-Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+statement ok
+CREATE SEQUENCE simple_case_multi_unnest_seq START 2
 
-statement error
-SELECT CASE random() WHEN 0 THEN simple_case_unnest() WHEN 1 THEN 3 ELSE 0 END
+query I
+SELECT CASE nextval('simple_case_multi_unnest_seq') WHEN 1 THEN unnest([2]) WHEN 2 THEN 3 ELSE 4 END
 ----
-Binder Error: Simple CASE expressions with a volatile operand and a subquery or UNNEST in a branch are not supported
+4
+
+statement ok
+CREATE SEQUENCE simple_case_multi_macro_subquery_seq START 2
+
+query I
+SELECT CASE nextval('simple_case_multi_macro_subquery_seq')
+	WHEN 1 THEN simple_case_subquery()
+	WHEN 2 THEN 3
+	ELSE 0
+END
+----
+0
+
+statement ok
+CREATE SEQUENCE simple_case_multi_macro_unnest_seq START 2
+
+query I
+SELECT CASE nextval('simple_case_multi_macro_unnest_seq')
+	WHEN 1 THEN simple_case_unnest()
+	WHEN 2 THEN 3
+	ELSE 4
+END
+----
+4
 
 # Errors originating from user-written nested lambdas are not remapped to CASE errors.
 statement error
@@ -223,21 +255,75 @@ END
 ----
 <REGEX>:Binder Error:.*UNNEST in lambda expressions is not supported.*
 
-# Aggregate and window expressions can be captured when a volatile operand requires invoke.
+# Aggregate and window expressions can be captured by invoke.
 statement ok
 CREATE SEQUENCE simple_case_capture_seq START 1
 
 query I
-SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
+SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN sum(i) WHEN 1 THEN 0 ELSE 0 END
+FROM range(3) tbl(i)
 ----
 3
 
 query I
-SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
+SELECT CASE nextval('simple_case_capture_seq') % 1 WHEN 0 THEN row_number() OVER () WHEN 1 THEN 0 ELSE 0 END
+FROM range(3) tbl(i)
 ----
 1
 2
 3
+
+# Restrictive binders preserve the legacy representation instead of rejecting valid SQL.
+statement ok
+CREATE SEQUENCE simple_case_default_seq START 1
+
+statement ok
+CREATE TABLE simple_case_default_tbl(i VARCHAR DEFAULT
+	CASE nextval('simple_case_default_seq') % 3
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END)
+
+statement ok
+INSERT INTO simple_case_default_tbl DEFAULT VALUES
+
+query T
+SELECT i FROM simple_case_default_tbl
+----
+one
+
+statement ok
+CREATE TABLE simple_case_generated_tbl(
+	i INTEGER,
+	j INTEGER GENERATED ALWAYS AS (
+		CASE i % 3 WHEN 0 THEN i WHEN 1 THEN i + 1 WHEN 2 THEN i + 2 ELSE i + 3 END
+	)
+)
+
+statement ok
+INSERT INTO simple_case_generated_tbl(i) VALUES (3), (4), (5)
+
+query II
+SELECT * FROM simple_case_generated_tbl ORDER BY i
+----
+3	3
+4	5
+5	7
+
+statement ok
+CREATE TABLE simple_case_check_tbl(i INTEGER, CHECK (
+	CASE i % 3 WHEN 0 THEN i >= 0 WHEN 1 THEN i > 0 WHEN 2 THEN i > 1 ELSE false END
+))
+
+statement ok
+INSERT INTO simple_case_check_tbl VALUES (0), (1), (2)
+
+statement error
+INSERT INTO simple_case_check_tbl VALUES (-1)
+----
+Constraint Error: CHECK constraint failed on table simple_case_check_tbl
 
 # The parsed operand survives current-format storage and is lowered again after restart.
 load {TEST_DIR}/simple_case_storage.db
