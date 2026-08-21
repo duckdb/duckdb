@@ -34,6 +34,9 @@ struct BoundCastExpression {
 	static bool IsTryCast(const BoundFunctionExpression &cast_expr);
 	static const BoundCastInfo &GetBoundCast(const BoundFunctionExpression &cast_expr);
 	static BoundCastInfo &GetBoundCastMutable(BoundFunctionExpression &cast_expr);
+	static unique_ptr<BaseStatistics> PropagateStatistics(BoundFunctionExpression &cast_expr,
+	                                                      const BaseStatistics &child_stats,
+	                                                      optional_ptr<ClientContext> context = nullptr);
 
 	//! Cast an expression to the specified SQL type, using only the built-in SQL casts
 	static unique_ptr<Expression> AddDefaultCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,

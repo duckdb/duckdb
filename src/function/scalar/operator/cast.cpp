@@ -8,6 +8,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -60,7 +61,8 @@ public:
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CastFunctionData>();
-		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast;
+		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast &&
+		       bound_cast.Equals(other.bound_cast);
 	}
 };
 
@@ -96,6 +98,11 @@ static unique_ptr<FunctionLocalState> CastInitLocalState(ExpressionState &state,
 
 static unique_ptr<FunctionData> BindCastFun(BindScalarFunctionInput &input) {
 	throw InvalidInputException("Cast function cannot be called directly");
+}
+
+static unique_ptr<BaseStatistics> CastPropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 1);
+	return BoundCastExpression::PropagateStatistics(input.expr, input.child_stats[0], context);
 }
 
 static string CastToString(FunctionToStringInput &input) {
@@ -141,6 +148,7 @@ ScalarFunction CastFun::GetFunction() {
 	cast_fun.SetSerializeCallback(CastFunctionSerialize);
 	cast_fun.SetDeserializeCallback(CastFunctionDeserialize);
 	cast_fun.SetInitStateCallback(CastInitLocalState);
+	cast_fun.SetStatisticsCallback(CastPropagateStatistics);
 	return cast_fun;
 }
 
@@ -204,6 +212,18 @@ const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpres
 
 BoundCastInfo &BoundCastExpression::GetBoundCastMutable(BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfoMutable()->Cast<CastFunctionData>().bound_cast;
+}
+
+unique_ptr<BaseStatistics> BoundCastExpression::PropagateStatistics(BoundFunctionExpression &cast_expr,
+                                                                    const BaseStatistics &child_stats,
+                                                                    optional_ptr<ClientContext> context) {
+	auto &cast_data = cast_expr.BindInfoMutable()->Cast<CastFunctionData>();
+	auto result =
+	    cast_data.bound_cast.PropagateStatistics(cast_data.source_type, cast_data.target_type, child_stats, context);
+	if (cast_data.try_cast && result) {
+		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	return result;
 }
 
 } // namespace duckdb
