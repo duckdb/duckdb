@@ -42,7 +42,7 @@ static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPru
 
 	auto &child = ListStats::GetChildStats(*list_stats);
 	if (!list_stats->CanHaveNoNull() || !child.CanHaveNoNull() || needle.IsNull()) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE_OR_NULL;
 	}
 	auto cast = needle.DefaultTryCastAs(child.GetType());
 	if (!cast) {
