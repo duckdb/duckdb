@@ -3,6 +3,9 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/message_serializer.hpp"
+
+#include "test_message_writer.hpp"
 
 namespace duckdb {
 
@@ -261,5 +264,227 @@ TEST_CASE("Test deleted values", "[serialization]") {
 		REQUIRE(v2_out.p5->c2 == "foo");
 	}
 }
+
+TEST_CASE("Test padded LEB128 encoding", "[serialization]") {
+	REQUIRE(EncodingUtil::MaxLEB128Width<uint8_t>() == 2);
+	REQUIRE(EncodingUtil::MaxLEB128Width<uint16_t>() == 3);
+	REQUIRE(EncodingUtil::MaxLEB128Width<uint32_t>() == 5);
+	REQUIRE(EncodingUtil::MaxLEB128Width<uint64_t>() == 10);
+
+	// Every legal width decodes to the same value, so a decoder needs no knowledge of slots
+	uint64_t values[] = {0, 1, 127, 128, 300, 16384, DConstants::INVALID_INDEX};
+	for (auto value : values) {
+		for (idx_t width = EncodingUtil::MinimalLEB128Width(value); width <= EncodingUtil::MaxLEB128Width<uint64_t>();
+		     width++) {
+			data_t buffer[16] = {};
+			EncodingUtil::EncodePaddedLEB128<uint64_t>(buffer, value, width);
+			uint64_t result;
+			REQUIRE(EncodingUtil::DecodeUnsignedLEB128<uint64_t>(buffer, result) == width);
+			REQUIRE(result == value);
+		}
+	}
+
+	data_t buffer[16] = {};
+	REQUIRE_THROWS(EncodingUtil::EncodePaddedLEB128<uint64_t>(buffer, 128, 1));
+	// Six bytes is more than the decoder accepts for a 32-bit value
+	REQUIRE_THROWS(EncodingUtil::EncodePaddedLEB128<uint32_t>(buffer, 1, 6));
+}
+
+TEST_CASE("Test reserved slots and deferred lists", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	MessageSerializer serializer(stream);
+
+	serializer.Begin();
+	serializer.WritePropertyWithDefault<string>(1, "name", string("incremental"));
+	auto items = serializer.BeginDeferredList(2, "items");
+	for (idx_t i = 0; i < 5; i++) {
+		TestMessageItem item;
+		item.value = static_cast<int32_t>(i);
+		item.label = "item" + to_string(i);
+		serializer.AppendElement(items, &item);
+	}
+	serializer.EndDeferredList(items);
+	auto total = serializer.ReserveProperty<idx_t>(3, "total_items");
+	serializer.ReserveProperty<idx_t>(4, "next_index", DConstants::INVALID_INDEX);
+	serializer.End();
+
+	serializer.PatchReserved(total, items.count);
+
+	stream.Rewind();
+	auto message = BinaryDeserializer::Deserialize<TestMessage>(stream);
+	REQUIRE(message->name == "incremental");
+	REQUIRE(message->total_items == 5);
+	REQUIRE(message->items.size() == 5);
+	for (idx_t i = 0; i < 5; i++) {
+		REQUIRE(message->items[i]->value == static_cast<int32_t>(i));
+		REQUIRE(message->items[i]->label == "item" + to_string(i));
+	}
+}
+
+TEST_CASE("Test patching a slot after the stream reallocates", "[serialization]") {
+	Allocator allocator;
+	// A small capacity, so the buffer moves between the reserve and the patch
+	MemoryStream stream(allocator, 16);
+	MessageSerializer serializer(stream);
+
+	serializer.Begin();
+	auto items = serializer.BeginDeferredList(2, "items");
+	auto initial_data = stream.GetData();
+	for (idx_t i = 0; i < 200; i++) {
+		TestMessageItem item;
+		item.value = static_cast<int32_t>(i);
+		item.label = string(32, 'x');
+		serializer.AppendElement(items, &item);
+	}
+	serializer.EndDeferredList(items);
+	serializer.ReserveProperty<idx_t>(4, "next_index", DConstants::INVALID_INDEX);
+	serializer.End();
+	REQUIRE(stream.GetData() != initial_data);
+
+	stream.Rewind();
+	auto message = BinaryDeserializer::Deserialize<TestMessage>(stream);
+	REQUIRE(message->items.size() == 200);
+}
+
+TEST_CASE("Test reserved slot errors", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	MessageSerializer serializer(stream);
+
+	serializer.Begin();
+	auto narrow = serializer.ReserveProperty<uint16_t>(1, "narrow");
+	serializer.End();
+
+	// A three byte slot holds a uint16_t, and nothing wider
+	REQUIRE_NOTHROW(serializer.PatchReserved(narrow, 65535));
+	REQUIRE_THROWS(serializer.PatchReserved(narrow, 1ULL << 30));
+
+	REQUIRE_THROWS(MessageSerializer::PatchSlot(stream.GetData(), 1, narrow, 1));
+
+	MessageSerializer::ReservedSlot invalid;
+	REQUIRE(!invalid.IsValid());
+	REQUIRE_THROWS(serializer.PatchReserved(invalid, 1));
+}
+
+TEST_CASE("Test the generated incremental writer", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	MessageSerializer serializer(stream);
+	TestMessageWriter writer(serializer);
+
+	serializer.Begin();
+	writer.WriteName("generated");
+	writer.BeginItems();
+	for (idx_t i = 0; i < 3; i++) {
+		TestMessageItem item;
+		item.value = static_cast<int32_t>(i * 10);
+		item.label = "label" + to_string(i);
+		writer.AppendItems(&item);
+	}
+	writer.EndItems();
+	auto total = writer.ReserveTotalItems();
+	auto next = writer.ReserveNextIndex();
+	serializer.End();
+
+	// The totals are known only after the payload closes, and the patch needs no live serializer
+	MessageSerializer::PatchSlot(stream.GetData(), stream.GetPosition(), total, 3);
+	MessageSerializer::PatchSlot(stream.GetData(), stream.GetPosition(), next, 99);
+
+	stream.Rewind();
+	auto message = BinaryDeserializer::Deserialize<TestMessage>(stream);
+	REQUIRE(message->name == "generated");
+	REQUIRE(message->total_items == 3);
+	REQUIRE(message->next_index.IsValid());
+	REQUIRE(message->next_index.GetIndex() == 99);
+	REQUIRE(message->items.size() == 3);
+	for (idx_t i = 0; i < 3; i++) {
+		REQUIRE(message->items[i]->value == static_cast<int32_t>(i * 10));
+		REQUIRE(message->items[i]->label == "label" + to_string(i));
+	}
+}
+
+TEST_CASE("Test the incremental writer agrees with the one-shot codec", "[serialization]") {
+	TestMessage expected;
+	expected.name = "both";
+	expected.total_items = 2;
+	for (idx_t i = 0; i < 2; i++) {
+		auto item = make_uniq<TestMessageItem>();
+		item->value = static_cast<int32_t>(i);
+		item->label = "e" + to_string(i);
+		expected.items.push_back(std::move(item));
+	}
+
+	Allocator allocator;
+	MemoryStream one_shot(allocator);
+	BinarySerializer::Serialize(expected, one_shot);
+
+	MemoryStream incremental(allocator);
+	MessageSerializer serializer(incremental);
+	TestMessageWriter writer(serializer);
+	serializer.Begin();
+	writer.WriteName(expected.name);
+	writer.BeginItems();
+	for (auto &item : expected.items) {
+		writer.AppendItems(item.get());
+	}
+	writer.EndItems();
+	auto total = writer.ReserveTotalItems();
+	writer.ReserveNextIndex();
+	serializer.End();
+	serializer.PatchReserved(total, expected.items.size());
+
+	// No byte comparison: a slot is a padded varint, and it is written even at its default value.
+	// The two payloads must decode to the same message.
+	one_shot.Rewind();
+	incremental.Rewind();
+	auto from_one_shot = BinaryDeserializer::Deserialize<TestMessage>(one_shot);
+	auto from_writer = BinaryDeserializer::Deserialize<TestMessage>(incremental);
+
+	REQUIRE(from_one_shot->name == from_writer->name);
+	REQUIRE(from_one_shot->total_items == from_writer->total_items);
+	REQUIRE(from_one_shot->next_index.IsValid() == from_writer->next_index.IsValid());
+	REQUIRE(from_one_shot->items.size() == from_writer->items.size());
+	for (idx_t i = 0; i < from_writer->items.size(); i++) {
+		REQUIRE(from_one_shot->items[i]->value == from_writer->items[i]->value);
+		REQUIRE(from_one_shot->items[i]->label == from_writer->items[i]->label);
+	}
+}
+
+TEST_CASE("Test an unpatched slot reads back as its placeholder", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	MessageSerializer serializer(stream);
+	TestMessageWriter writer(serializer);
+
+	serializer.Begin();
+	writer.WriteName("unpatched");
+	writer.BeginItems();
+	writer.EndItems();
+	writer.ReserveTotalItems();
+	writer.ReserveNextIndex();
+	serializer.End();
+
+	stream.Rewind();
+	auto message = BinaryDeserializer::Deserialize<TestMessage>(stream);
+	REQUIRE(message->items.empty());
+	// Zero is a real index, so an optional_idx slot starts at its own sentinel. An unpatched slot
+	// must read back as absent, not as index zero.
+	REQUIRE(message->total_items == 0);
+	REQUIRE(!message->next_index.IsValid());
+}
+
+#ifdef DEBUG
+TEST_CASE("Test the generated writer rejects out of order fields", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	MessageSerializer serializer(stream);
+	TestMessageWriter writer(serializer);
+
+	serializer.Begin();
+	writer.ReserveTotalItems();
+	REQUIRE_THROWS(writer.WriteName("out of order"));
+}
+#endif
 
 } // namespace duckdb
