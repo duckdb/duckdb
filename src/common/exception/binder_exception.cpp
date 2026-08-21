@@ -1,5 +1,4 @@
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/error_data.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function.hpp"
@@ -56,20 +55,6 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
 	    StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
 	                       "explicit type casts.\n\tCandidate functions:\n%s",
 	                       call_str, candidate_str));
-}
-
-BinderException BinderException::UnsupportedLambdaExpression(const string &message) {
-	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED_LAMBDA_EXPRESSION", QueryLocation());
-	return BinderException(extra_info, message);
-}
-
-bool BinderException::IsUnsupportedLambdaExpression(const ErrorData &error) {
-	if (!error.HasError() || error.Type() != ExceptionType::BINDER) {
-		return false;
-	}
-	auto &extra_info = error.ExtraInfo();
-	auto subtype = extra_info.find("error_subtype");
-	return subtype != extra_info.end() && subtype->second == "UNSUPPORTED_LAMBDA_EXPRESSION";
 }
 
 BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {

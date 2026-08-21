@@ -235,7 +235,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const optional_ptr<BindLambdaContext> bind_lambda_context,
                                             const vector<LogicalType> &function_child_types) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		throw BinderException::UnsupportedLambdaExpression("subqueries in lambda expressions are not supported");
+		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
 	// lambdas are bound depth-first, so an inner lambda has already had its own columns captured by the
@@ -251,8 +251,10 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	}
 
 	// these expression classes do not have children, transform them
+	// Unnamed bound references are binder inputs; named ones already address a surrounding lambda frame.
+	auto capture_bound_reference = expr->GetExpressionClass() == ExpressionClass::BOUND_REF && expr->GetAlias().empty();
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
-	    expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER ||
+	    expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER || capture_bound_reference ||
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.

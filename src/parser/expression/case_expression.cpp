@@ -9,17 +9,10 @@ CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, E
 }
 
 string CaseExpression::ToString() const {
-	string case_str = "CASE ";
 	if (case_operand) {
-		case_str += case_operand->ToString();
+		return GetLegacyCaseExpression()->ToString();
 	}
-	for (auto &check : case_checks) {
-		case_str += " WHEN (" + check.when_expr->ToString() + ")";
-		case_str += " THEN (" + check.then_expr->ToString() + ")";
-	}
-	case_str += " ELSE " + else_expr->ToString();
-	case_str += " END";
-	return case_str;
+	return ToString<CaseExpression, ParsedExpression>(*this);
 }
 
 unique_ptr<CaseExpression> CaseExpression::GetLegacyCaseExpression() const {
