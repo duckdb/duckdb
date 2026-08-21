@@ -774,6 +774,23 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 	RemoveDirectoryRecursive(normalized_dir.c_str());
 }
 
+bool LocalFileSystem::RemoveDirectoryIfEmpty(const string &directory, optional_ptr<FileOpener> opener) {
+	auto normalized_dir = ExpandPath(directory, opener);
+	if (rmdir(normalized_dir.c_str()) == 0) {
+		return true;
+	}
+	if (errno == ENOTEMPTY || errno == EEXIST) {
+		// something else is still using it - leave it alone
+		return false;
+	}
+	if (errno == ENOENT) {
+		// already gone
+		return true;
+	}
+	throw IOException({{"errno", std::to_string(errno)}}, "Could not remove directory \"%s\": %s", directory,
+	                  strerror(errno));
+}
+
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto normalized_file = ExpandPath(filename, opener);
 	if (std::remove(normalized_file.c_str()) != 0) {
@@ -1494,6 +1511,25 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 		return;
 	}
 	DeleteDirectoryRecursive(*this, directory, opener);
+}
+
+bool LocalFileSystem::RemoveDirectoryIfEmpty(const string &directory, optional_ptr<FileOpener> opener) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	if (RemoveDirectoryW(unicode_path.c_str())) {
+		return true;
+	}
+	auto error_code = GetLastError();
+	if (error_code == ERROR_DIR_NOT_EMPTY) {
+		// something else is still using it - leave it alone
+		return false;
+	}
+	if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
+		// already gone
+		return true;
+	}
+	auto error = LocalFileSystem::GetLastErrorAsString();
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Could not remove directory \"%s\": %s", abs_path, error);
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
