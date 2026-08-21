@@ -37,11 +37,16 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 	encoded_value |= UnsafeNumericCast<bitpacking_metadata_encoded_t>((uint8_t)metadata.mode << 24);
 	return encoded_value;
 }
-static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
+static bitpacking_metadata_t DecodeMeta(data_ptr_t metadata_ptr) {
+	auto metadata_encoded = Load<bitpacking_metadata_encoded_t>(metadata_ptr);
 	bitpacking_metadata_t metadata;
-	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
-	metadata.offset = *metadata_encoded & 0x00FFFFFF;
+	metadata.mode = static_cast<BitpackingMode>((metadata_encoded >> 24) & 0xFF);
+	metadata.offset = metadata_encoded & 0x00FFFFFF;
 	return metadata;
+}
+
+static void ThrowCorruptedBitpackingSegment(const char *reason) {
+	throw IOException("Failed to scan bitpacking segment - %s. Database file appears to be corrupted.", reason);
 }
 
 struct EmptyBitpackingWriter {
@@ -585,15 +590,25 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 		handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 		auto data_ptr = handle.GetDataMutable();
+		auto block_size = current_segment.GetBlockSize();
+		auto block_offset = segment.GetBlockOffset();
+		if (block_offset >= block_size || block_size - block_offset < sizeof(idx_t)) {
+			ThrowCorruptedBitpackingSegment("segment offset was out of range");
+		}
+		auto segment_capacity = block_size - block_offset;
+		auto segment_start = data_ptr + block_offset;
 
 		// load offset to bitpacking widths pointer
-		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
-		bitpacking_metadata_ptr =
-		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
-		if (bitpacking_metadata_ptr >= handle.GetDataMutable() + current_segment.GetBlockSize()) {
-			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
-			                        segment.GetBlockHandle()->BlockId());
+		auto bitpacking_metadata_offset = Load<idx_t>(segment_start);
+		if (bitpacking_metadata_offset < sizeof(bitpacking_metadata_encoded_t) ||
+		    bitpacking_metadata_offset > segment_capacity) {
+			ThrowCorruptedBitpackingSegment("metadata offset was out of range");
 		}
+		auto metadata_offset = bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+		if (metadata_offset % alignof(bitpacking_metadata_encoded_t) != 0) {
+			ThrowCorruptedBitpackingSegment("metadata offset was not aligned");
+		}
+		bitpacking_metadata_ptr = segment_start + metadata_offset;
 
 		// load the first group
 		LoadNextGroup();
@@ -622,7 +637,7 @@ public:
 		D_ASSERT(bitpacking_metadata_ptr > handle.GetDataMutable() &&
 		         (bitpacking_metadata_ptr < handle.GetDataMutable() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
-		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
+		current_group = DecodeMeta(bitpacking_metadata_ptr);
 
 		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 		current_group_ptr = GetPtr(current_group);
@@ -640,7 +655,7 @@ public:
 			current_group_ptr += sizeof(T);
 			break;
 		default:
-			throw InternalException("Invalid bitpacking mode");
+			ThrowCorruptedBitpackingSegment("bitpacking mode was invalid");
 		}
 
 		// Read second value
@@ -657,7 +672,7 @@ public:
 		case BitpackingMode::CONSTANT:
 			break;
 		default:
-			throw InternalException("Invalid bitpacking mode");
+			ThrowCorruptedBitpackingSegment("bitpacking mode was invalid");
 		}
 
 		// Read third value
