@@ -70,9 +70,21 @@ void BufferedFileWriter::Flush() {
 }
 
 void BufferedFileWriter::Close() {
+	if (!handle) {
+		return;
+	}
 	Flush();
 	handle->Close();
 	handle.reset();
+}
+
+void BufferedFileWriter::AbortWrite() {
+	offset = 0;
+	if (!handle) {
+		return;
+	}
+	auto abort_handle = std::move(handle);
+	abort_handle->AbortWrite();
 }
 
 void BufferedFileWriter::Sync() {

@@ -57,9 +57,9 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 }
 
 AsyncFileWriter::~AsyncFileWriter() {
-	if (!closed && handle) {
+	if (!finished && handle) {
 		try {
-			Close();
+			AbortWrite();
 		} catch (...) {
 		}
 	}
@@ -87,7 +87,7 @@ void AsyncFileWriter::BatchGuard::Finish() {
 	}
 	auto &writer_ref = *writer;
 	writer = nullptr;
-	auto apply_backpressure = !writer_ref.closed;
+	auto apply_backpressure = !writer_ref.finished;
 	writer_ref.LeaveBatch();
 	if (apply_backpressure) {
 		writer_ref.ApplyBackpressure();
@@ -107,7 +107,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		return;
 	}
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
@@ -147,7 +147,7 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 		return;
 	}
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 	if (!write_queue->IsAsync()) {
@@ -161,7 +161,7 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 
 void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, ScheduleMode schedule_mode) {
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
@@ -174,7 +174,7 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, Schedul
 void AsyncFileWriter::RegisterStagedWrite(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset,
                                           ScheduleMode schedule_mode) {
 	RethrowTaskError();
-	if (closed) {
+	if (finished) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 	RegisterWriteInternal(std::move(buffer), offset, schedule_mode);
@@ -331,7 +331,7 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 }
 
 void AsyncFileWriter::Close() {
-	if (closed) {
+	if (finished) {
 		return;
 	}
 	try {
@@ -341,10 +341,38 @@ void AsyncFileWriter::Close() {
 		write_queue->Close();
 		handle->Close();
 		handle.reset();
-		closed = true;
+		finished = true;
 	} catch (...) {
 		write_queue->ReleaseMemoryReservation();
 		throw;
+	}
+}
+
+void AsyncFileWriter::AbortWrite() {
+	if (finished) {
+		return;
+	}
+	finished = true;
+	copied_buffer.reset();
+
+	std::exception_ptr error;
+	try {
+		write_queue->AbortWrites();
+	} catch (...) {
+		error = std::current_exception();
+	}
+	auto abort_handle = std::move(handle);
+	if (abort_handle) {
+		try {
+			abort_handle->AbortWrite();
+		} catch (...) {
+			if (!error) {
+				error = std::current_exception();
+			}
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
 	}
 }
 

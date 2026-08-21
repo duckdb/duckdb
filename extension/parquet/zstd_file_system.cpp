@@ -32,6 +32,7 @@ public:
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close() override;
+	void AbortWrite() override;
 
 	void FlushStream();
 };
@@ -170,6 +171,10 @@ void ZstdStreamWrapper::Close() {
 	if (writing) {
 		FlushStream();
 	}
+	AbortWrite();
+}
+
+void ZstdStreamWrapper::AbortWrite() {
 	if (zstd_stream_ptr) {
 		duckdb_zstd::ZSTD_freeDStream(zstd_stream_ptr);
 	}

@@ -57,8 +57,12 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	//! Create a directory if it does not exist. Returns whether this call created the directory.
+	bool CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	//! Remove a directory only if it is empty
+	bool TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
@@ -71,6 +75,8 @@ public:
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
+	//! Close and remove an incomplete output file
+	void AbortFileWrite(FileHandle &handle) override;
 
 	//! Checks if path is is an absolute path
 	bool IsPathAbsolute(const string &path) override;

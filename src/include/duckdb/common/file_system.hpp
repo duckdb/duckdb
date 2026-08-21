@@ -104,6 +104,8 @@ public:
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
+	//! Abandon an incomplete write without publishing any buffered or staged data.
+	DUCKDB_API void AbortWrite();
 	DUCKDB_API string ReadLine();
 	DUCKDB_API string ReadLine(QueryContext context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
@@ -210,10 +212,15 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Create a directory if it does not exist. Returns true only if this call is known to have created it.
+	DUCKDB_API virtual bool CreateDirectoryIfNotExists(const string &directory,
+	                                                   optional_ptr<FileOpener> opener = nullptr);
 	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove a directory only if it is empty. Returns whether the directory was removed.
+	DUCKDB_API virtual bool TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
@@ -238,6 +245,8 @@ public:
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
+	//! Abandon an incomplete write represented by this file handle.
+	DUCKDB_API virtual void AbortFileWrite(FileHandle &handle);
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory

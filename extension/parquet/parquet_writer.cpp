@@ -1439,6 +1439,12 @@ void ParquetWriter::Finalize() {
 	writer.reset();
 }
 
+void ParquetWriter::AbortWrite() {
+	if (writer) {
+		writer->AbortWrite();
+	}
+}
+
 GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 	if (!geoparquet_data) {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>(GetGeoParquetVersion());

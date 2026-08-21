@@ -487,6 +487,10 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	global_state.writer->Finalize();
 }
 
+static void ParquetWriteAbort(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+	gstate.Cast<ParquetWriteGlobalState>().writer->AbortWrite();
+}
+
 static unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
@@ -1048,6 +1052,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
+	function.copy_to_abort = ParquetWriteAbort;
 	function.execution_mode = ParquetWriteExecutionMode;
 	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;

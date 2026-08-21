@@ -85,6 +85,7 @@ public:
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close() override;
+	void AbortWrite() override;
 
 	void FlushStream() const;
 };
@@ -304,7 +305,15 @@ void MiniZStreamWrapper::Close() {
 		unsigned char gzip_footer[MiniZStream::GZIP_FOOTER_SIZE];
 		MiniZStream::InitializeGZIPFooter(gzip_footer, crc, total_size);
 		file->child_handle->Write(file->context, gzip_footer, MiniZStream::GZIP_FOOTER_SIZE);
+	}
+	AbortWrite();
+}
 
+void MiniZStreamWrapper::AbortWrite() {
+	if (!mz_stream_ptr) {
+		return;
+	}
+	if (writing) {
 		duckdb_miniz::mz_deflateEnd(mz_stream_ptr.get());
 	} else {
 		duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());

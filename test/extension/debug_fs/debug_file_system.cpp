@@ -179,6 +179,10 @@ void DebugFileSystem::FileSync(FileHandle &handle) {
 	inner.file_system.FileSync(inner);
 }
 
+void DebugFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<DebugFileHandle>().inner->AbortWrite();
+}
+
 void DebugFileSystem::Seek(FileHandle &handle, idx_t location) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Seek(inner, location);
@@ -230,8 +234,16 @@ void DebugFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	inner_fs->CreateDirectory(directory, opener);
 }
 
+bool DebugFileSystem::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
+	return inner_fs->CreateDirectoryIfNotExists(directory, opener);
+}
+
 void DebugFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	inner_fs->RemoveDirectory(directory, opener);
+}
+
+bool DebugFileSystem::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return inner_fs->TryRemoveEmptyDirectory(directory, opener);
 }
 
 void DebugFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {

@@ -377,6 +377,10 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	global_state.writer.Close();
 }
 
+void WriteCSVAbort(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+	gstate.Cast<GlobalWriteCSVData>().writer.AbortWrite();
+}
+
 //===--------------------------------------------------------------------===//
 // Execution Mode
 //===--------------------------------------------------------------------===//
@@ -453,6 +457,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_sink = WriteCSVSink;
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
+	info.copy_to_abort = WriteCSVAbort;
 	info.execution_mode = WriteCSVExecutionMode;
 
 	info.prepare_batch = WriteCSVPrepareBatch;

@@ -231,12 +231,20 @@ void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional
 	underlying_file_system.CreateDirectory(directory, opener);
 }
 
+bool CachingFileSystemWrapper::CreateDirectoryIfNotExists(const string &directory, optional_ptr<FileOpener> opener) {
+	return underlying_file_system.CreateDirectoryIfNotExists(directory, opener);
+}
+
 void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
 	underlying_file_system.CreateDirectoriesRecursive(path, opener);
 }
 
 void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	underlying_file_system.RemoveDirectory(directory, opener);
+}
+
+bool CachingFileSystemWrapper::TryRemoveEmptyDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	return underlying_file_system.TryRemoveEmptyDirectory(directory, opener);
 }
 
 bool CachingFileSystemWrapper::ListFiles(const string &directory,

@@ -38,6 +38,8 @@ public:
 	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 	//! Flush all changes to the file and then close the file
 	DUCKDB_API void Close();
+	//! Discard buffered data and abandon the incomplete file write
+	DUCKDB_API void AbortWrite();
 	//! Flush all changes and fsync the file to disk
 	DUCKDB_API void Sync();
 	//! Flush the buffer to the file (without sync)

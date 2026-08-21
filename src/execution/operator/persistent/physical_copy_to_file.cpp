@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -81,27 +82,12 @@ template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
 //===--------------------------------------------------------------------===//
-// Copy File State Types
-//===--------------------------------------------------------------------===//
-struct GlobalFileState {
-public:
-	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p)
-	    : data(std::move(data_p)), path(path_p), num_batches(0) {
-	}
-
-public:
-	annotated_mutex lock;
-	unique_ptr<GlobalFunctionData> data;
-	const string path;
-	idx_t num_batches DUCKDB_GUARDED_BY(lock);
-};
-
-//===--------------------------------------------------------------------===//
 // Copy File State Declarations
 //===--------------------------------------------------------------------===//
 struct PendingFileState {
 	string output_path;
 	optional_ptr<CopyToFileInfo> written_file_info;
+	idx_t lifecycle_file_index;
 };
 
 struct PartitionDirectory {
@@ -113,7 +99,7 @@ enum class CopyDirectoryState : uint8_t { PENDING, COMPLETE, FAILED };
 
 class CopyDirectoryManager {
 public:
-	void EnsureDirectory(FileSystem &fs, const string &dir_path);
+	bool EnsureDirectory(FileSystem &fs, const string &dir_path);
 
 private:
 	struct DirectoryEntry {
@@ -135,7 +121,7 @@ public:
 public:
 	//! The registry is guarded by CopyToFileGlobalState::lock.
 	PendingFileState ReserveFile(string output_path, optional_ptr<const vector<Value>> partition_values);
-	void PublishCreatedPath(PendingFileState &pending_file_state, string output_path);
+	void PublishPath(PendingFileState &pending_file_state, string output_path);
 
 	idx_t WrittenFileCount() const {
 		return written_files.size();
@@ -149,20 +135,11 @@ public:
 		return written_files;
 	}
 
-	bool HasCreatedFiles() const {
-		return !created_files.empty();
-	}
-
-	const vector<string> &GetCreatedFiles() const {
-		return created_files;
-	}
-
 private:
 	optional_ptr<CopyToFileInfo> AddFile(const string &file_name);
 
 private:
 	const PhysicalCopyToFile &op;
-	vector<string> created_files;
 	vector<unique_ptr<CopyToFileInfo>> written_files;
 };
 
@@ -201,6 +178,10 @@ class FileStateOpenJob : public CopyFileLifecycleJob {
 public:
 	void Complete(unique_ptr<GlobalFileState> file_state_p) {
 		file_state = std::move(file_state_p);
+		CopyFileLifecycleJob::Complete();
+	}
+
+	void CompleteAborted() {
 		CopyFileLifecycleJob::Complete();
 	}
 
@@ -461,6 +442,7 @@ public:
 	FileStateHandle TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
 	void WaitForLifecycleTasks() DUCKDB_EXCLUDES(lock);
+	void MarkSuccessful();
 
 private:
 	void PrepareOutputDirectory() DUCKDB_EXCLUDES(lock);
@@ -473,12 +455,13 @@ private:
 public:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
+	CopyOutputLifecycle output_lifecycle;
 
 	//! Lock guarding the global state
 	mutable annotated_mutex lock;
-	//! Whether the copy was successfully initialized/finalized
+	//! Whether the copy was initialized or is being aborted
 	atomic<bool> initialized;
-	atomic<bool> finalized;
+	atomic<bool> aborting;
 
 	//! We write to files using the Prepare/Flush batch API:
 	//! - Prepare gets the data ready and can take a lot of time
@@ -1499,19 +1482,6 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 	return result;
 }
 
-//===--------------------------------------------------------------------===//
-// Copy File Lifecycle
-//===--------------------------------------------------------------------===//
-static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       unique_ptr<GlobalFileState> state) {
-	if (!finalize) {
-		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
-	}
-	if (!state || !state->data) {
-		throw InternalException("COPY file lifecycle finalize reached an empty file state");
-	}
-	finalize(context, bind_data, *state->data);
-}
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
 		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
@@ -1589,7 +1559,7 @@ void CopyFileLifecycleExecutor::ThrowError() {
 //===--------------------------------------------------------------------===//
 // Copy File State Helpers
 //===--------------------------------------------------------------------===//
-void CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
+bool CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
 	bool created_entry = false;
 	{
 		std::unique_lock<mutex> guard(lock);
@@ -1602,7 +1572,7 @@ void CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 			}
 
 			if (entry->second.state == CopyDirectoryState::COMPLETE) {
-				return;
+				return false;
 			}
 			if (entry->second.state == CopyDirectoryState::FAILED) {
 				std::rethrow_exception(entry->second.error);
@@ -1612,10 +1582,9 @@ void CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	}
 
 	std::exception_ptr error;
+	bool created_directory = false;
 	try {
-		if (!fs.DirectoryExists(dir_path)) {
-			fs.CreateDirectory(dir_path);
-		}
+		created_directory = fs.CreateDirectoryIfNotExists(dir_path);
 	} catch (...) {
 		error = std::current_exception();
 	}
@@ -1633,6 +1602,7 @@ void CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_pat
 	if (error) {
 		std::rethrow_exception(error);
 	}
+	return created_directory;
 }
 
 PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
@@ -1661,12 +1631,11 @@ PendingFileState CopyOutputFileRegistry::ReserveFile(string output_path,
 	return result;
 }
 
-void CopyOutputFileRegistry::PublishCreatedPath(PendingFileState &pending_file_state, string output_path) {
+void CopyOutputFileRegistry::PublishPath(PendingFileState &pending_file_state, string output_path) {
 	pending_file_state.output_path = std::move(output_path);
 	if (pending_file_state.written_file_info) {
 		pending_file_state.written_file_info->file_path = pending_file_state.output_path;
 	}
-	created_files.push_back(pending_file_state.output_path);
 }
 
 optional_ptr<CopyToFileInfo> CopyOutputFileRegistry::AddFile(const string &file_name) {
@@ -3237,28 +3206,17 @@ void PartitionedCopy::FinalizeFileStates(vector<FileStateHandle> files_to_finali
 // Copy Global State
 //===--------------------------------------------------------------------===//
 CopyToFileGlobalState::CopyToFileGlobalState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
-    : op(op_p), context(context_p), initialized(false), finalized(false), prepare_global_state(nullptr),
+    : op(op_p), context(context_p), output_lifecycle(context_p), initialized(false), aborting(false),
+      prepare_global_state(nullptr),
       create_file_state_fun([&](FileStateHandle &file_state) DUCKDB_EXCLUDES(lock) { RequestFileState(file_state); }),
       lifecycle_executor(context_p), output_files(op_p), rows_copied(0), last_file_offset(0) {
 }
 
 CopyToFileGlobalState::~CopyToFileGlobalState() {
+	aborting = true;
 	try {
 		WaitForLifecycleTasks();
 	} catch (...) {
-	}
-	if (!initialized || finalized || !output_files.HasCreatedFiles()) {
-		return;
-	}
-	// If we reach here, the query failed before Finalize was called
-	auto &fs = FileSystem::GetFileSystem(context);
-	for (auto &file : output_files.GetCreatedFiles()) {
-		try {
-			fs.TryRemoveFile(file);
-		} catch (...) {
-			// TryRemoveFile might fail for a variety of reasons, but we can't really propagate error codes here, so
-			// best effort cleanup
-		}
 	}
 }
 
@@ -3284,8 +3242,8 @@ void CopyToFileGlobalState::PrepareOutputDirectory() {
 		}
 	}
 
-	if (!fs.DirectoryExists(op.file_path)) {
-		fs.CreateDirectory(op.file_path);
+	if (fs.CreateDirectoryIfNotExists(op.file_path)) {
+		output_lifecycle.RegisterCreatedDirectory(op.file_path);
 	} else {
 		CheckDirectory(fs, op.file_path, op.overwrite_mode);
 	}
@@ -3295,8 +3253,11 @@ void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
 	D_ASSERT(!output_directory_job);
 	output_directory_job = make_shared_ptr<CopyFileLifecycleJob>();
 	try {
-		lifecycle_executor.Schedule(output_directory_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
-		                            [this]() { PrepareOutputDirectory(); });
+		lifecycle_executor.Schedule(output_directory_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE, [this]() {
+			if (!aborting) {
+				PrepareOutputDirectory();
+			}
+		});
 	} catch (...) {
 		if (!output_directory_job->IsFinished()) {
 			output_directory_job->CompleteException(std::current_exception());
@@ -3314,7 +3275,9 @@ void CopyToFileGlobalState::EnsureOutputDirectoryReady() {
 
 void CopyToFileGlobalState::EnsureDirectory(const string &dir_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	directory_manager.EnsureDirectory(fs, dir_path);
+	if (directory_manager.EnsureDirectory(fs, dir_path)) {
+		output_lifecycle.RegisterCreatedDirectory(dir_path);
+	}
 }
 
 PendingFileState CopyToFileGlobalState::PrepareFileStateLocked(string output_path,
@@ -3324,26 +3287,31 @@ PendingFileState CopyToFileGlobalState::PrepareFileStateLocked(string output_pat
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
 	}
 	auto result = output_files.ReserveFile(std::move(output_path), partition_values);
-	output_files.PublishCreatedPath(result, result.output_path);
+	result.lifecycle_file_index = output_lifecycle.RegisterFile(result.output_path);
+	output_files.PublishPath(result, result.output_path);
 	return result;
 }
 
 void CopyToFileGlobalState::RegisterPendingFileStatePathLocked(PendingFileState &pending_file_state,
                                                                string output_path) {
-	output_files.PublishCreatedPath(pending_file_state, std::move(output_path));
+	output_lifecycle.UpdateFile(pending_file_state.lifecycle_file_index, output_path);
+	output_files.PublishPath(pending_file_state, std::move(output_path));
 }
 
 unique_ptr<GlobalFileState> CopyToFileGlobalState::InitializeFileState(PendingFileState pending_file_state) {
 	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, pending_file_state.output_path);
+	auto result = make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path, context, *op.bind_data,
+	                                         op.function.copy_to_abort, output_lifecycle,
+	                                         pending_file_state.lifecycle_file_index);
 	if (pending_file_state.written_file_info && pending_file_state.written_file_info->file_stats) {
-		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data,
+		op.function.copy_to_get_written_statistics(context, *op.bind_data, *result->data,
 		                                           *pending_file_state.written_file_info->file_stats);
 	}
 	if (op.function.initialize_operator) {
-		op.function.initialize_operator(*data, op);
+		op.function.initialize_operator(*result->data, op);
 	}
 
-	return make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path);
+	return result;
 }
 
 void CopyToFileGlobalState::RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) {
@@ -3373,6 +3341,8 @@ CopyToFileGlobalState::CreatePartitionFileStateOpenLocked(FileStateHandle &file_
 	}
 	PendingFileStateOpen result;
 	result.pending_file_state = output_files.ReserveFile(std::move(output_path), partition_values);
+	result.pending_file_state.lifecycle_file_index =
+	    output_lifecycle.RegisterFile(result.pending_file_state.output_path);
 	result.open_job = make_shared_ptr<FileStateOpenJob>();
 	file_state.open_job = result.open_job;
 	return result;
@@ -3385,8 +3355,22 @@ void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_f
 		lifecycle_executor.Schedule(
 		    open_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
 		    [this, open_job, pending_file_state = std::move(pending_file_state_open.pending_file_state)]() mutable {
+			    if (aborting) {
+				    open_job->CompleteAborted();
+				    return;
+			    }
 			    EnsureOutputDirectoryReady();
-			    open_job->Complete(InitializeFileState(std::move(pending_file_state)));
+			    if (aborting) {
+				    open_job->CompleteAborted();
+				    return;
+			    }
+			    auto file_state = InitializeFileState(std::move(pending_file_state));
+			    if (aborting) {
+				    file_state.reset();
+				    open_job->CompleteAborted();
+				    return;
+			    }
+			    open_job->Complete(std::move(file_state));
 		    });
 	} catch (...) {
 		if (!open_job->IsFinished()) {
@@ -3411,7 +3395,15 @@ void CopyToFileGlobalState::SchedulePartitionFileStateOpen(PartitionFileOpenRequ
 }
 
 void PartitionFileOpenRequest::Run(CopyToFileGlobalState &copy_gstate) {
+	if (copy_gstate.aborting) {
+		open_job->CompleteAborted();
+		return;
+	}
 	copy_gstate.EnsureOutputDirectoryReady();
+	if (copy_gstate.aborting) {
+		open_job->CompleteAborted();
+		return;
+	}
 	auto &fs = FileSystem::GetFileSystem(copy_gstate.context);
 	for (auto &dir : directory.directories) {
 		copy_gstate.EnsureDirectory(dir);
@@ -3432,7 +3424,13 @@ void PartitionFileOpenRequest::Run(CopyToFileGlobalState &copy_gstate) {
 		annotated_lock_guard<annotated_mutex> guard(copy_gstate.lock);
 		copy_gstate.RegisterPendingFileStatePathLocked(pending_file_state, std::move(output_path));
 	}
-	open_job->Complete(copy_gstate.InitializeFileState(std::move(pending_file_state)));
+	auto file_state = copy_gstate.InitializeFileState(std::move(pending_file_state));
+	if (copy_gstate.aborting) {
+		file_state.reset();
+		open_job->CompleteAborted();
+		return;
+	}
+	open_job->Complete(std::move(file_state));
 }
 
 void CopyToFileGlobalState::RequestFileState(FileStateHandle &file_state, string output_path,
@@ -3497,19 +3495,21 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 		auto state = file_state.TakeFileState();
 		auto state_holder = make_shared_ptr<unique_ptr<GlobalFileState>>(std::move(state));
 		auto finalize = op.function.copy_to_finalize;
-		auto &context_ref = context;
-		auto &bind_data = *op.bind_data;
 		try {
 			lifecycle_executor.Schedule(finalize_job, CopyFileLifecycleWaitMode::DRAIN,
-			                            [finalize, &context_ref, &bind_data, state_holder]() mutable {
-				                            FinalizeLifecycleFileState(context_ref, finalize, bind_data,
-				                                                       std::move(*state_holder));
+			                            [this, finalize, state_holder]() mutable {
+				                            if (aborting) {
+					                            return;
+				                            }
+				                            (*state_holder)->Finalize(finalize);
 			                            });
 		} catch (...) {
 			if (!finalize_job->IsFinished() && state_holder && *state_holder) {
-				try {
-					FinalizeLifecycleFileState(context_ref, finalize, bind_data, std::move(*state_holder));
-				} catch (...) {
+				if (!aborting) {
+					try {
+						(*state_holder)->Finalize(finalize);
+					} catch (...) {
+					}
 				}
 			}
 			throw;
@@ -3538,6 +3538,10 @@ void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
 
 void CopyToFileGlobalState::WaitForLifecycleTasks() {
 	lifecycle_executor.WaitAll(CopyFileLifecycleWaitMode::DRAIN);
+}
+
+void CopyToFileGlobalState::MarkSuccessful() {
+	output_lifecycle.MarkSuccessful();
 }
 
 //===--------------------------------------------------------------------===//
@@ -3576,26 +3580,6 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context, const string &
 	string trimmed_path = file_path;
 	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
 	return trimmed_path;
-}
-
-void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	fs.MoveFile(tmp_file_path, file_path);
-}
-
-string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &tmp_file_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	auto path = StringUtil::GetFilePath(tmp_file_path);
-	auto base = StringUtil::GetFileName(tmp_file_path);
-
-	auto prefix = base.find("tmp_");
-	if (prefix == 0) {
-		base = base.substr(4);
-	}
-
-	return fs.JoinPath(path, base);
 }
 
 void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
@@ -3778,7 +3762,6 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CopyToFileGlobalState>();
-	gstate.finalized = true;
 
 	if (partition_output) {
 		gstate.partitioned_copy->Finalize(pipeline, event, input.interrupt_state);
@@ -3814,7 +3797,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		D_ASSERT(!partition_output);
 		D_ASSERT(!file_size_bytes.IsValid());
 		D_ASSERT(!Rotate());
-		MoveTmpFile(context, file_path);
+		gstate.output_lifecycle.CommitTemporaryFile(file_path);
 	}
 
 	return SinkFinalizeType::READY;
@@ -3982,13 +3965,16 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		for (idx_t i = 0; i < count; i++) {
 			auto &file_entry = gstate.output_files.GetWrittenFile(source_state.offset + i);
 			if (use_tmp_file) {
-				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
+				file_entry.file_path = gstate.output_lifecycle.GetTemporaryFileTarget(file_entry.file_path);
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
 		source_state.offset += count;
-		return source_state.offset < gstate.output_files.WrittenFileCount() ? SourceResultType::HAVE_MORE_OUTPUT
-		                                                                    : SourceResultType::FINISHED;
+		if (source_state.offset < gstate.output_files.WrittenFileCount()) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
+		gstate.MarkSuccessful();
+		return SourceResultType::FINISHED;
 	}
 
 	switch (return_type) {
@@ -4000,7 +3986,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		vector<Value> file_name_list;
 		for (auto &file_info : gstate.output_files.GetWrittenFiles()) {
 			if (use_tmp_file) {
-				file_name_list.emplace_back(GetNonTmpFile(context.client, file_info->file_path));
+				file_name_list.emplace_back(gstate.output_lifecycle.GetTemporaryFileTarget(file_info->file_path));
 			} else {
 				file_name_list.emplace_back(file_info->file_path);
 			}
@@ -4012,6 +3998,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
+	gstate.MarkSuccessful();
 	return SourceResultType::FINISHED;
 }
 
