@@ -72,6 +72,7 @@ public:
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const Identifier &name);
+	shared_ptr<AttachedDatabase> RollbackAttach(AttachedDatabase &database, optional_ptr<AttachedDatabase> replaced_database);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
