@@ -1,6 +1,9 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/database.hpp"
@@ -10,6 +13,166 @@
 #include "zstd.h"
 
 namespace duckdb {
+
+static constexpr const char *TEMPORARY_OWNER_FILE_PREFIX = "duckdb_temp_owner_v1_";
+static constexpr const char *TEMPORARY_OWNER_FILE_SUFFIX = ".lock";
+static constexpr const char *TEMPORARY_FILE_PREFIX = "duckdb_temp_v1_";
+static constexpr const char *TEMPORARY_OWNER_MAGIC = "DUCKDB_TEMP_OWNER";
+static constexpr idx_t TEMPORARY_OWNER_VERSION = 1;
+static constexpr idx_t TEMPORARY_OWNER_ID_LENGTH = 36;
+static constexpr idx_t TEMPORARY_OWNER_UUID_VERSION_INDEX = 14;
+static constexpr idx_t TEMPORARY_OWNER_UUID_VARIANT_INDEX = 19;
+static constexpr idx_t TEMPORARY_OWNER_CREATE_ATTEMPTS = 3;
+
+struct ActiveTemporaryOwnerRegistry {
+	// POSIX fcntl locks are process-scoped, so they cannot distinguish DuckDB instances in the same process.
+	mutex lock;
+	unordered_set<string> owners;
+};
+
+static ActiveTemporaryOwnerRegistry &GetActiveTemporaryOwnerRegistry() {
+	static ActiveTemporaryOwnerRegistry registry;
+	return registry;
+}
+
+static bool RegisterActiveTemporaryOwner(const string &owner_id) {
+	auto &registry = GetActiveTemporaryOwnerRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	return registry.owners.insert(owner_id).second;
+}
+
+static void UnregisterActiveTemporaryOwner(const string &owner_id) {
+	auto &registry = GetActiveTemporaryOwnerRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	registry.owners.erase(owner_id);
+}
+
+static bool IsActiveTemporaryOwner(const string &owner_id) {
+	auto &registry = GetActiveTemporaryOwnerRegistry();
+	lock_guard<mutex> guard(registry.lock);
+	return registry.owners.find(owner_id) != registry.owners.end();
+}
+
+static string TemporaryOwnerFileName(const string &owner_id) {
+	return string(TEMPORARY_OWNER_FILE_PREFIX) + owner_id + TEMPORARY_OWNER_FILE_SUFFIX;
+}
+
+static string TemporaryOwnerManifest(const string &owner_id) {
+	return StringUtil::Format("%s\n%llu\n%s\n", TEMPORARY_OWNER_MAGIC, TEMPORARY_OWNER_VERSION, owner_id);
+}
+
+static string OwnedTemporaryFilePrefix(const string &owner_id) {
+	return string(TEMPORARY_FILE_PREFIX) + owner_id + "_";
+}
+
+static bool IsTemporaryOwnerId(const string &candidate) {
+	if (candidate.size() != TEMPORARY_OWNER_ID_LENGTH) {
+		return false;
+	}
+	hugeint_t parsed_uuid;
+	return UUID::FromString(candidate, parsed_uuid, true) && UUID::ToString(parsed_uuid) == candidate &&
+	       candidate[TEMPORARY_OWNER_UUID_VERSION_INDEX] == '4' &&
+	       (candidate[TEMPORARY_OWNER_UUID_VARIANT_INDEX] == '8' ||
+	        candidate[TEMPORARY_OWNER_UUID_VARIANT_INDEX] == '9' ||
+	        candidate[TEMPORARY_OWNER_UUID_VARIANT_INDEX] == 'a' ||
+	        candidate[TEMPORARY_OWNER_UUID_VARIANT_INDEX] == 'b');
+}
+
+static bool TryParseTemporaryOwnerFile(const string &file_name, string &owner_id) {
+	if (!StringUtil::StartsWith(file_name, TEMPORARY_OWNER_FILE_PREFIX) ||
+	    !StringUtil::EndsWith(file_name, TEMPORARY_OWNER_FILE_SUFFIX)) {
+		return false;
+	}
+	const auto prefix_size = strlen(TEMPORARY_OWNER_FILE_PREFIX);
+	const auto suffix_size = strlen(TEMPORARY_OWNER_FILE_SUFFIX);
+	if (file_name.size() <= prefix_size + suffix_size) {
+		return false;
+	}
+	auto candidate = file_name.substr(prefix_size, file_name.size() - prefix_size - suffix_size);
+	if (!IsTemporaryOwnerId(candidate)) {
+		return false;
+	}
+	owner_id = std::move(candidate);
+	return true;
+}
+
+static bool IsUnsignedNumber(const string &value) {
+	if (value.empty()) {
+		return false;
+	}
+	for (const auto ch : value) {
+		if (ch < '0' || ch > '9') {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool IsTemporaryStorageSize(const string &value) {
+	return value == "S32K" || value == "S64K" || value == "S96K" || value == "S128K" || value == "S160K" ||
+	       value == "S192K" || value == "S224K" || value == "DEFAULT";
+}
+
+static bool TryParseOwnedTemporaryFile(const string &file_name, string &owner_id) {
+	if (!StringUtil::StartsWith(file_name, TEMPORARY_FILE_PREFIX)) {
+		return false;
+	}
+	const auto prefix_size = strlen(TEMPORARY_FILE_PREFIX);
+	if (file_name.size() <= prefix_size + TEMPORARY_OWNER_ID_LENGTH ||
+	    file_name[prefix_size + TEMPORARY_OWNER_ID_LENGTH] != '_') {
+		return false;
+	}
+	auto candidate = file_name.substr(prefix_size, TEMPORARY_OWNER_ID_LENGTH);
+	if (!IsTemporaryOwnerId(candidate)) {
+		return false;
+	}
+	const auto remainder = file_name.substr(prefix_size + TEMPORARY_OWNER_ID_LENGTH + 1);
+	if (StringUtil::StartsWith(remainder, "block-") && StringUtil::EndsWith(remainder, ".block")) {
+		const auto block_id =
+		    remainder.substr(strlen("block-"), remainder.size() - strlen("block-") - strlen(".block"));
+		if (!IsUnsignedNumber(block_id)) {
+			return false;
+		}
+		owner_id = std::move(candidate);
+		return true;
+	}
+	if (!StringUtil::StartsWith(remainder, "storage_") || !StringUtil::EndsWith(remainder, ".tmp")) {
+		return false;
+	}
+	const auto storage_id =
+	    remainder.substr(strlen("storage_"), remainder.size() - strlen("storage_") - strlen(".tmp"));
+	const auto separator = storage_id.rfind('-');
+	if (separator == string::npos) {
+		return false;
+	}
+	if (!IsTemporaryStorageSize(storage_id.substr(0, separator)) ||
+	    !IsUnsignedNumber(storage_id.substr(separator + 1))) {
+		return false;
+	}
+	owner_id = std::move(candidate);
+	return true;
+}
+
+static bool IsOwnedTemporaryFile(const string &file_name, const string &owner_id) {
+	string parsed_owner_id;
+	return TryParseOwnedTemporaryFile(file_name, parsed_owner_id) && parsed_owner_id == owner_id;
+}
+
+static bool TemporaryOwnerManifestMatches(FileHandle &handle, const string &owner_id) {
+	auto expected = TemporaryOwnerManifest(owner_id);
+	if (handle.GetFileSize() != expected.size()) {
+		return false;
+	}
+	string actual(expected.size(), '\0');
+	handle.Read(QueryContext(), data_ptr_cast(&actual[0]), actual.size(), 0);
+	return actual == expected;
+}
+
+struct LockedTemporaryOwner {
+	string owner_file_path;
+	unique_ptr<FileHandle> owner_file_handle;
+	vector<string> files;
+};
 
 //===--------------------------------------------------------------------===//
 // TemporaryBufferSize
@@ -485,9 +648,10 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 //===--------------------------------------------------------------------===//
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
-TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, string instance_id_p,
                                            atomic<idx_t> &size_on_disk_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
+    : db(db), temp_directory(temp_directory_p), instance_id(std::move(instance_id_p)), files(*this),
+      size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -705,8 +869,9 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s-%llu.tmp", EnumUtil::ToString(identifier.size),
-	                                       identifier.file_index.GetIndex()));
+	    temp_directory,
+	    StringUtil::Format("%sstorage_%s-%llu.tmp", OwnedTemporaryFilePrefix(instance_id),
+	                       EnumUtil::ToString(identifier.size), identifier.file_index.GetIndex()));
 }
 
 optional_ptr<TemporaryFileHandle> TemporaryFileManager::GetFileHandle(TemporaryFileManagerLock &,
@@ -731,55 +896,196 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
                                                    optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)),
-      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
+    : db(db), temp_directory(std::move(path_p)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
-		created_directory = true;
 	}
-	temp_file->SetMaxSwapSpace(max_swap_space);
+	try {
+		bool cleanup_orphaned_files = true;
+		try {
+			InitializeOwnerFile(fs);
+		} catch (...) {
+			// Establishing ownership is only required for orphan cleanup. Keep spilling in an unregistered UUID
+			// namespace if the file system cannot create, lock, write or sync the owner file.
+			ReleaseOwnerFile(fs, true);
+			instance_id = UUID::ToString(UUID::GenerateRandomUUID());
+			cleanup_orphaned_files = false;
+		}
+		if (cleanup_orphaned_files) {
+			CleanupOrphanedFiles(fs);
+		}
+		temp_file = make_uniq<TemporaryFileManager>(db, temp_directory, instance_id, size_on_disk);
+		temp_file->SetMaxSwapSpace(max_swap_space);
+	} catch (...) {
+		ReleaseOwnerFile(fs, true);
+		throw;
+	}
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
-	// first release any temporary files
 	temp_file.reset();
-	// then delete the temporary file directory
 	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		bool delete_directory = created_directory;
-		vector<string> files_to_delete;
-		if (!created_directory) {
-			bool deleted_everything = true;
-			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-				if (isdir) {
-					deleted_everything = false;
-					return;
-				}
-				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-					deleted_everything = false;
-					return;
-				}
-				files_to_delete.push_back(path);
-			});
+	bool remove_owner_file = true;
+	try {
+		RemoveOwnedTemporaryFiles(fs, instance_id);
+	} catch (...) {
+		remove_owner_file = false;
+	}
+	ReleaseOwnerFile(fs, remove_owner_file);
+}
+
+void TemporaryDirectoryHandle::InitializeOwnerFile(FileSystem &fs) {
+	const auto flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+	                   FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE | FileFlags::FILE_FLAGS_NULL_IF_EXISTS |
+	                   FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileLockType::WRITE_LOCK;
+	for (idx_t attempt = 0; attempt < TEMPORARY_OWNER_CREATE_ATTEMPTS; attempt++) {
+		auto candidate = UUID::ToString(UUID::GenerateRandomUUID());
+		if (!RegisterActiveTemporaryOwner(candidate)) {
+			continue;
 		}
-		if (delete_directory) {
-			// we want to remove all files in the directory
-			fs.RemoveDirectory(temp_directory);
-		} else {
-			vector<string> full_path_files_to_delete;
-			full_path_files_to_delete.reserve(files_to_delete.size());
-			for (auto &file : files_to_delete) {
-				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
+		string candidate_path;
+		unique_ptr<FileHandle> candidate_handle;
+		try {
+			candidate_path = fs.JoinPath(temp_directory, TemporaryOwnerFileName(candidate));
+			candidate_handle = fs.OpenFile(candidate_path, flags);
+		} catch (...) {
+			UnregisterActiveTemporaryOwner(candidate);
+			if (!candidate_path.empty()) {
+				fs.TryRemoveFile(candidate_path);
 			}
-			fs.RemoveFiles(full_path_files_to_delete);
+			throw;
+		}
+		if (!candidate_handle) {
+			UnregisterActiveTemporaryOwner(candidate);
+			continue;
+		}
+
+		instance_id = std::move(candidate);
+		owner_file_path = std::move(candidate_path);
+		owner_file_handle = std::move(candidate_handle);
+		owner_registered = true;
+		auto manifest = TemporaryOwnerManifest(instance_id);
+		owner_file_handle->Write(QueryContext(), &manifest[0], manifest.size(), 0);
+		fs.FileSync(*owner_file_handle);
+		return;
+	}
+	throw IOException("Failed to create a unique owner file in temporary directory \"%s\"", temp_directory);
+}
+
+void TemporaryDirectoryHandle::CleanupOrphanedFiles(FileSystem &fs) {
+	vector<pair<string, string>> owner_files;
+	try {
+		fs.ListFiles(temp_directory, [&](const string &file_name, bool is_directory) {
+			if (is_directory) {
+				return;
+			}
+			string owner_id;
+			if (TryParseTemporaryOwnerFile(file_name, owner_id)) {
+				owner_files.emplace_back(std::move(file_name), std::move(owner_id));
+			}
+		});
+	} catch (IOException &) {
+		return;
+	}
+
+	vector<LockedTemporaryOwner> locked_owners;
+	unordered_map<string, idx_t> locked_owner_indexes;
+	for (const auto &entry : owner_files) {
+		const auto &owner_file_name = entry.first;
+		const auto &owner_id = entry.second;
+		if (IsActiveTemporaryOwner(owner_id)) {
+			continue;
+		}
+		auto path = fs.JoinPath(temp_directory, owner_file_name);
+		try {
+			auto cleanup_lock = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
+			                                          FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS |
+			                                          FileFlags::FILE_FLAGS_DISABLE_LOGGING |
+			                                          FileLockType::WRITE_LOCK);
+			if (!cleanup_lock || !TemporaryOwnerManifestMatches(*cleanup_lock, owner_id)) {
+				continue;
+			}
+			locked_owner_indexes.emplace(owner_id, locked_owners.size());
+			locked_owners.push_back({std::move(path), std::move(cleanup_lock), {}});
+		} catch (IOException &) {
+			// A lock failure means the owner is still alive. Other I/O errors leave the owner marker for a later retry.
+			continue;
+		}
+	}
+	if (locked_owners.empty()) {
+		return;
+	}
+
+	try {
+		fs.ListFiles(temp_directory, [&](const string &file_name, bool is_directory) {
+			if (is_directory) {
+				return;
+			}
+			string owner_id;
+			if (!TryParseOwnedTemporaryFile(file_name, owner_id)) {
+				return;
+			}
+			const auto entry = locked_owner_indexes.find(owner_id);
+			if (entry == locked_owner_indexes.end()) {
+				return;
+			}
+			locked_owners[entry->second].files.push_back(fs.JoinPath(temp_directory, file_name));
+		});
+	} catch (IOException &) {
+		return;
+	}
+
+	for (auto &owner : locked_owners) {
+		try {
+			fs.RemoveFiles(owner.files);
+			fs.TryRemoveFile(owner.owner_file_path);
+		} catch (IOException &) {
+			// Leave the owner marker behind so a later process can retry cleanup.
+			continue;
 		}
 	}
 }
 
+void TemporaryDirectoryHandle::RemoveOwnedTemporaryFiles(FileSystem &fs, const string &owner_id) {
+	if (owner_id.empty()) {
+		return;
+	}
+	vector<string> files_to_delete;
+	fs.ListFiles(temp_directory, [&](const string &file_name, bool is_directory) {
+		if (!is_directory && IsOwnedTemporaryFile(file_name, owner_id)) {
+			files_to_delete.push_back(fs.JoinPath(temp_directory, file_name));
+		}
+	});
+	fs.RemoveFiles(files_to_delete);
+}
+
+void TemporaryDirectoryHandle::UnregisterOwner() {
+	if (!owner_registered) {
+		return;
+	}
+	UnregisterActiveTemporaryOwner(instance_id);
+	owner_registered = false;
+}
+
+void TemporaryDirectoryHandle::ReleaseOwnerFile(FileSystem &fs, bool remove_owner_file) {
+	owner_file_handle.reset();
+	UnregisterOwner();
+	if (remove_owner_file && !owner_file_path.empty()) {
+		fs.TryRemoveFile(owner_file_path);
+	}
+	owner_file_path.clear();
+}
+
 TemporaryFileManager &TemporaryDirectoryHandle::GetTempFile() const {
+	D_ASSERT(temp_file);
 	return *temp_file;
+}
+
+string TemporaryDirectoryHandle::GetTempBlockPath(block_id_t id) const {
+	return FileSystem::GetFileSystem(db).JoinPath(
+	    temp_directory, StringUtil::Format("%sblock-%llu.block", OwnedTemporaryFilePrefix(instance_id), id));
 }
 
 } // namespace duckdb
