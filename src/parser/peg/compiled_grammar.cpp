@@ -1,13 +1,14 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
-#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
-CompiledGrammar::CompiledGrammar(ParserCache &cache)
-    : keyword_helper(DuckDBKeywordHelper::Instance()), tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
+CompiledGrammar::CompiledGrammar(ParserCache &cache, const ParsedGrammar &grammar)
+    : owned_keyword_helper(make_uniq<ParsedGrammarKeywordHelper>(grammar)), keyword_helper(*owned_keyword_helper),
+      tokenizer(keyword_helper), version(cache.LatestParserVersion()) {
 }
 
 idx_t CompiledGrammar::Version() const {
@@ -67,7 +68,7 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<ClientContext> 
 		}
 	}
 
-	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this));
+	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(*this, grammar));
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
 		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, std::move(rule.transform)));
