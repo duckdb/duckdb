@@ -58,6 +58,50 @@ struct EncodingUtil {
 		return offset;
 	}
 
+	// The widest LEB128 the decoder accepts for T: 10 bytes for 64-bit, 5 for 32-bit, 3 for 16-bit
+	template <class T>
+	static constexpr idx_t MaxLEB128Width() {
+		static_assert(std::is_integral<T>::value, "Must be integral");
+		static_assert(std::is_unsigned<T>::value, "Must be unsigned");
+		static_assert(sizeof(T) <= sizeof(uint64_t), "Must be uint64_t or smaller");
+		return (sizeof(T) * 8 + 6) / 7;
+	}
+
+	// The narrowest LEB128 that holds this value
+	template <class T>
+	static idx_t MinimalLEB128Width(T value) {
+		static_assert(std::is_integral<T>::value, "Must be integral");
+		static_assert(std::is_unsigned<T>::value, "Must be unsigned");
+
+		idx_t width = 1;
+		while (value >= 0x80) {
+			value >>= 7;
+			width++;
+		}
+		return width;
+	}
+
+	// Encode into exactly `width` bytes, with redundant continuation bytes as padding. A padded LEB128
+	// decodes to the same value, so a slot keeps its size when you write a different value into it.
+	template <class T>
+	static void EncodePaddedLEB128(data_ptr_t target, T value, idx_t width) {
+		static_assert(std::is_integral<T>::value, "Must be integral");
+		static_assert(std::is_unsigned<T>::value, "Must be unsigned");
+		static_assert(sizeof(T) <= sizeof(uint64_t), "Must be uint64_t or smaller");
+
+		if (width < MinimalLEB128Width(value) || width > MaxLEB128Width<T>()) {
+			throw InternalException("Cannot encode LEB128 integer into %d bytes", width);
+		}
+		for (idx_t i = 0; i < width; i++) {
+			uint8_t byte = value & 0x7F;
+			value >>= 7;
+			if (i + 1 < width) {
+				byte |= 0x80;
+			}
+			target[i] = byte;
+		}
+	}
+
 	// Encode signed integer, returns the number of bytes written
 	template <class T>
 	static idx_t EncodeSignedLEB128(data_ptr_t target, T value) {
