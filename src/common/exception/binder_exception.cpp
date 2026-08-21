@@ -58,28 +58,18 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
 	                       call_str, candidate_str));
 }
 
-BinderException BinderException::UnsupportedLambdaExpression(const string &message, bool generated_simple_case) {
+BinderException BinderException::UnsupportedLambdaExpression(const string &message) {
 	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED_LAMBDA_EXPRESSION", QueryLocation());
-	if (generated_simple_case) {
-		extra_info["error_origin"] = "GENERATED_SIMPLE_CASE";
-	}
 	return BinderException(extra_info, message);
 }
 
-bool BinderException::IsUnsupportedLambdaExpression(const ErrorData &error, bool require_generated_simple_case) {
+bool BinderException::IsUnsupportedLambdaExpression(const ErrorData &error) {
 	if (!error.HasError() || error.Type() != ExceptionType::BINDER) {
 		return false;
 	}
 	auto &extra_info = error.ExtraInfo();
 	auto subtype = extra_info.find("error_subtype");
-	if (subtype == extra_info.end() || subtype->second != "UNSUPPORTED_LAMBDA_EXPRESSION") {
-		return false;
-	}
-	if (!require_generated_simple_case) {
-		return true;
-	}
-	auto origin = extra_info.find("error_origin");
-	return origin != extra_info.end() && origin->second == "GENERATED_SIMPLE_CASE";
+	return subtype != extra_info.end() && subtype->second == "UNSUPPORTED_LAMBDA_EXPRESSION";
 }
 
 BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {

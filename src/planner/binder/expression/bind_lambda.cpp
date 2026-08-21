@@ -12,6 +12,31 @@
 
 namespace duckdb {
 
+namespace {
+
+class LambdaBindingGuard {
+public:
+	LambdaBindingGuard(optional_ptr<vector<DummyBinding>> &bindings_p, DummyBinding binding)
+	    : bindings(bindings_p), previous_bindings(bindings_p) {
+		if (!bindings) {
+			bindings = &local_bindings;
+		}
+		bindings->push_back(std::move(binding));
+	}
+
+	~LambdaBindingGuard() {
+		bindings->pop_back();
+		bindings = previous_bindings;
+	}
+
+private:
+	optional_ptr<vector<DummyBinding>> &bindings;
+	optional_ptr<vector<DummyBinding>> previous_bindings;
+	vector<DummyBinding> local_bindings;
+};
+
+} // namespace
+
 static idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
@@ -134,24 +159,13 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	// create a lambda binding and push it to the lambda bindings vector
-	vector<DummyBinding> local_bindings;
-	if (!lambda_bindings) {
-		lambda_bindings = &local_bindings;
-	}
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
-	lambda_bindings->push_back(new_lambda_binding);
+	LambdaBindingGuard lambda_binding_guard(lambda_bindings, std::move(new_lambda_binding));
 
 	if (expr.CopiedExprMutable()) {
 		expr.RightMutable() = std::move(expr.CopiedExprMutable());
 	}
 	auto result = BindExpression(expr.RightMutable(), depth, false);
-	lambda_bindings->pop_back();
-
-	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
-	// query also contain lambdas
-	if (lambda_bindings->empty()) {
-		lambda_bindings = nullptr;
-	}
 
 	if (result.HasError()) {
 		result.error.Throw();
