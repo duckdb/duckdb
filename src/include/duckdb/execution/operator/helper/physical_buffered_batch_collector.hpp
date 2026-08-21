@@ -53,6 +53,10 @@ public:
 	bool IsStreaming() const override {
 		return true;
 	}
+
+private:
+	//! Whether background workers keep the buffer filled (see QueryResultExecutionMode)
+	bool async;
 };
 
 } // namespace duckdb

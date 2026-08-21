@@ -1,16 +1,18 @@
 #include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 
+#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
 PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
-    : PhysicalResultCollector(physical_plan, data) {
+    : PhysicalResultCollector(physical_plan, data), async(data.execution_mode == QueryResultExecutionMode::ASYNC) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -37,9 +39,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
-	if (buffered_data.ShouldBlockBatch(batch)) {
-		auto callback_state = input.interrupt_state;
-		buffered_data.BlockSink(callback_state, batch);
+	if (buffered_data.BlockSink(input.interrupt_state, batch)) {
 		return SinkResultType::BLOCKED;
 	}
 
@@ -101,7 +101,14 @@ unique_ptr<LocalSinkState> PhysicalBufferedBatchCollector::GetLocalSinkState(Exe
 unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedBatchCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared_ptr<BatchedBufferedData>(context);
+	state->buffered_data = make_shared_ptr<BatchedBufferedData>(context, async);
+	if (async) {
+		// A notify callback passed at execution time is armed before this buffer exists
+		auto notifier = context.GetActiveResultNotifier();
+		if (notifier) {
+			state->buffered_data->SetResultNotifier(std::move(notifier));
+		}
+	}
 	return std::move(state);
 }
 

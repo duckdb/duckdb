@@ -24,6 +24,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
@@ -105,6 +106,10 @@ public:
 	atomic<ClientInterruptState> interrupt_state {ClientInterruptState::NOT_INTERRUPTED};
 	//! The deadline for the current query (milliseconds since epoch)
 	optional_idx query_deadline;
+	//! Notifier of the active async stream result, called by Interrupt (may be null).
+	//! Own lock: Interrupt must not take the context lock.
+	mutex notifier_lock;
+	shared_ptr<QueryResultNotifier> active_result_notifier;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
@@ -137,6 +142,8 @@ public:
 
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
+	//! The notifier of the active async stream result, or null (read by the result collector)
+	DUCKDB_API shared_ptr<QueryResultNotifier> GetActiveResultNotifier();
 	DUCKDB_API bool IsInterrupted() const;
 	DUCKDB_API void ClearInterrupt();
 	//! Suppress all further interrupts for the current query (called after irreversible operations like COMMIT)
@@ -323,6 +330,7 @@ private:
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
+	void WaitForProgress(ClientContextLock &lock, BaseQueryResult &result);
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,

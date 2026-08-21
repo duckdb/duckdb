@@ -278,12 +278,21 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 void Executor::CancelTasks() {
 	task.reset();
 	reference_map_t<Task, shared_ptr<Task>> to_destroy;
+	shared_ptr<QueryResultNotifier> notifier;
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
+		notifier = std::move(result_notifier);
 		to_destroy = std::move(to_be_rescheduled_tasks);
 		to_be_rescheduled_tasks.clear();
+	}
+	if (notifier) {
+		// Cancellation runs on the consumer's own call path, and the task drain below can run
+		// a sink task right here, notifying on the consumer's stack under the client context
+		// lock. The buffered data holds its own notifier reference, so resetting ours is not
+		// enough: Clear is the kill switch that silences every copy.
+		notifier->Clear();
 	}
 	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
@@ -323,21 +332,52 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 	task_reschedule.notify_one();
 }
 
+void Executor::SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p) {
+	lock_guard<mutex> l(executor_lock);
+	result_notifier = std::move(result_notifier_p);
+}
+
 void Executor::UnregisterTask() {
+	shared_ptr<QueryResultNotifier> notifier;
 #ifndef DUCKDB_NO_THREADS
 	{
 		// Wake any thread blocked in `WaitForTask`.
 		// A finished task may have scheduled follow-up tasks or completed the query.
 		lock_guard<mutex> l(executor_lock);
 		task_reschedule.notify_all();
+		// Only the terminal transition changes what an async consumer can observe;
+		// chunk arrival wakes it through the buffer
+		if (result_notifier && ExecutionIsFinished()) {
+			notifier = result_notifier;
+		}
 	}
 #endif
 	executor_tasks--;
+	if (notifier) {
+		// Notify outside executor_lock: the callback must never run under an engine lock.
+		// This runs inside a noexcept task destructor, so a throwing callback (a contract
+		// violation) must not std::terminate a scheduler thread.
+		try {
+			notifier->Notify();
+		} catch (...) { // LCOV_EXCL_LINE
+		}
+	}
 }
 
 void Executor::WaitForTask() {
+	WaitForTaskInternal(true);
+}
+
+void Executor::WaitForProgress() {
+	// An observing (async) caller never runs tasks, so an available producer task is no
+	// reason to skip the wait
+	WaitForTaskInternal(false);
+}
+
+void Executor::WaitForTaskInternal(bool consider_producer_queue) {
 #ifndef DUCKDB_NO_THREADS
-	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
+	// WAIT_TIME is in milliseconds
+	static constexpr std::chrono::microseconds WAIT_INTERVAL = std::chrono::microseconds(WAIT_TIME * 1000);
 	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = TimePoint::Tick();
@@ -348,20 +388,22 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
-		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		// A chunk is buffered; the caller's next step will observe it
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
-		blocked_thread_time += blocked_micros;
-		return;
+	if (consider_producer_queue) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		if (scheduler.GetTaskCountForProducer(*producer) > 0) {
+			// A task is available for the calling thread, the next step will make progress without waiting
+			blocked_thread_time += blocked_micros;
+			return;
+		}
 	}
-	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
-	// Wait (bounded), but wake up on task completion or reschedule.
-	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
-	task_reschedule.wait_for(l, WAIT_TIME_MS);
+	// Nothing this caller can advance itself. Wait (bounded), but wake up on task
+	// completion or reschedule.
+	blocked_thread_time += blocked_micros + WAIT_INTERVAL.count();
+	task_reschedule.wait_for(l, WAIT_INTERVAL);
 #endif
 }
 

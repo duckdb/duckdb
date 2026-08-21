@@ -16,6 +16,10 @@ enum class QueryResultOutputType : uint8_t { FORCE_MATERIALIZED, ALLOW_STREAMING
 
 enum class QueryResultMemoryType : uint8_t { IN_MEMORY, BUFFER_MANAGED };
 
+//! SYNC: fetch calls drive execution and restart blocked producers (the default).
+//! ASYNC: background workers keep the result buffer filled; fetching never runs execution.
+enum class QueryResultExecutionMode : uint8_t { SYNC, ASYNC };
+
 struct QueryParameters {
 	QueryParameters() {
 	}
@@ -28,6 +32,7 @@ struct QueryParameters {
 	}
 	QueryResultOutputType output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY;
+	QueryResultExecutionMode execution_mode = QueryResultExecutionMode::SYNC;
 };
 
 } // namespace duckdb

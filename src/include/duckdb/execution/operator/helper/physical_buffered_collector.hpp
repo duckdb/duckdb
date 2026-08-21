@@ -17,6 +17,8 @@ public:
 	PhysicalBufferedCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, bool parallel);
 
 	bool parallel;
+	//! Whether the result buffer is kept filled by background workers (see QueryResultExecutionMode)
+	bool async;
 
 public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;

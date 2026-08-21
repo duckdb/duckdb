@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
