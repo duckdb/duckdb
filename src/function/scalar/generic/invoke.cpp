@@ -9,6 +9,15 @@ namespace duckdb {
 
 namespace {
 
+static void PropagateLambdaProperties(BoundScalarFunction &function, const Expression &lambda_expr) {
+	if (lambda_expr.IsVolatile()) {
+		function.SetVolatile();
+	}
+	if (lambda_expr.CanThrow()) {
+		function.SetFallible();
+	}
+}
+
 struct LambdaInvokeData final : public LambdaFunctionData {
 	unique_ptr<Expression> lambda_expr;
 
@@ -36,8 +45,9 @@ struct LambdaInvokeData final : public LambdaFunctionData {
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(
 		    101, "lambda_expr", unique_ptr<Expression>());
-		if (lambda_expr && lambda_expr->Cast<BoundLambdaExpression>().LambdaExpr()->CanThrow()) {
-			function.SetFallible();
+		if (lambda_expr) {
+			auto &bound_lambda_expr = lambda_expr->Cast<BoundLambdaExpression>();
+			PropagateLambdaProperties(function, *bound_lambda_expr.LambdaExpr());
 		}
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
 	}
@@ -114,9 +124,7 @@ unique_ptr<FunctionData> LambdaInvokeBind(BindScalarFunctionInput &input) {
 	}
 
 	bound_function.SetReturnType(bound_lambda_expr.LambdaExpr()->GetReturnType());
-	if (bound_lambda_expr.LambdaExpr()->CanThrow()) {
-		bound_function.SetFallible();
-	}
+	PropagateLambdaProperties(bound_function, *bound_lambda_expr.LambdaExpr());
 
 	return make_uniq<LambdaInvokeData>(bound_lambda_expr.Copy());
 }
