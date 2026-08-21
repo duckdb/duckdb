@@ -386,7 +386,7 @@ public:
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
-	void SetSearchPath(Catalog &catalog, const Identifier &schema);
+	void SetSearchPath(Catalog &catalog, const Identifier &schema, bool default_schema_precedence = false);
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
