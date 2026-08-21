@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/using_key_union_unique_frontier.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=using_key_union_unique_frontier
+BENCHMARK_NAME=USING KEY UNION unique frontier
+DESCRIPTION=Guard large duplicate-free keyed epochs against unnecessary preaggregation

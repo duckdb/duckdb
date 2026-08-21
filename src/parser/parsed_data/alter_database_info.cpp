@@ -40,7 +40,8 @@ string RenameDatabaseInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += StringUtil::Format("%s SET ALIAS TO %s", GetQualifiedName().Catalog(), new_name);
+	result +=
+	    StringUtil::Format("%s SET ALIAS TO %s", SQLIdentifier(GetQualifiedName().Catalog()), SQLIdentifier(new_name));
 	return result;
 }
 

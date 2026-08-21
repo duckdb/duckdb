@@ -1,11 +1,11 @@
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 
 namespace duckdb {
 
-MatcherFactory::MatcherList::MatcherList(PEGParser &parser, MatcherFactory &factory)
-    : parser(parser), factory(factory) {
+MatcherFactory::MatcherList::MatcherList(MatcherFactory &factory) : factory(factory) {
 }
 
 void MatcherFactory::MatcherList::AddMatcher(Matcher &matcher) {
@@ -49,7 +49,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		throw InternalException("PEG matcher create error - found too many close brackets");
 	}
 	auto &root_bracket_matcher = matchers.back();
-	if (root_bracket_matcher.function_name.GetSize() == 0) {
+	if (!root_bracket_matcher.function_name) {
 		// not a function
 		auto &bracket_matcher = root_bracket_matcher.matcher;
 		// remove the last matcher from the stack
@@ -58,7 +58,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		AddMatcher(bracket_matcher);
 	} else {
 		// function matcher
-		auto &function_name = root_bracket_matcher.function_name;
+		auto &function_name = *root_bracket_matcher.function_name;
 		auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
 
 		// wrap the parameters in a list if there is more than one
@@ -67,7 +67,7 @@ void MatcherFactory::MatcherList::CloseBracket() {
 		vector<reference<Matcher>> parameters;
 		parameters.push_back(parameter);
 		// do the substitution of the function call
-		auto &function_call = factory.CreateMatcher(parser, function_name, parameters);
+		auto &function_call = factory.CreateMatcher(function_name, parameters);
 		// remove the last matcher from the stack
 		matchers.pop_back();
 		// push it into the last matcher
@@ -79,7 +79,7 @@ MatcherFactory::MatcherList::Entry &MatcherFactory::MatcherList::GetLastRootMatc
 	return matchers.back();
 }
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matcher>> &parameters) {
 	bool is_function_call = !parameters.empty();
 	if (!is_function_call) {
 		// check if the matcher has already been created first
@@ -90,21 +90,21 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 	}
 	// look up the rule
-	auto entry = parser.rules.find(rule_name.GetString());
-	if (entry == parser.rules.end()) {
+	auto entry = grammar.rules.find(rule_name.GetString());
+	if (entry == grammar.rules.end()) {
 		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
 	}
 	// create a matcher and cache it
 	// since matchers can be recursive we need to cache it prior to recursively constructing the other rules
 	auto &matcher = List();
 	if (!is_function_call) {
-		matchers.insert(make_pair(rule_name, reference<Matcher>(matcher)));
+		matchers.insert(make_pair(string_t(entry->second->name), reference<Matcher>(matcher)));
 	}
 
-	MatcherList list(parser, *this);
+	MatcherList list(*this);
 	list.AddRootMatcher(matcher);
 	// fill the matcher from the given set of rules
-	auto &rule = entry->second;
+	auto &rule = entry->second->recipe;
 	if (rule.parameters.size() > 1) {
 		throw InternalException("Only functions with a single parameter are supported");
 	}
@@ -127,7 +127,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list.AddMatcher(parameters[param_entry->second].get());
 			} else {
 				// refers to a different rule - create the matcher for that rule
-				list.AddMatcher(CreateMatcher(parser, token.text));
+				list.AddMatcher(CreateMatcher(token.text));
 			}
 			break;
 		}
@@ -240,11 +240,19 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	if (list.GetRootMatcherCount() != 1) {
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
-	matcher.SetName(rule_name.GetString());
-	if (packrat_memoized_rules.count(rule_name.GetString())) {
+
+	auto rule_name_str = rule_name.GetString();
+	auto rule_p = compiled.GetRule(rule_name_str);
+	if (!rule_p) {
+		throw InvalidInputException("Failed to compile rule '%s', no registered data exists for it", rule_name_str);
+	}
+	auto &compiled_rule = *rule_p;
+
+	matcher.SetRule(compiled_rule);
+	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
-	if (no_suggestion_rules.count(rule_name.GetString())) {
+	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
 	return matcher;
@@ -258,6 +266,14 @@ void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	if (packrat_memoized_rules.count(name)) {
 		matcher.SetPackratMemoized();
 	}
+	if (grammar.GetRule(name)) {
+		auto rule_p = compiled.GetRule(name);
+		if (!rule_p) {
+			throw InvalidInputException("No registered data exists for rule '%s', failed to set RuleOverride", name);
+		}
+		auto &rule = *rule_p;
+		matcher.SetRule(rule);
+	}
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
 }
 
@@ -269,11 +285,11 @@ void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
 
-Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
-	// parse the grammar into a set of rules
-	PEGParser parser;
-	parser.ParseRules(grammar);
+MatcherFactory::MatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar_p, CompiledGrammar &compiled_p)
+    : allocator(allocator), grammar(grammar_p), compiled(compiled_p) {
+}
 
+Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// keyword overrides
 	AddKeywordOverride("TABLE", KeywordInfo(1, ' '));
 	AddKeywordOverride(".", KeywordInfo(0, '\0'));
@@ -312,48 +328,50 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
-	AddRuleOverride("Identifier", allocator.Allocate(
-	                                  make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                              compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedIdentifier", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	                                          SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
 	AddRuleOverride("CatalogName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                   SuggestionState::SUGGEST_CATALOG_NAME, keyword_helper)));
+	                                   SuggestionState::SUGGEST_CATALOG_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("SchemaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME,
-	                                                                              keyword_helper)));
+	                                                                              compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedSchemaName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_SCHEMA_NAME, keyword_helper)));
+	                                          SuggestionState::SUGGEST_SCHEMA_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME,
-	                                                                             keyword_helper)));
+	                                                                             compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedTableName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                         SuggestionState::SUGGEST_TABLE_NAME, keyword_helper)));
+	                                         SuggestionState::SUGGEST_TABLE_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("ColumnName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME,
-	                                                                              keyword_helper)));
+	                                                                              compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedColumnName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                          SuggestionState::SUGGEST_COLUMN_NAME, keyword_helper)));
-	AddRuleOverride("IndexName", allocator.Allocate(
-	                                 make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	                                          SuggestionState::SUGGEST_COLUMN_NAME, compiled.GetKeywordHelper())));
+	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
+	                                                                             compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedIndexName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                         SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	                                         SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
 	AddRuleOverride("SequenceName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE,
-	                                                                                keyword_helper)));
+	                                                                                compiled.GetKeywordHelper())));
 	AddRuleOverride("FunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper)));
-	AddRuleOverride("ReservedFunctionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, keyword_helper)));
+	                                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, compiled.GetKeywordHelper())));
+	AddRuleOverride("ReservedFunctionName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                    SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedKeyword", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                       SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
-	AddRuleOverride("TableFunctionName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                         SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, keyword_helper)));
-	AddRuleOverride("TypeName", allocator.Allocate(
-	                                make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME, keyword_helper)));
+	                                       SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
+	AddRuleOverride("TableFunctionName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME,
+	                                                                compiled.GetKeywordHelper())));
+	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME,
+	                                                                            compiled.GetKeywordHelper())));
 	AddRuleOverride("ReservedTypeName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                        SuggestionState::SUGGEST_TYPE_NAME, keyword_helper)));
+	                                        SuggestionState::SUGGEST_TYPE_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("PragmaName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME,
-	                                                                              keyword_helper)));
+	                                                                              compiled.GetKeywordHelper())));
 	AddRuleOverride("SettingName", allocator.Allocate(make_uniq<IdentifierMatcher>(
-	                                   SuggestionState::SUGGEST_SETTING_NAME, keyword_helper)));
+	                                   SuggestionState::SUGGEST_SETTING_NAME, compiled.GetKeywordHelper())));
 	AddRuleOverride("CopyOptionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
-	                                      SuggestionState::SUGGEST_VARIABLE, keyword_helper)));
+	                                      SuggestionState::SUGGEST_VARIABLE, compiled.GetKeywordHelper())));
 	AddRuleOverride("NumberLiteral", allocator.Allocate(make_uniq<NumberLiteralMatcher>()));
 	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
 	AddRuleOverride("OperatorLiteral", allocator.Allocate(make_uniq<OperatorMatcher>()));
@@ -366,9 +384,14 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");
+	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
+	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and
+	// queries.
+	SuppressSuggestions("ShowDeprecatedQualifiedTableName");
+	SuppressSuggestions("ShowDeprecatedSelect");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
-	return CreateMatcher(parser, root_rule);
+	return CreateMatcher(string_t(root_rule));
 }
 
 unique_ptr<KeywordMatcher> MatcherFactory::CreateKeyword(const string &keyword, const KeywordInfo &info) const {
@@ -439,9 +462,9 @@ Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
 	return entry->second.get();
 }
 
-Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
+Matcher &MatcherFactory::CreateMatcher(string_t rule_name) {
 	vector<reference<Matcher>> parameters;
-	return CreateMatcher(parser, rule_name, parameters);
+	return CreateMatcher(rule_name, parameters);
 }
 
 } // namespace duckdb

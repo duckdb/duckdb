@@ -113,7 +113,7 @@ string CopyInfo::TablePartToString() const {
 	if (!select_list.empty()) {
 		vector<string> options;
 		for (auto &option : select_list) {
-			options.push_back(SQLIdentifier::ToString(option.GetIdentifierName()));
+			options.push_back(SQLIdentifier::ToString(option));
 		}
 		result += " (";
 		result += StringUtil::Join(options, ", ");
