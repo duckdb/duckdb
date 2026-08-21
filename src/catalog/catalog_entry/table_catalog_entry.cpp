@@ -68,8 +68,7 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_
 		}
 		auto candidates =
 		    StringUtil::CandidatesErrorMessage(column_names, column_name.GetIdentifierName(), "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetIdentifierName(),
-		                      column_name, candidates);
+		throw BinderException("Table %s does not have a column with name %s\n%s", name, column_name, candidates);
 	}
 	return entry;
 }

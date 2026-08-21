@@ -33,6 +33,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -1194,6 +1195,32 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Preserve Identifier Case
+//===----------------------------------------------------------------------===//
+void PreserveIdentifierCaseSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("preserve_identifier_case setting cannot be NULL");
+	}
+	// backwards compatibility with the 1.x boolean setting: accept anything that casts to BOOLEAN,
+	// mapping true to preserve_case and false to lowercase
+	auto boolean_value = input.DefaultTryCastAs(LogicalType::BOOLEAN);
+	if (boolean_value) {
+		input = Value(BooleanValue::Get(*boolean_value) ? "preserve_case" : "lowercase");
+		return;
+	}
+	auto parameter = StringValue::Get(input);
+	try {
+		EnumUtil::FromString<IdentifierCaseMode>(parameter);
+	} catch (NotImplementedException &) {
+		// the generated setter reports this as a NotImplementedException naming the C++ enum
+		throw InvalidInputException(
+		    "Unrecognized parameter for option preserve_identifier_case \"%s\", expected one of: "
+		    "preserve_case, lowercase, uppercase",
+		    parameter);
 	}
 }
 

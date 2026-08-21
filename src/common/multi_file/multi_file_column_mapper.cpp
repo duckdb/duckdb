@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
@@ -884,7 +883,9 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 }
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
-	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
+	// this filter replaces the global one in the reader, so a constant that does not survive the cast
+	// exactly would silently change which rows match
+	if (!BoundCastExpression::CastIsInvertible(constant.type(), target_type)) {
 		return false;
 	}
 	auto cast = constant.DefaultTryCastAs(target_type);

@@ -64,8 +64,7 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) 
 			return result;
 		}
 	}
-	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found",
-	                        name.GetIdentifierName());
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name %s not found", name);
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p,
@@ -424,7 +423,7 @@ void DataTable::RebuildIndexes() {
 
 			auto error = bound_index.Append(table_chunk, row_ids);
 			if (error.HasError()) {
-				throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index.GetIndexName(),
+				throw InternalException("Failed to rebuild index %s after vacuum: %s", bound_index.GetIndexName(),
 				                        error.Message());
 			}
 		}
@@ -591,7 +590,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vect
 		return;
 	}
 
-	throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
+	throw ConstraintException("NOT NULL constraint failed: %s.%s", SQLIdentifier(table.name), SQLIdentifier(col_name));
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
@@ -607,8 +606,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 		throw;
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                          col.Type().ToString(), col.GeneratedExpression().ToString(), error.RawMessage());
+		throw ConstraintException("Incorrect value for generated column '%s %s AS (%s)' : %s",
+		                          SQLIdentifier(col.Name()), col.Type().ToString(),
+		                          col.GeneratedExpression().ToString(), error.RawMessage());
 	}
 }
 

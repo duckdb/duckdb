@@ -133,7 +133,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
     DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(DelimJoinAsCteSetting),
-    DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
     DUCKDB_SETTING_CALLBACK(DialectCompatibilityModeSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
@@ -215,7 +214,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(PivotFilterThresholdSetting),
     DUCKDB_SETTING(PivotLimitSetting),
     DUCKDB_SETTING(PreferRangeJoinsSetting),
-    DUCKDB_SETTING(PreserveIdentifierCaseSetting),
+    DUCKDB_SETTING_CALLBACK(PreserveIdentifierCaseSetting),
     DUCKDB_SETTING(PreserveInsertionOrderSetting),
     DUCKDB_SETTING(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfilingCoverageSetting),
@@ -230,6 +229,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(ShowBehaviorSetting),
     DUCKDB_GLOBAL(StandardVectorSizeSetting),
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
@@ -252,9 +252,9 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 30),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 30),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 131),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 130),
                                                      DUCKDB_SETTING_ALIAS("null_order", 62),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 154),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 153),
                                                      DUCKDB_SETTING_ALIAS("user", 173),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
                                                      DUCKDB_SETTING_ALIAS("worker_threads", 171),
@@ -440,7 +440,7 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		}
 		idx_t array_size = 0;
 		for (auto length_idx = bracket_open_idx + 1; length_idx < type.size() - 1; length_idx++) {
-			if (!isdigit(type[length_idx])) {
+			if (!isdigit(static_cast<unsigned char>(type[length_idx]))) {
 				throw InternalException("Ill formatted array type: '%s'", type);
 			}
 			array_size = array_size * 10 + static_cast<idx_t>(type[length_idx] - '0');
@@ -733,10 +733,19 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 		return optional_idx();
 	}
 
+	if (Value::IsNan(limit)) {
+		return optional_idx();
+	}
 	if (limit < 0) {
 		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
 	}
-	idx_t actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	idx_t actual_limit;
+	// double(idx_max) rounds up to 2^64, so equality already means the product is not representable
+	if (limit >= static_cast<double>(NumericLimits<idx_t>::Maximum()) / static_cast<double>(multiplier)) {
+		actual_limit = NumericLimits<idx_t>::Maximum();
+	} else {
+		actual_limit = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	}
 	if (actual_limit == NumericLimits<idx_t>::Maximum()) {
 		return static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
 	}
@@ -866,7 +875,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 	}
 	duckdb::identifier_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
 	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
-		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+		throw InvalidInputException("Cannot include %s in allowed_configs", config_name);
 	}
 	// Validate that the config name refers to a known setting (built-in or extension)
 	// and resolve aliases to canonical names
@@ -888,7 +897,7 @@ void DBConfig::AddAllowedConfig(const Identifier &config_name) {
 		options.allowed_configs.insert(config_name);
 		return;
 	}
-	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+	throw InvalidInputException("Unknown configuration option %s in allowed_configs", config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {

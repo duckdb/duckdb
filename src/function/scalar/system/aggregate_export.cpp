@@ -435,6 +435,7 @@ void CombineAggrStateCombine(Vector &source, Vector &target, AggregateInputData 
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 	                                 aggr_input_data.combine_type);
+	combine_input.combine_multiplicities = aggr_input_data.combine_multiplicities;
 	bind_data.aggr.GetStateCombineCallback()(source, target, combine_input, count);
 }
 

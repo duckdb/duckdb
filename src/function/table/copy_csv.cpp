@@ -412,8 +412,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
 	auto &original_types = collection->Types();
-	auto expressions =
-	    CreateCastExpressions(csv_data, context, StringsToIdentifiers(csv_data.options.name_list), original_types);
+	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
 	ExpressionExecutor executor(context, expressions);
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
