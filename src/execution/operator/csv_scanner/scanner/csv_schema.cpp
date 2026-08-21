@@ -158,11 +158,11 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
                              bool is_minimal_sniffer) const {
 	D_ASSERT(sniffer_result.names.size() == sniffer_result.return_types.size());
 	bool match = true;
-	unordered_map<string, TypeIdxPair> current_schema;
+	identifier_map_t<TypeIdxPair> current_schema;
 
 	for (idx_t i = 0; i < sniffer_result.names.size(); i++) {
 		// Populate our little schema
-		current_schema[sniffer_result.names[i].GetIdentifierName()] = {sniffer_result.return_types[i], i};
+		current_schema[sniffer_result.names[i]] = {sniffer_result.return_types[i], i};
 	}
 	if (is_minimal_sniffer) {
 		auto min_sniffer = static_cast<AdaptiveSnifferResult &>(sniffer_result);
@@ -170,7 +170,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 			bool min_sniff_match = true;
 			// If we don't have more than one row, either the names must match or the types must match.
 			for (auto &column : columns) {
-				if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
+				if (current_schema.find(column.name) == current_schema.end()) {
 					min_sniff_match = false;
 					break;
 				}
@@ -213,15 +213,16 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 	error << "Current file: " << cur_file_path << "\n";
 
 	for (auto &column : columns) {
-		if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
+		auto schema_entry = current_schema.find(column.name);
+		if (schema_entry == current_schema.end()) {
 			error << "Column with name: \"" << column.name.GetIdentifierName() << "\" is missing"
 			      << "\n";
 			match = false;
 		} else {
-			if (!CanWeCastIt(current_schema[column.name.GetIdentifierName()].type.id(), column.type.id())) {
+			if (!CanWeCastIt(schema_entry->second.type.id(), column.type.id())) {
 				error << "Column with name: \"" << column.name.GetIdentifierName()
 				      << "\" is expected to have type: " << column.type.ToString();
-				error << " But has type: " << current_schema[column.name.GetIdentifierName()].type.ToString() << "\n";
+				error << " But has type: " << schema_entry->second.type.ToString() << "\n";
 				match = false;
 			}
 		}
