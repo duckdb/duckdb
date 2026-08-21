@@ -337,6 +337,9 @@ public:
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
 
+	//! Whether DISTINCT arguments can be replaced by their collation keys
+	bool collate_distinct_arguments = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -382,6 +385,10 @@ public: // Properties
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
+
+	//! Whether DISTINCT arguments can be replaced by their collation keys
+	auto CollateDistinctArguments() const -> bool { return properties.collate_distinct_arguments; }
+	auto SetCollateDistinctArguments(bool value) -> void { properties.collate_distinct_arguments = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
