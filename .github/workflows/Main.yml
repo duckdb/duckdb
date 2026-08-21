@@ -92,6 +92,7 @@ jobs:
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
+      extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
       GEN: ninja
     steps:
@@ -116,11 +117,15 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
             effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+            extension_allow_failure_archs="linux_amd64_musl;linux_arm64_musl"
           fi
           echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
+          echo "extension_allow_failure_archs=$extension_allow_failure_archs" >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
+          echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -436,6 +441,7 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
       opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
+      allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       runners: ${{ needs.prepare.outputs.runners }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
