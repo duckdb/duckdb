@@ -15,26 +15,10 @@ public:
 		name = "StringLiteral";
 	}
 
-	MatchResultType Match(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return MatchResultType::FAIL;
-		}
-
-		auto &token_text = token->text;
-		auto string_info = GetSpecialStringInfo(token_text);
-
-		if (!MatchStringLiteral(state, string_info)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		auto token = state.token_iterator.Current();
-		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 
 		auto start_offset = optional_idx(token->offset);
@@ -42,21 +26,27 @@ public:
 		auto string_info = GetSpecialStringInfo(token->text);
 
 		if (!MatchStringLiteral(state, string_info)) {
-			return nullptr;
+			return MatcherResult::Failure();
+		}
+		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
 		}
 
 		idx_t suffix_len = 1;
 		if (token->text.length() < string_info.prefix_len + suffix_len) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 
 		string stripped_string =
 		    token->text.substr(string_info.prefix_len, token->text.length() - (string_info.prefix_len + suffix_len));
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
-		auto result = state.allocator.Allocate(
-		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset, token_length));
-		result->name = name;
+		auto result = state.AllocateParseResult<StringLiteralParseResult>(stripped_string, string_info.type,
+		                                                                  start_offset, token_length);
+		if (result.HasParseResult()) {
+			result.GetParseResult()->name = name;
+		}
 		return result;
 	}
 
