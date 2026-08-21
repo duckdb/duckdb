@@ -101,6 +101,17 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 	return FilterResult::SUCCESS;
 }
 
+optional_ptr<FilterCombiner::NotDistinctFromPair>
+FilterCombiner::FindNotDistinctFromPair(vector<NotDistinctFromPair> &pairs, const Expression &left,
+                                        const Expression &right) {
+	for (auto &pair : pairs) {
+		if ((pair.left == &left && pair.right == &right) || (pair.left == &right && pair.right == &left)) {
+			return optional_ptr<NotDistinctFromPair>(pair);
+		}
+	}
+	return nullptr;
+}
+
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
@@ -164,8 +175,13 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
 			for (idx_t k = i + 1; k < entries.size(); k++) {
-				auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
-				                                                    entries[i].get().Copy(), entries[k].get().Copy());
+				auto comparison_type = ExpressionType::COMPARE_EQUAL;
+				auto pair = FindNotDistinctFromPair(not_distinct_from_pairs, entries[i].get(), entries[k].get());
+				if (pair && !pair->also_equality && constant_list.empty()) {
+					comparison_type = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				}
+				auto comparison = BoundComparisonExpression::Create(comparison_type, entries[i].get().Copy(),
+				                                                    entries[k].get().Copy());
 				callback(std::move(comparison));
 			}
 			// for each entry also create a comparison with each constant
@@ -231,6 +247,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	equivalence_set_map.clear();
 	constant_values.clear();
 	equivalence_map.clear();
+	not_distinct_from_pairs.clear();
 }
 
 bool FilterCombiner::HasFilters() {
@@ -1037,8 +1054,9 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 
 FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	auto &comparison = expr.Cast<BoundFunctionExpression>();
-	if (!SupportedFilterComparison(comparison.GetExpressionType())) {
-		// only support [>, >=, <, <=, ==, !=] expressions
+	if (!SupportedFilterComparison(comparison.GetExpressionType()) &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		// only support [>, >=, <, <=, ==, !=] and IS NOT DISTINCT FROM expressions
 		return FilterResult::UNSUPPORTED;
 	}
 	// check if one of the sides is a scalar value
@@ -1056,6 +1074,11 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 			return FilterResult::UNSUPPORTED;
 		}
 		if (constant_value.IsNull()) {
+			if (comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				// X IS NOT DISTINCT FROM NULL is equivalent to X IS NULL, which is not
+				// unsatisfiable - keep the filter instead of pruning the entire branch
+				return FilterResult::UNSUPPORTED;
+			}
 			// comparisons with null are always null (i.e. will never result in rows)
 			return FilterResult::UNSATISFIABLE;
 		}
@@ -1064,6 +1087,10 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		ExpressionValueInformation info;
 		info.comparison_type =
 		    left_is_scalar ? FlipComparisonExpression(comparison.GetExpressionType()) : comparison.GetExpressionType();
+		if (info.comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			// with a non-null constant, X IS NOT DISTINCT FROM C is equivalent to X = C
+			info.comparison_type = ExpressionType::COMPARE_EQUAL;
+		}
 		info.constant = constant_value;
 
 		// get the current bucket of constant values
@@ -1094,7 +1121,8 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	} else {
 		// comparison between two non-scalars
 		// only handle comparisons for now
-		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+		    expr.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the LHS and RHS nodes
@@ -1107,6 +1135,14 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto left_equivalence_set = GetEquivalenceSet(left_node);
 		auto right_equivalence_set = GetEquivalenceSet(right_node);
 		if (left_equivalence_set == right_equivalence_set) {
+			if (expr.GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+				// an explicit equality on a NOT DISTINCT FROM pair is stronger,
+				// we can regenerate the pair as a regular equality
+				auto pair = FindNotDistinctFromPair(not_distinct_from_pairs, left_node, right_node);
+				if (pair) {
+					pair->also_equality = true;
+				}
+			}
 			// this equality filter already exists, prune it
 			return FilterResult::SUCCESS;
 		}
@@ -1116,6 +1152,19 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 
 		auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
 		auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			// record that all members of the two sets are connected via NOT DISTINCT FROM,
+			// so we can regenerate the comparisons with the correct type in GenerateFilters.
+			// IS NOT DISTINCT FROM is transitive, so every member of one set is NOT DISTINCT
+			// FROM every member of the other set.
+			for (auto &left_expr : left_bucket) {
+				for (auto &right_expr : right_bucket) {
+					if (!FindNotDistinctFromPair(not_distinct_from_pairs, left_expr.get(), right_expr.get())) {
+						not_distinct_from_pairs.push_back(NotDistinctFromPair {&left_expr.get(), &right_expr.get()});
+					}
+				}
+			}
+		}
 		for (auto &right_expr : right_bucket) {
 			// rewrite the equivalence set mapping for this node
 			equivalence_set_map[right_expr] = left_equivalence_set;
