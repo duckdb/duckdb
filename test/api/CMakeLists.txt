@@ -24,6 +24,7 @@ set(TEST_API_OBJECTS
     test_get_table_names.cpp
     test_prepared_api.cpp
     test_table_info.cpp
+    test_temp_directory_crash_recovery.cpp
     test_appender_api.cpp
     test_lifecycle_hooks.cpp
     test_extension_schema_api.cpp
