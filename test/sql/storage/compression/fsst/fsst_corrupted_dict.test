@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/fsst/fsst_corrupted_dict.test
+# group: [fsst]
+
+require vector_size 2048
+
+unzip data/storage/fsst_corrupt_dict_end.db.gz {TEST_DIR}/fsst_corrupt_dict_end.db
+
+statement ok
+ATTACH '{TEST_DIR}/fsst_corrupt_dict_end.db' AS db2 (READ_ONLY)
+
+statement ok
+USE db2
+
+query I
+SELECT compression FROM pragma_storage_info('fsst_tbl') WHERE compression='FSST'
+----
+FSST
+
+statement error
+SELECT * FROM fsst_tbl
+----
+Failed to scan FSST string - dictionary offset out of range
