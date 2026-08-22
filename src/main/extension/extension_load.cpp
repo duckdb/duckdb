@@ -203,7 +203,7 @@ void DuckDB::LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun
 	try {
 		// Statically linked extensions bind DuckDB's symbols at link time, so they never fetch the vtable. There is no
 		// client context this early either, so the entrypoint gets a connection of its own.
-		InvokeCAPIV2Entrypoint(*instance, init_result, name, init_fun, nullptr, /* statically_linked */ true);
+		instance->InvokeExtensionEntrypointV2(init_result, name, init_fun, nullptr, /* statically_linked */ true);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		load_info->LoadFail(error);
@@ -761,8 +761,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 			    extension_init_result.filebase);
 		}
 
-		InvokeCAPIV2Entrypoint(db, extension_init_result, extension, init_fun_capi_v2, context,
-		                       /* statically_linked */ false);
+		db.InvokeExtensionEntrypointV2(extension_init_result, extension, init_fun_capi_v2, context,
+		                               /* statically_linked */ false);
 
 		D_ASSERT(extension_init_result.install_info);
 
