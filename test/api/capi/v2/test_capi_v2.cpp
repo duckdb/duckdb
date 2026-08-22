@@ -1,7 +1,7 @@
 #include "test_capi_v2.hpp"
 
 // Include the internal header so we can construct internal objects manually for testing
-#include "capi_v2.hpp"
+#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 namespace test_capi_v2 {
 

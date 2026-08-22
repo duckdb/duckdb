@@ -1,4 +1,4 @@
-#include "capi_v2.hpp"
+#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 #include "duckdb/main/capi_v2/extension_api_v2.hpp"
 #include "duckdb/main/capi_v2/extension_load_v2.hpp"

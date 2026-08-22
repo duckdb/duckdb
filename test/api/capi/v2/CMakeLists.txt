@@ -1,5 +1,3 @@
-include_directories(${CMAKE_SOURCE_DIR}/src/main/capi/v2)
-
 add_library_unity(
   test_sql_capi_v2
   OBJECT

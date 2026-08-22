@@ -1,4 +1,4 @@
-#include "capi_v2.hpp"
+#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/type_visitor.hpp"
