@@ -411,6 +411,16 @@ private:
 			projection_expressions.push_back(std::move(final_result));
 		}
 
+		// Pass grouping-function bindings through after the original aggregates. Any helper aggregates added by the
+		// rewrite remain private to this projection.
+		for (idx_t grouping_idx = 0; grouping_idx < aggr.grouping_functions.size(); grouping_idx++) {
+			ColumnBinding grouping_binding(aggr.groupings_index, ProjectionIndex(grouping_idx));
+			aggregate_map[grouping_binding] =
+			    ColumnBinding(proj_index, ProjectionIndex(group_count + aggr_count + grouping_idx));
+			projection_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, grouping_binding));
+		}
+
 		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
 		if (op->has_estimated_cardinality) {
 			proj->SetEstimatedCardinality(op->estimated_cardinality);
