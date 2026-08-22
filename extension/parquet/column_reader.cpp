@@ -35,6 +35,7 @@
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -271,6 +272,32 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	}
 	ValidateColumnMetadata(row_group_num_rows, *chunk);
 	group_rows_available = NumericCast<idx_t>(chunk->meta_data.num_values);
+
+	if (reader.parquet_options.encryption_config) {
+		auto &enc_config = *reader.parquet_options.encryption_config;
+		if (chunk->__isset.crypto_metadata && chunk->crypto_metadata.__isset.ENCRYPTION_WITH_COLUMN_KEY) {
+			auto &column_key_metadata = chunk->crypto_metadata.ENCRYPTION_WITH_COLUMN_KEY;
+			auto &path = column_key_metadata.path_in_schema;
+			auto column_path = path.empty() ? column_schema.name : StringUtil::Join(path, ".");
+			auto col_name = path.empty() ? column_schema.name : path[0];
+			if (!enc_config.HasColumnKey(col_name)) {
+				throw InvalidInputException("No column key was provided for encrypted Parquet column \"%s\"",
+				                            column_path);
+			}
+			if (column_key_metadata.__isset.key_metadata) {
+				auto &expected_key_name = column_key_metadata.key_metadata;
+				auto &provided_key_name = enc_config.GetColumnKeyName(col_name);
+				if (expected_key_name != provided_key_name) {
+					throw InvalidInputException(
+					    "Encrypted Parquet column \"%s\" requires key \"%s\", but encryption_config assigns key \"%s\"",
+					    column_path, expected_key_name, provided_key_name);
+				}
+			}
+			column_encryption_key = enc_config.GetColumnKey(col_name);
+		} else {
+			column_encryption_key = enc_config.GetFooterKey();
+		}
+	}
 }
 
 bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter) {
@@ -324,14 +351,22 @@ void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
 	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
 	aad_crypto_metadata.page_ordinal =
 	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
-	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
+	if (!column_encryption_key.empty()) {
+		reader.ReadEncrypted(object, *protocol, aad_crypto_metadata, column_encryption_key);
+	} else {
+		reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
+	}
 }
 
 void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
 	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type, aad_crypto_metadata.page_ordinal);
 	aad_crypto_metadata.page_ordinal =
 	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
-	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
+	if (!column_encryption_key.empty()) {
+		reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata, column_encryption_key);
+	} else {
+		reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
+	}
 }
 
 void ColumnReader::Read(PageHeader &page_hdr) {

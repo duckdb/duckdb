@@ -138,6 +138,10 @@ ParquetEncryptionConfig::ParquetEncryptionConfig() {
 ParquetEncryptionConfig::ParquetEncryptionConfig(string footer_key_p) : footer_key(std::move(footer_key_p)) {
 }
 
+static string NormalizeColumnKey(const string &column_name) {
+	return StringUtil::Lower(column_name);
+}
+
 ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const Value &arg) {
 	if (arg.type().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Parquet encryption_config must be of type STRUCT");
@@ -147,23 +151,54 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 	const auto &keys = ParquetKeys::Get(context);
 	for (idx_t i = 0; i < StructType::GetChildCount(arg.type()); i++) {
 		auto &struct_key = child_types[i].first;
-		if (struct_key == "footer_key") {
+		auto normalized_struct_key = StringUtil::Lower(struct_key.GetIdentifierName());
+		if (normalized_struct_key == "footer_key") {
 			const auto footer_key_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
 			if (!keys.HasKey(footer_key_name)) {
 				throw BinderException(
 				    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
 				    footer_key_name);
 			}
-			// footer key name provided - read the key from the config
-			const auto &keys = ParquetKeys::Get(context);
 			footer_key = keys.GetKey(footer_key_name);
-		} else if (struct_key == "footer_key_value") {
+		} else if (normalized_struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
-		} else if (struct_key == "column_keys") {
-			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
+		} else if (normalized_struct_key == "column_keys") {
+			auto &ck_val = children[i];
+			if (ck_val.type().id() != LogicalTypeId::STRUCT) {
+				throw BinderException("column_keys must be a STRUCT of {key_name: [column_names]}");
+			}
+			auto &ck_child_types = StructType::GetChildTypes(ck_val.type());
+			auto &ck_children = StructValue::GetChildren(ck_val);
+			for (idx_t j = 0; j < StructType::GetChildCount(ck_val.type()); j++) {
+				auto key_name = ck_child_types[j].first.GetIdentifierName();
+				if (!keys.HasKey(key_name)) {
+					throw BinderException(
+					    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
+					    key_name);
+				}
+				auto &key_bytes = keys.GetKey(key_name);
+
+				auto &col_list = ck_children[j];
+				if (col_list.type().id() != LogicalTypeId::LIST) {
+					throw BinderException("column_keys values must be lists of column names");
+				}
+				auto &list_children = ListValue::GetChildren(col_list);
+				for (auto &col_val : list_children) {
+					auto col_name = StringValue::Get(col_val.DefaultCastAs(LogicalType::VARCHAR));
+					auto normalized_col_name = NormalizeColumnKey(col_name);
+					if (column_keys.count(normalized_col_name)) {
+						throw BinderException("Column \"%s\" is assigned to multiple keys", col_name);
+					}
+					column_keys[normalized_col_name] = key_bytes;
+					column_key_names[normalized_col_name] = key_name;
+				}
+			}
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);
 		}
+	}
+	if (!column_keys.empty() && footer_key.empty()) {
+		throw BinderException("encryption_config specifies column_keys but no footer_key");
 	}
 }
 
@@ -173,6 +208,54 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 
 const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return footer_key;
+}
+
+const string &ParquetEncryptionConfig::GetColumnKey(const string &column_name) const {
+	auto it = column_keys.find(NormalizeColumnKey(column_name));
+	if (it != column_keys.end()) {
+		return it->second;
+	}
+	throw InvalidInputException("No column key was provided for encrypted Parquet column \"%s\"", column_name);
+}
+
+const string &ParquetEncryptionConfig::GetColumnKeyName(const string &column_name) const {
+	auto it = column_key_names.find(NormalizeColumnKey(column_name));
+	if (it != column_key_names.end()) {
+		return it->second;
+	}
+	throw InvalidInputException("No column key was provided for encrypted Parquet column \"%s\"", column_name);
+}
+
+bool ParquetEncryptionConfig::HasColumnKey(const string &column_name) const {
+	return column_keys.count(NormalizeColumnKey(column_name)) > 0;
+}
+
+void ParquetEncryptionConfig::ValidateColumnNames(const vector<string> &column_names) {
+	unordered_map<string, string> validated_column_keys;
+	unordered_map<string, string> validated_column_key_names;
+
+	for (auto &entry : column_keys) {
+		bool found = false;
+		string normalized_name;
+		for (auto &name : column_names) {
+			if (StringUtil::CIEquals(entry.first, name)) {
+				found = true;
+				normalized_name = NormalizeColumnKey(name);
+				break;
+			}
+		}
+		if (!found) {
+			throw BinderException("Column \"%s\" in column_keys does not exist in the table", entry.first);
+		}
+		validated_column_keys[normalized_name] = entry.second;
+		auto key_name_entry = column_key_names.find(entry.first);
+		if (key_name_entry != column_key_names.end()) {
+			validated_column_key_names[normalized_name] = key_name_entry->second;
+		}
+	}
+
+	column_keys = std::move(validated_column_keys);
+	column_key_names = std::move(validated_column_key_names);
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;

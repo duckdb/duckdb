@@ -6,6 +6,7 @@
 
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
+#include "parquet_crypto.hpp"
 #include "parquet_writer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
@@ -426,15 +427,28 @@ void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 		FlushDictionary(state, state.stats_state.get());
 	}
 
+	string top_level_name = schema_path.empty() ? string() : schema_path[0].GetIdentifierName();
+	bool use_column_key =
+	    writer.HasEncryption() && !top_level_name.empty() && writer.GetEncryptionConfig().HasColumnKey(top_level_name);
+	optional_ptr<const string> column_key;
+	if (use_column_key) {
+		column_key = &writer.GetEncryptionConfig().GetColumnKey(top_level_name);
+	}
+
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		D_ASSERT(!write_info.prepared_header);
 		D_ASSERT(!write_info.prepared_payload);
 
-		write_info.prepared_header = writer.PrepareWrite(write_info.page_header);
 		auto payload_buffer = make_uniq<ParquetPagePayloadBuffer>(
 		    write_info.compressed_size, std::move(write_info.temp_writer), std::move(write_info.compressed_buf));
-		write_info.prepared_payload = writer.PrepareWriteData(std::move(payload_buffer));
+		if (column_key) {
+			write_info.prepared_header = writer.PrepareWrite(write_info.page_header, *column_key);
+			write_info.prepared_payload = writer.PrepareWriteData(std::move(payload_buffer), *column_key);
+		} else {
+			write_info.prepared_header = writer.PrepareWrite(write_info.page_header);
+			write_info.prepared_payload = writer.PrepareWriteData(std::move(payload_buffer));
+		}
 	}
 }
 
@@ -476,6 +490,22 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
 	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
+
+	if (writer.HasEncryption() && !schema_path.empty()) {
+		auto &enc_config = writer.GetEncryptionConfig();
+		auto col_name = schema_path[0].GetIdentifierName();
+		column_chunk.__isset.crypto_metadata = true;
+		if (enc_config.HasColumnKey(col_name)) {
+			duckdb_parquet::EncryptionWithColumnKey eck;
+			eck.path_in_schema = IdentifiersToStrings(schema_path);
+			eck.__isset.key_metadata = true;
+			eck.key_metadata = enc_config.GetColumnKeyName(col_name);
+			column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_COLUMN_KEY = true;
+			column_chunk.crypto_metadata.ENCRYPTION_WITH_COLUMN_KEY = std::move(eck);
+		} else {
+			column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_FOOTER_KEY = true;
+		}
+	}
 
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));

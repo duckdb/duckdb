@@ -1427,6 +1427,19 @@ uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProt
 	                               *encryption_util, aad_crypto_metadata);
 }
 
+uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+                                      CryptoMetaData &aad_crypto_metadata, const string &key) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::Read(object, iprot, key, *encryption_util, aad_crypto_metadata);
+}
+
+uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+                                          const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata,
+                                          const string &key) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, key, *encryption_util, aad_crypto_metadata);
+}
+
 static idx_t GetRowGroupOffset(const ParquetReader &reader, idx_t group_idx) {
 	idx_t row_group_offset = 0;
 	auto &row_groups = reader.GetFileMetadata()->row_groups;

@@ -68,6 +68,11 @@
         "id": 101,
         "name": "column_keys",
         "type": "unordered_map<string, string>"
+      },
+      {
+        "id": 102,
+        "name": "column_key_names",
+        "type": "unordered_map<string, string>"
       }
     ],
     "pointer_type": "shared_ptr"
