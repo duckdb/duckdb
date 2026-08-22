@@ -1,0 +1,24 @@
+add_library_unity(
+  duckdb_main_capi_v2
+  OBJECT
+  capi_v2.cpp
+  capi_v2_stubs.cpp
+  capi_v2_arena.cpp
+  capi_v2_connection.cpp
+  capi_v2_data_chunk.cpp
+  capi_v2_database.cpp
+  capi_v2_environment.cpp
+  capi_v2_error.cpp
+  capi_v2_extension.cpp
+  capi_v2_logging.cpp
+  capi_v2_logical_type.cpp
+  capi_v2_option.cpp
+  capi_v2_result.cpp
+  capi_v2_schema.cpp
+  capi_v2_statement.cpp
+  capi_v2_value.cpp
+  capi_v2_vector.cpp)
+
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_capi_v2>
+    PARENT_SCOPE)
