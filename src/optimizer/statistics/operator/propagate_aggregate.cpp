@@ -496,6 +496,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	count_matcher->policy = SetMatcher::Policy::ORDERED;
 	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
 
+	bool has_empty_grouping_set = false;
+	for (const auto &grouping_set : aggr.grouping_sets) {
+		if (grouping_set.empty()) {
+			has_empty_grouping_set = true;
+			break;
+		}
+	}
+	const bool groups_are_non_empty = !aggr.groups.empty() && !has_empty_grouping_set;
+
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
@@ -510,7 +519,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			}
 		}
 
-		auto stats = PropagateExpression(expr);
+		auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
+		auto stats = PropagateExpression(aggr_expr, expr, groups_are_non_empty);
 		if (!stats) {
 			continue;
 		}

@@ -301,12 +301,23 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	return fun;
 }
 
+unique_ptr<BaseStatistics> CountStarPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
+                                                   AggregateStatisticsInput &input) {
+	auto stats = make_uniq<BaseStatistics>(NumericStats::CreateUnknown(LogicalType::BIGINT));
+
+	NumericStats::SetMin(*stats, Value::BIGINT(input.groups_are_non_empty && !expr.GetFilter() ? 1 : 0));
+	NumericStats::SetMax(*stats, Value::BIGINT(NumericLimits<int64_t>::Maximum()));
+	stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+	return stats;
+}
+
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.SetName("count_star");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
+	fun.SetStatisticsCallback(CountStarPropagateStats);
 	return fun;
 }
 
