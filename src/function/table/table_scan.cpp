@@ -867,11 +867,17 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 			continue;
 		}
 		scanned_filters.insert(candidate.filter_index);
+
 		if (first_index) {
 			row_ids = std::move(candidate_row_ids);
 			first_index = false;
 		} else {
 			IntersectRowIds(row_ids, candidate_row_ids);
+		}
+
+		if (row_ids.empty()) {
+			// No rows match all scanned index filters, so we can skip scanning any other indexes.
+			return true;
 		}
 	}
 	return scanned_filters.size() == filter_set.FilterCount();
