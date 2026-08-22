@@ -497,7 +497,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999999999, T, NanosecondsOperator,
+			                                           DayHourMinuteParentOperator>(input.child_stats);
 		}
 	};
 
@@ -509,7 +510,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999999, T, MicrosecondsOperator,
+			                                           DayHourMinuteParentOperator>(input.child_stats);
 		}
 	};
 
@@ -521,7 +523,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999, T>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999, T, MillisecondsOperator,
+			                                           DayHourMinuteParentOperator>(input.child_stats);
 		}
 	};
 
@@ -1446,6 +1449,15 @@ int64_t DatePart::DayHourParentOperator::Operation(dtime_tz_t input) {
 template <>
 int64_t DatePart::DayHourMinuteParentOperator::Operation(dtime_tz_t input) {
 	return NumericCast<int64_t>(input.bits);
+}
+
+template <>
+int64_t DatePart::DayHourMinuteParentOperator::Operation(timestamp_ns_t input) {
+	date_t date;
+	dtime_t time;
+	int32_t nanos;
+	Timestamp::Convert(input, date, time, nanos);
+	return int64_t(date.days) * 24 * 60 + time.value / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
