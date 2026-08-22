@@ -1697,15 +1697,14 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		return;
 	}
 	auto &client_config = ClientConfig::GetConfig(context);
-	auto &db = DatabaseInstance::GetDatabase(context);
-	auto &parser_cache = db.GetParserCache();
 
 	if (input.IsNull()) {
-		client_config.active_grammar_extensions = {};
-		parser_cache.Invalidate();
+		case_insensitive_set_t selected_extensions;
+		auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+		client_config.active_grammar_extensions = std::move(selected_extensions);
+		client_config.cached_grammar = std::move(compiled_grammar);
 		return;
 	}
-	auto dialect_name = input.GetValue<string>();
 
 	auto &config = DatabaseInstance::GetDatabase(context).config;
 	auto grammar_extensions = config.GetCallbackManager().GrammarExtensions();
@@ -1744,25 +1743,20 @@ void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Valu
 		                            missing_list);
 	}
 
-	parser_cache.Invalidate();
-	auto old_extensions = std::move(client_config.active_grammar_extensions);
-	try {
-		client_config.active_grammar_extensions = selected_extensions;
-		(void)parser_cache.GetMatcher();
-	} catch (...) {
-		client_config.active_grammar_extensions = std::move(old_extensions);
-		throw;
-	}
+	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	client_config.active_grammar_extensions = std::move(selected_extensions);
+	client_config.cached_grammar = std::move(compiled_grammar);
 }
 
 void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
 	if (!OnLocalReset(context)) {
 		return;
 	}
-	auto &db = DatabaseInstance::GetDatabase(context);
-	auto &parser_cache = db.GetParserCache();
-	ClientConfig::GetConfig(context).active_grammar_extensions = {};
-	parser_cache.Invalidate();
+	case_insensitive_set_t selected_extensions;
+	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	auto &client_config = ClientConfig::GetConfig(context);
+	client_config.active_grammar_extensions = std::move(selected_extensions);
+	client_config.cached_grammar = std::move(compiled_grammar);
 }
 
 bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {

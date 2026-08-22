@@ -8,12 +8,17 @@ namespace duckdb {
 
 struct ParserCache;
 class ClientContext;
+class GrammarExtension;
 
 struct CompiledGrammar {
 	friend struct ParserCache;
 
 private:
 	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes, idx_t version);
+	static shared_ptr<CompiledGrammar> Create(const vector<shared_ptr<GrammarExtension>> &grammar_extensions,
+	                                          idx_t parser_version);
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
+	                                          const case_insensitive_set_t &active_extensions, idx_t parser_version);
 
 public:
 	const Matcher &ProgramMatcher() const {
@@ -35,6 +40,9 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! Compile a grammar for the selected extensions without changing the client configuration.
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
+	                                          const case_insensitive_set_t &active_extensions);
 
 public:
 	idx_t Version() const;

@@ -8,6 +8,9 @@ statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension';
 
 statement ok
+SET active_grammar_extensions = ['pipe_query_syntax'];
+
+statement ok
 SET debug_transformer_trampoline_style=true;
 
 statement ok

@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
@@ -57,6 +58,10 @@ static void RegisterGrammarExtensionTestSyntax(DatabaseInstance &db) {
 	GrammarExtension::Register(db, make_shared_ptr<AddGrammarExtensionTestAtom>());
 }
 
+static void ActivateGrammarExtensionTestSyntax(Connection &con) {
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['extension_test_value', 'extension_test_atom']"));
+}
+
 static void CheckGrammarExtensionTestSyntax(Connection &con) {
 	auto result = con.Query("ANSWER");
 	REQUIRE_NO_FAIL(*result);
@@ -67,6 +72,7 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	DuckDB db(nullptr);
 	RegisterGrammarExtensionTestSyntax(*db.instance);
 	Connection con(db);
+	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 }
 
@@ -131,7 +137,7 @@ TEST_CASE("Default terminal rule overrides are registered before additions", "[a
 	DuckDB db(nullptr);
 	Connection con(db);
 	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideDefaultTerminalRule>());
-	REQUIRE_THROWS(CompiledGrammar::Get(*con.context));
+	REQUIRE_FAIL(con.Query("SET active_grammar_extensions = ['default_terminal_rule']"));
 }
 
 TEST_CASE("Grammar extensions invalidate an initialized parser cache", "[api][grammar_extension]") {
@@ -141,8 +147,23 @@ TEST_CASE("Grammar extensions invalidate an initialized parser cache", "[api][gr
 	REQUIRE_FALSE(CompiledGrammar::Get(*con.context)->HasGrammarChanges());
 
 	RegisterGrammarExtensionTestSyntax(*db.instance);
+	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 	REQUIRE(CompiledGrammar::Get(*con.context)->HasGrammarChanges());
+}
+
+TEST_CASE("Active grammar extensions are cached per connection", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	Connection enabled(db);
+	Connection disabled(db);
+
+	ActivateGrammarExtensionTestSyntax(enabled);
+	CheckGrammarExtensionTestSyntax(enabled);
+	REQUIRE_FAIL(disabled.Query("ANSWER"));
+	CheckGrammarExtensionTestSyntax(enabled);
+	ActiveGrammarExtensionsSetting::SetLocal(*enabled.context, Value::LIST(LogicalType::VARCHAR, vector<Value> {}));
+	REQUIRE_FAIL(enabled.Query("ANSWER"));
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
@@ -158,6 +179,12 @@ public:
 TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
 	GrammarExtension::Register(*db.instance, make_shared_ptr<AddInvalidGrammarExtensionTestRule>());
-	REQUIRE_THROWS(CompiledGrammar::Get(*con.context));
+	ActivateGrammarExtensionTestSyntax(con);
+	auto result = con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']");
+	REQUIRE_FAIL(result);
+	CheckGrammarExtensionTestSyntax(con);
+	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->GetValue(0, 0);
+	REQUIRE(ListValue::GetChildren(setting).size() == 2);
 }

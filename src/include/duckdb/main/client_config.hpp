@@ -85,7 +85,7 @@ struct ClientConfig {
 	//! The (ordered) list of grammar extensions currently used by the parser
 	case_insensitive_set_t active_grammar_extensions;
 	//! The compiled grammar active for the connection
-	shared_ptr<CompiledGrammar> cached_grammar;
+	mutable shared_ptr<CompiledGrammar> cached_grammar;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
