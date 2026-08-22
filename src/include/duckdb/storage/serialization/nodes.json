@@ -700,6 +700,12 @@
         "id": 107,
         "name": "allow_empty",
         "type": "bool"
+      },
+      {
+        "id": 108,
+        "name": "hive_sample_size",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "pointer_type": "none"

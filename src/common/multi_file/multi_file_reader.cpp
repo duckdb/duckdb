@@ -91,6 +91,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_sample_size"] = LogicalType::BIGINT;
 	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
@@ -172,6 +173,20 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
+	} else if (key == "hive_sample_size") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
+		}
+		auto sample_size = val.GetValue<int64_t>();
+		if (sample_size < 1 && sample_size != -1) {
+			throw BinderException("Unsupported parameter for HIVE_SAMPLE_SIZE: cannot be smaller than 1");
+		}
+		if (sample_size == -1) {
+			// -1 means all files are inspected
+			options.hive_sample_size.SetInvalid();
+		} else {
+			options.hive_sample_size = NumericCast<idx_t>(sample_size);
+		}
 	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -249,8 +264,13 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 	if (options.hive_partitioning) {
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
-		// verify that all files have the same hive partitioning scheme
+		// verify that all sampled files have the same hive partitioning scheme
+		const auto sample_size = MultiFileOptions::GetHiveSampleSize(options.hive_sample_size);
+		idx_t sampled_files = 0;
 		for (const auto &file : files.Files()) {
+			if (sampled_files++ >= sample_size) {
+				break;
+			}
 			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
@@ -743,7 +763,12 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 	}
 }
 
-bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
+idx_t MultiFileOptions::GetHiveSampleSize(optional_idx sample_size) {
+	return sample_size.IsValid() ? sample_size.GetIndex() : NumericLimits<idx_t>::Maximum();
+}
+
+bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context,
+                                                          optional_idx sample_size) {
 	auto first_file = files.GetFirstFile();
 	auto partitions = HivePartitioning::Parse(first_file.path);
 	if (partitions.empty()) {
@@ -751,7 +776,12 @@ bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, 
 		return false;
 	}
 
+	const auto max_files = GetHiveSampleSize(sample_size);
+	idx_t sampled_files = 0;
 	for (const auto &file : files.Files()) {
+		if (sampled_files++ >= max_files) {
+			break;
+		}
 		auto new_partitions = HivePartitioning::Parse(file.path);
 		if (new_partitions.size() != partitions.size()) {
 			// partition count mismatch
@@ -770,8 +800,13 @@ bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, 
 void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
+	const auto max_files = GetHiveSampleSize(hive_sample_size);
+	idx_t sampled_files = 0;
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
+		if (sampled_files++ >= max_files) {
+			break;
+		}
 		auto partitions = HivePartitioning::Parse(file.path);
 		if (partitions.empty()) {
 			return;
@@ -827,7 +862,7 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		auto_detect_hive_partitioning = false;
 	}
 	if (auto_detect_hive_partitioning) {
-		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
+		hive_partitioning = AutoDetectHivePartitioningInternal(files, context, hive_sample_size);
 	}
 	if (hive_partitioning && hive_types_autocast) {
 		AutoDetectHiveTypesInternal(files, context);
