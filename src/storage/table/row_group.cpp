@@ -316,7 +316,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
-	column_scans.reserve(column_scans.size());
+	column_scans.reserve(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
 	}
