@@ -179,6 +179,7 @@ struct DatePart {
 		}
 		auto min = NumericStats::GetMin<T>(nstats);
 		auto max = NumericStats::GetMax<T>(nstats);
+		// an empty or invalid range gives us no bounds to propagate
 		if (min > max) {
 			return nullptr;
 		}
@@ -189,6 +190,8 @@ struct DatePart {
 		}
 		int64_t part_min = MIN;
 		int64_t part_max = MAX;
+		// If min and max fall within the same parent period (e.g. the same year for month), the part cannot
+		// wrap around, so it is non-decreasing over the entire range.
 		if (PARENT_OP::template Operation<T, int64_t>(min) == PARENT_OP::template Operation<T, int64_t>(max)) {
 			part_min = OP::template Operation<T, int64_t>(min);
 			part_max = OP::template Operation<T, int64_t>(max);
@@ -241,13 +244,13 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// month is monotone within a single year, otherwise [1, 12]
+			// min/max of month operator is [1, 12]
 			return PropagatePartWithinParentStatistics<1, 12, T, MonthOperator, YearOperator>(input.child_stats);
 		}
 	};
 
 	//! Combines year and month into a single value, used as the parent period for day statistics
-	struct YearMonthOperator {
+	struct YearMonthParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
 			return YearOperator::Operation<TA, TR>(input) * 12 + MonthOperator::Operation<TA, TR>(input);
@@ -262,8 +265,9 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// day is monotone within a single month, otherwise [1, 31]
-			return PropagatePartWithinParentStatistics<1, 31, T, DayOperator, YearMonthOperator>(input.child_stats);
+			// min/max of day operator is [1, 31]
+			return PropagatePartWithinParentStatistics<1, 31, T, DayOperator, YearMonthParentOperator>(
+			    input.child_stats);
 		}
 	};
 
@@ -348,7 +352,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// quarter is monotone within a single year, otherwise [1, 4]
+			// min/max of quarter operator is [1, 4]
 			return PropagatePartWithinParentStatistics<1, 4, T, QuarterOperator, YearOperator>(input.child_stats);
 		}
 	};
@@ -393,7 +397,6 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// day of year is monotone within a single year, otherwise [1, 366]
 			return PropagatePartWithinParentStatistics<1, 366, T, DayOfYearOperator, YearOperator>(input.child_stats);
 		}
 	};
@@ -406,7 +409,6 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// ISO week is monotone within a single ISO year, otherwise [1, 53]
 			return PropagatePartWithinParentStatistics<1, 53, T, WeekOperator, ISOYearOperator>(input.child_stats);
 		}
 	};
@@ -532,8 +534,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// second is monotone within a single minute, otherwise [0, 59]
-			return PropagatePartWithinParentStatistics<0, 59, T, SecondsOperator, MinuteParentOperator>(
+			return PropagatePartWithinParentStatistics<0, 59, T, SecondsOperator, DayHourMinuteParentOperator>(
 			    input.child_stats);
 		}
 	};
@@ -546,8 +547,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// minute is monotone within a single hour, otherwise [0, 59]
-			return PropagatePartWithinParentStatistics<0, 59, T, MinutesOperator, HourParentOperator>(
+			return PropagatePartWithinParentStatistics<0, 59, T, MinutesOperator, DayHourParentOperator>(
 			    input.child_stats);
 		}
 	};
@@ -560,7 +560,6 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			// hour is monotone within a single day, otherwise [0, 24]
 			return PropagatePartWithinParentStatistics<0, 24, T, HoursOperator, DayParentOperator>(input.child_stats);
 		}
 	};
@@ -572,17 +571,19 @@ struct DatePart {
 		static inline TR Operation(TA input);
 	};
 
-	struct HourParentOperator {
+	//! Combines day and hour into a single value, used as the parent period for minute statistics
+	struct DayHourParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
 			return DayParentOperator::Operation<TA, TR>(input) * 24 + HoursOperator::Operation<TA, TR>(input);
 		}
 	};
 
-	struct MinuteParentOperator {
+	//! Combines day, hour and minute into a single value, used as the parent period for second statistics
+	struct DayHourMinuteParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return HourParentOperator::Operation<TA, TR>(input) * 60 + MinutesOperator::Operation<TA, TR>(input);
+			return DayHourParentOperator::Operation<TA, TR>(input) * 60 + MinutesOperator::Operation<TA, TR>(input);
 		}
 	};
 
@@ -1440,12 +1441,12 @@ int64_t DatePart::DayParentOperator::Operation(dtime_tz_t input) {
 }
 
 template <>
-int64_t DatePart::HourParentOperator::Operation(dtime_tz_t input) {
+int64_t DatePart::DayHourParentOperator::Operation(dtime_tz_t input) {
 	return static_cast<int64_t>(input.bits);
 }
 
 template <>
-int64_t DatePart::MinuteParentOperator::Operation(dtime_tz_t input) {
+int64_t DatePart::DayHourMinuteParentOperator::Operation(dtime_tz_t input) {
 	return static_cast<int64_t>(input.bits);
 }
 
