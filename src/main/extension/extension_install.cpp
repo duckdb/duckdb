@@ -12,6 +12,9 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/thread.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <fstream>
@@ -292,11 +295,71 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 	info.version = parsed_metadata.extension_version;
 }
 
-// Note: since this method is not atomic, this can fail in different ways, that should all be handled properly by
-// DuckDB:
-//   1. Crash after extension removal: extension is now uninstalled, metadata file still present
-//   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
-//   3. Crash after extension move: extension is now uninstalled, new metadata file present
+// Serialize INSTALL of a given extension path across threads and processes (issue #12589).
+// fcntl locks are process-scoped on Unix, so an in-process mutex is required for concurrent
+// connections in the same process; the file lock covers separate processes.
+static mutex &GetExtensionInstallProcessMutex(const string &lock_path) {
+	static mutex registry_lock;
+	static unordered_map<string, unique_ptr<mutex>> registry;
+	lock_guard<mutex> guard(registry_lock);
+	auto &entry = registry[lock_path];
+	if (!entry) {
+		entry = make_uniq<mutex>();
+	}
+	return *entry;
+}
+
+class ExtensionInstallFileLock {
+public:
+	ExtensionInstallFileLock(FileSystem &fs, const string &lock_path)
+	    : fs(fs), lock_path(lock_path), process_lock(GetExtensionInstallProcessMutex(lock_path)) {
+		// Open-or-create (not CREATE_NEW) + WRITE_LOCK. Retry ~60s for slow disks / other processes.
+		static constexpr idx_t MAX_ATTEMPTS = 600;
+		static constexpr idx_t SLEEP_MS = 100;
+		string last_error = "unknown error";
+		for (idx_t attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+			try {
+				handle = fs.OpenFile(lock_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+				                                    FileLockType::WRITE_LOCK);
+				return;
+			} catch (const IOException &ex) {
+				last_error = ex.what();
+#ifdef DUCKDB_NO_THREADS
+				break;
+#else
+				if (attempt + 1 < MAX_ATTEMPTS) {
+					ThreadUtil::SleepMs(SLEEP_MS);
+				}
+#endif
+			}
+		}
+		throw IOException("Could not acquire extension install lock on \"%s\" after waiting: %s. "
+		                  "Another process may be installing the same extension.",
+		                  lock_path, last_error);
+	}
+
+	~ExtensionInstallFileLock() {
+		// Release OS lock first, then best-effort remove the lock file, then process mutex (RAII).
+		handle.reset();
+		try {
+			fs.TryRemoveFile(lock_path);
+		} catch (...) {
+		}
+	}
+
+	ExtensionInstallFileLock(const ExtensionInstallFileLock &) = delete;
+	ExtensionInstallFileLock &operator=(const ExtensionInstallFileLock &) = delete;
+
+private:
+	FileSystem &fs;
+	string lock_path;
+	// Declared before handle so destruction releases the file lock before the process mutex.
+	unique_lock<mutex> process_lock;
+	unique_ptr<FileHandle> handle;
+};
+
+// Publish via temp files + rename. Binary is published before .info so LOAD (which only needs the binary)
+// never sees a missing extension file. Crash mid-publish may leave .info skew; FORCE INSTALL recovers.
 static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
                                 ExtensionInstallInfo &info, DBConfig &config) {
@@ -322,8 +385,9 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	auto metadata_file_path = local_extension_path + ".info";
 	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
 
-	fs.MoveFile(metadata_tmp_path, metadata_file_path);
+	// Binary first so concurrent LOAD never observes a missing extension path
 	fs.MoveFile(temp_path, local_extension_path);
+	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 }
 
 // Install an extension using a filesystem
@@ -569,6 +633,10 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	string temp_path =
 	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + ".duckdb_extension";
 
+	// Serialize concurrent INSTALL of the same extension (shared ~/.duckdb/extensions, CI xdist, etc.)
+	ExtensionInstallFileLock install_lock(fs, local_extension_path + ".lock");
+
+	// Re-check under lock (another process may have finished installing while we waited)
 	if (fs.FileExists(local_extension_path) && !options.force_install) {
 		// File exists: throw error if origin mismatches
 		if (options.throw_on_origin_mismatch && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(db) &&
