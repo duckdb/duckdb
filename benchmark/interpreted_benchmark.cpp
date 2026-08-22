@@ -495,7 +495,7 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 	auto &map = is_load_set ? load_extensions_map : extensions_map;
 	for (auto &it : map) {
 		auto &extension = it.first;
-		auto result = ExtensionHelper::LoadExtension(state.db, extension);
+		auto result = ExtensionHelper::LoadExtension(state.db, Identifier(extension));
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {

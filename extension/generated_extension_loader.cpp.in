@@ -6,15 +6,15 @@
 ${EXT_CAPI_DECLARATIONS}
 namespace duckdb {
 
-//! Publishes the CMake-generated list of extensions linked into this binary onto the config, so that
+//! Publishes the CMake-generated list of extensions linked into DuckDB onto the config, so that
 //! ExtensionHelper::LoadExtension can find them - including when it is called from code carrying its
 //! own copy of DuckDB, which links no generated loader of its own.
 void ExtensionHelper::RegisterLinkedExtensions(DBConfig &config) {
 ${EXT_REGISTER_BODY}
 }
 
-vector<string> LinkedExtensions(){
-    vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+vector<Identifier> LinkedExtensions(){
+    vector<Identifier> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
     };
     return VEC;
 }

@@ -914,11 +914,11 @@ idx_t FileHandle::GetProgress() {
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {
-	string extension = "";
+	Identifier extension = "";
 	return IsRemoteFile(path, extension);
 }
 
-bool FileSystem::IsRemoteFile(const string &path, string &extension) {
+bool FileSystem::IsRemoteFile(const string &path, Identifier &extension) {
 	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 		if (StringUtil::StartsWith(path, entry.name)) {
 			extension = entry.extension;

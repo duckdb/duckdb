@@ -480,10 +480,10 @@ public:
 	}
 };
 
-static set<string> test_loaded_extension_list; // NOLINT
+static identifier_set_t test_loaded_extension_list; // NOLINT
 
 class QuackLoadExtension : public ExtensionCallback {
-	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
+	void OnExtensionLoaded(DatabaseInstance &db, const Identifier &name) override {
 		test_loaded_extension_list.insert(name);
 	}
 };

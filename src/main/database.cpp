@@ -343,14 +343,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
-	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
+	if (!config.options.database_type.empty() && config.options.database_type != "duckdb") {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 		}
 	}
 
@@ -583,11 +583,11 @@ idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DatabaseInstance::ExtensionIsLoaded(const string &name) {
+bool DatabaseInstance::ExtensionIsLoaded(const Identifier &name) {
 	return extension_manager->ExtensionIsLoaded(name);
 }
 
-bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+bool DuckDB::ExtensionIsLoaded(const Identifier &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 

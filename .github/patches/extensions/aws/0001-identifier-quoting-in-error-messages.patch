@@ -7,7 +7,7 @@ index 30d4f5a..2ee1d09 100644
  create secret s1 (type s3, provider 'credential_chain');
  ----
 -Invalid Input Error: Secret provider credential_chain for type s3 does not exist, but it exists in the aws extension.
-+Invalid Input Error: Secret provider "credential_chain" for type "s3" does not exist, but it exists in the aws extension.
++Invalid Input Error: Secret provider "credential_chain" for type "s3" does not exist, but it exists in the "aws" extension.
  
  # Require statement will ensure this test is run with this extension loaded
  require aws

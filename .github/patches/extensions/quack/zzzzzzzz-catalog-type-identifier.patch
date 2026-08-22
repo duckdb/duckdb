@@ -1,0 +1,12 @@
+diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
+--- a/src/include/storage/quack_catalog.hpp
++++ b/src/include/storage/quack_catalog.hpp
+@@ -28,7 +28,7 @@
+ 	~QuackCatalog() override;
+ 
+ public:
+-	string GetCatalogType() override {
++	Identifier GetCatalogType() override {
+ 		return "quack";
+ 	}
+ 	static bool IsQuackScan(const string &name);

@@ -87,7 +87,7 @@ string ExtensionRepository::ToReadableString() {
 
 unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs,
                                                                        const std::string &info_file_path,
-                                                                       const std::string &extension_name) {
+                                                                       const Identifier &extension_name) {
 	unique_ptr<ExtensionInstallInfo> result;
 
 	string hint = StringUtil::Format("Try reinstalling the extension using 'FORCE INSTALL %s;'", extension_name);

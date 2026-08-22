@@ -27,14 +27,14 @@ ExtensionAlias ExtensionHelper::GetInternalExtensionAlias(idx_t index) {
 }
 
 // todo; we might want to update this
-string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
-	auto lname = StringUtil::Lower(extension_name);
+Identifier ExtensionHelper::ApplyExtensionAlias(const Identifier &extension_name) {
 	for (idx_t index = 0; internal_aliases[index].alias; index++) {
-		if (lname == internal_aliases[index].alias) {
-			return internal_aliases[index].extension;
+		if (internal_aliases[index].alias == extension_name) {
+			return Identifier(internal_aliases[index].extension);
 		}
 	}
-	return lname;
+	// extension binaries are named in lowercase, so the name is normalized even when it is not an alias
+	return Identifier(StringUtil::Lower(extension_name.GetIdentifierName()));
 }
 
 } // namespace duckdb

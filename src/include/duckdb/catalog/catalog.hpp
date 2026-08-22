@@ -152,7 +152,7 @@ public:
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const Identifier &GetName() const;
 	DUCKDB_API idx_t GetOid();
-	DUCKDB_API virtual string GetCatalogType() = 0;
+	DUCKDB_API virtual Identifier GetCatalogType() = 0;
 
 	DUCKDB_API CatalogTransaction GetCatalogTransaction(ClientContext &context);
 
@@ -481,10 +481,10 @@ public:
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const Identifier &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static String AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name);
+	static Identifier AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name);
-	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
+	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const Identifier &extension_name) noexcept;
 
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);

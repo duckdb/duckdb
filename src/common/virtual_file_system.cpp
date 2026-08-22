@@ -375,7 +375,7 @@ FileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &re
 	auto fs = FindFileSystemInternal(*registry, path);
 
 	if (!fs && db_instance) {
-		string required_extension;
+		Identifier required_extension;
 
 		for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 			if (StringUtil::StartsWith(path, entry.name)) {

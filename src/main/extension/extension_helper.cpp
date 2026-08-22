@@ -93,10 +93,10 @@ namespace duckdb {
 //! Loads an extension that was linked into the binary, via the registry the config carries. This is
 //! deliberately not generated code: an extension with its own copy of DuckDB links no generated
 //! loader, so a compile-time list would be invisible to it, while the config is data it can read.
-ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
+ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const Identifier &extension) {
 	auto &config = DBConfig::GetConfig(*db.instance);
 	for (auto &linked : config.linked_extensions) {
-		if (StringUtil::CIEquals(linked.name, extension)) {
+		if (linked.name == extension) {
 			linked.load(db);
 			return ExtensionLoadResult::LOADED_EXTENSION;
 		}
@@ -170,8 +170,8 @@ static const char *const auto_install[] = {
     nullptr};
 
 // TODO: unify with new autoload mechanism
-bool ExtensionHelper::AllowAutoInstall(const string &extension) {
-	auto extension_name = ApplyExtensionAlias(extension);
+bool ExtensionHelper::AllowAutoInstall(const string &extension_name_or_path) {
+	auto extension_name = ApplyExtensionAlias(Identifier(extension_name_or_path));
 	for (idx_t i = 0; auto_install[i]; i++) {
 		if (extension_name == auto_install[i]) {
 			return true;
@@ -180,7 +180,7 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	return false;
 }
 
-bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
+bool ExtensionHelper::CanAutoloadExtension(const Identifier &ext_name) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	return false;
 #endif
@@ -197,11 +197,11 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 }
 
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
-                                                          const string &extension_name) {
+                                                          const Identifier &extension_name) {
 	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
-                                                          const string &extension_name) {
+                                                          const Identifier &extension_name) {
 	string install_hint;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -226,7 +226,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 	return base_error;
 }
 
-bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
+bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const Identifier &extension_name) noexcept {
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
@@ -238,7 +238,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(context, {extension_name});
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
 	} catch (...) {
 		return false;
@@ -253,7 +253,7 @@ static string GetAutoInstallExtensionsRepository(const DBConfig &config) {
 	return repository_url;
 }
 
-bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const Identifier &extension_name) noexcept {
 	if (instance.ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
@@ -268,7 +268,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
-			ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+			ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 			return true;
 		}
 		return false;
@@ -277,13 +277,14 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	}
 }
 
-bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance,
+                                                    const Identifier &extension_name) noexcept {
 	if (instance.ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 		return true;
 	} catch (...) {
 		return false;
@@ -291,7 +292,8 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 }
 
 static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
-                                                     const string &full_extension_path, const string &extension_name) {
+                                                     const string &full_extension_path,
+                                                     const Identifier &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 
@@ -382,9 +384,9 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 		}
 
 		auto extension_file_name = StringUtil::GetFileName(path);
-		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
+		auto extension_name = Identifier(StringUtil::Split(extension_file_name, ".")[0]);
 
-		seen_extensions.insert(Identifier(extension_name));
+		seen_extensions.insert(extension_name);
 
 		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
@@ -393,7 +395,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	return result;
 }
 
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const Identifier &extension_name) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
@@ -411,11 +413,11 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 	return update_result;
 }
 
-void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const Identifier &extension_name) {
 	return ExtensionHelper::AutoLoadExtension(*context.db, extension_name);
 }
 
-void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &extension_name) {
+void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const Identifier &extension_name) {
 	if (db.ExtensionIsLoaded(extension_name)) {
 		// Avoid downloading again
 		return;
@@ -432,7 +434,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 			ExtensionHelper::InstallExtension(db, fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, fs, {extension_name});
+		ExtensionHelper::LoadExternalExtension(db, fs, extension_name);
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);

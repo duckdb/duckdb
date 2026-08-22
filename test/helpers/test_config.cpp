@@ -398,14 +398,14 @@ SortStyle TestConfiguration::GetDefaultSortStyle() {
 	return default_sort_style_enum;
 }
 
-vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
-	vector<string> res;
+vector<Identifier> TestConfiguration::ExtensionToBeLoadedOnLoad() {
+	vector<Identifier> res;
 	auto entry = options.find("statically_loaded_extensions");
 	if (entry != options.end()) {
 		vector<Value> ext_list = ListValue::GetChildren(entry->second);
 
 		for (auto ext : ext_list) {
-			res.push_back(ext.GetValue<string>());
+			res.push_back(ext.GetValue<Identifier>());
 		}
 	} else {
 		res.push_back("core_functions");
