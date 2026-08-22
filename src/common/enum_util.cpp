@@ -197,7 +197,6 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
-#include "duckdb/parser/parser_change.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
@@ -4222,23 +4221,6 @@ const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value) {
 template<>
 ParseResultType EnumUtil::FromString<ParseResultType>(const char *value) {
 	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 14, "ParseResultType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetParserChangeTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ParserChangeType::GRAMMAR), "GRAMMAR" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ParserChangeType>(ParserChangeType value) {
-	return StringUtil::EnumToString(GetParserChangeTypeValues(), 1, "ParserChangeType", static_cast<uint32_t>(value));
-}
-
-template<>
-ParserChangeType EnumUtil::FromString<ParserChangeType>(const char *value) {
-	return static_cast<ParserChangeType>(StringUtil::StringToEnum(GetParserChangeTypeValues(), 1, "ParserChangeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {

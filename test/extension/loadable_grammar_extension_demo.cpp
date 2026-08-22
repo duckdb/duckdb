@@ -2,7 +2,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/parser_change.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/peg/ast/limit_percent_result.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -160,9 +160,12 @@ static unique_ptr<TransformResultValue> TransformPipeSelectAtom(PEGTransformer &
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
 }
 
-class PipeSQLGrammarChange final : public ParserChange {
+class PipeSQLGrammarChange final : public GrammarExtension {
 public:
-	PipeSQLGrammarChange() : ParserChange(ParserChangeType::GRAMMAR) {
+	PipeSQLGrammarChange()
+	    : GrammarExtension("pipe_query_syntax",
+	                       "Add Pipe query syntax, inspired by "
+	                       "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax") {
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
@@ -188,7 +191,7 @@ public:
 
 extern "C" {
 
-DUCKDB_CPP_EXTENSION_ENTRY(loadable_parser_change_extension_demo, loader) {
-	ParserChange::Register(loader.GetDatabaseInstance(), make_shared_ptr<PipeSQLGrammarChange>());
+DUCKDB_CPP_EXTENSION_ENTRY(loadable_grammar_extension_demo, loader) {
+	GrammarExtension::Register(loader.GetDatabaseInstance(), make_shared_ptr<PipeSQLGrammarChange>());
 }
 }

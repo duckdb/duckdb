@@ -1,11 +1,11 @@
-# name: test/extension/test_loadable_parser_change.test
+# name: test/extension/test_loadable_grammar_extension.test
 # description: Test a loadable extension that changes the PEG grammar.
 # group: [extension]
 
 require skip_reload
 
 statement ok
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_parser_change_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_grammar_extension_demo.duckdb_extension';
 
 statement ok
 SET debug_transformer_trampoline_style=true;

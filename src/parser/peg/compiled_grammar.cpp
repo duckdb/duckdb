@@ -4,7 +4,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/parser/parser_change.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 
 namespace duckdb {
 
@@ -135,24 +135,17 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<const ClientCon
 		parser_version = version;
 	}
 
-	vector<shared_ptr<ParserChange>> parser_changes;
+	vector<shared_ptr<GrammarExtension>> grammar_extensions;
 	if (context) {
-		for (auto &change : ExtensionCallbackManager::Get(*context).ParserChanges()) {
-			parser_changes.push_back(change);
+		for (auto &change : ExtensionCallbackManager::Get(*context).GrammarExtensions()) {
+			grammar_extensions.push_back(change);
 		}
 	}
 
 	auto grammar = ParsedGrammar::CreateDefault();
 	bool has_grammar_changes = false;
-	for (auto &change : parser_changes) {
-		switch (change->type) {
-		case ParserChangeType::GRAMMAR:
-			has_grammar_changes = true;
-			change->Apply(grammar);
-			break;
-		default:
-			throw InternalException("Unsupported parser change type");
-		}
+	for (auto &extension : grammar_extensions) {
+		extension->Apply(grammar);
 	}
 	ValidateParsedGrammarRoots(grammar);
 	for (auto &entry : grammar.rules) {

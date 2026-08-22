@@ -2,7 +2,7 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/parser_change.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
@@ -13,7 +13,7 @@
 
 using namespace duckdb;
 
-static unique_ptr<TransformResultValue> TransformParserChangeTestAtom(PEGTransformer &, ParseResult &) {
+static unique_ptr<TransformResultValue> TransformGrammarExtensionTestAtom(PEGTransformer &, ParseResult &) {
 	auto statement = make_uniq<SelectStatement>();
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
@@ -22,15 +22,15 @@ static unique_ptr<TransformResultValue> TransformParserChangeTestAtom(PEGTransfo
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
 }
 
-class AddParserChangeTestValue final : public ParserChange {
+class AddGrammarExtensionTestValue final : public GrammarExtension {
 public:
-	AddParserChangeTestValue() : ParserChange(ParserChangeType::GRAMMAR) {
+	AddGrammarExtensionTestValue() : GrammarExtension("extension_test_value", "GrammarExtensionTestValue") {
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("ParserChangeTestValue <- 'WRONG'");
+		grammar.AddRule("GrammarExtensionTestValue <- 'WRONG'");
 		grammar.AddChoice("UnreservedKeyword", "'ANSWER'");
-		grammar.AddTerminalRuleOverride("ParserChangeTestValue", [](const PEGKeywordHelper &keyword_helper) {
+		grammar.AddTerminalRuleOverride("GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
 			if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 				throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			}
@@ -39,38 +39,38 @@ public:
 	}
 };
 
-class AddParserChangeTestAtom final : public ParserChange {
+class AddGrammarExtensionTestAtom final : public GrammarExtension {
 public:
-	AddParserChangeTestAtom() : ParserChange(ParserChangeType::GRAMMAR) {
+	AddGrammarExtensionTestAtom() : GrammarExtension("extension_test_atom", "GrammarExtensionTestAtom") {
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("ParserChangeTestAtom <- ParserChangeTestValue", TransformParserChangeTestAtom);
-		grammar.PrependChoice("SelectAtom", "ParserChangeTestAtom", [](const PEGExpression &expression) {
+		grammar.AddRule("GrammarExtensionTestAtom <- GrammarExtensionTestValue", TransformGrammarExtensionTestAtom);
+		grammar.PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
 			return expression.type == PEGExpression::Type::REFERENCE && expression.text.GetString() == "SelectParens";
 		});
 	}
 };
 
-static void RegisterParserChangeTestSyntax(DatabaseInstance &db) {
-	ParserChange::Register(db, make_shared_ptr<AddParserChangeTestValue>());
-	ParserChange::Register(db, make_shared_ptr<AddParserChangeTestAtom>());
+static void RegisterGrammarExtensionTestSyntax(DatabaseInstance &db) {
+	GrammarExtension::Register(db, make_shared_ptr<AddGrammarExtensionTestValue>());
+	GrammarExtension::Register(db, make_shared_ptr<AddGrammarExtensionTestAtom>());
 }
 
-static void CheckParserChangeTestSyntax(Connection &con) {
+static void CheckGrammarExtensionTestSyntax(Connection &con) {
 	auto result = con.Query("ANSWER");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
 }
 
-TEST_CASE("Parser changes apply in registration order", "[api][parser_change]") {
+TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
-	RegisterParserChangeTestSyntax(*db.instance);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
 	Connection con(db);
-	CheckParserChangeTestSyntax(con);
+	CheckGrammarExtensionTestSyntax(con);
 }
 
-TEST_CASE("Grammar choices support cursor placement", "[api][parser_change]") {
+TEST_CASE("Grammar choices support cursor placement", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'last'");
 	grammar.AddChoice("CursorRule", "'second'", [](const PEGExpression &expression) {
 		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "first";
@@ -90,7 +90,7 @@ TEST_CASE("Grammar choices support cursor placement", "[api][parser_change]") {
 	REQUIRE(choices == vector<string> {"first", "second", "third", "last"});
 }
 
-TEST_CASE("Grammar choices can be removed", "[api][parser_change]") {
+TEST_CASE("Grammar choices can be removed", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'second' / 'last'");
 	grammar.RemoveChoice("CursorRule", [](const PEGExpression &expression) {
 		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "second";
@@ -114,9 +114,10 @@ TEST_CASE("Grammar choices can be removed", "[api][parser_change]") {
 	REQUIRE(rule->recipe.expression.text.GetString() == "last");
 }
 
-class OverrideDefaultTerminalRule final : public ParserChange {
+class OverrideDefaultTerminalRule final : public GrammarExtension {
 public:
-	OverrideDefaultTerminalRule() : ParserChange(ParserChangeType::GRAMMAR) {
+	OverrideDefaultTerminalRule()
+	    : GrammarExtension("default_terminal_rule", "Add a terminal rule override for identifier") {
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
@@ -126,37 +127,37 @@ public:
 	}
 };
 
-TEST_CASE("Default terminal rule overrides are registered before additions", "[api][parser_change]") {
+TEST_CASE("Default terminal rule overrides are registered before additions", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ParserChange::Register(*db.instance, make_shared_ptr<OverrideDefaultTerminalRule>());
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideDefaultTerminalRule>());
 	REQUIRE_THROWS(CompiledGrammar::Get(*con.context));
 }
 
-TEST_CASE("Parser changes invalidate an initialized parser cache", "[api][parser_change]") {
+TEST_CASE("Grammar extensions invalidate an initialized parser cache", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
 	REQUIRE_FALSE(CompiledGrammar::Get(*con.context)->HasGrammarChanges());
 
-	RegisterParserChangeTestSyntax(*db.instance);
-	CheckParserChangeTestSyntax(con);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	CheckGrammarExtensionTestSyntax(con);
 	REQUIRE(CompiledGrammar::Get(*con.context)->HasGrammarChanges());
 }
 
-class AddInvalidParserChangeTestRule final : public ParserChange {
+class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
 public:
-	AddInvalidParserChangeTestRule() : ParserChange(ParserChangeType::GRAMMAR) {
+	AddInvalidGrammarExtensionTestRule() : GrammarExtension("invalid_grammar_extension", "Invalid grammar extension") {
 	}
 
 	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("ParserChangeInvalid <- ParserChangeMissingRule");
+		grammar.AddRule("GrammarExtensionInvalid <- GrammarExtensionMissingRule");
 	}
 };
 
-TEST_CASE("Invalid parser changes fail grammar compilation", "[api][parser_change]") {
+TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_extension]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	ParserChange::Register(*db.instance, make_shared_ptr<AddInvalidParserChangeTestRule>());
+	GrammarExtension::Register(*db.instance, make_shared_ptr<AddInvalidGrammarExtensionTestRule>());
 	REQUIRE_THROWS(CompiledGrammar::Get(*con.context));
 }
