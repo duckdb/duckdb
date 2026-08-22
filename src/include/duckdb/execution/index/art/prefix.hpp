@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class ARTKey;
+class SlotHandle;
 
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
@@ -42,7 +43,7 @@ public:
 
 public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
-	static void New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, const idx_t depth, idx_t count);
+	static void New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Concatenates parent -> prev_node4 -> child.
 	static void Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
@@ -58,6 +59,7 @@ public:
 	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
 	//! after its creation.
 	static GateStatus Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child, const uint8_t pos);
+	static GateStatus Split(ART &art, SlotHandle &slot, NodePtr &child, const uint8_t pos);
 
 private:
 	static Prefix NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
