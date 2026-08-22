@@ -137,8 +137,13 @@ shared_ptr<CompiledGrammar> ParserCache::GetMatcher(optional_ptr<const ClientCon
 
 	vector<shared_ptr<GrammarExtension>> grammar_extensions;
 	if (context) {
-		for (auto &change : ExtensionCallbackManager::Get(*context).GrammarExtensions()) {
-			grammar_extensions.push_back(change);
+		auto all_extensions = ExtensionCallbackManager::Get(*context).GrammarExtensions();
+		auto &active_extensions = ClientConfig::GetConfig(*context).active_grammar_extensions;
+		for (auto &extension : all_extensions) {
+			if (!active_extensions.count(extension->Name())) {
+				continue;
+			}
+			grammar_extensions.push_back(extension);
 		}
 	}
 

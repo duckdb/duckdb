@@ -29,8 +29,12 @@ public:
 	DUCKDB_API static void Register(DatabaseInstance &db, shared_ptr<GrammarExtension> extension);
 
 public:
-	const string &Name() const;
-	const string &Description() const;
+	const string &Name() const {
+		return name;
+	}
+	const string &Description() const {
+		return description;
+	}
 	virtual void Apply(ParsedGrammar &grammar) const = 0;
 
 private:
