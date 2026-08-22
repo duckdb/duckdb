@@ -44,6 +44,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 
 #include "mbedtls_wrapper.hpp"
 
@@ -1690,4 +1691,90 @@ void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		info.db->GetParserCache().Invalidate();
 	}
 }
+
+void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!OnLocalSet(context, input)) {
+		return;
+	}
+	auto &client_config = ClientConfig::GetConfig(context);
+
+	if (input.IsNull()) {
+		case_insensitive_set_t selected_extensions;
+		auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+		client_config.active_grammar_extensions = std::move(selected_extensions);
+		client_config.cached_grammar = std::move(compiled_grammar);
+		return;
+	}
+
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+	auto grammar_extensions = config.GetCallbackManager().GrammarExtensions();
+	case_insensitive_set_t selected_extensions;
+	if (input.type().id() != LogicalTypeId::LIST) {
+		throw InvalidInputException("'active_grammar_extensions' setting value should be of type VARCHAR[], not %s",
+		                            input.type().ToString());
+	}
+	auto &list_input = ListValue::GetChildren(input);
+	for (auto &val : list_input) {
+		if (val.type().id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'active_grammar_extensions' list values should be of type VARCHAR, not %s",
+			                            val.type().ToString());
+		}
+		auto val_str = val.GetValue<string>();
+		if (!selected_extensions.insert(val_str).second) {
+			throw InvalidInputException("'active_grammar_extensions' list contains duplicate value '%s'", val_str);
+		}
+	}
+
+	case_insensitive_set_t all_extensions;
+	for (auto &extension : grammar_extensions) {
+		auto &extension_name = extension->Name();
+		all_extensions.insert(extension_name);
+	}
+
+	vector<string> missing;
+	for (auto &ext : selected_extensions) {
+		if (!all_extensions.count(ext)) {
+			missing.push_back(ext);
+		}
+	}
+	if (!missing.empty()) {
+		auto missing_list = StringUtil::Join(missing, ",");
+		throw InvalidInputException("Can't set 'active_grammar_extensions', the following extensions don't exist: %s",
+		                            missing_list);
+	}
+
+	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	client_config.active_grammar_extensions = std::move(selected_extensions);
+	client_config.cached_grammar = std::move(compiled_grammar);
+}
+
+void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
+	if (!OnLocalReset(context)) {
+		return;
+	}
+	case_insensitive_set_t selected_extensions;
+	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	auto &client_config = ClientConfig::GetConfig(context);
+	client_config.active_grammar_extensions = std::move(selected_extensions);
+	client_config.cached_grammar = std::move(compiled_grammar);
+}
+
+bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	return true;
+}
+
+bool ActiveGrammarExtensionsSetting::OnLocalReset(ClientContext &context) {
+	return true;
+}
+
+Value ActiveGrammarExtensionsSetting::GetSetting(const ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	auto &active_extensions = client_config.active_grammar_extensions;
+	vector<Value> values;
+	for (auto &extension : active_extensions) {
+		values.push_back(extension);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(values));
+}
+
 } // namespace duckdb

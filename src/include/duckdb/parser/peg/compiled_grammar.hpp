@@ -8,18 +8,23 @@ namespace duckdb {
 
 struct ParserCache;
 class ClientContext;
+class GrammarExtension;
 
 struct CompiledGrammar {
 	friend struct ParserCache;
 
 private:
-	explicit CompiledGrammar(ParserCache &cache);
+	CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes, idx_t version);
+	static shared_ptr<CompiledGrammar> Create(const vector<shared_ptr<GrammarExtension>> &grammar_extensions,
+	                                          idx_t parser_version);
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
+	                                          const case_insensitive_set_t &active_extensions, idx_t parser_version);
 
 public:
-	const Matcher &ProgramMatcher() {
+	const Matcher &ProgramMatcher() const {
 		return *program_matcher;
 	}
-	const Matcher &TopLevelStatementMatcher() {
+	const Matcher &TopLevelStatementMatcher() const {
 		return *top_level_statement_matcher;
 	}
 	const PEGKeywordHelper &GetKeywordHelper() const {
@@ -29,10 +34,15 @@ public:
 		return tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	bool HasGrammarChanges() const {
+		return has_grammar_changes;
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
-	static shared_ptr<CompiledGrammar> Get(DatabaseInstance &db);
+	//! Compile a grammar for the selected extensions without changing the client configuration.
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
+	                                          const case_insensitive_set_t &active_extensions);
 
 public:
 	idx_t Version() const;
@@ -42,12 +52,13 @@ private:
 	optional_ptr<const Matcher> program_matcher;
 	optional_ptr<const Matcher> top_level_statement_matcher;
 
-	//! TODO: this should be a unique_ptr when we allow keyword overrides
+	unique_ptr<PEGKeywordHelper> owned_keyword_helper;
 	const PEGKeywordHelper &keyword_helper;
 	Tokenizer tokenizer;
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 
 private:
+	const bool has_grammar_changes;
 	const idx_t version;
 };
 
@@ -58,7 +69,7 @@ public:
 	ParserCache();
 
 public:
-	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<ClientContext> context);
+	shared_ptr<CompiledGrammar> GetMatcher(optional_ptr<const ClientContext> context = nullptr);
 	void Invalidate();
 
 public:

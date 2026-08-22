@@ -39,7 +39,7 @@ ParserCache &Parser::GetCache() {
 CompiledGrammar &Parser::GetGrammar() {
 	if (!compiled_grammar) {
 		auto &cache = GetCache();
-		compiled_grammar = cache.GetMatcher(nullptr);
+		compiled_grammar = cache.GetMatcher(options.context);
 	}
 	return *compiled_grammar;
 }
@@ -363,8 +363,7 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 		return nullptr;
 	}
 	auto &compiled_grammar = GetGrammar();
-	return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options,
-	                                                         compiled_grammar.TopLevelStatementMatcher());
+	return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options, compiled_grammar);
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {

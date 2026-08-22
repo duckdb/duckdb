@@ -114,14 +114,14 @@ void TransformStack::SetResultLocation(ParseResult &parse_result, TransformResul
 	if (!parse_result.offset.IsValid()) {
 		return;
 	}
-	auto *expression_result = TryCastTransformResult<unique_ptr<ParsedExpression>>(result);
-	if (expression_result && expression_result->value && !expression_result->value->HasQueryLocation()) {
-		transformer.SetQueryLocation(*expression_result->value, parse_result.GetLocation());
+	auto *expression_result = TryGetTransformResult<unique_ptr<ParsedExpression>>(result);
+	if (expression_result && *expression_result && !(*expression_result)->HasQueryLocation()) {
+		transformer.SetQueryLocation(**expression_result, parse_result.GetLocation());
 		return;
 	}
-	auto *table_ref_result = TryCastTransformResult<unique_ptr<TableRef>>(result);
-	if (table_ref_result && table_ref_result->value && !table_ref_result->value->query_location.IsValid()) {
-		transformer.SetQueryLocation(*table_ref_result->value, parse_result.GetLocation());
+	auto *table_ref_result = TryGetTransformResult<unique_ptr<TableRef>>(result);
+	if (table_ref_result && *table_ref_result && !(*table_ref_result)->query_location.IsValid()) {
+		transformer.SetQueryLocation(**table_ref_result, parse_result.GetLocation());
 		return;
 	}
 }

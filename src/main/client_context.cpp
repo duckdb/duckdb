@@ -1607,6 +1607,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	options.parser_cache = &db->GetParserCache();
+	options.context = this;
 	return options;
 }
 

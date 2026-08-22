@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+class ClientContext;
 class ExtensionCallbackManager;
 class ParserExtension;
 struct ParserCache;
@@ -28,6 +29,7 @@ struct ParserOptions {
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
 	optional_ptr<ParserCache> parser_cache;
+	optional_ptr<const ClientContext> context;
 };
 
 } // namespace duckdb
