@@ -179,7 +179,7 @@ struct DatePart {
 		}
 		auto min = NumericStats::GetMin<T>(nstats);
 		auto max = NumericStats::GetMax<T>(nstats);
-		// an empty or invalid range gives us no bounds to propagate
+		// an invalid range gives no bounds to propagate
 		if (min > max) {
 			return nullptr;
 		}
@@ -190,8 +190,7 @@ struct DatePart {
 		}
 		int64_t part_min = MIN;
 		int64_t part_max = MAX;
-		// If min and max fall within the same parent period (e.g. the same year for month), the part cannot
-		// wrap around, so it is non-decreasing over the entire range.
+		// within a single parent period the part cannot wrap around, so the endpoints are exact bounds
 		if (PARENT_OP::template Operation<T, int64_t>(min) == PARENT_OP::template Operation<T, int64_t>(max)) {
 			part_min = OP::template Operation<T, int64_t>(min);
 			part_max = OP::template Operation<T, int64_t>(max);
@@ -564,18 +563,13 @@ struct DatePart {
 		}
 	};
 
-	//! A parent period operator maps an input to a globally unique id of the period containing it,
-	//! e.g. DayParentOperator maps 2024-06-01 12:34 to the number of days between 1970-01-01 and 2024-06-01.
-	//! If the min and max of a range map to the same id, the whole range lies inside one period, so the
-	//! child part (e.g. hour) never resets to its lowest value inside the range and endpoint evaluation is exact.
-
 	//! Identifies the day containing the input, used as the parent period for hour statistics
 	struct DayParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input);
 	};
 
-	//! Identifies the hour containing the input (day id * 24 + hour), used as the parent period for minute statistics
+	//! Identifies the hour containing the input, used as the parent period for minute statistics
 	struct DayHourParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -1438,6 +1432,7 @@ int64_t DatePart::DayParentOperator::Operation(dtime_ns_t input) {
 	return 0;
 }
 
+// TIME_TZ parts are not monotone under its UTC-based ordering, so only identical values share a parent
 template <>
 int64_t DatePart::DayParentOperator::Operation(dtime_tz_t input) {
 	return NumericCast<int64_t>(input.bits);
