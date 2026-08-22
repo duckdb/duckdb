@@ -249,7 +249,7 @@ struct DatePart {
 		}
 	};
 
-	//! Combines year and month into a single value, used as the parent period for day statistics
+	//! Identifies the calendar month containing the input, used as the parent period for day statistics
 	struct YearMonthParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -564,14 +564,18 @@ struct DatePart {
 		}
 	};
 
-	//! Parent period operators for sub-daily parts: inputs mapping to the same parent value are
-	//! guaranteed to produce monotonically non-decreasing part values
+	//! A parent period operator maps an input to a globally unique id of the period containing it,
+	//! e.g. DayParentOperator maps 2024-06-01 12:34 to the number of days between 1970-01-01 and 2024-06-01.
+	//! If the min and max of a range map to the same id, the whole range lies inside one period, so the
+	//! child part (e.g. hour) never resets to its lowest value inside the range and endpoint evaluation is exact.
+
+	//! Identifies the day containing the input, used as the parent period for hour statistics
 	struct DayParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input);
 	};
 
-	//! Combines day and hour into a single value, used as the parent period for minute statistics
+	//! Identifies the hour containing the input (day id * 24 + hour), used as the parent period for minute statistics
 	struct DayHourParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -579,7 +583,7 @@ struct DatePart {
 		}
 	};
 
-	//! Combines day, hour and minute into a single value, used as the parent period for second statistics
+	//! Identifies the minute containing the input, used as the parent period for second statistics
 	struct DayHourMinuteParentOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -1434,20 +1438,19 @@ int64_t DatePart::DayParentOperator::Operation(dtime_ns_t input) {
 	return 0;
 }
 
-// TIME_TZ ordering mixes time and offset, so only identical values share a parent period
 template <>
 int64_t DatePart::DayParentOperator::Operation(dtime_tz_t input) {
-	return static_cast<int64_t>(input.bits);
+	return NumericCast<int64_t>(input.bits);
 }
 
 template <>
 int64_t DatePart::DayHourParentOperator::Operation(dtime_tz_t input) {
-	return static_cast<int64_t>(input.bits);
+	return NumericCast<int64_t>(input.bits);
 }
 
 template <>
 int64_t DatePart::DayHourMinuteParentOperator::Operation(dtime_tz_t input) {
-	return static_cast<int64_t>(input.bits);
+	return NumericCast<int64_t>(input.bits);
 }
 
 template <>
