@@ -1,0 +1,136 @@
+# name: test/sql/index/art/scan/test_multi_index_scan.test
+# description: Test index scans using multiple single-column ART indexes.
+# group: [scan]
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+CREATE TABLE multi_index AS
+SELECT a::INTEGER AS a, b::INTEGER AS b, (a * 100 + b)::INTEGER AS payload
+FROM range(100) a(a), range(100) b(b);
+
+statement ok
+CREATE INDEX multi_index_a ON multi_index(a);
+
+statement ok
+CREATE INDEX multi_index_b ON multi_index(b);
+
+# Both filters are covered by separate ART indexes.
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM multi_index WHERE a = 42 AND b = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT payload FROM multi_index WHERE a = 42 AND b = 7;
+----
+4207
+
+# IN filters produce a union within one ART and an intersection between ARTs.
+
+query I rowsort
+SELECT payload FROM multi_index WHERE a IN (1, 42) AND b = 7;
+----
+107
+4207
+
+# All filters must be covered by single-column ART indexes.
+
+query II
+EXPLAIN ANALYZE SELECT b FROM multi_index WHERE a = 42 AND payload = 4207;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT b FROM multi_index WHERE a = 42 AND payload = 4207;
+----
+7
+
+# Multiple usable indexes are not enough if another filter remains uncovered.
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM multi_index WHERE a = 42 AND b = 7 AND payload = 4207;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT payload FROM multi_index WHERE a = 42 AND b = 7 AND payload = 4207;
+----
+4207
+
+# Multi-column filters cannot be covered by single-column ART indexes.
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM multi_index WHERE a = 42 AND a < b;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT count(*) FROM multi_index WHERE a = 42 AND a < b;
+----
+57
+
+# Incompatible index expressions are detected when the ART scan is initialized.
+
+statement ok
+CREATE TABLE expression_index(a INTEGER);
+
+statement ok
+INSERT INTO expression_index VALUES (41), (42), (43);
+
+statement ok
+CREATE INDEX expression_index_a ON expression_index((a + 1));
+
+query II
+EXPLAIN ANALYZE SELECT a FROM expression_index WHERE a = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT a FROM expression_index WHERE a = 42;
+----
+42
+
+# Fall back if any selected ART scan exceeds the index scan threshold.
+
+statement ok
+CREATE INDEX multi_index_payload ON multi_index(payload);
+
+statement ok
+SET index_scan_percentage = 0.000001;
+
+statement ok
+SET index_scan_max_count = 2;
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM multi_index WHERE a = 42 AND payload = 4207;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT payload FROM multi_index WHERE a = 42 AND payload = 4207;
+----
+4207
+
+# Compound ART indexes remain unsupported for index scans.
+
+statement ok
+CREATE TABLE compound_index(a INTEGER, b INTEGER, payload INTEGER);
+
+statement ok
+INSERT INTO compound_index SELECT a, b, payload FROM multi_index;
+
+statement ok
+CREATE INDEX compound_index_ab ON compound_index(a, b);
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM compound_index WHERE a = 42 AND b = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query I
+SELECT payload FROM compound_index WHERE a = 42 AND b = 7;
+----
+4207
