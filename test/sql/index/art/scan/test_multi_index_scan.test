@@ -93,6 +93,72 @@ SELECT a FROM expression_index WHERE a = 42;
 ----
 42
 
+# An incompatible index must not hide a later compatible index on the same column.
+
+statement ok
+CREATE TABLE alternative_index AS
+SELECT a::INTEGER AS a, (a % 7)::INTEGER AS b
+FROM range(10000) a(a);
+
+statement ok
+CREATE INDEX alternative_index_a ON alternative_index(a);
+
+statement ok
+CREATE INDEX alternative_index_expr ON alternative_index((a % 10));
+
+statement ok
+CREATE INDEX alternative_index_b ON alternative_index(b);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM alternative_index WHERE a % 10 = 2;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM alternative_index WHERE a % 10 = 2;
+----
+1000
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM alternative_index WHERE a % 10 = 2 AND b = 0;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM alternative_index WHERE a % 10 = 2 AND b = 0;
+----
+143
+
+# Index column IDs are physical, while table scan column IDs are logical.
+
+statement ok
+CREATE TABLE generated_column_gap (
+	a INTEGER,
+	generated_a INTEGER GENERATED ALWAYS AS (a + 1),
+	b INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO generated_column_gap (a, b, payload)
+SELECT a, b, payload FROM multi_index;
+
+statement ok
+CREATE INDEX generated_column_gap_a ON generated_column_gap(a);
+
+statement ok
+CREATE INDEX generated_column_gap_b ON generated_column_gap(b);
+
+query II
+EXPLAIN ANALYZE SELECT payload FROM generated_column_gap WHERE a = 42 AND b = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT payload FROM generated_column_gap WHERE a = 42 AND b = 7;
+----
+4207
+
 # Fall back if any selected ART scan exceeds the index scan threshold.
 
 statement ok

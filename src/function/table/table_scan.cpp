@@ -763,25 +763,25 @@ static void IntersectRowIds(set<row_t> &row_ids, const set<row_t> &candidate_row
 
 struct IndexScanCandidate {
 	IndexScanCandidate(ART &art_p, IndexEntry &entry_p, unique_ptr<Expression> index_expr_p,
-	                   vector<unique_ptr<Expression>> filter_expressions_p)
+	                   vector<unique_ptr<Expression>> filter_expressions_p, ProjectionIndex filter_index_p)
 	    : art(art_p), entry(entry_p), index_expr(std::move(index_expr_p)),
-	      filter_expressions(std::move(filter_expressions_p)) {
+	      filter_expressions(std::move(filter_expressions_p)), filter_index(filter_index_p) {
 	}
 
 	reference<ART> art;
 	reference<IndexEntry> entry;
 	unique_ptr<Expression> index_expr;
 	vector<unique_ptr<Expression>> filter_expressions;
+	ProjectionIndex filter_index;
 };
 
-static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &column_list,
-	                           TableFunctionInitInput &input, TableFilterSet &filter_set, idx_t max_count,
-	                           set<row_t> &row_ids) {
-	if (filter_set.HasMultiColumnFilters()) {
+static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &column_list, TableFunctionInitInput &input,
+                           TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
+	if (filter_set.HasMultiColumnFilters() || !filter_set.HasFilters()) {
 		return false;
 	}
 
-	// Select a single-column ART for every filter before scanning any index.
+	// Collect the single-column ARTs that could cover each filter before scanning any index.
 	vector<IndexScanCandidate> candidates;
 	unordered_set<ProjectionIndex> covered_filters;
 
@@ -807,13 +807,15 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 		if (indexed_columns.size() != 1) {
 			continue;
 		}
+		auto indexed_column = PhysicalIndex(indexed_columns[0]);
+		auto indexed_logical_column = column_list.PhysicalToLogical(indexed_column);
 
 		// Resolve bound column references in the index_expr against the current input projection
 		ProjectionIndex scan_column_index;
 
 		// Find the indexed column amongst the input columns
 		for (idx_t i = 0; i < input.column_indexes.size(); ++i) {
-			if (input.column_indexes[i].GetPrimaryIndex() == indexed_columns[0]) {
+			if (input.column_indexes[i].ToLogical() == indexed_logical_column) {
 				scan_column_index = ProjectionIndex(i);
 				break;
 			}
@@ -835,22 +837,17 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 			bound_column_ref_expr.BindingMutable().column_index = scan_column_index;
 		});
 
-		// If the filter has already been covered by a previous index, skip it.
-		if (covered_filters.find(scan_column_index) != covered_filters.end()) {
-			continue;
-		}
-
 		// Try to find a matching filter for the column.
 		auto filter = filter_set.TryGetFilterByColumnIndex(scan_column_index);
 		if (!filter) {
 			continue;
 		}
 
-		auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
+		auto &col = column_list.GetColumn(indexed_column);
 		auto expressions = ExtractFilterExpressions(col, *filter, scan_column_index.GetIndex());
 
 		covered_filters.insert(scan_column_index);
-		candidates.emplace_back(art, entry, std::move(index_expr), std::move(expressions));
+		candidates.emplace_back(art, entry, std::move(index_expr), std::move(expressions), scan_column_index);
 	}
 
 	// TODO: Support partially covered filters by applying residual filters after fetching candidate rows.
@@ -859,12 +856,17 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 	}
 
 	bool first_index = true;
+	unordered_set<ProjectionIndex> scanned_filters;
 	for (auto &candidate : candidates) {
-		set<row_t> candidate_row_ids;
-		if (!TryScanIndex(candidate.art, candidate.entry, *candidate.index_expr, candidate.filter_expressions, max_count,
-		                  candidate_row_ids)) {
-			return false;
+		if (scanned_filters.find(candidate.filter_index) != scanned_filters.end()) {
+			continue;
 		}
+		set<row_t> candidate_row_ids;
+		if (!TryScanIndex(candidate.art, candidate.entry, *candidate.index_expr, candidate.filter_expressions,
+		                  max_count, candidate_row_ids)) {
+			continue;
+		}
+		scanned_filters.insert(candidate.filter_index);
 		if (first_index) {
 			row_ids = std::move(candidate_row_ids);
 			first_index = false;
@@ -872,7 +874,7 @@ static bool TryScanIndexes(const TableIndexList &indexes, const ColumnList &colu
 			IntersectRowIds(row_ids, candidate_row_ids);
 		}
 	}
-	return true;
+	return scanned_filters.size() == filter_set.FilterCount();
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
