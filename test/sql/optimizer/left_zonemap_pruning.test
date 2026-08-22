@@ -1,0 +1,96 @@
+# name: test/sql/optimizer/left_zonemap_pruning.test
+# description: Prune row groups for left() with a constant length
+# group: [optimizer]
+
+# 500k rows -> 5 row groups. The string increases with the row id.
+statement ok
+CREATE TABLE left_pruning AS
+SELECT i::INTEGER AS i, lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+# Equality on a prefix is already rewritten into a range predicate on the column itself.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 2) = '40';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 2) = '40';
+----
+10000
+
+# A constant-length prefix preserves the ordering of the input min/max values.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 3) > '495';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 3) > '495';
+----
+4000
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) BETWEEN '1000' AND '1099';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 4) BETWEEN '1000' AND '1099';
+----
+10000
+
+# Lengths beyond the string preserve the bounds unchanged.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 20) > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 20) > '495000';
+----
+4999
+
+# A negative length depends on the length of each row, so no bounds are derived.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, -4) = '40';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, -4) = '40';
+----
+10000
+
+# Dynamic lengths do not propagate statistics.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, (i % 2) + 2) = '40';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, (i % 2) + 2) = '40';
+----
+5000
+
+# A zero length always produces an empty string.
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) = '';
+----
+500000
+
+# Prefixes are measured in characters rather than bytes.
+statement ok
+CREATE TABLE left_pruning_utf8 AS
+SELECT i::INTEGER AS i, '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning_utf8 WHERE left(s, 3) BETWEEN '🦆40' AND '🦆41';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM left_pruning_utf8 WHERE left(s, 3) BETWEEN '🦆40' AND '🦆41';
+----
+20000
