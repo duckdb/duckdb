@@ -126,7 +126,8 @@ void VectorStructBuffer::VerifyInternal(const LogicalType &type, const Selection
 			}
 		} else {
 			if (child.GetVectorType() == VectorType::FLAT_VECTOR ||
-			    child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			    child.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+			    child.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 				auto child_validity = child.Validity();
 				for (idx_t r = 0; r < Size(); r++) {
 					if (!validity.RowIsValid(r)) {
@@ -250,13 +251,159 @@ void VectorStructBuffer::ReserveInternal(idx_t new_size) {
 	capacity = new_size;
 }
 
+namespace {
+
+// The nested-NULL invariant for struct children: "a child of a NULL parent must itself be NULL".
+// A NULL parent row is reflected when all its child slots are NULL, so a wholesale Copy carries the
+// NULLs and never reads child payload. It is unreflected when a child holds a value under it, which
+// only external (non-DuckDB) data produces.
+
+// True iff some physical source row has a NULL parent but a child holding a value (an unreflected row).
+bool AnyParentNullUnreflected(const ValidityMask &parent_validity,
+                              const vector<optional_ptr<const ValidityMask>> &child_masks, idx_t source_size) {
+	for (auto &child_mask : child_masks) {
+		// an empty mask is a constant-NULL child, which never holds a value
+		if (child_mask && AnyChildValidUnderNullParent(parent_validity, *child_mask, 0, source_size)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+struct ChildNullReflection {
+	//! Inspect a struct source's children to see whether its NULL parent rows are reflected.
+	static ChildNullReflection Check(const Vector &source, const vector<Vector> &children);
+
+	//! Every NULL parent row in the copied source is reflected -> a single wholesale copy is safe.
+	bool AllReflected() const {
+		return all_reflected;
+	}
+	//! Whether this source row's NULL parent is reflected in the children (all child slots NULL).
+	//! Returns false whenever reflection can't be decided from the masks (see can_check).
+	bool RowReflectsNull(idx_t source_row) const {
+		if (!can_check) {
+			return false;
+		}
+		for (auto &child_mask : child_masks) {
+			if (child_mask && child_mask->RowIsValid(source_row)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+private:
+	//! per-child validity, fetched once. An empty entry is a child that never holds a value (constant-NULL)
+	vector<optional_ptr<const ValidityMask>> child_masks;
+	//! false when the masks can't decide reflection: a child's validity isn't readable per row
+	//! (dictionary/sequence), or a child holds a value under every row (constant non-NULL)
+	bool can_check = true;
+	//! proven that every NULL parent row in the copied source is reflected
+	bool all_reflected = false;
+};
+
+ChildNullReflection ChildNullReflection::Check(const Vector &source, const vector<Vector> &children) {
+	ChildNullReflection result;
+	result.child_masks.resize(children.size());
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto child_vector_type = children[i].GetVectorType();
+		if (child_vector_type == VectorType::FLAT_VECTOR) {
+			result.child_masks[i] = FlatVector::Validity(children[i]);
+			continue;
+		}
+		if (child_vector_type == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(children[i])) {
+			// constant-NULL child never holds a value. Its empty mask is already correct
+			continue;
+		}
+		// constant non-NULL (a value under every row) or dictionary/sequence (validity unreadable):
+		// the masks can no longer decide reflection row by row
+		result.can_check = false;
+		break;
+	}
+	// a flat source lets us prove reflection for the whole vector with one word-wise scan: its
+	// physical rows align bit-for-bit with the child masks
+	const idx_t source_size = source.size();
+	if (result.can_check && source.GetVectorType() == VectorType::FLAT_VECTOR && source_size != 0) {
+		result.all_reflected = !AnyParentNullUnreflected(FlatVector::Validity(source), result.child_masks, source_size);
+	}
+	return result;
+}
+
+} // namespace
+
 void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == children.size());
-	for (idx_t i = 0; i < source_children.size(); i++) {
-		children[i].Copy(source_children[i], source_sel, source_count, source_offset, target_offset, copy_count);
+
+	// The per-row split copy below reads children at source_offset + start. On a sequence/FSST/dictionary child
+	// vector VectorBuffer::Copy would then flatten past the source selection. Normalize such children to owned flat
+	// copies once (flat/constant ones are referenced as-is). This also lets the reflection check read their
+	// validity instead of falling back to isolating every NULL row.
+	auto is_flat_or_constant = [](const Vector &child) {
+		auto type = child.GetVectorType();
+		return type == VectorType::FLAT_VECTOR || type == VectorType::CONSTANT_VECTOR;
+	};
+	bool needs_normalization = false;
+	for (auto &child : source_children) {
+		if (!is_flat_or_constant(child)) {
+			needs_normalization = true;
+			break;
+		}
 	}
+	vector<Vector> normalized_children;
+	if (needs_normalization) {
+		normalized_children.reserve(source_children.size());
+		for (auto &child : source_children) {
+			normalized_children.emplace_back(Vector::Ref(child));
+			if (!is_flat_or_constant(child)) {
+				normalized_children.back().Flatten();
+			}
+		}
+	}
+	auto &copy_children = needs_normalization ? normalized_children : source_children;
+
+	// Helper to copy slice of copy_children into this.children
+	auto copy_children_slice = [&](idx_t start, idx_t end) {
+		if (end == start) {
+			return;
+		}
+		for (idx_t i = 0; i < copy_children.size(); i++) {
+			children[i].Copy(copy_children[i], source_sel, source_count, source_offset + start, target_offset + start,
+			                 end - start);
+		}
+	};
+
+	// If there are no NULL rows in the copied range we can copy all at once and are done
+	if (validity.CheckAllValid(target_offset + copy_count, target_offset)) {
+		copy_children_slice(0, copy_count);
+		return;
+	}
+
+	// A NULL parent row is safe to copy wholesale when the children reflect it (all child slots NULL).
+	// Only unreflected rows must be isolated and NULLed.
+	auto reflection = ChildNullReflection::Check(source, copy_children);
+	if (reflection.AllReflected()) {
+		copy_children_slice(0, copy_count);
+		return;
+	}
+	idx_t start_idx = 0;
+	for (idx_t i = 0; i < copy_count; i++) {
+		if (validity.RowIsValidUnsafe(target_offset + i)) {
+			continue;
+		}
+		if (reflection.RowReflectsNull(source_sel.get_index(source_offset + i))) {
+			continue;
+		}
+		// unreflected row: isolate it from the wholesale runs and NULL its children
+		copy_children_slice(start_idx, i);
+		start_idx = i + 1;
+		for (idx_t j = 0; j < children.size(); j++) {
+			// recursive: see VectorArrayBuffer::CopyInternal
+			FlatVector::SetNull(children[j], target_offset + i, true);
+		}
+	}
+	copy_children_slice(start_idx, copy_count);
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type) const {
