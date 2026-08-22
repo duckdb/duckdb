@@ -523,8 +523,8 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagatePartWithinParentStatistics<0, 59999, T, MillisecondsOperator,
-			                                           DayHourMinuteParentOperator>(input.child_stats);
+			return PropagatePartWithinParentStatistics<0, 59999, T, MillisecondsOperator, DayHourMinuteParentOperator>(
+			    input.child_stats);
 		}
 	};
 
