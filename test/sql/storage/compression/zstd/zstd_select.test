@@ -1,0 +1,133 @@
+# name: test/sql/storage/compression/zstd/zstd_select.test
+# description: Test select (filter pushdown) on ZSTD compressed columns
+# group: [zstd]
+
+require vector_size 2048
+
+load {TEST_DIR}/zstd_select.db readwrite v1.2.0
+
+statement ok
+PRAGMA force_compression='zstd'
+
+# 4096 rows spans two ZSTD vectors, every 7th value is NULL
+# `sparse` and `dense` exist so a filter that is pushed into the scan can produce a sparse
+# respectively a dense selection vector for `v`
+statement ok
+CREATE TABLE t AS
+SELECT
+	i AS id,
+	i % 977 = 0 AS sparse,
+	i % 3 = 0 AS dense,
+	CASE WHEN i % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || i END AS v
+FROM range(4096) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VARCHAR' LIMIT 1
+----
+ZSTD
+
+# all filters below are on columns other than `v`, so `v` is read through the select path with a
+# partially selected vector
+
+# single row
+query II
+SELECT id, v FROM t WHERE id = 1234
+----
+1234	thisisalongstring_1234
+
+# single row that is NULL
+query II
+SELECT id, v FROM t WHERE id = 1239
+----
+1239	NULL
+
+# range straddling the ZSTD vector boundary at 2048
+query II
+SELECT id, v FROM t WHERE id BETWEEN 2044 AND 2051 ORDER BY id
+----
+2044	NULL
+2045	thisisalongstring_2045
+2046	thisisalongstring_2046
+2047	thisisalongstring_2047
+2048	thisisalongstring_2048
+2049	thisisalongstring_2049
+2050	thisisalongstring_2050
+2051	NULL
+
+# range at the start of the segment
+query II
+SELECT id, v FROM t WHERE id < 10 ORDER BY id
+----
+0	NULL
+1	thisisalongstring_1
+2	thisisalongstring_2
+3	thisisalongstring_3
+4	thisisalongstring_4
+5	thisisalongstring_5
+6	thisisalongstring_6
+7	NULL
+8	thisisalongstring_8
+9	thisisalongstring_9
+
+# sparse selection - at most one row per vector
+query II
+SELECT id, v FROM t WHERE sparse ORDER BY id
+----
+0	NULL
+977	thisisalongstring_977
+1954	thisisalongstring_1954
+2931	thisisalongstring_2931
+3908	thisisalongstring_3908
+
+# dense selection - a third of every vector
+query II
+SELECT count(*), count(v) FROM t WHERE dense
+----
+1366	1170
+
+# near-complete selection
+query II
+SELECT count(*), count(v) FROM t WHERE NOT sparse
+----
+4091	3506
+
+# selecting every row
+query II
+SELECT count(*), count(v) FROM t WHERE id >= 0
+----
+4096	3510
+
+# compare the values produced by the select path against the expected ones; the two-column
+# predicate cannot be pushed into the scan, so the pushed-down filter still drives the select
+query I
+SELECT count(*) FROM t
+WHERE dense AND v IS NOT DISTINCT FROM CASE WHEN id % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || id END
+----
+1366
+
+query I
+SELECT count(*) FROM t
+WHERE sparse AND v IS NOT DISTINCT FROM CASE WHEN id % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || id END
+----
+5
+
+query I
+SELECT count(*) FROM t
+WHERE NOT sparse AND v IS NOT DISTINCT FROM CASE WHEN id % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || id END
+----
+4091
+
+query I
+SELECT count(*) FROM t
+WHERE id < 2048 AND v IS NOT DISTINCT FROM CASE WHEN id % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || id END
+----
+2048
+
+query I
+SELECT count(*) FROM t
+WHERE id >= 2048 AND v IS NOT DISTINCT FROM CASE WHEN id % 7 = 0 THEN NULL ELSE 'thisisalongstring_' || id END
+----
+2048
