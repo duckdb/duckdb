@@ -72,7 +72,7 @@ SELECT count(*) FROM case_lengthening WHERE upper(s) = 'ⱯⱯⱯⱯⱯⱯ';
 ----
 2048
 
-# Strings longer than the stored zonemap prefix only have truncated stats: even identical values cannot be proven equal, so no pruning is possible.
+# All row groups share the same truncated 12-byte prefix 'prefixprefix': the constant matches that prefix everywhere, so nothing can be pruned.
 statement ok
 CREATE TABLE case_truncated AS
 SELECT i::INTEGER AS i,
@@ -88,3 +88,51 @@ query I
 SELECT count(*) FROM case_truncated WHERE upper(s) = 'PREFIXPREFIX_BETA';
 ----
 2048
+
+# Truncated stats with min == max mean all values in a row group share the stored 12-byte prefix.
+# Case conversion is codepoint-local, so the converted prefix can be propagated as truncated stats: row groups with a different prefix are pruned.
+statement ok
+CREATE TABLE case_truncated_distinct AS
+SELECT i::INTEGER AS i,
+       CASE WHEN i < 2048 THEN 'aaaaaaaaaaaa' WHEN i < 4096 THEN 'bbbbbbbbbbbb' ELSE 'cccccccccccc' END
+           || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'BBBBBBBBBBBB002500';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'BBBBBBBBBBBB002500';
+----
+1
+
+# A constant that matches no prefix prunes every row group.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'ZZZZ';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'ZZZZ';
+----
+0
+
+# The 12-byte truncation point can split a multi-byte character: byte 12 lands in the middle of the duck emoji, so only the complete leading characters can be converted and propagated.
+statement ok
+CREATE TABLE case_split_char AS
+SELECT i::INTEGER AS i,
+       CASE WHEN i < 2048 THEN 'abcdefghij' WHEN i < 4096 THEN 'klmnopqrst' ELSE 'uvwxyzabcd' END
+           || '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_split_char WHERE upper(s) = 'KLMNOPQRST🦆002500';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM case_split_char WHERE upper(s) = 'KLMNOPQRST🦆002500';
+----
+1
