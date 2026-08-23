@@ -14,7 +14,6 @@ CREATE TABLE left_pruning AS
 SELECT i::INTEGER AS i, lpad(i::VARCHAR, 6, '0') AS s
 FROM range(6144) r(i);
 
-# Equality on a prefix is already rewritten into a range predicate on the column itself.
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) = '0010';
 ----
@@ -25,7 +24,6 @@ SELECT count(*) FROM left_pruning WHERE left(s, 4) = '0010';
 ----
 100
 
-# A constant-length prefix preserves the ordering of the input min/max values.
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) > '0050';
 ----
@@ -93,6 +91,28 @@ SELECT count(*) FROM left_pruning WHERE left(s, (i % 2) + 4) = '0010';
 # A zero length always produces an empty string.
 query I
 SELECT count(*) FROM left_pruning WHERE left(s, 0) = '';
+----
+6144
+
+# The derived bounds for a zero length are exact ('' on both sides), so an impossible comparison prunes every row group.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 0) > '';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) > '';
+----
+0
+
+# An always-true comparison still has to scan every row group.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 0) <= '';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) <= '';
 ----
 6144
 

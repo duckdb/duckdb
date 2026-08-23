@@ -65,16 +65,16 @@ static unique_ptr<BaseStatistics> LeftPropagateStats(ClientContext &context, Fun
 	}
 	auto length = length_value.GetValue<int64_t>();
 	// a negative length counts from the back of each string, so no bounds can be derived
-	if (length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+	if (length < 0 || length > NumericLimits<uint32_t>::Maximum()) {
 		return nullptr;
 	}
-	// left(s, n) with a constant n >= 1 is a fixed-length character prefix, which preserves ordering
+	// left(s, n) with a constant n >= 0 is a fixed-length character prefix, which preserves ordering
 	return PropagateStringSliceStats(input, 0, NumericCast<idx_t>(length));
 }
 
 ScalarFunction LeftFun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                        LeftFunction<LeftRightUnicode>, nullptr, LeftPropagateStats);
+	                        LeftFunction<LeftRightUnicode>, /*bind=*/nullptr, LeftPropagateStats);
 	// throws if the resulting substring is out of the supported range
 	function.SetFallible();
 	return function;
