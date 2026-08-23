@@ -354,12 +354,25 @@ public:
 class BoundWindowFunction : public BaseWindowFunction, public BoundSimpleFunction {
 public:
 	explicit BoundWindowFunction(const WindowFunction &base);
+	explicit BoundWindowFunction(shared_ptr<const WindowFunction> base);
 
 public:
 	const ExpressionType window_enum;
 
 	DUCKDB_API bool operator==(const BoundWindowFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundWindowFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function.
+	//! NOTE: the definition is currently a per-bind copy, so pointer identity is only stable within one expression
+	//! lineage - inspect the function itself rather than comparing pointers.
+	const shared_ptr<const WindowFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 public:
 	void GetBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr) const {
@@ -417,6 +430,9 @@ public:
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
+
+private:
+	shared_ptr<const WindowFunction> definition;
 };
 
 } // namespace duckdb

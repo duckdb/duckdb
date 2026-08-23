@@ -561,9 +561,26 @@ public:
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
+	explicit BoundScalarFunction(shared_ptr<const ScalarFunction> function);
 
 	bool operator==(const BoundScalarFunction &rhs) const;
 	bool operator!=(const BoundScalarFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function, e.g. statistics
+	//! propagation swapping in a specialized implementation.
+	//! NOTE: the definition is currently a per-bind copy, so pointer identity is only stable within one expression
+	//! lineage - inspect the function itself rather than comparing pointers.
+	const shared_ptr<const ScalarFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
+
+private:
+	shared_ptr<const ScalarFunction> definition;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

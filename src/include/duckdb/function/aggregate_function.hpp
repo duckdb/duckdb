@@ -832,11 +832,26 @@ public:
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
 public:
 	explicit BoundAggregateFunction(const AggregateFunction &function);
+	explicit BoundAggregateFunction(shared_ptr<const AggregateFunction> function);
 
+	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by ReplaceImplementation and by later mutation of the bound
+	//! function, e.g. statistics propagation swapping in a specialized implementation.
+	//! NOTE: the definition is currently a per-bind copy, so pointer identity is only stable within one expression
+	//! lineage - inspect the function itself rather than comparing pointers.
+	const shared_ptr<const AggregateFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
@@ -850,6 +865,9 @@ public:
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
 	}
+
+private:
+	shared_ptr<const AggregateFunction> definition;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
