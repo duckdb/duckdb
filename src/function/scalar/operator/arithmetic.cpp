@@ -1216,18 +1216,6 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	return nullptr;
 }
 
-struct TryDivideOperator {
-	template <class T>
-	static bool Operation(T left, T right, T &result) {
-		// with a non-zero divisor, division only overflows for the minimum value divided by -1
-		if (left == NumericLimits<T>::Minimum() && right == T(-1)) {
-			return false;
-		}
-		result = DivideOperator::Operation<T, T, T>(left, right);
-		return true;
-	}
-};
-
 struct DividePropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
