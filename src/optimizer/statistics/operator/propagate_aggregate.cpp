@@ -303,7 +303,16 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto &proj = child_ref.get().Cast<LogicalProjection>();
-		for (auto &column_info : min_max_columns) {
+		for (auto &column_info : length_columns) {
+			auto &expr = proj.GetExpression(column_info.binding);
+			if (!TryGetLengthColumnRef(expr, column_info.binding)) {
+				return;
+			}
+		}
+		// walk backwards: entries whose projection computes a byte length are moved
+		// into length_columns
+		for (idx_t i = min_max_columns.size(); i > 0; i--) {
+			auto &column_info = min_max_columns[i - 1];
 			auto &expr = proj.GetExpression(column_info.binding);
 			MinMaxColumnInfo projection_info;
 			if (!TryGetMinMaxColumnInfo(expr, projection_info)) {
@@ -327,12 +336,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			column_info.binding = projection_info.binding;
 			column_info.input_type = projection_info.input_type;
-		}
-		for (auto &column_info : length_columns) {
-			auto &expr = proj.GetExpression(column_info.binding);
-			if (!TryGetLengthColumnRef(expr, column_info.binding)) {
-				return;
-			}
 		}
 		child_ref = *child_ref.get().children[0];
 	}

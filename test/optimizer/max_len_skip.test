@@ -163,16 +163,49 @@ SELECT max(octet_length(b)) FROM t_blob
 
 # When strlen(s) is shared by multiple aggregates, the common subexpression is
 # lifted into a projection and the aggregates see a column reference instead of
-# the function - the length optimization does not apply, but results stay correct
+# the function - the projection walk converts them to length aggregates
 query II
 EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t
 ----
-physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
 
 query II
 SELECT max(strlen(s)), min(strlen(s)) FROM t
 ----
 100	1
+
+# Converted length entries also merge into the partial precompute projection
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+physical_plan	<REGEX>:.*COALESCE.*greatest.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+100	1
+
+# A shared length() is lifted as well, but counts code points - still not optimized
+query II
+EXPLAIN SELECT max(length(s)), min(length(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(length(s)), min(length(s)) FROM t
+----
+100	1
+
+# A shared octet_length over a blob column converts as well
+query II
+EXPLAIN SELECT max(octet_length(b)), min(octet_length(b)) FROM t_blob
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(octet_length(b)), min(octet_length(b)) FROM t_blob
+----
+10	1
 
 # A fully NULL column has no length value: no precompute, the aggregate returns NULL
 statement ok
