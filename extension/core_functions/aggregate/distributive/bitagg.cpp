@@ -13,7 +13,7 @@ namespace {
 template <class T>
 struct BitState {
 	using value_type = T;
-	using STATE_TYPE = OptionalStateType<T>;
+	using STATE_TYPE = OptionalStateType<StateTypedValue<T, StateReturnType>>;
 	T value;
 	bool is_set;
 };
