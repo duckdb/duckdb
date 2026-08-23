@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/prefix_zonemap_pruning.test
-# description: Prune row groups for NOT prefix()/starts_with() when the zonemap proves a shared prefix
+# description: Prune row groups for prefix scan function when the zonemap proves a shared prefix
 # group: [optimizer]
 
 statement ok
