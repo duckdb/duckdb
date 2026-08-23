@@ -81,8 +81,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 	const auto minimum_arg_count = sig.GetRequiredParameterCount();
 
 	// a "*args"/"**kwargs" parameter collects an unbounded number of arguments
-	const auto accepts_any_count = sig.HasVarArgs() || sig.HasArgumentPacks();
-	const auto maximum_arg_count = accepts_any_count ? NumericLimits<idx_t>::Maximum() : sig.GetParameterCount();
+	const auto maximum_arg_count = sig.HasArgumentPacks() ? NumericLimits<idx_t>::Maximum() : sig.GetParameterCount();
 
 	if (received_arg_count < minimum_arg_count) {
 		// We have fewer arguments than the function requires, so this function cannot be a match.
@@ -121,8 +120,6 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 		} else if (var_positional_index.IsValid()) {
 			// captured by "*args" - check against the element type it constrains its arguments to
 			arg_type = sig.GetParameter(var_positional_index.GetIndex()).GetType();
-		} else if (sig.HasVarArgs()) {
-			arg_type = sig.GetVarArgs();
 		} else {
 			// more positional arguments than the function can take
 			return optional_idx();
@@ -144,17 +141,14 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 		auto opt_param_idx = sig.GetParameterIndexByName(named_arg.first);
 
 		if (!opt_param_idx.IsValid()) {
-			if (!var_keyword_index.IsValid() && !sig.HasVarArgs()) {
+			if (!var_keyword_index.IsValid()) {
 				// no parameter with this name: continue
 				return optional_idx();
 			}
 
-			// This argument is captured by "**kwargs" (or by the legacy trailing varargs) - check it against the
-			// value type that parameter constrains its arguments to. Both are always at the end of the argument
-			// list, so no parameter index check is needed.
-			const auto &catch_all_type = var_keyword_index.IsValid()
-			                                 ? sig.GetParameter(var_keyword_index.GetIndex()).GetType()
-			                                 : sig.GetVarArgs();
+			// This argument is captured by "**kwargs" - check it against the value type that parameter constrains
+			// its arguments to
+			const auto &catch_all_type = sig.GetParameter(var_keyword_index.GetIndex()).GetType();
 			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, catch_all_type);
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
@@ -565,7 +559,7 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 		PrepareTypeForCast(arg);
 	}
 
-	// Varargs should be expanded by this point
+	// Every argument expression sits in the slot of the parameter it fills by this point.
 	// If not, the function has somehow added more argument expressions during binding, which is not allowed.
 	// There is one exception, count(*) which can be invoked internally with fewer arguments than the function
 	// definition. That should be fixed separately though.
@@ -1214,8 +1208,7 @@ static void ApplyArgumentPackTypes(const FunctionSignature &sig, BoundSimpleFunc
 
 // Drain all named argument and insert them in the correct position according to the function signature.
 // Also insert default arguments where needed.
-// Returns the resolved name of every argument slot: the signature parameter name for positional slots, the
-// caller-provided name for named varargs, and an empty identifier for unnamed varargs.
+// Returns the name of every argument slot the signature covers.
 static vector<Identifier> ResolveArguments(ClientContext &context, const SimpleFunction &function,
                                            vector<unique_ptr<Expression>> &arguments,
                                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
@@ -1244,11 +1237,8 @@ static vector<Identifier> ResolveArguments(ClientContext &context, const SimpleF
 
 	identifier_set_t seen_names;
 
-	vector<pair<Identifier, unique_ptr<Expression>>> trailing_kwargs;
-
-	// We now need to reorder them to match the function signature, before appending them to the argument list.
-	for (idx_t kwarg_idx = 0; kwarg_idx < named_arguments.size(); kwarg_idx++) {
-		auto &[name, arg] = named_arguments[kwarg_idx];
+	// We now need to reorder them to match the function signature.
+	for (auto &[name, arg] : named_arguments) {
 		const auto location = arg->GetQueryLocation();
 
 		if (name.empty()) {
@@ -1268,14 +1258,8 @@ static vector<Identifier> ResolveArguments(ClientContext &context, const SimpleF
 
 		const auto opt_param_idx = sig.GetParameterIndexByName(name);
 		if (!opt_param_idx.IsValid()) {
-			if (!sig.HasVarArgs()) {
-				throw BinderException(location, "Function '%s' does not have a parameter named '%s'",
-				                      function.GetName(), name);
-			}
-
-			// This is a named vararg argument, come back for it later
-			trailing_kwargs.emplace_back(name, std::move(arg));
-			continue;
+			throw BinderException(location, "Function '%s' does not have a parameter named '%s'", function.GetName(),
+			                      name);
 		}
 
 		const auto param_idx = opt_param_idx.GetIndex();
@@ -1314,26 +1298,6 @@ static vector<Identifier> ResolveArguments(ClientContext &context, const SimpleF
 	for (idx_t i = 0; i < MinValue<idx_t>(arguments.size(), sig.GetParameterCount()); i++) {
 		argument_names[i] = sig.GetParameter(i).GetName();
 	}
-
-	// Now spread out any trailing named vararg arguments into the remaining argument slots, wherever they may be
-	idx_t kwarg_idx = 0;
-	for (idx_t slot_idx = kwargs_offset; slot_idx < arguments.size(); slot_idx++) {
-		if (!arguments[slot_idx]) {
-			argument_names[slot_idx] = trailing_kwargs[kwarg_idx].first;
-			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx].second);
-			kwarg_idx++;
-		}
-	}
-
-	// And if there are still some left, just append them to the end
-	idx_t kwargs_remaining = trailing_kwargs.size() - kwarg_idx;
-	while (kwargs_remaining) {
-		argument_names.push_back(trailing_kwargs[kwarg_idx].first);
-		arguments.push_back(std::move(trailing_kwargs[kwarg_idx].second));
-		kwarg_idx++;
-		kwargs_remaining--;
-	}
-
 	return argument_names;
 }
 
@@ -1345,14 +1309,6 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(function);
-
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < arguments.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
 
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.
@@ -1425,14 +1381,6 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(function);
 
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
-
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.
 	ResolveTemplateTypes(function.GetSignature(), bound_function, children);
@@ -1504,14 +1452,6 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 	auto argument_names = ResolveArguments(context, function, children, named_arguments);
 
 	BoundWindowFunction bound_function(function);
-
-	// Expand varargs if necessary
-	if (function.HasVarArgs()) {
-		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
-			bound_function.GetArguments().push_back(varargs_type);
-		}
-	}
 
 	// A "*args"/"**kwargs" parameter declares the type of the arguments it collects, not the type of the pack that
 	// is handed to the function - fill in the concrete pack type before the "bind" callback runs.

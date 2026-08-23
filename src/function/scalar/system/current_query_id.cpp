@@ -44,7 +44,7 @@ void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 ScalarFunction CurrentQueryId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentQueryIdFunction, CurrentQueryIdBind, nullptr, nullptr,
-	                      LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	                      FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

@@ -71,6 +71,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("varargs");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("named_varargs");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("macro_definition");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -137,6 +140,25 @@ Value FunctionStabilityToValue(FunctionStability stability) {
 	}
 }
 
+//! The "varargs" column reports the type a "*args" parameter constrains the arguments it collects to, which is what
+//! a trailing-varargs function used to declare
+static Value VarPositionalType(const FunctionSignature &signature) {
+	auto index = signature.GetVarPositionalIndex();
+	if (!index.IsValid()) {
+		return Value();
+	}
+	return Value(signature.GetParameter(index.GetIndex()).GetType().ToString());
+}
+
+//! The "named_varargs" column reports the type a "**kwargs" parameter constrains the named arguments it collects to
+static Value VarKeywordType(const FunctionSignature &signature) {
+	auto index = signature.GetVarKeywordIndex();
+	if (!index.IsValid()) {
+		return Value();
+	}
+	return Value(signature.GetParameter(index.GetIndex()).GetType().ToString());
+}
+
 struct ScalarFunctionExtractor {
 	static idx_t FunctionCount(ScalarFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -177,8 +199,11 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VarPositionalType(entry.functions.GetFunctionByOffset(offset).GetSignature());
+	}
+
+	static Value GetNamedVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		return VarKeywordType(entry.functions.GetFunctionByOffset(offset).GetSignature());
 	}
 
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
@@ -235,7 +260,11 @@ struct WindowFunctionExtractor {
 	}
 
 	static Value GetVarArgs(WindowFunctionCatalogEntry &entry, idx_t offset) {
-		return Value();
+		return VarPositionalType(entry.functions.GetFunctionByOffset(offset).GetSignature());
+	}
+
+	static Value GetNamedVarArgs(WindowFunctionCatalogEntry &entry, idx_t offset) {
+		return VarKeywordType(entry.functions.GetFunctionByOffset(offset).GetSignature());
 	}
 
 	static Value GetMacroDefinition(WindowFunctionCatalogEntry &entry, idx_t offset) {
@@ -291,8 +320,11 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		const auto &fun = entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		return VarPositionalType(entry.functions.GetFunctionByOffset(offset).GetSignature());
+	}
+
+	static Value GetNamedVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		return VarKeywordType(entry.functions.GetFunctionByOffset(offset).GetSignature());
 	}
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
@@ -356,6 +388,10 @@ struct MacroExtractor {
 		return Value();
 	}
 
+	static Value GetNamedVarArgs(ScalarMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		auto &macro_entry = *entry.macros[offset];
 		D_ASSERT(macro_entry.type == MacroType::SCALAR_MACRO);
@@ -416,6 +452,10 @@ struct TableMacroExtractor {
 	}
 
 	static Value GetVarArgs(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value GetNamedVarArgs(TableMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 
@@ -485,6 +525,10 @@ struct TableFunctionExtractor {
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
+	static Value GetNamedVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
@@ -545,6 +589,10 @@ struct PragmaFunctionExtractor {
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+	}
+
+	static Value GetNamedVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
 	}
 
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {
@@ -689,6 +737,9 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 
 	// varargs, LogicalType::VARCHAR
 	output.data[col++].Append(OP::GetVarArgs(function, function_idx));
+
+	// named_varargs, LogicalType::VARCHAR
+	output.data[col++].Append(OP::GetNamedVarArgs(function, function_idx));
 
 	// macro_definition, LogicalType::VARCHAR
 	output.data[col++].Append(OP::GetMacroDefinition(function, function_idx));

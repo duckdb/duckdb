@@ -2,10 +2,12 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -50,18 +52,33 @@ struct LeastGreatestSortKeyState : public FunctionLocalState {
 	OrderModifiers modifiers;
 };
 
+//! least/greatest collects everything after its first argument into an "*args" pack
+idx_t GetInputCount(const LogicalType &pack_type) {
+	return 1 + ArgumentPack::GetSize(pack_type);
+}
+
+vector<reference<Vector>> GetInputVectors(DataChunk &args) {
+	vector<reference<Vector>> inputs;
+	inputs.emplace_back(args.data[0]);
+	for (auto &packed : ArgumentPack::GetInput(args.data[1])) {
+		inputs.emplace_back(packed);
+	}
+	return inputs;
+}
+
 template <class OP>
 unique_ptr<FunctionLocalState> LeastGreatestSortKeyInit(ExpressionState &state, const BoundFunctionExpression &expr,
                                                         FunctionData *bind_data) {
-	return make_uniq<LeastGreatestSortKeyState>(expr.GetChildren().size(), OP::NullOrdering());
+	return make_uniq<LeastGreatestSortKeyState>(GetInputCount(expr.GetChildren()[1]->GetReturnType()),
+	                                            OP::NullOrdering());
 }
 
 template <bool STRING>
 struct StandardLeastGreatest {
 	static constexpr bool IS_STRING = STRING;
 
-	static DataChunk &Prepare(DataChunk &args, ExpressionState &) {
-		return args;
+	static vector<reference<Vector>> Prepare(vector<reference<Vector>> inputs, ExpressionState &) {
+		return inputs;
 	}
 
 	static Vector &TargetVector(Vector &result, ExpressionState &) {
@@ -81,13 +98,15 @@ struct StandardLeastGreatest {
 struct SortKeyLeastGreatest {
 	static constexpr bool IS_STRING = false;
 
-	static DataChunk &Prepare(DataChunk &args, ExpressionState &state) {
+	static vector<reference<Vector>> Prepare(vector<reference<Vector>> inputs, ExpressionState &state) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestSortKeyState>();
 		lstate.sort_keys.Reset();
-		for (idx_t c_idx = 0; c_idx < args.ColumnCount(); c_idx++) {
-			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], lstate.modifiers, lstate.sort_keys.data[c_idx]);
+		vector<reference<Vector>> sort_keys;
+		for (idx_t c_idx = 0; c_idx < inputs.size(); c_idx++) {
+			CreateSortKeyHelpers::CreateSortKey(inputs[c_idx].get(), lstate.modifiers, lstate.sort_keys.data[c_idx]);
+			sort_keys.emplace_back(lstate.sort_keys.data[c_idx]);
 		}
-		return lstate.sort_keys;
+		return sort_keys;
 	}
 
 	static Vector &TargetVector(Vector &result, ExpressionState &state) {
@@ -111,41 +130,43 @@ struct SortKeyLeastGreatest {
 
 template <class T, class OP, class BASE_OP = StandardLeastGreatest<false>>
 void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (args.ColumnCount() == 1) {
+	auto arguments = GetInputVectors(args);
+	const auto count = args.size();
+	if (arguments.size() == 1) {
 		// single input: nop
-		result.Reference(args.data[0]);
+		result.Reference(arguments[0].get());
 		return;
 	}
-	auto &input = BASE_OP::Prepare(args, state);
+	auto input = BASE_OP::Prepare(arguments, state);
 	auto &result_vector = BASE_OP::TargetVector(result, state);
 
 	auto result_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+	for (idx_t col_idx = 0; col_idx < input.size(); col_idx++) {
+		if (arguments[col_idx].get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			// non-constant input: result is not a constant vector
 			result_type = VectorType::FLAT_VECTOR;
 		}
 		if (BASE_OP::IS_STRING) {
 			// for string vectors we add a reference to the heap of the children
-			StringVector::AddHeapReference(result_vector, input.data[col_idx]);
+			StringVector::AddHeapReference(result_vector, input[col_idx].get());
 		}
 	}
 
 	auto result_data = FlatVector::ScatterWriter<T>(result_vector);
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
-	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR &&
-		    ConstantVector::IsNull(input.data[col_idx])) {
+	for (idx_t col_idx = 0; col_idx < input.size(); col_idx++) {
+		auto &column = input[col_idx].get();
+		if (column.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(column)) {
 			// ignore null vector
 			continue;
 		}
 
-		auto entries = input.data[col_idx].template Values<T>();
+		auto entries = column.template Values<T>();
 
 		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask
-			for (idx_t i = 0; i < input.size(); i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto entry = entries[i];
 				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
@@ -158,7 +179,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 		} else {
 			// no new null entries: only need to perform the operation
-			for (idx_t i = 0; i < input.size(); i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto ivalue = entries.GetValueUnsafe(i);
 				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 					result_has_value[i] = true;
@@ -167,7 +188,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 		}
 	}
-	BASE_OP::FinalizeResult(input.size(), result_has_value, result, state);
+	BASE_OP::FinalizeResult(count, result_has_value, result, state);
 	result.SetVectorType(result_type);
 }
 
@@ -202,7 +223,16 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 	Value anchored;          // over non-null inputs only
 	Value anchored_fallback; // over all inputs; used only when every input is nullable
 	bool has_nonnull_input = false;
-	for (auto &cs : child_stats) {
+	vector<reference<const BaseStatistics>> input_stats;
+	input_stats.emplace_back(child_stats[0]);
+	if (child_stats[1].GetStatsType() != StatisticsType::STRUCT_STATS) {
+		return nullptr;
+	}
+	for (idx_t i = 0; i < StructType::GetChildCount(child_stats[1].GetType()); i++) {
+		input_stats.emplace_back(StructStats::GetChildStats(child_stats[1], i));
+	}
+	for (auto &stats_ref : input_stats) {
+		auto &cs = stats_ref.get();
 		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
 			return nullptr;
 		}
@@ -239,10 +269,10 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
-	for (idx_t i = 1; i < arguments.size(); i++) {
-		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
+	for (auto &packed : ArgumentPack::GetPackedChildren(*arguments[1])) {
+		auto arg_type = ExpressionBinder::GetExpressionReturnType(*packed);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			throw BinderException(arguments[i]->GetQueryLocation(),
+			throw BinderException(packed->GetQueryLocation(),
 			                      "Cannot combine types of %s and %s - an explicit cast is required",
 			                      child_type.ToString(), arg_type.ToString());
 		}
@@ -291,18 +321,24 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	for (auto &arg : bound_function.GetArguments()) {
-		arg = child_type;
-	}
+	// every argument is cast to the common type, including the ones the "*args" pack collected
+	auto &pack_type = bound_function.GetArguments()[1];
+	pack_type = ArgumentPack::PositionalType(vector<LogicalType>(ArgumentPack::GetSize(pack_type), child_type));
+	bound_function.GetArguments()[0] = child_type;
 	bound_function.SetReturnType(child_type);
 	return nullptr;
 }
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
-	                      PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::SPECIAL_HANDLING);
+	auto sig = FunctionSignature()
+	               .AddParameter("arg", LogicalType::ANY)
+	               .AddVarPositionalParameter("args", LogicalType::ANY)
+	               .SetReturnType(LogicalType::ANY);
+	return ScalarFunction(Identifier(), std::move(sig))
+	    .SetBindCallback(BindLeastGreatest<OP>)
+	    .SetStatisticsCallback(PropagateLeastGreatestStats<OP>)
+	    .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>

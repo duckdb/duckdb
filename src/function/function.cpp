@@ -56,9 +56,8 @@ SimpleFunction::SimpleFunction(Identifier name_p, FunctionSignature signature_p)
     : Function(std::move(name_p)), signature(std::move(signature_p)) {
 }
 
-SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_p, LogicalType return_type,
-                               LogicalType varargs_p)
-    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
+SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_p, LogicalType return_type)
+    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(return_type)) {
 }
 
 SimpleFunction::~SimpleFunction() {
@@ -101,9 +100,6 @@ string FunctionSignature::ToString() const {
 			}
 		}
 		params.push_back(param.ToString());
-	}
-	if (varargs.IsValid()) {
-		params.push_back("[" + varargs.ToString() + "...]");
 	}
 	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
 	if (return_type.IsValid()) {
@@ -170,8 +166,7 @@ hash_t SimpleFunction::Hash() const {
 
 string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments,
-                              const vector<pair<Identifier, LogicalType>> &named_arguments,
-                              const LogicalType &varargs) {
+                              const vector<pair<Identifier, LogicalType>> &named_arguments) {
 	string result;
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		result += catalog_name + "." + schema_name + ".";
@@ -186,18 +181,13 @@ string Function::CallToString(const Identifier &catalog_name, const Identifier &
 		string_arguments.push_back(StringUtil::Format("%s := %s", arg_name, arg_type.ToString()));
 	}
 
-	if (varargs.IsValid()) {
-		string_arguments.push_back("[" + varargs.ToString() + "...]");
-	}
 	result += StringUtil::Join(string_arguments, ", ");
 	return result + ")";
 }
 
 string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
-                              const vector<LogicalType> &arguments, const LogicalType &varargs,
-                              const LogicalType &return_type) {
-	string result =
-	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<Identifier, LogicalType>> {}, varargs);
+                              const vector<LogicalType> &arguments, const LogicalType &return_type) {
+	string result = CallToString(catalog_name, schema_name, name, arguments, vector<pair<Identifier, LogicalType>> {});
 	result += " -> " + return_type.ToString();
 	return result;
 }
@@ -244,7 +234,7 @@ hash_t BoundSimpleFunction::Hash() const {
 }
 
 string BoundSimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {
@@ -256,7 +246,7 @@ bool FunctionParameter::operator!=(const FunctionParameter &other) const {
 }
 
 bool FunctionSignature::operator==(const FunctionSignature &other) const {
-	return parameters == other.parameters && varargs == other.varargs && return_type == other.return_type;
+	return parameters == other.parameters && return_type == other.return_type;
 }
 
 bool FunctionSignature::operator!=(const FunctionSignature &other) const {
@@ -274,9 +264,6 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 		if (parameters[i].GetKind() != other.parameters[i].GetKind()) {
 			return false;
 		}
-	}
-	if (varargs != other.varargs) {
-		return false;
 	}
 	if (return_type != other.return_type) {
 		return false;
@@ -363,8 +350,7 @@ optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
 		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
 		                        function.GetName(), name);
 	}
-	// The binder resolves every argument to a slot and reports its name: the signature parameter name for positional
-	// slots, or the name the caller used for named varargs.
+	// The binder resolves every argument to the slot of the parameter it fills, and reports that parameter's name.
 	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
 		if ((*argument_names)[arg_idx] == name) {
 			return optional_idx(arg_idx);

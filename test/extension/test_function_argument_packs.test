@@ -302,3 +302,15 @@ statement error
 SELECT test_pack_both(1, 2, b := 'notanint');
 ----
 <REGEX>:Conversion Error:.*
+
+#===--------------------------------------------------------------------===#
+# duckdb_functions() reports the element/value type of each pack parameter
+#===--------------------------------------------------------------------===#
+
+query III
+SELECT function_name, varargs, named_varargs FROM duckdb_functions()
+WHERE function_name IN ('test_pack_args', 'test_pack_kwargs', 'test_pack_both') ORDER BY function_name;
+----
+test_pack_args	ANY	NULL
+test_pack_both	INTEGER	VARCHAR
+test_pack_kwargs	NULL	ANY

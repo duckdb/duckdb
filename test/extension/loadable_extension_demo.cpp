@@ -1011,7 +1011,7 @@ static void InspectAggUpdate(Vector inputs[], AggregateInputData &, idx_t input_
 
 // The inspection functions below return VARCHAR and print "<idx>|arg|arg|..." (see
 // TestFunctionArgs) so that a single query result reveals both which overload was chosen
-// and the final positional argument list (after reordering/defaults/varargs). SPECIAL_HANDLING
+// and the final positional argument list (after reordering and defaults). SPECIAL_HANDLING
 // is used so that NULL arguments still reach the body and we can observe their final position.
 static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	using NH = FunctionNullHandling;
@@ -1025,19 +1025,6 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		sig.AddParameter("c", LogicalType::INTEGER, Value::INTEGER(200));
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_named_inspect", std::move(sig), TestFunctionArgs<1>);
-		fn.SetNullHandling(NH::SPECIAL_HANDLING);
-		loader.RegisterFunction(std::move(fn));
-	}
-
-	// test_named_varargs(a INTEGER, b INTEGER = 100, ... INTEGER) -> VARCHAR
-	// Varargs are appended trailing; named varargs have their names discarded but keep order.
-	{
-		FunctionSignature sig;
-		sig.AddParameter("a", LogicalType::INTEGER);
-		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
-		sig.SetVarArgs(LogicalType::INTEGER);
-		sig.SetReturnType(LogicalType::VARCHAR);
-		ScalarFunction fn("test_named_varargs", std::move(sig), TestFunctionArgs<2>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
 		loader.RegisterFunction(std::move(fn));
 	}

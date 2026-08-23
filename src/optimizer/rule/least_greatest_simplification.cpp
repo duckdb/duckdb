@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/least_greatest_simplification.hpp"
 
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -20,7 +21,15 @@ unique_ptr<Expression> LeastGreatestSimplificationRule::Apply(LogicalOperator &o
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &children = root.GetChildrenMutable();
 	D_ASSERT(children.size() == 2);
-	if (children[0]->IsVolatile() || !children[0]->Equals(*children[1])) {
+	// least/greatest collects everything after its first argument into an "*args" pack
+	if (!ArgumentPack::IsPack(*children[1])) {
+		return nullptr;
+	}
+	auto &packed = ArgumentPack::GetPackedChildren(*children[1]);
+	if (packed.size() != 1) {
+		return nullptr;
+	}
+	if (children[0]->IsVolatile() || !children[0]->Equals(*packed[0])) {
 		return nullptr;
 	}
 	return std::move(children[0]);

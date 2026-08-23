@@ -46,7 +46,7 @@ void CurrentTransactionIdFunction(DataChunk &args, ExpressionState &state, Vecto
 
 ScalarFunction CurrentTransactionId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentTransactionIdFunction, CurrentTransactionIdBind, nullptr,
-	                      nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	                      nullptr, FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

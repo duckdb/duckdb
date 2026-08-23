@@ -164,60 +164,6 @@ SELECT test_named_nullshort(a := 1, b := NULL);
 NULL
 
 #===--------------------------------------------------------------------===#
-# Varargs (a INT, b INT = 100, ... INT) - varargs are appended trailing
-#===--------------------------------------------------------------------===#
-
-query I
-SELECT test_named_varargs(1);
-----
-<2>|1|100|
-
-query I
-SELECT test_named_varargs(1, 2);
-----
-<2>|1|2|
-
-query I
-SELECT test_named_varargs(1, 2, 3);
-----
-<2>|1|2|3|
-
-query I
-SELECT test_named_varargs(1, 2, 3, 4, 5);
-----
-<2>|1|2|3|4|5|
-
-# Named varargs: the names are discarded, the values are appended in call order
-query I
-SELECT test_named_varargs(1, 2, x := 3, y := 4);
-----
-<2>|1|2|3|4|
-
-# Order of multiple named varargs is preserved
-query I
-SELECT test_named_varargs(1, 2, z := 30, w := 40, m := 50);
-----
-<2>|1|2|30|40|50|
-
-# Defaults are filled before varargs are appended
-query I
-SELECT test_named_varargs(1, x := 10);
-----
-<2>|1|100|10|
-
-# Named non-vararg parameter + named vararg
-query I
-SELECT test_named_varargs(a := 1, b := 2, x := 3);
-----
-<2>|1|2|3|
-
-# A castable vararg value is cast to the vararg type
-query I
-SELECT test_named_varargs(1, 2, 3::SMALLINT);
-----
-<2>|1|2|3|
-
-#===--------------------------------------------------------------------===#
 # Overload resolution driven by types/arity, including via named arguments
 #   <10> (a INT, b INT)   <11> (a INT, b VARCHAR)   <12> (a INT)
 #===--------------------------------------------------------------------===#
@@ -289,12 +235,6 @@ SELECT test_named_inspect();
 # argument resolution rather than from "no matching function".
 statement error
 SELECT test_named_inspect(b := 2);
-----
-<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
-
-# A named vararg cannot satisfy a required positional parameter
-statement error
-SELECT test_named_varargs(x := 5);
 ----
 <REGEX>:Binder Error:.*Missing value for parameter 'a'.*
 

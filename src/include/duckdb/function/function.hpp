@@ -195,20 +195,13 @@ class FunctionSignature {
 public:
 	FunctionSignature() = default;
 
-	FunctionSignature(vector<LogicalType> arguments, LogicalType varargs, LogicalType return_type)
-	    : varargs(std::move(varargs)), return_type(std::move(return_type)) {
+	FunctionSignature(vector<FunctionParameter> parameters, LogicalType return_type)
+	    : parameters(std::move(parameters)), return_type(std::move(return_type)) {
+	}
+	FunctionSignature(vector<LogicalType> arguments, LogicalType return_type) : return_type(std::move(return_type)) {
 		for (auto &arg : arguments) {
 			AddParameter(std::move(arg));
 		}
-	}
-	FunctionSignature(vector<FunctionParameter> parameters, LogicalType return_type)
-	    : parameters(std::move(parameters)), varargs(LogicalTypeId::INVALID), return_type(std::move(return_type)) {
-	}
-	FunctionSignature(vector<FunctionParameter> parameters, LogicalType varargs, LogicalType return_type)
-	    : parameters(std::move(parameters)), varargs(std::move(varargs)), return_type(std::move(return_type)) {
-	}
-	FunctionSignature(vector<LogicalType> arguments, LogicalType return_type)
-	    : FunctionSignature(std::move(arguments), LogicalType(LogicalTypeId::INVALID), std::move(return_type)) {
 	}
 
 	string ToString() const;
@@ -238,16 +231,6 @@ public:
 	auto SetReturnType(LogicalType return_type_p) -> FunctionSignature & {
 		return_type = std::move(return_type_p);
 		return *this;
-	}
-
-	auto HasVarArgs() const -> bool {
-		return varargs.id() != LogicalTypeId::INVALID;
-	}
-	auto GetVarArgs() const -> const LogicalType & {
-		return varargs;
-	}
-	auto SetVarArgs(LogicalType varargs_p) -> void {
-		varargs = std::move(varargs_p);
 	}
 
 	auto AddParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
@@ -435,11 +418,6 @@ public:
 				                            parameters[var_keyword.GetIndex()].GetName(), param.GetName());
 			}
 		}
-
-		if (HasVarArgs() && (var_positional.IsValid() || var_keyword.IsValid())) {
-			throw InvalidInputException("A function cannot combine trailing varargs with '*args'/'**kwargs' "
-			                            "parameters - use '*args' instead");
-		}
 	}
 
 	hash_t Hash() const;
@@ -456,7 +434,6 @@ private:
 
 private:
 	vector<FunctionParameter> parameters;
-	LogicalType varargs;
 	LogicalType return_type;
 };
 
@@ -495,12 +472,11 @@ public:
 	//! Returns the formatted string name(arg1, arg2, ...)
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
-	                                      const vector<pair<Identifier, LogicalType>> &named_arguments,
-	                                      const LogicalType &varargs = LogicalType::INVALID);
+	                                      const vector<pair<Identifier, LogicalType>> &named_arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
-	                                      const LogicalType &varargs, const LogicalType &return_type);
+	                                      const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
@@ -519,8 +495,7 @@ private:
 class SimpleFunction : public Function {
 public:
 	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
-	DUCKDB_API SimpleFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
-	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	DUCKDB_API SimpleFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type);
 	DUCKDB_API ~SimpleFunction() override;
 
 protected:
@@ -535,18 +510,6 @@ public:
 	}
 	const FunctionSignature &GetSignature() const {
 		return signature;
-	}
-
-	const LogicalType &GetVarArgs() const {
-		return signature.GetVarArgs();
-	}
-
-	void SetVarArgs(LogicalType varargs_p) {
-		signature.SetVarArgs(std::move(varargs_p));
-	}
-
-	DUCKDB_API bool HasVarArgs() const {
-		return signature.HasVarArgs();
 	}
 
 	void SetReturnType(LogicalType return_type_p) {

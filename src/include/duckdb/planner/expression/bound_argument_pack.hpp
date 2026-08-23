@@ -25,6 +25,7 @@ struct ArgumentPack {
 	static constexpr const char *TYPE_ALIAS = "__argument_pack";
 
 	static const vector<Vector> &GetInput(const Vector &pack);
+	static vector<Vector> &GetInput(Vector &pack);
 
 	static const child_list_t<LogicalType> &GetTypes(const LogicalType &pack);
 
