@@ -1,0 +1,314 @@
+# name: test/optimizer/max_len_skip.test
+# description: Test precomputation of MIN/MAX aggregates over byte-length functions (strlen/octet_length)
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+require no_alternative_verify
+
+# min_string_length/total_string_length are only persisted in the V2_0_0+ storage
+# format; the default v0.10.2 compatibility format drops them on checkpoint
+statement ok
+SET storage_compatibility_version='latest';
+
+statement ok
+ATTACH '{TEST_DIR}/max_len_skip.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+# 4 row groups: [0-2047], [2048-4095], [4096-6143], [6144-8191], j = i * 2
+# s has byte length (i % 100) + 1, i.e. 1..100, so every row group has max_string_length = 100,
+# min_string_length = 1
+statement ok
+CREATE TABLE t AS (SELECT i, (i * 2) AS j, repeat('a', (i % 100) + 1) AS s FROM range(8192) _(i));
+
+# Reopen to clear version info
+statement ok
+ATTACH '{TEST_DIR}/tmp_max_len_skip.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/max_len_skip.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+# Full precompute: MAX(strlen(s)) is folded from the exact string stats, no scan
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t
+----
+100
+
+# MIN over a length function folds as well
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t
+----
+1
+
+# Mixed with count_star and a plain column min: all precomputed
+query II
+EXPLAIN SELECT count(*), max(strlen(s)), min(i) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), max(strlen(s)), min(i) FROM t
+----
+8192	100	0
+
+# With a filter that prunes entire row groups, all remaining partitions precompute
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND i < 6144
+----
+100
+
+# Partial precompute: i >= 2048 excludes row group 0 entirely, j > 5000 (j = i * 2)
+# cuts inside row group 1, so row groups 2-3 are precomputed while row group 1 is
+# scanned; the projection merges the precomputed length constant with the scan
+# result via greatest
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+physical_plan	<REGEX>:.*COALESCE.*greatest.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+100
+
+# The min direction of the same partial precompute merges via least
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+physical_plan	<REGEX>:.*COALESCE.*least.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t WHERE i >= 2048 AND j > 5000
+----
+1
+
+# length() is a code point count, not byte length - not optimized here,
+# the aggregate is executed normally
+statement ok
+CREATE TABLE t_unicode AS (SELECT i, CASE WHEN i % 10 = 0 THEN '你好世界' ELSE 'abc' END AS s
+                           FROM range(2048) _(i));
+
+query II
+EXPLAIN SELECT max(length(s)) FROM t_unicode
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(length(s)) FROM t_unicode
+----
+4
+
+# BLOB columns with octet_length
+statement ok
+CREATE TABLE t_blob AS (SELECT i, CAST(repeat('x', (i % 10) + 1) AS BLOB) AS b FROM range(2048) _(i));
+
+# Reopen to clear row group change tracking
+statement ok
+ATTACH '{TEST_DIR}/tmp2_max_len_skip.duckdb' AS tmp2
+
+statement ok
+USE tmp2
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/max_len_skip.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp2
+
+query II
+EXPLAIN SELECT max(octet_length(b)) FROM t_blob
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(octet_length(b)) FROM t_blob
+----
+10
+
+# When strlen(s) is shared by multiple aggregates, the common subexpression is
+# lifted into a projection and the aggregates see a column reference instead of
+# the function - the length optimization does not apply, but results stay correct
+query II
+EXPLAIN SELECT max(strlen(s)), min(strlen(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(strlen(s)), min(strlen(s)) FROM t
+----
+100	1
+
+# A fully NULL column has no length value: no precompute, the aggregate returns NULL
+statement ok
+CREATE TABLE t_null AS (SELECT i, CAST(NULL AS VARCHAR) AS s FROM range(8192) _(i));
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t_null
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t_null
+----
+NULL
+
+# An empty table: no partition stats, no optimization
+statement ok
+CREATE TABLE t_empty AS (SELECT * FROM t WHERE 1 = 0);
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t_empty
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t_empty
+----
+NULL
+
+# Prevent automatic checkpoints: a checkpoint rewrites the row group and re-tightens its statistics
+statement ok
+SET checkpoint_threshold = '1TB'
+
+# An update marks row group 0 as changed: its length stats become inexact, the
+# whole optimization bails out (no per-partition fallback on this branch) - the
+# aggregate is executed normally and the result stays correct
+statement ok
+UPDATE t SET s = repeat('b', 200) WHERE i = 100
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t
+----
+200
+
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t
+----
+1
+
+# A delete makes the count of row group 0 approximate: the optimization bails,
+# results stay correct
+statement ok
+DELETE FROM t WHERE i = 100
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t
+----
+100
+
+# Single-value column: every string has length 5
+statement ok
+CREATE TABLE t_single AS (SELECT i, repeat('x', 5) AS s FROM range(8192) _(i));
+
+# A very long string (stored in an overflow block) mixed with short ones
+statement ok
+CREATE TABLE t_overflow AS (SELECT i,
+                            CASE WHEN i = 0 THEN repeat('x', 300000) ELSE repeat('a', (i % 100) + 1) END AS s
+                            FROM range(8192) _(i));
+
+# Reopen to clear row group change tracking
+statement ok
+ATTACH '{TEST_DIR}/tmp3_max_len_skip.duckdb' AS tmp3
+
+statement ok
+USE tmp3
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/max_len_skip.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp3
+
+# min == max for a single-value column: both fold
+query II
+EXPLAIN SELECT min(strlen(s)) FROM t_single
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(strlen(s)) FROM t_single
+----
+5
+
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t_single
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t_single
+----
+5
+
+# the overflow string length is reflected in the exact statistics
+query II
+EXPLAIN SELECT max(strlen(s)) FROM t_overflow
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(strlen(s)) FROM t_overflow
+----
+300000
+
+query I
+SELECT min(strlen(s)) FROM t_overflow
+----
+1
