@@ -714,6 +714,37 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 }
 
 bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
+	const auto table_filters = filters.GetTableFilters();
+	const auto column_ids = filters.GetColumnIds();
+	if (table_filters && column_ids) {
+		for (const auto &filter : table_filters->GetMultiColumnFilters()) {
+			const auto &expression_filter = ExpressionFilter::GetExpressionFilter(*filter, "RowGroup::CheckZonemap");
+			vector<BaseStatistics> input_stats;
+			input_stats.reserve(expression_filter.column_indexes.size());
+			bool supported = true;
+			for (const auto &column_index : expression_filter.column_indexes) {
+				if (column_index.GetIndex() >= column_ids->size()) {
+					throw InternalException("Multi-column filter column index out of range");
+				}
+				const auto &storage_index = (*column_ids)[column_index.GetIndex()];
+				if (storage_index.IsRowIdColumn() || storage_index.IsRowNumberColumn()) {
+					supported = false;
+					break;
+				}
+				input_stats.push_back(GetStatistics(storage_index)->Copy());
+			}
+			if (!supported) {
+				continue;
+			}
+			const auto prune_result = ExpressionFilter::CheckExpressionStatistics(
+			    context, *expression_filter.expr,
+			    array_ptr<const BaseStatistics>(input_stats.data(), input_stats.size()));
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				return false;
+			}
+		}
+	}
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();

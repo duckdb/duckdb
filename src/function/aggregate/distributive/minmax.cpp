@@ -374,6 +374,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// to make sure the result's correctness.
 		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
 		function.ReplaceImplementation(GetCollatedMinMaxFunction(context, function.GetName(), types));
+		function.SetSingleValueIdentity(true);
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
@@ -396,6 +397,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	minmax_func.SetSingleValueIdentity(true);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());

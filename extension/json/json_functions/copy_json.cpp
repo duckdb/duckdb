@@ -242,7 +242,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			csv_copy_options.insert(kv);
 		} else {
 			throw BinderException("Unknown option for COPY ... TO ... (FORMAT %s): %s.", GetJSONCopyFormatName(format),
-			                      option_name);
+			                      SQLIdentifier(option_name));
 		}
 	}
 	if (array_output) {

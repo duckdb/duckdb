@@ -197,7 +197,6 @@ struct ModeState {
 	SubFrames prevs;
 	Counts *frequency_map = nullptr;
 	KEY_TYPE *mode = nullptr;
-	//! Capacity of the arena allocation backing "mode" for TYPE_OP::Update (unused for non-string KEY_TYPE)
 	uint32_t mode_alloc_size = 0;
 	size_t nonzero = 0;
 	bool valid = false;
@@ -279,16 +278,14 @@ struct ModeState {
 		const auto &key = GetCell(row);
 		auto &attr = (*frequency_map)[key];
 		auto new_count = (attr.count += 1);
-		if (new_count == 1) {
-			++nonzero;
-			attr.first_row = row;
-		} else {
-			attr.first_row = MinValue(row, attr.first_row);
-		}
+		nonzero += size_t(new_count == 1);
 		if (new_count > count) {
 			valid = true;
 			count = new_count;
 			Update(key, aggr_input_data);
+		} else if (new_count == count) {
+			// The key now ties the mode, so the tie must be broken by frame position
+			valid = false;
 		}
 	}
 
@@ -306,6 +303,44 @@ struct ModeState {
 
 	void Update(const KEY_TYPE &key, AggregateInputData &aggr_input_data) {
 		mode = TYPE_OP::Update(mode, mode_alloc_size, key, aggr_input_data);
+	}
+
+	//! Rescan the frequency map, breaking ties by the first tied value in the frames.
+	//! The per-value first_row is not tracked by ModeRm, so it cannot be used here.
+	template <class INCLUDED>
+	void ScanFrames(const SubFrames &frames, const INCLUDED &included) {
+		auto highest_frequency = frequency_map->begin();
+		size_t n_ties = 0;
+		for (auto i = frequency_map->begin(); i != frequency_map->end(); ++i) {
+			if (i == highest_frequency || i->second.count > highest_frequency->second.count) {
+				highest_frequency = i;
+				n_ties = 1;
+			} else if (i->second.count == highest_frequency->second.count) {
+				++n_ties;
+			}
+		}
+		valid = highest_frequency != frequency_map->end() && highest_frequency->second.count > 0;
+		if (!valid) {
+			return;
+		}
+		count = highest_frequency->second.count;
+		if (n_ties == 1) {
+			Update(highest_frequency->first);
+			return;
+		}
+		for (const auto &frame : frames) {
+			for (auto i = frame.start; i < frame.end; ++i) {
+				if (!included(i)) {
+					continue;
+				}
+				const auto &key = GetCell(i);
+				const auto attr = frequency_map->find(key);
+				if (attr != frequency_map->end() && attr->second.count == count) {
+					Update(key);
+					return;
+				}
+			}
+		}
 	}
 
 	typename Counts::const_iterator Scan() const {
@@ -491,13 +526,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 			}
 
 			if (!state.valid) {
-				// Rescan
-				auto highest_frequency = state.Scan();
-				if (highest_frequency != state.frequency_map->end()) {
-					state.Update(highest_frequency->first, aggr_input_data);
-					state.count = highest_frequency->second.count;
-					state.valid = (state.count > 0);
-				}
+				state.ScanFrames(frames, included);
 			}
 
 			if (state.valid) {

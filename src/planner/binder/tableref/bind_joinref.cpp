@@ -69,8 +69,7 @@ bool Binder::TryFindBinding(const Identifier &using_column, const string &join_s
 BindingAlias Binder::FindBinding(const Identifier &using_column, const string &join_side) {
 	BindingAlias result;
 	if (!TryFindBinding(using_column, join_side, result)) {
-		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column.GetIdentifierName(),
-		                      join_side);
+		throw BinderException("Column %s does not exist on %s side of join!", using_column, join_side);
 	}
 	return result;
 }

@@ -4,7 +4,6 @@ import json
 import os
 import subprocess
 import sys
-from tqdm import tqdm
 
 
 OLD_DB_NAME = "old.duckdb"
@@ -255,7 +254,7 @@ def main():
 
     print("")
     print("RUNNING BENCHMARK QUERIES")
-    for f in tqdm(files):
+    for f in files:
         query_name = f.split("/")[-1].replace(".sql", "")
 
         with open(f, "r") as file:

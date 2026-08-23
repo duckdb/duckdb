@@ -608,7 +608,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(130, "parallel", options.parallel);
 	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", options.was_type_manually_set);
 	serializer.WritePropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", options.rejects_scan_name, {"reject_scans"});
-	serializer.WritePropertyWithDefault<vector<string>>(133, "name_list", options.name_list);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(133, "name_list", options.name_list);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", options.sql_type_list);
 	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column", options.sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", options.columns_set, false);
@@ -656,7 +656,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	auto options_parallel = deserializer.ReadPropertyWithDefault<bool>(130, "parallel");
 	auto options_was_type_manually_set = deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set");
 	auto options_rejects_scan_name = deserializer.ReadPropertyWithExplicitDefault<CSVOption<string>>(132, "rejects_scan_name", {"reject_scans"});
-	auto options_name_list = deserializer.ReadPropertyWithDefault<vector<string>>(133, "name_list");
+	auto options_name_list = deserializer.ReadPropertyWithDefault<vector<Identifier>>(133, "name_list");
 	auto options_sql_type_list = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list");
 	auto options_sql_types_per_column = deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column");
 	auto options_columns_set = deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", false);
@@ -779,11 +779,13 @@ TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", GetTableFiltersForSerialization(serializer));
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(101, "multi_column_filters", multi_column_filters, vector<unique_ptr<TableFilter>>());
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
 	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", result.GetTableFiltersForDeserialization(deserializer));
+	deserializer.ReadPropertyWithExplicitDefault<vector<unique_ptr<TableFilter>>>(101, "multi_column_filters", result.multi_column_filters, vector<unique_ptr<TableFilter>>());
 	return result;
 }
 
