@@ -135,6 +135,14 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	}
+	// Cases where min and max both start with the prefix.
+	if (min.size() >= prefix.size() && max.size() >= prefix.size() &&
+	    memcmp(min.c_str(), prefix.c_str(), prefix.size()) == 0 &&
+	    memcmp(max.c_str(), prefix.c_str(), prefix.size()) == 0) {
+		// NULL values produce NULL rather than true, so they prevent an always-true result
+		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
