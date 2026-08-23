@@ -350,14 +350,20 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	return candidate_functions[0];
 }
 
-template <class T>
-static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &functions) {
-	for (auto &func : functions.functions) {
-		if (func.GetProperties().GetCaptureArgumentAliases()) {
-			return true;
+// Named arguments identify a parameter, so the same name cannot be passed twice - regardless of which overload the
+// call ends up resolving to, or whether the name feeds a parameter or a "**kwargs" pack.
+static void VerifyUniqueArgumentNames(const Identifier &function_name,
+                                      const vector<pair<Identifier, unique_ptr<Expression>>> &arguments) {
+	identifier_set_t seen_names;
+	for (auto &[name, arg] : arguments) {
+		if (name.empty()) {
+			continue;
+		}
+		if (!seen_names.insert(name).second) {
+			throw BinderException(arg->GetQueryLocation(), "Duplicate named argument '%s' in function call to '%s'",
+			                      name.GetIdentifierName(), function_name);
 		}
 	}
-	return false;
 }
 
 static optional_idx PositionalAfterNamedArgumentError(const vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
@@ -382,7 +388,9 @@ template <class T>
 optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, const FunctionSet<T> &functions,
                                                        vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
                                                        ErrorData &error) {
-	// First, attempt a regular bind, splitting the arguments into positional + named just once for all overloads.
+	VerifyUniqueArgumentNames(name, arguments);
+
+	// Split the arguments into positional + named just once for all overloads.
 	vector<LogicalType> positional;
 	vector<pair<Identifier, LogicalType>> named;
 
@@ -391,24 +399,6 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 	}
 
 	// The split failed because a positional argument follows a named one.
-	// Check if there is any overload that supports implicit argument names.
-	if (AnyOverloadSupportsImplicitArgumentNames(functions)) {
-		// If so, we can attempt to salvage the call by implicitly naming the positional arguments and retrying again
-		for (auto &[name, expr] : arguments) {
-			if (name.empty()) {
-				name = expr->GetAlias();
-			}
-		}
-
-		positional.clear();
-		named.clear();
-
-		if (TrySplitArgumentTypes(arguments, positional, named)) {
-			return BindFunctionFromArguments(name, functions, positional, named, error);
-		}
-	}
-
-	// No overload could rescue the positional-after-named call, give a clear error.
 	return PositionalAfterNamedArgumentError(arguments, error);
 }
 

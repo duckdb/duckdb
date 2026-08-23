@@ -37,15 +37,15 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 	auto &func = input.GetBoundFunction();
 
-	const auto &args = input.GetArguments();
-	const auto &head = args[0]->GetReturnType();
-	const auto &tail = ArgumentPack::GetTypes(args[1]->GetReturnType());
+	// every argument is cast to the type the "T" parameter resolved to, which is the array's element type
+	const auto &element_type = func.GetArguments()[0];
+	const auto tail_size = ArgumentPack::GetSize(input.GetArguments()[1]->GetReturnType());
 
-	if (tail.size() > ArrayType::MAX_ARRAY_SIZE) {
+	if (tail_size > ArrayType::MAX_ARRAY_SIZE) {
 		throw OutOfRangeException("Array size exceeds maximum allowed size");
 	}
 
-	func.SetReturnType(LogicalType::ARRAY(head, 1 + tail.size()));
+	func.SetReturnType(LogicalType::ARRAY(element_type, 1 + tail_size));
 	return make_uniq<VariableReturnBindData>(func.GetReturnType());
 }
 

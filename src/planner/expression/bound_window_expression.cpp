@@ -248,14 +248,14 @@ unique_ptr<Expression> BoundWindowExpression::SerializedDefault(Serializer &seri
 }
 
 void BoundWindowExpression::Serialize(Serializer &serializer) const {
-	// see BoundFunctionExpression::Serialize - argument packs are unrolled for older storage versions. Packs and
-	// the legacy lead/lag rewrite in SerializedChildren are mutually exclusive, so only one of the two applies.
+	// see BoundFunctionExpression::Serialize - argument packs are unrolled on the way out. Packs and the legacy
+	// lead/lag rewrite in SerializedChildren are mutually exclusive, so only one of the two applies.
 	vector<unique_ptr<Expression>> flat_children;
 	vector<LogicalType> flat_arguments;
 	bool unrolled = false;
-	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (aggregate || window) {
 		const auto &arguments = aggregate ? aggregate->GetArguments() : window->GetArguments();
-		unrolled = ArgumentPack::Unroll(children, arguments, flat_children, flat_arguments);
+		unrolled = ArgumentPack::Unroll(serializer, children, arguments, flat_children, flat_arguments);
 	}
 	if (!unrolled) {
 		flat_children = SerializedChildren(serializer);

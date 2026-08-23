@@ -157,12 +157,12 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 		return;
 	}
 
-	// storage versions that predate argument packs never saw a packed call - write the plain argument list the
-	// call was made with, which binds straight back into packs when it is read again
+	// argument packs are never written to disk - write the plain argument list the call was made with, which is
+	// rolled back up into packs when it is read again
 	vector<unique_ptr<Expression>> flat_children;
 	vector<LogicalType> flat_arguments;
-	const auto unrolled = !serializer.ShouldSerialize(StorageVersion::V2_0_0) &&
-	                      ArgumentPack::Unroll(children, function.GetArguments(), flat_children, flat_arguments);
+	const auto unrolled =
+	    ArgumentPack::Unroll(serializer, children, function.GetArguments(), flat_children, flat_arguments);
 
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);

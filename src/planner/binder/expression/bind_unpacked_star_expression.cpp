@@ -44,16 +44,22 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
                               optional_ptr<duckdb_re2::RE2> regex) {
 	auto &function_expr = expr->Cast<FunctionExpression>();
 
-	// Replace children
-	expression_list_t new_children;
+	// Replace children, keeping the name of any argument that expanded into exactly one expression
+	vector<FunctionArgument> new_arguments;
 	for (auto &child : function_expr.GetArgumentsMutable()) {
-		AddChild(child.GetExpressionMutable(), new_children, star_list, star, regex);
+		expression_list_t expanded;
+		AddChild(child.GetExpressionMutable(), expanded, star_list, star, regex);
+		if (expanded.size() == 1) {
+			new_arguments.emplace_back(child.GetName(), std::move(expanded[0]));
+			continue;
+		}
+		for (auto &new_child : expanded) {
+			new_arguments.emplace_back(std::move(new_child));
+		}
 	}
-
-	function_expr.GetArgumentsMutable().clear();
-	for (auto &child : new_children) {
-		function_expr.GetArgumentsMutable().emplace_back(std::move(child));
-	}
+	function_expr.GetArgumentsMutable() = std::move(new_arguments);
+	// the expansion may have produced column references struct_pack can name itself
+	function_expr.ApplyImplicitFieldNames();
 
 	// Replace ORDER_BY
 	if (function_expr.OrderBy()) {

@@ -390,12 +390,15 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
 	children.push_back(std::move(expr));
-	// push the extra arguments the "*args" parameter collected into the list aggregate bind
+	// push the extra arguments the "*args" parameter collected into the list aggregate bind, leaving the pack empty
 	if (arguments.size() > 2) {
-		for (auto &extra : ArgumentPack::GetPackedChildren(*arguments[2])) {
+		auto &packed = ArgumentPack::GetPackedChildren(*arguments[2]);
+		for (auto &extra : packed) {
 			children.push_back(std::move(extra));
 		}
-		arguments.resize(2);
+		packed.clear();
+		ArgumentPack::RefreshType(*arguments[2]);
+		bound_function.GetArguments()[2] = arguments[2]->GetReturnType();
 	}
 
 	FunctionBinder function_binder(context);

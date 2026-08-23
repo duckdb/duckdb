@@ -7,6 +7,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -51,9 +52,17 @@ optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
 	D_ASSERT(struct_pack.GetReturnType().id() == LogicalTypeId::STRUCT);
-	for (auto &child : struct_pack.GetChildren()) {
-		if (child->GetAlias() == name) {
-			return child.get();
+	// struct_pack collects its fields into a "**kwargs" pack keyed by the field names
+	auto &pack = *struct_pack.GetChildrenMutable().back();
+	if (!ArgumentPack::IsPack(pack)) {
+		// the pack was folded away, so there are no field expressions left to lift out
+		return nullptr;
+	}
+	auto &fields = ArgumentPack::GetTypes(pack.GetReturnType());
+	auto &packed = ArgumentPack::GetPackedChildren(pack);
+	for (idx_t i = 0; i < fields.size(); i++) {
+		if (fields[i].first == name) {
+			return packed[i].get();
 		}
 	}
 	return nullptr;

@@ -10,6 +10,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/list.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -70,6 +71,14 @@ public:
 		return !error.empty();
 	}
 };
+
+//! struct_pack takes its field names from its argument names, so the defaults are packed as keyword arguments
+static unique_ptr<Expression> PackDefaultValues(ClientContext &context,
+                                                vector<pair<Identifier, unique_ptr<Expression>>> fields) {
+	FunctionBinder function_binder(context);
+	return function_binder.BindScalarFunction(StructPackFun::GetFunction(), vector<unique_ptr<Expression>>(),
+	                                          std::move(fields));
+}
 
 struct ColumnMapResult {
 	//! Contains the name of the local column that corresponds to this field
@@ -304,12 +313,11 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 	}
 	if (is_selected && child_map.default_value) {
 		// we have default values at a previous level wrap it in a "list"
-		vector<unique_ptr<Expression>> default_expressions;
-		child_map.default_value->SetAlias("list");
-		default_expressions.push_back(std::move(child_map.default_value));
+		vector<pair<Identifier, unique_ptr<Expression>>> default_expressions;
+		default_expressions.emplace_back("list", std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = PackDefaultValues(context, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
@@ -373,7 +381,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 	auto nested_mapper = mapper.Create(local_key_value.children);
 	child_list_t<Value> column_mapping;
-	vector<unique_ptr<Expression>> default_expressions;
+	vector<pair<Identifier, unique_ptr<Expression>>> default_expressions;
 	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
 	if (global_index.HasChildren()) {
 		//! FIXME: is this expected for maps??
@@ -410,8 +418,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
 		if (map_result.default_value) {
-			map_result.default_value->SetAlias(name);
-			default_expressions.push_back(std::move(map_result.default_value));
+			default_expressions.emplace_back(name, std::move(map_result.default_value));
 		}
 	}
 
@@ -430,7 +437,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 	}
 	if (!default_expressions.empty()) {
 		// we have default values at a previous level wrap it in a "list"
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = PackDefaultValues(context, std::move(default_expressions));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
@@ -471,7 +478,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	}
 
 	child_list_t<Value> column_mapping;
-	vector<unique_ptr<Expression>> default_expressions;
+	vector<pair<Identifier, unique_ptr<Expression>>> default_expressions;
 	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
 	if (global_index.HasChildren()) {
 		for (auto &index : global_index.GetChildIndexes()) {
@@ -514,8 +521,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		//! FIXME: the 'default_value' should only be used if the STRUCT's default value is not NULL
 		if (child_map.default_value) {
 			// found a default value for this child - emplace it
-			child_map.default_value->SetAlias(Identifier(global_child.name));
-			default_expressions.push_back(std::move(child_map.default_value));
+			default_expressions.emplace_back(Identifier(global_child.name), std::move(child_map.default_value));
 		}
 	}
 
@@ -535,7 +541,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 	}
 
 	if (!default_expressions.empty()) {
-		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
+		result.default_value = PackDefaultValues(context, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	if (global_index.HasType()) {

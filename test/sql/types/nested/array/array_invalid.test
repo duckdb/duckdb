@@ -25,11 +25,11 @@ CREATE TABLE t1(a INT, b INT[2147483647]);
 ----
 <REGEX>:.*Binder Error.*ARRAY type size must be at most 100000.*
 
-# Should not be able to create an array with 0 elements
+# Should not be able to create an array with 0 elements - array_value declares one required element
 statement error
 SELECT array_value();
 ----
-<REGEX>:.*Invalid Input Error.*array_value requires at least one argument.*
+<REGEX>:.*Binder Error.*No function matches.*array_value.*
 
 # Should not be able to create an array with a negative number of elements
 statement error

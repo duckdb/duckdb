@@ -62,6 +62,22 @@ void RequirePackedHashCall(LogicalOperator &plan) {
 	REQUIRE(ArgumentPack::IsPackType(function.GetChildren()[1]->GetReturnType()));
 }
 
+//! "struct_pack" takes (**fields ANY), so a bound call always has exactly one argument: the keyword pack, whose
+//! field names are the names the arguments were passed under
+void RequirePackedStructPackCall(LogicalOperator &plan) {
+	auto &expr = *plan.expressions[0];
+	REQUIRE(expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	REQUIRE(function.Function().GetName() == "struct_pack");
+	REQUIRE(function.GetChildren().size() == 1);
+
+	auto &pack_type = function.GetChildren()[0]->GetReturnType();
+	REQUIRE(ArgumentPack::IsPackType(pack_type));
+	REQUIRE(StructType::GetChildCount(pack_type) == 2);
+	REQUIRE(StructType::GetChildName(pack_type, 0) == "a");
+	REQUIRE(StructType::GetChildName(pack_type, 1) == "b");
+}
+
 } // namespace
 
 TEST_CASE("Argument packs survive plan serialization", "[api]") {
@@ -79,11 +95,7 @@ TEST_CASE("Argument packs survive plan serialization", "[api]") {
 	auto latest_bytes = Serialize(*plan, StorageCompatibility::Latest());
 	auto legacy_bytes = Serialize(*plan, StorageCompatibility::FromString("v1.2.0"));
 
-	// a storage version that predates argument packs gets a different encoding of the same call: the pack is
-	// unrolled into the plain argument list the call was written with
-	REQUIRE(latest_bytes != legacy_bytes);
-
-	SECTION("current storage version keeps the call packed") {
+	SECTION("the current storage version writes the call unrolled and reads it back packed") {
 		auto deserialized = Deserialize(con, latest_bytes);
 		RequirePackedHashCall(*deserialized);
 
@@ -92,11 +104,38 @@ TEST_CASE("Argument packs survive plan serialization", "[api]") {
 		REQUIRE(result->Equals(*expected, false));
 	}
 
-	SECTION("an unrolled call binds its trailing arguments back into a pack") {
+	SECTION("so does a storage version that predates argument packs") {
 		auto deserialized = Deserialize(con, legacy_bytes);
 
 		// this is also what happens when a plan written before argument packs existed is read back
 		RequirePackedHashCall(*deserialized);
+
+		auto result = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized)), false);
+		REQUIRE_NO_FAIL(*result);
+		fprintf(stderr, "GOT:\n%s\nEXPECTED:\n%s\n", result->ToString().c_str(), expected->ToString().c_str());
+		REQUIRE(result->Equals(*expected, false));
+	}
+
+	con.Rollback();
+}
+
+TEST_CASE("Keyword argument packs survive plan serialization", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+
+	const string query = "SELECT struct_pack(a := i, b := i + 1) FROM range(3) t(i)";
+	auto plan = PlanQuery(con, query);
+	RequirePackedStructPackCall(*plan);
+
+	// the keyword pack is unrolled with its field names in the argument aliases, which is how a call to a function
+	// that derived its names from argument aliases looked before argument packs existed
+	for (auto &compatibility : {StorageCompatibility::Latest(), StorageCompatibility::FromString("v1.2.0")}) {
+		auto expected = con.Query(query);
+		REQUIRE_NO_FAIL(*expected);
+
+		auto deserialized = Deserialize(con, Serialize(*plan, compatibility));
+		RequirePackedStructPackCall(*deserialized);
 
 		auto result = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized)), false);
 		REQUIRE_NO_FAIL(*result);

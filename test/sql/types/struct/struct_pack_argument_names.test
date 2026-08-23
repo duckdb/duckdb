@@ -1,0 +1,97 @@
+# name: test/sql/types/struct/struct_pack_argument_names.test
+# description: struct_pack takes its field names from its argument names
+# group: [struct]
+
+statement ok
+CREATE TABLE t AS SELECT 1 a, 'x' b
+
+# an argument written without a name takes the name of the column it references
+query I
+SELECT struct_pack(a, b) FROM t
+----
+{'a': 1, 'b': x}
+
+# the column name, not the qualification it was written with
+query I
+SELECT struct_pack(t.a, main.t.b) FROM t
+----
+{'a': 1, 'b': x}
+
+# explicit names win, and can be mixed with implicit ones
+query I
+SELECT struct_pack(a, c := b) FROM t
+----
+{'a': 1, 'c': x}
+
+query I
+SELECT struct_pack(c := b, a) FROM t
+----
+{'c': x, 'a': 1}
+
+# a *COLUMNS(...) expansion produces column references, which are named the same way
+query I
+SELECT struct_pack(*COLUMNS(*)) FROM t
+----
+{'a': 1, 'b': x}
+
+query I
+SELECT struct_pack(c := 42, *COLUMNS('a')) FROM t
+----
+{'c': 42, 'a': 1}
+
+# COLUMNS(...) replicates the whole expression instead
+query II
+SELECT struct_pack(COLUMNS(*)) FROM t
+----
+{'a': 1}	{'b': x}
+
+# an argument that is not a column reference has no name to take
+statement error
+SELECT struct_pack(a + 1) FROM t
+----
+<REGEX>:.*Binder Error.*No function matches.*struct_pack.*
+
+statement error
+SELECT struct_pack(1)
+----
+<REGEX>:.*Binder Error.*No function matches.*struct_pack.*
+
+# a struct literal without a field name is the same case
+statement error
+SELECT {'': 42}
+----
+<REGEX>:.*Binder Error.*No function matches.*struct_pack.*
+
+# duplicate field names are rejected
+statement error
+SELECT struct_pack(a := 1, a := 2)
+----
+<REGEX>:.*Binder Error.*Duplicate named argument 'a'.*
+
+statement error
+SELECT struct_pack(a, a := 2) FROM t
+----
+<REGEX>:.*Binder Error.*Duplicate named argument 'a'.*
+
+# row() is positional and keeps no names
+query II
+SELECT row(a, b), typeof(row(a, b)) FROM t
+----
+(1, x)	TUPLE(INTEGER, VARCHAR)
+
+statement error
+SELECT "row"(a := 1)
+----
+<REGEX>:.*Binder Error.*No function matches.*row.*
+
+# the packed call survives a rebind through storage
+statement ok
+CREATE TABLE packed(id INT, s STRUCT(a INT, b VARCHAR) DEFAULT struct_pack(a := 1, b := 'x'))
+
+statement ok
+INSERT INTO packed (id) VALUES (1)
+
+query II
+SELECT id, s FROM packed
+----
+1	{'a': 1, 'b': x}

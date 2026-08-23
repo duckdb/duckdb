@@ -330,6 +330,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	    QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier(lowercase_name)),
 	    std::move(function_children), std::move(filter_expr), std::move(order_modifier), distinct, false,
 	    export_clause);
+	// struct_pack(a, b) is shorthand for struct_pack(a := a, b := b)
+	result->ApplyImplicitFieldNames();
 
 	return std::move(result);
 }

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 
 namespace duckdb {
 namespace {
@@ -72,11 +73,22 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 	if (list_function.GetChildren().empty()) {
 		throw BinderException("No values provided for SWITCH expression");
 	}
+	// list_value collects everything after its first element into an "*args" pack
+	vector<reference<unique_ptr<Expression>>> elements;
 	for (auto &list_child : list_function.GetChildrenMutable()) {
-		if (list_child->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		if (!ArgumentPack::IsPack(*list_child)) {
+			elements.push_back(list_child);
+			continue;
+		}
+		for (auto &packed : ArgumentPack::GetPackedChildren(*list_child)) {
+			elements.push_back(packed);
+		}
+	}
+	for (auto &element : elements) {
+		if (element.get()->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			throw NotImplementedException("Only constant expressions are supported for keys inside SWITCH");
 		}
-		result.push_back(std::move(list_child));
+		result.push_back(std::move(element.get()));
 	}
 }
 

@@ -4,6 +4,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -120,8 +121,13 @@ unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &o
 	if (left.Function().GetName() != "row" || right.Function().GetName() != "row") {
 		return nullptr;
 	}
-	auto &left_children = left.GetChildrenMutable();
-	auto &right_children = right.GetChildrenMutable();
+	// "row" collects its arguments into an "*args" pack, so its elements are one level down
+	if (left.GetChildren().size() != 1 || right.GetChildren().size() != 1 ||
+	    !ArgumentPack::IsPack(*left.GetChildren()[0]) || !ArgumentPack::IsPack(*right.GetChildren()[0])) {
+		return nullptr;
+	}
+	auto &left_children = ArgumentPack::GetPackedChildren(*left.GetChildrenMutable()[0]);
+	auto &right_children = ArgumentPack::GetPackedChildren(*right.GetChildrenMutable()[0]);
 	if (left_children.empty() || left_children.size() != right_children.size()) {
 		return nullptr;
 	}

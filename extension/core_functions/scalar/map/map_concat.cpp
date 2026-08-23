@@ -35,13 +35,16 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 	return entries;
 }
 
-void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	const auto &head = input.data[0];
-	const auto &tail = ArgumentPack::GetInput(input.data[1]);
+unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
+	if (ArgumentPack::GetSize(input.GetArguments()[0]->GetReturnType()) < 2) {
+		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
+	}
+	return nullptr;
+}
 
+void MapConcatFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	vector<const_reference<Vector>> args;
-	args.emplace_back(head);
-	for (auto &arg : tail) {
+	for (auto &arg : ArgumentPack::GetInput(input.data[0])) {
 		args.emplace_back(arg);
 	}
 
@@ -133,14 +136,12 @@ ScalarFunction MapConcatFun::GetFunction() {
 	const auto val_type = LogicalType::TEMPLATE("V");
 	const auto map_type = LogicalType::MAP(key_type, val_type);
 
-	// TODO: this should take a single map arg + varargs
-	auto sig = FunctionSignature()
-	               .AddParameter("arg", map_type)
-	               .AddVarPositionalParameter("args", map_type)
-	               .SetReturnType(map_type);
+	// every argument is a map - the bind rejects a call with fewer than two of them
+	auto sig = FunctionSignature().AddVarPositionalParameter("args", map_type).SetReturnType(map_type);
 
 	auto fun = ScalarFunction("map_concat", std::move(sig))
 	               .SetFunctionCallback(MapConcatFunction)
+	               .SetBindCallback(MapConcatBind)
 	               .SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING)
 	               .SetFallible();
 

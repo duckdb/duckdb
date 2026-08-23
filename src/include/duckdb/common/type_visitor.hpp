@@ -67,7 +67,9 @@ inline LogicalType TypeVisitor::VisitReplace(const LogicalType &type, F &&func) 
 			return func(type);
 		}
 		const auto &child = ArrayType::GetChildType(type);
-		return func(LogicalType::ARRAY(VisitReplace(child, func), ArrayType::GetSize(type)));
+		// an array whose size is not known yet stays that way
+		const auto size = ArrayType::IsAnySize(type) ? optional_idx() : optional_idx(ArrayType::GetSize(type));
+		return func(LogicalType::ARRAY(VisitReplace(child, func), size));
 	}
 	case LogicalTypeId::MAP: {
 		if (!type.AuxInfo()) {

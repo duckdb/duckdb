@@ -33,6 +33,10 @@ struct ArgumentPack {
 	//! Whether the given type is the type of an argument pack
 	static bool IsPackType(const LogicalType &type);
 
+	//! Whether the given expression is still a pack expression. A pack is built by the binder, but the optimizer
+	//! may replace it with an expression of the same type - a constant, say - that no longer holds the arguments.
+	static bool IsPack(const Expression &expr);
+
 	//! The type of a "*args" pack over the given element types: an unnamed TUPLE carrying the pack alias
 	static LogicalType PositionalType(vector<LogicalType> element_types);
 	//! The type of a "**kwargs" pack: a STRUCT keyed by the caller's argument names, carrying the pack alias
@@ -43,14 +47,21 @@ struct ArgumentPack {
 	//! NULL members, and it is up to the function to decide what they mean.
 	static unique_ptr<Expression> Create(vector<unique_ptr<Expression>> children, LogicalType pack_type);
 
-	//! Flatten a bound call's argument packs back into the plain argument list the call was written with, which is
-	//! how a call to the same function looked before it took *args/**kwargs. Used when serializing to a storage
-	//! format that predates argument packs - reading such a call back simply binds the trailing arguments into
-	//! packs again. Only a call shaped like a pre-pack variadic one (leading positional arguments followed by the
-	//! "*args" pack) can be put back together that way, so anything else throws. Returns false if the call has no
-	//! packs, leaving the outputs untouched.
-	static bool Unroll(const vector<unique_ptr<Expression>> &children, const vector<LogicalType> &arguments,
-	                   vector<unique_ptr<Expression>> &flat_children, vector<LogicalType> &flat_arguments);
+	//! Flatten a bound call's argument packs back into the plain argument list the call was written with, so that
+	//! packs never reach disk - Reroll builds them again when the call is read back. A "**kwargs" pack is
+	//! flattened with its field names in the expression aliases. Only a call with a single trailing pack can be
+	//! put back together that way: anything else is written as-is, unless the storage version predates argument
+	//! packs, in which case it cannot be represented at all and this throws. Returns false when nothing was
+	//! unrolled, leaving the outputs untouched.
+	static bool Unroll(Serializer &serializer, const vector<unique_ptr<Expression>> &children,
+	                   const vector<LogicalType> &arguments, vector<unique_ptr<Expression>> &flat_children,
+	                   vector<LogicalType> &flat_arguments);
+
+	//! The inverse of Unroll: collect the trailing arguments of a call read back from disk into the pack the
+	//! signature declares. A "**kwargs" pack is keyed by the expression aliases, which is where Unroll left the
+	//! field names. Returns false when there is nothing to roll up.
+	static bool Reroll(const FunctionSignature &sig, vector<unique_ptr<Expression>> &children,
+	                   vector<LogicalType> &arguments);
 
 	//! The collected arguments, in place. A pack is built by the binder and only replaced afterwards, by the
 	//! optimizer, which the binder undoes before re-binding a call - so this is always reachable from a bind

@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 
+#include "duckdb/function/scalar/struct_functions.hpp"
+
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
@@ -331,14 +333,16 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	if (args.size() == 1) {
 		aggregate_params.push_back(std::move(args[0]));
 	} else if (args.size() > 1) {
-		// For more than one arg, we must use struct pack
-		auto &catalog = Catalog::GetSystemCatalog(context);
+		// For more than one arg, we must use struct pack - it names its fields after its argument names, and the
+		// projection below reads them back out under those same names
 		FunctionBinder function_binder(context);
-		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
-		    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "struct_pack"));
-		const auto &struct_pack_fun =
-		    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
-		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
+		vector<pair<Identifier, unique_ptr<Expression>>> fields;
+		fields.reserve(args.size());
+		for (auto &arg : args) {
+			fields.emplace_back(arg->GetAlias(), std::move(arg));
+		}
+		auto struct_pack_expr = function_binder.BindScalarFunction(StructPackFun::GetFunction(),
+		                                                           vector<unique_ptr<Expression>>(), std::move(fields));
 		aggregate_params.push_back(std::move(struct_pack_expr));
 	}
 

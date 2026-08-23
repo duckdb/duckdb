@@ -37,6 +37,10 @@ public:
 		return !name.empty();
 	}
 
+	void SetName(Identifier name_p) {
+		name = std::move(name_p);
+	}
+
 	unique_ptr<ParsedExpression> &GetExpressionMutable() {
 		return expression;
 	}
@@ -162,6 +166,11 @@ public:
 
 	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
 	optional_ptr<ParsedExpression> IsLambdaFunction();
+
+	//! struct_pack takes its field names from its argument names. Name any argument that was written without one
+	//! after the column it references, so that struct_pack(a, b) means struct_pack(a := a, b := b). Does nothing
+	//! unless this is a call to struct_pack.
+	DUCKDB_API void ApplyImplicitFieldNames();
 
 	bool IsLegacyFunctionCall() const {
 		return is_legacy_function_call;

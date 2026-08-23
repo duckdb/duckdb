@@ -127,11 +127,11 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() const {
 }
 
 void BoundAggregateExpression::Serialize(Serializer &serializer) const {
-	// see BoundFunctionExpression::Serialize - argument packs are unrolled for older storage versions
+	// see BoundFunctionExpression::Serialize - argument packs are unrolled on the way out
 	vector<unique_ptr<Expression>> flat_children;
 	vector<LogicalType> flat_arguments;
-	const auto unrolled = !serializer.ShouldSerialize(StorageVersion::V2_0_0) &&
-	                      ArgumentPack::Unroll(children, function.GetArguments(), flat_children, flat_arguments);
+	const auto unrolled =
+	    ArgumentPack::Unroll(serializer, children, function.GetArguments(), flat_children, flat_arguments);
 
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);

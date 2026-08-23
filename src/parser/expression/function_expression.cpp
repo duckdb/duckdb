@@ -6,6 +6,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,21 @@ optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 	return nullptr;
 }
 
+void FunctionExpression::ApplyImplicitFieldNames() {
+	if (qualified_name.Name() != "struct_pack") {
+		return;
+	}
+	for (auto &argument : arguments) {
+		if (argument.HasName()) {
+			continue;
+		}
+		auto &expression = argument.GetExpression();
+		if (expression.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			argument.SetName(expression.Cast<ColumnRefExpression>().GetColumnName());
+		}
+	}
+}
+
 void FunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", qualified_name.Name());
@@ -194,6 +210,12 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	// New children deserialization
 	if (children.empty()) {
 		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(209, "arguments", result->arguments);
+	}
+
+	// struct_pack takes its field names from its argument names, which a legacy call carried in the argument aliases
+	if (result->FunctionName() == "struct_pack") {
+		result->is_legacy_function_call = false;
+		result->ApplyImplicitFieldNames();
 	}
 
 	return std::move(result);

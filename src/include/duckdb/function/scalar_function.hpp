@@ -239,9 +239,6 @@ public: // Properties
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
 	auto SetCollationHandling(FunctionCollationHandling value) -> IMPL & { properties.collation_handling = value; return static_cast<IMPL &>(*this); }
 
-	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
-	auto SetCaptureArgumentAliases(bool value) -> IMPL & { properties.capture_argument_aliases = value; return static_cast<IMPL &>(*this); }
-
 	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
 	auto SetRequiresOrderedExecution(bool value) -> IMPL & { properties.requires_ordered_execution = value; return static_cast<IMPL &>(*this); }
 

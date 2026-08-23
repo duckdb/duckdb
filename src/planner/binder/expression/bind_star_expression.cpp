@@ -111,6 +111,10 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		// the replacement may have turned an argument into a column reference struct_pack can name itself
+		expr->Cast<FunctionExpression>().ApplyImplicitFieldNames();
+	}
 }
 
 string Binder::ReplaceColumnsAlias(const string &alias, const string &column_name,

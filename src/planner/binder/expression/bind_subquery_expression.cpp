@@ -2,6 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_argument_pack.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -61,9 +62,14 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		// not "ROW"
 		return;
 	}
+	if (function.GetChildren().size() != 1 || !ArgumentPack::IsPack(*function.GetChildren()[0])) {
+		// "row" collects its arguments into an "*args" pack - without one there is nothing to extract
+		return;
+	}
+	auto &row_children = ArgumentPack::GetPackedChildren(*function.GetChildrenMutable()[0]);
 	// we found (a, b, ...) - we can extract all children of this function
 	// note that we don't always want to do this
-	if (types.size() == 1 && TypeIsTuple(types[0]) && function.GetChildrenMutable().size() != types.size()) {
+	if (types.size() == 1 && TypeIsTuple(types[0]) && row_children.size() != types.size()) {
 		// old case: we have an unnamed struct INSIDE the subquery as well
 		// i.e. (a, b) IN (SELECT (a, b) ...)
 		// unnesting the struct is guaranteed to throw an error - match the structs against each-other instead
@@ -81,7 +87,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		// Keep the struct intact for row-valued comparisons with non-element-wise semantics.
 		return;
 	}
-	for (auto &row_child : function.GetChildrenMutable()) {
+	for (auto &row_child : row_children) {
 		result.push_back(std::move(row_child));
 	}
 }

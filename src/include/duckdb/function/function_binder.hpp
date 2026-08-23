@@ -114,8 +114,7 @@ public:
 	                                                     optional_ptr<Binder> binder = nullptr);
 
 	//! Bind a scalar function from a catalog entry given the full list of (maybe-named) bound arguments. The
-	//! positional/named split is resolved per candidate overload (overloads flagged to capture argument aliases
-	//! treat every argument as positional and keep its alias).
+	//! positional/named split is resolved per candidate overload.
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunctionCatalogEntry &function,
 	                                                     vector<pair<Identifier, unique_ptr<Expression>>> arguments,
 	                                                     ErrorData &error, bool is_operator = false,

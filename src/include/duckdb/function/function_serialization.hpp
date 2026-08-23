@@ -65,6 +65,34 @@ public:
 		return function;
 	}
 
+	//! Argument packs are written to disk unrolled (see ArgumentPack::Unroll), so a call read back from disk has to
+	//! be rolled up again. Table/pragma functions have no FunctionSignature and never pack.
+	static bool TryReroll(const SimpleFunction &function, vector<unique_ptr<Expression>> &children,
+	                      vector<LogicalType> &arguments, bool keywords_only = false) {
+		auto &sig = function.GetSignature();
+		if (keywords_only && !sig.GetVarKeywordIndex().IsValid()) {
+			return false;
+		}
+		return ArgumentPack::Reroll(sig, children, arguments);
+	}
+	static bool TryReroll(const SimpleNamedParameterFunction &, vector<unique_ptr<Expression>> &, vector<LogicalType> &,
+	                      bool = false) {
+		return false;
+	}
+
+	//! A "**kwargs" call has to be rolled up before the overload lookup, because its arguments only match the
+	//! signature once they are packed - and only the pack carries their names, which the unrolled form left in the
+	//! expression aliases.
+	template <class CATALOG_ENTRY>
+	static void RerollKeywordArguments(const CATALOG_ENTRY &functions, vector<unique_ptr<Expression>> &children,
+	                                   vector<LogicalType> &arguments) {
+		for (auto &candidate : functions.functions.functions) {
+			if (TryReroll(candidate, children, arguments, true)) {
+				return;
+			}
+		}
+	}
+
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
 	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
@@ -91,10 +119,19 @@ public:
 			}
 		}
 
+		if (children && original_arguments.empty()) {
+			auto &pack_catalog =
+			    Catalog::GetEntry(context, catalog_type, QualifiedName(catalog_name, schema_name, name));
+			RerollKeywordArguments(pack_catalog.template Cast<CATALOG_ENTRY>(), *children, arguments);
+		}
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
 		                                                         arguments, original_arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		if (has_serialize) {
+			// nothing re-binds this call, so its argument packs have to be rebuilt here
+			if (children) {
+				TryReroll(function, *children, arguments);
+			}
 			function.GetArguments() = std::move(arguments);
 			function.GetOriginalArguments() = std::move(original_arguments);
 		}
@@ -190,6 +227,9 @@ public:
 			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
+		if (original_arguments.empty()) {
+			RerollKeywordArguments(functions, children, arguments);
+		}
 		const auto &function = functions.functions.GetFunctionByArguments(
 		    context, original_arguments.empty() ? arguments : original_arguments);
 
@@ -213,7 +253,9 @@ public:
 			}
 		}
 
-		// Otherwise, construct the bound function from its parts
+		// Otherwise, construct the bound function from its parts - nothing re-binds this call, so its argument
+		// packs have to be rebuilt here
+		TryReroll(function, children, arguments);
 		FUNC bound_function(function);
 		bound_function.GetArguments() = std::move(arguments);
 		bound_function.GetOriginalArguments() = std::move(original_arguments);

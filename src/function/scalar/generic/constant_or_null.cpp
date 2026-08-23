@@ -39,6 +39,16 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		inputs.push_back(packed);
 	}
 
+	// a constant NULL anywhere makes the whole result NULL - check for one up front, because merging the other
+	// inputs' validity flattens the result and it can no longer be turned into a constant
+	for (auto &input_ref : inputs) {
+		auto &input = input_ref.get();
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result, count_t(args.size()));
+			return;
+		}
+	}
+
 	for (auto &input_ref : inputs) {
 		auto &input = input_ref.get();
 		switch (input.GetVectorType()) {
@@ -53,17 +63,9 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			}
 			break;
 		}
-		case VectorType::CONSTANT_VECTOR: {
-			if (ConstantVector::IsNull(input)) {
-				// input is constant null, return constant null
-				auto &result_mask = ConstantVector::Validity(result);
-				auto &input_mask = ConstantVector::Validity(input);
-				result_mask.Initialize(input_mask);
-				ConstantVector::SetNull(result, count_t(args.size()));
-				return;
-			}
+		case VectorType::CONSTANT_VECTOR:
+			// a constant that is not NULL contributes nothing
 			break;
-		}
 		default: {
 			auto entries = input.Validity();
 			if (entries.CanHaveNull()) {

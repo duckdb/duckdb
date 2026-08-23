@@ -79,9 +79,25 @@ static void MakeTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 	throw InvalidInputException("make_type function can only be used in constant expressions");
 }
 
+//! Turn the arguments an "*args"/"**kwargs" pack collected into type arguments. A keyword pack keys them by name,
+//! a positional one leaves them unnamed - which is what tells apart LIST(INTEGER) from STRUCT(a INTEGER).
+static void AddTypeArguments(ClientContext &context, Expression &pack,
+                             vector<unique_ptr<ParsedExpression>> &type_args) {
+	if (!pack.IsFoldable()) {
+		throw BinderException("make_type function arguments must be constant expressions");
+	}
+	auto pack_value = ExpressionExecutor::EvaluateScalar(context, pack);
+	auto &pack_items = StructValue::GetChildren(pack_value);
+
+	for (idx_t i = 0; i < pack_items.size(); i++) {
+		auto type_arg = make_uniq<ConstantExpression>(pack_items[i]);
+		type_arg->SetAlias(StructType::GetChildName(pack_value.type(), i));
+		type_args.push_back(std::move(type_arg));
+	}
+}
+
 static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpressionInput &input) {
 	auto &name_arg = input.children[0];
-	auto &pack_arg = input.children[1];
 
 	if (!name_arg->IsFoldable()) {
 		throw BinderException("make_type function arguments must be constant expressions");
@@ -92,23 +108,9 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	}
 	auto &type_name = StringValue::Get(name_val);
 
-	if (!pack_arg->IsFoldable()) {
-		throw BinderException("make_type function arguments must be constant expressions");
-	}
-
-	auto pack_value = ExpressionExecutor::EvaluateScalar(input.context, *pack_arg);
-	auto &pack_items = StructValue::GetChildren(pack_value);
-
 	vector<unique_ptr<ParsedExpression>> type_args;
-	for (idx_t i = 0; i < pack_items.size(); i++) {
-		auto &item_name = StructType::GetChildName(pack_value.type(), i);
-		auto &item_value = pack_items[i];
-
-		auto result = make_uniq<ConstantExpression>(item_value);
-		result->SetAlias(Identifier(item_name));
-
-		type_args.push_back(std::move(result));
-	}
+	AddTypeArguments(input.context, *input.children[1], type_args);
+	AddTypeArguments(input.context, *input.children[2], type_args);
 
 	auto qualified_name = QualifiedName::Parse(type_name);
 
@@ -124,6 +126,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 ScalarFunction MakeTypeFun::GetFunction() {
 	auto sig = FunctionSignature()
 	               .AddParameter("type_name", LogicalType::VARCHAR)
+	               .AddVarPositionalParameter("args", LogicalTypeId::ANY)
 	               .AddVarKeywordParameter("kwargs", LogicalTypeId::ANY)
 	               .SetReturnType(LogicalType::TYPE());
 
