@@ -52,8 +52,8 @@ public:
 
 	//! Apply a modification to every overload in the set. The overloads are immutable once bound from, so each is
 	//! replaced by a modified copy rather than being changed in place.
-	template <class CALLBACK>
-	void ApplyToFunctions(CALLBACK &&callback) {
+	template <class FUNC>
+	void ApplyToFunctions(FUNC &&callback) {
 		for (auto &function : functions) {
 			auto modified = make_shared_ptr<T>(*function);
 			callback(*modified);
