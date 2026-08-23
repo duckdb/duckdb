@@ -1252,53 +1252,14 @@ struct DividePropagateStatistics {
 	}
 };
 
-// Dedicated callback rather than PropagateNumericStats: when propagation fails the divisor
-// range may contain zero, and division by zero produces NULLs that the inputs do not have,
-// so returning validity-only statistics would be incorrect - we must return no statistics.
+// When propagation fails the divisor range may contain zero, and division by zero produces NULLs that the inputs do not
+// have: return no statistics instead of the validity-only statistics that PropagateNumericStats falls back to.
 unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, FunctionStatisticsInput &input) {
-	auto &child_stats = input.child_stats;
-	auto &expr = input.expr;
-	D_ASSERT(child_stats.size() == 2);
-	auto &lstats = child_stats[0];
-	auto &rstats = child_stats[1];
-	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {
+	auto stats = PropagateNumericStats<TryDivideOperator, DividePropagateStatistics, DivideOperator>(context, input);
+	if (stats && !NumericStats::HasMinMax(*stats)) {
 		return nullptr;
 	}
-	auto &type = expr.GetReturnType();
-	Value new_min, new_max;
-	bool failed;
-	switch (type.InternalType()) {
-	case PhysicalType::INT8:
-		failed =
-		    DividePropagateStatistics::Operation<int8_t, TryDivideOperator>(type, lstats, rstats, new_min, new_max);
-		break;
-	case PhysicalType::INT16:
-		failed =
-		    DividePropagateStatistics::Operation<int16_t, TryDivideOperator>(type, lstats, rstats, new_min, new_max);
-		break;
-	case PhysicalType::INT32:
-		failed =
-		    DividePropagateStatistics::Operation<int32_t, TryDivideOperator>(type, lstats, rstats, new_min, new_max);
-		break;
-	case PhysicalType::INT64:
-		failed =
-		    DividePropagateStatistics::Operation<int64_t, TryDivideOperator>(type, lstats, rstats, new_min, new_max);
-		break;
-	case PhysicalType::INT128:
-		failed =
-		    DividePropagateStatistics::Operation<hugeint_t, TryDivideOperator>(type, lstats, rstats, new_min, new_max);
-		break;
-	default:
-		return nullptr;
-	}
-	if (failed) {
-		return nullptr;
-	}
-	auto result = NumericStats::CreateEmpty(type);
-	NumericStats::SetMin(result, new_min);
-	NumericStats::SetMax(result, new_max);
-	result.CombineValidity(lstats, rstats);
-	return result.ToUnique();
+	return stats;
 }
 
 } // namespace
