@@ -140,6 +140,26 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	}
 	// case conversion is not order- or length-preserving, but it never turns a valid string into NULL
 	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	// If all values are a single known string, the result is the case-converted string
+	if (StringStats::HasMinMax(child_stats[0]) &&
+	    StringStats::GetMinType(child_stats[0]) == StringStatsType::EXACT_STATS &&
+	    StringStats::GetMaxType(child_stats[0]) == StringStatsType::EXACT_STATS) {
+		auto min = StringStats::Min(child_stats[0]);
+		auto max = StringStats::Max(child_stats[0]);
+		if (min == max) {
+			string converted;
+			converted.resize(GetResultLength<IS_UPPER>(min.c_str(), min.size()));
+			CaseConvert<IS_UPPER>(min.c_str(), min.size(), &converted[0]);
+			// case conversion can lengthen a string beyond what the stats can store
+			auto stats_type = StringStatsType::EXACT_STATS;
+			if (converted.size() > StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
+				converted.resize(StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+				stats_type = StringStatsType::TRUNCATED_STATS;
+			}
+			StringStats::SetMin(result, string_t(converted), stats_type);
+			StringStats::SetMax(result, string_t(converted), stats_type);
+		}
+	}
 	result.CopyValidity(child_stats[0]);
 	return result.ToUnique();
 }

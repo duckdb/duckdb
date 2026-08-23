@@ -53,6 +53,25 @@ SELECT count(*) FROM case_mixed WHERE upper(s) = 'V004000';
 ----
 1
 
+# Unicode case conversion can lengthen a string beyond the stored zonemap prefix:
+# upper('ɐɐɐɐɐɐ') is the 18-byte 'ⱯⱯⱯⱯⱯⱯ', so the propagated stats must be marked
+# truncated. The 'ɐ' row group stays inconclusive (scanned and matched), while the
+# other row groups are still pruned.
+statement ok
+CREATE TABLE case_lengthening AS
+SELECT i::INTEGER AS i, CASE WHEN i < 2048 THEN 'ɐɐɐɐɐɐ' WHEN i < 4096 THEN 'oooooo' ELSE 'zzzzzz' END AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_lengthening WHERE upper(s) = 'ⱯⱯⱯⱯⱯⱯ';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM case_lengthening WHERE upper(s) = 'ⱯⱯⱯⱯⱯⱯ';
+----
+2048
+
 # Strings longer than the stored zonemap prefix only have truncated stats: even identical values cannot be proven equal, so no pruning is possible.
 statement ok
 CREATE TABLE case_truncated AS
