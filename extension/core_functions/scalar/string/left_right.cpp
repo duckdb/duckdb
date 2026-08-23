@@ -68,8 +68,8 @@ static unique_ptr<BaseStatistics> LeftPropagateStats(ClientContext &context, Fun
 	if (length < 0 || length > NumericLimits<uint32_t>::Maximum()) {
 		return nullptr;
 	}
-	// left(s, n) with a constant n >= 0 is a fixed-length character prefix, which preserves ordering
-	return PropagateStringSliceStats(input, 0, NumericCast<idx_t>(length));
+	return PropagateStringSliceStats(input, /*start_character_index=*/0,
+	                                 /*character_count=*/NumericCast<idx_t>(length));
 }
 
 ScalarFunction LeftFun::GetFunction() {
