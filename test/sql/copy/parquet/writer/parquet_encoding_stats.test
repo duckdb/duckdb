@@ -1,0 +1,60 @@
+# name: test/sql/copy/parquet/writer/parquet_encoding_stats.test
+# description: Writer populates ColumnMetaData.encoding_stats (PageEncodingStats)
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE strings AS SELECT (i % 3)::VARCHAR AS s FROM range(1000) tbl(i);
+
+statement ok
+COPY strings TO '{TEST_DIR}/encoding_stats_v1.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+# the dictionary page is listed first: that is the physical page order, and readers exist that
+# check the first entry to decide whether a dictionary page leads the chunk
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_v1.parquet'))
+----
+DICTIONARY_PAGE	PLAIN	1
+DATA_PAGE	PLAIN_DICTIONARY	1
+
+statement ok
+COPY strings TO '{TEST_DIR}/encoding_stats_v2.parquet' (FORMAT PARQUET, PARQUET_VERSION v2);
+
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_v2.parquet'))
+----
+DICTIONARY_PAGE	PLAIN	1
+DATA_PAGE	RLE_DICTIONARY	1
+
+# non-dictionary chunk: no DICTIONARY_PAGE entry
+statement ok
+CREATE TABLE distinct_strings AS SELECT i::VARCHAR AS s FROM range(30) tbl(i);
+
+statement ok
+COPY distinct_strings TO '{TEST_DIR}/encoding_stats_plain.parquet' (FORMAT PARQUET);
+
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s FROM parquet_metadata('{TEST_DIR}/encoding_stats_plain.parquet'))
+----
+DATA_PAGE	PLAIN	1
+
+# reading the field back from a parquet-mr file that carries it
+query TTI
+SELECT s.page_type, s.encoding, s."count"
+FROM (SELECT unnest(encoding_stats) AS s
+      FROM parquet_metadata('data/parquet-testing/enum.parquet')
+      WHERE path_in_schema = 'trace_id')
+----
+DICTIONARY_PAGE	PLAIN_DICTIONARY	1
+DATA_PAGE	PLAIN_DICTIONARY	1
+
+# a file written without the field reads back NULL
+query I
+SELECT encoding_stats FROM parquet_metadata('data/parquet-testing/userdata1.parquet')
+WHERE path_in_schema = 'first_name'
+----
+NULL
