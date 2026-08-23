@@ -1051,7 +1051,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.execution_mode = ParquetWriteExecutionMode;
 	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = scan_fun.functions[0];
+	function.copy_from_function = *scan_fun.functions[0];
 
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;

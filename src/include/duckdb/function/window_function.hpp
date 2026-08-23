@@ -363,9 +363,10 @@ public:
 	DUCKDB_API bool operator!=(const BoundWindowFunction &rhs) const;
 
 public:
-	//! The function this was bound from. Unaffected by later mutation of the bound function.
-	//! NOTE: the definition is currently a per-bind copy, so pointer identity is only stable within one expression
-	//! lineage - inspect the function itself rather than comparing pointers.
+	//! The function this was bound from. Unaffected by later mutation of the bound function. For a function bound
+	//! from a WindowFunctionSet this is the set's own overload, so it compares equal by pointer across binds.
+	//! Functions bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
 	}

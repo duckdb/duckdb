@@ -19,7 +19,7 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 }
 
 BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)
-    // TODO: remove this copy once FunctionSet stores shared_ptr functions
+    // the function does not come from a function set - copy it into a definition of its own
     : BoundWindowFunction(make_shared_ptr<WindowFunction>(base)) {
 }
 

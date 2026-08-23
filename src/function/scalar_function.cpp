@@ -118,7 +118,7 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 }
 
 BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function)
-    // TODO: remove this copy once FunctionSet stores shared_ptr functions
+    // the function does not come from a function set - copy it into a definition of its own
     : BoundScalarFunction(make_shared_ptr<ScalarFunction>(function)) {
 }
 

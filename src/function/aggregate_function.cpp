@@ -85,7 +85,7 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 }
 
 BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function)
-    // TODO: remove this copy once FunctionSet stores shared_ptr functions
+    // the function does not come from a function set - copy it into a definition of its own
     : BoundAggregateFunction(make_shared_ptr<AggregateFunction>(function)) {
 }
 

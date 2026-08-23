@@ -12,9 +12,7 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunction function)
 CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
     : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(std::move(set)) {
 	SetFunctionName(functions.name);
-	for (auto &func : functions.functions) {
-		func.name = functions.name;
-	}
+	functions.ApplyToFunctions([&](ScalarFunction &func) { func.name = functions.name; });
 	internal = true;
 }
 
