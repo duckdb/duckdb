@@ -1232,13 +1232,14 @@ struct DividePropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
-		// a divisor range that contains zero produces NULLs, and the result grows without
+		D_ASSERT(NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats));
+		// A divisor range that contains zero produces NULLs, and the result grows without
 		// bound as the divisor approaches zero - no statistics can be derived
 		if (NumericStats::GetMin<T>(rstats) <= T(0) && NumericStats::GetMax<T>(rstats) >= T(0)) {
 			return true;
 		}
-		// as with multiplication, the extremes depend on the signs of the inputs:
-		// evaluate all combinations of the bounds and take the minimum/maximum
+		// The extremes depend on the signs of the inputs: evaluate all combinations of the bounds and take the
+		// minimum/maximum
 		T lvals[] {NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(lstats)};
 		T rvals[] {NumericStats::GetMin<T>(rstats), NumericStats::GetMax<T>(rstats)};
 		T min = NumericLimits<T>::Maximum();
