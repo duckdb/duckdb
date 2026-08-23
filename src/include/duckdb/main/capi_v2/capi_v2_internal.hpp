@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/main/capi_v2/capi_v2_internal.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 // DuckDB C++ internals (also pulls in duckdb.h which defines idx_t, etc.)
