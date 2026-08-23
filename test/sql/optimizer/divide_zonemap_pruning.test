@@ -37,6 +37,34 @@ SELECT count(*) FROM divide_pruning WHERE i / 100.0 < 5;
 ----
 500
 
+# Float division by a negative constant flips the corners: i / -100.0 > -5 only holds for i < 500.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE i / -100.0 > -5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE i / -100.0 > -5;
+----
+500
+
+# Float division with a divisor range: the middle row group's divisor range contains zero, so it cannot be pruned.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE 6144.0 / (i - 3000) = 123456;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE 6144.0 / (i - 3000) = 123456;
+----
+0
+
+# Float division by a zero constant never matches, whether it yields NULL or infinity.
+query I
+SELECT count(*) FROM divide_pruning WHERE i / 0.0 = 123;
+----
+0
+
 # A negative divisor flips the corners: the result range of the first two row
 # groups is above -4, so only the last row group can match.
 query II
@@ -80,3 +108,21 @@ statement error
 SELECT count(*) FROM divide_overflow WHERE i // -1 = 42;
 ----
 <REGEX>:.*Overflow in division.*
+
+# A row group containing infinity: the corner evaluation hits a non-finite
+# value, so no statistics are derived for it and it is scanned rather than
+# incorrectly pruned. The finite row groups are still pruned.
+statement ok
+CREATE TABLE divide_float AS
+SELECT CASE WHEN i = 5000 THEN 'infinity'::DOUBLE ELSE i::DOUBLE END AS d
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_float WHERE d / 2.0 > 1e308;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_float WHERE d / 2.0 > 1e308;
+----
+1
