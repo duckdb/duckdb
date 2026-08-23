@@ -308,7 +308,7 @@ struct ModeState {
 	//! Rescan the frequency map, breaking ties by the first tied value in the frames.
 	//! The per-value first_row is not tracked by ModeRm, so it cannot be used here.
 	template <class INCLUDED>
-	void ScanFrames(const SubFrames &frames, const INCLUDED &included) {
+	void ScanFrames(const SubFrames &frames, const INCLUDED &included, AggregateInputData &aggr_input_data) {
 		auto highest_frequency = frequency_map->begin();
 		size_t n_ties = 0;
 		for (auto i = frequency_map->begin(); i != frequency_map->end(); ++i) {
@@ -325,7 +325,7 @@ struct ModeState {
 		}
 		count = highest_frequency->second.count;
 		if (n_ties == 1) {
-			Update(highest_frequency->first);
+			Update(highest_frequency->first, aggr_input_data);
 			return;
 		}
 		for (const auto &frame : frames) {
@@ -336,7 +336,7 @@ struct ModeState {
 				const auto &key = GetCell(i);
 				const auto attr = frequency_map->find(key);
 				if (attr != frequency_map->end() && attr->second.count == count) {
-					Update(key);
+					Update(key, aggr_input_data);
 					return;
 				}
 			}
@@ -526,7 +526,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 			}
 
 			if (!state.valid) {
-				state.ScanFrames(frames, included);
+				state.ScanFrames(frames, included, aggr_input_data);
 			}
 
 			if (state.valid) {
