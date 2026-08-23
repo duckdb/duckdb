@@ -1,0 +1,71 @@
+# name: test/sql/optimizer/upper_lower_zonemap_pruning.test
+# description: Prune row groups for upper()/lower() when a row group's min == max
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/upper_lower_zonemap_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048 rows, each holding a single constant string,
+# so every row group has min == max exact stats.
+statement ok
+CREATE TABLE case_pruning AS
+SELECT i::INTEGER AS i, CASE WHEN i < 2048 THEN 'alpha' WHEN i < 4096 THEN 'Beta' ELSE 'GAMMA' END AS s
+FROM range(6144) r(i);
+
+# When min == max, upper() of the row group is a single known value: only the 'Beta' row group can match.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_pruning WHERE upper(s) = 'BETA';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM case_pruning WHERE upper(s) = 'BETA';
+----
+2048
+
+# lower() shares the same propagation.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_pruning WHERE lower(s) = 'gamma';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM case_pruning WHERE lower(s) = 'gamma';
+----
+2048
+
+# upper()/lower() are not order-preserving, so a row group with min != max cannot be pruned.
+statement ok
+CREATE TABLE case_mixed AS
+SELECT i::INTEGER AS i, 'v' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_mixed WHERE upper(s) = 'V004000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM case_mixed WHERE upper(s) = 'V004000';
+----
+1
+
+# Strings longer than the stored zonemap prefix only have truncated stats: even identical values cannot be proven equal, so no pruning is possible.
+statement ok
+CREATE TABLE case_truncated AS
+SELECT i::INTEGER AS i,
+       CASE WHEN i < 2048 THEN 'prefixprefix_alpha' WHEN i < 4096 THEN 'prefixprefix_beta' ELSE 'prefixprefix_gamma' END AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM case_truncated WHERE upper(s) = 'PREFIXPREFIX_BETA';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM case_truncated WHERE upper(s) = 'PREFIXPREFIX_BETA';
+----
+2048
