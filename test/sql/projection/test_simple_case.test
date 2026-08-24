@@ -435,7 +435,7 @@ SELECT count(*) FROM simple_case_volatile_check_tbl
 3
 
 # The parsed operand survives current-format storage and is lowered again after restart.
-load {TEST_DIR}/simple_case_storage.db
+load {TEST_DIR}/simple_case_storage.db readwrite v2.0.0
 
 statement ok
 CREATE SEQUENCE stored_simple_case_seq START 1
