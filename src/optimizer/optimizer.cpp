@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/redundant_distinct_remover.hpp"
 #include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
@@ -270,6 +271,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
 		InClauseRewriter ic_rewriter(context, *this);
 		plan = ic_rewriter.Rewrite(std::move(plan));
+	});
+
+	// removes DISTINCT operators whose duplicates are discarded by an operator above them
+	RunOptimizer(OptimizerType::REDUNDANT_DISTINCT, [&]() {
+		RedundantDistinctRemover redundant_distinct(*this);
+		plan = redundant_distinct.Optimize(std::move(plan));
 	});
 
 	// removes any redundant DelimGets/DelimJoins
