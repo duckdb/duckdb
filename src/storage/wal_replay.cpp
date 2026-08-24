@@ -1346,15 +1346,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
 			}
 			current_row_id += chunk.size();
-			for (auto index : indexes.MutableIndexHandles()) {
-				if (!index->IsBound()) {
-					auto unbound_index = std::move(index).Into<UnboundIndex>();
-					unbound_index->BufferChunk(chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
-					continue;
-				}
-				auto bound_index = std::move(index).Into<BoundIndex>();
-				bound_index->Append(chunk, row_id_vector);
-			}
+			indexes.Append(chunk, row_id_vector);
 		}
 	}
 	storage.MergeStorage(new_row_groups, nullptr);

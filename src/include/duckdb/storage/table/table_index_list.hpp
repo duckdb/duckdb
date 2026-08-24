@@ -160,6 +160,8 @@ private:
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
 	explicit IndexEntry(unique_ptr<Index> index);
+	//! Append a chunk to the physical index, buffering it while the index is unbound.
+	void Append(DataChunk &chunk, Vector &row_ids);
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -323,6 +325,8 @@ public:
 	void AddIndex(unique_ptr<Index> index);
 	//! Adds an empty copy of an index for transaction-local storage.
 	void AddLocalIndex(const IndexHandle<BoundIndex> &source);
+	//! Appends a chunk to all index entries.
+	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.

@@ -22,6 +22,17 @@ IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_
 	}
 }
 
+void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!owned_index->IsBound()) {
+		auto &unbound_index = owned_index->Cast<UnboundIndex>();
+		unbound_index.BufferChunk(chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
+		return;
+	}
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	bound_index.Append(chunk, row_ids);
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -189,6 +200,13 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 void TableIndexList::AddLocalIndex(const IndexHandle<BoundIndex> &source) {
 	D_ASSERT(source->SupportsDeltaIndexes());
 	AddIndex(source->CreateEmptyCopy(source->GetConstraintType()));
+}
+
+void TableIndexList::Append(DataChunk &chunk, Vector &row_ids) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->Append(chunk, row_ids);
+	}
 }
 
 void TableIndexList::RemoveIndex(const Identifier &name) {
