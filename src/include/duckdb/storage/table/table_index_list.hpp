@@ -162,6 +162,8 @@ public:
 	explicit IndexEntry(unique_ptr<Index> index);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
+	//! Returns whether the physical index enforces a unique constraint.
+	bool IsUnique() const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -349,6 +351,8 @@ public:
 		annotated_lock_guard lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns true, if there are unique indexes.
+	bool HasUniqueIndexes() const;
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).

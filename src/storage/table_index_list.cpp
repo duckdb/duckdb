@@ -33,6 +33,11 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 	bound_index.Append(chunk, row_ids);
 }
 
+bool IndexEntry::IsUnique() const {
+	auto entry_lock = lock.GetSharedLock();
+	return owned_index->IsUnique();
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -222,6 +227,16 @@ void TableIndexList::RemoveIndex(const Identifier &name) {
 			return;
 		}
 	}
+}
+
+bool TableIndexList::HasUniqueIndexes() const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		if (entry->IsUnique()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 unordered_set<string> TableIndexList::DistinctIndexTypes() const {

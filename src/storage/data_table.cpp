@@ -343,15 +343,7 @@ bool DataTable::HasIndexes() const {
 }
 
 bool DataTable::HasUniqueIndexes() const {
-	if (!HasIndexes()) {
-		return false;
-	}
-	for (const auto index : info->indexes.IndexHandles()) {
-		if (index->IsUnique()) {
-			return true;
-		}
-	}
-	return false;
+	return info->indexes.HasUniqueIndexes();
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index) {
