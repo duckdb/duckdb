@@ -54,8 +54,14 @@ static void CopyStatistics(column_binding_map_t<unique_ptr<BaseStatistics>> &sta
 	if (entry == statistics_map.end()) {
 		return;
 	}
+	unique_ptr<BaseStatistics> statistics;
+	if (entry->second) {
+		statistics = entry->second->Copy().ToUnique();
+	}
 	statistics_map.erase(target);
-	statistics_map.emplace(target, entry->second->Copy().ToUnique());
+	if (statistics) {
+		statistics_map.emplace(target, std::move(statistics));
+	}
 }
 
 static bool GetBindingWidth(const ColumnBinding &binding, const LogicalType &type,
