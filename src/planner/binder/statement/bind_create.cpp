@@ -96,8 +96,8 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 		}
 		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
+			    "Ambiguous reference to catalog or schema %s - use a fully qualified path like '%s.%s'", schema,
+			    SQLIdentifier(catalog_name), SQLIdentifier(schema));
 		}
 	}
 	catalog = schema;
@@ -444,15 +444,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Constant-fold all default parameter expressions
+		identifier_set_t integer_literal_defaults;
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
 			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				auto &value = param_expr->Cast<ConstantExpression>().GetValue();
+				if (value.type().IsIntegral() && !value.IsNull()) {
+					integer_literal_defaults.insert(param_name);
+				}
 				continue;
 			}
 
-			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter '%s'", param_name));
+			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter %s", param_name));
 			auto default_expr = param_expr->Copy();
 			auto bound_default = binder.Bind(default_expr);
 			if (!bound_default->IsFoldable()) {
@@ -481,7 +486,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
+				auto &value = it->second->Cast<ConstantExpression>().GetValue();
+				auto val_type = value.type();
+				if (integer_literal_defaults.find(param_name) != integer_literal_defaults.end()) {
+					val_type = LogicalType::INTEGER_LITERAL(value);
+				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
@@ -772,7 +781,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		auto bound_body = body_binder->Bind(*body_copy);
 		validation_binder->GetActiveBinders().pop_back();
 		if (body_binder->correlated_columns.empty()) {
-			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW or OLD "
+			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
 			                      create_trigger_info.GetTriggerName(), table.name);
 		}
@@ -819,6 +828,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
+		if (base.security_type == ViewSecurityType::SECURE_VIEW) {
+			// secure views cannot be persisted in older storage formats - block their creation instead of silently
+			// turning them into regular views on the next checkpoint
+			auto &attached = schema.ParentCatalog().GetAttached();
+			if (!base.temporary && !attached.IsTemporary() && attached.HasStorageManager()) {
+				auto &storage_manager = attached.GetStorageManager();
+				if (!storage_manager.InMemory() && storage_manager.GetStorageVersion() < StorageVersion::V2_0_0) {
+					throw BinderException("CREATE SECURE VIEW is only supported for storage versions v2.0.0 and "
+					                      "higher.\nUse an in-memory database, or ATTACH with (STORAGE_VERSION "
+					                      "v2.0.0)");
+				}
+			}
+		}
 		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			CatalogTransaction transaction(schema.ParentCatalog(), context);
 			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.GetViewName());

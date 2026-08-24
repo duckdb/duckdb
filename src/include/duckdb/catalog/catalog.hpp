@@ -81,6 +81,7 @@ class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
 class QueryNode;
+class SQLStatement;
 
 //! Per-capability opt-in for remote catalogs. Each value gates a specific dispatch path or
 //! engine-wide accommodation:
@@ -89,11 +90,14 @@ class QueryNode;
 //!    counts attached remote catalogs).
 //!  - EXECUTE_QUERY_NODE: `RemoteExecute(QueryNode)` is implemented; the RemotePushdownOptimizer
 //!    may push down structured queries to this catalog.
+//!  - EXECUTE_STATEMENT: `RemoteExecute(SQLStatement)` is implemented; the RemotePushdownOptimizer
+//!    may push down non-query statements (DDL) to this catalog.
 //!  - CONNECT: `RemoteExecute(string)` is implemented; the CONNECT chokepoint may route raw SQL
 //!    to this catalog.
 enum class RemoteCapability : uint8_t {
 	IS_REMOTE,
 	EXECUTE_QUERY_NODE,
+	EXECUTE_STATEMENT,
 	CONNECT,
 };
 
@@ -395,10 +399,13 @@ public:
 		return false;
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
+	//! Execute a full (non-query) statement remotely - the returned table ref yields the statement's result
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<SQLStatement> statement);
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
 	virtual bool SupportsPushdown(const ParsedExpression &expression);
 	virtual bool SupportsPushdown(const TableRef &ref);
 	virtual bool SupportsPushdown(const QueryNode &node);
+	virtual bool SupportsPushdown(const SQLStatement &statement);
 	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
 	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
 	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
@@ -471,12 +478,12 @@ public:
 
 	virtual void Verify();
 
-	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const Identifier &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static String AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name);
+	static String AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
+	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 	//! Called when the catalog is detached

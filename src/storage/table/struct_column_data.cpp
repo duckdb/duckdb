@@ -48,6 +48,20 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
+FilterPropagateResult StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                                     optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	if (state.expression_state) {
+		checked_segment = nullptr;
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (state.storage_index.IsPushdownExtract()) {
+		auto children = GetStructChildren(state);
+		D_ASSERT(children.size() == 1);
+		return children[0].col.CheckZonemap(children[0].state, filter, checked_segment);
+	}
+	return CheckValidityZonemap(state, filter, checked_segment, *validity);
+}
+
 vector<StructColumnData::StructColumnDataChild> StructColumnData::GetStructChildren(ColumnScanState &state) const {
 	vector<StructColumnData::StructColumnDataChild> res;
 	if (state.storage_index.IsPushdownExtract()) {

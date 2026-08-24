@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -80,10 +81,13 @@ ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vect
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(filters.HasFilters());
+	D_ASSERT(filters.HasFilters() || filters.HasMultiColumnFilters());
 	table_filters = &filters;
-	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
-	adaptive_filter->SetLogger(context.logger);
+	this->column_ids = &column_ids;
+	if (filters.HasFilters()) {
+		adaptive_filter = make_uniq<AdaptiveFilter>(filters);
+		adaptive_filter->SetLogger(context.logger);
+	}
 	filter_list.reserve(filters.FilterCount());
 	for (auto &entry : filters) {
 		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
@@ -298,11 +302,39 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 	return false;
 }
 
+bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks) {
+	if (!row_group) {
+		return false;
+	}
+	auto &current_row_group = row_group->GetNode();
+	ScanOptions options {TransactionData(transaction)};
+	if (!current_row_group.PrepareScan(options, *this)) {
+		// the assignment is exhausted
+		D_ASSERT(max_row <= row_group->GetRowStart() + current_row_group.count);
+		row_group = nullptr;
+		return false;
+	}
+	if (prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED) {
+		// I/O for the prepared vector was already registered (e.g. we are resuming after BLOCKED)
+		return true;
+	}
+	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
+	tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
+	return true;
+}
+
+void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {
+	D_ASSERT(row_group);
+	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
+	ScanOptions options {TransactionData(transaction)};
+	row_group->GetNode().ProcessPreparedScan(options, *this, result);
+}
+
 PreparedScanVector::PreparedScanVector() : sample_sel(STANDARD_VECTOR_SIZE) {
 }
 
 void PreparedScanVector::Reset() {
-	prepared = false;
+	prepare_state = VectorPrepareState::NONE;
 }
 
 PrefetchState::~PrefetchState() {

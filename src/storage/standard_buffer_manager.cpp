@@ -13,6 +13,7 @@
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
@@ -314,6 +315,20 @@ void StandardBufferManager::ExecutePrefetch(QueryContext context, vector<Prefetc
 void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
 	auto plan = RegisterPrefetch(handles);
 	ExecutePrefetch(context, plan);
+}
+
+vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(QueryContext context,
+                                                                         vector<shared_ptr<BlockHandle>> &handles) {
+	auto plan = RegisterPrefetch(handles);
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.reserve(plan.size());
+	for (auto &run : plan) {
+		// the io size is the number of bytes this run will read
+		auto io_size = run.handles.size() * run.handles[0]->GetBlockAllocSize();
+		tasks.push_back(make_uniq<CallbackAsyncTask>(
+		    [this, context, run = std::move(run)]() mutable { BatchRead(context, run); }, io_size));
+	}
+	return tasks;
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {

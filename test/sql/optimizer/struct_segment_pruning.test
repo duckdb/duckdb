@@ -1,0 +1,65 @@
+# name: test/sql/optimizer/struct_segment_pruning.test
+# description: Segment pruning for pushed-down STRUCT fields
+# group: [optimizer]
+
+require json
+
+require no_force_storage
+
+require vector_size 2048
+
+statement ok
+SET threads = 1
+
+statement ok
+SET initial_column_segment_size = 2048
+
+statement ok
+SET wal_autocheckpoint = '1TB'
+
+statement ok
+CREATE TABLE events AS
+SELECT i,
+       CASE WHEN i = 50000 THEN NULL
+            ELSE {'meta': {'ts': CASE WHEN i = 50001 THEN NULL
+                                      WHEN i = 99999 THEN TIMESTAMP '2100-01-01'
+                                      ELSE TIMESTAMP '2020-01-01' + i * INTERVAL 1 SECOND
+                                 END}}
+       END AS payload
+FROM range(100000) t(i)
+
+query I
+SELECT count(*) FROM events WHERE payload.meta.ts IS NULL
+----
+2
+
+statement ok
+PRAGMA enable_profiling = 'json'
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/struct_segment_pruning_profile.json'
+
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned']
+
+query I
+SELECT count(*) FROM events WHERE payload.meta.ts >= TIMESTAMP '2099-01-01'
+----
+1
+
+statement ok
+PRAGMA disable_profiling
+
+query I
+SELECT query.total_rows_scanned BETWEEN 1 AND 99999
+FROM '{TEST_DIR}/struct_segment_pruning_profile.json'
+----
+true
+
+statement ok
+UPDATE events SET payload = NULL WHERE i = 1
+
+query I
+SELECT count(*) FROM events WHERE payload.meta.ts IS NULL
+----
+3

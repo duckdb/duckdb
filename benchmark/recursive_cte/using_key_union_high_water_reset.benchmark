@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/using_key_union_high_water_reset.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=using_key_union_high_water_reset
+BENCHMARK_NAME=USING KEY UNION high-water reset
+DESCRIPTION=Guard address-set reset cost after a wide epoch followed by many singleton epochs

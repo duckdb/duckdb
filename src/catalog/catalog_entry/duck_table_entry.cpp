@@ -56,7 +56,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("Aggregate state columns are not supported in storage versions prior to %s "
-				                            "(database \"%s\" is using storage version %s)",
+				                            "(database %s is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
 			return false;
@@ -73,7 +73,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("Empty STRUCT columns are not supported in storage versions prior to %s "
-				                            "(database \"%s\" is using storage version %s)",
+				                            "(database %s is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
 			// an unnamed STRUCT is serialized identically to a TUPLE, so it must pass the same gate
@@ -82,7 +82,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
-				                            "(database \"%s\" is using storage version %s)",
+				                            "(database %s is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
 		} break;
@@ -95,7 +95,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
-				                            "(database \"%s\" is using storage version %s)",
+				                            "(database %s is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
 		} break;
@@ -107,7 +107,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("VARIANT columns are not supported in storage versions prior to %s "
-				                            "(database \"%s\" is using storage version %s)",
+				                            "(database %s is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
 		} break;
@@ -123,7 +123,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				logger.WriteLog(DefaultLogType::NAME, LogLevel::LOG_WARNING,
 				                "GEOMETRY columns with coordinate reference system identifiers are not supported in "
 				                "storage versions prior "
-				                "to %s (database \"%s\" is using storage version %s). CRS will not be persisted.",
+				                "to %s (database %s is using storage version %s). CRS will not be persisted.",
 				                required, db.GetName(), current);
 			}
 		} break;
@@ -609,7 +609,7 @@ Value ConstructMapping(const Identifier &name, const LogicalType &type) {
 StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identifier> &column_path,
                                    const ColumnDefinition &new_field, idx_t depth = 0) {
 	if (!type.IsNested()) {
-		throw BinderException("Column '%s' is not a nested type, ADD COLUMN can only be used on nested types",
+		throw BinderException("Column %s is not a nested type, ADD COLUMN can only be used on nested types",
 		                      column_path[depth]);
 	}
 
@@ -628,7 +628,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 		for (auto &entry : child_list) {
 			if (entry.first == new_field.Name()) {
 				// already exists!
-				result.error = ErrorData(CatalogException("Duplicate field \"%s\" - field already exists in struct %s",
+				result.error = ErrorData(CatalogException("Duplicate field %s - field already exists in struct %s",
 				                                          new_field.Name(), current_component));
 				return result;
 			}
@@ -738,7 +738,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 				if (bound_check.bound_columns.size() > 1) {
 					// CHECK constraint that concerns mult
 					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
+					    "Cannot drop column %s because there is a CHECK constraint that depends on it",
 					    info.removed_column);
 				} else {
 					// CHECK constraint that ONLY concerns this column, strip the constraint
@@ -756,7 +756,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 				// Single-column UNIQUE constraint
 				if (unique.GetIndex() == removed_index) {
 					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
+					    "Cannot drop column %s because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
 				}
 				unique.SetIndex(adjusted_indices[unique.GetIndex().index]);
@@ -766,9 +766,8 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 					if (col_name == info.removed_column) {
 						// Build constraint string for error message: UNIQUE(col1, col2, ...)
 						auto constraint_str = "UNIQUE(" + StringUtil::Join(unique.GetColumnNames(), ", ") + ")";
-						throw CatalogException(
-						    "Cannot drop column \"%s\" because it is referenced in unique constraint %s",
-						    info.removed_column, constraint_str);
+						throw CatalogException("Cannot drop column %s because it is referenced in unique constraint %s",
+						                       info.removed_column, constraint_str);
 					}
 				}
 			}
@@ -789,7 +788,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 			for (idx_t i = 0; i < columns.size(); i++) {
 				if (columns[i] == info.removed_column) {
 					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
+					    "Cannot drop column %s because there is a FOREIGN KEY constraint that depends on it",
 					    info.removed_column);
 				}
 			}
@@ -862,7 +861,7 @@ struct DroppedFieldMapping {
 
 DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Identifier> &column_path, idx_t depth) {
 	if (!type.IsNested()) {
-		throw CatalogException("Cannot drop field from column \"%s\" - not a nested type", column_path[0]);
+		throw CatalogException("Cannot drop field from column %s - not a nested type", column_path[0]);
 	}
 	auto &dropped_entry = column_path[depth];
 	bool last_entry = depth + 1 == column_path.size();
@@ -880,9 +879,8 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 			found = true;
 			if (last_entry) {
 				if (type.id() != LogicalTypeId::STRUCT) {
-					throw CatalogException("Cannot drop field '%s' from column '%s' - it's not a struct",
-					                       column_path.back().GetIdentifierName(),
-					                       column_path.front().GetIdentifierName());
+					throw CatalogException("Cannot drop field %s from column %s - it's not a struct",
+					                       column_path.back(), column_path.front());
 				}
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
@@ -929,7 +927,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, RemoveFieldInfo &info) {
 	if (!ColumnExists(info.column_path[0])) {
 		if (!info.if_column_exists) {
-			throw CatalogException("Cannot drop field from column \"%s\" - it does not exist", info.column_path[0]);
+			throw CatalogException("Cannot drop field from column %s - it does not exist", info.column_path[0]);
 		}
 		return nullptr;
 	}
@@ -960,7 +958,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<Identifier> &column_path,
                                           const string &new_name, idx_t depth) {
 	if (!type.IsNested()) {
-		throw CatalogException("Cannot rename field from column \"%s\" - not a nested type", column_path[0]);
+		throw CatalogException("Cannot rename field from column %s - not a nested type", column_path[0]);
 	}
 	auto &rename_entry = column_path[depth];
 	bool last_entry = depth + 1 == column_path.size();
@@ -979,8 +977,8 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			if (last_entry) {
 				if (type.id() != LogicalTypeId::STRUCT) {
 					throw CatalogException(
-					    "Cannot rename field '%s' from column '%s' - can only rename fields inside a struct",
-					    column_path.back().GetIdentifierName(), column_path.front().GetIdentifierName());
+					    "Cannot rename field %s from column %s - can only rename fields inside a struct",
+					    column_path.back(), column_path.front());
 				}
 				// we are renaming this entry
 				for (auto &sub_entry : child_types) {
@@ -1028,7 +1026,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, RenameFieldInfo &info) {
 	if (!ColumnExists(info.column_path[0])) {
-		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
+		throw CatalogException("Cannot rename field from column %s - it does not exist", info.column_path[0]);
 	}
 
 	// follow the path
@@ -1063,7 +1061,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 	// Modify the column that was specified by 'column_name'
 	auto &col = table_info.columns.GetColumnMutable(default_idx);
 	if (col.Generated()) {
-		throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", col.Name());
+		throw BinderException("Cannot SET DEFAULT for generated column %s", col.Name());
 	}
 	col.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 
@@ -1372,7 +1370,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 		if (unique.is_primary_key && existing_pk) {
 			auto existing_name = existing_pk->ToString();
-			throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
+			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
 		table_info.constraints.push_back(info.constraint->Copy());
 

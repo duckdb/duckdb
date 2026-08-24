@@ -150,9 +150,14 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	}
 	result = comparator.GetVal(*column_stats);
-	if (result.type() != result_type && !result.DefaultTryCastAs(result_type)) {
+	if (result.type() == result_type) {
+		return true;
+	}
+	auto cast = result.DefaultTryCastAs(result_type);
+	if (!cast) {
 		return false;
 	}
+	result = std::move(*cast);
 	return true;
 }
 
@@ -368,7 +373,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 					agg_result = rhs;
 				}
 			}
-			types.push_back(agg_result.GetTypeMutable());
+			types.push_back(agg_result.type());
 			auto expr = make_uniq<BoundConstantExpression>(agg_result);
 			agg_results.push_back(std::move(expr));
 		}
@@ -390,6 +395,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 	}
 
+	if (need_to_scan) {
+		// Partial precomputation combines plan-time partition statistics with an execution-time scan that
+		// skips partitions by their index in the row-group list. That list can change in between
+		// (concurrent appends, checkpoints), in which case a skipped partition is scanned again and its
+		// rows are counted twice. Only the full precomputation (no scan) is safe.
+		return;
+	}
 	if (need_to_scan) {
 		// Partial precomputation: some partitions need scanning
 		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results

@@ -33,13 +33,13 @@ ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
+	set.ApplyToFunctions([](ScalarFunction &func) {
 		const auto &sig = func.GetSignature();
 		if (sig.GetParameterCount() == 1 && sig.GetParameter(0).GetType().IsJSONType()) {
-			continue;
+			return;
 		}
 		func.SetFallible();
-	}
+	});
 	return set;
 }
 

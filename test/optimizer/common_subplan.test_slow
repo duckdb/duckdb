@@ -475,6 +475,9 @@ RESET disabled_optimizers
 
 # TPCH Q2 with delimiter joins rewritten to CTEs should still expose the
 # repeated supplier/nation/region subtree to common subplan elimination.
+statement ok
+SET disabled_optimizers = 'aggregate_reuse'
+
 query II
 explain
 SELECT
@@ -522,3 +525,6 @@ ORDER BY
 LIMIT 100;
 ----
 logical_opt	<REGEX>:.*__common_subplan_.*__duckdb_delim_.*
+
+statement ok
+RESET disabled_optimizers

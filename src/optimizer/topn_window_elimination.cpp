@@ -177,16 +177,21 @@ LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t colu
 	return result;
 }
 
-//! Late materialization recreates a payload by re-scanning the base table column and re-applying a type cast at the
-//! topmost projection. That only reproduces the original value when the projection expression is a plain column
-//! reference, optionally wrapped in casts. A value-transforming expression (e.g. parse_filename(col)) cannot be
-//! rebuilt that way, so it must not be eligible for late materialization.
+//! Late materialization recreates a payload by re-scanning the base table column and re-applying a single default
+//! (strict) cast at the topmost projection. That only reproduces the original value when the projection expression
+//! is a plain column reference, optionally wrapped in a single non-try cast. A value-transforming expression
+//! (e.g. parse_filename(col)) cannot be rebuilt that way. A try cast would be reconstructed as a strict cast
+//! (losing its NULL semantics), and a deeper cast chain would lose its intermediate conversions, so none of those
+//! shapes are eligible for late materialization.
 bool IsRecreatableByLateMaterialization(const Expression &expr) {
-	reference<const Expression> current = expr;
-	while (BoundCastExpression::IsCast(current.get())) {
-		current = BoundCastExpression::Child(current.get().Cast<BoundFunctionExpression>());
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return true;
 	}
-	return current.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	if (BoundCastExpression::IsCast(expr) && !BoundCastExpression::IsTryCast(expr.Cast<BoundFunctionExpression>())) {
+		return BoundCastExpression::Child(expr.Cast<BoundFunctionExpression>()).GetExpressionClass() ==
+		       ExpressionClass::BOUND_COLUMN_REF;
+	}
+	return false;
 }
 
 } // namespace
@@ -363,18 +368,16 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->children.push_back(std::move(window.children[0]));
 	aggregate->ResolveOperatorTypes();
 
-	// Add group statistics to allow for perfect hash aggregation if applicable
+	// Add group statistics to allow for perfect hash aggregation if applicable.
+	// The partition statistics describe the window input, i.e. exactly what this aggregate reads.
+	// The global statistics map cannot be used here: its entries are narrowed by operators above the window.
+	auto &partitions_stats = window_expr.PartitionsStats();
 	aggregate->group_stats.resize(aggregate->groups.size());
-	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
-		auto &group = aggregate->groups[i];
-		if (group->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			auto &column_ref = group->Cast<BoundColumnRefExpression>();
-			auto group_stats = stats->find(column_ref.Binding());
-			if (group_stats == stats->end()) {
-				continue;
-			}
-			aggregate->group_stats[i] = group_stats->second->ToUnique();
+	for (idx_t i = 0; i < MinValue<idx_t>(aggregate->groups.size(), partitions_stats.size()); i++) {
+		if (!partitions_stats[i]) {
+			continue;
 		}
+		aggregate->group_stats[i] = partitions_stats[i]->ToUnique();
 	}
 
 	return unique_ptr<LogicalOperator>(std::move(aggregate));

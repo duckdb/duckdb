@@ -117,7 +117,14 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
 }
 
-BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
+BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundScalarFunction(make_shared_ptr<ScalarFunction>(function)) {
+}
+
+BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> function_p)
+    : definition(std::move(function_p)) {
+	auto &function = *definition;
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();

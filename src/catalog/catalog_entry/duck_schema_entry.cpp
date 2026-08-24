@@ -63,7 +63,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
 		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
-			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
+			throw CatalogException("Could not drop the table because this table is main key table of the table %s",
 			                       fk.info.table);
 		}
 	}
