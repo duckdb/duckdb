@@ -169,7 +169,7 @@ public:
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
-	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                           optional_ptr<FileOpener> opener = nullptr);
 
 	//! Open a memory-mapped view of [path]. Throws if not supported by this filesystem.

@@ -28,7 +28,7 @@ class CachingFileHandleWrapper : public FileHandle {
 
 public:
 	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
-	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
+	                                    unique_ptr<CachingFileHandle> handle, const FileOpenFlags &flags);
 
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 

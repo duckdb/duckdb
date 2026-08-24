@@ -26,7 +26,7 @@ DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
-                                                   unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+                                                   unique_ptr<CachingFileHandle> handle, const FileOpenFlags &flags)
     : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)),
       caching_handle(std::move(handle)) {
 	D_ASSERT(!flags.OpenForWriting());
@@ -121,7 +121,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const string &path, Fi
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                           optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(path, flags, opener);
+		return OpenFileExtended(path, std::move(flags), opener);
 	}
 	throw NotImplementedException("CachingFileSystemWrapper: OpenFile is not implemented!");
 }

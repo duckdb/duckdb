@@ -51,7 +51,7 @@ static ClientContext &RequireClientContext(QueryContext context) {
 }
 
 AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const string &path_p,
-                                 FileOpenFlags open_flags)
+                                 const FileOpenFlags &open_flags)
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 

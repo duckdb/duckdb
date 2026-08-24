@@ -53,7 +53,7 @@ public:
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
-	                           FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS);
+	                           const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS);
 	DUCKDB_API ~AsyncFileWriter() override;
 	using WriteStream::Write;
 

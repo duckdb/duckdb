@@ -412,7 +412,8 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path,
+                                                    FileOpenFlags flags, // NOLINT: virtual, overrides mutate flags
                                                     optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: OpenFileExtended is not implemented!", GetName());
 }
@@ -424,12 +425,12 @@ bool FileSystem::ListFilesExtended(const string &directory, const std::function<
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(OpenFileInfo(path), flags, opener);
+		return OpenFileExtended(OpenFileInfo(path), std::move(flags), opener);
 	}
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags,
                                             optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
 		return OpenFileExtended(file, flags, opener);
@@ -755,8 +756,8 @@ bool FileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEs
 	return false;
 }
 
-FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags)
-    : file_system(file_system), path(std::move(path_p)), flags(flags) {
+FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags_p)
+    : file_system(file_system), path(std::move(path_p)), flags(std::move(flags_p)) {
 }
 
 FileHandle::~FileHandle() {

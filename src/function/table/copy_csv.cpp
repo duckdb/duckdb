@@ -266,7 +266,7 @@ public:
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
 	                   FileCompressionType compression, QueryContext context)
-	    : writer(options, fs, file_path, compression, context) {
+	    : writer(options, fs, file_path, std::move(compression), context) {
 	}
 
 	idx_t FileSize() {
