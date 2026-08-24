@@ -12,13 +12,14 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/enums/identifier_case_mode.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -112,15 +113,15 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true,
+	           idx_t &max_token_index, IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
 	           ParserPackratCache *packrat_cache_p = nullptr)
 	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
+	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
 	      packrat_cache(packrat_cache_p) {
 	}
 	MatchState(MatchState &state)
 	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
-	      max_token_index(state.max_token_index), preserve_identifier_case(state.preserve_identifier_case),
+	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
 	      packrat_cache(state.packrat_cache) {
 	}
 
@@ -129,7 +130,7 @@ struct MatchState {
 	reference_set_t<const Matcher> added_suggestions;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
-	bool preserve_identifier_case = true;
+	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	ParserPackratCache *packrat_cache;
 
 	void UpdateMaxTokenIndex() {
@@ -140,6 +141,20 @@ struct MatchState {
 
 	idx_t GetMaxTokenIndex() const {
 		return max_token_index;
+	}
+
+	//! Fold a non-quoted identifier in-place according to the configured case mode
+	void FoldIdentifier(string &text) const {
+		switch (identifier_case_mode) {
+		case IdentifierCaseMode::LOWERCASE:
+			text = StringUtil::Lower(text);
+			break;
+		case IdentifierCaseMode::UPPERCASE:
+			text = StringUtil::Upper(text);
+			break;
+		default:
+			break;
+		}
 	}
 
 	void AddSuggestion(MatcherSuggestion suggestion);
@@ -179,6 +194,13 @@ public:
 	void SetName(string name_p) {
 		name = std::move(name_p);
 	}
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+		name = rule_p.name;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
+	}
 	bool HasName() const {
 		return !name.empty();
 	}
@@ -216,6 +238,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	optional_ptr<const CompiledGrammarRule> rule;
 };
 
 class KeywordInfo {

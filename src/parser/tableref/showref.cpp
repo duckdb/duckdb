@@ -57,11 +57,11 @@ bool ShowRef::Equals(const TableRef &other_p) const {
 	}
 	auto &other = other_p.Cast<ShowRef>();
 	if (other.query.get() != query.get()) {
-		if (!other.query->Equals(query.get())) {
+		if (!query || !query->Equals(other.query.get())) {
 			return false;
 		}
 	}
-	return GetTableName() == other.GetTableName() && show_type == other.show_type;
+	return qualified_name == other.qualified_name && show_type == other.show_type;
 }
 
 unique_ptr<TableRef> ShowRef::Copy() {

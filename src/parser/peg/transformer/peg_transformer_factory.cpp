@@ -19,6 +19,9 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
+	if (transformer.options.debug_transformer_trampoline_style) {
+		return TransformStatementTrampoline(transformer, parse_result);
+	}
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
@@ -37,7 +40,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	auto &choice_result = choice_pr.GetResult();
 
 	TransformStack stack(transformer);
-	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result.name));
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result));
 	if (!transformer.named_parameter_map.empty()) {
 		result->named_param_map = transformer.named_parameter_map;
 	}
@@ -45,21 +48,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	return result;
 }
 
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto result = TransformStatementTrampoline(transformer, parse_result);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
-}
-
-void PEGTransformerFactory::RegisterGeneratedTrampoline() {
-	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
-}
-
-const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &rule_name) {
+const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const ParseResult &parse_result) {
 	auto &ops_map = GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(rule_name);
+	auto ops_entry = ops_map.find(parse_result.name);
 	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+		throw NotImplementedException("No trampoline transformer for rule '%s'", parse_result.name);
 	}
 	return *ops_entry->second;
 }
@@ -89,7 +82,7 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const Matcher &root_matcher) const {
+                                                                           const Matcher &root_matcher) {
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -97,8 +90,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	ParseResultAllocator parse_result_allocator;
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_iterator.Position();
-	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index,
-	                 options.preserve_identifier_case, &packrat_cache);
+	MatchState state(token_iterator, suggestions, parse_result_allocator, max_token_index, options.identifier_case_mode,
+	                 &packrat_cache);
 	auto match_result = root_matcher.MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
@@ -142,8 +135,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	auto &transform_functions = GetTransformFunctions(options);
-	PEGTransformer transformer(transformer_allocator, transform_functions, parser.rules, options);
+	PEGTransformer transformer(transformer_allocator, token_iterator, options);
 
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
@@ -197,9 +189,8 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("SettingName", &TransformIdentifierOrKeyword);
 }
 
-PEGTransformerFactory::PEGTransformerFactory() {
+PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
 	RegisterGenerated();
-	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterCommon();
 	RegisterCreateTable();
@@ -209,12 +200,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterKeywordsAndIdentifiers();
 }
 
-const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
-PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) const {
-	if (options.debug_transformer_trampoline_style) {
-		return trampoline_transform_functions;
-	}
-	return sql_transform_functions;
+void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {
+	PEGTransformerFactory factory(grammar);
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {

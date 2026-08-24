@@ -64,15 +64,14 @@ public:
 	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const Identifier &table_schema,
-		                const Identifier &table_name)
-		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, QualifiedName table_name)
+		    : index_list(index_list), index(std::move(index)), table_name(std::move(table_name)) {
 		}
 
 		reference<TableIndexList> index_list;
 		unique_ptr<Index> index;
-		Identifier table_schema;
-		Identifier table_name;
+		//! The fully-qualified name of the table the index belongs to ([catalog, schema path..., table])
+		QualifiedName table_name;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -863,9 +862,7 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	// Remove any replay indexes of this table.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema ==
-		                                                         info.GetQualifiedName().Schema() &&
-		                                                     replay_info.table_name == info.GetQualifiedName().Name();
+		                                              return replay_info.table_name == info.GetQualifiedName();
 	                                              }),
 	                               state.replay_index_infos.end());
 
@@ -940,10 +937,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
-	auto &table = catalog
-	                  .GetEntry<TableCatalogEntry>(context, ReplayQualifiedName(catalog, table_info.GetQualifiedName(),
-	                                                                            table_info.GetQualifiedName().Name()))
-	                  .Cast<DuckTableEntry>();
+	auto table_name = ReplayQualifiedName(catalog, table_info.GetQualifiedName(), table_info.GetQualifiedName().Name());
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, table_name).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -985,8 +980,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance),
-	                                      table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), std::move(table_name));
 
 	catalog.Alter(context, alter_info);
 }
@@ -1237,12 +1231,9 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	const auto schema_name = create_info->GetQualifiedName().Schema();
-	const auto table_name = info.table;
-
 	// the table lives in the same (possibly nested) schema as the index
-	auto &entry = catalog.GetEntry<TableCatalogEntry>(
-	    context, ReplayQualifiedName(catalog, create_info->GetQualifiedName(), table_name));
+	auto table_name = ReplayQualifiedName(catalog, create_info->GetQualifiedName(), info.table);
+	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, table_name);
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);
@@ -1254,7 +1245,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name, table_name);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), std::move(table_name));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -1266,14 +1257,14 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 		return;
 	}
 
-	// Remove the replay index, if any.
-	state.replay_index_infos.erase(
-	    std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
-	                   [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                   return replay_info.table_schema == info.GetQualifiedName().Schema() &&
-		                          replay_info.index->GetIndexName() == info.GetQualifiedName().Name();
-	                   }),
-	    state.replay_index_infos.end());
+	// Remove the replay index, if any - the index lives in the same (possibly nested) schema as its table
+	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
+	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
+		                                              return replay_info.table_name.WithName(
+		                                                         replay_info.index->GetIndexName()) ==
+		                                                     info.GetQualifiedName();
+	                                              }),
+	                               state.replay_index_infos.end());
 
 	catalog.DropEntry(context, info);
 }

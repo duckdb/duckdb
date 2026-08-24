@@ -11798,7 +11798,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NameList", &PEGTransformerFactory::TransformNameListInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
-		sql_transform_functions[rule.name] = rule.transform;
+		grammar.SetTransform(rule.name, rule.transform);
 	}
 }
 
