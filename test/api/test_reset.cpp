@@ -181,6 +181,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
+	    "active_grammar_extensions",
 	    "allowed_configs",
 	    "allowed_directories",
 	    "allowed_paths",
