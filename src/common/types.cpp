@@ -155,8 +155,10 @@ PhysicalType LogicalType::GetInternalType() {
 		}
 		return EnumType::GetPhysicalType(*this);
 	}
-	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
+		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
+		return PhysicalType::UINT8;
+	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
