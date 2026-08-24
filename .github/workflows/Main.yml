@@ -514,7 +514,6 @@ jobs:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         FORCE_WARN_UNUSED: 1
-        DISABLE_SANITIZER: 1
         SMOKE_RUNNER: build/release/test/run
       with:
         build: python3 scripts/ci/retry.py -- make release
@@ -699,7 +698,7 @@ jobs:
     - name: Build
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        LTO: full
+        LTO: thin
         LTO_JOBS: 8
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
         ENABLE_EXTENSION_AUTOLOADING: 1
