@@ -423,15 +423,7 @@ void DataTable::VerifyIndexBuffers() const {
 }
 
 void DataTableInfo::VerifyIndexBuffers() const {
-	for (auto index : indexes.MutableIndexHandles()) {
-		if (auto delta = index.FindDelta(IndexDeltaType::DELETED_ROWS_IN_USE)) {
-			delta->VerifyBuffers();
-		}
-		if (index->IsBound()) {
-			auto bound_index = std::move(index).Into<BoundIndex>();
-			bound_index->VerifyBuffers();
-		}
-	}
+	indexes.VerifyBuffers();
 }
 
 void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {

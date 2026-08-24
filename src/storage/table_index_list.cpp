@@ -45,6 +45,16 @@ void IndexEntry::Vacuum() {
 	}
 }
 
+void IndexEntry::VerifyBuffers() {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {
+		delta->VerifyBuffers();
+	}
+	if (owned_index->IsBound()) {
+		owned_index->Cast<BoundIndex>().VerifyBuffers();
+	}
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -250,6 +260,13 @@ void TableIndexList::Vacuum() {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->Vacuum();
+	}
+}
+
+void TableIndexList::VerifyBuffers() const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->VerifyBuffers();
 	}
 }
 

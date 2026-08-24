@@ -166,6 +166,8 @@ public:
 	bool IsUnique() const;
 	//! Vacuums the physical index if it is bound.
 	void Vacuum();
+	//! Verifies the buffers of the physical index and its delete delta.
+	void VerifyBuffers();
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -357,6 +359,8 @@ public:
 	bool HasUniqueIndexes() const;
 	//! Vacuums all bound indexes.
 	void Vacuum();
+	//! Verifies the buffers of all bound indexes and their delete deltas.
+	void VerifyBuffers() const;
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).
