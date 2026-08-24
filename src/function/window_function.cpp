@@ -18,7 +18,14 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
 }
 
-BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_enum(base.window_enum) {
+BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundWindowFunction(make_shared_ptr<WindowFunction>(base)) {
+}
+
+BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p)
+    : window_enum(base_p->window_enum), definition(std::move(base_p)) {
+	auto &base = *definition;
 	name = base.name;
 	schema_name = base.GetSchemaName();
 	catalog_name = base.GetCatalogName();

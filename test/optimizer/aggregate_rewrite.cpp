@@ -26,7 +26,7 @@ static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
-	const auto &function = entry.functions.GetFunctionByArguments(context, {child->GetReturnType()});
+	auto function = entry.functions.GetFunctionByArguments(context, {child->GetReturnType()});
 	FunctionBinder function_binder(context);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(child));
@@ -127,7 +127,7 @@ static void RegisterDagAggregate(Connection &con, const char *name = "test_dag_a
                                  OptimizerType optimizer_type = OptimizerType::INVALID,
                                  aggregate_rewrite_cost_t cost = nullptr) {
 	auto functions = CountFun::GetFunctions();
-	auto function = functions.GetFunctionByArguments(*con.context, {LogicalType::BIGINT});
+	auto function = *functions.GetFunctionByArguments(*con.context, {LogicalType::BIGINT});
 	function.SetName(name);
 	function.SetRewriteCallback(RewriteDagAggregate, policy, optimizer_type, cost);
 	CreateAggregateFunctionInfo info(function);

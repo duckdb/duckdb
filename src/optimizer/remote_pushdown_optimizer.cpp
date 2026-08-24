@@ -868,7 +868,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
 			for (auto &func : tf_entry.functions.functions) {
-				if (func.return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
+				if (func->return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
 					is_set_returning = true;
 					break;
 				}
@@ -1102,7 +1102,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 		// at least one overload must be non-volatile (the selected overload is verified after binding)
 		auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
 		for (auto &overload : scalar_entry.functions.functions) {
-			if (foldable_modifiers && overload.GetStability() != FunctionStability::VOLATILE) {
+			if (foldable_modifiers && overload->GetStability() != FunctionStability::VOLATILE) {
 				state.foldability = ExpressionFoldability::FOLDABLE;
 				break;
 			}
