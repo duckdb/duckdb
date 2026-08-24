@@ -57,8 +57,8 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterSubSystem(unique_ptr<
 	return new_registry;
 }
 
-shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterCompressionFilesystem(
-    unique_ptr<CompressedFileSystem> fs) const {
+shared_ptr<FileSystemRegistry>
+FileSystemRegistry::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) const {
 	auto new_registry = make_shared_ptr<FileSystemRegistry>(*this);
 	auto compression_type = fs->GetCompressionType().ToString();
 	new_registry->compressed_fs[compression_type] = make_shared_ptr<FileSystemHandle>(std::move(fs));
@@ -207,7 +207,6 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
 	} else {
-		// note: FindFileSystem may have refreshed the registry after autoloading an extension
 		auto compression_filesystem = FindCompressionFileSystem(*registry, compression, file.path);
 		if (compression_filesystem) {
 			file_handle =

@@ -18,8 +18,7 @@ namespace duckdb {
 class FileCompressionType {
 public:
 	//! Creates an UNCOMPRESSED compression type
-	FileCompressionType() : compression("uncompressed") {
-	}
+	DUCKDB_API FileCompressionType();
 	//! Creates a compression type from a string, normalizing known aliases (e.g. "infer" -> auto detection)
 	DUCKDB_API FileCompressionType(string compression); // NOLINT: allow implicit conversion from string
 
@@ -32,26 +31,14 @@ public:
 	DUCKDB_API static const FileCompressionType ZSTD;
 
 public:
-	bool operator==(const FileCompressionType &other) const {
-		return compression == other.compression;
-	}
-	bool operator!=(const FileCompressionType &other) const {
-		return compression != other.compression;
-	}
+	DUCKDB_API bool operator==(const FileCompressionType &other) const;
+	DUCKDB_API bool operator!=(const FileCompressionType &other) const;
 	//! Whether this refers to an actual compression scheme (i.e. not uncompressed and not auto-detection)
-	bool IsCompressed() const {
-		return !IsUncompressed() && !IsAutoDetect();
-	}
-	bool IsUncompressed() const {
-		return compression == "uncompressed";
-	}
-	bool IsAutoDetect() const {
-		return compression == "auto_detect";
-	}
+	DUCKDB_API bool IsCompressed() const;
+	DUCKDB_API bool IsUncompressed() const;
+	DUCKDB_API bool IsAutoDetect() const;
 	//! The canonical (lower-case) name of the compression scheme, e.g. "gzip"
-	const string &ToString() const {
-		return compression;
-	}
+	DUCKDB_API const string &ToString() const;
 
 private:
 	string compression;

@@ -9,12 +9,42 @@ const FileCompressionType FileCompressionType::UNCOMPRESSED = FileCompressionTyp
 const FileCompressionType FileCompressionType::GZIP = FileCompressionType("gzip");
 const FileCompressionType FileCompressionType::ZSTD = FileCompressionType("zstd");
 
+// note: the constructors and predicates below use string literals instead of the constants above, as they can run
+// during static initialization of globals in other translation units (e.g. FileFlags), before the constants are
+// initialized
+FileCompressionType::FileCompressionType() : compression("uncompressed") {
+}
+
 FileCompressionType::FileCompressionType(string compression_p) : compression(StringUtil::Lower(compression_p)) {
 	if (compression == "infer" || compression == "auto") {
 		compression = "auto_detect";
 	} else if (compression == "none" || compression.empty()) {
 		compression = "uncompressed";
 	}
+}
+
+bool FileCompressionType::operator==(const FileCompressionType &other) const {
+	return compression == other.compression;
+}
+
+bool FileCompressionType::operator!=(const FileCompressionType &other) const {
+	return compression != other.compression;
+}
+
+bool FileCompressionType::IsCompressed() const {
+	return !IsUncompressed() && !IsAutoDetect();
+}
+
+bool FileCompressionType::IsUncompressed() const {
+	return compression == "uncompressed";
+}
+
+bool FileCompressionType::IsAutoDetect() const {
+	return compression == "auto_detect";
+}
+
+const string &FileCompressionType::ToString() const {
+	return compression;
 }
 
 string CompressionExtensionFromType(const FileCompressionType &type) {
