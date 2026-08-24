@@ -70,7 +70,9 @@ static bool GetBindingWidth(const ColumnBinding &binding, const LogicalType &typ
 	}
 	// Variable-width values are only costed when statistics provide a safe upper bound.
 	auto entry = statistics_map.find(binding);
-	if (entry == statistics_map.end() || !StringStats::HasMaxStringLength(*entry->second)) {
+	if (entry == statistics_map.end() || !entry->second ||
+	    entry->second->GetStatsType() != StatisticsType::STRING_STATS ||
+	    !StringStats::HasMaxStringLength(*entry->second)) {
 		return false;
 	}
 	width = GetTypeIdSize(physical_type) + StringStats::MaxStringLength(*entry->second);
