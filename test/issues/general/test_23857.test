@@ -1,0 +1,48 @@
+# name: test/issues/general/test_23857.test
+# description: Trigger bodies bind against the trigger schema
+# group: [general]
+
+require noforcestorage
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+CREATE TABLE s1.t(i INTEGER);
+
+statement ok
+CREATE TABLE s1.row_t(i INTEGER);
+
+statement ok
+CREATE TABLE s1.audit(x INTEGER);
+
+statement ok
+CREATE TABLE s2.audit(y INTEGER);
+
+statement ok
+SET schema = 's1';
+
+statement ok
+CREATE TRIGGER statement_tr AFTER INSERT ON t FOR EACH STATEMENT
+    INSERT INTO audit VALUES (1);
+
+statement ok
+SET schema = 's2';
+
+statement ok
+CREATE TRIGGER row_tr AFTER INSERT ON s1.row_t FOR EACH ROW
+    INSERT INTO audit(x) VALUES (NEW.i);
+
+statement ok
+INSERT INTO s1.t VALUES (42);
+
+statement ok
+INSERT INTO s1.row_t VALUES (2);
+
+query II
+SELECT (SELECT count(*) FROM s1.audit), (SELECT count(*) FROM s2.audit);
+----
+2	0
