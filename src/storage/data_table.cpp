@@ -1698,16 +1698,9 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-
-#ifdef DEBUG
 	// Ensure that we never call UPDATE for indexed columns.
 	// Instead, we must rewrite these updates into DELETE + INSERT.
-	for (auto index : info->indexes.IndexHandles()) {
-		D_ASSERT(index->IsBound());
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		D_ASSERT(!bound_index->IndexIsUpdated(column_ids));
-	}
-#endif
+	info->indexes.VerifyUpdate(column_ids);
 }
 
 unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context,

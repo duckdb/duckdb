@@ -166,6 +166,8 @@ public:
 	bool IsUnique() const;
 	//! Returns whether the physical index has the given name.
 	bool NameEquals(const Identifier &name) const;
+	//! Verifies that the physical index is not updated by the given columns.
+	void VerifyUpdate(const vector<PhysicalIndex> &column_ids) const;
 	//! Vacuums the physical index if it is bound.
 	void Vacuum();
 	//! Verifies the buffers of the physical index and its delete delta.
@@ -369,6 +371,8 @@ public:
 	void Vacuum();
 	//! Verifies the buffers of all bound indexes and their delete deltas.
 	void VerifyBuffers() const;
+	//! Verifies that no index is updated by the given columns.
+	void VerifyUpdate(const vector<PhysicalIndex> &column_ids) const;
 	//! Returns table storage metadata for all indexes.
 	vector<IndexInfo> GetStorageInfo() const;
 	//! Returns the combined in-memory size of all bound indexes.

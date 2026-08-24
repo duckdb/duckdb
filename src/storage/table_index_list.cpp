@@ -43,6 +43,15 @@ bool IndexEntry::NameEquals(const Identifier &name) const {
 	return owned_index->GetIndexName() == name;
 }
 
+void IndexEntry::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
+#ifdef DEBUG
+	auto entry_lock = lock.GetSharedLock();
+	D_ASSERT(owned_index->IsBound());
+	const auto &bound_index = owned_index->Cast<BoundIndex>();
+	D_ASSERT(!bound_index.IndexIsUpdated(column_ids));
+#endif
+}
+
 void IndexEntry::Vacuum() {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (owned_index->IsBound()) {
@@ -291,6 +300,17 @@ void TableIndexList::VerifyBuffers() const {
 	for (const auto &entry : index_entries) {
 		entry->VerifyBuffers();
 	}
+}
+
+void TableIndexList::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
+#ifdef DEBUG
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->VerifyUpdate(column_ids);
+	}
+#else
+	(void)column_ids;
+#endif
 }
 
 vector<IndexInfo> TableIndexList::GetStorageInfo() const {
