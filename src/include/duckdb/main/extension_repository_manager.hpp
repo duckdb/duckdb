@@ -25,7 +25,10 @@ class FileSystem;
 class ExtensionRepositoryManager {
 public:
 	//! The file extension used for the stored repository definitions
-	static constexpr const char *FILE_EXTENSION = ".json";
+	//! Repository files carry a ".duckdb_extension." segment so that they are covered by the write protection in
+	//! OpenerFileSystem::IsDuckDBExtensionName: they hold the pinned keys that decide which extensions may be loaded,
+	//! so they must not be writable through anything but CREATE EXTENSION REPOSITORY
+	static constexpr const char *FILE_EXTENSION = ".duckdb_extension.repo.json";
 	//! The version of the repository file format
 	static constexpr const idx_t FORMAT_VERSION = 1;
 	//! The metadata file that a repository serves under its prefix, describing its trusted signing keys

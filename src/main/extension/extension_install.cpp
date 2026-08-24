@@ -250,7 +250,11 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
 }
 
 static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
-	auto file_writer = BufferedFileWriter(fs, path);
+	// the metadata file records which repository the extension came from, and thereby which keys may have signed it,
+	// so it is part of the extension trust domain and reserved from other writers
+	auto file_writer = BufferedFileWriter(fs, path,
+	                                      FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+	                                          FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	BinarySerializer::Serialize(metadata, file_writer);
 	file_writer.Sync();
 }
