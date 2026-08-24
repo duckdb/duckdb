@@ -70,6 +70,14 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	return result;
 }
 
+idx_t IndexEntry::GetInMemorySize() const {
+	auto entry_lock = lock.GetSharedLock();
+	if (!owned_index->IsBound()) {
+		return 0;
+	}
+	return owned_index->Cast<BoundIndex>().GetInMemorySize();
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -291,6 +299,15 @@ vector<IndexInfo> TableIndexList::GetStorageInfo() const {
 	result.reserve(index_entries.size());
 	for (const auto &entry : index_entries) {
 		result.push_back(entry->GetStorageInfo());
+	}
+	return result;
+}
+
+idx_t TableIndexList::GetInMemorySize() const {
+	annotated_lock_guard lock(index_entries_lock);
+	idx_t result = 0;
+	for (const auto &entry : index_entries) {
+		result += entry->GetInMemorySize();
 	}
 	return result;
 }

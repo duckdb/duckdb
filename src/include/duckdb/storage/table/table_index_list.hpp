@@ -172,6 +172,8 @@ public:
 	void VerifyBuffers();
 	//! Returns a copy of the physical index's table storage metadata.
 	IndexInfo GetStorageInfo() const;
+	//! Returns the in-memory size of the physical index, or zero if it is unbound.
+	idx_t GetInMemorySize() const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -369,6 +371,8 @@ public:
 	void VerifyBuffers() const;
 	//! Returns table storage metadata for all indexes.
 	vector<IndexInfo> GetStorageInfo() const;
+	//! Returns the combined in-memory size of all bound indexes.
+	idx_t GetInMemorySize() const;
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).

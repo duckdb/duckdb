@@ -125,18 +125,8 @@ idx_t LocalTableStorage::EstimatedSize() const {
 		data_size = appended_rows * row_size;
 	}
 
-	// get the index size
-	idx_t index_sizes = 0;
-	for (auto index : append_indexes.IndexHandles()) {
-		if (!index->IsBound()) {
-			continue;
-		}
-		const auto bound_index = std::move(index).Into<BoundIndex>();
-		index_sizes += bound_index->GetInMemorySize();
-	}
-
 	// return the size of the appended rows and the index size
-	return data_size + index_sizes;
+	return data_size + append_indexes.GetInMemorySize();
 }
 
 void LocalTableStorage::WriteNewRowGroup(idx_t flushed_row_group_idx) {
