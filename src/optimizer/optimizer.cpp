@@ -51,6 +51,7 @@
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/projection_placement.hpp"
 #include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
@@ -442,6 +443,10 @@ void Optimizer::RunBuiltInOptimizers() {
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 		}
+		RunOptimizer(OptimizerType::PROJECTION_PLACEMENT, [&]() {
+			ProjectionPlacementOptimizer projection_placement(*this, statistics_map);
+			projection_placement.Optimize(plan);
+		});
 	}
 
 	// rewrite row_number window function + filter on row_number to aggregate

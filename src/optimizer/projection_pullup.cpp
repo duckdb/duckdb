@@ -3,24 +3,10 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-
-static bool ReferencesVariableSizeColumn(const Expression &expression) {
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		return !TypeIsConstantSize(expression.GetReturnType().InternalType());
-	}
-	bool result = false;
-	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
-		if (!result && ReferencesVariableSizeColumn(child)) {
-			result = true;
-		}
-	});
-	return result;
-}
 
 void ProjectionPullup::PopParents(const LogicalOperator &op) {
 	// pop back elements until the last operator in the stack is THIS operator
@@ -170,6 +156,8 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 	column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
 	auto projection_to_move = std::move(op);
 	op = std::move(projection_to_move->children[0]);
+	projection_to_move->has_estimated_cardinality = insert_at_node.has_estimated_cardinality;
+	projection_to_move->estimated_cardinality = insert_at_node.estimated_cardinality;
 
 	idx_t next_col = proj.expressions.size();
 	for (idx_t i = 0; i < insert_bindings.size(); i++) {
@@ -238,6 +226,14 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	VisitOperator(op);
 }
 
+bool ProjectionPullup::OptimizeJoinChild(LogicalOperator &join, unique_ptr<LogicalOperator> &child) {
+	auto child_before = child.get();
+	parents.push_back(join);
+	VisitOperator(child);
+	PopParents(join);
+	return child.get() != child_before;
+}
+
 void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	// These operators depend on column order.
@@ -300,15 +296,6 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op->Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
-		bool crosses_join = false;
-		for (auto &parent : parents) {
-			if (parent.get().type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-			    parent.get().type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-				crosses_join = true;
-				break;
-			}
-		}
-
 		// Check if all expressions are simple column refs
 		// Cannot pull this projection up safely if any expression is not a column ref
 		bool all_column_refs = true;
@@ -318,14 +305,7 @@ void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 			if (proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				all_column_refs = false;
 			}
-			if (proj.expressions[i]->IsVolatile()) {
-				ProjectionPullup next(optimizer, root);
-				next.Optimize(proj.children[0]);
-				return; // bail
-			}
-			if (crosses_join && proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF &&
-			    (!TypeIsConstantSize(proj.expressions[i]->GetReturnType().InternalType()) ||
-			     ReferencesVariableSizeColumn(*proj.expressions[i]))) {
+			if (proj.expressions[i]->IsVolatile() || proj.expressions[i]->CanThrow()) {
 				ProjectionPullup next(optimizer, root);
 				next.Optimize(proj.children[0]);
 				return; // bail

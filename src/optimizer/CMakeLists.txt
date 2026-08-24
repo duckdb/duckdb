@@ -57,6 +57,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   projection_pullup.cpp
+  projection_placement.cpp
   remote_pushdown_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
