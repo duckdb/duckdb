@@ -138,12 +138,9 @@ FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
 optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystemRegistry &registry,
                                                                       const FileCompressionType &compression,
                                                                       const string &filepath) {
-	if (compression.IsUncompressed()) {
-		return nullptr;
-	}
-
+	auto resolved = compression;
 	// For auto-detection, check whether any registered compression filesystem can handle this file.
-	if (compression.IsAutoDetect()) {
+	if (resolved.IsAutoDetect()) {
 		auto lower_path = StringUtil::Lower(filepath);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
@@ -154,29 +151,30 @@ optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileSystem
 				return entry.second->file_system.get();
 			}
 		}
-		// zstd support is provided by the parquet extension - hint at loading it if the file looks zstd-compressed
-		if (IsFileCompressed(lower_path, FileCompressionType::ZSTD)) {
-			throw NotImplementedException(
-			    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
-			    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+		if (!IsFileCompressed(lower_path, FileCompressionType::ZSTD)) {
+			// no applicable compression filesystem was found - consider the file uncompressed
+			return nullptr;
 		}
-		// no applicable compression filesystem was found - consider the file uncompressed
+		// the file looks zstd-compressed but zstd is not registered - fall through to raise an error below
+		resolved = FileCompressionType::ZSTD;
+	}
+	if (resolved.IsUncompressed()) {
 		return nullptr;
 	}
 
 	// An explicit compression type was requested - look it up in the registry.
-	auto iter = registry.compressed_fs.find(compression.ToString());
+	auto iter = registry.compressed_fs.find(resolved.ToString());
 	if (iter != registry.compressed_fs.end()) {
 		return iter->second->file_system.get();
 	}
-	if (compression == FileCompressionType::ZSTD) {
-		throw NotImplementedException(
-		    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
-		    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+	// zstd support is provided by the parquet extension - hint at loading it
+	string hint;
+	if (resolved == FileCompressionType::ZSTD) {
+		hint = "\nConsider explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme";
 	}
-	throw NotImplementedException("Attempting to open a file with compression type \"%s\", but no compression "
-	                              "filesystem with that type has been registered",
-	                              compression.ToString());
+	throw NotImplementedException(
+	    "Attempting to open a compressed file, but the compression type is not supported (compression type \"%s\")%s",
+	    resolved.ToString(), hint);
 }
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
