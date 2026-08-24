@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 #include <type_traits>
 
