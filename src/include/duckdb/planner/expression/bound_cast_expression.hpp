@@ -22,6 +22,9 @@ struct BoundCastExpression {
 	//! Create a bound cast function expression around the given child using the provided bound cast
 	static unique_ptr<Expression> Create(unique_ptr<Expression> child, const LogicalType &target_type,
 	                                     BoundCastInfo bound_cast, bool try_cast = false);
+	//! Create a bound cast function expression that is rebound using only the built-in SQL casts
+	static unique_ptr<Expression> CreateDefault(unique_ptr<Expression> child, const LogicalType &target_type,
+	                                            BoundCastInfo bound_cast, bool try_cast = false);
 
 	//! The expression that is being cast
 	static const Expression &Child(const BoundFunctionExpression &cast_expr);

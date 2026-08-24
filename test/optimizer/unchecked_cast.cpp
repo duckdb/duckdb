@@ -276,12 +276,12 @@ TEST_CASE("Statistics specialize casts only after a successful proof", "[optimiz
 
 	auto safe_result = connection.Query("SELECT min(i::TINYINT), max(i::TINYINT) FROM safe_values");
 	REQUIRE_NO_FAIL(*safe_result);
-	CHECK_COLUMN(safe_result, 0, {0});
-	CHECK_COLUMN(safe_result, 1, {127});
+	REQUIRE(CHECK_COLUMN(safe_result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(safe_result, 1, {127}));
 	auto unsafe_result = connection.Query("SELECT count(*) FILTER (WHERE TRY_CAST(i AS TINYINT) IS NULL) "
 	                                      "FROM unsafe_values");
 	REQUIRE_NO_FAIL(*unsafe_result);
-	CHECK_COLUMN(unsafe_result, 0, {128});
+	REQUIRE(CHECK_COLUMN(unsafe_result, 0, {128}));
 	REQUIRE_FAIL(connection.Query("SELECT sum(i::TINYINT) FROM unsafe_values"));
 }
 
@@ -308,7 +308,7 @@ TEST_CASE("Compressed materialization uses cast-owned proofs", "[optimizer][cast
 
 	auto result = connection.Query("SELECT sum(i) FROM (SELECT i FROM safe_values ORDER BY i)");
 	REQUIRE_NO_FAIL(*result);
-	CHECK_COLUMN(result, 0, {8128});
+	REQUIRE(CHECK_COLUMN(result, 0, {8128}));
 }
 
 TEST_CASE("Custom casts without statistics callbacks are not specialized", "[optimizer][cast]") {
@@ -323,7 +323,7 @@ TEST_CASE("Custom casts without statistics callbacks are not specialized", "[opt
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE custom_values AS SELECT i::BIGINT i FROM range(3) t(i)"));
 	auto result = connection.Query("SELECT i::TINYINT FROM custom_values ORDER BY i");
 	REQUIRE_NO_FAIL(*result);
-	CHECK_COLUMN(result, 0, {1, 2, 3});
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	DuckDB reverse_db;
 	Connection reverse_connection(reverse_db);
@@ -333,7 +333,7 @@ TEST_CASE("Custom casts without statistics callbacks are not specialized", "[opt
 	REQUIRE_NO_FAIL(reverse_connection.Query("CREATE TABLE reverse_values AS SELECT i::BIGINT i FROM range(128) t(i)"));
 	auto reverse_result = reverse_connection.Query("SELECT sum(i) FROM (SELECT i FROM reverse_values ORDER BY i)");
 	REQUIRE_NO_FAIL(*reverse_result);
-	CHECK_COLUMN(reverse_result, 0, {8128});
+	REQUIRE(CHECK_COLUMN(reverse_result, 0, {8128}));
 }
 
 TEST_CASE("Compressed materialization uses value-preserving default casts", "[optimizer][cast]") {
@@ -345,11 +345,20 @@ TEST_CASE("Compressed materialization uses value-preserving default casts", "[op
 	casts.RegisterCastFunction(LogicalType::BIGINT, LogicalType::TINYINT, std::move(custom_cast));
 
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE custom_values AS SELECT i::BIGINT i FROM range(101) t(i)"));
+	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_serializer=true"));
 	auto explicit_cast = connection.Query("SELECT sum(i::TINYINT) FROM custom_values");
 	REQUIRE_NO_FAIL(*explicit_cast);
-	CHECK_COLUMN(explicit_cast, 0, {5151});
+	REQUIRE(CHECK_COLUMN(explicit_cast, 0, {5151}));
 
 	auto materialized = connection.Query("SELECT sum(i) FROM (SELECT i FROM custom_values ORDER BY i)");
 	REQUIRE_NO_FAIL(*materialized);
-	CHECK_COLUMN(materialized, 0, {5050});
+	REQUIRE(CHECK_COLUMN(materialized, 0, {5050}));
+
+	REQUIRE_NO_FAIL(connection.Query("SET storage_compatibility_version='v1.5.2'"));
+	auto legacy_explicit_cast = connection.Query("SELECT sum(i::TINYINT) FROM custom_values");
+	REQUIRE_NO_FAIL(*legacy_explicit_cast);
+	REQUIRE(CHECK_COLUMN(legacy_explicit_cast, 0, {5151}));
+	auto legacy_materialized = connection.Query("SELECT sum(i) FROM (SELECT i FROM custom_values ORDER BY i)");
+	REQUIRE_NO_FAIL(*legacy_materialized);
+	REQUIRE(CHECK_COLUMN(legacy_materialized, 0, {5050}));
 }
