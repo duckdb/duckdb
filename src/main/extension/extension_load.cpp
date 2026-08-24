@@ -5,6 +5,7 @@
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/main/capi_v2/extension_load_v2.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
@@ -24,6 +25,18 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Extension C API
 //===--------------------------------------------------------------------===//
+
+//! Which C API family an extension targets. C_STRUCT_UNSTABLE always means V2: everything that was unstable in the V1
+//! API was stabilized into v1.5.6, so a V1 extension pins that version rather than building against "unstable".
+static bool UsesCAPIV2(const ExtensionInitResult &init_result) {
+	if (init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
+		return true;
+	}
+	if (init_result.abi_type != ExtensionABIType::C_STRUCT) {
+		return false;
+	}
+	return VersioningUtils::IsCAPIV2Version(init_result.duckdb_capi_version);
+}
 
 //! State that is kept during the load phase of a C API extension
 struct DuckDBExtensionLoadState {
@@ -107,21 +120,19 @@ struct ExtensionAccess {
 		string version_string = version;
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
+		// Only reached for V1 extensions: C_STRUCT_UNSTABLE now selects the V2 entrypoint, which has its own get_api
 		if (load_state.init_result.abi_type == ExtensionABIType::C_STRUCT) {
 			idx_t major, minor, patch;
 			auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
 
-			if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
+			if (!parsed || major != DUCKDB_EXTENSION_API_VERSION_MAJOR ||
+			    !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
 				load_state.has_error = true;
 				load_state.error_data = ErrorData(
 				    ExceptionType::UNKNOWN_TYPE,
 				    "Unsupported C CAPI version detected during extension initialization: " + string(version));
 				return nullptr;
 			}
-		} else if (load_state.init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
-			// NOTE: we currently don't check anything here: the version of extensions of ABI type C_STRUCT_UNSTABLE is
-			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb versions meaning they will always
-			// receive the whole function pointer struct
 		} else {
 			load_state.has_error = true;
 			load_state.error_data =
@@ -167,6 +178,36 @@ void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t in
 		string msg = load_state.has_error ? load_state.error_data.Message() : "unknown error";
 		load_info->LoadFail(ErrorData(msg));
 		throw IOException("Failed to load static C API extension '%s': %s", name, msg);
+	}
+
+	ExtensionInstallInfo install_info;
+	install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
+	load_info->FinishLoad(install_info);
+}
+
+void DuckDB::LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun_t init_fun) {
+	auto &manager = ExtensionManager::Get(*instance);
+	auto load_info = manager.BeginLoad({name});
+	if (!load_info) {
+		// already loaded
+		return;
+	}
+
+	ExtensionInitResult init_result;
+	init_result.filename = name;
+	init_result.filebase = name;
+	// Statically compiled extensions are always tied to the exact DuckDB version
+	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
+	init_result.lib_hdl = nullptr;
+
+	try {
+		// Statically linked extensions bind DuckDB's symbols at link time, so they never fetch the vtable. There is no
+		// client context this early either, so the entrypoint gets a connection of its own.
+		instance->InvokeExtensionEntrypointV2(init_result, name, init_fun, nullptr, /* statically_linked */ true);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		load_info->LoadFail(error);
+		throw;
 	}
 
 	ExtensionInstallInfo install_info;
@@ -577,6 +618,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	result.abi_type = parsed_metadata.abi_type;
+	result.duckdb_capi_version = parsed_metadata.duckdb_capi_version;
 
 	if (!direct_load) {
 		auto info_file_name = filename + ".info";
@@ -644,7 +686,8 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options,
+                                            optional_ptr<ClientContext> context) {
 	// Loading a second copy of an extension that is already linked into this binary is an ODR
 	// violation. The default extension table cannot detect that for out-of-tree extensions, which
 	// are never marked statically_loaded, so ask the CMake-generated loader instead.
@@ -662,7 +705,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
+		LoadExternalExtensionInternal(db, fs, options.extension_name, *info, context);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -671,7 +714,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                                    ExtensionActiveLoad &info) {
+                                                    ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -703,9 +746,32 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 		return;
 	}
 
-	// C ABI
-	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT ||
-	    extension_init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
+	// C ABI, V2
+	if (UsesCAPIV2(extension_init_result)) {
+		auto init_fun_name = extension_init_result.filebase + "_init_c_api_v2";
+		auto init_fun_capi_v2 = TryLoadFunctionFromDLL<ext_init_c_api_v2_fun_t>(
+		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+
+		if (!init_fun_capi_v2) {
+			throw IOException(
+			    "File \"%s\" did not contain function \"%s\". Extensions built against the unstable C API, or against "
+			    "C API v2.x.y, must use the entrypoint from duckdb_extension_v2.h. To keep using the V1 C API, pin it "
+			    "with build_loadable_extension_capi(%s 1 5 6 ...), which provides \"%s_init_c_api\" instead.",
+			    extension_init_result.filename, init_fun_name, extension_init_result.filebase,
+			    extension_init_result.filebase);
+		}
+
+		db.InvokeExtensionEntrypointV2(extension_init_result, extension, init_fun_capi_v2, context,
+		                               /* statically_linked */ false);
+
+		D_ASSERT(extension_init_result.install_info);
+
+		info.FinishLoad(*extension_init_result.install_info);
+		return;
+	}
+
+	// C ABI, V1
+	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
 		ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
 		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
@@ -749,7 +815,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options, context);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
