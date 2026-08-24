@@ -41,10 +41,13 @@ SELECT CASE random() WHEN DATE '2020-01-01' THEN 1 WHEN DATE '2020-01-02' THEN 2
 ----
 <REGEX>:Conversion Error:.*source column random\(\).*
 
-# Simple CASE retains its historical implicit result-column name.
+# Simple CASE uses its SQL syntax as the implicit result-column name.
 query I
-SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END"
-FROM (SELECT CASE 1 WHEN 1 THEN 2 END)
+SELECT "CASE i WHEN (w) THEN (t) ELSE e END"
+FROM (
+	SELECT CASE i WHEN w THEN t ELSE e END
+	FROM (VALUES (1, 1, 2, NULL::INTEGER)) tbl(i, w, t, e)
+)
 ----
 2
 
@@ -53,22 +56,31 @@ SELECT simple_case_alias FROM (SELECT CASE 1 WHEN 1 THEN 2 END AS simple_case_al
 ----
 2
 
-# Historical names are preserved when simple CASE is nested in another expression.
+# The syntax-based name is also used when simple CASE is nested in another expression.
 query I
-SELECT "sum(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END)"
-FROM (SELECT sum(CASE i WHEN 0 THEN 1 ELSE 0 END) FROM range(2) tbl(i))
+SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)"
+FROM (
+	SELECT sum(CASE i WHEN w THEN t ELSE e END)
+	FROM (VALUES (0, 0, 1, 0), (1, 0, 1, 0)) tbl(i, w, t, e)
+)
 ----
 1
 
 query I
-SELECT "(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END + 1)"
-FROM (SELECT CASE i WHEN 0 THEN 1 ELSE 0 END + 1 FROM (VALUES (0)) tbl(i))
+SELECT "(CASE i WHEN (w) THEN (t) ELSE e END + delta)"
+FROM (
+	SELECT CASE i WHEN w THEN t ELSE e END + delta
+	FROM (VALUES (0, 0, 1, 0, 1)) tbl(i, w, t, e, delta)
+)
 ----
 2
 
 query I
-SELECT "CAST(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END AS BIGINT)"
-FROM (SELECT CAST(CASE i WHEN 0 THEN 1 ELSE 0 END AS BIGINT) FROM (VALUES (0)) tbl(i))
+SELECT "CAST(CASE i WHEN (w) THEN (t) ELSE e END AS BIGINT)"
+FROM (
+	SELECT CAST(CASE i WHEN w THEN t ELSE e END AS BIGINT)
+	FROM (VALUES (0, 0, 1, 0)) tbl(i, w, t, e)
+)
 ----
 1
 
@@ -451,11 +463,14 @@ CREATE VIEW stored_simple_case AS
 	FROM range(10000)
 
 statement ok
-CREATE VIEW stored_simple_case_name AS SELECT CASE 1 WHEN 1 THEN 2 END
+CREATE VIEW stored_simple_case_name AS
+	SELECT CASE i WHEN w THEN t ELSE e END
+	FROM (VALUES (1, 1, 2, NULL::INTEGER)) tbl(i, w, t, e)
 
 statement ok
 CREATE VIEW stored_nested_simple_case_name AS
-	SELECT sum(CASE i WHEN 0 THEN 1 ELSE 0 END) FROM range(2) tbl(i)
+	SELECT sum(CASE i WHEN w THEN t ELSE e END)
+	FROM (VALUES (0, 0, 1, 0), (1, 0, 1, 0)) tbl(i, w, t, e)
 
 restart
 
@@ -465,12 +480,12 @@ SELECT count(*) FROM stored_simple_case WHERE result = 'other'
 0
 
 query I
-SELECT "CASE  WHEN ((1 = 1)) THEN (2) ELSE NULL END" FROM stored_simple_case_name
+SELECT "CASE i WHEN (w) THEN (t) ELSE e END" FROM stored_simple_case_name
 ----
 2
 
 query I
-SELECT "sum(CASE  WHEN ((i = 0)) THEN (1) ELSE 0 END)" FROM stored_nested_simple_case_name
+SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)" FROM stored_nested_simple_case_name
 ----
 1
 
