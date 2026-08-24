@@ -373,7 +373,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
-	auto &scalar_function = func.functions.functions.front();
+	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
 	if (!bind_lambda_function) {
 		return BindResult("This scalar function does not support lambdas!");

@@ -492,7 +492,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = *func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
