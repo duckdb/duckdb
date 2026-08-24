@@ -101,6 +101,8 @@ struct VariantBuilder {
 	//! maps a key string to its (unsorted) dictionary index, owned by the result's keys vector
 	OrderedOwningStringMap<uint32_t> &dictionary;
 
+	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
+
 	//! the offsets at which the current row's entries begin
 	idx_t row_values = 0;
 	idx_t row_children = 0;
@@ -154,7 +156,10 @@ struct VariantBuilder {
 
 	//! Emit an ARRAY value with 'n' elements. 'emit_fn(i)' must emit exactly one value for element i.
 	template <class EMIT_FN>
-	void EmitArray(idx_t n, EMIT_FN &&emit_fn) {
+	void EmitArray(idx_t n, EMIT_FN &&emit_fn, idx_t depth = 0) {
+		if (depth >= MAX_RECURSION_DEPTH) {
+			throw InvalidInputException("VARIANT nesting exceeds maximum of %d", MAX_RECURSION_DEPTH);
+		}
 		auto byte_offset = NumericCast<uint32_t>(blob.size());
 		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
 		byte_offsets.push_back(byte_offset);
@@ -474,7 +479,10 @@ auto CollectObjectChildren(const NODE &it) {
 
 //! Traverse a VariantNode-like cursor 'it' (any type exposing the node concept) into the builder.
 template <class NODE>
-void EmitIterator(const NODE &it, VariantBuilder &builder) {
+void EmitIterator(const NODE &it, VariantBuilder &builder, idx_t depth = 0) {
+	if (depth >= VariantBuilder::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_RECURSION_DEPTH);
+	}
 	if (it.IsNull() || it.IsMissing()) {
 		builder.EmitNull();
 		return;
@@ -486,12 +494,13 @@ void EmitIterator(const NODE &it, VariantBuilder &builder) {
 		auto children = CollectObjectChildren(it);
 		builder.EmitObject(
 		    children.size(), [&](idx_t i) { return children[i].key; },
-		    [&](idx_t i) { EmitIterator(children[i].value, builder); });
+		    [&](idx_t i) { EmitIterator(children[i].value, builder, depth + 1); });
 		break;
 	}
 	case VariantLogicalType::ARRAY: {
 		auto array = it.GetArrayChildren();
-		builder.EmitArray(array.size(), [&](idx_t i) { EmitIterator(array[i], builder); });
+		builder.EmitArray(
+		    array.size(), [&](idx_t i) { EmitIterator(array[i], builder, depth + 1); }, depth + 1);
 		break;
 	}
 	default:
