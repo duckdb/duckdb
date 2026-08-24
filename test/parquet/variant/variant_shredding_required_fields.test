@@ -73,13 +73,42 @@ WHERE name = 'element';
 ----
 element	REQUIRED
 
-# Missing shredded fields still round-trip (encoded as null value + null typed_value under a present field group)
+# Array shredding with a non-list scalar: typed_value is unused, element group is still REQUIRED
+statement ok
+COPY (
+	SELECT '42'::VARIANT AS v
+) TO '{TEST_DIR}/variant_required_array_scalar.parquet' (
+	SHREDDING {v: 'VARCHAR[]'}
+);
+
+query II
+SELECT name, repetition_type
+FROM parquet_schema('{TEST_DIR}/variant_required_array_scalar.parquet')
+WHERE name = 'element';
+----
+element	REQUIRED
+
+query I
+SELECT v FROM '{TEST_DIR}/variant_required_array_scalar.parquet';
+----
+42
+
+# Missing shredded fields: unused field groups are still REQUIRED
 statement ok
 COPY (
 	SELECT {'a': 1::INTEGER}::VARIANT AS v
 ) TO '{TEST_DIR}/variant_required_missing_field.parquet' (
 	SHREDDING {v: 'STRUCT(a INTEGER, b VARCHAR)'}
 );
+
+query II
+SELECT name, repetition_type
+FROM parquet_schema('{TEST_DIR}/variant_required_missing_field.parquet')
+WHERE name IN ('a', 'b')
+ORDER BY name;
+----
+a	REQUIRED
+b	REQUIRED
 
 query I
 SELECT v FROM '{TEST_DIR}/variant_required_missing_field.parquet';
