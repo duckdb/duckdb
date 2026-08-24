@@ -175,10 +175,11 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		Vector::DebugTransformToDictionary(vector);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
+		// LAMBDA is not a value - its slot only holds a placeholder, so there is nothing to round-trip
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE ||
-			        type.id() == LogicalTypeId::TUPLE) {
+			        type.id() == LogicalTypeId::TUPLE || type.id() == LogicalTypeId::LAMBDA) {
 				    return true;
 			    }
 			    return false;
