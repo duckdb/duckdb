@@ -16,8 +16,6 @@ public:
 	}
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
-	//! Pull one projection through a known join without revisiting the full plan.
-	bool OptimizeJoinChild(LogicalOperator &join, unique_ptr<LogicalOperator> &child);
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:

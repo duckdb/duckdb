@@ -227,14 +227,6 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	VisitOperator(op);
 }
 
-bool ProjectionPullup::OptimizeJoinChild(LogicalOperator &join, unique_ptr<LogicalOperator> &child) {
-	auto child_bindings_before = child->GetColumnBindings();
-	parents.push_back(join);
-	VisitOperator(child);
-	PopParents(join);
-	return child_bindings_before != child->GetColumnBindings();
-}
-
 void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	// These operators depend on column order.

@@ -63,3 +63,49 @@ FROM (
 JOIN placement_result_dimension f USING (i);
 ----
 1000000
+
+# Verification projections preserve IEJoin payload types
+statement ok
+SET debug_verification_projection = true;
+
+statement ok
+SET merge_join_threshold = 0;
+
+statement ok
+SET nested_loop_join_threshold = 0;
+
+statement ok
+SET prefer_range_joins = true;
+
+statement ok
+CREATE TABLE placement_ie_left(id INTEGER, start DATE, stop DATE, price DECIMAL);
+
+statement ok
+INSERT INTO placement_ie_left VALUES
+	(1, '2026-01-01', '2026-01-02', 150),
+	(2, '2026-01-02', '2026-01-03', 151),
+	(3, '2026-01-03', '2026-01-04', 380),
+	(4, '2026-01-05', NULL, 410),
+	(5, NULL, '2026-01-06', 420);
+
+statement ok
+CREATE TABLE placement_ie_right(start DATE, stop DATE, bid DECIMAL);
+
+statement ok
+INSERT INTO placement_ie_right VALUES
+	('2026-01-01', '2026-01-03', 149.5),
+	('2026-01-03', '2026-01-04', 150.5),
+	('2026-01-04', '2026-01-05', 379);
+
+query III
+SELECT l.id, l.start, l.stop
+FROM placement_ie_left l
+ANTI JOIN placement_ie_right r
+	ON l.start < r.stop
+	AND r.start < l.stop
+	AND l.price + r.bid > 300
+ORDER BY 1;
+----
+1	2026-01-01	2026-01-02
+4	2026-01-05	NULL
+5	NULL	2026-01-06
