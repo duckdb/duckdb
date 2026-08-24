@@ -164,6 +164,8 @@ public:
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
+	//! Returns whether the physical index has the given name.
+	bool NameEquals(const Identifier &name) const;
 	//! Vacuums the physical index if it is bound.
 	void Vacuum();
 	//! Verifies the buffers of the physical index and its delete delta.
@@ -339,6 +341,8 @@ public:
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name) const;
+	//! Returns true if an index with the given name exists.
+	bool Contains(const Identifier &name) const;
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
 	//! Binds unbound indexes possibly present after loading an extension.

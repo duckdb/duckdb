@@ -38,6 +38,11 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
+bool IndexEntry::NameEquals(const Identifier &name) const {
+	auto entry_lock = lock.GetSharedLock();
+	return owned_index->GetIndexName() == name;
+}
+
 void IndexEntry::Vacuum() {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (owned_index->IsBound()) {
@@ -317,6 +322,16 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 		}
 	}
 	return true;
+}
+
+bool TableIndexList::Contains(const Identifier &name) const {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		if (entry->NameEquals(name)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
