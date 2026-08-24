@@ -152,9 +152,9 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 // How permissive an access level is, independent of the enum's numeric values. Higher is more permissive
 static int ExtensionRepositoryPermissiveness(ExtensionRepositoryAccess access) {
 	switch (access) {
-	case ExtensionRepositoryAccess::ALLOWED:
-		return 2;
 	case ExtensionRepositoryAccess::UNDECIDED:
+		return 2;
+	case ExtensionRepositoryAccess::ALLOWED:
 		return 1;
 	default: // FORBIDDEN
 		return 0;
