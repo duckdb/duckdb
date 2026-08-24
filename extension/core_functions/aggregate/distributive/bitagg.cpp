@@ -134,24 +134,41 @@ struct BitXorOperation : public BitwiseOperation {
 };
 
 struct BitStringBitwiseOperation : public BitwiseOperation {
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.is_set && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.is_set) {
+			OP::template Assign<INPUT_TYPE>(state, input, unary_input.input);
+			state.is_set = true;
+		} else {
+			OP::template Execute<INPUT_TYPE>(state, input);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		if (!source.is_set) {
+			// source is NULL, nothing to do.
+			return;
+		}
+		if (!target.is_set) {
+			// target is NULL, use source value directly.
+			OP::template Assign<typename STATE::TYPE>(target, source.value, aggr_input_data);
+			target.is_set = true;
+		} else {
+			OP::template Execute<typename STATE::TYPE>(target, source.value);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &aggr_input_data) {
 		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
 			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
-			auto ptr = new char[len];
+			auto ptr = aggr_input_data.allocator.Allocate(len);
 			memcpy(ptr, input.GetData(), len);
-
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+			state.value = string_t(char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -203,7 +220,7 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 	}
 
 	bit_and.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
+	    AggregateFunction::UnaryAggregate<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
 	return bit_and;
 }
@@ -213,9 +230,8 @@ AggregateFunctionSet BitOrFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
-	bit_or.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_or.AddFunction(AggregateFunction::UnaryAggregate<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_or;
 }
 
@@ -225,7 +241,7 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	bit_xor.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
+	    AggregateFunction::UnaryAggregate<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
 	return bit_xor;
 }
