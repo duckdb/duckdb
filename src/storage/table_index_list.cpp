@@ -506,6 +506,19 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() const {
 	return column_ids;
 }
 
+unordered_set<column_t> TableIndexList::GetUniqueIndexColumns() const {
+	annotated_lock_guard lock(index_entries_lock);
+	unordered_set<column_t> result;
+	for (const auto &entry : index_entries) {
+		auto index_info = entry->GetStorageInfo();
+		if (!index_info.is_unique) {
+			continue;
+		}
+		result.insert(index_info.column_set.begin(), index_info.column_set.end());
+	}
+	return result;
+}
+
 IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
 

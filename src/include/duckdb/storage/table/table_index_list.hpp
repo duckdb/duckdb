@@ -390,6 +390,8 @@ public:
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns() const;
+	//! Get the combined column ids of the unique indexes.
+	unordered_set<column_t> GetUniqueIndexColumns() const;
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
