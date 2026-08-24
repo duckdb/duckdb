@@ -8,6 +8,7 @@ add_library_unity(
   filter_pushdown_alias.cpp
   join_order_conflict_detector.cpp
   relation_statistics.cpp
+  remove_unused_columns.cpp
   union_alls.cpp)
 
 set(UNITTEST_OBJECT_FILES

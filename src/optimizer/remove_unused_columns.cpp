@@ -31,6 +31,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -157,14 +158,17 @@ void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
 	rec.column_count = entries.size();
 }
 
-void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
-                                                        const unordered_set<ProjectionIndex> &required_columns) {
+vector<ReplacementBinding>
+RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+                                                   const unordered_set<ProjectionIndex> &required_columns) {
 	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
 	cte_ref_pruner.VisitOperator(*rec.children[1]);
+	auto binding_replacements = std::move(cte_ref_pruner.binding_replacements);
 	ColumnBindingReplacer column_binding_replacer;
-	column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
+	column_binding_replacer.replacement_bindings = binding_replacements;
 	column_binding_replacer.VisitOperator(*rec.children[1]);
+	return binding_replacements;
 }
 
 bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
@@ -179,10 +183,13 @@ bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
 		return false;
 	}
 	ApplyRecursiveProjections(rec, required_columns);
-	RewriteRecursiveCTEReferences(rec, required_columns);
+	auto reference_replacements = RewriteRecursiveCTEReferences(rec, required_columns);
 	for (auto &child : rec.children) {
 		RemoveUnusedColumns remove(*this, true);
 		remove.VisitOperator(child);
+	}
+	for (auto &replacement : reference_replacements) {
+		root.projection_map_replacements[replacement.old_binding] = {replacement.new_binding};
 	}
 	return true;
 }
@@ -221,6 +228,9 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 		auto current_binding = ColumnBinding(table_idx, ProjectionIndex(col_idx + offset));
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
+			if (replace) {
+				root.projection_map_replacements[current_binding].clear();
+			}
 			// this entry is not referred to, erase it from the set of expressions
 			list.erase_at(col_idx);
 			offset++;
@@ -241,11 +251,98 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 		}
 		if (should_replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
-			auto created_bindings =
-			    ReplaceBinding(current_binding, ColumnBinding(table_idx, ProjectionIndex(new_col_idx)));
+			auto new_binding = ColumnBinding(table_idx, ProjectionIndex(new_col_idx));
+			auto created_bindings = ReplaceBinding(current_binding, new_binding);
+			auto &map_replacements = root.projection_map_replacements[current_binding];
+			map_replacements.clear();
+			for (idx_t binding_idx = 0; binding_idx < created_bindings; binding_idx++) {
+				map_replacements.emplace_back(table_idx, ProjectionIndex(new_col_idx + binding_idx));
+			}
 			new_col_idx += created_bindings;
 		} else {
 			new_col_idx++;
+		}
+	}
+}
+
+enum class ProjectionBindingResolution : uint8_t { SELECTED, REPLACEMENT };
+
+static void ResolveProjectionBindings(ColumnBinding binding, const column_binding_set_t &new_bindings,
+                                      const column_binding_map_t<vector<ColumnBinding>> &replacements,
+                                      column_binding_set_t &active_bindings, vector<ColumnBinding> &resolved_bindings,
+                                      ProjectionBindingResolution resolution) {
+	if (resolution == ProjectionBindingResolution::REPLACEMENT && new_bindings.find(binding) != new_bindings.end()) {
+		resolved_bindings.push_back(binding);
+		return;
+	}
+	auto replacement = replacements.find(binding);
+	if (replacement != replacements.end()) {
+		if (!active_bindings.insert(binding).second) {
+			throw InternalException("Cyclic column pruning replacement for %s", binding.ToString());
+		}
+		for (auto &new_binding : replacement->second) {
+			if (new_binding == binding) {
+				if (new_bindings.find(new_binding) != new_bindings.end()) {
+					resolved_bindings.push_back(new_binding);
+				}
+			} else {
+				ResolveProjectionBindings(new_binding, new_bindings, replacements, active_bindings, resolved_bindings,
+				                          ProjectionBindingResolution::REPLACEMENT);
+			}
+		}
+		active_bindings.erase(binding);
+		return;
+	}
+	if (new_bindings.find(binding) != new_bindings.end()) {
+		resolved_bindings.push_back(binding);
+	}
+}
+
+static void RemapPrunedProjectionMap(LogicalOperator &op, idx_t child_index,
+                                     const vector<ColumnBinding> &old_child_bindings,
+                                     const column_binding_map_t<vector<ColumnBinding>> &replacements) {
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
+	D_ASSERT(projection_map);
+	vector<ColumnBinding> selected_bindings;
+	if (projection_map->empty()) {
+		selected_bindings = old_child_bindings;
+	} else {
+		selected_bindings.reserve(projection_map->size());
+		for (auto projection_index : *projection_map) {
+			if (projection_index.GetIndex() >= old_child_bindings.size()) {
+				throw InternalException("Projection map references a missing child column");
+			}
+			selected_bindings.push_back(old_child_bindings[projection_index.GetIndex()]);
+		}
+	}
+
+	auto new_child_bindings = op.children[child_index]->GetColumnBindings();
+	column_binding_set_t new_binding_set(new_child_bindings.begin(), new_child_bindings.end());
+	vector<ColumnBinding> rewritten_bindings;
+	for (auto &binding : selected_bindings) {
+		column_binding_set_t active_bindings;
+		ResolveProjectionBindings(binding, new_binding_set, replacements, active_bindings, rewritten_bindings,
+		                          ProjectionBindingResolution::SELECTED);
+	}
+	if (rewritten_bindings.empty()) {
+		if (new_child_bindings.size() > 1) {
+			*projection_map = {ProjectionIndex(0)};
+		} else {
+			projection_map->clear();
+		}
+	} else if (rewritten_bindings == new_child_bindings) {
+		projection_map->clear();
+	} else {
+		*projection_map = ColumnBindingLayout(new_child_bindings).CreateProjectionMap(rewritten_bindings);
+	}
+}
+
+void RemoveUnusedColumns::VisitPrunableChildren(LogicalOperator &op) {
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		auto old_child_bindings = op.children[child_index]->GetColumnBindings();
+		VisitOperator(op.children[child_index]);
+		if (op.HasProjectionMap()) {
+			RemapPrunedProjectionMap(op, child_index, old_child_bindings, root.projection_map_replacements);
 		}
 	}
 }
@@ -635,6 +732,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			// removed columns.
 			CTERefPruner cte_ref_pruner(cte.table_index, referenced_columns_in_rhs);
 			cte_ref_pruner.VisitOperator(*cte.children[1]);
+			for (auto &replacement : cte_ref_pruner.binding_replacements) {
+				root.projection_map_replacements[replacement.old_binding] = {replacement.new_binding};
+			}
 
 			// We also need to rewrite the column bindings in the right-hand side of the CTE to account for the removed
 			// columns on the left-hand side. Conveniently, the CTERefPruner already has the information about which
@@ -684,7 +784,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		break;
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
-	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	VisitPrunableChildren(op);
 
 	if (!analyze &&
 	    (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
@@ -1208,15 +1308,24 @@ void CTERefPruner::VisitOperator(LogicalOperator &op) {
 					ColumnBinding source_binding(cte_ref.table_index, ProjectionIndex(i));
 					ColumnBinding target_binding(cte_ref.table_index, ProjectionIndex(i - skipped));
 					binding_replacements.push_back(ReplacementBinding(source_binding, target_binding));
+					projection_map_replacements[source_binding] = {target_binding};
 				}
 			} else {
+				projection_map_replacements[ColumnBinding(cte_ref.table_index, ProjectionIndex(i))].clear();
 				skipped++;
 			}
 		}
 		cte_ref.types = std::move(types);
 		cte_ref.chunk_types = cte_ref.types;
 	}
-	LogicalOperatorVisitor::VisitOperator(op);
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		auto old_child_bindings = op.children[child_index]->GetColumnBindings();
+		VisitOperator(*op.children[child_index]);
+		if (op.HasProjectionMap()) {
+			RemapPrunedProjectionMap(op, child_index, old_child_bindings, projection_map_replacements);
+		}
+	}
+	VisitOperatorExpressions(op);
 }
 
 void BaseColumnPruner::SetMode(BaseColumnPrunerMode mode) {
