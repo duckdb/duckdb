@@ -307,9 +307,7 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 	    ScalarFunction({float_array, float_array}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>));
 	set.AddFunction(
 	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 

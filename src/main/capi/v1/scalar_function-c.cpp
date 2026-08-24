@@ -511,7 +511,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 	}
 	auto &scalar_function_set = GetCScalarFunctionSet(set);
 	for (idx_t idx = 0; idx < scalar_function_set.Size(); idx++) {
-		const auto &scalar_function = scalar_function_set.GetFunctionByOffset(idx);
+		const auto &scalar_function = *scalar_function_set.GetFunctionByOffset(idx);
 		auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 
 		if (scalar_function.name.empty() || !info.function) {
