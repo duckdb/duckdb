@@ -57,8 +57,6 @@ private:
 	string compression;
 };
 
-DUCKDB_API FileCompressionType FileCompressionTypeFromString(const string &input);
-
 DUCKDB_API string CompressionExtensionFromType(const FileCompressionType &type);
 
 DUCKDB_API bool IsFileCompressed(string path, const FileCompressionType &type);

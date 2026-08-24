@@ -17,10 +17,6 @@ FileCompressionType::FileCompressionType(string compression_p) : compression(Str
 	}
 }
 
-FileCompressionType FileCompressionTypeFromString(const string &input) {
-	return FileCompressionType(input);
-}
-
 string CompressionExtensionFromType(const FileCompressionType &type) {
 	if (type == FileCompressionType::GZIP) {
 		return ".gz";
