@@ -463,14 +463,7 @@ void DataTable::SetTableName(Identifier new_name) {
 TableStorageInfo DataTable::GetStorageInfo() const {
 	TableStorageInfo result;
 	result.cardinality = GetTotalRows();
-	for (const auto index : info->indexes.IndexHandles()) {
-		IndexInfo index_info;
-		index_info.is_primary = index->IsPrimary();
-		index_info.is_unique = index->IsUnique() || index_info.is_primary;
-		index_info.is_foreign = index->IsForeign();
-		index_info.column_set = index->GetColumnIdSet();
-		result.index_info.push_back(std::move(index_info));
-	}
+	result.index_info = info->indexes.GetStorageInfo();
 	return result;
 }
 

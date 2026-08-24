@@ -168,6 +168,8 @@ public:
 	void Vacuum();
 	//! Verifies the buffers of the physical index and its delete delta.
 	void VerifyBuffers();
+	//! Returns a copy of the physical index's table storage metadata.
+	IndexInfo GetStorageInfo() const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -361,6 +363,8 @@ public:
 	void Vacuum();
 	//! Verifies the buffers of all bound indexes and their delete deltas.
 	void VerifyBuffers() const;
+	//! Returns table storage metadata for all indexes.
+	vector<IndexInfo> GetStorageInfo() const;
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).

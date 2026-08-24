@@ -55,6 +55,16 @@ void IndexEntry::VerifyBuffers() {
 	}
 }
 
+IndexInfo IndexEntry::GetStorageInfo() const {
+	auto entry_lock = lock.GetSharedLock();
+	IndexInfo result;
+	result.is_primary = owned_index->IsPrimary();
+	result.is_unique = owned_index->IsUnique() || result.is_primary;
+	result.is_foreign = owned_index->IsForeign();
+	result.column_set = owned_index->GetColumnIdSet();
+	return result;
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -268,6 +278,16 @@ void TableIndexList::VerifyBuffers() const {
 	for (const auto &entry : index_entries) {
 		entry->VerifyBuffers();
 	}
+}
+
+vector<IndexInfo> TableIndexList::GetStorageInfo() const {
+	annotated_lock_guard lock(index_entries_lock);
+	vector<IndexInfo> result;
+	result.reserve(index_entries.size());
+	for (const auto &entry : index_entries) {
+		result.push_back(entry->GetStorageInfo());
+	}
+	return result;
 }
 
 unordered_set<string> TableIndexList::DistinctIndexTypes() const {
