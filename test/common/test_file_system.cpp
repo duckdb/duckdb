@@ -22,7 +22,7 @@ using namespace duckdb;
 
 namespace {
 
-void create_dummy_file(string fname) {
+void CreateDummyFile(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
 #ifdef _WIN32
@@ -126,7 +126,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
 	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -174,7 +174,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	auto fname_in_dir = fs->JoinPath(dname, fname);
 	auto fname_in_dir2 = fs->JoinPath(dname, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -273,9 +273,9 @@ TEST_CASE("Test RemoveFiles", "[file_system]") {
 	auto file2 = fs->JoinPath(dname, "file2.txt");
 	auto file3 = fs->JoinPath(dname, "file3.txt");
 	auto file4 = fs->JoinPath(dname, "file4.txt");
-	create_dummy_file(file1);
-	create_dummy_file(file2);
-	create_dummy_file(file3);
+	CreateDummyFile(file1);
+	CreateDummyFile(file2);
+	CreateDummyFile(file3);
 
 	REQUIRE(fs->FileExists(file1));
 	REQUIRE(fs->FileExists(file2));

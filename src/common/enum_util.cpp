@@ -37,7 +37,6 @@
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
