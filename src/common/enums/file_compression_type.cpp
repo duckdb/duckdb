@@ -15,7 +15,8 @@ const FileCompressionType FileCompressionType::ZSTD = FileCompressionType("zstd"
 FileCompressionType::FileCompressionType() : compression("uncompressed") {
 }
 
-FileCompressionType::FileCompressionType(const string &compression_p) : compression(StringUtil::Lower(compression_p)) {
+FileCompressionType::FileCompressionType(string compression_p) : compression(std::move(compression_p)) {
+	compression = StringUtil::Lower(compression);
 	if (compression == "infer" || compression == "auto") {
 		compression = "auto_detect";
 	} else if (compression == "none" || compression.empty()) {

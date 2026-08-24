@@ -20,7 +20,7 @@ public:
 	//! Creates an UNCOMPRESSED compression type
 	DUCKDB_API FileCompressionType();
 	//! Creates a compression type from a string, normalizing known aliases (e.g. "infer" -> auto detection)
-	DUCKDB_API FileCompressionType(const string &compression); // NOLINT: allow implicit conversion from string
+	DUCKDB_API FileCompressionType(string compression); // NOLINT: allow implicit conversion from string
 
 	//! Detect the compression type based on the file name
 	DUCKDB_API static const FileCompressionType AUTO_DETECT;
