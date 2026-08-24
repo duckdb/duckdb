@@ -363,6 +363,20 @@ def build_package(
                 "    }});\n"
                 "#endif\n"
             )
+        elif ext_kind == 'CAPI_V2':
+            ext_capi_declarations += (
+                f'#if {ext_linked_define}\n'
+                f'extern "C" void {ext}_init_c_api_v2(struct duckdb_v2_extension_input *);\n'
+                "#endif\n"
+            )
+            ext_loader_body += (
+                f"#if {ext_linked_define}\n"
+                f"    if (extension==\"{ext}\") {{\n"
+                f"        db.LoadStaticCAPIExtensionV2(\"{ext}\", {ext}_init_c_api_v2);\n"
+                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
+                "    }\n"
+                "#endif\n"
+            )
         else:
             ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
             ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')

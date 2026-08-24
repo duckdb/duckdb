@@ -265,9 +265,7 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 			break;
 		}
 	}
-	for (auto &func : abs.functions) {
-		func.SetFallible();
-	}
+	abs.SetFallible();
 	return abs;
 }
 
@@ -1365,9 +1363,7 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
-	for (auto &function : funcs.functions) {
-		function.SetFallible();
-	}
+	funcs.SetFallible();
 	return funcs;
 }
 
@@ -2093,9 +2089,7 @@ ScalarFunctionSet GreatestCommonDivisorFun::GetFunctions() {
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
 	// negating the minimum value overflows, so the failure must be reportable
-	for (auto &func : funcs.functions) {
-		func.SetFallible();
-	}
+	funcs.SetFallible();
 	return funcs;
 }
 
@@ -2129,9 +2123,7 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	funcs.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
-	for (auto &function : funcs.functions) {
-		function.SetFallible();
-	}
+	funcs.SetFallible();
 	return funcs;
 }
 
