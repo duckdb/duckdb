@@ -164,6 +164,8 @@ public:
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
+	//! Vacuums the physical index if it is bound.
+	void Vacuum();
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -353,6 +355,8 @@ public:
 	}
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
+	//! Vacuums all bound indexes.
+	void Vacuum();
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).

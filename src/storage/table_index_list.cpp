@@ -38,6 +38,13 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
+void IndexEntry::Vacuum() {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (owned_index->IsBound()) {
+		owned_index->Cast<BoundIndex>().Vacuum();
+	}
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -237,6 +244,13 @@ bool TableIndexList::HasUniqueIndexes() const {
 		}
 	}
 	return false;
+}
+
+void TableIndexList::Vacuum() {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->Vacuum();
+	}
 }
 
 unordered_set<string> TableIndexList::DistinctIndexTypes() const {

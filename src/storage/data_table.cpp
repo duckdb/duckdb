@@ -360,12 +360,7 @@ void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info)
 }
 
 void DataTable::VacuumIndexes() {
-	for (auto index : info->indexes.MutableIndexHandles()) {
-		if (index->IsBound()) {
-			auto bound_index = std::move(index).Into<BoundIndex>();
-			bound_index->Vacuum();
-		}
-	}
+	info->indexes.Vacuum();
 }
 
 void DataTable::RebuildIndexes() {
