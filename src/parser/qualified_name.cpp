@@ -104,14 +104,25 @@ end:
 }
 
 hash_t QualifiedName::Hash() const {
-	hash_t result = Catalog().Hash();
-	result = CombineHash(result, Schema().Hash());
-	result = CombineHash(result, Name().Hash());
+	// hash the full path - the qualification can be deeper than [catalog, schema]
+	hash_t result = duckdb::Hash<idx_t>(path.size());
+	for (auto &component : path) {
+		result = CombineHash(result, component.Hash());
+	}
 	return result;
 }
 
 bool QualifiedName::operator==(const QualifiedName &rhs) const {
-	return Catalog() == rhs.Catalog() && Schema() == rhs.Schema() && Name() == rhs.Name();
+	// compare the full path - the qualification can be deeper than [catalog, schema]
+	if (path.size() != rhs.path.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < path.size(); i++) {
+		if (path[i] != rhs.path[i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool QualifiedName::operator!=(const QualifiedName &rhs) const {

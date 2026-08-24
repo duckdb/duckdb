@@ -348,7 +348,7 @@ struct URISchemeDetectionResult {
 };
 
 bool IsValidSchemeChar(char c) {
-	return std::isalnum(c) || c == '+' || c == '.' || c == '-';
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '.' || c == '-';
 }
 
 //! See https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
@@ -363,7 +363,7 @@ URISchemeDetectionResult DetectURIScheme(const string &uri) {
 		return result;
 	}
 
-	if (!std::isalpha(uri[0])) {
+	if (!std::isalpha(static_cast<unsigned char>(uri[0]))) {
 		//! Scheme names consist of a sequence of characters beginning with a letter
 		result.lower_scheme = "";
 		result.scheme_type = URISchemeType::NONE;

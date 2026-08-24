@@ -31,9 +31,12 @@ enum class ExtensionABIType : uint8_t {
 	UNKNOWN = 0,
 	//! Uses C++ ABI, version needs to match precisely
 	CPP = 1,
-	//! Uses C ABI using the duckdb_ext_api_v1 struct, version needs to be equal or higher
+	//! Uses C ABI, version needs to be equal or higher. The CAPI version major selects the API family: 1 uses the
+	//! duckdb_ext_api_v1 struct and the <name>_init_c_api entrypoint, 2 the duckdb_ext_api_v2 struct and
+	//! <name>_init_c_api_v2
 	C_STRUCT = 2,
-	//! Uses C ABI using the duckdb_ext_api_v1 struct including "unstable" functions, version needs to match precisely
+	//! Uses C ABI using the duckdb_ext_api_v2 struct including "unstable" functions, version needs to match precisely.
+	//! Everything that was unstable in the V1 API was stabilized into v1.5.6, so "unstable" now always means V2
 	C_STRUCT_UNSTABLE = 3
 };
 
@@ -74,8 +77,13 @@ struct VersioningUtils {
 	static bool IsReleaseVersion(const string &version_tag);
 
 	//! Note: only supports format v{major}.{minor}.{patch}
+	//! The major selects which C API family the version is checked against: 1 against duckdb_ext_api_v1, 2 against
+	//! duckdb_ext_api_v2. Any other major is unsupported.
 	static bool IsSupportedCAPIVersion(string &capi_version_string);
 	static bool IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch);
+
+	//! Whether a C_STRUCT extension built against this CAPI version uses the V2 API
+	static bool IsCAPIV2Version(const string &capi_version_string);
 };
 
 } // namespace duckdb

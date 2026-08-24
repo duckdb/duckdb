@@ -412,9 +412,7 @@ ScalarFunctionSet RegexpFun::GetFunctions() {
 	    {{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}, {"options", LogicalType::VARCHAR}},
 	    LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>, RegexpMatchesBind, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	for (auto &func : regexp_full_match.functions) {
-		func.SetFallible();
-	}
+	regexp_full_match.SetFallible();
 	return (regexp_full_match);
 }
 
@@ -428,9 +426,7 @@ ScalarFunctionSet RegexpMatchesFun::GetFunctions() {
 	    {{"string", LogicalType::VARCHAR}, {"regex", LogicalType::VARCHAR}, {"options", LogicalType::VARCHAR}},
 	    LogicalType::BOOLEAN, RegexpMatchesFunction<RegexPartialMatch>, RegexpMatchesBind, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	for (auto &func : regexp_partial_match.functions) {
-		func.SetFallible();
-	}
+	regexp_partial_match.SetFallible();
 	return (regexp_partial_match);
 }
 
