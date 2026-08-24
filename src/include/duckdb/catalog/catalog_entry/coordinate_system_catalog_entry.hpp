@@ -22,8 +22,8 @@ public:
 
 public:
 	CoordinateSystemCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateCoordinateSystemInfo &info)
-	    : StandardEntry(CatalogType::COORDINATE_SYSTEM_ENTRY, schema, catalog, info.name), authority(info.authority),
-	      code(info.code), projjson_definition(info.projjson_definition),
+	    : StandardEntry(CatalogType::COORDINATE_SYSTEM_ENTRY, schema, catalog, info.GetCoordinateSystemName()),
+	      authority(info.authority), code(info.code), projjson_definition(info.projjson_definition),
 	      wkt2_2019_definition(info.wkt2_2019_definition) {
 	}
 

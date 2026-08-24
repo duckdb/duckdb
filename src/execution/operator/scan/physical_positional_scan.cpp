@@ -8,6 +8,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <utility>
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 

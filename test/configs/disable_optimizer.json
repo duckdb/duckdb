@@ -2,11 +2,23 @@
   "description": "Run with SET debug_disable_optimizer=true;.",
   "on_init": "SET debug_disable_optimizer=true;",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
+    {
+      "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
+      "paths": [
+        "test/optimizer/joins/required_cross_product_activation.test"
+      ]
+    },
     {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test",
+        "test/sql/optimizer/struct_segment_pruning.test",
+        "test/sql/optimizer/map_extract_row_group_pruning.test",
+        "test/sql/copy/parquet/map_extract_row_group_pruning.test",
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/sql/types/geo/geometry_parquet_pushdown.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test"
@@ -65,6 +77,7 @@
     {
       "reason": "Recursive CTE relies on short-circuiting optimization.",
       "paths": [
+        "test/sql/cte/recursive_cte_limit.test",
         "test/sql/cte/test_recursive_cte_union.test",
         "test/sql/cte/test_recursive_cte_union_all.test",
         "test/sql/cte/test_recursive_cte_tutorial.test"
@@ -95,35 +108,13 @@
       ]
     },
     {
-      "reason": "Statistics are not set without optimizers.",
+      "reason": "Type and function pushdown optimizers changes output types",
       "paths": [
-        "test/optimizer/statistics/statistics_numeric.test",
-        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
-        "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
-        "test/parquet/parquet_stats_function.test",
-        "test/parquet/issue_22144.test",
-        "test/sql/types/struct/struct_stats.test",
-        "test/sql/types/list/list_stats.test",
-        "test/sql/types/nested/array/array_statistics.test",
-        "test/sql/vacuum/test_analyze.test",
-        "test/sql/function/date/date_part_stats.test",
-        "test/sql/function/date/test_date_trunc.test",
-        "test/sql/function/time/test_extract_stats.test",
-        "test/sql/function/generic/test_stats.test",
-        "test/sql/function/timetz/test_date_part.test",
-        "test/sql/storage/types/variant/variant_extract_stats.test",
-        "test/sql/alter/alter_type/test_alter_type.test",
-        "test/sql/alter/add_col/test_add_col_stats.test",
-        "test/sql/copy/return_stats.test",
-        "test/sql/copy/parquet/parquet_stats.test",
-        "test/sql/copy/parquet/writer/parquet_write_decimals.test",
-        "test/sql/copy/parquet/shredded_variant_stats.test",
-        "test/sql/copy/parquet/corrupt_stats.test",
-        "test/sql/copy/parquet/parquet_row_number.test",
-        "test/sql/copy/parquet/parquet_string_stats.test",
-        "test/sql/storage/extended_string_stats.test",
-        "test/sql/storage/min_string_length_too_large.test_slow",
-        "test/sql/storage/total_string_length_repeated_insert.test"
+        "test/optimizer/pushdown/csv_type_pushdown.test",
+        "test/optimizer/pushdown/scalar_function_pushdown.test",
+        "test/sql/copy/csv/test_insert_into_types.test",
+        "test/sql/copy/csv/test_csv_error_message_type.test",
+        "test/sql/copy/csv/test_timestamptz_12926.test"
       ]
     },
     {
@@ -133,19 +124,10 @@
       ]
     },
     {
-      "reason": "FIXME: crash.",
-      "paths": [
-        "test/sql/join/asof/test_asof_join_filter_pushdown.test"
-        ]
-    },
-    {
       "reason": "FIXME: binding bug.",
       "paths": [
-        "test/sql/merge/merge_into_invalid_column_reference.test",
-        "test/sql/merge/merge_into_by_source.test",
-        "test/sql/subquery/scalar/test_complex_correlated_subquery.test",
         "test/sql/join/natural/natural_join.test"
-        ]
+      ]
     }
   ]
 }

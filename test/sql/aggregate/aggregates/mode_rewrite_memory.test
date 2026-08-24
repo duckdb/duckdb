@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/aggregates/mode_rewrite_memory.test
+# description: MODE aggregate rewrite memory usage
+# group: [aggregates]
+
+require exact_vector_size 2048
+
+require no_alternative_verify
+
+statement ok
+SET threads=4;
+
+statement ok
+SET debug_force_external=true;
+
+statement ok
+SET memory_limit='32MB';
+
+# aggregate ordering no longer creates a sorted-list state in the final stage
+query II
+SELECT mode(i ORDER BY i DESC) = 999999, entropy(i ORDER BY i DESC) > 19
+FROM range(1000000) t(i);
+----
+1	1

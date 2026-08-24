@@ -56,13 +56,17 @@ public:
 class TupleDataAllocator {
 public:
 	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
-	                   shared_ptr<ArenaAllocator> stl_allocator);
+	                   shared_ptr<ArenaAllocator> stl_allocator, QueryContext context = QueryContext());
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
 
 	//! Get the buffer manager
 	BufferManager &GetBufferManager();
+	//! Get the query context used to attribute eviction/spill I/O
+	QueryContext GetContext() const {
+		return context;
+	}
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the STL allocator
@@ -140,6 +144,8 @@ private:
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The buffer manager
 	BufferManager &buffer_manager;
+	//! The query context, used to attribute eviction/spill I/O to the query
+	QueryContext context;
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;

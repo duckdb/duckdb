@@ -9,11 +9,14 @@
 #pragma once
 
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
+class GlobalSinkState;
+class LocalSinkState;
 
 class GroupedAggregateHashTable;
 struct AggregatePartition;

@@ -1,0 +1,108 @@
+# name: test/sql/collate/test_collate_list_contains.test
+# description: Test that list_contains/list_position correctly push collations
+# group: [collate]
+
+# list_contains pushes the collation of the target onto the list elements
+query I
+SELECT list_contains(['hello', 'world'], 'HELLO' COLLATE NOCASE)
+----
+true
+
+query I
+SELECT list_contains(['hello', 'world'], 'XYZ' COLLATE NOCASE)
+----
+false
+
+# list_position returns the (1-based) position under the collation
+query I
+SELECT list_position(['hello', 'world'], 'WORLD' COLLATE NOCASE)
+----
+2
+
+query I
+SELECT list_position(['hello', 'world'], 'XYZ' COLLATE NOCASE)
+----
+NULL
+
+# contains() routes to the list overload and pushes collations too
+query I
+SELECT contains(['hello', 'world'], 'World' COLLATE NOCASE)
+----
+true
+
+# without a collation the comparison remains case-sensitive (binary)
+query I
+SELECT list_contains(['hello', 'world'], 'HELLO')
+----
+false
+
+query I
+SELECT list_contains(['hello', 'world'], 'hello')
+----
+true
+
+# combined collations
+query I
+SELECT list_contains(['héllo', 'world'], 'HELLO' COLLATE NOACCENT.NOCASE)
+----
+true
+
+# NULLs in the list
+query I
+SELECT list_position([NULL, 'BB'], 'bb' COLLATE NOCASE)
+----
+2
+
+query I
+SELECT list_contains([NULL, 'BB'], 'bb' COLLATE NOCASE)
+----
+true
+
+# empty list
+query I
+SELECT list_contains([]::VARCHAR[], 'x' COLLATE NOCASE)
+----
+false
+
+# NULL list / NULL target
+query I
+SELECT list_contains(NULL::VARCHAR[], 'x' COLLATE NOCASE)
+----
+NULL
+
+statement ok
+CREATE TABLE null_needle(n VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO null_needle VALUES (NULL);
+
+query I
+SELECT list_position(['a', 'b'], n) FROM null_needle
+----
+NULL
+
+# collation pushed from a NOCASE column onto the list elements
+statement ok
+CREATE TABLE t(id INTEGER, l VARCHAR[], needle VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO t VALUES (1, ['Apple', 'Banana'], 'banana'), (2, ['Cherry', 'date'], 'DATE'), (3, ['Egg'], 'fig');
+
+query III
+SELECT id, list_contains(l, needle), list_position(l, needle) FROM t ORDER BY id
+----
+1	true	2
+2	true	2
+3	false	NULL
+
+# the list column itself can carry a NOCASE collation (via a NOCASE column)
+query II
+SELECT list_contains([needle], 'BANANA'), list_position([needle], 'BANANA') FROM t WHERE id = 1
+----
+true	1
+
+# non-varchar lists are unaffected
+query I
+SELECT list_contains([1, 2, 3], 2)
+----
+true

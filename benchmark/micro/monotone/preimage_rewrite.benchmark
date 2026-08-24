@@ -1,0 +1,15 @@
+# name: benchmark/micro/monotone/preimage_rewrite.benchmark
+# description: MonotonePreimageRule rewrites year(col) = const into a direct date range on the base column (dropping year()), making it sargable and pruning row groups
+# group: [monotone]
+
+name MonotonePreimageRewrite
+group micro
+
+load
+CREATE TABLE dates AS SELECT (DATE '1970-01-01' + (i::INTEGER))::DATE AS d FROM range(50000000) tbl(i);
+
+run
+SELECT count(*) FROM dates WHERE year(d) = 2000;
+
+result I
+366

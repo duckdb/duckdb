@@ -74,7 +74,7 @@ FROM duckdb_logs(denormalized_table=1)
 WHERE type ILIKE log_type
 )"},
 	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
-SELECT * EXCLUDE(input_type, scope, aliases)
+SELECT * EXCLUDE(input_type, scope, aliases, typed_value)
   FROM duckdb_settings()
   WHERE name IN (
       'enable_profiling',
@@ -110,8 +110,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
-	bind_info->schema = Identifier(default_macro.schema);
-	bind_info->name = Identifier(default_macro.name);
+	bind_info->SetQualifiedName(QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->macros.push_back(std::move(function));

@@ -66,7 +66,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                           ClientProperties &options, ClientContext &context, bool map_is_parent = false) {
 	child.format = "+s";
-	auto &child_types = StructType::GetChildTypes(type);
+	auto child_types = TupleType::NamedChildren(type);
+
 	child.n_children = NumericCast<int64_t>(child_types.size());
 	root_holder.nested_children.emplace_back();
 	root_holder.nested_children.back().resize(child_types.size());
@@ -75,10 +76,11 @@ void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &chi
 	for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 		root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
 	}
-	child.children = &root_holder.nested_children_ptr.back()[0];
+	child.children = child_types.empty() ? nullptr : &root_holder.nested_children_ptr.back()[0];
 	for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 		InitializeChild(*child.children[type_idx], root_holder);
-		root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first.GetIdentifierName()));
+		auto child_name = child_types[type_idx].first.GetIdentifierName();
+		root_holder.owned_type_names.push_back(AddName(child_name));
 		child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 		SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
 	}
@@ -175,17 +177,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::UUID: {
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			// UUID is cast to a regular (non-view) string by the appender, so never declare "vu".
+			child.format = "U";
 		} else {
-			if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
-				// List views are only introduced in arrow format v1.4
-				child.format = "vu";
-			} else {
-				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-					child.format = "U";
-				} else {
-					child.format = "u";
-				}
-			}
+			child.format = "u";
 		}
 		break;
 	}
@@ -329,7 +325,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
 		break;
 	}
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		SetArrowStructFormat(root_holder, child, type, options, context);
 		break;
 	}
@@ -406,6 +403,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.dictionary = root_holder.nested_children_ptr.back()[0];
+		// dict values are always written in the regular int32 layout (see ArrowEnumData).
 		child.dictionary->format = "u";
 		break;
 	}

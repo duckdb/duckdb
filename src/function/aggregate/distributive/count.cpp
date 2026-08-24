@@ -1,5 +1,7 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -11,6 +13,17 @@ struct BaseCountFunction {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target += source;
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		STATE repeated_count;
+		if (!TryMultiplyOperator::Operation(source, static_cast<STATE>(count), repeated_count)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
+		if (!TryAddOperator::Operation(target, repeated_count, target)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
 	}
 
 	template <class T, class STATE>
@@ -258,7 +271,8 @@ struct CountFunction : public BaseCountFunction {
 
 AggregateStateLayout GetCountStateType(AggregateLayoutInput &input) {
 	auto &function = input.function;
-	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
+	AggregateStateInput state_input(function, input.bind_data.get());
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(state_input)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,

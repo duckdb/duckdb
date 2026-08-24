@@ -52,8 +52,8 @@
 
 #include <stdio.h>
 
-struct W_STORE_TBL g_w_store;
-static struct W_STORE_TBL g_OldValues;
+thread_local struct W_STORE_TBL g_w_store;
+static thread_local struct W_STORE_TBL g_OldValues;
 
 /*
  * mk_store
@@ -62,11 +62,11 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	int32_t nFieldChangeFlags, bFirstRecord = 0;
 
 	/* begin locals declarations */
-	static decimal_t dRevMin, dRevMax;
+	static thread_local decimal_t dRevMin, dRevMax;
 	char *sName1, *sName2, *szTemp;
 	int32_t nHierarchyTotal, nStoreType, nPercentage, nDaysOpen, nMin, nMax;
-	static date_t tDate;
-	static decimal_t min_rev_growth, max_rev_growth, dMinTaxPercentage, dMaxTaxPercentage;
+	static thread_local date_t tDate;
+	static thread_local decimal_t min_rev_growth, max_rev_growth, dMinTaxPercentage, dMaxTaxPercentage;
 	struct W_STORE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(STORE);
 

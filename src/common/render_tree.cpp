@@ -1,7 +1,9 @@
 #include "duckdb/common/render_tree.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -17,6 +19,8 @@ struct PipelineRenderNode {
 
 namespace {
 
+using duckdb::LogicalOperator;
+using duckdb::LogicalOperatorType;
 using duckdb::MaxValue;
 using duckdb::PhysicalDelimJoin;
 using duckdb::PhysicalOperator;
@@ -25,14 +29,40 @@ using duckdb::PhysicalPositionalScan;
 using duckdb::PipelineRenderNode;
 using duckdb::RenderTreeNode;
 
+//! Secure views must not expose anything about their contents - the operators inside the view are never rendered,
+//! regardless of the output format. For the profiling tree the subtree has already been folded into the boundary
+//! node by the query profiler, so there is nothing left to hide there.
+template <class T>
+static bool HidesChildren(const T &op) {
+	return false;
+}
+
+template <>
+bool HidesChildren(const LogicalOperator &op) {
+	return op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW;
+}
+
+template <>
+bool HidesChildren(const PhysicalOperator &op) {
+	return op.type == PhysicalOperatorType::SECURE_VIEW;
+}
+
+template <>
+bool HidesChildren(const PipelineRenderNode &op) {
+	return HidesChildren(op.op);
+}
+
 class TreeChildrenIterator {
 public:
 	template <class T>
 	static bool HasChildren(const T &op) {
-		return !op.children.empty();
+		return !HidesChildren(op) && !op.children.empty();
 	}
 	template <class T>
 	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
+		if (HidesChildren(op)) {
+			return;
+		}
 		for (auto &child : op.children) {
 			callback(*child);
 		}
@@ -41,11 +71,14 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	return !op.GetChildren().empty();
+	return !HidesChildren(op) && !op.GetChildren().empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
                                    const std::function<void(const PhysicalOperator &child)> &callback) {
+	if (HidesChildren(op)) {
+		return;
+	}
 	for (auto &child : op.GetChildren()) {
 		callback(child);
 	}
@@ -53,13 +86,13 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PipelineRenderNode &op) {
-	return op.child.get();
+	return !HidesChildren(op) && op.child.get();
 }
 
 template <>
 void TreeChildrenIterator::Iterate(const PipelineRenderNode &op,
                                    const std::function<void(const PipelineRenderNode &child)> &callback) {
-	if (op.child) {
+	if (op.child && !HidesChildren(op)) {
 		callback(*op.child);
 	}
 }
@@ -104,6 +137,10 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 
 	auto &node_name = info.name;
 	auto result = make_uniq<RenderTreeNode>(node_name, info.GetExtraInfo());
+	if (info.total_row_groups_to_scan > 0) {
+		result->extra_text["Row Groups Scanned"] =
+		    to_string(info.row_groups_scanned) + " / " + to_string(info.total_row_groups_to_scan);
+	}
 	result->extra_text[RenderTreeNode::CARDINALITY] = to_string(info.elements_returned);
 	string timing = StringUtil::Format("%.2f", info.time);
 	result->extra_text[RenderTreeNode::TIMING] = timing + "s";

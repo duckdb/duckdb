@@ -12,14 +12,13 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/type_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/timebase.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp_base.hpp"
 
 namespace duckdb {
 
 struct interval_t;
 struct date_t;
-struct dtime_t;
-struct dtime_tz_t;
 
 struct SubtractOperator {
 	template <class TA, class TB, class TR>

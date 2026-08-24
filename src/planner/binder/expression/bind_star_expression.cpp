@@ -8,6 +8,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -181,6 +182,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "~~*",
 	                                     "!~~*",
 	                                     "regexp_full_match",
+	                                     "regexp_matches",
 	                                     "not_like_escape",
 	                                     "ilike_escape",
 	                                     "not_ilike_escape",
@@ -202,7 +204,8 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	auto original_alias = root->GetAlias();
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
-	if (!inverse && function.FunctionName() == "regexp_full_match" && star.ExcludeList().empty()) {
+	if (!inverse && function.FunctionName() == "regexp_full_match" && function.GetArguments().size() == 2 &&
+	    star.ExcludeList().empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right.GetExpressionMutable());
 	} else {

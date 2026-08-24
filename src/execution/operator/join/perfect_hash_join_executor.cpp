@@ -2,6 +2,8 @@
 
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -16,7 +18,7 @@ const LogicalType &PerfectHashJoinExecutor::GetKeyType() const {
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
-bool ExtractNumericValue(Value val, hugeint_t &result) {
+bool ExtractNumericValue(const Value &val, hugeint_t &result) {
 	if (!val.type().IsIntegral()) {
 		switch (val.type().InternalType()) {
 		case PhysicalType::INT8:
@@ -59,10 +61,11 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 			return false;
 		}
 	} else {
-		if (!val.DefaultTryCastAs(LogicalType::HUGEINT)) {
+		auto cast = val.DefaultTryCastAs(LogicalType::HUGEINT);
+		if (!cast) {
 			return false;
 		}
-		result = val.GetValue<hugeint_t>();
+		result = cast->GetValue<hugeint_t>();
 	}
 	return true;
 }
@@ -137,7 +140,8 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable() {
 	// First, allocate memory for each build column
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
-		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableDictionary(type, build_size));
+		// PHJ keeps each entry alive for the operator's lifetime and wraps it in every emitted chunk
+		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableGlobalDictionary(type, build_size));
 	}
 
 	// and for duplicate_checking

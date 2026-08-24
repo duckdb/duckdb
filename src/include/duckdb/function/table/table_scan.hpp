@@ -13,6 +13,8 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 
+#include "duckdb/storage/table/row_group_order_options.hpp"
+
 namespace duckdb {
 class DuckTableEntry;
 class TableCatalogEntry;

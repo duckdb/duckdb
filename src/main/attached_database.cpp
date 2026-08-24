@@ -1,4 +1,5 @@
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -111,10 +113,14 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 //===--------------------------------------------------------------------===//
 // Attached Database
 //===--------------------------------------------------------------------===//
+ValidChecker &ValidChecker::Get(AttachedDatabase &db) {
+	return db.GetValidChecker();
+}
+
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    Identifier(type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG), 0),
-      db(db), type(type), close_lock(make_shared_ptr<mutex>()) {
+      db(db), validity(db), type(type), close_lock(make_shared_ptr<mutex>()) {
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
@@ -131,8 +137,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Identifier name_p, string file_path_p,
                                    AttachOptions &options)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      close_lock(make_shared_ptr<mutex>()) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), validity(db),
+      parent_catalog(&catalog_p), close_lock(make_shared_ptr<mutex>()) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -140,7 +146,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Ide
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
+	original_path = options.original_path;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -153,8 +161,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Ide
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, Identifier name_p, AttachInfo &info, AttachOptions &options)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      storage_extension(&storage_extension_p), close_lock(make_shared_ptr<mutex>()) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), validity(db),
+      parent_catalog(&catalog_p), storage_extension(&storage_extension_p), close_lock(make_shared_ptr<mutex>()) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -162,7 +170,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
+	original_path = options.original_path;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name.GetIdentifierName(), info, options);
@@ -249,11 +259,29 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	}
 
 	auto close_lock = attached_db->close_lock;
-	lock_guard<mutex> guard(*close_lock);
-	if (attached_db.use_count() == 1) {
-		attached_db->Close(close_action);
+	{
+		lock_guard<mutex> guard(*close_lock);
+		if (attached_db.use_count() != 1) {
+			attached_db.reset();
+			return;
+		}
+		attached_db->is_closing = true;
 	}
+	attached_db->Close(close_action);
 	attached_db.reset();
+}
+
+shared_ptr<AttachedDatabase> AttachedDatabase::TryGetReference(const weak_ptr<AttachedDatabase> &attached_db) {
+	auto result = attached_db.lock();
+	if (!result) {
+		return nullptr;
+	}
+	auto close_lock = result->close_lock;
+	lock_guard<mutex> guard(*close_lock);
+	if (result->is_closing) {
+		result.reset();
+	}
+	return result;
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
@@ -309,6 +337,15 @@ bool AttachedDatabase::IsInitialDatabase() const {
 	return is_initial_database;
 }
 
+void AttachedDatabase::Invalidate(const string &reason) {
+	string recovery = HasStorageManager() && GetStorageManager().InMemory()
+	                      ? "It is an in-memory database, so its data cannot be recovered."
+	                      : "Detach and reattach it before using it again.";
+	ValidChecker::Invalidate(*this, StringUtil::Format("Database %s has been invalidated because checkpointing "
+	                                                   "failed. %s Original error: %s",
+	                                                   GetName(), recovery, reason));
+}
+
 void AttachedDatabase::SetInitialDatabase() {
 	is_initial_database = true;
 }
@@ -337,7 +374,8 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 		auto create_checkpoint = true;
 		if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
 			create_checkpoint = false;
-		} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db)) {
+		} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db) ||
+		           ValidChecker::IsInvalidated(*this)) {
 			create_checkpoint = false;
 		}
 

@@ -1,0 +1,279 @@
+# name: test/sql/json/scalar/test_json_remove.test
+# description: Test JSON remove (remove value at path)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: remove key from object
+query T
+SELECT json_remove('{"a":1,"b":2}', '$.a')
+----
+{"b":2}
+
+# Missing key is a no-op
+query T
+SELECT json_remove('{"a":1}', '$.b')
+----
+{"a":1}
+
+# JSON Pointer syntax works too
+query T
+SELECT json_remove('{"a":1,"b":2}', '/a')
+----
+{"b":2}
+
+# Nested path: remove inside nested object
+query T
+SELECT json_remove('{"a":{"x":1,"y":2}}', '$.a.x')
+----
+{"a":{"y":2}}
+
+# Nested path: missing nested key is a no-op
+query T
+SELECT json_remove('{"a":{"x":1}}', '$.a.y')
+----
+{"a":{"x":1}}
+
+# Array: remove middle element, remaining elements shift down
+query T
+SELECT json_remove('[1,2,3]', '$[1]')
+----
+[1,3]
+
+# Array: remove first element
+query T
+SELECT json_remove('[1,2,3]', '$[0]')
+----
+[2,3]
+
+# Array: remove last element
+query T
+SELECT json_remove('[1,2,3]', '$[2]')
+----
+[1,2]
+
+# Array: index beyond length is a no-op
+query T
+SELECT json_remove('[1,2]', '$[5]')
+----
+[1,2]
+
+# Remove from nested array with JSON Pointer
+query T
+SELECT json_remove('{"a":[1,[2,3],4]}', '/a/1/0')
+----
+{"a":[1,[3],4]}
+
+# Remove object from array
+query T
+SELECT json_remove('[{"a":1},{"b":2}]', '$[0]')
+----
+[{"b":2}]
+
+# Removing the only key leaves an empty object
+query T
+SELECT json_remove('{"a":1}', '$.a')
+----
+{}
+
+# Removing the root produces NULL
+query T
+SELECT json_remove('{"a":1}', '$')
+----
+NULL
+
+# Quoted key containing a dot
+query T
+SELECT json_remove('{"a.b":1,"c":2}', '$."a.b"')
+----
+{"c":2}
+
+# Quoted key containing a slash
+query T
+SELECT json_remove('{"a/b":1,"c":2}', '$."a/b"')
+----
+{"c":2}
+
+# Empty object is a no-op
+query T
+SELECT json_remove('{}', '$.a')
+----
+{}
+
+# NULL handling: NULL in any argument produces NULL
+query T
+SELECT json_remove(NULL, '$.a')
+----
+NULL
+
+query T
+SELECT json_remove('{"a":1}', NULL)
+----
+NULL
+
+# Bare key name (treated as top-level key)
+query T
+SELECT json_remove('{"a":1,"b":2}', 'a')
+----
+{"b":2}
+
+# Constant vector test
+query T
+SELECT json_remove('{"a":1,"b":2}', '$.a') FROM range(3)
+----
+{"b":2}
+{"b":2}
+{"b":2}
+
+# Table-based test: strip a sensitive field
+statement ok
+CREATE TABLE users (id INTEGER, profile JSON);
+
+statement ok
+INSERT INTO users VALUES
+    (1, '{"name":"alice","password":"x1"}'),
+    (2, '{"name":"bob","password":"x2","admin":true}'),
+    (3, '{"name":"carol"}');
+
+query IT
+SELECT id, json_remove(profile, '$.password') FROM users ORDER BY id
+----
+1	{"name":"alice"}
+2	{"name":"bob","admin":true}
+3	{"name":"carol"}
+
+# Composability: remove then normalize
+query T
+SELECT json_normalize(json_remove('{"z":1,"a":2}', '$.z'))
+----
+{"a":2}
+
+# Quoted key with an escaped quote removes the key a"b, not its sibling
+query T
+SELECT json_remove('{"a\"b":1,"a\\":2}', '$."a\"b"')
+----
+{"a\\":2}
+
+# Quoted key with an escaped backslash removes the key a\
+query T
+SELECT json_remove('{"a\\":1,"b":2}', '$."a\\"')
+----
+{"b":2}
+
+# Quoted key containing a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', '$."a~b"')
+----
+{"c":2}
+
+# Empty quoted keys are not valid JSONPath, same as json_extract
+statement error
+SELECT json_remove('{"":1,"a":2}', '$.""')
+----
+JSON path error
+
+# The empty string key is addressable with a JSON Pointer
+query T
+SELECT json_remove('{"":1,"a":2}', '/')
+----
+{"a":2}
+
+# [#-1] removes the last array element
+query T
+SELECT json_remove('[1,2,3]', '$[#-1]')
+----
+[1,2]
+
+# [#-2] removes the second element from the end
+query T
+SELECT json_remove('[1,2,3]', '$[#-2]')
+----
+[1,3]
+
+# [#] is the array length, where no element exists, so this is a no-op
+query T
+SELECT json_remove('[1,2]', '$[#]')
+----
+[1,2]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_remove('[1,2]', '$[#-5]')
+----
+[1,2]
+
+# Reverse index into an empty array is a no-op
+query T
+SELECT json_remove('[]', '$[#-1]')
+----
+[]
+
+# A reverse offset too large to represent is not a valid path
+statement error
+SELECT json_remove('[1,2]', '$[#-18446744073709551617]')
+----
+JSON path error
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_remove('{"a":1}', '$not_a_path')
+----
+JSON path error
+
+# Constant modification path errors remain catchable by TRY
+query T
+SELECT TRY(json_remove('{"a":1}', '$[#-'))
+----
+NULL
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_remove('{"a":[1,2]}', '$.a[*]')
+----
+not supported
+
+# Negative indexes count from the back, same as json_extract
+query T
+SELECT json_remove('[1,2,3]', '$[-1]')
+----
+[1,2]
+
+# The empty path is the whole document, so removal produces NULL
+query T
+SELECT json_remove('{"a":1}', '')
+----
+NULL
+
+# Removing the root of an array document also produces NULL
+query T
+SELECT json_remove('[1,2]', '$')
+----
+NULL
+
+# Raw JSON Pointer escape ~0 addresses a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', '/a~0b')
+----
+{"c":2}
+
+# Raw JSON Pointer escape ~1 addresses a slash
+query T
+SELECT json_remove('{"a/b":1,"c":2}', '/a~1b')
+----
+{"c":2}
+
+# Bare key name containing a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', 'a~b')
+----
+{"c":2}
+
+# Vectorized execution with NULLs mixed in
+query T
+SELECT json_remove(d, '$.x') FROM (VALUES ('{"x":1,"y":2}'), (NULL)) t(d)
+----
+{"y":2}
+NULL

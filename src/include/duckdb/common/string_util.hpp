@@ -14,7 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/complex_json.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 
 #include <cstring>
@@ -128,6 +128,9 @@ public:
 	//! Returns true if the target string ends with the given suffix
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
 
+	//! Returns the size in bytes of the longest common prefix
+	DUCKDB_API static idx_t GetCommonPrefixSize(const string &left, const string &right);
+
 	//! Repeat a string multiple times
 	DUCKDB_API static string Repeat(const string &str, const idx_t n);
 
@@ -225,6 +228,9 @@ public:
 	//! Case insensitive starts-with
 	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
 
+	//! Case insensitive ends-with
+	DUCKDB_API static bool CIEndsWith(const string &str, const string &suffix);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
@@ -316,12 +322,12 @@ public:
 	static bool Equals(const string_t &s1, const char *s2);
 	static bool Equals(const char *s1, const string_t &s2);
 
-	//! JSON method that parses a { string: value } JSON blob
+	//! JSON method that parses a { string: value } JSON blob into a flat key -> value map. Nested objects/arrays are
+	//! kept as their (re-serialized) JSON string value.
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
-	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
-	DUCKDB_API static unique_ptr<ComplexJSON> ParseJSONMap(const string &json, bool ignore_errors = false);
+	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json, bool ignore_errors = false);
 
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
@@ -331,8 +337,6 @@ public:
 
 	//! Transforms an unordered map to a JSON string
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
-	//! Transforms an complex JSON to a JSON string
-	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
 
 	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 

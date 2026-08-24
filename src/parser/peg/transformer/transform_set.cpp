@@ -21,11 +21,14 @@ PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
 }
 
 // SetSetting <- SettingScope? SettingName
-SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer, const SetScope &setting_scope,
+SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer,
+                                                       const optional<SetScope> &setting_scope,
                                                        const Identifier &setting_name) {
 	SettingInfo result;
 	result.name = setting_name;
-	result.scope = setting_scope;
+	if (setting_scope) {
+		result.scope = *setting_scope;
+	}
 	return result;
 }
 
@@ -34,6 +37,13 @@ unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
                                              unique_ptr<SetStatement> set_assignment_or_time_zone) {
 	return std::move(set_assignment_or_time_zone);
+}
+
+// SetSchema <- 'SCHEMA' StringLiteral
+unique_ptr<SetStatement> PEGTransformerFactory::TransformSetSchema(PEGTransformer &transformer,
+                                                                   const string &string_literal) {
+	auto value = make_uniq<ConstantExpression>(Value(string_literal));
+	return make_uniq<SetVariableStatement>("schema", std::move(value), SetScope::AUTOMATIC);
 }
 
 // ZoneLocal <- 'LOCAL'
@@ -129,7 +139,7 @@ SetScope PEGTransformerFactory::TransformGlobalScope(PEGTransformer &transformer
 // ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer, const string &string_literal,
-                                                         const DatePartSpecifier &interval) {
+                                                         const optional<DatePartSpecifier> &interval) {
 	auto expr = make_uniq<ConstantExpression>(Value(string_literal));
 	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 }

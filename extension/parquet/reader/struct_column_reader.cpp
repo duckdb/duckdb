@@ -42,6 +42,11 @@ StructColumnReader::StructColumnReader(const ParquetReader &reader, const Parque
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 }
 
 ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
@@ -51,13 +56,13 @@ ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
 	return *child_readers[child_idx].get();
 }
 
-void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
-                                        TProtocol &protocol_p) {
+void StructColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                        const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
 		if (!child) {
 			continue;
 		}
-		child->InitializeRead(row_group_idx_p, columns, protocol_p);
+		child->InitializeRead(row_group_idx_p, row_group_num_rows, columns, protocol_p);
 	}
 }
 

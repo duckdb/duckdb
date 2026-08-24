@@ -1,0 +1,481 @@
+# name: test/sql/join/hash_join/hash_join_dict_surviving.test
+# description: Test the dict-surviving hash join - a global dictionary build-side DICTIONARY_VECTOR is stored as a narrow row-store index and re-emitted at probe time
+# group: [hash_join]
+
+# force multi-threaded build so thread-local dictionaries reconcile through Merge
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+# keep the written join order so the dictionary lands on the downstream build side
+statement ok
+SET disabled_optimizers='join_order'
+
+# dense nation key picks a perfect hash join that mints the dictionaries; customer's wide key keeps the next join on the regular path
+statement ok
+CREATE TABLE nation AS
+SELECT i AS nk, 'NATION_' || (i % 5) AS n_name, ((i % 5) * 10)::INTEGER AS n_region
+FROM range(25) t(i)
+
+statement ok
+CREATE TABLE customer AS SELECT i * 1000 AS ck, i % 25 AS nk FROM range(2000) t(i)
+
+statement ok
+CREATE TABLE orders AS SELECT i AS ok, (i % 2000) * 1000 AS ck FROM range(8000) t(i)
+
+# VARCHAR payload (16B) over a 25-slot dictionary narrows to a 1-byte index
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	1600
+NATION_1	1600
+NATION_2	1600
+NATION_3	1600
+NATION_4	1600
+
+# INTEGER payload (4B) narrows to a 1-byte index - the slot only ever shrinks
+query II
+SELECT n.n_region, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_region ORDER BY n.n_region
+----
+0	1600
+10	1600
+20	1600
+30	1600
+40	1600
+
+# two narrowed columns (VARCHAR + INTEGER) survive together
+query III
+SELECT n.n_name, n.n_region, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name, n.n_region ORDER BY n.n_name
+----
+NATION_0	0	1600
+NATION_1	10	1600
+NATION_2	20	1600
+NATION_3	30	1600
+NATION_4	40	1600
+
+# dictionary > 256 slots -> 2-byte index
+statement ok
+CREATE TABLE nation2 AS SELECT i AS nk, 'NAME_' || i AS n_name FROM range(300) t(i)
+
+statement ok
+CREATE TABLE customer2 AS SELECT i * 1000 AS ck, i % 300 AS nk FROM range(2000) t(i)
+
+statement ok
+CREATE TABLE orders2 AS SELECT i AS ok, (i % 2000) * 1000 AS ck FROM range(8000) t(i)
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT u.n_name)
+FROM (
+    SELECT n.n_name FROM nation2 n JOIN customer2 c ON n.nk = c.nk JOIN orders2 o ON o.ck = c.ck
+) u
+----
+8000	300
+
+# dictionary > 65536 slots -> 4-byte index (nation4 is the smaller perfect-hash build side)
+statement ok
+CREATE TABLE nation4 AS SELECT i AS nk, 'NM_' || i AS n_name FROM range(70000) t(i)
+
+statement ok
+CREATE TABLE customer4 AS SELECT i * 1000 AS ck, i % 70000 AS nk FROM range(200000) t(i)
+
+statement ok
+CREATE TABLE orders4 AS SELECT i AS ok, (i % 200000) * 1000 AS ck FROM range(400000) t(i)
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT u.n_name)
+FROM (SELECT n.n_name FROM nation4 n JOIN customer4 c ON n.nk = c.nk JOIN orders4 o ON o.ck = c.ck) u
+----
+400000	70000
+
+# chained: the narrowed dictionary survives two consecutive downstream joins (join_order on so each dict result becomes the next build)
+statement ok
+SET disabled_optimizers=''
+
+statement ok
+CREATE TABLE lineitem AS SELECT i AS lk, (i % 8000) * 1000 AS ok FROM range(30000) t(i)
+
+statement ok
+CREATE TABLE orders_c AS SELECT i * 1000 AS ok, (i % 2000) * 1000 AS ck FROM range(8000) t(i)
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n
+JOIN customer c ON n.nk = c.nk
+JOIN orders_c o ON o.ck = c.ck
+JOIN lineitem l ON l.ok = o.ok
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	6000
+NATION_1	6000
+NATION_2	6000
+NATION_3	6000
+NATION_4	6000
+
+statement ok
+SET disabled_optimizers='join_order'
+
+# tiny build routes dict chunks through the caching operator, which must coalesce them without flattening
+statement ok
+CREATE TABLE customer_tiny AS SELECT i * 100000 AS ck, i % 25 AS nk FROM range(50) t(i)
+
+statement ok
+CREATE TABLE orders_tiny AS SELECT i AS ok, (i % 50) * 100000 AS ck FROM range(200) t(i)
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer_tiny c ON n.nk = c.nk JOIN orders_tiny o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	40
+NATION_1	40
+NATION_2	40
+NATION_3	40
+NATION_4	40
+
+# join types that emit RHS columns through GatherRHS
+
+# SEMI: the dict-carrying side flips to a RIGHT_SEMI build and emits through GatherRHS
+query I
+SELECT COUNT(*)
+FROM (SELECT c.ck, n.n_name FROM nation n JOIN customer c ON n.nk = c.nk) u
+SEMI JOIN orders o ON u.ck = o.ck
+----
+2000
+
+# ANTI: every dict-carrying build row matches, so none survive
+query I
+SELECT COUNT(*)
+FROM (SELECT c.ck, n.n_name FROM nation n JOIN customer c ON n.nk = c.nk) u
+ANTI JOIN orders o ON u.ck = o.ck
+----
+0
+
+# RIGHT: an unmatched build row's dictionary index must still resolve via ScanFullOuter
+statement ok
+CREATE TABLE customer_orphan AS
+SELECT i * 1000 AS ck, i % 25 AS nk FROM range(2000) t(i)
+UNION ALL SELECT 7777777, 0
+
+statement ok
+CREATE TABLE orders_miss AS
+SELECT i AS ok, CASE WHEN i < 800 THEN 999999999 ELSE (i % 2000) * 1000 END AS ck FROM range(8000) t(i)
+
+query II
+SELECT COALESCE(u.n_name, 'NO_BUILD') AS nm, COUNT(*) AS cnt
+FROM orders_miss o
+RIGHT JOIN (SELECT c.ck, n.n_name FROM nation n JOIN customer_orphan c ON n.nk = c.nk) u ON o.ck = u.ck
+GROUP BY nm ORDER BY nm
+----
+NATION_0	1441
+NATION_1	1440
+NATION_2	1440
+NATION_3	1440
+NATION_4	1440
+
+# LEFT excluded: NextUniqueLeftJoin gathers outside GatherRHS; build_side_probe_side off keeps the dict side as build
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side'
+
+query II
+SELECT COALESCE(u.n_name, 'NO_MATCH') AS nm, COUNT(*) AS cnt
+FROM orders_miss o
+LEFT JOIN (SELECT c.ck, n.n_name FROM nation n JOIN customer c ON n.nk = c.nk) u ON o.ck = u.ck
+GROUP BY nm ORDER BY nm
+----
+NATION_0	1440
+NATION_1	1440
+NATION_2	1440
+NATION_3	1440
+NATION_4	1440
+NO_MATCH	800
+
+statement ok
+SET disabled_optimizers='join_order'
+
+# FULL OUTER excluded: constant-NULL left-fill makes the output stream non-uniform
+query II
+SELECT COALESCE(u.n_name, 'NO_MATCH') AS nm, COUNT(*) AS cnt
+FROM orders_miss o
+FULL OUTER JOIN (SELECT c.ck, n.n_name FROM nation n JOIN customer_orphan c ON n.nk = c.nk) u ON o.ck = u.ck
+GROUP BY nm ORDER BY nm
+----
+NATION_0	1441
+NATION_1	1440
+NATION_2	1440
+NATION_3	1440
+NATION_4	1440
+NO_MATCH	800
+
+# SINGLE excluded: needs FlatVector::SetNull on unmatched rows, which a dictionary cannot supply
+query I
+SELECT COUNT(*) FROM orders o
+WHERE o.ok < 10
+  AND (SELECT n.n_name FROM nation n JOIN customer c ON n.nk = c.nk WHERE c.ck = o.ck) IS NOT NULL
+----
+10
+
+# external is supported: the in-memory dictionary and the narrow index column survive the spill/repartition,
+# so results must match the in-memory path
+statement ok
+PRAGMA debug_force_external=true
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	1600
+NATION_1	1600
+NATION_2	1600
+NATION_3	1600
+NATION_4	1600
+
+# the strings themselves must reconstruct correctly after the external rebuild (not just the row counts)
+query II
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+WHERE o.ok < 5
+ORDER BY o.ok
+----
+NATION_0	0
+NATION_1	1
+NATION_2	2
+NATION_3	3
+NATION_4	4
+
+# carry both a VARCHAR (n_name) and an INTEGER (n_region) global-dictionary payload through the external join
+query III
+SELECT n.n_name, n.n_region, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name, n.n_region ORDER BY n.n_name
+----
+NATION_0	0	1600
+NATION_1	10	1600
+NATION_2	20	1600
+NATION_3	30	1600
+NATION_4	40	1600
+
+# aggregate keyed on the surviving dictionary column (exercises the downstream per-id cache across the boundary)
+query I
+SELECT COUNT(DISTINCT n.n_name)
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+----
+5
+
+# row-level self-consistency across the external rebuild (the GROUP BY above only checks aggregates)
+query II
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+EXCEPT
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+----
+
+statement ok
+PRAGMA debug_force_external=false
+
+# a column read by a residual predicate keeps native width (the predicate spans both sides to stay a residual)
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk
+JOIN orders o ON o.ck = c.ck AND (o.ok + length(n.n_name)) > 5
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	1600
+NATION_1	1600
+NATION_2	1600
+NATION_3	1600
+NATION_4	1600
+
+# nested-type (LIST) column keeps native width - Vector::Dictionary rejects nested types
+statement ok
+CREATE TABLE nation_list AS SELECT i AS nk, ['NATION_' || (i % 5)] AS n_names FROM range(25) t(i)
+
+query II
+SELECT n.n_names[1] AS nm, COUNT(*) AS cnt
+FROM nation_list n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY nm ORDER BY nm
+----
+NATION_0	1600
+NATION_1	1600
+NATION_2	1600
+NATION_3	1600
+NATION_4	1600
+
+# a 1-byte native column has no narrower index, so it stays native
+statement ok
+CREATE TABLE nation_tiny AS SELECT i AS nk, (i % 5)::TINYINT AS n_t FROM range(25) t(i)
+
+query II
+SELECT n.n_t, COUNT(*) AS cnt
+FROM nation_tiny n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_t ORDER BY n.n_t
+----
+0	1600
+1	1600
+2	1600
+3	1600
+4	1600
+
+# NULL handling
+
+# NULL probe keys never match under equality and are dropped
+statement ok
+CREATE TABLE orders_null_probe AS
+SELECT i AS ok, CASE WHEN i < 100 THEN NULL ELSE (i % 2000) * 1000 END AS ck FROM range(8000) t(i)
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders_null_probe o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	1580
+NATION_1	1580
+NATION_2	1580
+NATION_3	1580
+NATION_4	1580
+
+# NULL build keys are carried but match no probe row
+statement ok
+CREATE TABLE customer_null_key AS
+SELECT CASE WHEN i < 100 THEN NULL ELSE i * 1000 END AS ck, i % 25 AS nk FROM range(2000) t(i)
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation n JOIN customer_null_key c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name
+----
+NATION_0	1520
+NATION_1	1520
+NATION_2	1520
+NATION_3	1520
+NATION_4	1520
+
+# dictionary NULL child slots and a NULL payload value must be preserved 1:1
+statement ok
+CREATE TABLE nation_gap (nk INTEGER, n_name VARCHAR)
+
+statement ok
+INSERT INTO nation_gap VALUES (0, 'A'), (1, 'B'), (2, 'A'), (5, 'C'), (6, NULL)
+
+statement ok
+CREATE TABLE customer_gap AS
+SELECT i * 1000 AS ck, (CASE WHEN i % 7 IN (3, 4) THEN 9 ELSE i % 7 END) AS nk FROM range(2000) t(i)
+
+statement ok
+CREATE TABLE orders_gap AS SELECT i AS ok, (i % 2000) * 1000 AS ck FROM range(8000) t(i)
+
+query II
+SELECT n.n_name, COUNT(*) AS cnt
+FROM nation_gap n JOIN customer_gap c ON n.nk = c.nk JOIN orders_gap o ON o.ck = c.ck
+GROUP BY n.n_name ORDER BY n.n_name NULLS FIRST
+----
+NULL	1140
+A	2288
+B	1144
+C	1140
+
+# empty build: no Sink chunk, so a default-width layout is published at finalize without crashing
+query II
+SELECT u.n_name, COUNT(*) AS cnt
+FROM (SELECT c.ck, n.n_name FROM nation n JOIN customer c ON n.nk = c.nk WHERE 1=0) u
+JOIN orders o ON o.ck = u.ck
+GROUP BY u.n_name ORDER BY u.n_name
+----
+
+# UNION ALL build excluded: multiple producers break the decide-once-on-first-chunk layout contract
+statement ok
+CREATE TABLE other_flat AS SELECT i * 1000 + 500 AS ck, 'FLAT_' || (i % 5) AS n_name FROM range(2000) t(i)
+
+statement ok
+CREATE TABLE probe_mixed AS SELECT i * 500 AS pk FROM range(8000) t(i)
+
+query II
+SELECT u.n_name, COUNT(*) AS cnt
+FROM probe_mixed p JOIN (
+    SELECT c.ck AS ck, n.n_name FROM nation n JOIN customer c ON n.nk = c.nk
+    UNION ALL
+    SELECT o.ck, o.n_name FROM other_flat o
+) u ON p.pk = u.ck
+GROUP BY u.n_name ORDER BY u.n_name
+----
+FLAT_0	400
+FLAT_1	400
+FLAT_2	400
+FLAT_3	400
+FLAT_4	400
+NATION_0	400
+NATION_1	400
+NATION_2	400
+NATION_3	400
+NATION_4	400
+
+# storage dict not admitted: a per-row-group DICTIONARY_VECTOR is not a global dictionary
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side'
+
+statement ok
+ATTACH '{TEST_DIR}/hash_join_dict_surviving.db' AS sdb
+
+statement ok
+PRAGMA force_compression='dictionary'
+
+statement ok
+CREATE TABLE sdb.dim (k VARCHAR, name VARCHAR)
+
+statement ok
+INSERT INTO sdb.dim SELECT 'K_' || i, 'NAME_' || (i % 5) FROM range(5000) t(i)
+
+statement ok
+CREATE TABLE sdb.fact (id INTEGER, k VARCHAR)
+
+statement ok
+INSERT INTO sdb.fact SELECT i, 'K_' || (i % 5000) FROM range(20000) t(i)
+
+statement ok
+CHECKPOINT sdb
+
+query II
+SELECT d.name, COUNT(*) AS cnt FROM sdb.fact f JOIN sdb.dim d ON f.k = d.k GROUP BY d.name ORDER BY d.name
+----
+NAME_0	4000
+NAME_1	4000
+NAME_2	4000
+NAME_3	4000
+NAME_4	4000
+
+statement ok
+PRAGMA force_compression='auto'
+
+statement ok
+SET disabled_optimizers='join_order'
+
+# small-build dictionary emission produces a global dictionary the next join narrows
+statement ok
+CREATE TABLE dim AS SELECT 'KEY_' || i AS d_key, 'LABEL_' || (i % 5) AS d_label FROM range(100) t(i)
+
+statement ok
+CREATE TABLE fact1 AS SELECT 'KEY_' || (i % 100) AS f1_dkey, 'CUST_' || i AS f1_ckey FROM range(262200) t(i)
+
+# fact2 is 2x the dim-fact1 result so the dict-carrying side becomes the build
+statement ok
+CREATE TABLE fact2 AS SELECT 'CUST_' || (i % 262200) AS f2_ckey FROM range(524400) t(i)
+
+query II
+SELECT d.d_label, COUNT(*) AS cnt
+FROM dim d JOIN fact1 f1 ON d.d_key = f1.f1_dkey JOIN fact2 f2 ON f1.f1_ckey = f2.f2_ckey
+GROUP BY d.d_label ORDER BY d.d_label
+----
+LABEL_0	104880
+LABEL_1	104880
+LABEL_2	104880
+LABEL_3	104880
+LABEL_4	104880

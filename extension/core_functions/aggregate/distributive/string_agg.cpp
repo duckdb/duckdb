@@ -64,7 +64,7 @@ struct StringAggFunction {
 			if (new_size > NumericLimits<uint32_t>::Maximum()) {
 				throw InvalidInputException("string_agg string size exceeds maximum string size");
 			}
-			state.alloc_size = NextPowerOfTwo(new_size);
+			state.alloc_size = MinValue<idx_t>(NextPowerOfTwo(new_size), string_t::MAX_STRING_SIZE);
 			target_data = char_ptr_cast(allocator.Allocate(state.alloc_size));
 			if (current_size > 0) {
 				// copy over the current data
@@ -117,9 +117,9 @@ struct StringAggFunction {
 	}
 };
 
+//! Binds the separator into the bind data. It stays part of the expression tree, and the aggregate is handed it
+//! along with the input - the update callback only consumes the leading input argument
 unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
 		// single argument: default to comma
@@ -132,20 +132,13 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("Separator argument to StringAgg must be a constant");
-	}
-	auto separator_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto separator_val = input.GetConstant(1);
 	string separator_string = ",";
 	if (separator_val.IsNull()) {
 		arguments[0] = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
 	} else {
 		separator_string = separator_val.ToString();
 	}
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_uniq<StringAggBindData>(std::move(separator_string));
 }
 
@@ -167,7 +160,7 @@ AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
 	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(StringAggState));
 	layout.field = BuildStateField<ST>();
-	if (function.GetOriginalArguments().size() == 2) {
+	if (function.GetArguments().size() == 2) {
 		// record the value of the separator if explicitly provided
 		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
 	}
@@ -186,11 +179,13 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
+
+	string_agg_param.GetSignature().GetParameter(0).SetName("input");
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg_param.SetStructStateExport(StringAggStateType);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
+	string_agg_param.GetSignature().AddParameter("separator", LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

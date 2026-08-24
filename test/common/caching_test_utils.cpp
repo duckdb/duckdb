@@ -43,4 +43,24 @@ string SimpleTrackingFileSystem::GetVersionTag(FileHandle &handle) {
 	return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
 }
 
+string NoValidationMetadataFileSystem::GetName() const {
+	return "NoValidationMetadataFileSystem";
+}
+
+bool NoValidationMetadataFileSystem::CanHandleFile(const string &path) {
+	return StringUtil::StartsWith(path, TestDirectoryPath());
+}
+
+bool NoValidationMetadataFileSystem::CanSeek() {
+	return true;
+}
+
+string NoValidationMetadataFileSystem::GetVersionTag(FileHandle &handle) {
+	return "";
+}
+
+timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	return timestamp_t(0);
+}
+
 } // namespace duckdb

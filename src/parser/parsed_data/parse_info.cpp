@@ -35,18 +35,4 @@ string ParseInfo::TypeToString(CatalogType type) {
 	}
 }
 
-string ParseInfo::QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name) {
-	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
-		if (!schema.empty()) {
-			result += SQLIdentifier(schema) + ".";
-		}
-	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += SQLIdentifier(schema) + ".";
-	}
-	result += SQLIdentifier(name);
-	return result;
-}
-
 } // namespace duckdb

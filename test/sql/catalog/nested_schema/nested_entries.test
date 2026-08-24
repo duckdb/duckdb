@@ -1,0 +1,267 @@
+# name: test/sql/catalog/nested_schema/nested_entries.test
+# description: Test creating/using/dropping views, sequences, types, macros and indexes in nested schemas
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t(i INTEGER);
+
+statement ok
+INSERT INTO s1.s2.t VALUES (1), (2);
+
+# VIEW
+
+statement ok
+CREATE VIEW s1.s2.v AS SELECT i * 10 AS x FROM s1.s2.t;
+
+query I
+SELECT * FROM s1.s2.v ORDER BY x;
+----
+10
+20
+
+query II
+SELECT schema_name, view_name FROM duckdb_views() WHERE view_name = 'v';
+----
+s2	v
+
+# the view is not visible as a top-level "s2" schema
+statement error
+SELECT * FROM s2.v;
+----
+<REGEX>:.*does not exist.*
+
+statement ok
+CREATE OR REPLACE VIEW s1.s2.v AS SELECT i * 100 AS x FROM s1.s2.t;
+
+query I
+SELECT * FROM s1.s2.v ORDER BY x;
+----
+100
+200
+
+# SEQUENCE
+
+statement ok
+CREATE SEQUENCE s1.s2.seq START 5;
+
+query I
+SELECT nextval('s1.s2.seq');
+----
+5
+
+# a dotted name is at most three components, so the catalog cannot be spelled out on top of a nested schema path
+statement error
+SELECT nextval('memory.s1.s2.seq');
+----
+<REGEX>:.*too many entries found.*
+
+query II
+SELECT schema_name, sequence_name FROM duckdb_sequences() WHERE sequence_name = 'seq';
+----
+s2	seq
+
+# a sequence used as a column default
+statement ok
+CREATE TABLE s1.s2.defaults(i INTEGER DEFAULT nextval('s1.s2.seq'));
+
+statement ok
+INSERT INTO s1.s2.defaults DEFAULT VALUES;
+
+query I
+SELECT i FROM s1.s2.defaults;
+----
+6
+
+# MACRO
+
+statement ok
+CREATE MACRO s1.s2.double(a) AS a * 2;
+
+query I
+SELECT s1.s2.double(21);
+----
+42
+
+statement ok
+CREATE MACRO s1.s2.tbl_macro() AS TABLE SELECT 42 AS x;
+
+query I
+SELECT * FROM s1.s2.tbl_macro();
+----
+42
+
+query II
+SELECT schema_name, function_name FROM duckdb_functions() WHERE function_name = 'double';
+----
+s2	double
+
+# TYPE
+
+statement ok
+CREATE TYPE s1.s2.mood AS ENUM ('happy', 'sad');
+
+query I
+SELECT 'happy'::s1.s2.mood;
+----
+happy
+
+statement ok
+CREATE TABLE s1.s2.moods(m s1.s2.mood);
+
+statement ok
+INSERT INTO s1.s2.moods VALUES ('sad');
+
+query I
+SELECT * FROM s1.s2.moods;
+----
+sad
+
+statement error
+SELECT 'angry'::s1.s2.mood;
+----
+<REGEX>:.*Conversion Error.*
+
+query II
+SELECT schema_name, type_name FROM duckdb_types() WHERE type_name = 'mood';
+----
+s2	mood
+
+# a type in a nested schema that does not exist
+statement error
+SELECT 'happy'::s1.nope.mood;
+----
+<REGEX>:.*does not exist.*
+
+# INDEX
+
+statement ok
+CREATE INDEX idx ON s1.s2.t(i);
+
+query IIII
+SELECT database_name, schema_name, index_name, table_name FROM duckdb_indexes() WHERE index_name = 'idx';
+----
+memory	s2	idx	t
+
+statement ok
+DROP INDEX s1.s2.idx;
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'idx';
+----
+0
+
+# TRIGGER
+
+statement ok
+CREATE TABLE s1.s2.log(i INTEGER);
+
+statement ok
+CREATE TRIGGER trg AFTER INSERT ON s1.s2.t FOR EACH STATEMENT INSERT INTO s1.s2.log SELECT 1;
+
+statement ok
+INSERT INTO s1.s2.t VALUES (3);
+
+query I
+SELECT count(*) FROM s1.s2.log;
+----
+1
+
+query III
+SELECT database_name, schema_name, trigger_name FROM duckdb_triggers() WHERE trigger_name = 'trg';
+----
+memory	s2	trg
+
+statement ok
+DROP TRIGGER trg ON s1.s2.t;
+
+query I
+SELECT count(*) FROM duckdb_triggers() WHERE trigger_name = 'trg';
+----
+0
+
+# nested entries in an attached catalog
+
+statement ok
+CREATE SCHEMA db2.a;
+
+statement ok
+CREATE SCHEMA db2.a.b;
+
+statement ok
+USE db2;
+
+statement ok
+CREATE TABLE a.b.t(i INTEGER);
+
+statement ok
+CREATE VIEW a.b.v AS SELECT 1 AS x;
+
+statement ok
+CREATE SEQUENCE a.b.seq;
+
+query I
+SELECT * FROM a.b.v;
+----
+1
+
+query I
+SELECT nextval('a.b.seq');
+----
+1
+
+statement ok
+USE memory;
+
+# DROP
+
+statement ok
+DROP VIEW s1.s2.v;
+
+statement ok
+DROP SEQUENCE s1.s2.seq CASCADE;
+
+statement ok
+DROP MACRO s1.s2.double;
+
+# "DROP MACRO" also drops a table macro in a nested schema
+statement ok
+DROP MACRO s1.s2.tbl_macro;
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE view_name = 'v' AND database_name = 'memory';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'seq' AND database_name = 'memory';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name IN ('double', 'tbl_macro');
+----
+0
+
+# CASCADE drops all entries in the nested schema
+
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'mood';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE database_name = 'memory';
+----
+0

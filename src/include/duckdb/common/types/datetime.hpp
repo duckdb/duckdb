@@ -14,83 +14,87 @@
 
 namespace duckdb {
 
-//! Type used to represent time (microseconds)
-struct dtime_t { // NOLINT
-	int64_t micros;
+template <int64_t P>
+struct dtime_base_t { // NOLINT
+	// NOTE: The unit of value is microseconds for timestamp_t, but it can be
+	// different for subclasses (e.g. it's nanos for timestamp_ns, etc).
+	static constexpr int64_t PRECISION = P;
 
-	dtime_t() = default;
-	explicit inline constexpr dtime_t(int64_t micros_p) : micros(micros_p) {
+	int64_t value;
+
+	dtime_base_t() = default;
+	explicit inline constexpr dtime_base_t(int64_t value) : value(value) {
 	}
-	inline dtime_t &operator=(int64_t micros_p) {
-		micros = micros_p;
+	inline dtime_base_t &operator=(int64_t value) {
+		this->value = value;
 		return *this;
 	}
 
 	// explicit conversion
 	explicit inline operator int64_t() const {
-		return micros;
+		return value;
 	}
 	explicit inline operator double() const {
-		return static_cast<double>(micros);
+		return static_cast<double>(value);
 	}
 
 	// comparison operators
-	inline bool operator==(const dtime_t &rhs) const {
-		return micros == rhs.micros;
+	inline bool operator==(const dtime_base_t &rhs) const {
+		return value == rhs.value;
 	};
-	inline bool operator!=(const dtime_t &rhs) const {
-		return micros != rhs.micros;
+	inline bool operator!=(const dtime_base_t &rhs) const {
+		return value != rhs.value;
 	};
-	inline bool operator<=(const dtime_t &rhs) const {
-		return micros <= rhs.micros;
+	inline bool operator<=(const dtime_base_t &rhs) const {
+		return value <= rhs.value;
 	};
-	inline bool operator<(const dtime_t &rhs) const {
-		return micros < rhs.micros;
+	inline bool operator<(const dtime_base_t &rhs) const {
+		return value < rhs.value;
 	};
-	inline bool operator>(const dtime_t &rhs) const {
-		return micros > rhs.micros;
+	inline bool operator>(const dtime_base_t &rhs) const {
+		return value > rhs.value;
 	};
-	inline bool operator>=(const dtime_t &rhs) const {
-		return micros >= rhs.micros;
+	inline bool operator>=(const dtime_base_t &rhs) const {
+		return value >= rhs.value;
 	};
 
 	// arithmetic operators
-	inline dtime_t operator+(const int64_t &micros) const {
-		return dtime_t(this->micros + micros);
+	inline dtime_base_t operator+(const int64_t &value) const {
+		return dtime_base_t(this->value + value);
 	};
-	inline dtime_t operator+(const double &micros) const {
-		return dtime_t(this->micros + int64_t(micros));
+	inline dtime_base_t operator+(const double &value) const {
+		return dtime_base_t(this->value + int64_t(value));
 	};
-	inline dtime_t operator-(const int64_t &micros) const {
-		return dtime_t(this->micros - micros);
+	inline dtime_base_t operator-(const int64_t &value) const {
+		return dtime_base_t(this->value - value);
 	};
-	inline dtime_t operator*(const idx_t &copies) const {
-		return dtime_t(this->micros * UnsafeNumericCast<int64_t>(copies));
+	inline dtime_base_t operator*(const idx_t &copies) const {
+		return dtime_base_t(this->value * UnsafeNumericCast<int64_t>(copies));
 	};
-	inline dtime_t operator/(const idx_t &copies) const {
-		return dtime_t(this->micros / UnsafeNumericCast<int64_t>(copies));
+	inline dtime_base_t operator/(const idx_t &copies) const {
+		return dtime_base_t(this->value / UnsafeNumericCast<int64_t>(copies));
 	};
-	inline int64_t operator-(const dtime_t &other) const {
-		return this->micros - other.micros;
+	inline int64_t operator-(const dtime_base_t &other) const {
+		return this->value - other.value;
 	};
 
 	// in-place operators
-	inline dtime_t &operator+=(const int64_t &micros) {
-		this->micros += micros;
+	inline dtime_base_t &operator+=(const int64_t &value) {
+		this->value += value;
 		return *this;
 	};
-	inline dtime_t &operator-=(const int64_t &micros) {
-		this->micros -= micros;
+	inline dtime_base_t &operator-=(const int64_t &value) {
+		this->value -= value;
 		return *this;
 	};
-	inline dtime_t &operator+=(const dtime_t &other) {
-		this->micros += other.micros;
+	inline dtime_base_t &operator+=(const dtime_base_t &other) {
+		this->value += other.value;
 		return *this;
 	};
 
 	// special values
-	static inline dtime_t allballs() { // NOLINT
-		return dtime_t(0);
+	static inline dtime_base_t allballs() { // NOLINT
+		return dtime_base_t(0);
 	} // NOLINT
 
 	inline bool IsFinite() const {
@@ -98,15 +102,12 @@ struct dtime_t { // NOLINT
 	}
 };
 
+//! Type used to represent time (microseconds)
+using dtime_t = dtime_base_t<1000000>;
+using dtime_us_t = dtime_base_t<1000000>;
+
 //! Type used to represent TIME_NS. dtime_ns_t holds the nanoseconds since midnight.
-struct dtime_ns_t : public dtime_t { // NOLINT
-	dtime_ns_t() = default;
-	explicit inline constexpr dtime_ns_t(const int64_t nanos) : dtime_t(nanos) {
-	}
-	inline dtime_t time() const { // NOLINT
-		return dtime_t(micros / 1000);
-	}
-};
+using dtime_ns_t = dtime_base_t<1000000000>;
 
 struct dtime_tz_t { // NOLINT
 	static constexpr const int TIME_BITS = 40;
@@ -140,7 +141,7 @@ struct dtime_tz_t { // NOLINT
 
 	dtime_tz_t() = default;
 
-	inline dtime_tz_t(dtime_t t, int32_t offset) : bits(encode_micros(t.micros) | encode_offset(offset)) {
+	inline dtime_tz_t(dtime_t t, int32_t offset) : bits(encode_micros(t.value) | encode_offset(offset)) {
 	}
 	explicit inline dtime_tz_t(uint64_t bits_p) : bits(bits_p) {
 	}
@@ -192,6 +193,14 @@ namespace std {
 //! Time
 template <>
 struct hash<duckdb::dtime_t> {
+	std::size_t operator()(const duckdb::dtime_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+
+template <>
+struct hash<duckdb::dtime_ns_t> {
 	std::size_t operator()(const duckdb::dtime_t &k) const {
 		using std::hash;
 		return hash<int64_t>()((int64_t)k);

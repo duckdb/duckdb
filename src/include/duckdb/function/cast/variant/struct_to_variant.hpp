@@ -2,6 +2,7 @@
 
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
@@ -16,6 +17,10 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 	auto children_offset_data = OffsetData::GetChildren(result.offsets);
 	auto &type = source.vec.GetType();
+	// unnamed STRUCTs can't be represented as a VARIANT OBJECT (duplicate empty keys lose data) - they should be TUPLEs
+	if (StructType::IsUnnamed(type)) {
+		throw ConversionException("Can't cast unnamed struct to VARIANT");
+	}
 
 	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
@@ -41,15 +46,11 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 			                               children_offset_data[result_index]);
 
 			if (WRITE_DATA && dictionary_indices.empty()) {
-				if (StructType::IsUnnamed(type)) {
-					throw ConversionException("Can't cast unnamed struct to VARIANT");
-				}
-				auto &struct_children = StructType::GetChildTypes(type);
+				// (the owning dictionary copies the key, so temporary strings are safe)
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					auto &struct_child = struct_children[child_idx];
-					string_t struct_child_str(struct_child.first.c_str(),
-					                          NumericCast<uint32_t>(struct_child.first.size()));
-					dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
+					auto &name = StructType::GetChildName(type, child_idx);
+					string_t name_str(name.c_str(), NumericCast<uint32_t>(name.size()));
+					dictionary_indices.push_back(result.GetOrCreateIndex(name_str));
 				}
 			}
 

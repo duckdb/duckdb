@@ -19,7 +19,7 @@ struct DuckDBTriggersData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBTriggersBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -129,7 +129,7 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.schema.oid)));
 		trigger_name.Append(Value(trigger.name));
 		trigger_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.oid)));
-		table_name.Append(Value(trigger.base_table->table_name));
+		table_name.Append(Value(trigger.base_table->Table()));
 		action_timing.Append(Value(EnumUtil::ToString(trigger.timing)));
 		event_manipulation.Append(Value(EnumUtil::ToString(trigger.event_type)));
 		vector<Value> col_vals;

@@ -25,8 +25,9 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
-	                                                          expr.Function().GetName(), OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), expr.Function().GetName()),
+	    OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return false;
 	}
@@ -41,9 +42,9 @@ bool IsStructPack(const BoundFunctionExpression &expr) {
 }
 
 optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
-	while (expr->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
-		auto &cast_expr = expr->Cast<BoundCastExpression>();
-		expr = cast_expr.ChildMutable().get();
+	while (BoundCastExpression::IsCast(*expr)) {
+		auto &cast_expr = expr->Cast<BoundFunctionExpression>();
+		expr = BoundCastExpression::ChildMutable(cast_expr).get();
 	}
 	return expr;
 }

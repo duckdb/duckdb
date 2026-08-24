@@ -8,7 +8,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -69,9 +68,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// get bindings from the duplicate-eliminated side
 		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
 		VisitOperator(delim_side);
+		auto delim_bindings = bindings;
+		auto delim_types = types;
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
-			VisitExpression(&expr);
+			if (cond.IsComparison()) {
+				auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
+				VisitExpression(&expr);
+			}
 		}
 		// visit the duplicate eliminated columns
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
@@ -80,9 +83,28 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// now the other side
 		auto &other_side = comp_join.delim_flipped ? *comp_join.children[0] : *comp_join.children[1];
 		VisitOperator(other_side);
+		auto other_bindings = bindings;
+		auto other_types = types;
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
-			VisitExpression(&expr);
+			if (cond.IsComparison()) {
+				auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
+				VisitExpression(&expr);
+			}
+		}
+
+		// arbitrary expressions are resolved against both join sides in logical left/right order
+		auto combined_bindings = comp_join.delim_flipped ? other_bindings : delim_bindings;
+		auto &right_bindings = comp_join.delim_flipped ? delim_bindings : other_bindings;
+		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
+		auto combined_types = comp_join.delim_flipped ? other_types : delim_types;
+		auto &right_types = comp_join.delim_flipped ? delim_types : other_types;
+		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
+		bindings = std::move(combined_bindings);
+		types = std::move(combined_types);
+		for (auto &cond : comp_join.conditions) {
+			if (!cond.IsComparison()) {
+				VisitExpression(&cond.JoinExpressionReference());
+			}
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
@@ -107,6 +129,10 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
 		}
 		VisitOperatorExpressions(op);
+
+		//	Restore bindings for the caller
+		bindings = op.GetColumnBindings();
+		types = op.types;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX: {
@@ -196,12 +222,12 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 			if (!types.empty()) {
 				if (bindings.size() != types.size()) {
 					throw InternalException(
-					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
+					    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)",
 					    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index, bindings.size(),
 					    types.size());
 				}
 				if (expr.GetReturnType() != types[i]) {
-					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
+					throw InternalException("Failed to bind column reference %s [%d.%d]: inequal types (%s != %s)",
 					                        expr.GetAlias(), expr.Binding().table_index.index,
 					                        expr.Binding().column_index, expr.GetReturnType().ToString(),
 					                        types[i].ToString());
@@ -217,7 +243,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
+	throw InternalException("Failed to bind column reference %s [%d.%d] (bindings: %s)", expr.GetAlias(),
 	                        expr.Binding().table_index.index, expr.Binding().column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP

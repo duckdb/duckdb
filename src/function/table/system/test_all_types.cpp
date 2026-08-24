@@ -201,6 +201,13 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
+	// Empty struct
+	child_list_t<Value> empty_struct_values;
+	child_list_t<LogicalType> empty_struct_types;
+	auto empty_struct_type = LogicalType::STRUCT(empty_struct_types);
+	auto empty_struct_val = Value::STRUCT(empty_struct_values);
+	result.emplace_back(empty_struct_type, "empty_struct", empty_struct_val, empty_struct_val);
+
 	// structs with lists
 	child_list_t<LogicalType> struct_list_type_list;
 	struct_list_type_list.emplace_back(make_pair("a", int_list_type));
@@ -364,6 +371,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
 
+	// unnamed tuple - added last so existing column positions are unchanged
+	auto tuple_type = LogicalType::TUPLE({LogicalType::INTEGER, LogicalType::VARCHAR});
+	auto min_tuple_val = Value::TUPLE({Value(LogicalType::INTEGER), Value(LogicalType::VARCHAR)});
+	auto max_tuple_val = Value::TUPLE({Value::INTEGER(42), Value("🦆🦆🦆🦆🦆🦆")});
+	result.emplace_back(tuple_type, "tuple", min_tuple_val, max_tuple_val);
+
 	return result;
 }
 
@@ -372,7 +385,7 @@ struct TestAllTypesBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<TestAllTypesBindData>();
 	bool use_large_enum = false;
 	bool use_large_bignum = false;
@@ -393,7 +406,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);
 	for (auto &test_type : result->test_types) {
 		return_types.push_back(test_type.type);
-		names.push_back(test_type.name);
+		names.emplace_back(test_type.name);
 	}
 	return std::move(result);
 }

@@ -1,0 +1,48 @@
+# name: benchmark/micro/join/hashjoin_dictionary_surviving_build.benchmark
+# description: Global dictionary surviving across three chained hash joins into a GROUP BY: a low-cardinality VARCHAR payload stays dict-encoded instead of materialising the full string at each build
+# group: [join]
+
+name Hash Join Dictionary Surviving Build
+group join
+
+# Measures the dict-surviving path: a small build emits a global dictionary kept dict-encoded
+# across two large downstream join builds and the GROUP BY, versus materialising the full string per
+# build row. Each probe is larger than its build (3M -> 6M -> 12M rows) so the dictionary-carrying side
+# stays on the build of joins 2 and 3 and the aggregate input is large. Single thread and fixed join
+# order keep the plan deterministic; compressed_materialization is off so the planner does not
+# pre-encode the payload and mask the effect under test.
+init
+SET threads TO 1;
+SET disabled_optimizers TO 'join_order,compressed_materialization';
+
+load
+CREATE TABLE dim AS
+  SELECT 'KEY_' || i AS d_key,
+         'LABEL_' || (i % 5) AS d_label
+  FROM range(25) t(i);
+CREATE TABLE fact1 AS
+  SELECT 'KEY_' || (i % 25) AS f1_dkey,
+         i AS f1_k2
+  FROM range(3000000) t(i);
+CREATE TABLE fact2 AS
+  SELECT (i % 3000000) AS f2_k2,
+         i AS f2_k3
+  FROM range(6000000) t(i);
+CREATE TABLE fact3 AS
+  SELECT (i % 6000000) AS f3_k3
+  FROM range(12000000) t(i);
+
+run
+SELECT d.d_label, COUNT(*) AS cnt
+FROM dim d
+JOIN fact1 f1 ON d.d_key = f1.f1_dkey
+JOIN fact2 f2 ON f1.f1_k2 = f2.f2_k2
+JOIN fact3 f3 ON f2.f2_k3 = f3.f3_k3
+GROUP BY d.d_label;
+
+result II
+LABEL_0	2400000
+LABEL_1	2400000
+LABEL_2	2400000
+LABEL_3	2400000
+LABEL_4	2400000

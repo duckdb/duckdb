@@ -51,6 +51,34 @@ select DATESUB('isoyear', '2004-02-29 12:00:00-08'::TIMESTAMPTZ, '2005-02-28 13:
 ----
 1
 
+# Complete ISO years and eras across BC/AD
+foreach datepart isoyear era
+
+query II
+SELECT
+	date_sub('{datepart}', '1-01-01 (BC)'::TIMESTAMPTZ, '1-01-01'::TIMESTAMPTZ),
+	date_sub('{datepart}', '1-01-01'::TIMESTAMPTZ, '1-01-01 (BC)'::TIMESTAMPTZ);
+----
+1	-1
+
+endloop
+
+# Years increase continuously across BC/AD
+query II
+SELECT
+	date_sub('year', '2-01-01 (BC)'::TIMESTAMPTZ, '2-01-01'::TIMESTAMPTZ),
+	date_sub('year', '2-01-01'::TIMESTAMPTZ, '2-01-01 (BC)'::TIMESTAMPTZ);
+----
+3	-3
+
+# Unequal dates in the same era have no era boundaries between them
+query II
+SELECT
+	date_sub('era', '2000-01-01'::TIMESTAMPTZ, '2020-01-01'::TIMESTAMPTZ),
+	date_sub('era', '2020-01-01'::TIMESTAMPTZ, '2000-01-01'::TIMESTAMPTZ);
+----
+0	0
+
 query I
 select DATESUB('decade', '1994-02-28 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
 ----
@@ -299,3 +327,36 @@ FROM (
 1
 
 endloop
+
+# Era subtraction follows each calendar's era numbering
+statement ok
+SET TimeZone = 'UTC';
+
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+CREATE TEMP TABLE era_subtraction(name VARCHAR, startdate TIMESTAMPTZ, enddate TIMESTAMPTZ);
+
+statement ok
+INSERT INTO era_subtraction VALUES
+	('coptic', '0283-08-30 12:00:00+00', '0284-08-29 12:00:00+00'),
+	('japanese', '1872-10-01 12:00:00+00', '2023-10-01 12:00:00+00');
+
+statement ok
+SET Calendar = 'coptic';
+
+query II
+SELECT date_sub('era', startdate, enddate), date_sub('era', enddate, startdate)
+FROM era_subtraction WHERE name = 'coptic';
+----
+1	-1
+
+statement ok
+SET Calendar = 'japanese';
+
+query II
+SELECT date_sub('era', startdate, enddate), date_sub('era', enddate, startdate)
+FROM era_subtraction WHERE name = 'japanese';
+----
+4	-4

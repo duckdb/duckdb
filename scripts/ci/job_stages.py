@@ -21,6 +21,7 @@ COMMON_JOBS = [
     "swift",
     "windows",
     "no-string-inline",
+    "no-rtti",
     "vector-sizes",
     "threadsan",
     "linux-configs",
@@ -34,9 +35,9 @@ PULL_REQUEST_ONLY_JOBS = [
 PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
 
 NIGHTLY_ONLY_JOBS = [
-    "main_julia",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "codecov",
 ]
 
 NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
@@ -53,6 +54,7 @@ RELEASE_JOBS = [
     "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "staged-extension-install",
 ]
 
 SKIP_TESTS_JOBS = {
@@ -114,9 +116,6 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
 
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
-
-    if "julia" in selection_input.changed_keys or "capi" in selection_input.changed_keys:
-        selected_jobs.append("main_julia")
 
     if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:
         selected_jobs.extend(RELEASE_JOBS)

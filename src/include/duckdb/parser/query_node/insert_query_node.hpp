@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
@@ -36,12 +37,12 @@ public:
 	//! Column names to insert into
 	vector<Identifier> columns;
 
-	//! Table name to insert to
-	Identifier table;
-	//! Schema name to insert to
-	Identifier schema;
-	//! The catalog name to insert to
-	Identifier catalog;
+	//! The qualified name of the table to insert to (catalog/schema/name)
+	QualifiedName qualified_name;
+
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;

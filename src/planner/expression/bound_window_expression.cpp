@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
@@ -15,6 +16,11 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
                  std::move(return_type)),
       aggregate(std::move(aggregate)), window(std::move(window)), bind_info(std::move(bind_info)), ignore_nulls(false),
       distinct(false) {
+}
+
+bool BoundWindowExpression::IsVolatile() const {
+	auto stability = aggregate ? aggregate->GetStability() : window->GetStability();
+	return stability == FunctionStability::VOLATILE || Expression::IsVolatile();
 }
 
 string BoundWindowExpression::ToString() const {
@@ -92,17 +98,20 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 }
 
 bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression &other) const {
-	// Partitions are not order sensitive.
-	if (partitions.size() != other.partitions.size()) {
+	// Partitions are neither order nor duplicate sensitive, so compare them as sets.
+	expression_set_t lhs;
+	for (const auto &partition : partitions) {
+		lhs.insert(*partition);
+	}
+	expression_set_t rhs;
+	for (const auto &partition : other.partitions) {
+		rhs.insert(*partition);
+	}
+	if (lhs.size() != rhs.size()) {
 		return false;
 	}
-	// TODO: Should partitions be an expression_set_t?
-	expression_set_t others;
-	for (const auto &partition : other.partitions) {
-		others.insert(*partition);
-	}
-	for (const auto &partition : partitions) {
-		if (!others.count(*partition)) {
+	for (const auto &partition : lhs) {
+		if (!rhs.count(partition)) {
 			return false;
 		}
 	}
@@ -321,7 +330,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto &context = deserializer.Get<ClientContext &>();
 		auto binder = Binder::CreateBinder(context);
-		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(name));
+		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(Identifier(name)));
 		auto entry = binder->GetCatalogEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(), lookup,
 		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();

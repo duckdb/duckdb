@@ -1,4 +1,5 @@
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -313,6 +314,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
+				state.GetContext().InterruptCheck();
 				execute_info.lambda_chunk.Reset();
 				ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
 				auto &lambda_vector = execute_info.lambda_chunk.data[0];

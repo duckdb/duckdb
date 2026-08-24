@@ -33,6 +33,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -289,7 +290,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
-				throw BinderException("Duplicate column name \"%s\" in INSERT", columns[i]);
+				throw BinderException("Duplicate column name %s in INSERT", columns[i]);
 			}
 			auto column_index = table.GetColumnIndex(columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -347,8 +348,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto &on_conflict_info = *node.on_conflict_info;
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
-	string table_name =
-	    !node.table_ref->alias.empty() ? node.table_ref->alias.GetIdentifierName() : node.table.GetIdentifierName();
+	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias.GetIdentifierName()
+	                                                   : node.qualified_name.Name().GetIdentifierName();
 	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
@@ -598,10 +599,13 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	BindSchemaOrCatalog(node.catalog, node.schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+	node.qualified_name = BindTableName(node.qualified_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.qualified_name);
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
+		return std::move(*expanded);
+	}
+	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
 	}
 

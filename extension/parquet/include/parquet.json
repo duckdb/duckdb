@@ -35,6 +35,25 @@
     "pointer_type": "none"
   },
   {
+    "class": "ParquetReaderProjectionExpression",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "ParquetReaderProjectionExpressionType"
+      },
+      {
+        "id": 101,
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "ParquetEncryptionConfig",
     "includes": [
       "parquet_crypto.hpp"
@@ -116,6 +135,13 @@
         "type": "ParquetPrefetchStrategyOption",
         "default": "ParquetPrefetchStrategyOption::AUTO",
         "property": "parquet_options.prefetch_strategy"
+      },
+      {
+        "id": 109,
+        "name": "utf8_validation",
+        "type": "StringColumnReader::Utf8ValidationOption",
+        "default": "StringColumnReader::Utf8ValidationOption::STRICT_UTF8",
+        "property": "parquet_options.utf8_validation_option"
       }
     ],
     "pointer_type": "none"
@@ -193,7 +219,7 @@
       {
         "id": 100,
         "name": "types",
-        "type": "identifier_map_t<ShreddingType>",
+        "type": "unordered_map<string, ShreddingType>",
         "serialize_property": "types.operator*()",
         "deserialize_property": "types.operator*()"
       }

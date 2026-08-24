@@ -1,0 +1,107 @@
+# name: test/sql/json/table/json_table_in_out_fullkey_quoting.test
+# description: Test that json_each/json_tree quote object keys in fullkey/path when needed (issue #23148)
+# group: [table]
+
+require json
+
+# the exact repro from issue #23148: a key containing a '.' must be quoted in fullkey
+query II
+SELECT fullkey, value FROM json_each('{"a.b": 1}')
+----
+$."a.b"	1
+
+# the fullkey must round-trip through json_extract
+query I
+SELECT json_extract('{"a.b": 1}', fullkey) FROM json_each('{"a.b": 1}')
+----
+1
+
+# same for json_tree: fullkey and path of descendants must quote the special key
+query III
+SELECT key, fullkey, path FROM json_tree('{"a.b": {"c": [1, 2]}}')
+----
+NULL	$	$
+a.b	$."a.b"	$
+c	$."a.b".c	$."a.b"
+0	$."a.b".c[0]	$."a.b".c
+1	$."a.b".c[1]	$."a.b".c
+
+# every fullkey in the tree round-trips: extracting it from the original JSON yields the row's value
+query I
+SELECT count(*)
+FROM json_tree('{"a.b": {"c": [1, 2]}}')
+WHERE json_extract('{"a.b": {"c": [1, 2]}}', fullkey) IS DISTINCT FROM value
+----
+0
+
+# quoting rule matches SQLite: unquoted only if the key is an ASCII letter
+# followed by ASCII alphanumerics/underscores
+query II
+SELECT key, fullkey FROM json_each('{"x1": 1, "Ab": 2, "a_b": 3}')
+----
+x1	$.x1
+Ab	$.Ab
+a_b	$.a_b
+
+query II
+SELECT key, fullkey FROM json_each('{"a.b": 1, "a b": 2, "0a": 3, "_x": 4, "*": 5, "a[0]": 6}')
+----
+a.b	$."a.b"
+a b	$."a b"
+0a	$."0a"
+_x	$."_x"
+*	$."*"
+a[0]	$."a[0]"
+
+# quotes and backslashes within keys are escaped inside the quoted key
+query II
+SELECT key, fullkey FROM json_each('{"a\"b": 1}')
+----
+a"b	$."a\"b"
+
+query II
+SELECT key, fullkey FROM json_each('{"a\\b": 1}')
+----
+a\b	$."a\\b"
+
+# non-ASCII keys are quoted
+query II
+SELECT key, fullkey FROM json_each('{"é": 1}')
+----
+é	$."é"
+
+# the empty key is quoted (matches SQLite's fullkey output)
+query II
+SELECT key, fullkey FROM json_each('{"": 1}')
+----
+(empty)	$.""
+
+# all of these round-trip through json_extract
+# (the empty key and the literal '*' key are excluded: our path parser does not yet accept an
+#  empty quoted key, and a quoted '*' is interpreted as a wildcard - both pre-existing limitations)
+query I
+SELECT count(*)
+FROM json_each('{"a.b": 1, "a b": 2, "0a": 3, "_x": 4, "a[0]": 6, "a\"b": 7, "a\\b": 8, "é": 9, "x1": 10}')
+WHERE json_extract('{"a.b": 1, "a b": 2, "0a": 3, "_x": 4, "a[0]": 6, "a\"b": 7, "a\\b": 8, "é": 9, "x1": 10}',
+                   fullkey) IS DISTINCT FROM value
+----
+0
+
+# quoting also applies when starting from a nested path argument
+query II
+SELECT key, fullkey FROM json_each('{"nested": {"a.b": 1}}', '$.nested')
+----
+a.b	$.nested."a.b"
+
+query I
+SELECT json_extract('{"nested": {"a.b": 1}}', fullkey) FROM json_each('{"nested": {"a.b": 1}}', '$.nested')
+----
+1
+
+# recursion through arrays of objects with special keys
+query III
+SELECT key, fullkey, path FROM json_tree('[{"a.b": 42}]')
+----
+NULL	$	$
+0	$[0]	$
+a.b	$[0]."a.b"	$[0]

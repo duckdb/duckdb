@@ -27,9 +27,7 @@ BoundStatement InsertRelation::Bind(Binder &binder) {
 	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
-	node.catalog = catalog_name;
-	node.schema = schema_name;
-	node.table = table_name;
+	node.qualified_name = QualifiedName(catalog_name, schema_name, table_name);
 	node.select_statement = std::move(select);
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }

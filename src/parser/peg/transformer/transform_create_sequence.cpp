@@ -4,24 +4,23 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer, const bool &if_not_exists,
-                                                   const QualifiedName &qualified_name,
-                                                   vector<pair<string, unique_ptr<SequenceOption>>> sequence_option) {
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(
+    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+    optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
-	info->catalog = qualified_name.catalog;
-	info->schema = qualified_name.schema;
-	info->name = qualified_name.name;
+	info->SetQualifiedName(qualified_name);
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	case_insensitive_map_t<unique_ptr<SequenceOption>> sequence_options;
-	for (auto &seq_option : sequence_option) {
-		if (sequence_options.find(seq_option.first) != sequence_options.end()) {
-			auto seq_option_capital = StringUtil::Lower(seq_option.first);
-			seq_option_capital[0] = StringUtil::CharacterToUpper(seq_option_capital[0]);
-			throw ParserException("%s should be passed at most once", seq_option_capital);
+	if (sequence_option) {
+		for (auto &seq_option : *sequence_option) {
+			if (sequence_options.find(seq_option.first) != sequence_options.end()) {
+				auto seq_option_capital = StringUtil::Lower(seq_option.first);
+				seq_option_capital[0] = StringUtil::CharacterToUpper(seq_option_capital[0]);
+				throw ParserException("%s should be passed at most once", seq_option_capital);
+			}
+			sequence_options.insert(std::move(seq_option));
 		}
-		sequence_options.insert(std::move(seq_option));
 	}
 	bool no_min = false;
 	bool no_max = false;
@@ -46,6 +45,9 @@ PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer, 
 	for (auto &option : sequence_options) {
 		if (option.first == "increment") {
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("INCREMENT must not be NULL");
+			}
 			info->increment = seq_val_option->value.GetValue<int64_t>();
 			if (info->increment == 0) {
 				throw ParserException("Increment must not be zero");
@@ -69,6 +71,9 @@ PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer, 
 				continue;
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("MINVALUE must not be NULL");
+			}
 			info->min_value = seq_val_option->value.GetValue<int64_t>();
 			min_value_set = true;
 		} else if (option.first == "maxvalue") {
@@ -76,10 +81,16 @@ PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer, 
 				continue;
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("MAXVALUE must not be NULL");
+			}
 			info->max_value = seq_val_option->value.GetValue<int64_t>();
 			max_value_set = true;
 		} else if (option.first == "start") {
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
+			if (seq_val_option->value.IsNull()) {
+				throw ParserException("START value must not be NULL");
+			}
 			info->start_value = seq_val_option->value.GetValue<int64_t>();
 			has_start_value = true;
 		} else if (option.first == "cycle") {
@@ -120,7 +131,8 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqNoCy
 }
 
 pair<string, unique_ptr<SequenceOption>>
-PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
+PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, const bool &has_result,
+                                                unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
 		if (func_expr->FunctionName() != "-") {
@@ -173,7 +185,8 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqNoMi
 }
 
 pair<string, unique_ptr<SequenceOption>>
-PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
+PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer, const bool &has_result,
+                                             unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");
 	}

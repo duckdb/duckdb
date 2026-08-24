@@ -55,10 +55,10 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
-	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-	                     BaseFileReaderOptions &options, vector<string> &expected_names,
+	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+	                     BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
-	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
 	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
@@ -70,7 +70,11 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                        FileExpandResult expand_result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
-	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) override;
+	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
+
+	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override {
+		return true;
+	}
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

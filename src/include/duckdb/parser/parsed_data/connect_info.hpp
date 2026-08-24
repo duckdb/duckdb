@@ -9,7 +9,11 @@
 #pragma once
 
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -32,6 +36,11 @@ public:
 	//! (connection-string form) from `CONNECT foo` (attached-db identifier) at the AST level,
 	//! so ToString roundtrips the source form and downstream impl can dispatch correctly.
 	bool name_is_string_literal = false;
+	//! Set of parsed (key, value) options — only for the connection-string form. Bound in
+	//! bind_connect and passed through to the implicit ATTACH performed by `CONNECT '<uri>'`.
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_options;
+	//! Set of bound (key, value) options forwarded to the implicit ATTACH.
+	unordered_map<string, Value> options;
 
 public:
 	unique_ptr<ConnectInfo> Copy() const;

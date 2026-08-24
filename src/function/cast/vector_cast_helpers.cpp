@@ -459,6 +459,9 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 	auto end_char = buf[pos] == '{' ? '}' : ')';
 	pos++;
 	SkipWhitespace(input_state);
+	if (pos == len) {
+		return false;
+	}
 	if (buf[pos] == end_char) {
 		pos++;
 		SkipWhitespace(input_state);
@@ -599,6 +602,10 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 			child_idx++;
 			pos++;
 			SkipWhitespace(input_state);
+			if (pos < len && buf[pos] == ')') {
+				// allow a trailing comma, e.g. the single-element tuple "(1,)"
+				break;
+			}
 		}
 		(void)child_idx;
 	}

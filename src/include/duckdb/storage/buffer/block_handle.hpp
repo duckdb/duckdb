@@ -206,8 +206,8 @@ public:
 	//! The state here can change if the block lock is held.
 	//! However, this method does not hold the block lock.
 	bool CanUnload() const;
-	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l);
-	void Unload(BlockLock &l);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, QueryContext context = QueryContext());
+	void Unload(BlockLock &l, QueryContext context = QueryContext());
 
 private:
 	//! A reference to the buffer manager.

@@ -1,0 +1,191 @@
+# name: test/sql/function/string/regex_operators.test
+# description: Test regular expression match operators
+# group: [string]
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+partial
+
+# default partial matching
+query T
+SELECT 'abc' ~ 'b'
+----
+1
+
+query T
+SELECT 'abc' !~ 'b'
+----
+0
+
+query T
+SELECT 'abc' ~ '^a'
+----
+1
+
+query T
+SELECT 'abc' ~ '^b'
+----
+0
+
+# case-sensitive by default
+query T
+SELECT 'ABC' ~ 'a'
+----
+0
+
+# case-insensitive regex operators
+query T
+SELECT 'ABC' ~* 'a'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a'
+----
+0
+
+statement ok
+CREATE TABLE regex_columns_partial(abc INTEGER, bcd INTEGER, def INTEGER);
+
+statement ok
+INSERT INTO regex_columns_partial VALUES (1, 2, 3);
+
+query II
+SELECT * ~ 'b' FROM regex_columns_partial
+----
+1	2
+
+query II
+SELECT * ~* 'B' FROM regex_columns_partial
+----
+1	2
+
+query T
+SELECT 'abc' ~ ANY(['b', 'z'])
+----
+1
+
+query T
+SELECT 'abc' ~* ANY(['Z', 'B'])
+----
+1
+
+query T
+SELECT 'abc' !~* ALL(['z', 'y'])
+----
+1
+
+query T
+SELECT 'abc' ~ ANY(['z', NULL]) IS NULL
+----
+1
+
+query T
+SELECT 'abc' ~ ALL(['abc', NULL]) IS NULL
+----
+1
+
+query T
+SELECT 'abc' ~ ANY([]::VARCHAR[])
+----
+0
+
+query T
+SELECT 'abc' ~ ALL([]::VARCHAR[])
+----
+1
+
+statement ok
+SET regex_match_operator_semantics = 'full'
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+full
+
+# full matching restores the current DuckDB anchoring behavior
+query T
+SELECT 'abc' ~ 'b'
+----
+0
+
+query T
+SELECT 'abc' !~ 'b'
+----
+1
+
+query T
+SELECT 'abc' ~ '^a.*'
+----
+1
+
+query T
+SELECT 'ABC' ~* 'a'
+----
+0
+
+query T
+SELECT 'ABC' ~* 'a.*'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a.*'
+----
+0
+
+statement ok
+CREATE TABLE regex_columns_full(abc INTEGER, "Bcd" INTEGER, def INTEGER);
+
+statement ok
+INSERT INTO regex_columns_full VALUES (1, 2, 3);
+
+query I
+SELECT * ~* 'b.*' FROM regex_columns_full
+----
+2
+
+query T
+SELECT 'abc' ~ ANY(['b', 'abc'])
+----
+1
+
+query T
+SELECT 'abc' ~* ANY(['B', 'ABC'])
+----
+1
+
+query T
+SELECT 'abc' ~* ALL(['ABC', 'A.*'])
+----
+1
+
+statement ok
+RESET regex_match_operator_semantics
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+partial
+
+statement ok
+SET regex_match_operator_semantics = 'PARTIAL'
+
+query T
+SELECT 'abc' ~ 'b'
+----
+1
+
+statement error
+SET regex_match_operator_semantics = 'unknown'
+----
+<REGEX>:.*unrecognized value.*
+
+statement ok
+RESET regex_match_operator_semantics

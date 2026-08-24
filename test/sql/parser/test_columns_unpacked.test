@@ -268,7 +268,7 @@ select
 	]
 from (select 21 a, 42 b, 1337 c)
 ----
-Star expression "COLUMNS(CAST(main.list_value() AS VARCHAR[]))" resulted in an empty set of columns
+Star expression "COLUMNS(CAST(list_value() AS VARCHAR[]))" resulted in an empty set of columns
 
 statement error
 select

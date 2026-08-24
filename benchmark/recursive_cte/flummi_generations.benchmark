@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/flummi_generations.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=flummi_generations
+BENCHMARK_NAME=Flummi Generations cellular automaton
+DESCRIPTION=Run Flummi's generated Generations cellular-automaton program

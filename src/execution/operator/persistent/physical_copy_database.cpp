@@ -14,6 +14,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -74,11 +75,12 @@ SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context
 		catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
 
 		auto &create_index_info = create_info->Cast<CreateIndexInfo>();
-		auto &table_entry =
-		    catalog.GetEntry<TableCatalogEntry>(context.client, create_index_info.schema, create_index_info.table);
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(
+		    context.client,
+		    QualifiedName(catalog.GetName(), create_index_info.GetQualifiedName().Schema(), create_index_info.table));
 		auto &data_table = table_entry.GetStorage();
 
-		IndexStorageInfo storage_info(create_index_info.index_name);
+		IndexStorageInfo storage_info(create_index_info.GetIndexName());
 		storage_info.options.emplace("v1_0_0_storage", false);
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), std::move(storage_info),
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());

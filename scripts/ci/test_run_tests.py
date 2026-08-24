@@ -4,7 +4,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
-from io import StringIO
+from io import BytesIO, StringIO, TextIOWrapper
 from unittest import mock
 from pathlib import Path
 
@@ -33,6 +33,25 @@ def strip_ansi_lines(lines: list[str]) -> list[str]:
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_line_buffering_escapes_unicode_for_non_utf8_streams(self):
+        stdout_buffer = BytesIO()
+        stderr_buffer = BytesIO()
+        stdout = TextIOWrapper(stdout_buffer, encoding="cp1252")
+        stderr = TextIOWrapper(stderr_buffer, encoding="cp1252")
+
+        with (
+            mock.patch("scripts.ci.run_tests.sys.stdout", stdout),
+            mock.patch("scripts.ci.run_tests.sys.stderr", stderr),
+        ):
+            run_tests.enable_line_buffering()
+            print("❌ ran tests", file=run_tests.sys.stdout)
+            print("❌ failed", file=run_tests.sys.stderr)
+            run_tests.sys.stdout.flush()
+            run_tests.sys.stderr.flush()
+
+        self.assertEqual(stdout_buffer.getvalue(), b"\\u274c ran tests\n")
+        self.assertEqual(stderr_buffer.getvalue(), b"\\u274c failed\n")
+
     def test_highlight_stack_trace_lines_colors_frame_index_and_function_name(self):
         lines = run_tests.highlight_stack_trace_lines(
             [
@@ -1327,10 +1346,10 @@ Run with -? for options
 -------------------------------------------------------------------------------
 Test Progress Bar Fast
 -------------------------------------------------------------------------------
-{progress_bar_path}:91
+{progress_bar_path}:102
 ...............................................................................
 
-{progress_bar_path}:73: FAILED:
+{progress_bar_path}:84: FAILED:
   REQUIRE( cur_rows_read == total_cardinality )
 with expansion:
   20000 (0x4e20) == 100020002 (0x5f62f22)
@@ -1350,13 +1369,13 @@ assertions: 359 | 358 passed | 1 failed
             [
                 "error: FAIL Test Progress Bar Fast",
                 "",
-                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
-                "    71              return;",
-                "    72          }",
-                "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
-                "    74      }",
-                "    75  }",
-                "    76  void Start() {",
+                '    81          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
+                "    82              return;",
+                "    83          }",
+                "  > 84          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
+                "    85      }",
+                "    86  }",
+                "    87  void Start() {",
                 "",
                 "FAILED: REQUIRE( cur_rows_read == total_cardinality )",
                 "  with expansion:",
@@ -1379,10 +1398,10 @@ Run with -? for options
 -------------------------------------------------------------------------------
 Test Progress Bar Fast
 -------------------------------------------------------------------------------
-{progress_bar_path}(91)
+{progress_bar_path}(102)
 ...............................................................................
 
-{progress_bar_path}(73): FAILED:
+{progress_bar_path}(84): FAILED:
   REQUIRE( cur_rows_read == total_cardinality )
 with expansion:
   20000 (0x4e20) == 100020002 (0x5f62f22)
@@ -1402,13 +1421,13 @@ assertions: 359 | 358 passed | 1 failed
             [
                 "error: FAIL Test Progress Bar Fast",
                 "",
-                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
-                "    71              return;",
-                "    72          }",
-                "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
-                "    74      }",
-                "    75  }",
-                "    76  void Start() {",
+                '    81          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
+                "    82              return;",
+                "    83          }",
+                "  > 84          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
+                "    85      }",
+                "    86  }",
+                "    87  void Start() {",
                 "",
                 "FAILED: REQUIRE( cur_rows_read == total_cardinality )",
                 "  with expansion:",
@@ -1625,6 +1644,47 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
                 "    4  }",
             ],
         )
+
+    def test_snippet_ignores_line_number_past_end_of_file(self):
+        snippet_test_path = create_temp_file("query I\nSELECT 42\n----\n42\n")
+        try:
+            self.assertEqual(run_tests.render_test_snippet(str(snippet_test_path), 4000), [])
+            self.assertEqual(run_tests.render_context_snippet(str(snippet_test_path), 4000), [])
+        finally:
+            snippet_test_path.unlink(missing_ok=True)
+
+    def test_assertion_source_line_is_not_applied_to_the_test_file(self):
+        # the assertion location points at a C++ source that is not present, so it renders no snippet of its own
+        test_path = create_temp_file("query I\nSELECT 42\n----\n42\n")
+        stdout = textwrap.dedent(
+            f"""
+            [1/2] (50%): {test_path}
+            -------------------------------------------------------------------------------
+            {test_path}
+            -------------------------------------------------------------------------------
+            /elsewhere/test/sqlite/sqllogic_test_runner.cpp:4000: FAILED:
+              REQUIRE( result->success )
+            with expansion:
+              false
+            """
+        )
+        try:
+            lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, "", [str(test_path)])
+        finally:
+            test_path.unlink(missing_ok=True)
+
+        self.assertEqual(
+            strip_ansi_lines(lines),
+            [
+                run_tests.FAILURE_MARKER,
+                f"error: FAIL {test_path}",
+                "",
+                "FAILED: REQUIRE( result->success )",
+                "  with expansion:",
+                "false",
+            ],
+        )
+        self.assertEqual(reproduce_batch, [str(test_path)])
 
     def test_timeout_names_last_file_in_multi_test_batch(self):
         lines, reproduce_batch = run_tests.summarize_failure_output(

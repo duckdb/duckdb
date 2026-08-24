@@ -1,0 +1,169 @@
+# name: test/sql/optimizer/monotone_preimage.test
+# description: Rewrite f(col) OP const into a range on col via the monotone preimage (bisection)
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# 500k rows -> 5 row groups; dt increases with the row id
+statement ok
+CREATE TABLE d AS SELECT (DATE '1970-01-01' + INTERVAL (range) DAY)::DATE AS dt FROM range(500000);
+
+# year() is strictly increasing on finite dates: year(dt) = 2020 becomes a direct date range,
+# and year() is dropped from the plan entirely (full replacement).
+query II
+EXPLAIN SELECT count(*) FROM d WHERE year(dt) = 2020;
+----
+logical_opt	<REGEX>:.*dt >= '2020-01-01'.*dt <= '2020-12-31'.*
+
+query II
+EXPLAIN SELECT count(*) FROM d WHERE year(dt) = 2020;
+----
+logical_opt	<!REGEX>:.*year.*
+
+# ordering comparisons rewrite to a single-sided date bound
+query II
+EXPLAIN SELECT count(*) FROM d WHERE year(dt) < 1975;
+----
+logical_opt	<REGEX>:.*dt <= '1974-12-31'.*
+
+query II
+EXPLAIN SELECT count(*) FROM d WHERE year(dt) >= 2020;
+----
+logical_opt	<REGEX>:.*dt >= '2020-01-01'.*
+
+# the rewritten range is sargable: it prunes row groups on the base column zonemap
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM d WHERE year(dt) = 2020;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+# non-monotone functions (month cycles 1..12) must NOT be rewritten
+query II
+EXPLAIN SELECT count(*) FROM d WHERE month(dt) = 6;
+----
+logical_opt	<REGEX>:.*month.*
+
+# ---------------------------------------------------------------------------
+# correctness, including infinity (year(±inf) = NULL) and NULL rows
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE e(dt DATE);
+
+statement ok
+INSERT INTO e VALUES ('2020-06-15'), ('2019-01-01'), ('2021-12-31'), ('infinity'), ('-infinity'), (NULL);
+
+query I
+SELECT count(*) FROM e WHERE year(dt) = 2020;
+----
+1
+
+# > must exclude +infinity AND -infinity (both have year = NULL)
+query I
+SELECT count(*) FROM e WHERE year(dt) > 2020;
+----
+1
+
+query I
+SELECT count(*) FROM e WHERE year(dt) < 2020;
+----
+1
+
+query I
+SELECT count(*) FROM e WHERE year(dt) >= 2020;
+----
+2
+
+query I
+SELECT count(*) FROM e WHERE year(dt) <= 2020;
+----
+2
+
+# Infinity-domain rewrites are only safe in root filter predicates: projections and nested boolean
+# contexts must preserve the NULL result of year(±infinity).
+query I
+SELECT year(dt) = 2020 FROM e ORDER BY dt NULLS LAST;
+----
+NULL
+false
+true
+false
+NULL
+NULL
+
+query I
+SELECT count(*) FROM e WHERE (year(dt) = 2020) IS FALSE;
+----
+2
+
+# empty preimage over a type without infinity folds to false-or-null (preserves NULL rows)
+statement ok
+CREATE TABLE ints(x INTEGER);
+
+statement ok
+INSERT INTO ints VALUES (1), (2), (3), (NULL);
+
+# differential vs a pushdown barrier (OFFSET 0) on a mixed dataset across every operator
+statement ok
+CREATE TABLE big AS
+  SELECT (DATE '1900-01-01' + INTERVAL (range) DAY)::DATE AS dt FROM range(200000)
+  UNION ALL SELECT 'infinity'::DATE UNION ALL SELECT '-infinity'::DATE UNION ALL SELECT NULL::DATE;
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM big WHERE year(dt) > 2000
+  EXCEPT ALL SELECT 1 FROM (SELECT dt FROM big OFFSET 0) WHERE year(dt) > 2000
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM (SELECT dt FROM big OFFSET 0) WHERE year(dt) > 2000
+  EXCEPT ALL SELECT 1 FROM big WHERE year(dt) > 2000
+);
+----
+0
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP columns (int64 domain) rewrite too, via the overflow-safe bisection
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE ts AS SELECT ('2020-01-01'::TIMESTAMP + INTERVAL (range) MINUTE) AS t FROM range(1000000);
+
+query II
+EXPLAIN SELECT count(*) FROM ts WHERE year(t) = 2020;
+----
+logical_opt	<REGEX>:.*t <= '2020-12-31 23:59:59.999999'.*
+
+query II
+EXPLAIN SELECT count(*) FROM ts WHERE year(t) = 2020;
+----
+logical_opt	<!REGEX>:.*year.*
+
+# correctness on TIMESTAMP with ±infinity and NULL, differential vs a pushdown barrier
+statement ok
+CREATE TABLE ets AS
+  SELECT ('2000-01-01'::TIMESTAMP + INTERVAL (range) HOUR) AS t FROM range(200000)
+  UNION ALL SELECT 'infinity'::TIMESTAMP UNION ALL SELECT '-infinity'::TIMESTAMP UNION ALL SELECT NULL::TIMESTAMP;
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM ets WHERE year(t) > 2010
+  EXCEPT ALL SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE year(t) > 2010
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE year(t) > 2010
+  EXCEPT ALL SELECT 1 FROM ets WHERE year(t) > 2010
+);
+----
+0
+
+query I
+SELECT count(*) FROM ets WHERE year(t) = 2005;
+----
+8760

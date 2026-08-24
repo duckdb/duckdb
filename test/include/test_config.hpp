@@ -24,7 +24,7 @@ namespace duckdb {
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 
 struct ConfigSetting {
-	string name;
+	Identifier name;
 	Value value;
 };
 
@@ -51,6 +51,12 @@ public:
 	bool ChangeWorkingDirectory(const string &dir); // true -> changed
 
 	void ProcessPath(string &path, const string &test_name);
+	// Override the value {TEST_DIR}/__TEST_DIR__ expands to during ProcessPath. Used by the extension
+	// (AUTO_SWITCH_TEST_DIR) runner: after it chdir's into the extension source dir, the default
+	// (cwd-relative) TestDirectoryPath() would resolve to a non-existent sibling, so the runner pins
+	// {TEST_DIR} to the absolute, main-cwd-anchored temp dir. Empty (the default) uses TestDirectoryPath().
+	void SetTestDirOverride(const string &absolute_test_dir);
+	void ClearTestDirOverride();
 
 	string GetDescription();
 	string GetInitialDBPath();
@@ -73,11 +79,14 @@ public:
 	string OnLoadCommand();
 	string OnConnectionCommand();
 	string OnCleanupCommand();
+	string GetInitSqllogic();
+	string GetCleanupSqllogic();
 	SortStyle GetDefaultSortStyle();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
+	bool HasTestEnv(const string &key);
 	const unordered_map<string, string> &GetTestEnvMap();
 	vector<unordered_set<string>> GetSelectTagSets();
 	vector<unordered_set<string>> GetSkipTagSets();
@@ -96,12 +105,42 @@ public:
 	static void AppendSelectTagSet(const Value &tag_set);
 	static void AppendSkipTagSet(const Value &tag_set);
 
+	//! --temp-dir-* family + run-id + env-passthrough: on_set_option hooks bridging the generic option
+	//! table to the test_helpers setters of record (see test_helpers.hpp).
+	static void SetTempDirRootOption(const Value &input);
+	static void SetLocalTempDirRootOption(const Value &input);
+	static void SetRunIdOption(const Value &input);
+	static void SetTempDirRunIdOption(const Value &input);
+	static void SetTempDirTestIdOption(const Value &input);
+	static void SetTempDirDestroyOption(const Value &input);
+	static void SetDatabaseDestroyOption(const Value &input);
+	static void AppendEnvPassthrough(const Value &input);
+	static void CheckLocalDataDir(const Value &input);
+
+	//! false + `error` set when LOCAL_DATA_DIR was pinned away from a DATA_DIR that is itself local.
+	//! Call after UpdateEnvironment(), which is where both are resolved.
+	bool ValidateDataDirs(string &error);
+	//! false + `error` set when a config `test_env` entry names a runner-resolved variable
+	//! (IsReservedEnvName). Engine-populated names are reserved against every external input.
+	bool ValidateTestEnv(string &error);
+
 	string GetLocalExtensionRepository() const;
 	void SetLocalExtensionRepository(const string &repo);
 
 private:
+	void LoadTestEnvFromConfig();
+
+	//! Parse options into this instance without running their on_set_option hooks. Set on a
+	//! throwaway config loaded only for its `skip_tests` -- the hooks write process-global
+	//! lifecycle state that belongs to the selected invocation, not to an inherited file.
+	bool ignore_option_side_effects = false;
+
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;
+	unordered_set<string> test_env_from_config_keys;
+	//! Parsed once from the `test_env` config list; re-overlaid onto test_env on every
+	//! LoadTestEnvFromConfig() so caller overrides survive UpdateEnvironment's default recompute.
+	unordered_map<string, string> config_test_env;
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 
@@ -109,6 +148,8 @@ private:
 	// and get env updates to match
 	string working_dir;
 	string test_uuid;
+	// When non-empty, the value {TEST_DIR}/__TEST_DIR__ resolve to in ProcessPath (see SetTestDirOverride).
+	string test_dir_override;
 	unordered_map<string, string> test_env;
 
 	vector<unordered_set<string>> select_tag_sets;

@@ -1,3 +1,4 @@
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
@@ -39,7 +40,7 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 		}
 		if (aggr->GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT) {
 			arg_orders.clear();
-		} else {
+		} else if (!wexpr.Distinct()) {
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
 			if (BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) == arg_orders.size()) {

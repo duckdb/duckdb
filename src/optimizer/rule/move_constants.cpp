@@ -1,10 +1,14 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
@@ -61,8 +65,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		if (!Hugeint::TrySubtractInPlace(outer_value, inner_value)) {
 			return nullptr;
 		}
-		auto result_value = Value::HUGEINT(outer_value);
-		if (!result_value.DefaultTryCastAs(constant_type)) {
+		auto result_value = Value::HUGEINT(outer_value).DefaultTryCastAs(constant_type);
+		if (!result_value) {
 			if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 				return nullptr;
 			}
@@ -72,7 +76,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			return ExpressionRewriter::ConstantOrNull(
 			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 		}
-		outer_constant.GetValueMutable() = std::move(result_value);
+		outer_constant.GetValueMutable() = std::move(*result_value);
 	} else if (op_type == "-") {
 		// [x - 1 COMP 10] O R [1 - x COMP 10]
 		// order matters in subtraction:
@@ -82,8 +86,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			if (!Hugeint::TryAddInPlace(outer_value, inner_value)) {
 				return nullptr;
 			}
-			auto result_value = Value::HUGEINT(outer_value);
-			if (!result_value.DefaultTryCastAs(constant_type)) {
+			auto result_value = Value::HUGEINT(outer_value).DefaultTryCastAs(constant_type);
+			if (!result_value) {
 				// if the cast is not possible then an equality comparison is not possible
 				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
@@ -91,15 +95,15 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				return ExpressionRewriter::ConstantOrNull(
 				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
-			outer_constant.GetValueMutable() = std::move(result_value);
+			outer_constant.GetValueMutable() = std::move(*result_value);
 		} else {
 			// [1 - x COMP 10]
 			// change right side to 1-10=-9
 			if (!Hugeint::TrySubtractInPlace(inner_value, outer_value)) {
 				return nullptr;
 			}
-			auto result_value = Value::HUGEINT(inner_value);
-			if (!result_value.DefaultTryCastAs(constant_type)) {
+			auto result_value = Value::HUGEINT(inner_value).DefaultTryCastAs(constant_type);
+			if (!result_value) {
 				// if the cast is not possible then an equality comparison is not possible
 				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
@@ -107,7 +111,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				return ExpressionRewriter::ConstantOrNull(
 				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
-			outer_constant.GetValueMutable() = std::move(result_value);
+			outer_constant.GetValueMutable() = std::move(*result_value);
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
 			BoundComparisonExpression::FlipType(comparison);
@@ -147,12 +151,12 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		// else divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division
 		// because e.g. -128 / -1 = 128, which is out of range
-		auto result_value = Value::HUGEINT(outer_value / inner_value);
-		if (!result_value.DefaultTryCastAs(constant_type)) {
+		auto result_value = Value::HUGEINT(outer_value / inner_value).DefaultTryCastAs(constant_type);
+		if (!result_value) {
 			return ExpressionRewriter::ConstantOrNull(
 			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 		}
-		outer_constant.GetValueMutable() = std::move(result_value);
+		outer_constant.GetValueMutable() = std::move(*result_value);
 	}
 	// replace left side with x
 	// first extract x from the arithmetic expression
@@ -162,6 +166,191 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		BoundComparisonExpression::RightMutable(comparison) = std::move(arithmetic_child);
 	} else {
 		BoundComparisonExpression::LeftMutable(comparison) = std::move(arithmetic_child);
+	}
+	changes_made = true;
+	return nullptr;
+}
+
+static bool IsOrderedComparison(ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool TryOutOfRangeComparisonResult(ExpressionType comparison_type, bool &result) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		result = false;
+		return true;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result = true;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool CanDuplicateForNaNGuard(const Expression &expr) {
+	return expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
+	       expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+static unique_ptr<Expression> CreateIsNanCall(ClientContext &context, const Expression &expr) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(expr.Copy());
+
+	ErrorData error;
+	FunctionBinder binder(context);
+	auto isnan = binder.BindScalarFunction(Identifier::DefaultSchema(), "isnan", std::move(children), error);
+	if (!isnan) {
+		error.Throw();
+	}
+	return isnan;
+}
+
+static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {
+	auto not_isnan = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+	not_isnan->GetChildrenMutable().push_back(CreateIsNanCall(context, expr));
+	return std::move(not_isnan);
+}
+
+//! -NaN is still NaN, and DuckDB orders NaN above every other value, so [-x > c] and [-x >= c] are TRUE for a
+//! NaN input while the flipped [x < -c] / [x <= -c] are FALSE. Those two need [OR isnan(x)]; [-x < c] and
+//! [-x <= c] have the mirrored problem and need [AND NOT isnan(x)]. The comparison type passed here must
+//! already be oriented with the negation on the left.
+static bool NaNGuardIsDisjunctive(ExpressionType comparison_type) {
+	return comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+}
+
+MoveUnaryMinusRule::MoveUnaryMinusRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	op->policy = SetMatcher::Policy::UNORDERED;
+
+	// match a unary minus over a numeric expression, e.g. [-x = -5] or [-x < -3.14]
+	auto negation = make_uniq<FunctionExpressionMatcher>();
+	negation->function = make_uniq<SpecificFunctionMatcher>("-");
+	negation->type = make_uniq<NumericTypeMatcher>();
+	negation->matchers.push_back(make_uniq<ExpressionMatcher>());
+	negation->policy = SetMatcher::Policy::ORDERED;
+	op->matchers.push_back(std::move(negation));
+	root = std::move(op);
+}
+
+unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                 bool &changes_made, bool is_root) {
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
+	auto &negation = bindings[2].get().Cast<BoundFunctionExpression>();
+
+	// Unsigned values cannot be negated
+	if (negation.GetReturnType().IsUnsigned()) {
+		return nullptr;
+	}
+
+	// Handle NULL values
+	if (outer_constant.GetValue().IsNull()) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return nullptr;
+		}
+		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
+	}
+
+	auto &constant_type = outer_constant.GetReturnType();
+	unique_ptr<Expression> nan_guard;
+	bool nan_guard_disjunctive = false;
+	if (constant_type.IsFloating()) {
+		if (IsOrderedComparison(comparison.GetExpressionType())) {
+			auto &input = *negation.GetChildren()[0];
+			if (!CanDuplicateForNaNGuard(input)) {
+				return nullptr;
+			}
+			// the guard depends on the direction of the comparison AS SEEN BY the negation, so [c > -x]
+			// must be read as [-x < c] first
+			auto negation_type = comparison.GetExpressionType();
+			if (!RefersToSameObject(BoundComparisonExpression::Left(comparison), negation)) {
+				negation_type = FlipComparisonExpression(negation_type);
+			}
+			nan_guard_disjunctive = NaNGuardIsDisjunctive(negation_type);
+			nan_guard =
+			    nan_guard_disjunctive ? CreateIsNanCall(GetContext(), input) : CreateNotIsNanGuard(GetContext(), input);
+		}
+		double val = 0.0;
+		if (constant_type.id() == LogicalTypeId::FLOAT) {
+			val = static_cast<double>(FloatValue::Get(outer_constant.GetValue()));
+		} else {
+			val = DoubleValue::Get(outer_constant.GetValue());
+		}
+		auto result_value = Value::DOUBLE(-val).DefaultTryCastAs(constant_type);
+		if (!result_value) {
+			return nullptr;
+		}
+		outer_constant.GetValueMutable() = std::move(*result_value);
+	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
+		// negate the unscaled integer and reconstruct with the same width/scale
+		hugeint_t negated_value;
+		if (!Hugeint::TryNegate(IntegralValue::Get(outer_constant.GetValue()), negated_value)) {
+			return nullptr;
+		}
+		auto width = DecimalType::GetWidth(constant_type);
+		auto scale = DecimalType::GetScale(constant_type);
+		switch (constant_type.InternalType()) {
+		case PhysicalType::INT16:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT32:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT64:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT128:
+			outer_constant.GetValueMutable() = Value::DECIMAL(negated_value, width, scale);
+			break;
+		default:
+			throw InternalException("Unknown DECIMAL physical type");
+		}
+	} else {
+		// integer path
+		hugeint_t negated_value;
+		if (!Hugeint::TryNegate(IntegralValue::Get(outer_constant.GetValue()), negated_value)) {
+			return nullptr;
+		}
+		auto result_value = Value::HUGEINT(negated_value).DefaultTryCastAs(constant_type);
+		if (!result_value) {
+			bool comparison_result;
+			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
+				return nullptr;
+			}
+			return ExpressionRewriter::ConstantOrNull(std::move(negation.GetChildrenMutable()[0]),
+			                                          Value::BOOLEAN(comparison_result));
+		}
+		outer_constant.GetValueMutable() = std::move(*result_value);
+	}
+	// [-x COMP c] => [x FLIPPED_COMP -c]
+	auto inner_expr = std::move(negation.GetChildrenMutable()[0]);
+	if (RefersToSameObject(BoundComparisonExpression::Left(comparison), negation)) {
+		BoundComparisonExpression::LeftMutable(comparison) = std::move(inner_expr);
+	} else {
+		BoundComparisonExpression::RightMutable(comparison) = std::move(inner_expr);
+	}
+	BoundComparisonExpression::FlipType(comparison);
+	if (nan_guard) {
+		auto conjunction_type =
+		    nan_guard_disjunctive ? ExpressionType::CONJUNCTION_OR : ExpressionType::CONJUNCTION_AND;
+		auto result = make_uniq<BoundConjunctionExpression>(conjunction_type, comparison.Copy(), std::move(nan_guard));
+		return std::move(result);
 	}
 	changes_made = true;
 	return nullptr;

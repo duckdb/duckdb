@@ -100,8 +100,62 @@ char Bignum::DigitToChar(int digit) {
 	return static_cast<char>(digit + '0');
 }
 
+static bool ShouldRoundDecimalDigits(const char *data, idx_t decimal_start, idx_t decimal_end) {
+	if (decimal_start >= decimal_end) {
+		return false;
+	}
+	uint64_t decimal = 0;
+	uint16_t decimal_digits = 0;
+	for (idx_t pos = decimal_start; pos < decimal_end; pos++) {
+		auto digit = UnsafeNumericCast<uint8_t>(data[pos] - '0');
+		if (decimal > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
+			for (; pos < decimal_end; pos++) {
+				if (data[pos] != '0') {
+					return true;
+				}
+			}
+			break;
+		}
+		decimal_digits++;
+		decimal = decimal * 10 + digit;
+	}
+	while (decimal > 10) {
+		decimal /= 10;
+		decimal_digits--;
+	}
+	return decimal_digits == 1 && decimal >= 5;
+}
+
+static void IncrementDecimalString(string &digits) {
+	int carry = 1;
+	for (int64_t i = static_cast<int64_t>(digits.size()) - 1; i >= 0 && carry; i--) {
+		auto digit = static_cast<int>(digits[static_cast<idx_t>(i)] - '0') + carry;
+		digits[static_cast<idx_t>(i)] = static_cast<char>('0' + (digit % 10));
+		carry = digit / 10;
+	}
+	if (carry) {
+		digits = "1" + digits;
+	}
+}
+
+string Bignum::EncodeVarcharBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative,
+                                   bool is_zero, bool should_round_up) {
+	if (start_pos == end_pos && !should_round_up) {
+		is_zero = true;
+	}
+	if (should_round_up) {
+		string integer_digits(value.GetData() + start_pos, end_pos - start_pos);
+		IncrementDecimalString(integer_digits);
+		is_zero = false;
+		string_t rounded_digits(integer_digits);
+		return EncodeBignum(rounded_digits, 0, integer_digits.size(), is_negative, is_zero);
+	}
+	return EncodeBignum(value, start_pos, end_pos, is_negative, is_zero);
+}
+
 bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
-                               bool &is_zero) {
+                               bool &is_zero, bool &should_round_up) {
+	should_round_up = false;
 	// If it's empty we error
 	if (value.Empty()) {
 		return false;
@@ -149,18 +203,94 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			return false;
 		}
 
+		// Now cur_pos points to the first digit after the decimal point.
+		bool has_digit_after_decimal = false;
+		auto decimal_start = cur_pos;
 		while (cur_pos < end_pos) {
 			if (StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
+				has_digit_after_decimal = true;
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.
 				return false;
 			}
 		}
-		// Floor cast this boy
+		should_round_up = ShouldRoundDecimalDigits(int_value_char, decimal_start, end_pos);
+		// No integer digits before the decimal (e.g. ".5", "0.5" after leading zero trim, "0.").
+		if (possible_end == start_pos) {
+			if (!at_least_one_zero && !has_digit_after_decimal) {
+				return false;
+			}
+			end_pos = possible_end;
+			if (should_round_up) {
+				is_zero = false;
+				return true;
+			}
+			is_zero = true;
+			return true;
+		}
 		end_pos = possible_end;
 	}
 	return true;
+}
+
+string Bignum::EncodeBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative, bool is_zero) {
+	if (is_zero) {
+		// Return Value 0
+		return InitializeBignumZero();
+	}
+	auto int_value_char = value.GetData();
+	idx_t actual_size = end_pos - start_pos;
+
+	// we initialize result with space for our header
+	string result(BIGNUM_HEADER_SIZE, '0');
+	unsafe_vector<uint64_t> digits;
+
+	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
+	// That has 20 digits
+	// In the worst case a remainder of a division will be 255, which is 3 digits
+	// Since the max value is 184, we need to take one more digit out
+	// Hence we end up with a max of 16 digits supported.
+	constexpr uint8_t max_digits = 16;
+	const idx_t number_of_digits = static_cast<idx_t>(std::ceil(static_cast<double>(actual_size) / max_digits));
+
+	// lets convert the string to a uint64_t vector
+	idx_t cur_end = end_pos;
+	for (idx_t i = 0; i < number_of_digits; i++) {
+		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
+		                      ? start_pos
+		                      : cur_end - max_digits;
+		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
+		digits.push_back(std::stoull(current_number));
+		// move cur_end to more digits down the road
+		cur_end = cur_end - max_digits;
+	}
+
+	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
+	while (!digits.empty()) {
+		idx_t digit_idx = digits.size() - 1;
+		uint8_t remainder = 0;
+		idx_t digits_size = digits.size();
+		for (idx_t i = 0; i < digits_size; i++) {
+			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
+			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
+			digits[digit_idx] /= 256;
+			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
+				// we can cap this
+				digits.pop_back();
+			}
+			digit_idx--;
+		}
+		if (is_negative) {
+			result.push_back(static_cast<char>(~remainder));
+		} else {
+			result.push_back(static_cast<char>(remainder));
+		}
+	}
+	std::reverse(result.begin() + BIGNUM_HEADER_SIZE, result.end());
+	// Set header after we know the size of the bignum
+	SetHeader(&result[0], result.size() - BIGNUM_HEADER_SIZE, is_negative);
+	return result;
 }
 
 void Bignum::GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob) {
@@ -257,66 +387,11 @@ string Bignum::BignumToVarchar(const bignum_t &blob) {
 
 string Bignum::VarcharToBignum(const string_t &value) {
 	idx_t start_pos, end_pos;
-	bool is_negative, is_zero;
-	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
+	bool is_negative, is_zero, should_round_up;
+	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero, should_round_up)) {
 		throw ConversionException("Could not convert string \'%s\' to Bignum", value.GetString());
 	}
-	if (is_zero) {
-		// Return Value 0
-		return InitializeBignumZero();
-	}
-	auto int_value_char = value.GetData();
-	idx_t actual_size = end_pos - start_pos;
-
-	// we initialize result with space for our header
-	string result(BIGNUM_HEADER_SIZE, '0');
-	unsafe_vector<uint64_t> digits;
-
-	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
-	// That has 20 digits
-	// In the worst case a remainder of a division will be 255, which is 3 digits
-	// Since the max value is 184, we need to take one more digit out
-	// Hence we end up with a max of 16 digits supported.
-	constexpr uint8_t max_digits = 16;
-	const idx_t number_of_digits = static_cast<idx_t>(std::ceil(static_cast<double>(actual_size) / max_digits));
-
-	// lets convert the string to a uint64_t vector
-	idx_t cur_end = end_pos;
-	for (idx_t i = 0; i < number_of_digits; i++) {
-		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
-		                      ? start_pos
-		                      : cur_end - max_digits;
-		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
-		digits.push_back(std::stoull(current_number));
-		// move cur_end to more digits down the road
-		cur_end = cur_end - max_digits;
-	}
-
-	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
-	while (!digits.empty()) {
-		idx_t digit_idx = digits.size() - 1;
-		uint8_t remainder = 0;
-		idx_t digits_size = digits.size();
-		for (idx_t i = 0; i < digits_size; i++) {
-			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
-			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
-			digits[digit_idx] /= 256;
-			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
-				// we can cap this
-				digits.pop_back();
-			}
-			digit_idx--;
-		}
-		if (is_negative) {
-			result.push_back(static_cast<char>(~remainder));
-		} else {
-			result.push_back(static_cast<char>(remainder));
-		}
-	}
-	std::reverse(result.begin() + BIGNUM_HEADER_SIZE, result.end());
-	// Set header after we know the size of the bignum
-	SetHeader(&result[0], result.size() - BIGNUM_HEADER_SIZE, is_negative);
-	return result;
+	return EncodeVarcharBignum(value, start_pos, end_pos, is_negative, is_zero, should_round_up);
 }
 
 bool Bignum::BignumToDouble(const bignum_t &blob, double &result, bool &strict) {

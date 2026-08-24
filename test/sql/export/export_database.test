@@ -8,6 +8,26 @@ SET default_null_order='nulls_first';
 statement ok
 SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
 
+statement error
+EXPORT DATABASE '' (FORMAT X!);
+----
+Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
+
+statement error
+EXPORT DATABASE '' (FORMAT x);
+----
+Copy Function with name x does not exist!
+
+statement error
+EXPORT DATABASE '' (FORMAT);
+----
+FORMAT requires a parameter, e.g. FORMAT 'csv' or FORMAT 'parquet'
+
+statement error
+EXPORT DATABASE '' (FORMAT lower('csv'));
+----
+Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
+
 # create a bunch of tables with data and views
 
 statement ok

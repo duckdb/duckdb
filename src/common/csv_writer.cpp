@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -30,11 +31,15 @@ CSVWriterState::~CSVWriterState() {
 	}
 }
 
-CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline) {
+CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline,
+                                   char comment_char) {
 	requires_quotes = vector<bool>(256, false);
 	requires_quotes['\n'] = true;
 	requires_quotes['\r'] = true;
-	requires_quotes['#'] = true;
+	// quote values containing the comment char so they are not read back as comments (see #17744)
+	if (comment_char != '\0') {
+		requires_quotes[NumericCast<idx_t>(comment_char)] = true;
+	}
 	requires_quotes[NumericCast<idx_t>(delim[0])] = true;
 	requires_quotes[NumericCast<idx_t>(quote)] = true;
 
@@ -43,12 +48,19 @@ CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const
 	}
 }
 
+// The comment char to protect on write. Defaults to '#' when unset, since the sniffer detects '#'
+// comments by default; an explicit comment (including the empty '\0' from `comment ''`) is honored.
+static char GetWriteCommentChar(CSVReaderOptions &options) {
+	auto &comment = options.dialect_options.state_machine_options.comment;
+	return comment.IsSetByUser() ? comment.GetValue() : '#';
+}
+
 CSVWriterOptions::CSVWriterOptions(CSVReaderOptions &options)
     : CSVWriterOptions(options.dialect_options.state_machine_options.delimiter.GetValue(),
                        options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline) {
 }
 
-CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
+CSVWriter::CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool shared)
     : writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                      options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
       write_stream(stream), should_initialize(true), shared(shared) {
@@ -62,13 +74,14 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
 }
 
 CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
-                     FileCompressionType compression, bool shared)
-    : options(options_p),
-      writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
-                     options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
+                     FileCompressionType compression, QueryContext context, bool shared)
+    : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
+                                         options.dialect_options.state_machine_options.quote.GetValue(),
+                                         options.write_newline, GetWriteCommentChar(options)),
       file_writer(make_uniq<BufferedFileWriter>(fs, file_path,
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
-                                                    FileLockType::WRITE_LOCK | compression)),
+                                                    FileLockType::WRITE_LOCK | compression,
+                                                context)),
       write_stream(*file_writer), should_initialize(true), shared(shared) {
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();

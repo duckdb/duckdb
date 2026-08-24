@@ -71,8 +71,7 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 	uint8_t header_byte = 0;
 	//! Set 'version' to 1
 	header_byte |= static_cast<uint8_t>(1);
-	//! Set 'sorted_strings' to 1
-	header_byte |= static_cast<uint8_t>(1) << 4;
+	//! NOTE: keep 'sorted_strings' at 0, we don't always sort the key strings
 	//! Set 'offset_size_minus_one' to byte_length-1
 	header_byte |= (static_cast<uint8_t>(byte_length) - 1) << 6;
 
@@ -231,14 +230,13 @@ vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row
 		}
 		return child_indices;
 	}
-	//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
-	case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+	auto shredded_fields = shredding_state->ObjectFields();
 
 	for (idx_t i = 0; i < nested_data.child_count; i++) {
 		auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 		auto &key = variant.GetKey(row, keys_index);
 
-		if (shredded_fields.count(key)) {
+		if (shredded_fields.count(key.GetString())) {
 			//! This field is shredded on, omit it from the value
 			continue;
 		}
@@ -1000,9 +998,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
-	auto res = LogicalType::STRUCT(std::move(children));
-	res.SetAlias("PARQUET_VARIANT");
-	return res;
+	return LogicalType::STRUCT(std::move(children)).WithAlias("PARQUET_VARIANT");
 }
 
 static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
@@ -1023,13 +1019,7 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		if (!shredding.IsFoldable()) {
-			throw BinderException("Optional second argument 'shredding' has to be a constant expression");
-		}
-		Value type_str = ExpressionExecutor::EvaluateScalar(context, shredding);
-		if (type_str.IsNull()) {
-			throw BinderException("Optional second argument 'shredding' can not be NULL");
-		}
+		auto type_str = input.GetNonNullConstant(1);
 		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
@@ -1040,9 +1030,11 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
-	                         BindTransform);
+	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
+	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// throws for values that are out of range for the parquet variant encoding
+	transform.SetFallible();
 	return transform;
 }
 

@@ -116,6 +116,11 @@ void FileBuffer::Read(QueryContext context, FileHandle &handle, uint64_t locatio
 	handle.Read(context, internal_buffer, internal_size, location);
 }
 
+void FileBuffer::ReadFromMemory(const_data_ptr_t source, uint64_t location) {
+	D_ASSERT(type != FileBufferType::TINY_BUFFER);
+	memcpy(internal_buffer, source + location, internal_size);
+}
+
 void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	// Zero-copy: adopt a pointer into the mapping.

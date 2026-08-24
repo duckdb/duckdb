@@ -9,11 +9,15 @@
 #pragma once
 
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "json_common.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 
 class TableRef;
+class Expression;
+class ClientContext;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
@@ -36,6 +40,9 @@ public:
 	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
 	const idx_t len;
+	//! Path elements parsed once at bind time (constant regular '$' paths only)
+	vector<JSONPathElement> elements;
+	bool use_elements = false;
 };
 
 struct JSONReadManyFunctionData : public FunctionData {
@@ -49,6 +56,9 @@ public:
 	const vector<string> paths;
 	vector<const char *> ptrs;
 	const vector<idx_t> lens;
+	//! Per-path elements parsed once at bind time (regular '$' paths only)
+	vector<vector<JSONPathElement>> elements;
+	vector<bool> use_elements;
 };
 
 struct JSONFunctionLocalState : public FunctionLocalState {
@@ -73,6 +83,15 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
+	static ScalarFunction GetJSONCopyToJSONFunction();
+	static ScalarFunction GetJSONCopyToGeoJSONFunction();
+	static CopyFunction GetGeoJSONCopyFunction();
+	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
+	                                                             unique_ptr<Expression> date_format,
+	                                                             unique_ptr<Expression> timestamp_format);
+	//! Validation callback for the json_geometry_format setting, so an invalid value is rejected by SET rather
+	//! than by every subsequent conversion
+	static void ValidateGeometryFormat(ClientContext &context, SetScope scope, Value &parameter);
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
@@ -95,6 +114,9 @@ private:
 	static ScalarFunctionSet GetTransformFunction();
 	static ScalarFunctionSet GetTransformStrictFunction();
 
+	static ScalarFunctionSet GetAsGeoJSONFunction();
+	static ScalarFunctionSet GetGeomFromGeoJSONFunction();
+
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
 	static ScalarFunctionSet GetExistsFunction();
@@ -109,6 +131,10 @@ private:
 	static ScalarFunctionSet GetPrettyPrintFunction();
 	static ScalarFunctionSet GetNormalizeFunction();
 	static ScalarFunctionSet GetStripNullsFunction();
+	static ScalarFunctionSet GetInsertFunction();
+	static ScalarFunctionSet GetRemoveFunction();
+	static ScalarFunctionSet GetReplaceFunction();
+	static ScalarFunctionSet GetSetFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

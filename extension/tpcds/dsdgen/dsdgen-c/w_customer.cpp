@@ -48,7 +48,7 @@
 
 #include <stdio.h>
 
-struct W_CUSTOMER_TBL g_w_customer;
+thread_local struct W_CUSTOMER_TBL g_w_customer;
 /* extern tdef w_tdefs[]; */
 
 /*
@@ -68,12 +68,12 @@ struct W_CUSTOMER_TBL g_w_customer;
 int mk_w_customer(void *info_arr, ds_key_t index) {
 	int nTemp;
 
-	static int nBaseDate;
+	static thread_local int nBaseDate;
 	/* begin locals declarations */
 	int nNameIndex, nGender;
 	struct W_CUSTOMER_TBL *r;
 	date_t dtTemp;
-	static date_t dtBirthMin, dtBirthMax, dtToday, dt1YearAgo, dt10YearsAgo;
+	static thread_local date_t dtBirthMin, dtBirthMax, dtToday, dt1YearAgo, dt10YearsAgo;
 	tdef *pT = getSimpleTdefsByNumber(CUSTOMER);
 
 	r = &g_w_customer;

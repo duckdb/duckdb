@@ -41,4 +41,12 @@ struct CMStringDecompressFun {
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 };
 
+struct CMGeometryPointCompressFun {
+	static ScalarFunction GetFunction();
+};
+
+struct CMGeometryPointDecompressFun {
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

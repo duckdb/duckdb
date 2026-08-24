@@ -6,6 +6,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -39,7 +41,7 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 
 		// UTF-8.
 		int sz = 0;
-		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 		auto new_sz = Utf8Proc::CodepointLength(converted);
 		output_length += UnsafeNumericCast<idx_t>(new_sz);
@@ -55,7 +57,7 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 			auto converted_codepoint =
 			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
@@ -136,7 +138,10 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
-	return nullptr;
+	// case conversion is not order- or length-preserving, but it never turns a valid string into NULL
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
 }
 
 ScalarFunction LowerFun::GetFunction() {

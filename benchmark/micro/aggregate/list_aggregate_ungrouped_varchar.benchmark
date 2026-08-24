@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/list_aggregate_ungrouped_varchar.benchmark
+# description: Ungrouped list() aggregate over many VARCHAR rows (clustered single-run batch append)
+# group: [aggregate]
+
+name List Aggregate VARCHAR (Ungrouped)
+group aggregate
+
+load
+CREATE TABLE strings AS SELECT 'string_' || (i % 1000)::VARCHAR AS s FROM range(0, 10000000) tbl(i);
+
+run
+SELECT len(list(s)) FROM strings
+
+result I
+10000000

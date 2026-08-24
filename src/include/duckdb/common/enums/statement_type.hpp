@@ -12,7 +12,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/enums/database_modification_type.hpp"
 
 namespace duckdb {
@@ -53,7 +53,8 @@ enum class StatementType : uint8_t {
 	UPDATE_EXTENSIONS_STATEMENT,
 	MERGE_INTO_STATEMENT,
 	CONNECT_STATEMENT,
-	DISCONNECT_STATEMENT
+	DISCONNECT_STATEMENT,
+	EXTERNAL_RESOURCE_STATEMENT
 };
 
 DUCKDB_API string StatementTypeToString(StatementType type);

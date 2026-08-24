@@ -2,6 +2,9 @@
 # description: Test inequality join
 # group: [join]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Coverage for multiple slicing predicates
 query IIIIII
 WITH lhs(i, j, k) AS (VALUES

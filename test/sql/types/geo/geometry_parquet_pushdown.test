@@ -1,0 +1,44 @@
+# name: test/sql/types/geo/geometry_parquet_pushdown.test
+# group: [geo]
+
+require parquet
+
+require json
+
+require no_vector_verification
+
+statement ok
+COPY (
+	select
+		(x + y) as id,
+		printf('POINT(%d %d)', x, y)::GEOMETRY('OGC:CRS84') as g
+	from range(100) xx(x), range(100) yy(y)
+) TO '{TEST_DIR}/points.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 1000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/output.json';
+
+statement ok
+SET tracked_metrics = ['operator.type', 'operator.row_groups_scanned', 'operator.total_row_groups_to_scan'];
+
+statement ok
+select * from '{TEST_DIR}/points.parquet' where g && 'POLYGON((10 10, 20 10, 20 20, 10 20, 10 10))'::GEOMETRY;
+
+statement ok
+PRAGMA disable_profiling;
+
+# The geometry predicate is pushed down into the Parquet reader, pruning row groups via their
+# bounding box. Only 2 of the 10 row groups overlap the query polygon, so only 2 are scanned.
+# (total_row_groups_to_scan is read + runtime-skipped and is not deterministic across threads).
+query I
+SELECT t.row_groups_scanned
+FROM '{TEST_DIR}/output.json' prof,
+     LATERAL unnest(prof.operator) t0(op0),
+     LATERAL unnest(op0.children) t1(op1),
+     LATERAL unnest(op1.children) t2(t)
+WHERE t.type = 'TABLE_SCAN';
+----
+2

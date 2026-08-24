@@ -31,8 +31,12 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (width_value.IsNull()) {
 			throw BinderException("DECIMAL type width cannot be NULL");
 		}
-		if (width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-			width = width_value.GetValueUnsafe<uint8_t>();
+		if (!width_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type width must be an integral type");
+		}
+		auto cast_width = width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+		if (cast_width) {
+			width = cast_width->GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
 		} else {
 			throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
@@ -44,8 +48,12 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (scale_value.IsNull()) {
 			throw BinderException("DECIMAL type scale cannot be NULL");
 		}
-		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-			scale = scale_value.GetValueUnsafe<uint8_t>();
+		if (!scale_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type scale must be an integral type");
+		}
+		auto cast_scale = scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+		if (cast_scale) {
+			scale = cast_scale->GetValueUnsafe<uint8_t>();
 		} else {
 			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL);
 		}
@@ -84,8 +92,9 @@ LogicalType BindTimestampType(BindLogicalTypeInput &input) {
 		throw BinderException("TIMESTAMP type precision cannot be NULL");
 	}
 	uint8_t precision;
-	if (precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-		precision = precision_value.GetValueUnsafe<uint8_t>();
+	auto cast_precision = precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+	if (cast_precision) {
+		precision = cast_precision->GetValueUnsafe<uint8_t>();
 	} else {
 		throw BinderException("TIMESTAMP type precision must be between 0 and 9");
 	}
@@ -238,11 +247,12 @@ LogicalType BindArrayType(BindLogicalTypeInput &input) {
 	if (!size_val.type().IsIntegral()) {
 		throw BinderException("ARRAY type size modifier must be an integral type");
 	}
-	if (!size_val.DefaultTryCastAs(LogicalTypeId::BIGINT)) {
+	auto cast_size = size_val.DefaultTryCastAs(LogicalTypeId::BIGINT);
+	if (!cast_size) {
 		throw BinderException("ARRAY type size modifier must be a BIGINT");
 	}
 
-	auto array_size = size_val.GetValueUnsafe<int64_t>();
+	auto array_size = cast_size->GetValueUnsafe<int64_t>();
 
 	if (array_size < 1) {
 		throw BinderException("ARRAY type size must be at least 1");
@@ -261,58 +271,53 @@ LogicalType BindArrayType(BindLogicalTypeInput &input) {
 LogicalType BindStructType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
-	if (arguments.empty()) {
-		throw BinderException("STRUCT type requires at least one child type");
-	}
+	identifier_set_t name_collision_set;
+	child_list_t<LogicalType> children;
+	children.reserve(arguments.size());
 
-	auto all_name = true;
-	auto all_anon = true;
 	for (auto &arg : arguments) {
-		if (arg.HasName()) {
-			all_anon = false;
-		} else {
-			all_name = false;
+		if (!arg.HasName()) {
+			throw BinderException("STRUCT type arguments must have names");
 		}
-
-		// Also check if all arguments are types
 		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
 			throw BinderException("STRUCT type arguments must be types");
 		}
-
-		// And not null!
 		if (arg.GetValue().IsNull()) {
 			throw BinderException("STRUCT type arguments cannot be NULL");
 		}
-	}
 
-	if (!all_name && !all_anon) {
-		throw BinderException("STRUCT type arguments must either all have names or all be anonymous");
-	}
-
-	if (all_anon) {
-		// Unnamed struct case
-		child_list_t<LogicalType> children;
-		for (auto &arg : arguments) {
-			children.emplace_back("", TypeValue::GetType(arg.GetValue()));
+		auto name = Identifier(arg.GetName());
+		if (name_collision_set.find(name) != name_collision_set.end()) {
+			throw BinderException("Duplicate STRUCT type argument name \"%s\"", name);
 		}
-		return LogicalType::STRUCT(std::move(children));
-	}
 
-	// Named struct case
-	D_ASSERT(all_name);
-	child_list_t<LogicalType> children;
-	identifier_set_t name_collision_set;
-
-	for (auto &arg : arguments) {
-		auto &child_name = arg.GetName();
-		if (name_collision_set.find(Identifier(child_name)) != name_collision_set.end()) {
-			throw BinderException("Duplicate STRUCT type argument name \"%s\"", child_name);
-		}
-		name_collision_set.insert(Identifier(child_name));
-		children.emplace_back(child_name, TypeValue::GetType(arg.GetValue()));
+		children.emplace_back(std::move(name), TypeValue::GetType(arg.GetValue()));
 	}
 
 	return LogicalType::STRUCT(std::move(children));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// TUPLE Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindTupleType(BindLogicalTypeInput &input) {
+	auto &arguments = input.modifiers;
+
+	vector<LogicalType> children;
+	children.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		if (arg.HasName()) {
+			throw BinderException("TUPLE type arguments cannot have names - use STRUCT for named fields");
+		}
+		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
+			throw BinderException("TUPLE type arguments must be types");
+		}
+		if (arg.GetValue().IsNull()) {
+			throw BinderException("TUPLE type arguments cannot be NULL");
+		}
+		children.push_back(TypeValue::GetType(arg.GetValue()));
+	}
+	return LogicalType::TUPLE(std::move(children));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -461,7 +466,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 82>;
+using builtin_type_array = std::array<DefaultType, 83>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -522,6 +527,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"uint8", LogicalTypeId::UTINYINT, nullptr},
                                            {"struct", LogicalTypeId::STRUCT, BindStructType},
                                            {"row", LogicalTypeId::STRUCT, BindStructType},
+                                           {"tuple", LogicalTypeId::TUPLE, BindTupleType},
                                            {"list", LogicalTypeId::LIST, BindListType},
                                            {"array", LogicalTypeId::ARRAY, BindArrayType},
                                            {"map", LogicalTypeId::MAP, BindMapType},
@@ -581,7 +587,7 @@ LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vecto
 		if (params.empty()) {
 			return LogicalType(entry->type);
 		} else {
-			throw InvalidInputException("Type '%s' does not take any type parameters", name);
+			throw InvalidInputException("Type %s does not take any type parameters", name);
 		}
 	}
 
@@ -608,7 +614,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 		return nullptr;
 	}
 	CreateTypeInfo info;
-	info.name = entry_name;
+	info.SetTypeName(entry_name);
 	info.type = LogicalType(entry->type);
 	info.internal = true;
 	info.temporary = true;

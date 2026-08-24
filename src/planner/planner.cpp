@@ -11,12 +11,19 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -26,6 +33,35 @@ namespace duckdb {
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
+// Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
+// FlattenDependentJoins machinery can decorrelate the trigger body.
+static void RewriteTriggersToDependent(Binder &binder, LogicalOperator &op) {
+	for (auto &child : op.children) {
+		if (child) {
+			RewriteTriggersToDependent(binder, *child);
+		}
+	}
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		if (!op.children[i] || op.children[i]->type != LogicalOperatorType::LOGICAL_TRIGGER) {
+			continue;
+		}
+		auto &trig = op.children[i]->Cast<LogicalTrigger>();
+		auto dep_join = make_uniq<LogicalDependentJoin>(JoinType::INNER);
+		dep_join->correlated_columns = std::move(trig.correlated_columns);
+		// Trigger bodies have side effects and must fire once per row. Dedup on a synthetic per-row
+		// row_number() key instead of the NEW columns (mirrors PerformDuplicateElimination's
+		// perform_delim=false path). otherwise rows with identical NEW values would underfire.
+		auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
+		CorrelatedColumnInfo info(binding, LogicalType::BIGINT, "delim_index", 0);
+		dep_join->correlated_columns.AddColumn(std::move(info));
+		dep_join->correlated_columns.SetDelimIndexToZero();
+		dep_join->perform_delim = false;
+		dep_join->children.push_back(std::move(trig.children[0]));
+		dep_join->children.push_back(std::move(trig.children[1]));
+		op.children[i] = std::move(dep_join);
+	}
+}
+
 static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
 	if (depth >= max_depth) {
 		throw ParserException("Maximum tree depth of %lld exceeded in logical planner", max_depth);
@@ -33,6 +69,68 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	for (auto &child : op.children) {
 		CheckTreeDepth(*child, max_depth, depth + 1);
 	}
+}
+
+static bool ContainsDependentJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDependentJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
+	if (plan.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    plan.type == LogicalOperatorType::LOGICAL_DELIM_JOIN || plan.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		auto &join = plan.Cast<LogicalComparisonJoin>();
+		unordered_set<TableIndex> left_bindings;
+		unordered_set<TableIndex> right_bindings;
+		LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
+		LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				continue;
+			}
+			auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
+			auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
+			// A condition side can be independent of both children, for example a constant or an outer reference.
+			// It is non-canonical only when it requires the opposite child or both children.
+			if (left_side == JoinSide::RIGHT || left_side == JoinSide::BOTH || right_side == JoinSide::LEFT ||
+			    right_side == JoinSide::BOTH) {
+				return false;
+			}
+		}
+	}
+	for (auto &child : plan.children) {
+		if (!VerifyCanonicalComparisonJoins(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
+	bool valid = true;
+	LogicalOperatorVisitor::EnumerateExpressions(plan, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->HasSubquery()) {
+			valid = false;
+		}
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression, [&](const BoundColumnRefExpression &column_ref) { valid &= column_ref.Depth() == 0; });
+	});
+	if (!valid) {
+		return false;
+	}
+	for (auto &child : plan.children) {
+		if (!VerifyPlannedExpressions(*child)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
@@ -96,7 +194,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
+		RewriteTriggersToDependent(*this->binder, *this->plan);
+		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		D_ASSERT(!ContainsDependentJoin(*this->plan));
+		D_ASSERT(VerifyPlannedExpressions(*this->plan));
+		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
@@ -121,6 +224,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement) {
 	auto copied_statement = statement->Copy();
 	// create a plan of the underlying statement
+	// set PREPARE binding mode so that $params without supplied values create placeholder slots
+	// instead of falling back to user variables (user variables serve as defaults at EXECUTE time)
+	binder->SetBindingMode(BindingMode::PREPARE);
 	CreatePlan(std::move(statement));
 	// now create the logical prepare
 	auto prepared_data = make_shared_ptr<PreparedStatementData>(copied_statement->type);
@@ -166,6 +272,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::MERGE_INTO_STATEMENT:
 	case StatementType::CONNECT_STATEMENT:
 	case StatementType::DISCONNECT_STATEMENT:
+	case StatementType::EXTERNAL_RESOURCE_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

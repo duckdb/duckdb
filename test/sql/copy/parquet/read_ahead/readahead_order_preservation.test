@@ -1,0 +1,48 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_order_preservation.test
+# description: Concurrent read-ahead producers must admit jobs in batch order, preserving insertion order
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET threads=8
+
+statement ok
+COPY (SELECT range AS i FROM range(0, 100000)) TO '{TEST_DIR}/ord_0.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+statement ok
+COPY (SELECT range AS i FROM range(100000, 200000)) TO '{TEST_DIR}/ord_1.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+statement ok
+COPY (SELECT range AS i FROM range(200000, 300000)) TO '{TEST_DIR}/ord_2.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+statement ok
+COPY (SELECT range AS i FROM range(300000, 400000)) TO '{TEST_DIR}/ord_3.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+loop x 0 5
+
+query I
+SELECT count(*) FROM (
+    SELECT i, row_number() OVER () AS rn
+    FROM read_parquet(['{TEST_DIR}/ord_0.parquet', '{TEST_DIR}/ord_1.parquet', '{TEST_DIR}/ord_2.parquet', '{TEST_DIR}/ord_3.parquet'])
+) WHERE i + 1 <> rn
+----
+0
+
+endloop
+
+# a depth below the thread count maximizes producer contention
+statement ok
+SET read_ahead_depth=3
+
+loop x 0 5
+
+query I
+SELECT count(*) FROM (
+    SELECT i, row_number() OVER () AS rn
+    FROM read_parquet(['{TEST_DIR}/ord_0.parquet', '{TEST_DIR}/ord_1.parquet', '{TEST_DIR}/ord_2.parquet', '{TEST_DIR}/ord_3.parquet'])
+) WHERE i + 1 <> rn
+----
+0
+
+endloop

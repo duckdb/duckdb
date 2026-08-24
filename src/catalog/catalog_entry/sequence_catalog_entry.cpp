@@ -21,7 +21,7 @@ SequenceData::SequenceData(CreateSequenceInfo &info)
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.GetSequenceName()), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -67,7 +67,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 		}
 	} else {
 		if (result < data.min_value || (overflow && data.increment < 0)) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", name, data.min_value);
+			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
 		}
 		if (result > data.max_value || overflow) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
@@ -79,6 +79,28 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 		transaction.PushSequenceUsage(*this, data);
 	}
 	return result;
+}
+
+int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t value, bool is_called) {
+	{
+		lock_guard<mutex> seqlock(lock);
+		if (value < data.min_value || value > data.max_value) {
+			throw SequenceException("setval: value %lld is out of bounds for sequence %s (%lld..%lld)", value, name,
+			                        data.min_value, data.max_value);
+		}
+
+		data.counter = value;
+		if (!is_called) {
+			data.usage_count++;
+			if (!temporary) {
+				transaction.PushSequenceUsage(*this, data);
+			}
+			return value;
+		}
+	}
+
+	// is_called: behave as if nextval() was just invoked and returned `value`.
+	return NextValue(transaction);
 }
 
 void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {
@@ -93,9 +115,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto seq_data = GetData();
 
 	auto result = make_uniq<CreateSequenceInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->name = name;
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;

@@ -161,6 +161,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 		auto varchar_vector_validity = varchar_vector.Validity();
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
+			if (!result_mask.RowIsValid(i)) {
+				continue;
+			}
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
 				if (!result_child_validity.IsValid(j) && varchar_vector_validity.IsValid(j)) {
 					result_mask.SetInvalid(i);
@@ -191,7 +194,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	Vector varchar_vector(varchar_struct_type, count);
 	auto &child_vectors = StructVector::GetEntries(varchar_vector);
 	auto &result_children = StructVector::GetEntries(result);
-	auto is_unnamed = StructType::IsUnnamed(result.GetType());
+	auto is_unnamed = result.GetType().id() == LogicalTypeId::TUPLE;
 
 	string_map_t<idx_t> child_names;
 	vector<reference<ValidityMask>> child_masks;
@@ -491,6 +494,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                         input, LogicalType::ARRAY(LogicalType::VARCHAR, optional_idx()), target),
 		                     ArrayBoundCastData::InitArrayLocalState);
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
 		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target),
 		                     StructBoundCastData::InitStructCastLocalState);

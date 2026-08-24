@@ -123,7 +123,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start == sd.out_buff.get() + sd.out_buf_size) {
 			// no more output buffer available: flush
-			file.child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file.child_handle->Write(file.context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
@@ -154,7 +154,7 @@ void ZstdStreamWrapper::FlushStream() {
 		idx_t written_to_output = out_buffer.pos;
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file->child_handle->Write(file->context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		if (res == 0) {

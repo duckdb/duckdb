@@ -189,3 +189,54 @@ query T
 SELECT regexp_replace('héllo-café/rest', '^([^/]+)/.*$', '\1');
 ----
 héllo-café
+
+# Invalid replacement strings should raise an error (issue #23370).
+# Previously these silently produced wrong output instead of erroring.
+
+# (A) out-of-range backreference, global: was returning input unchanged
+statement error
+SELECT regexp_replace('abcabc', '(b)', '\3Y', 'g');
+----
+Invalid replacement string for regexp_replace
+
+# (B) invalid escape sequence in replacement, global: was returning partial output
+statement error
+SELECT regexp_replace('abcabc', 'b', E'X\\xY', 'g');
+----
+Invalid replacement string for regexp_replace
+
+# (C) trailing backslash in replacement, global: was returning partial output
+statement error
+SELECT regexp_replace('abcabc', 'b', E'X\\', 'g');
+----
+Invalid replacement string for regexp_replace
+
+# (D) out-of-range backreference, non-global: was returning input unchanged
+statement error
+SELECT regexp_replace('abc', '(b)', '\3Y');
+----
+Invalid replacement string for regexp_replace
+
+# Non-constant pattern path: out-of-range backreference should also raise an error
+statement ok
+CREATE TABLE t_repl_invalid(s VARCHAR, pat VARCHAR, repl VARCHAR);
+
+statement ok
+INSERT INTO t_repl_invalid VALUES ('abcabc', '(b)', '\3Y');
+
+statement error
+SELECT regexp_replace(s, pat, repl) FROM t_repl_invalid;
+----
+Invalid replacement string for regexp_replace
+
+# Non-constant pattern path: invalid escape should also raise an error
+statement ok
+DELETE FROM t_repl_invalid;
+
+statement ok
+INSERT INTO t_repl_invalid VALUES ('abcabc', 'b', E'X\\xY');
+
+statement error
+SELECT regexp_replace(s, pat, repl) FROM t_repl_invalid;
+----
+Invalid replacement string for regexp_replace

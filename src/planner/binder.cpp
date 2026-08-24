@@ -133,6 +133,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ConnectStatement>());
 	case StatementType::DISCONNECT_STATEMENT:
 		return Bind(statement.Cast<DisconnectStatement>());
+	case StatementType::EXTERNAL_RESOURCE_STATEMENT:
+		return Bind(statement.Cast<ExternalResourceStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -233,6 +235,20 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
+	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
+	auto *current = &op;
+	while (true) {
+		if (current->type == LogicalOperatorType::LOGICAL_GET) {
+			return current->Cast<LogicalGet>();
+		}
+		if (current->type != LogicalOperatorType::LOGICAL_PROJECTION || current->children.size() != 1) {
+			return nullptr;
+		}
+		current = current->children[0].get();
+	}
+}
+
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
 	return global_binder_state->parameters;
 }
@@ -312,14 +328,17 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, 
 optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
                                                  const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
-	optional_ptr<Binding> binding;
-	if (macro_binding && table_name == macro_binding->GetAlias()) {
-		binding = optional_ptr<Binding>(macro_binding.get());
-	} else {
-		BindingAlias alias(catalog_name, schema_name, table_name);
-		binding = bind_context.GetBinding(alias, column_name, error);
+	BindingAlias alias(catalog_name, schema_name, table_name);
+	return GetMatchingBinding(alias, column_name, error);
+}
+
+optional_ptr<Binding> Binder::GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
+                                                 ErrorData &error) {
+	if (macro_binding && alias.GetSchemaPath().empty() && alias.GetCatalog().empty() &&
+	    alias.GetAlias() == macro_binding->GetAlias()) {
+		return optional_ptr<Binding>(macro_binding.get());
 	}
-	return binding;
+	return bind_context.GetBinding(alias, column_name, error);
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -377,8 +396,9 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 		    if (!column_ref.IsQualified()) {
 			    return;
 		    }
-		    auto &table_name = column_ref.GetTableName();
-		    if (table_name == "excluded") {
+		    // the table qualifier is the component directly before the column name
+		    auto &names = column_ref.ColumnNames();
+		    if (names[names.size() - 2] == "excluded") {
 			    throw NotImplementedException(
 			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
 		    }
@@ -421,7 +441,7 @@ void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &ge
 	}
 }
 
-//! Helper: convert scan column mapping to projection expression mapping for MERGE INTO
+//! Helper: convert scan column mapping to expression mapping
 static void ConvertScanToProjectionMapping(TableCatalogEntry &table, const vector<idx_t> &scan_return_columns,
                                            vector<idx_t> &return_columns,
                                            vector<unique_ptr<Expression>> &projection_expressions,
@@ -577,7 +597,14 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
-	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
+	return entry_retriever.GetEntry(
+	    EntryLookupInfo(lookup_info, QualifiedName(catalog, schema, lookup_info.GetEntryIdentifier())),
+	    on_entry_not_found);
+}
+
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
+	return entry_retriever.GetEntry(lookup_info, on_entry_not_found);
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema

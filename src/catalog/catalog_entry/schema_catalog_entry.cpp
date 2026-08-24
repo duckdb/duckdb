@@ -11,7 +11,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.SchemaName()) {
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -41,7 +41,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 
 optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
                                                         const Identifier &name) {
-	EntryLookupInfo lookup_info(type, name);
+	EntryLookupInfo lookup_info(type, QualifiedName(name));
 	return LookupEntry(transaction, lookup_info);
 }
 
@@ -59,9 +59,26 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 	return result;
 }
 
+vector<Identifier> SchemaCatalogEntry::GetSchemaPath() const {
+	vector<Identifier> path;
+	optional_ptr<const SchemaCatalogEntry> schema = this;
+	while (schema) {
+		path.push_back(schema->name);
+		schema = schema->GetParentSchema().get();
+	}
+	std::reverse(path.begin(), path.end());
+	return path;
+}
+
+QualifiedName SchemaCatalogEntry::GetQualifiedName(const Identifier &entry_name) const {
+	auto path = GetSchemaPath();
+	path.insert(path.begin(), catalog.GetName());
+	return QualifiedName(std::move(path), entry_name);
+}
+
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
-	result->schema = name;
+	result->SetQualifiedName(QualifiedName({name}, Identifier()));
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);
@@ -69,6 +86,7 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 
 string SchemaCatalogEntry::ToSQL() const {
 	auto create_schema_info = GetInfo();
+	create_schema_info->StripCatalogQualification();
 	return create_schema_info->ToString();
 }
 

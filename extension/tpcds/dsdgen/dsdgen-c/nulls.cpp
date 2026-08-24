@@ -54,7 +54,7 @@
  * TODO: None
  */
 int nullCheck(int nColumn) {
-	static int nLastTable = 0;
+	static thread_local int nLastTable = 0;
 	tdef *pTdef;
 	ds_key_t kBitMask = 1;
 
@@ -86,7 +86,7 @@ int nullCheck(int nColumn) {
 void nullSet(ds_key_t *pDest, int nStream) {
 	int nThreshold;
 	ds_key_t kBitMap;
-	static int nLastTable = 0;
+	static thread_local int nLastTable = 0;
 	tdef *pTdef;
 
 	nLastTable = getTableFromColumn(nStream);

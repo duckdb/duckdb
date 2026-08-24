@@ -13,8 +13,8 @@
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 class BlockManager;

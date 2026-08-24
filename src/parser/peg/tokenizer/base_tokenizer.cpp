@@ -1,11 +1,13 @@
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens)
-    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
+TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
+}
+
+Tokenizer::Tokenizer(const PEGKeywordHelper &keyword_helper_p) : keyword_helper(keyword_helper_p) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -18,7 +20,7 @@ static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op
 	return true;
 }
 
-bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
+bool Tokenizer::IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const {
 	const char *op_start = sql.c_str() + pos;
 	if (pos + 2 < sql.size()) {
 		if (OperatorEquals(op_start, "->>", 3, op_len)) {
@@ -47,7 +49,7 @@ bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 	return false;
 }
 
-bool BaseTokenizer::IsSingleByteOperator(char c) {
+bool Tokenizer::IsSingleByteOperator(char c) {
 	switch (c) {
 	case '(':
 	case ')':
@@ -66,14 +68,14 @@ bool BaseTokenizer::IsSingleByteOperator(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsInitialNumber(char c) {
+bool Tokenizer::CharacterIsInitialNumber(char c) {
 	if (c >= '0' && c <= '9') {
 		return true;
 	}
 	return c == '.';
 }
 
-bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
+bool Tokenizer::CharacterIsSpecialStringCharacter(char c) {
 	if (c == 'N' || c == 'n') {
 		return true;
 	}
@@ -89,7 +91,7 @@ bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
 	return false;
 }
 
-bool BaseTokenizer::CharacterIsNumber(char c) {
+bool Tokenizer::CharacterIsNumber(char c) {
 	if (CharacterIsInitialNumber(c)) {
 		return true;
 	}
@@ -103,7 +105,7 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsScientific(char c) {
+bool Tokenizer::CharacterIsScientific(char c) {
 	switch (c) {
 	case 'e':
 	case 'E':
@@ -113,7 +115,7 @@ bool BaseTokenizer::CharacterIsScientific(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsControlFlow(char c) {
+bool Tokenizer::CharacterIsControlFlow(char c) {
 	switch (c) {
 	case '\'':
 	case '-':
@@ -126,7 +128,7 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 	}
 }
 
-bool BaseTokenizer::CharacterIsKeyword(char c) {
+bool Tokenizer::CharacterIsKeyword(char c) {
 	if (IsSingleByteOperator(c)) {
 		return false;
 	}
@@ -142,7 +144,7 @@ bool BaseTokenizer::CharacterIsKeyword(char c) {
 	return true;
 }
 
-bool BaseTokenizer::CharacterIsOperator(char c) {
+bool Tokenizer::CharacterIsOperator(char c) {
 	if (IsSingleByteOperator(c)) {
 		return false;
 	}
@@ -152,7 +154,7 @@ bool BaseTokenizer::CharacterIsOperator(char c) {
 	return StringUtil::CharacterIsOperator(c);
 }
 
-TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
+TokenType Tokenizer::TokenizeStateToType(TokenizeState state) {
 	switch (state) {
 	case TokenizeState::STANDARD:
 		return TokenType::IDENTIFIER;
@@ -177,7 +179,7 @@ TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
 	}
 }
 
-void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
+void TokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
 	if (type == TokenType::COMMENT) {
 		return;
 	}
@@ -191,7 +193,7 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unter
 // Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377
 // Note: 0-9 are only valid after the first character. Callers are expected to validate that before calling this
 // function.
-bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
+bool Tokenizer::IsValidDollarTagCharacter(char c) {
 	if (c >= 'A' && c <= 'Z') {
 		return true;
 	}
@@ -210,7 +212,7 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 	return false;
 }
 
-bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
+bool Tokenizer::IsUnterminatedState(TokenizeState state) {
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
 	case TokenizeState::QUOTED_IDENTIFIER:
@@ -221,23 +223,26 @@ bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
 	}
 }
 
-bool BaseTokenizer::CanAutocomplete() const {
-	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
-}
-
-void BaseTokenizer::TokenizeInput() {
-	if (TokenizeInputInternal()) {
-		tokens.emplace_back("", sql.size(), GetTerminator());
+bool Tokenizer::TokenizeInput(TokenizerBehavior &behavior) const {
+	auto &sql = behavior.sql;
+	auto &tokens = behavior.tokens;
+	if (TokenizeInputInternal(behavior)) {
+		tokens.emplace_back("", sql.size(), behavior.GetTerminator());
 	} else {
 		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
 	}
+	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 }
 
-bool BaseTokenizer::TokenizeInputInternal() {
+bool Tokenizer::TokenizeInputInternal(TokenizerBehavior &behavior) const {
+	auto &sql = behavior.sql;
+	auto &tokens = behavior.tokens;
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
+	bool escape_string = false;
 	string dollar_quote_marker;
 	idx_t dollar_marker_start = 0;
+	idx_t multi_line_comment_depth = 0;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -245,6 +250,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			if (c == '\'') {
 				state = TokenizeState::STRING_LITERAL;
 				last_pos = i;
+				escape_string = false;
 				break;
 			}
 			if (c == '"') {
@@ -254,7 +260,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			}
 			if (c == ';') {
 				// end of statement
-				OnStatementEnd(i);
+				behavior.OnStatementEnd(i);
 				last_pos = i + 1;
 				break;
 			}
@@ -305,6 +311,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
 				i++;
 				state = TokenizeState::MULTI_LINE_COMMENT;
+				multi_line_comment_depth = 1;
 				break;
 			}
 			if (StringUtil::CharacterIsSpace(c)) {
@@ -313,7 +320,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 				break;
 			}
 			idx_t op_len;
-			if (IsSpecialOperator(i, op_len)) {
+			if (IsSpecialOperator(sql, i, op_len)) {
 				// special operator - push the special operator
 				tokens.emplace_back(sql.substr(i, op_len), last_pos, TokenType::OPERATOR);
 				i += op_len - 1;
@@ -337,6 +344,9 @@ bool BaseTokenizer::TokenizeInputInternal() {
 				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
 					state = TokenizeState::STRING_LITERAL;
 					last_pos = i;
+					if (c == 'E' || c == 'e') {
+						escape_string = true;
+					}
 					i++;
 					break;
 				}
@@ -387,7 +397,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			while (!CharacterIsInitialNumber(sql[i - 1])) {
 				i--;
 			}
-			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
+			behavior.PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
 			state = TokenizeState::STANDARD;
 			last_pos = i;
 			i--;
@@ -412,7 +422,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 						end_pos--;
 					}
 				}
-				PushToken(last_pos, end_pos, TokenType::OPERATOR);
+				behavior.PushToken(last_pos, end_pos, TokenType::OPERATOR);
 				// Push any trimmed '+' characters as individual tokens
 				for (idx_t j = end_pos; j < i; j++) {
 					tokens.emplace_back(string(1, sql[j]), j, TokenType::OPERATOR);
@@ -429,20 +439,25 @@ bool BaseTokenizer::TokenizeInputInternal() {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
 				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
-				PushToken(last_pos, i, token_type);
+				behavior.PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
 			}
 			break;
 		case TokenizeState::STRING_LITERAL:
+			if (escape_string && c == '\\' && i + 1 < sql.size()) {
+				i++;
+				break;
+			}
 			if (c == '\'') {
 				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
+					behavior.PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
 					last_pos = i + 1;
+					escape_string = false;
 					state = TokenizeState::STANDARD;
 				}
 			}
@@ -453,7 +468,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1, TokenType::IDENTIFIER);
+					behavior.PushToken(last_pos, i + 1, TokenType::IDENTIFIER);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}
@@ -461,17 +476,23 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			break;
 		case TokenizeState::SINGLE_LINE_COMMENT:
 			if (c == '\n' || c == '\r') {
-				PushToken(last_pos, i + 1, TokenType::COMMENT);
+				behavior.PushToken(last_pos, i + 1, TokenType::COMMENT);
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}
 			break;
 		case TokenizeState::MULTI_LINE_COMMENT:
-			if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
 				i++;
-				PushToken(last_pos, i + 1, TokenType::COMMENT);
-				last_pos = i + 1;
-				state = TokenizeState::STANDARD;
+				multi_line_comment_depth++;
+			} else if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+				i++;
+				multi_line_comment_depth--;
+				if (multi_line_comment_depth == 0) {
+					behavior.PushToken(last_pos, i + 1, TokenType::COMMENT);
+					last_pos = i + 1;
+					state = TokenizeState::STANDARD;
+				}
 			}
 			break;
 		case TokenizeState::DOLLAR_QUOTED_STRING: {
@@ -522,33 +543,33 @@ bool BaseTokenizer::TokenizeInputInternal() {
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
-		PushToken(last_pos, sql.size(), TokenType::COMMENT);
+		behavior.PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
-		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
+		behavior.PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
 		return false;
 	default:
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	OnLastToken(state, std::move(last_word), last_pos);
+	behavior.OnLastToken(*this, state, std::move(last_word), last_pos);
 	return true;
 }
 
-void BaseTokenizer::OnStatementEnd(idx_t pos) {
+void TokenizerBehavior::OnStatementEnd(idx_t pos) {
 	// Default: Do nothing
 }
 
-void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+void TokenizerBehavior::OnLastToken(const Tokenizer &tokenizer, TokenizeState state, string last_word, idx_t last_pos) {
 	if (last_word.empty()) {
 		return;
 	}
 	if (state == TokenizeState::KEYWORD) {
-		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+		state = tokenizer.keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
 	}
 
-	bool is_unterminated = IsUnterminatedState(state);
-	tokens.emplace_back(std::move(last_word), last_pos, TokenizeStateToType(state), is_unterminated);
+	bool is_unterminated = Tokenizer::IsUnterminatedState(state);
+	tokens.emplace_back(std::move(last_word), last_pos, Tokenizer::TokenizeStateToType(state), is_unterminated);
 }
 
 } // namespace duckdb

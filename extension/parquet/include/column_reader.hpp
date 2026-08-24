@@ -109,7 +109,8 @@ public:
 
 public:
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
-	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+	                            TProtocol &protocol_p);
 	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
 	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
 	                    idx_t approved_tuple_count);
@@ -140,6 +141,16 @@ public:
 	inline bool IsSkipped() const {
 		return !chunk;
 	}
+	//! Set the parent reader (the composite reader this reader is a child of). Top-level readers have no parent.
+	void SetParent(ColumnReader &parent_p) {
+		parent = parent_p;
+	}
+	//! Whether this is a top-level reader (i.e. it has no parent reader)
+	bool IsRoot() const {
+		return !parent;
+	}
+	//! Whether every value in the current row group's column chunk is NULL (according to its statistics)
+	bool AllValuesAreNull() const;
 
 	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
 	                              idx_t row_group_ordinal_p) {
@@ -162,7 +173,8 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	void ValidateColumnMetadata(idx_t row_group_num_rows, const ColumnChunk &column);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
 	void PlainTemplatedDefines(ByteBuffer &plain_data, const uint8_t *defines, uint64_t num_values, idx_t result_offset,
@@ -296,6 +308,13 @@ private:
 		}
 	}
 
+	//! The caller wraps the result in a dictionary that still spans the rows we skipped over, so those rows must hold
+	//! a defined value instead of uninitialized memory - zero is an empty string for string_t, and 0 otherwise
+	template <class VALUE_TYPE>
+	static void ZeroSkippedRows(VALUE_TYPE *result_ptr, idx_t row_offset, idx_t skip_count) {
+		memset(result_ptr + row_offset, 0, sizeof(VALUE_TYPE) * skip_count);
+	}
+
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
@@ -309,6 +328,7 @@ private:
 			// perform any skips forward if required
 			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, CHECKED>(plain_data, defines,
 			                                                             next_entry - current_entry, current_entry);
+			ZeroSkippedRows<VALUE_TYPE>(result_ptr, current_entry, next_entry - current_entry);
 			// read this row
 			if (HAS_DEFINES && defines[next_entry] != MaxDefine()) {
 				result_mask.SetInvalid(next_entry);
@@ -321,6 +341,7 @@ private:
 			// skip forward to the end of where we are selecting
 			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, CHECKED>(plain_data, defines,
 			                                                             num_values - current_entry, current_entry);
+			ZeroSkippedRows<VALUE_TYPE>(result_ptr, current_entry, num_values - current_entry);
 		}
 	}
 
@@ -364,6 +385,8 @@ private:
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
+	//! The composite reader this reader is a child of (struct/list/variant/expression). Null for top-level readers.
+	optional_ptr<ColumnReader> parent;
 
 	TProtocol *protocol;
 	idx_t page_rows_available;

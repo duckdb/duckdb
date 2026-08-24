@@ -200,7 +200,7 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 		if (remaining_size > 0) {
 			auto remaining_offset = total_written;
 			total_written += remaining_size;
-			if (SupportsPositionalWrites()) {
+			if (GetWriteMode() != FileWriteMode::SEQUENTIAL) {
 				Write(buffer + copied_prefix, remaining_size, remaining_offset);
 			} else {
 				Write(buffer + copied_prefix, remaining_size);
@@ -261,8 +261,8 @@ void AsyncFileWriter::LeaveBatch() noexcept {
 	write_queue->LeaveBatch();
 }
 
-bool AsyncFileWriter::SupportsPositionalWrites() {
-	return handle->SupportsPositionalWrites();
+FileWriteMode AsyncFileWriter::GetWriteMode() {
+	return handle->GetWriteMode();
 }
 
 bool AsyncFileWriter::IsLocalFile() {
@@ -358,7 +358,7 @@ void AsyncFileWriter::Truncate(idx_t size) {
 	handle->Truncate(NumericCast<int64_t>(size));
 	total_written = size;
 	write_queue->ResetNextOffset(total_written);
-	if (handle->CanSeek() && handle->SeekPosition() > size) {
+	if (handle->CanSeek() && handle->SeekPosition() != size) {
 		handle->Seek(size);
 	}
 }

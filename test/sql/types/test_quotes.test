@@ -104,12 +104,12 @@ CREATE VIEW v_list AS SELECT CAST([1, 2] AS UTINYINT[]) AS l;
 query T
 SELECT sql FROM duckdb_views() WHERE view_name = 'v_struct';
 ----
-CREATE VIEW v_struct AS SELECT CAST(main.struct_pack(x := 1, y := 2) AS STRUCT(x UTINYINT, y USMALLINT)) AS s;
+CREATE VIEW v_struct AS SELECT CAST(struct_pack(x := 1, y := 2) AS STRUCT(x UTINYINT, y USMALLINT)) AS s;
 
 query T
 SELECT sql FROM duckdb_views() WHERE view_name = 'v_list';
 ----
-CREATE VIEW v_list AS SELECT CAST(main.list_value(1, 2) AS UTINYINT[]) AS l;
+CREATE VIEW v_list AS SELECT CAST(list_value(1, 2) AS UTINYINT[]) AS l;
 
 # ---------------------------------------------------------------------------
 # 4. user-defined types named after keywords must keep their quotes.

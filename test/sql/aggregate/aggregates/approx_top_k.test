@@ -55,3 +55,52 @@ statement error
 select approx_top_k(i, NULL) from range(5) t(i)
 ----
 NULL
+
+# ordered approx_top_k with grouping - the sorted aggregate wrapper finalizes one group at a time at increasing
+# offsets, so ApproxTopKFinalize must honor a non-zero offset (regression: it used to crash on the second group)
+statement ok
+CREATE TABLE ordered_groups AS SELECT (i % 8)::TINYINT AS g, i AS v FROM range(4000) t(i);
+
+query I
+SELECT count(*) FROM (
+    SELECT g, list_sort(approx_top_k(v, 5 ORDER BY v)) AS ordered,
+              list_sort(approx_top_k(v, 5)) AS unordered
+    FROM ordered_groups GROUP BY g
+) WHERE ordered IS DISTINCT FROM unordered;
+----
+0
+
+query I
+SELECT g FROM (SELECT g, approx_top_k(v, 3 ORDER BY v DESC) k FROM ordered_groups GROUP BY g)
+WHERE len(k) <> 3;
+----
+
+statement error
+SELECT approx_top_k(x, k) actual
+FROM (VALUES
+  (1, 100, 1),
+  (2,   1, 2),
+  (3,  50, 3),
+  (4,   2, 1),
+  (5,  49, 2)
+) AS t(id, x, k)
+----
+Binder Error: The "col1" argument in function "approx_top_k" must be a constant expression
+
+statement error
+SELECT id,
+       approx_top_k(x, k) OVER (
+         ORDER BY id
+         ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+         EXCLUDE CURRENT ROW
+       ) AS actual
+FROM (VALUES
+  (1, 100, 1),
+  (2,   1, 2),
+  (3,  50, 3),
+  (4,   2, 1),
+  (5,  49, 2)
+) AS t(id, x, k)
+ORDER BY id;
+----
+Binder Error: The "col1" argument in function "approx_top_k" must be a constant expression

@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function.hpp"
 
@@ -31,7 +32,7 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
                                                     const Identifier &name, const vector<LogicalType> &arguments,
                                                     const vector<pair<Identifier, LogicalType>> &named_arguments,
                                                     const vector<string> &candidates) {
-	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", optional_idx());
+	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", QueryLocation());
 	// no matching function was found, throw an error
 	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
 	string candidate_str;

@@ -1,0 +1,11 @@
+# name: test/sql/index/art/test_art_empty_close_range.test
+# description: Test close range index scan on an empty ART (Issue 23064)
+# group: [art]
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE UNIQUE);
+
+query I
+SELECT c0 FROM t0 WHERE (c0 - 0 BETWEEN 0 AND 0) AND (c0 - 0 = c0);
+----
+

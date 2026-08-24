@@ -3,6 +3,9 @@
 # group: [left_join_reordering]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table large as select range l_id from range(100000);
 
 statement ok

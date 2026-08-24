@@ -1,0 +1,21 @@
+# name: test/optimizer/pushdown/starts_with_pushdown.test
+# description: Test that starts_with/^@/prefix filters are pushed down as range filters
+# group: [pushdown]
+
+statement ok
+CREATE TABLE t AS SELECT lpad(i::VARCHAR, 9, '0') AS s FROM range(500000) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE starts_with(s, '00049999')
+----
+analyzed_plan	<REGEX>:(?s).*s >= '00049999'.*s < '0004999:'.*Row Groups Scanned: 1 / 5.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s ^@ '00049999'
+----
+analyzed_plan	<REGEX>:(?s).*s >= '00049999'.*s < '0004999:'.*Row Groups Scanned: 1 / 5.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE prefix(s, '00049999')
+----
+analyzed_plan	<REGEX>:(?s).*s >= '00049999'.*s < '0004999:'.*Row Groups Scanned: 1 / 5.*

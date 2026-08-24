@@ -1,11 +1,16 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 #include "dsdgen.hpp"
 #include "tpcds_extension.hpp"
+
+#include <atomic>
+#include <mutex>
 
 namespace duckdb {
 
@@ -13,7 +18,6 @@ struct DSDGenFunctionData : public TableFunctionData {
 	DSDGenFunctionData() {
 	}
 
-	bool finished = false;
 	double sf = 0;
 	Identifier catalog = INVALID_CATALOG;
 	Identifier schema = DEFAULT_SCHEMA;
@@ -22,12 +26,32 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool keys = false;
 };
 
+struct DSDGenGlobalState : public GlobalTableFunctionState {
+	bool schema_created = false;
+	atomic<bool> finished {false};
+	// Progress polling can run while dsdgen is being resumed by the table function.
+	mutable mutex generator_lock;
+	unique_ptr<tpcds::DSDGenGenerator> generator;
+};
+
+class DSDGenYieldTask : public AsyncTask {
+public:
+	void Execute() override {
+	}
+};
+
+static AsyncResult DSDGenYield() {
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.push_back(make_uniq<DSDGenYieldTask>());
+	return AsyncResult(std::move(tasks));
+}
+
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                           vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
 
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -62,15 +86,66 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	return std::move(result);
 }
 
+unique_ptr<GlobalTableFunctionState> DsdgenInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<DSDGenGlobalState>();
+}
+
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->CastNoConst<DSDGenFunctionData>();
-	if (data.finished) {
+	auto &data = data_p.bind_data->Cast<DSDGenFunctionData>();
+	auto &state = data_p.global_state->Cast<DSDGenGlobalState>();
+	if (state.finished.load()) {
+		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
-	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys, data.overwrite);
-	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.catalog, data.schema, data.suffix);
+	if (!state.schema_created) {
+		tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys,
+		                                        data.overwrite);
+		auto generator = tpcds::CreateDSDGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix);
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			state.generator = std::move(generator);
+		}
+		state.schema_created = true;
+	}
 
-	data.finished = true;
+	while (true) {
+		bool finished = false;
+		bool can_yield = false;
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			finished = !state.generator || state.generator->GenerateNext();
+			can_yield = state.generator && state.generator->CanYield();
+		}
+		if (finished) {
+			state.finished.store(true);
+			data_p.async_result = AsyncResultType::FINISHED;
+			return;
+		}
+		if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR && can_yield) {
+			data_p.async_result = DSDGenYield();
+			return;
+		}
+	}
+}
+
+static double DsdgenProgress(ClientContext &context, const FunctionData *bind_data,
+                             const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0.0;
+	}
+	auto &state = global_state->Cast<DSDGenGlobalState>();
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		if (state.generator) {
+			return state.generator->Progress();
+		}
+	}
+	return state.finished.load() ? 100.0 : 0.0;
+}
+
+static unique_ptr<NodeStatistics> DsdgenCardinality(ClientContext &, const FunctionData *) {
+	// The result is a single status row, but the side-effecting scan does the real work.
+	return make_uniq<NodeStatistics>(1000);
 }
 
 struct TPCDSData : public GlobalTableFunctionState {
@@ -85,7 +160,7 @@ unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunc
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -119,7 +194,8 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                                             vector<LogicalType> &return_types,
+                                                             vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -163,18 +239,24 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 }
 
 static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-DS query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
+	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
+	dsdgen_func.table_scan_progress = DsdgenProgress;
+	dsdgen_func.cardinality = DsdgenCardinality;
 
 	loader.RegisterFunction(dsdgen_func);
 

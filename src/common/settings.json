@@ -115,6 +115,13 @@
         "custom_implementation": true
     },
     {
+        "name": "approximate_join_order_threshold",
+        "description": "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "12"
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
@@ -219,7 +226,7 @@
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
         "type": "ENUM<CheckpointOnDetach>",
         "default_scope": "local",
         "default_value": "DEFAULT"
@@ -248,6 +255,18 @@
             "custom_profiling_settings",
             "configure_metrics"
         ]
+    },
+    {
+        "name": "current_dialect",
+        "description": "The SQL dialect used by the parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "default_value": "duckdb",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ],
+        "custom_implementation": true
     },
     {
         "name": "current_transaction_invalidation_policy",
@@ -314,6 +333,20 @@
         "default_value": "0"
     },
     {
+        "name": "debug_force_commit_failure",
+        "description": "DEBUG SETTING: force transaction commit to fail after the undo buffer has been committed, used for testing commit error recovery",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_commit_revert_failure",
+        "description": "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -352,6 +385,13 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -493,14 +533,7 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
-    },
-    {
-        "name": "deprecated_using_key_syntax",
-        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<DeprecatedUsingKeySyntax>",
-        "default_scope": "local",
-        "default_value": "DEFAULT"
+        "default_value": "true"
     },
     {
         "name": "dialect_compatibility_mode",
@@ -639,6 +672,13 @@
         "default_value": "false"
     },
     {
+        "name": "enable_optimistic_write",
+        "description": "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk appends in memory (e.g. for in-memory benchmarks).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "enable_optimizer",
         "description": "Whether or not query optimization is enabled",
         "type": "BOOLEAN",
@@ -745,6 +785,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "external_file_cache_spill",
+        "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "external_threads",
@@ -1129,10 +1176,13 @@
     },
     {
         "name": "preserve_identifier_case",
-        "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
-        "type": "BOOLEAN",
+        "description": "How to fold non-quoted identifiers: 'preserve_case' keeps the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
+        "type": "ENUM<IdentifierCaseMode>",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "preserve_case",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "preserve_insertion_order",
@@ -1187,6 +1237,23 @@
         "custom_implementation": true
     },
     {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "regex_match_operator_semantics",
+        "description": "Configures whether regex match operators use partial or full string matching",
+        "type": "ENUM<RegexMatchOperatorSemantics>",
+        "default_scope": "local",
+        "default_value": "partial"
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",
@@ -1225,6 +1292,13 @@
         "custom_implementation": true
     },
     {
+        "name": "show_behavior",
+        "description": "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), 'table' (always a table), or 'setting' (always a setting)",
+        "type": "ENUM<ShowBehaviorType>",
+        "default_scope": "global",
+        "default_value": "AUTO"
+    },
+    {
         "name": "standard_vector_size",
         "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
         "type": "UBIGINT",
@@ -1255,6 +1329,13 @@
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "table_function_identifier_conversion",
+        "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
+        "type": "ENUM<TableFunctionIdentifierConversion>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "temp_directory",

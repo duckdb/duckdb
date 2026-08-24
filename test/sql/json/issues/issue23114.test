@@ -1,0 +1,25 @@
+# name: test/sql/json/issues/issue23114.test
+# description: Test issue 23114 - json_object and json_group_object should error on NULL keys
+# group: [issues]
+
+require json
+
+statement error
+SELECT json_object(CAST(NULL AS VARCHAR), 'two');
+----
+JSON key cannot be NULL
+
+query T
+SELECT json_object('key', NULL);
+----
+{"key":null}
+
+statement error
+SELECT json_group_object(k, v) FROM (VALUES ('ok', 'one'), (NULL, 'two')) t(k, v);
+----
+json_group_object key cannot be NULL
+
+query T
+SELECT json_group_object(k, v) FROM (VALUES ('ok', 'one'), ('two', NULL)) t(k, v);
+----
+{"ok":"one","two":null}

@@ -1,0 +1,18 @@
+# name: test/sql/parser/empty_quoted_identifier.test
+# description: Empty quoted identifiers should fail during parsing
+# group: [parser]
+
+statement error
+SELECT a."";
+----
+Parser Error: zero-length delimited identifier
+
+statement error
+SELECT "";
+----
+Parser Error: zero-length delimited identifier
+
+statement error
+CREATE TABLE t("");
+----
+Parser Error: zero-length delimited identifier

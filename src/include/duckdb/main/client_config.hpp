@@ -10,12 +10,12 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/parser/expression/lambda_expression.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/main/user_settings.hpp"
 
 namespace duckdb {
@@ -23,6 +23,7 @@ namespace duckdb {
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
+struct CompiledGrammar;
 
 typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -76,16 +77,20 @@ struct ClientConfig {
 	LocalUserSettings user_settings;
 
 	//! Variables set by the user
-	case_insensitive_map_t<Value> user_variables;
+	identifier_map_t<Value> user_variables;
 
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
+
+	//! The compiled grammar active for the connection
+	shared_ptr<CompiledGrammar> cached_grammar;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
 	void SetUserVariable(const String &name, Value value);
+	bool GetUserVariable(const Identifier &name, Value &result);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
 

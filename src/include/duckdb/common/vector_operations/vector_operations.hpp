@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -69,9 +70,12 @@ struct VectorOperations {
 	static void LessThanEquals(const Vector &left, const Vector &right, Vector &result);
 
 	// result = -1 if left < right, 0 if left == right, 1 if left > right (stored in int8_t TINYINT result vector)
-	static void Comparator(const Vector &left, const Vector &right, Vector &result);
+	// if inequality is set, then scalars inside nested types will be compared with NULLS LAST semantics.
+	static void Comparator(const Vector &left, const Vector &right, Vector &result, const ExpressionType comp);
 	// result = -1 if left < right, 0 if left == right, 1 if left > right; fills exactly count rows (for select paths)
-	static void ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count);
+	// if inequality is set, then scalars inside nested types will be compared with NULLS LAST semantics.
+	static void ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count,
+	                           const ExpressionType comp);
 
 	// result = A != B with nulls being equal
 	static void DistinctFrom(const Vector &left, const Vector &right, Vector &result);
@@ -150,19 +154,6 @@ struct VectorOperations {
 	                                        optional_ptr<SelectionVector> true_sel,
 	                                        optional_ptr<SelectionVector> false_sel,
 	                                        optional_ptr<ValidityMask> null_mask = nullptr);
-
-	//===--------------------------------------------------------------------===//
-	// Nested Comparisons
-	//===--------------------------------------------------------------------===//
-	// true := A != B with nulls being equal
-	static idx_t NestedNotEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-	                             idx_t count, optional_ptr<SelectionVector> true_sel,
-	                             optional_ptr<SelectionVector> false_sel,
-	                             optional_ptr<ValidityMask> null_mask = nullptr);
-	// true := A == B with nulls being equal
-	static idx_t NestedEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-	                          idx_t count, optional_ptr<SelectionVector> true_sel,
-	                          optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions
@@ -330,12 +321,12 @@ struct VectorOperations {
 		}
 		LessThanEquals(left, right, result);
 	}
-	[[deprecated("count parameter is deprecated; call Comparator without count instead")]] static void
+	[[deprecated("count parameter is deprecated; call Comparator with ExpressionType instead")]] static void
 	Comparator(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		if (count != left.size()) {
 			throw InternalException("Comparator: count (%llu) does not match vector size (%llu)", count, left.size());
 		}
-		Comparator(left, right, result);
+		Comparator(left, right, result, ExpressionType::COMPARE_EQUAL);
 	}
 	[[deprecated("count parameter is deprecated; call DistinctFrom without count instead")]] static void
 	DistinctFrom(const Vector &left, const Vector &right, Vector &result, idx_t count) {

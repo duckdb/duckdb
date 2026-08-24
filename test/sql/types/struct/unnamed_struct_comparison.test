@@ -3,11 +3,11 @@
 # group: [struct]
 
 query I
-select a<>b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
+select a IS DISTINCT FROM b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
 true
 
-
+# 1 <> 6
 query I
 select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
@@ -19,13 +19,13 @@ select 1 from values (struct_pack(k := NULL)) t(a) where 1 <> a.k;
 ----
 
 query I
-select [NULL, 6] <> [6, 5];
+select [NULL, 6] IS DISTINCT FROM [6, 5];
 ----
 true
 
 
 query I
-select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a<>b;
+select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a IS DISTINCT FROM b;
 ----
 1
 
@@ -34,31 +34,30 @@ query I
 select 1 from VALUES ([NULL, 1, NULL], [5, 6, 7])  t(a, b) where  a=b;
 ----
 
-
+# 1 <> 6
 query I
 select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where  a<>b;
 ----
 1
-
 
 # a<>b is true
 query I
 select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where a<>b is null;
 ----
 
-
 query I
 select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b) where NULL;
 ----
 
-
+# 1 <> 6 and 2 <> 5
 query I
 select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) where a<>b and c<>d;
 ----
 1
 
 query II
-select a<>b, c<>d from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) where a<>b and c<>d;
+select a<>b, c<>d
+from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d);
 ----
-true	true
+1	1
 

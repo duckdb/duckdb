@@ -8,8 +8,7 @@ namespace duckdb {
 
 void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.type = type;
-	other.catalog = catalog;
-	other.schema = schema;
+	other.SetQualifiedName(GetQualifiedName());
 	other.on_conflict = on_conflict;
 	other.temporary = temporary;
 	other.internal = internal;
@@ -22,6 +21,20 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 
 unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
+}
+
+void CreateInfo::StripCatalogQualification() {
+	qualified_name.StripCatalog();
+}
+
+string CreateInfo::QualifiedNameToString() const {
+	if (!temporary) {
+		return qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	}
+	// for temporary entries the catalog is implied, so it is omitted from the rendered name
+	auto name = qualified_name;
+	name.StripCatalog();
+	return name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 }
 
 string CreateInfo::GetCreatePrefix(const string &entry) const {

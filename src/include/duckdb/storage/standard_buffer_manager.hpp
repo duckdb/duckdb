@@ -66,11 +66,17 @@ public:
 	                                                  bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size,
+	                                 bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	                                 bool can_destroy = true) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
 
-	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
+	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) final;
+	vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	                                                  vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -113,8 +119,8 @@ public:
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-	                                             ARGS...);
+	TempBufferPoolReservation EvictBlocksOrThrow(QueryContext context, MemoryTag tag, idx_t memory_delta,
+	                                             unique_ptr<FileBuffer> *buffer, ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed instead of evicted,
@@ -125,7 +131,8 @@ protected:
 	//! The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
-	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy);
+	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy,
+	                                       QueryContext context = QueryContext());
 
 	//! Get allocated size for a block
 	idx_t GetBlockAllocSize(idx_t block_size) const;
@@ -137,7 +144,7 @@ protected:
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
+	void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
@@ -161,8 +168,16 @@ protected:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
 
-	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
-	               block_id_t first_block, block_id_t last_block);
+	//! A run of handles with adjacent block ids starting at first_block
+	struct PrefetchRun {
+		block_id_t first_block;
+		vector<shared_ptr<BlockHandle>> handles;
+	};
+	//! Computes the contiguous runs of blocks that still need to be loaded, without performing any I/O
+	vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
+	//! Synchronously executes every run in the plan through BatchRead
+	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
+	void BatchRead(QueryContext context, PrefetchRun &run);
 
 	bool EncryptTemporaryFiles();
 

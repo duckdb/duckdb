@@ -10,7 +10,6 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 
@@ -33,12 +32,12 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, std::ostream &ss);
-	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss) override;
-	void Render(const Pipeline &op, std::ostream &ss);
+	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
+	void Render(const Pipeline &op, BaseTreeRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
 	string RenderProfilerDisabled() override;
 };

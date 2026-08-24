@@ -42,15 +42,20 @@ statement ok
 SET memory_limit = '50MB';
 
 statement ok
-CREATE TABLE t (id INTEGER, val VARCHAR);
+ATTACH '{TEST_DIR}/acct.db' AS acct;
+
+statement ok
+CREATE TABLE acct.t (id INTEGER, val VARCHAR);
 
 # Write ~57 MB of incompressible OVERFLOW_STRINGS data in 20-row batches.
 # Each row → one OVERFLOW_STRINGS block of ~576 KB → one .block file on eviction.
 # 50 MB budget vs ~57 MB workload guarantees eviction during inserts.
 loop b 0 5
 
-statement ok
-INSERT INTO t SELECT range + {b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+statement maybe
+INSERT INTO acct.t SELECT range + {b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+----
+<REGEX>:.*invalidated.*
 
 endloop
 

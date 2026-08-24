@@ -16,45 +16,45 @@
 namespace duckdb {
 
 string MermaidTreeRenderer::ToString(const LogicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const PhysicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const ProfilingNode &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const Pipeline &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void MermaidTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void MermaidTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void MermaidTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void MermaidTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void MermaidTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
@@ -80,7 +80,7 @@ static string SanitizeMermaidLabel(const string &text) {
 	return result;
 }
 
-void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	vector<string> nodes;
 	vector<string> edges;
 

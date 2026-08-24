@@ -52,7 +52,7 @@
 
 #include <stdio.h>
 
-struct CATALOG_PAGE_TBL g_w_catalog_page;
+thread_local struct CATALOG_PAGE_TBL g_w_catalog_page;
 
 /*
  * Routine: mk_catalog_page()
@@ -73,9 +73,9 @@ struct CATALOG_PAGE_TBL g_w_catalog_page;
  * 20020903 jms cp_description needs to be randomized
  */
 int mk_w_catalog_page(void *info_arr, ds_key_t index) {
-	static date_t dStartDateStorage;
-	static date_t *dStartDate = &dStartDateStorage;
-	static int nCatalogPageMax;
+	static thread_local date_t dStartDateStorage;
+	static thread_local date_t *dStartDate = &dStartDateStorage;
+	static thread_local int nCatalogPageMax;
 	int nDuration, nOffset, nType;
 	struct CATALOG_PAGE_TBL *r;
 	int nCatalogInterval;

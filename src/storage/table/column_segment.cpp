@@ -59,6 +59,27 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
+unique_ptr<ColumnSegment> SuballocationBlock::CreateTransientSegment(DatabaseInstance &db,
+                                                                     const CompressionFunction &function,
+                                                                     const LogicalType &type, const idx_t segment_size,
+                                                                     BlockManager &block_manager) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
+
+	//	Do we have enough room in the block?
+	if (!block || block->GetBlockSize() < allocated + segment_size) {
+		auto &temp_block_manger = buffer_manager.GetTemporaryBlockManager();
+		block = buffer_manager.RegisterTransientMemory(temp_block_manger.GetBlockSize(), temp_block_manger);
+		allocated = 0;
+		block_id = block->BlockId();
+	}
+
+	const auto offset = allocated;
+	allocated += segment_size;
+	return make_uniq<ColumnSegment>(db, block, ColumnSegmentType::TRANSIENT, 0U, function,
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, offset, segment_size);
+}
+
 //===--------------------------------------------------------------------===//
 // Construct/Destruct
 //===--------------------------------------------------------------------===//
@@ -154,7 +175,7 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+	if (row_id < 0 || NumericCast<idx_t>(row_id) >= count) {
 		throw InternalException("ColumnSegment::FetchRow - row_id out of range for segment");
 	}
 	function.get().fetch_row(*this, state, row_id, result, result_idx);
@@ -481,6 +502,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
+		return state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+	}
 	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
 }
 

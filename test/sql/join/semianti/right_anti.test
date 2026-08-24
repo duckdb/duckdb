@@ -2,6 +2,11 @@
 # description: Test positional joins
 # group: [semianti]
 
+# expand_all disables the timing-based folding so the "Join Type" detail is always rendered
+# (otherwise EXPLAIN ANALYZE hides it for fast operators and the RIGHT_ANTI check becomes timing-dependent)
+statement ok
+SET profiling_renderer_settings = MAP {'expand_all': 'true'};
+
 statement ok
 CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
 

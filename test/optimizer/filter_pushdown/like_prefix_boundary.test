@@ -1,0 +1,25 @@
+# name: test/optimizer/filter_pushdown/like_prefix_boundary.test
+# description: Test LIKE filter pushdown with boundary UTF-8 prefixes
+# group: [filter_pushdown]
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES (chr(127)), (chr(127) || 'abc'), (chr(128)), ('abc');
+
+query I
+SELECT encode(s) FROM strings WHERE s LIKE chr(127) || '%' || 'c' ORDER BY 1
+----
+\x7Fabc
+
+statement ok
+DELETE FROM strings;
+
+statement ok
+INSERT INTO strings VALUES (chr(2047)), (chr(2047) || 'abc'), (chr(2048)), ('abc');
+
+query I
+SELECT encode(s) FROM strings WHERE s LIKE chr(2047) || '%' || 'c' ORDER BY 1
+----
+\xDF\xBFabc

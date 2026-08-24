@@ -6,18 +6,24 @@
 namespace duckdb {
 
 bool SQLLogicParser::OpenFile(const string &path) {
-	this->file_name = path;
-
-	std::ifstream infile(file_name);
-	if (infile.bad() || infile.fail()) {
+	auto infile = make_uniq<std::ifstream>(path);
+	if (infile->bad() || infile->fail()) {
 		return false;
 	}
+	owned_stream = std::move(infile);
+	return OpenStream(*owned_stream, path);
+}
 
-	string line;
-	while (std::getline(infile, line)) {
-		lines.push_back(StringUtil::Replace(line, "\r", ""));
-	}
-	return !infile.bad();
+bool SQLLogicParser::OpenStream(std::istream &input, const string &source_name) {
+	file_name = source_name;
+	stream = &input;
+	stream_finished = false;
+	current_line = 0;
+	line_start = 0;
+	lines.clear();
+	seen_statement = false;
+	current_include.reset();
+	return !stream->bad() && !stream->fail();
 }
 
 void SQLLogicParser::IncludeFile(const string &file_name) {
@@ -33,14 +39,49 @@ bool SQLLogicParser::EmptyOrComment(const string &line) {
 	return line.empty() || StringUtil::StartsWith(line, "#");
 }
 
+bool SQLLogicParser::HasLine(idx_t line_idx) {
+	if (line_idx < line_start) {
+		return false;
+	}
+	while (!stream_finished && line_idx >= line_start + lines.size()) {
+		if (!stream || !stream->good()) {
+			stream_finished = true;
+			break;
+		}
+		string line;
+		if (!std::getline(*stream, line)) {
+			stream_finished = true;
+			break;
+		}
+		lines.push_back(StringUtil::Replace(line, "\r", ""));
+	}
+	return line_idx >= line_start && line_idx < line_start + lines.size();
+}
+
+string &SQLLogicParser::GetLine(idx_t line_idx) {
+	if (!HasLine(line_idx)) {
+		Fail("Unexpected end of file");
+	}
+	return lines[line_idx - line_start];
+}
+
+void SQLLogicParser::PruneLines() {
+	if (current_line <= line_start || lines.empty()) {
+		return;
+	}
+	auto prune_count = MinValue<idx_t>(current_line - line_start, lines.size());
+	lines.erase(lines.begin(), lines.begin() + prune_count);
+	line_start += prune_count;
+}
+
 bool SQLLogicParser::NextLineEmptyOrComment() {
 	if (current_include) {
 		return current_include->NextLineEmptyOrComment();
 	}
-	if (current_line + 1 >= lines.size()) {
+	if (!HasLine(current_line + 1)) {
 		return true;
 	} else {
-		return EmptyOrComment(lines[current_line + 1]);
+		return EmptyOrComment(GetLine(current_line + 1));
 	}
 }
 
@@ -56,17 +97,18 @@ bool SQLLogicParser::NextStatement() {
 	if (seen_statement) {
 		// skip the current statement
 		// but only if we have already seen a statement in the file
-		while (current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
+		while (HasLine(current_line) && !EmptyOrComment(GetLine(current_line))) {
 			current_line++;
 		}
 	}
 	seen_statement = true;
 	// now look for the first non-empty line
-	while (current_line < lines.size() && EmptyOrComment(lines[current_line])) {
+	while (HasLine(current_line) && EmptyOrComment(GetLine(current_line))) {
 		current_line++;
 	}
+	PruneLines();
 	// return whether or not we reached the end of the file
-	return current_line < lines.size();
+	return HasLine(current_line);
 }
 
 void SQLLogicParser::NextLine() {
@@ -84,14 +126,14 @@ string SQLLogicParser::ExtractStatement() {
 	string statement;
 
 	bool first_line = true;
-	while (current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
-		if (lines[current_line] == "----") {
+	while (HasLine(current_line) && !EmptyOrComment(GetLine(current_line))) {
+		if (GetLine(current_line) == "----") {
 			break;
 		}
 		if (!first_line) {
 			statement += "\n";
 		}
-		statement += lines[current_line];
+		statement += GetLine(current_line);
 		first_line = false;
 
 		current_line++;
@@ -106,12 +148,12 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 	}
 	vector<string> result;
 	// skip the result line (----) if we are still reading that
-	if (current_line < lines.size() && lines[current_line] == "----") {
+	if (HasLine(current_line) && GetLine(current_line) == "----") {
 		current_line++;
 	}
 	// read the expected result until we encounter a new line
-	while (current_line < lines.size() && !lines[current_line].empty()) {
-		result.push_back(lines[current_line]);
+	while (HasLine(current_line) && !GetLine(current_line).empty()) {
+		result.push_back(GetLine(current_line));
 		current_line++;
 	}
 	return result;
@@ -125,7 +167,7 @@ string SQLLogicParser::ExtractExpectedError(ExpectedResult expected_result, bool
 	    expected_result == ExpectedResult::RESULT_ERROR || expected_result == ExpectedResult::RESULT_UNKNOWN;
 
 	// check if there is an expected error at all
-	if (current_line >= lines.size() || lines[current_line] != "----") {
+	if (!HasLine(current_line) || GetLine(current_line) != "----") {
 		if (expect_error_message && !original_sqlite_test) {
 			Fail("Failed to parse statement: statement error and maybe needs to have an expected error message");
 		}
@@ -138,8 +180,8 @@ string SQLLogicParser::ExtractExpectedError(ExpectedResult expected_result, bool
 	current_line++;
 	string error;
 	vector<string> error_lines;
-	while (current_line < lines.size() && !lines[current_line].empty()) {
-		error_lines.push_back(lines[current_line]);
+	while (HasLine(current_line) && !GetLine(current_line).empty()) {
+		error_lines.push_back(GetLine(current_line));
 		current_line++;
 	}
 	error = StringUtil::Join(error_lines, "\n");
@@ -157,13 +199,13 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 		return current_include->Tokenize();
 	}
 	SQLLogicToken result;
-	if (current_line >= lines.size()) {
+	if (!HasLine(current_line)) {
 		result.type = SQLLogicTokenType::SQLLOGIC_INVALID;
 		return result;
 	}
 
 	vector<string> argument_list;
-	auto &line = lines[current_line];
+	auto &line = GetLine(current_line);
 	idx_t last_pos = 0;
 	for (idx_t i = 0; i < line.size(); i++) {
 		if (StringUtil::CharacterIsSpace(line[i])) {

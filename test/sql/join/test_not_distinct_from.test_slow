@@ -3,6 +3,9 @@
 # group: [join]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 SET default_null_order='nulls_first';
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)

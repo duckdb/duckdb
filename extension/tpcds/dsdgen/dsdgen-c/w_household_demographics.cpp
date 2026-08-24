@@ -48,7 +48,7 @@
 
 #include <stdio.h>
 
-struct W_HOUSEHOLD_DEMOGRAPHICS_TBL g_w_household_demographics;
+thread_local struct W_HOUSEHOLD_DEMOGRAPHICS_TBL g_w_household_demographics;
 
 /*
  * mk_household_demographics

@@ -5,8 +5,10 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -16,6 +18,24 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+static void RewriteAggregateCallbacks(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
+	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		auto &aggregate_op = op->Cast<LogicalAggregate>();
+		for (auto &expr : aggregate_op.expressions) {
+			auto &aggregate = expr->Cast<BoundAggregateExpression>();
+			AggregateRewriteInput input(optimizer, aggregate_op, aggregate);
+			auto rewrite = TryDirectAggregateRewrite(input);
+			if (!rewrite) {
+				continue;
+			}
+			expr = std::move(rewrite);
+		}
+	}
+	for (auto &child : op->children) {
+		RewriteAggregateCallbacks(optimizer, child);
+	}
+}
 
 class AggregateRewriteRule {
 public:
@@ -78,8 +98,8 @@ public:
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry =
-		    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, Identifier::DefaultSchema(), "sum");
+		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+		    optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "sum"));
 		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
@@ -182,6 +202,11 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
+		// don't rewrite state-export aggregates - list(x ORDER BY x) EXPORT_STATE would become
+		// list_sort(list(x) EXPORT_STATE, ...), which cannot bind list_sort on the AGGREGATE_STATE result
+		if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			return false;
+		}
 		if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 			return false;
 		}
@@ -410,6 +435,7 @@ AggregateFunctionRewriter::~AggregateFunctionRewriter() {
 }
 
 void AggregateFunctionRewriter::Optimize(unique_ptr<LogicalOperator> &op) {
+	RewriteAggregateCallbacks(optimizer, op);
 	// Run each rule as an independent pass so that transformations by an earlier rule affect later rules
 	for (auto &rule : rules) {
 		AggregateFunctionRewriterInternal rewriter(optimizer, *rule);

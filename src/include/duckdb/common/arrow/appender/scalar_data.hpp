@@ -55,7 +55,7 @@ struct ArrowIntervalConverter {
 struct ArrowTimeTzConverter {
 	template <class TGT, class SRC>
 	static TGT Operation(SRC input) {
-		return input.time().micros;
+		return input.time().value;
 	}
 
 	static bool SkipNulls() {

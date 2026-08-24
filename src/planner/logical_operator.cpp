@@ -1,5 +1,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/planner/expression_iterator.hpp"
+
 #include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
@@ -8,6 +10,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -96,12 +99,31 @@ bool LogicalOperator::HasSideEffects() const {
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return true;
 	default:
 		break;
 	}
 	for (auto &child : children) {
 		if (child && child->HasSideEffects()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool LogicalOperator::HasVolatileExpressions() const {
+	bool is_volatile = false;
+	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->IsVolatile()) {
+			is_volatile = true;
+		}
+	});
+	if (is_volatile) {
+		return true;
+	}
+	for (auto &child : children) {
+		if (child && child->HasVolatileExpressions()) {
 			return true;
 		}
 	}
@@ -156,13 +178,13 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString(const ProfilerPrintFormat &format) const {
-	auto renderer = TreeRenderer::CreateRenderer(format);
+string LogicalOperator::ToString(optional_ptr<ClientContext> context, const ProfilerPrintFormat &format) const {
+	auto renderer = context ? TreeRenderer::CreateRenderer(*context, format) : TreeRenderer::CreateRenderer(format);
 	if (!renderer) {
 		// formats without output (e.g. "no_output") render nothing
 		return string();
 	}
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();

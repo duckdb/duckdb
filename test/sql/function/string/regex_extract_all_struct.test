@@ -322,7 +322,7 @@ statement error
 WITH params(name_list) AS (SELECT ['g1','g2'])
 SELECT regexp_extract_all('abc', '(a)(b)', name_list) FROM params;
 ----
-Group specification field must be a constant list
+must be a constant expression
 
 statement error
 SELECT regexp_extract_all('abc', '(a)', NULL::VARCHAR[]);

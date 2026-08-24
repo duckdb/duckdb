@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 

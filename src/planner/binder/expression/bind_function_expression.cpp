@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -32,7 +33,8 @@ static bool TypeContainsDecimal(const LogicalType &type) {
 		return TypeContainsDecimal(ListType::GetChildType(type));
 	case LogicalTypeId::ARRAY:
 		return TypeContainsDecimal(ArrayType::GetChildType(type));
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		for (const auto &child : StructType::GetChildTypes(type)) {
 			if (TypeContainsDecimal(child.second)) {
 				return true;
@@ -254,20 +256,21 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.FunctionName(),
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 		                                      error_context);
-		auto table_func =
-		    GetCatalogEntry(function.Catalog(), function.Schema(), table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
-			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
+			                      "Function %s is a table function but it was used as a scalar function. This "
 			                      "function has to be called in a FROM clause (similar to a table).",
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
-		func =
-		    GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+		                                error_context);
+		func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }
@@ -282,7 +285,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		break;
 	default:
 		if (function.Distinct() || function.Filter() || !function.OrderBy()->orders.empty()) {
-			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+			throw InvalidInputException("Function %s is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 			                            "applicable to window and aggregate functions.",
 			                            function.FunctionName(), CatalogTypeToString(func.type));
 		}
@@ -370,7 +373,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
-	auto &scalar_function = func.functions.functions.front();
+	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
 	if (!bind_lambda_function) {
 		return BindResult("This scalar function does not support lambdas!");
@@ -378,14 +381,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &args = function.GetArgumentsMutable();
 
-	// the first child is the list, the second child is the lambda expression
-	// constexpr idx_t list_ix = 0;
-	constexpr idx_t list_idx = 0;
-	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(args[lambda_expr_idx].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA);
+	// list lambda functions use the existing (list, lambda) shape; invoke is the only lambda
+	// function that accepts the lambda expression as the first argument.
+	const idx_t lambda_expr_idx = func.name == "invoke" ? 0 : 1;
+	if (args.size() <= lambda_expr_idx ||
+	    args[lambda_expr_idx].GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+		return BindResult("This scalar function requires a lambda expression!");
+	}
 
 	vector<LogicalType> function_child_types;
-	// bind the list
 	ErrorData error;
 
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
@@ -408,13 +412,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		function_child_types.push_back(child->GetReturnType());
 	}
 
-	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*args[list_idx].GetExpressionMutable());
-	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-	    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
-		return BindResult("Invalid LIST argument during lambda function binding!");
+	if (lambda_expr_idx == 1) {
+		// get the logical type of the children of the list
+		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
+		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+			return BindResult("Invalid LIST argument during lambda function binding!");
+		}
 	}
 
 	// bind the lambda parameter

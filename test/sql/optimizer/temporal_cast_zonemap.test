@@ -2,6 +2,9 @@
 # description: Test that temporal cast filters generate OptionalFilter for zonemap pruning
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # ---------------------------------------------------------------------------
 # Setup tables
 # ---------------------------------------------------------------------------

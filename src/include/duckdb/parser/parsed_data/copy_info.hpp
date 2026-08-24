@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -27,12 +28,6 @@ public:
 public:
 	CopyInfo();
 
-	//! The catalog name to copy to/from
-	Identifier catalog;
-	//! The schema name to copy to/from
-	Identifier schema;
-	//! The table name to copy to/from
-	Identifier table;
 	//! List of columns to copy to/from
 	vector<Identifier> select_list;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
@@ -46,22 +41,47 @@ public:
 	//! The file path to copy to/from
 	string file_path;
 	//! Set of (key, value) options
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_options;
+	identifier_map_t<unique_ptr<ParsedExpression>> parsed_options;
 	//! Set of (key, value) options
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 	//! The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
+
+public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
+	const Identifier &Table() const {
+		return qualified_name.Name();
+	}
+	void SetTable(Identifier table) {
+		qualified_name = qualified_name.WithName(std::move(table));
+	}
 
 public:
 	string CopyOptionsToString() const;
 
 public:
 	unique_ptr<CopyInfo> Copy() const;
+	bool Equals(const CopyInfo &other) const;
 	string ToString() const;
 	string TablePartToString() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Qualified name of the table to copy to/from (catalog.schema.table)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

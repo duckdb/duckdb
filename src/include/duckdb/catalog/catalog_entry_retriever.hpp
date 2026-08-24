@@ -39,20 +39,35 @@ public:
 		return context;
 	}
 
-	optional_ptr<CatalogEntry> GetEntry(const Identifier &catalog, const Identifier &schema,
-	                                    const EntryLookupInfo &lookup_info,
+	//! Look up an entry described by the (catalog/schema-qualified) EntryLookupInfo
+	optional_ptr<CatalogEntry> GetEntry(const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
-
-	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,
-	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
-
-	LogicalType GetType(const Identifier &catalog, const Identifier &schema, const Identifier &name,
-	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
-	LogicalType GetType(Catalog &catalog, const Identifier &schema, const Identifier &name,
-	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
-
-	optional_ptr<SchemaCatalogEntry> GetSchema(const Identifier &catalog, const EntryLookupInfo &schema_lookup,
+	//! Look up a (catalog/schema-qualified) type
+	LogicalType GetType(const QualifiedName &name, OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+	//! Look up the schema described by the (catalog-qualified) EntryLookupInfo
+	optional_ptr<SchemaCatalogEntry> GetSchema(const EntryLookupInfo &schema_lookup,
 	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+
+	//! Deprecated: the catalog/schema qualification is now carried inside the EntryLookupInfo / QualifiedName - fold it
+	//! in there instead of passing it separately.
+	[[deprecated(
+	    "Fold catalog/schema into the EntryLookupInfo and use GetEntry(EntryLookupInfo)")]] optional_ptr<CatalogEntry>
+	GetEntry(const Identifier &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,
+	         OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+	[[deprecated(
+	    "Fold the schema into the EntryLookupInfo and use GetEntry(EntryLookupInfo)")]] optional_ptr<CatalogEntry>
+	GetEntry(Catalog &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,
+	         OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+	[[deprecated("Fold catalog/schema into the QualifiedName and use GetType(QualifiedName)")]] LogicalType
+	GetType(const Identifier &catalog, const Identifier &schema, const Identifier &name,
+	        OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+	[[deprecated("Fold the schema into the QualifiedName and use GetType(QualifiedName)")]] LogicalType
+	GetType(Catalog &catalog, const Identifier &schema, const Identifier &name,
+	        OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(EntryLookupInfo)")]] optional_ptr<
+	    SchemaCatalogEntry>
+	GetSchema(const Identifier &catalog, const EntryLookupInfo &schema_lookup,
+	          OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	const CatalogSearchPath &GetSearchPath() const;
 	void SetSearchPath(vector<CatalogSearchEntry> entries);

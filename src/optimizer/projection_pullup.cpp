@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -221,6 +222,10 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 }
 
 void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
+	VisitOperator(op);
+}
+
+void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	// These operators depend on column order.
 	// If their immediate child is a projection, keep it and recurse into the projection’s child.
@@ -255,15 +260,14 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 		parents.push_back(*op);
 		if (comp_join.join_type == JoinType::SEMI || comp_join.join_type == JoinType::ANTI) {
 			// LHS: can pull through
-			Optimize(comp_join.children[0]);
+			VisitChildOfOperatorWithProjectionMap(comp_join.children[0], comp_join.left_projection_map);
 
 			// RHS: Cannot pull through. Add a projection "barrier"
 			InsertProjectionBelowOp(op, comp_join.children[1], false);
 		} else {
 			// All other joins: recurse normally on both sides
-			for (auto &child : op->children) {
-				Optimize(child);
-			}
+			VisitChildOfOperatorWithProjectionMap(comp_join.children[0], comp_join.left_projection_map);
+			VisitChildOfOperatorWithProjectionMap(comp_join.children[1], comp_join.right_projection_map);
 		}
 
 		PopParents(*op);
@@ -274,7 +278,8 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 		parents.push_back(*op);
 
 		// Recurse
-		Optimize(op->children[0]);
+		auto &filter = op->Cast<LogicalFilter>();
+		VisitChildOfOperatorWithProjectionMap(op->children[0], filter.projection_map);
 
 		PopParents(*op);
 		return;
@@ -347,9 +352,7 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	}
 
 	// Create new optimizer for child (start fresh without any state)
-	for (auto &child : op->children) {
-		ProjectionPullup next(optimizer, root);
-		next.Optimize(child);
-	}
+	ProjectionPullup next(optimizer, root);
+	next.VisitOperatorChildren(*op);
 }
 } // namespace duckdb

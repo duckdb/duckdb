@@ -58,24 +58,12 @@ static vector<string> CollectPaths(const Value &constant_arg, const string &func
 	return paths;
 }
 
-bool VariantBindUtils::GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
-}
-
 unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	const auto &function_name = input.GetBoundFunction().GetName();
 
 	if (arguments.size() != 1 && arguments.size() != 2) {
-		throw BinderException("'%s' expects either one VARIANT column argument, or two VARIANT column and "
+		throw BinderException("%s expects either one VARIANT column argument, or two VARIANT column and "
 		                      "VARCHAR path arguments",
 		                      function_name);
 	}
@@ -88,21 +76,18 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 	const auto &path_expr = *arguments[1];
 	const auto &return_type = path_expr.GetReturnType();
 	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("'%s' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+		throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
 		                      function_name, return_type.ToString());
 	}
 	if (return_type.id() == LogicalTypeId::LIST) {
 		const auto child_type_id = ListType::GetChildType(return_type).id();
 		if (child_type_id != LogicalTypeId::VARCHAR && child_type_id != LogicalTypeId::SQLNULL) {
-			throw BinderException("'%s' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
+			throw BinderException("%s expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
 			                      function_name, return_type.ToString());
 		}
 	}
 
-	Value constant_arg;
-	if (!GetConstantArgument(context, path_expr, constant_arg)) {
-		throw BinderException("'%s' expects the second argument to be a constant expression", function_name);
-	}
+	auto constant_arg = input.GetNonNullConstant(1);
 
 	const auto path_type_id = constant_arg.type().id();
 	if (path_type_id == LogicalTypeId::VARCHAR) {

@@ -1,7 +1,6 @@
 #include "duckdb/parallel/task_scheduler_queue.hpp"
 
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
@@ -34,30 +33,36 @@ TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p)
 }
 
 void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	task->token = token;
 	if (queue->q.enqueue(token.GetQueueProducerToken(pool_type).token, std::move(task))) {
 		++tasks_in_queue;
+		token.producer_cv.notify_one();
 	} else {
 		throw InternalException("Could not schedule task!");
 	}
 }
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	for (auto &task : tasks) {
 		task->token = token;
 	}
 	if (queue->q.enqueue_bulk(token.GetQueueProducerToken(pool_type).token, std::make_move_iterator(tasks.begin()),
 	                          tasks.size())) {
 		tasks_in_queue += tasks.size();
+		token.producer_cv.notify_one();
 	} else {
 		throw InternalException("Could not schedule tasks!");
 	}
 }
 
 bool TaskSchedulerQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
+	return DequeueFromProducerLocked(token, task);
+}
+
+bool TaskSchedulerQueue::DequeueFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) {
 	if (!queue->q.try_dequeue_from_producer(token.GetQueueProducerToken(pool_type).token, task)) {
 		return false;
 	}
@@ -84,7 +89,7 @@ idx_t TaskSchedulerQueue::GetProducerCount() const {
 }
 
 idx_t TaskSchedulerQueue::GetTaskCountForProducer(ProducerToken &token) const {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	return queue->q.size_producer_approx(token.GetQueueProducerToken(pool_type).token);
 }
 
@@ -111,20 +116,29 @@ TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p) : pool_typ
 }
 
 void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
+	annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	lock_guard<mutex> lock(qlock);
 	task->token = token;
 	q[token.GetQueueProducerToken(pool_type)].push(std::move(task));
+	token.producer_cv.notify_one();
 }
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	lock_guard<mutex> lock(qlock);
 	for (auto &task : tasks) {
 		task->token = token;
 		q[token.GetQueueProducerToken(pool_type)].push(std::move(task));
 	}
+	token.producer_cv.notify_one();
 }
 
 bool TaskSchedulerQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
+	return DequeueFromProducerLocked(token, task);
+}
+
+bool TaskSchedulerQueue::DequeueFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
 
 	const auto it = q.find(token.GetQueueProducerToken(pool_type));

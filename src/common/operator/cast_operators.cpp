@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
@@ -37,7 +38,7 @@ namespace duckdb {
 
 ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
                                                        optional_ptr<CastParameters> parameters) {
-	optional_idx query_location;
+	QueryLocation query_location;
 	if (parameters) {
 		query_location = parameters->query_location;
 		if (parameters->cast_source && parameters->cast_target) {
@@ -1036,31 +1037,57 @@ bool TryCast::Operation(date_t input, timestamp_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
+template <typename SRC, typename DST>
+static bool TryCastTimeBase(const SRC &input, DST &result, bool strict = true) {
+	if (SRC::PRECISION == DST::PRECISION || !input.IsFinite()) {
+		result.value = input.value;
+		return true;
+	} else if (SRC::PRECISION < DST::PRECISION) {
+		const int64_t scaling = DST::PRECISION / SRC::PRECISION;
+		return TryMultiplyOperator::Operation(input.value, scaling, result.value);
+	} else {
+		//	Round away from the epoch.
+		//	Scale first so we don't overflow.
+		const int64_t power_of_ten = SRC::PRECISION / DST::PRECISION;
+		const int64_t scaling = power_of_ten / 2;
+		result.value = input.value / scaling; // NOLINT: power_of_ten >= 10 so scaling >= 5
+		if (result.value < 0) {
+			--result.value;
+		} else {
+			++result.value;
+		}
+		result.value /= 2;
+		return true;
+	}
+}
+
+template <typename SRC, typename DST>
+static DST CastTimeBase(const SRC &input) {
+	DST result;
+	if (!TryCastTimeBase(input, result)) {
+		throw ConversionException("Could not convert time to higher precision.");
+	}
+	return result;
+}
+
 template <>
 bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict) {
-	result = input;
-	return true;
+	return TryCastTimeBase<dtime_t, dtime_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict) {
-	result.micros = input.micros;
-	return true;
+	return TryCastTimeBase<dtime_ns_t, dtime_ns_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict) {
-	//	Round
-	result.micros = (input.micros + (Interval::NANOS_PER_MICRO / 2)) / Interval::NANOS_PER_MICRO;
-	return true;
+	return TryCastTimeBase<dtime_ns_t, dtime_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict) {
-	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MICRO, result.micros)) {
-		throw ConversionException("Could not convert TIME to TIME_NS");
-	}
-	return true;
+	return TryCastTimeBase<dtime_t, dtime_ns_t>(input, result, strict);
 }
 
 template <>
@@ -1088,7 +1115,7 @@ bool TryCast::Operation(dtime_tz_t input, dtime_t &result, bool strict) {
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
 template <typename SRC, typename DST>
-static bool TryCastTimebase(const SRC &input, DST &result, bool strict = true) {
+static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = true) {
 	if (SRC::PRECISION == DST::PRECISION || !input.IsFinite()) {
 		result.value = input.value;
 		return true;
@@ -1112,12 +1139,36 @@ static bool TryCastTimebase(const SRC &input, DST &result, bool strict = true) {
 }
 
 template <typename SRC, typename DST>
-static DST CastTimebase(const SRC &input) {
+static DST CastTimestampOperation(const SRC &input, const string &error_message) {
 	DST result;
-	if (!TryCastTimebase(input, result)) {
-		throw ConversionException("Could not convert Timestamp  to higher precision.");
+	if (!TryCast::Operation(input, result)) {
+		throw ConversionException(error_message);
 	}
 	return result;
+}
+
+template <typename SRC, typename DST>
+static DST CastTimestampPrecisionOperation(const SRC &input) {
+	return CastTimestampOperation<SRC, DST>(input, "Could not convert Timestamp to higher precision.");
+}
+
+template <typename SRC, typename DST>
+static DST CastTimestampTargetOperation(const SRC &input) {
+	return CastTimestampOperation<SRC, DST>(
+	    input, StringUtil::Format("Could not convert Timestamp to %s.", TypeIdToString(GetTypeId<DST>())));
+}
+
+template <typename SRC>
+static dtime_t CastTimestampTimeOperation(const SRC &input) {
+	return Timestamp::GetTime(CastTimestampPrecisionOperation<SRC, timestamp_t>(input));
+}
+
+static dtime_ns_t CastTimestampNsTimeNsOperation(timestamp_ns_t input) {
+	dtime_ns_t result;
+	if (TryCast::Operation(input, result)) {
+		return result;
+	}
+	return Timestamp::GetTimeNs(input);
 }
 
 template <>
@@ -1136,77 +1187,197 @@ bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
 }
 
 template <>
-bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
-	return TryCastTimebase<timestamp_t, timestamp_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
-	return TryCastTimebase<timestamp_sec_t, timestamp_sec_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
-	return TryCastTimebase<timestamp_t, timestamp_sec_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ms_t, timestamp_ms_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) {
-	return TryCastTimebase<timestamp_t, timestamp_ms_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ns_t, timestamp_ns_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
-	return TryCastTimebase<timestamp_t, timestamp_ns_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
-	return TryCastTimebase<timestamp_tz_t, timestamp_tz_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_tz_t input, timestamp_t &result, bool strict) {
-	return TryCastTimebase<timestamp_tz_t, timestamp_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict) {
-	return TryCastTimebase<timestamp_tz_ns_t, timestamp_tz_ns_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool strict) {
-	return TryCastTimebase<timestamp_tz_ns_t, timestamp_ns_t>(input, result, strict);
-}
-
-template <>
-bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
-	return TryCastTimebase<timestamp_t, timestamp_tz_t>(input, result, strict);
-}
-
-template <>
 bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict) {
 	if (!input.IsFinite()) {
 		return false;
 	}
 	result = dtime_tz_t(Timestamp::GetTime(input), 0);
 	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, date_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_sec_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetDate(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, dtime_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_sec_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetTime(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_sec_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, date_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_ms_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetDate(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, dtime_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_ms_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetTime(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_ms_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, date_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_ns_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetDate(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, dtime_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_ns_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetTime(us);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, dtime_ns_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	result = Timestamp::GetTimeNs(input);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_ns_t, timestamp_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_t, timestamp_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_t, timestamp_tz_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, dtime_tz_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	result = dtime_tz_t(Timestamp::GetTime(timestamp_t(input)), 0);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_t, timestamp_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_tz_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, dtime_tz_t &result, bool strict) {
+	if (!input.IsFinite()) {
+		return false;
+	}
+	dtime_t time;
+	if (!TryCast::Operation(timestamp_ns_t(input), time, strict)) {
+		return false;
+	}
+	result = dtime_tz_t(time, 0);
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_ns_t, timestamp_tz_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_t, timestamp_tz_t>(input, result, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1236,107 +1407,142 @@ duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_sec_t input, 
 
 template <>
 timestamp_ms_t Cast::Operation(timestamp_t input) {
-	return CastTimebase<timestamp_t, timestamp_ms_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_t, timestamp_ms_t>(input);
 }
 
 template <>
 timestamp_ns_t Cast::Operation(timestamp_t input) {
-	return CastTimebase<timestamp_t, timestamp_ns_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_t, timestamp_ns_t>(input);
 }
 
 template <>
 timestamp_sec_t Cast::Operation(timestamp_t input) {
-	return CastTimebase<timestamp_t, timestamp_sec_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_t, timestamp_sec_t>(input);
+}
+
+template <>
+dtime_t Cast::Operation(timestamp_t input) {
+	return Timestamp::GetTime(input);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_t input) {
+	return dtime_tz_t(Timestamp::GetTime(input), 0);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_tz_t input) {
+	return dtime_tz_t(Timestamp::GetTime(timestamp_t(input)), 0);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_tz_ns_t input) {
+	return dtime_tz_t(CastTimestampTimeOperation(timestamp_ns_t(input)), 0);
 }
 
 template <>
 timestamp_t Cast::Operation(timestamp_ms_t input) {
-	return CastTimebase<timestamp_ms_t, timestamp_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_ms_t, timestamp_t>(input);
 }
 
 template <>
 date_t Cast::Operation(timestamp_ms_t input) {
-	return Timestamp::GetDate(CastTimebase<timestamp_ms_t, timestamp_t>(input));
+	return CastTimestampTargetOperation<timestamp_ms_t, date_t>(input);
 }
 
 template <>
 dtime_t Cast::Operation(timestamp_ms_t input) {
-	return Timestamp::GetTime(CastTimebase<timestamp_ms_t, timestamp_t>(input));
+	return CastTimestampTimeOperation(input);
 }
 
 template <>
 timestamp_ns_t Cast::Operation(timestamp_ms_t input) {
-	return CastTimebase<timestamp_ms_t, timestamp_ns_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_ms_t, timestamp_ns_t>(input);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ms_t input, timestamp_sec_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ms_t, timestamp_sec_t>(input, result, strict);
+	return TryCastTimestampBase<timestamp_ms_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_ms_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ns_t input, timestamp_ms_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ns_t, timestamp_ms_t>(input, result, strict);
+	return TryCastTimestampBase<timestamp_ns_t, timestamp_ms_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ns_t input, timestamp_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ns_t, timestamp_t>(input, result, strict);
+	return TryCastTimestampBase<timestamp_ns_t, timestamp_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ms_t input, timestamp_t &result, bool strict) {
-	return TryCastTimebase<timestamp_ms_t, timestamp_t>(input, result, strict);
+	return TryCastTimestampBase<timestamp_ms_t, timestamp_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_sec_t input, timestamp_t &result, bool strict) {
-	return TryCastTimebase<timestamp_sec_t, timestamp_t>(input, result, strict);
+	return TryCastTimestampBase<timestamp_sec_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_sec_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_sec_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
 timestamp_t Cast::Operation(timestamp_ns_t input) {
-	return CastTimebase<timestamp_ns_t, timestamp_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_ns_t, timestamp_t>(input);
 }
 
 template <>
 timestamp_t Cast::Operation(timestamp_sec_t input) {
-	return CastTimebase<timestamp_sec_t, timestamp_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_sec_t, timestamp_t>(input);
 }
 
 template <>
 date_t Cast::Operation(timestamp_ns_t input) {
-	return Timestamp::GetDate(CastTimebase<timestamp_ns_t, timestamp_t>(input));
+	return CastTimestampTargetOperation<timestamp_ns_t, date_t>(input);
 }
 
 template <>
 dtime_t Cast::Operation(timestamp_ns_t input) {
-	return Timestamp::GetTime(CastTimebase<timestamp_ns_t, timestamp_t>(input));
+	return CastTimestampTimeOperation(input);
 }
 
 template <>
 dtime_ns_t Cast::Operation(timestamp_ns_t input) {
-	return Timestamp::GetTimeNs(input);
+	return CastTimestampNsTimeNsOperation(input);
 }
 
 template <>
 timestamp_ms_t Cast::Operation(timestamp_sec_t input) {
-	return CastTimebase<timestamp_sec_t, timestamp_ms_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_sec_t, timestamp_ms_t>(input);
 }
 
 template <>
 timestamp_ns_t Cast::Operation(timestamp_sec_t input) {
-	return CastTimebase<timestamp_sec_t, timestamp_ns_t>(input);
+	return CastTimestampPrecisionOperation<timestamp_sec_t, timestamp_ns_t>(input);
 }
 
 template <>
 date_t Cast::Operation(timestamp_sec_t input) {
-	return Timestamp::GetDate(CastTimebase<timestamp_sec_t, timestamp_t>(input));
+	return CastTimestampTargetOperation<timestamp_sec_t, date_t>(input);
 }
 
 template <>
 dtime_t Cast::Operation(timestamp_sec_t input) {
-	return Timestamp::GetTime(CastTimebase<timestamp_sec_t, timestamp_t>(input));
+	return CastTimestampTimeOperation(input);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1348,7 +1554,7 @@ bool TryCast::Operation(string_t input, timestamp_ms_t &result, bool strict) {
 	if (!TryCast::Operation<string_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	return TryCastTimebase<timestamp_t, timestamp_ms_t>(us, result, strict);
+	return TryCastTimestampBase<timestamp_t, timestamp_ms_t>(us, result, strict);
 }
 
 template <>
@@ -1357,7 +1563,7 @@ bool TryCast::Operation(string_t input, timestamp_sec_t &result, bool strict) {
 	if (!TryCast::Operation<string_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	return TryCastTimebase<timestamp_t, timestamp_sec_t>(us, result, strict);
+	return TryCastTimestampBase<timestamp_t, timestamp_sec_t>(us, result, strict);
 }
 
 template <>
@@ -1366,7 +1572,7 @@ bool TryCast::Operation(date_t input, timestamp_ns_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	return TryCastTimebase<timestamp_t, timestamp_ns_t>(us, result, strict);
+	return TryCastTimestampBase<timestamp_t, timestamp_ns_t>(us, result, strict);
 }
 
 template <>
@@ -1375,7 +1581,7 @@ bool TryCast::Operation(date_t input, timestamp_ms_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	return TryCastTimebase<timestamp_t, timestamp_ms_t>(us, result, strict);
+	return TryCastTimestampBase<timestamp_t, timestamp_ms_t>(us, result, strict);
 }
 
 template <>
@@ -1384,7 +1590,7 @@ bool TryCast::Operation(date_t input, timestamp_sec_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	return TryCastTimebase<timestamp_t, timestamp_sec_t>(us, result, strict);
+	return TryCastTimestampBase<timestamp_t, timestamp_sec_t>(us, result, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1611,17 +1817,52 @@ template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
 	// Pass the query location of the cast source if available.
 	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : QueryLocation());
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Date
 //===--------------------------------------------------------------------===//
+static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool strict) {
+	idx_t pos = 0;
+	bool special = false;
+	auto date_result = Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict);
+	auto timestamp_suffix_pos = pos;
+	if (date_result == DateCastResult::SUCCESS) {
+		while (pos < input.GetSize() && StringUtil::CharacterIsSpace(input.GetData()[pos])) {
+			pos++;
+		}
+		if (pos == input.GetSize()) {
+			return date_result;
+		}
+	}
+	if (strict || date_result != DateCastResult::SUCCESS) {
+		return date_result;
+	}
+
+	timestamp_t timestamp;
+	auto timestamp_result =
+	    Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), timestamp, /*use_offset=*/false, nullptr,
+	                                   /*strict=*/false);
+	if (timestamp_result == TimestampCastResult::SUCCESS) {
+		return DateCastResult::SUCCESS;
+	}
+	if (timestamp_result == TimestampCastResult::ERROR_RANGE) {
+		string timestamp_input = "2000-01-01"; // placeholder
+		timestamp_input.append(input.GetData() + timestamp_suffix_pos, input.GetSize() - timestamp_suffix_pos);
+		timestamp_result = Timestamp::TryConvertTimestamp(timestamp_input.c_str(), timestamp_input.size(), timestamp,
+		                                                  /*use_offset=*/false, /*nanos=*/nullptr, /*strict=*/false);
+		if (timestamp_result == TimestampCastResult::SUCCESS) {
+			return DateCastResult::SUCCESS;
+		}
+	}
+	return timestamp_result == TimestampCastResult::ERROR_RANGE ? DateCastResult::ERROR_RANGE
+	                                                            : DateCastResult::ERROR_INCORRECT_FORMAT;
+}
+
 template <>
 bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParameters &parameters) {
-	idx_t pos;
-	bool special = false;
-	switch (Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, parameters.strict)) {
+	switch (TryConvertDateCast(input, result, parameters.strict)) {
 	case DateCastResult::SUCCESS:
 		break;
 	case DateCastResult::ERROR_INCORRECT_FORMAT:
@@ -1636,15 +1877,21 @@ bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParamete
 
 template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
-	idx_t pos;
-	bool special = false;
-	return Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict) ==
-	       DateCastResult::SUCCESS;
+	return TryConvertDateCast(input, result, strict) == DateCastResult::SUCCESS;
 }
 
 template <>
 date_t Cast::Operation(string_t input) {
-	return Date::FromCString(input.GetData(), input.GetSize());
+	date_t result;
+	switch (TryConvertDateCast(input, result, false)) {
+	case DateCastResult::SUCCESS:
+		return result;
+	case DateCastResult::ERROR_INCORRECT_FORMAT:
+		throw ConversionException(Date::FormatError(input));
+	case DateCastResult::ERROR_RANGE:
+		throw ConversionException(Date::RangeError(input));
+	}
+	throw InternalException("Unknown DateCastResult");
 }
 
 //===--------------------------------------------------------------------===//
@@ -1693,7 +1940,7 @@ bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	if (!TryCast::Operation(micros, result)) {
 		return false;
 	}
-	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.micros, nanos, result.micros);
+	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value);
 }
 
 template <>
@@ -1761,7 +2008,7 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, Cast
 	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), us, true)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
-		return TryCastTimebase<timestamp_t, timestamp_tz_t>(us, result, true);
+		return TryCastTimestampBase<timestamp_t, timestamp_tz_t>(us, result, true);
 		;
 	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
 		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
@@ -1782,8 +2029,7 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_ns_t &result, C
 	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), ns, true)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
-		return TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, true);
-		;
+		return TryCastTimestampBase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, true);
 	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
 		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
 		break;
@@ -1813,14 +2059,14 @@ template <>
 bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
 	timestamp_t us;
 	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), us, true) == TimestampCastResult::SUCCESS &&
-	       TryCastTimebase<timestamp_t, timestamp_tz_t>(us, result, strict);
+	       TryCastTimestampBase<timestamp_t, timestamp_tz_t>(us, result, strict);
 }
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_tz_ns_t &result, bool strict) {
 	timestamp_ns_t ns;
 	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), ns, true) == TimestampCastResult::SUCCESS &&
-	       TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, strict);
+	       TryCastTimestampBase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, strict);
 }
 
 template <>
@@ -1831,7 +2077,7 @@ timestamp_t Cast::Operation(string_t input) {
 template <>
 timestamp_tz_t Cast::Operation(string_t input) {
 	const auto us = Timestamp::FromCString(input.GetData(), input.GetSize(), true);
-	return CastTimebase<timestamp_t, timestamp_tz_t>(us);
+	return CastTimestampPrecisionOperation<timestamp_t, timestamp_tz_t>(us);
 }
 
 template <>
@@ -1842,7 +2088,7 @@ timestamp_tz_ns_t Cast::Operation(string_t input) {
 	if (!Timestamp::TryFromTimestampNanos(us, nanos, ns)) {
 		throw ConversionException(Timestamp::RangeError(input));
 	}
-	return CastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns);
+	return CastTimestampPrecisionOperation<timestamp_ns_t, timestamp_tz_ns_t>(ns);
 }
 
 template <>
@@ -2580,7 +2826,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		return false;
 	}
 	// For some reason PG does not use statistical rounding here (even though it _does_ for integers...)
-	result = Cast::Operation<SRC, DST>(static_cast<SRC>(roundedValue));
+	result = Cast::Operation<double, DST>(roundedValue);
 	return true;
 }
 

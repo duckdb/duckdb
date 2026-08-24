@@ -53,6 +53,11 @@ public:
 	//! Perform the callback to indicate the Interrupt is over
 	DUCKDB_API void Callback() const;
 
+	//! Whether Callback() can be invoked, i.e. a task or signal state was registered
+	bool CanCallback() const {
+		return mode != InterruptMode::NO_INTERRUPTS;
+	}
+
 protected:
 	//! Current interrupt mode
 	InterruptMode mode;

@@ -1,0 +1,16 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [jsonbench-parquet]
+
+include benchmark/jsonbench-parquet/jsonbench_parquet_load.benchmark.in
+
+name Q${QUERY_NUMBER_PADDED}
+group jsonbench-parquet
+
+storage persistent v1.5.0
+
+cache jsonbench-parquet.db
+
+run benchmark/jsonbench-parquet/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result benchmark/jsonbench-parquet/answers/q${QUERY_NUMBER_PADDED}.csv

@@ -1,0 +1,26 @@
+# name: test/sql/types/variant/variant_map_to_variant_filter.test
+# description: MAP(VARCHAR, VARIANT) -> VARIANT must read the selected rows under a filter
+# group: [variant]
+
+# Forced storage uses the default storage version, but VARIANT requires v1.5.0, so skip.
+require no_force_storage
+
+statement ok
+CREATE TABLE t AS SELECT i, MAP{'k': i::VARIANT} AS m FROM range(2) t(i);
+
+# filtering row 1 must yield value 1, not row 0's value
+query I
+SELECT m::VARIANT FROM t WHERE i = 1;
+----
+[{'key': k, 'value': 1}]
+
+# multi-row selection, incl. a row past the 2048 vector boundary
+statement ok
+CREATE TABLE big AS SELECT i, MAP{'k': i::VARIANT} AS m FROM range(3000) t(i);
+
+query II
+SELECT i, m::VARIANT FROM big WHERE i IN (1, 2, 2050) ORDER BY i;
+----
+1	[{'key': k, 'value': 1}]
+2	[{'key': k, 'value': 2}]
+2050	[{'key': k, 'value': 2050}]

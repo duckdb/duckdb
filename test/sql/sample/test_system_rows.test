@@ -3,7 +3,7 @@
 # group: [sample]
 
 statement ok
-PRAGMA enable_verification;
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 # Create test table with 10000 rows
 statement ok
@@ -164,6 +164,3 @@ query I
 SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAMPLE 200 ROWS (system);
 ----
 100
-
-statement ok
-PRAGMA enable_verification;

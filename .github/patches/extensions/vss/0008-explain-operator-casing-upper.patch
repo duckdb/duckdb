@@ -1,0 +1,90 @@
+diff --git a/test/sql/hnsw/hnsw_basic.test b/test/sql/hnsw/hnsw_basic.test
+index ea45dae..164d176 100644
+--- a/test/sql/hnsw/hnsw_basic.test
++++ b/test/sql/hnsw/hnsw_basic.test
+@@ -6,6 +6,9 @@ require vss
+ # Step 0: Open a database
+ load __TEST_DIR__/temp_index_hnsw_storage.db
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ SET hnsw_enable_experimental_persistence = true;
+ 
+@@ -40,6 +43,9 @@ CHECKPOINT;
+ # Restart
+ restart
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ # Make sure we get the index scan plan again
+ query II
+ EXPLAIN SELECT * FROM t1 ORDER BY array_distance(vec, [1,2,3]::FLOAT[3]) LIMIT 3;
+diff --git a/test/sql/hnsw/hnsw_crud.test b/test/sql/hnsw/hnsw_crud.test
+index c7d5bdd..c8fcd0c 100644
+--- a/test/sql/hnsw/hnsw_crud.test
++++ b/test/sql/hnsw/hnsw_crud.test
+@@ -6,6 +6,9 @@ require vss
+ # Step 0: Open a database
+ load __TEST_DIR__/temp_index_hnsw_crud_storage.db
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ SET hnsw_enable_experimental_persistence = true;
+ 
+@@ -35,6 +38,9 @@ SELECT * FROM t1;
+ # Restart the database
+ restart
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ # Step 2: Check the index
+ query II
+ EXPLAIN SELECT * FROM t1 ORDER BY array_distance(vec, [1,2,3]::FLOAT[3]) LIMIT 3;
+diff --git a/test/sql/hnsw/hnsw_metrics.test b/test/sql/hnsw/hnsw_metrics.test
+index 1f418a2..f76b63b 100644
+--- a/test/sql/hnsw/hnsw_metrics.test
++++ b/test/sql/hnsw/hnsw_metrics.test
+@@ -5,6 +5,9 @@ require vss
+ 
+ require noforcestorage
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
+ 
+diff --git a/test/sql/hnsw/hnsw_result.test b/test/sql/hnsw/hnsw_result.test
+index 043c17e..6b903c6 100644
+--- a/test/sql/hnsw/hnsw_result.test
++++ b/test/sql/hnsw/hnsw_result.test
+@@ -5,6 +5,9 @@ require vss
+ 
+ require noforcestorage
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
+ 
+diff --git a/test/sql/hnsw/hnsw_topk.test b/test/sql/hnsw/hnsw_topk.test
+index 79661ab..41a0ca9 100644
+--- a/test/sql/hnsw/hnsw_topk.test
++++ b/test/sql/hnsw/hnsw_topk.test
+@@ -5,6 +5,9 @@ require vss
+ 
+ require noforcestorage
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
+ 

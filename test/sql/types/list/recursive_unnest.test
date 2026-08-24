@@ -108,7 +108,7 @@ Nested UNNEST calls are not supported
 statement error
 SELECT UNNEST();
 ----
-requires at lease one argument
+requires at least one argument
 
 statement error
 SELECT UNNEST([1, 2, 3], 'hello');

@@ -1,5 +1,4 @@
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -19,14 +18,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include <cmath>
@@ -96,12 +93,20 @@ static Value NumericStatsValue(const LogicalType &type, T value) {
 	D_ASSERT(type.IsNumeric());
 	switch (type.InternalType()) {
 	case PhysicalType::FLOAT:
-		return Value::FLOAT(value);
+		return Value::FLOAT(static_cast<float>(value));
 	case PhysicalType::DOUBLE:
-		return Value::DOUBLE(value);
+		return Value::DOUBLE(static_cast<double>(value));
 	default:
-		return Value::Numeric(type, value);
+		return Value::Numeric(type, static_cast<int64_t>(value));
 	}
+}
+
+static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
+	D_ASSERT(type.IsNumeric());
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
+	}
+	return Value::Numeric(type, value);
 }
 
 template <class T>
@@ -219,6 +224,10 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			potential_overflow =
 			    PROPAGATE::template Operation<int64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
+		case PhysicalType::INT128:
+			potential_overflow =
+			    PROPAGATE::template Operation<hugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
 		default:
 			return nullptr;
 		}
@@ -302,7 +311,9 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 			throw InternalException("Could not convert type %s to a decimal.",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		max_width = MaxValue<uint8_t>(width, max_width);
+		if (width > max_width) {
+			max_width = width;
+		}
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
@@ -311,11 +322,6 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 		required_width = NumericCast<uint8_t>(required_width + 1);
-		if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
-			// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
-			bind_data->check_overflow = true;
-			required_width = Decimal::MAX_WIDTH_INT64;
-		}
 	}
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
@@ -354,14 +360,11 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
-		if (IS_SUBTRACT) {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
-		} else {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
-		}
+	if (IS_SUBTRACT) {
+		bound_function.SetStatisticsCallback(
+		    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
+	} else {
+		bound_function.SetStatisticsCallback(PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
 	}
 	return std::move(bind_data);
 }
@@ -711,19 +714,15 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 
 static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+	D_ASSERT(input.GetArguments().size() == 1);
 
-	D_ASSERT(arguments.size() == 1);
-	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return nullptr;
-	}
-	auto &const_expr = arguments[0]->Cast<BoundConstantExpression>();
-	if (const_expr.GetValue().IsNull()) {
+	// only need to promote if the argument is a constant that exactly equals the type's minimum value
+	auto constant = input.TryGetConstant(0);
+	if (!constant || constant->IsNull()) {
 		return nullptr;
 	}
 	auto &type = bound_function.GetArguments()[0];
-	// only need to promote if the constant exactly equals the type's minimum value
-	if (const_expr.GetValue() != Value::MinimumValue(type)) {
+	if (*constant != Value::MinimumValue(type)) {
 		return nullptr;
 	}
 	LogicalType promoted_type;
@@ -985,9 +984,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 			throw InternalException("Could not convert type %s to a decimal?",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		if (width > max_width) {
-			max_width = width;
-		}
+		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
 		result_scale += scale;
 	}
@@ -1033,10 +1030,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128) {
-		bound_function.SetStatisticsCallback(
-		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
-	}
+	bound_function.SetStatisticsCallback(
+	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
 	return std::move(bind_data);
 }
 
@@ -1076,9 +1071,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	for (auto &func : multiply.functions) {
-		func.SetFallible();
-	}
+	multiply.SetFallible();
 
 	return multiply;
 }
@@ -1231,9 +1224,7 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, double, interval_t, DivideOperator>));
-	for (auto &func : fp_divide.functions) {
-		func.SetFallible();
-	}
+	fp_divide.SetFallible();
 	return fp_divide;
 }
 
@@ -1247,9 +1238,7 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : full_divide.functions) {
-		func.SetFallible();
-	}
+	full_divide.SetFallible();
 	return full_divide;
 }
 
@@ -1305,9 +1294,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : modulo.functions) {
-		func.SetFallible();
-	}
+	modulo.SetFallible();
 
 	return modulo;
 }
@@ -1323,7 +1310,7 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
+	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
 template <>
@@ -1333,6 +1320,14 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	hugeint_t delta_hugeint = hi;
+	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
+		const auto delta = Hugeint::Cast<double>(delta_hugeint);
+		return lo + Hugeint::Convert(delta * d);
+	}
+
+	// if delta overflows, we fall back to original subtraction to avoid UB
+	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
 	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 

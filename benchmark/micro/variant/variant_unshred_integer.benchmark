@@ -1,0 +1,17 @@
+# name: benchmark/micro/variant/variant_unshred_integer.benchmark
+# description: Unshred a VARIANT column fully shredded on an INTEGER value for every row. Materializing the scanned column flattens the SHREDDED_VECTOR via VariantUtils::UnshredVariantData, isolating the unshredding path on a primitive (leaf) value without any text-encoding overhead.
+# group: [variant]
+
+name variant_unshred_integer
+group variant
+storage persistent v2.0.0
+
+cache variant_unshred_integer.duckdb
+
+load
+SET variant_minimum_shredding_size = 0;
+CREATE TABLE tbl AS SELECT i::INTEGER::VARIANT v FROM range(10000000) t(i);
+CHECKPOINT;
+
+run
+SELECT v FROM tbl;

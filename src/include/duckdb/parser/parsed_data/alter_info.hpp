@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 
@@ -34,14 +35,15 @@ enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(Identifier catalog_p, Identifier schema_p, Identifier name_p, OnEntryNotFound if_not_found)
-	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
-	      if_not_found(if_not_found) {
+	AlterEntryData(QualifiedName qualified_name_p, OnEntryNotFound if_not_found)
+	    : qualified_name(std::move(qualified_name_p)), if_not_found(if_not_found) {
 	}
 
-	Identifier catalog;
-	Identifier schema;
-	Identifier name;
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+
+	QualifiedName qualified_name;
 	OnEntryNotFound if_not_found;
 };
 
@@ -50,24 +52,35 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
-	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, QualifiedName name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
 	OnEntryNotFound if_not_found;
-	//! Catalog name to alter
-	Identifier catalog;
-	//! Schema name to alter
-	Identifier schema;
-	//! Entry name to alter
-	Identifier name;
 	//! Allow altering internal entries
 	bool allow_internal;
 	//! Determine whether to skip Bind
 	AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER;
 	//! New dependencies for the altered entry (set during binding)
 	unique_ptr<LogicalDependencyList> new_dependencies;
+
+public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
@@ -86,6 +99,9 @@ public:
 
 protected:
 	explicit AlterInfo(AlterType type);
+
+	//! Qualified name of the entry to alter (catalog.schema.name)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

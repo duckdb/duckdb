@@ -9,14 +9,14 @@
 #pragma once
 
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
-enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
-enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
+enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 
 class ConflictManager;
 class ARTKey;
@@ -63,7 +63,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	Node tree = Node();
+	NodePtr tree = NodePtr();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
@@ -148,6 +148,9 @@ public:
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
+	//! Returns true if this ART may hold GEOMETRY keys in the legacy pre-v1.5.0 encoding,
+	//! which key generation cannot reproduce byte-identically.
+	bool HasLegacyGeometryKeys() const;
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;
@@ -177,14 +180,14 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
+	void VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
 	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

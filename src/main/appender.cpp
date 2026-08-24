@@ -80,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetChildCardinality(chunk.size() + 1);
+	chunk.SetCardinalityUnsafe(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -321,10 +321,10 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (value.type() == target.GetTypes()[col]) {
 		target.data[col].SetValue(row, value);
 	} else {
-		Value new_value;
 		string error_msg;
-		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.data[col].SetValue(row, new_value);
+		auto new_value = value.DefaultTryCastAs(target.GetTypes()[col], &error_msg);
+		if (new_value) {
+			target.data[col].SetValue(row, *new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -395,6 +395,7 @@ void BaseAppender::FlushChunk() {
 	if (chunk.size() == 0) {
 		return;
 	}
+	chunk.SetChildCardinality(chunk.size());
 	collection->Append(chunk);
 	chunk.Reset();
 	if (ShouldFlush()) {
@@ -511,8 +512,8 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+		throw CatalogException(StringUtil::Format("Table '%s.%s.%s' could not be found", SQLIdentifier(database_name),
+		                                          SQLIdentifier(schema_name), SQLIdentifier(table_name)));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");
@@ -589,13 +590,13 @@ vector<Identifier> Appender::GetExpectedNames() {
 string Appender::ConstructQuery(TableDescription &description_p, const Identifier &table_name,
                                 const vector<Identifier> &expected_names) {
 	string query = "INSERT INTO ";
-	if (!description_p.database.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
+	if (!description_p.qualified_name.Catalog().empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.qualified_name.Catalog()));
 	}
-	if (!description_p.schema.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.schema));
+	if (!description_p.qualified_name.Schema().empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.qualified_name.Schema()));
 	}
-	query += StringUtil::Format("%s", SQLIdentifier(description_p.table));
+	query += StringUtil::Format("%s", SQLIdentifier(description_p.qualified_name.Name()));
 	if (!expected_names.empty()) {
 		query += "(";
 		for (idx_t i = 0; i < expected_names.size(); i++) {

@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -17,7 +18,8 @@ struct DuckDBPreparedStatementsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBPreparedStatementsBind(ClientContext &context, TableFunctionBindInput &input,
-                                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                                             vector<LogicalType> &return_types,
+                                                             vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

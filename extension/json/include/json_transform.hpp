@@ -10,6 +10,7 @@
 
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 

@@ -18,7 +18,7 @@ COLUMN_NOT_FOUND
 statement error
 SECT cbl FROM (VALUES (42)) t(col)
 ----
-<REGEX>:.*Parser Error.*syntax error at or near.*
+SYNTAX_ERROR
 
 statement error
 select corr('hello'::VARCHAR, 'world'::VARCHAR)

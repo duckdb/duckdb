@@ -1,6 +1,9 @@
 # name: test/sql/filter/test_struct_pushdown.test
 # group: [filter]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 load {TEST_DIR}/test_struct_pushdown.db
 
 statement ok
@@ -56,7 +59,7 @@ NULL
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL;
 ----
-physical_plan	<REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters.*
 
 query I
 SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL ORDER BY 1 DESC NULLS FIRST;
@@ -125,7 +128,7 @@ INSERT INTO nested_structs VALUES
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.a.b < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'a'\),.*'b'\).*<.*2.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'a'\),.*'b'\).*<.*2.*
 
 query I
 SELECT * FROM nested_structs WHERE s.a.b < 2;
@@ -135,7 +138,7 @@ SELECT * FROM nested_structs WHERE s.a.b < 2;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'a'\),.*'c'\).*=.*true.*AND.*struct_extract\(s, 'd'\),.*'e'\).*=.*5.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'a'\),.*'c'\).*=.*true.*AND.*struct_extract\(s,.*'d'\),.*'e'\).*=.*5.*
 
 query I
 SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
@@ -145,7 +148,7 @@ SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.d.f = 'bar';
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'd'\),.*'f'\).*=.*'bar'.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'd'\),.*'f'\).*=.*'bar'.*
 
 query I
 SELECT * FROM nested_structs WHERE s.d.f = 'bar';
@@ -172,7 +175,7 @@ SELECT * FROM read_parquet('{TEST_DIR}/test_structs.parquet') WHERE i.a < 2;
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/test_structs.parquet') WHERE i.b = true or i.a IS NULL;
 ----
-physical_plan	<REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters.*
 
 query I
 SELECT * FROM read_parquet('{TEST_DIR}/test_structs.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;
@@ -204,7 +207,7 @@ COPY (FROM nested_structs) TO '{TEST_DIR}/nested_structs.parquet' (FORMAT PARQUE
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/nested_structs.parquet') WHERE s.a.b < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'a'\),.*'b'\).*<.*2.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'a'\),.*'b'\).*<.*2.*
 
 query I
 SELECT * FROM read_parquet('{TEST_DIR}/nested_structs.parquet') WHERE s.a.b < 2;
@@ -214,7 +217,7 @@ SELECT * FROM read_parquet('{TEST_DIR}/nested_structs.parquet') WHERE s.a.b < 2;
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'a'\),.*'c'\).*=.*true.*AND.*struct_extract\(s, 'd'\),.*'e'\).*=.*5.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'a'\),.*'c'\).*=.*true.*AND.*struct_extract\(s,.*'d'\),.*'e'\).*=.*5.*
 
 query I
 SELECT * FROM read_parquet('{TEST_DIR}/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
@@ -229,7 +232,7 @@ COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '{TEST_DIR}/
 query II
 EXPLAIN SELECT * FROM read_parquet('{TEST_DIR}/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
 ----
-physical_plan	<REGEX>:.*Filters:.*struct_extract\(s, 'i'\).*>.*=.*500.*AND.*struct_extract.*\(s, 'i'\).*<.*5000.*
+physical_plan	<REGEX>:.*Filters.*struct_extract\(s, 'i'\).*>.*=.*500.*AND.*struct_extract.*\(s, 'i'\).*<.*5000.*
 
 query II
 SELECT min(s.i), max(s.i) FROM read_parquet('{TEST_DIR}/large.parquet') WHERE s.i >= 500 AND s.i < 5000;

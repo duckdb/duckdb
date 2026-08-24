@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -62,7 +63,9 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 		bool bind_macro_parameter = false;
 		if (col_ref.IsQualified()) {
-			if (col_ref.GetTableName().GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos) {
+			// the table qualifier is the component directly before the column name
+			auto &names = col_ref.ColumnNames();
+			if (names[names.size() - 2].StartsWith(DummyBinding::DUMMY_NAME)) {
 				bind_macro_parameter = true;
 			}
 		} else {
@@ -104,8 +107,9 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 		auto &fn_expr = expr->Cast<FunctionExpression>();
 
 		// Look up the function in the catalog, check to see if it is actually an aggregate function
-		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, fn_expr.FunctionName());
-		auto entry = GetCatalogEntry(fn_expr.Catalog(), fn_expr.Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
+		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, QualifiedName(fn_expr.FunctionName()));
+		auto entry = GetCatalogEntry(fn_expr.GetQualifiedName().Catalog(), fn_expr.GetQualifiedName().Schema(),
+		                             fn_entry, OnEntryNotFound::RETURN_NULL);
 
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			exprs.push_back(expr);
@@ -133,9 +137,7 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 
 	// Transfer the macro function attributes
 	auto &window_expr = expr->Cast<WindowExpression>();
-	window_expr.CatalogMutable() = agg_fn_expr.Catalog();
-	window_expr.SchemaMutable() = agg_fn_expr.Schema();
-	window_expr.FunctionNameMutable() = agg_fn_expr.FunctionName();
+	window_expr.SetQualifiedName(agg_fn_expr.GetQualifiedName());
 	window_expr.GetArgumentsMutable().clear();
 	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {
 		window_expr.GetArgumentsMutable().push_back(std::move(arg));

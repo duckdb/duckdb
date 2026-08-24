@@ -1,0 +1,40 @@
+diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
+index d7b0c52..5f76703 100644
+--- a/src/hnsw/hnsw_index_macros.cpp
++++ b/src/hnsw/hnsw_index_macros.cpp
+@@ -95,8 +95,8 @@ static void RegisterTableMacro(ExtensionLoader &loader, const string &name, cons
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.schema = Identifier::DefaultSchema();
+-	info.name = Identifier(name);
++	info.SchemaMutable() = Identifier::DefaultSchema();
++	info.SetFunctionName(Identifier(name));
+ 	info.temporary = true;
+ 	info.internal = true;
+ 	info.macros.push_back(std::move(func));
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index bd923b9..0c54956 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -72,7 +72,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateHNSWIndex::GetGlobalSinkState(ClientCo
+ 	auto &constraint_type = info->constraint_type;
+ 	auto &db = storage.db;
+ 	gstate->global_index =
+-	    make_uniq<HNSWIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
++	    make_uniq<HNSWIndex>(info->GetIndexName(), constraint_type, storage_ids, table_manager, unbound_expressions, db,
+ 	                         info->options, IndexStorageInfo(), estimated_cardinality);
+ 
+ 	return std::move(gstate);
+@@ -269,9 +269,9 @@ public:
+ 		auto &schema = table.schema;
+ 		info.column_ids = storage_ids;
+ 
+-		if (schema.GetEntry(schema.GetCatalogTransaction(*gstate.context), CatalogType::INDEX_ENTRY, info.index_name)) {
++		if (schema.GetEntry(schema.GetCatalogTransaction(*gstate.context), CatalogType::INDEX_ENTRY, info.GetIndexName())) {
+ 			if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+-				throw CatalogException("Index with name \"%s\" already exists", info.index_name);
++				throw CatalogException("Index with name \"%s\" already exists", info.GetIndexName());
+ 			}
+ 		}
+ 

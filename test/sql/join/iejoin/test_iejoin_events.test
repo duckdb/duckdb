@@ -2,6 +2,9 @@
 # description: Test IEJoin
 # group: [iejoin]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require skip_reload
 
 # RNG order depends on vector size

@@ -734,9 +734,10 @@ void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, start_ptr);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, start_ptr);
 	}
 }
 
@@ -757,9 +758,10 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, location);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, location);
 	}
 }
 
@@ -1184,13 +1186,14 @@ void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
 }
 
-void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
+void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
+                                        idx_t block_count) {
 	D_ASSERT(start_block >= 0);
 	D_ASSERT(block_count >= 1);
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	handle->Read(QueryContext(), buffer, location);
+	handle->Read(context, buffer, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -1361,7 +1364,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		header.free_list = DConstants::INVALID_INDEX;
 	}
 	lock.unlock();
-	metadata_manager.Flush();
+	metadata_manager.Flush(context);
 
 	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);

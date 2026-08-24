@@ -8,27 +8,25 @@
 
 #pragma once
 
-#include "duckdb/common/chrono.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
 //! Profiler class to measure the elapsed time.
-template <typename T>
-class BaseProfiler {
+class Profiler {
 public:
 	//! Start the timer.
 	void Start() {
 		finished = false;
 		ran = true;
-		start = Tick();
+		start = TimePoint::Tick();
 	}
 	//! End the timer.
 	void End() {
-		end = Tick();
+		end = TimePoint::Tick();
 		finished = true;
 	}
-	//! Reset the timer.
 	void Reset() {
 		finished = false;
 		ran = false;
@@ -42,33 +40,30 @@ public:
 		if (!ran) {
 			return 0;
 		}
-		auto measured_end = finished ? end : Tick();
-		return std::chrono::duration_cast<std::chrono::duration<double>>(measured_end - start).count();
+		int64_t elapsed_nanos = 0;
+		if (finished) {
+			elapsed_nanos = TimePoint::ElapsedNanos(start, end);
+		} else {
+			elapsed_nanos = start.ElapsedNanos();
+		}
+		return static_cast<double>(elapsed_nanos) / 1e9;
 	}
 
 	idx_t ElapsedNanos() const {
 		if (!ran) {
 			return 0;
 		}
-		auto measured_end = finished ? end : Tick();
-		return static_cast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(measured_end - start).count());
+		if (finished) {
+			return static_cast<idx_t>(TimePoint::ElapsedNanos(start, end));
+		}
+		return static_cast<idx_t>(start.ElapsedNanos());
 	}
 
 private:
-	//! Current time point.
-	time_point<T> Tick() const {
-		return T::now();
-	}
-	//! Start time point.
-	time_point<T> start;
-	//! End time point.
-	time_point<T> end;
-	//! True, if end End() been called.
+	TimePoint start;
+	TimePoint end;
 	bool finished = false;
-	//! True, if the timer was ran.
 	bool ran = false;
 };
-
-using Profiler = BaseProfiler<steady_clock>;
 
 } // namespace duckdb

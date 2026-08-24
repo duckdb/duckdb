@@ -79,3 +79,54 @@ statement ok
 SELECT sum(i) over cumulativeSum 
 FROM integers 
 WINDOW cumulativeSum AS ();
+
+# A named window can inherit from an earlier named window in the same WINDOW clause
+query I
+SELECT count(*) OVER w AS x
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW base AS (ORDER BY a), w AS (base ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+ORDER BY a;
+----
+2
+1
+
+query I
+SELECT count(*) OVER w AS x
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW base AS (ORDER BY a), w AS (base)
+ORDER BY a;
+----
+1
+2
+
+query I
+SELECT count(*) OVER w AS x
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW base AS (ORDER BY a), w AS (base RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+ORDER BY a;
+----
+2
+1
+
+query I
+SELECT count(*) OVER w AS x
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW base AS (ORDER BY a), w AS (base GROUPS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+ORDER BY a;
+----
+2
+1
+
+statement error
+SELECT count(*) OVER w
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW w AS (base), base AS (ORDER BY a);
+----
+does not exist
+
+statement error
+SELECT count(*) OVER w
+FROM (VALUES (1), (2)) AS t(a)
+WINDOW w AS (w);
+----
+does not exist

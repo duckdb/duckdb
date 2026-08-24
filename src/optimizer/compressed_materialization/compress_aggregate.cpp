@@ -35,6 +35,20 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	vector<CompressedMaterializationType> materialization_types(groups.size(), CompressedMaterializationType::INVALID);
 	vector<unique_ptr<BaseStatistics>> stored_group_stats;
 	stored_group_stats.resize(groups.size());
+	auto try_compress_group = [&](idx_t group_idx, Expression &group_expr, optional_ptr<BaseStatistics> stats) {
+		if (!stats) {
+			return false;
+		}
+		auto compress_expr = GetCompressExpression(group_expr.Copy(), *stats);
+		if (!compress_expr) {
+			return false;
+		}
+		materialization_types[group_idx] = compress_expr->materialization_type;
+		stored_group_stats[group_idx] = stats->ToUnique();
+		groups[group_idx] = std::move(compress_expr->expression);
+		group_stats[group_idx] = std::move(compress_expr->stats);
+		return true;
+	};
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group_expr = *groups[group_idx];
 		if (group_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
@@ -47,18 +61,10 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		GetReferencedBindings(group_expr, referenced_bindings);
 
 		// The non-colref expression won't be compressed generically, so try to compress it here
-		if (!group_stats[group_idx]) {
-			continue; // Can't compress without stats
+		if (try_compress_group(group_idx, group_expr, GetVariantWrapperStats(group_expr))) {
+			continue;
 		}
-
-		// Try to compress, if successful, replace the expression
-		auto compress_expr = GetCompressExpression(group_expr.Copy(), *group_stats[group_idx]);
-		if (compress_expr) {
-			materialization_types[group_idx] = compress_expr->materialization_type;
-			stored_group_stats[group_idx] = std::move(group_stats[group_idx]);
-			groups[group_idx] = std::move(compress_expr->expression);
-			group_stats[group_idx] = std::move(compress_expr->stats);
-		}
+		try_compress_group(group_idx, group_expr, group_stats[group_idx].get());
 	}
 
 	// Anything referenced in the aggregate functions is also excluded

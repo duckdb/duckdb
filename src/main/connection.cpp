@@ -15,6 +15,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 
 namespace duckdb {
 
@@ -88,7 +89,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	QueryParameters query_parameters;
 	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto result = context->Query(query, query_parameters);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
@@ -98,7 +99,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	query_parameters.memory_type = memory_type;
 	auto result = context->Query(std::move(statement), query_parameters);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
@@ -183,7 +184,17 @@ unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name)
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
-	return context->ParseStatements(query);
+	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
+	// engine-facing statements into a vector.
+	auto &client_context = *context;
+	auto iterator = client_context.IterateStatements(query);
+	vector<unique_ptr<SQLStatement>> result;
+	while (iterator.Peek()) {
+		if (auto statement = iterator.GetStatement()) {
+			result.push_back(std::move(statement));
+		}
+	}
+	return result;
 }
 
 unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
@@ -202,7 +213,8 @@ shared_ptr<Relation> Connection::Table(const Identifier &schema_name, const Iden
 	auto table_info = TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 	if (!table_info) {
 		throw CatalogException("Table %s does not exist!",
-		                       ParseInfo::QualifierToString(Identifier(), schema_name, table_name));
+		                       QualifiedName(Identifier(), schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
@@ -223,7 +235,8 @@ shared_ptr<Relation> Connection::Table(const Identifier &catalog_name, const Ide
 
 	if (!table_info) {
 		throw CatalogException("Table %s does not exist!",
-		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
+		                       QualifiedName(catalog_name, schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }

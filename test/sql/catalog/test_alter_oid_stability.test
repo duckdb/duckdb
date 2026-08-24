@@ -1,0 +1,44 @@
+# name: test/sql/catalog/test_alter_oid_stability.test
+# description: A catalog entry keeps its oid across ALTER/RENAME (same logical object), but a DROP + re-CREATE
+# group: [catalog]
+
+# oids are a runtime identity assigned on catalog load - they are stable within a session but not across a
+# database restart (which reloads the catalog from storage). Skip reloading so we test the in-session invariant.
+require skip_reload
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+# remember the oid of the freshly created table
+statement ok
+CREATE TABLE oid_ref AS SELECT table_oid AS id FROM duckdb_tables() WHERE table_name='t';
+
+# ALTER preserves the oid - it is still the same logical object
+statement ok
+ALTER TABLE t ADD COLUMN j INTEGER;
+
+query I
+SELECT (SELECT table_oid FROM duckdb_tables() WHERE table_name='t') = (SELECT id FROM oid_ref);
+----
+true
+
+# RENAME preserves the oid as well
+statement ok
+ALTER TABLE t RENAME TO t2;
+
+query I
+SELECT (SELECT table_oid FROM duckdb_tables() WHERE table_name='t2') = (SELECT id FROM oid_ref);
+----
+true
+
+# DROP + re-CREATE is a different logical object: it gets a fresh oid
+statement ok
+DROP TABLE t2;
+
+statement ok
+CREATE TABLE t2(i INTEGER);
+
+query I
+SELECT (SELECT table_oid FROM duckdb_tables() WHERE table_name='t2') = (SELECT id FROM oid_ref);
+----
+false

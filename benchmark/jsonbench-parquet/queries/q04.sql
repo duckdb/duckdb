@@ -1,0 +1,1 @@
+SELECT j.did::String as user_id,TO_TIMESTAMP(CAST(MIN(j.time_us) AS BIGINT) / 1000000) AS first_post_date FROM bluesky WHERE (j.kind = 'commit') AND (j.commit.operation = 'create')   AND (j.commit.collection = 'app.bsky.feed.post') GROUP BY user_id ORDER BY first_post_date ASC LIMIT 3;

@@ -1,4 +1,5 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -11,7 +12,7 @@ void MultiFileReaderInterface::InitializeInterface(ClientContext &context, Multi
 }
 
 void MultiFileReaderInterface::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-                                                const vector<string> &expected_names,
+                                                const vector<Identifier> &expected_names,
                                                 const vector<LogicalType> &expected_types) {
 }
 

@@ -47,10 +47,13 @@ DUCKDB_PATH = os.path.join(*args.shell.split('/'))
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
 EXTENSION_DEPENDENCIES = {
+    'ducklake': [
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
-    ]
+    ],
 }
 
 from enum import Enum
@@ -797,6 +800,7 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
+    {"geojson", "json"},
     {"avro", "avro"},
     {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
@@ -807,6 +811,12 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
 }; // END_OF_EXTENSION_TYPES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_STORAGE_EXTENSIONS[] = {
+    {"arn", "aws"},
+}; // END_OF_EXTENSION_STORAGE_EXTENSIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -849,6 +859,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".json", "json"},
     {".jsonl", "json"},
     {".ndjson", "json"},
+    {".geojson", "json"},
+    {".geojsonl", "json"},
     {".shp", "spatial"},
     {".gpkg", "spatial"},
     {".fgb", "spatial"},

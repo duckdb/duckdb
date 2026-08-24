@@ -30,6 +30,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SAMPLE = 12,
 	LOGICAL_PIVOT = 14,
 	LOGICAL_COPY_DATABASE = 15,
+	LOGICAL_SECURE_VIEW = 16,
 
 	// -----------------------------
 	// Data sources
@@ -68,6 +69,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_DELETE = 101,
 	LOGICAL_UPDATE = 102,
 	LOGICAL_MERGE_INTO = 103,
+	LOGICAL_TRIGGER = 104,
 
 	// -----------------------------
 	// Schema
@@ -105,6 +107,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_UPDATE_EXTENSIONS = 182,
 	LOGICAL_CONNECT = 183,
 	LOGICAL_DISCONNECT = 184,
+	LOGICAL_EXTERNAL_RESOURCE = 185,
 
 	// -----------------------------
 	// Secrets

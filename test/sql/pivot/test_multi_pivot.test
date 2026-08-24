@@ -69,6 +69,16 @@ SELECT (SELECT * FROM (SELECT 1 a, 2 b, 3 c) PIVOT (min(a) FOR (b, c) IN ((NULL,
 ----
 NULL
 
+query I
+SELECT * FROM (VALUES (1)) PIVOT (count(col0) FOR col0 IN (1::INT));
+----
+1
+
+query I
+FROM (SELECT 1 a, 2 b) PIVOT (sum(a) FOR b IN ('2022-01-01'::DATE));
+----
+NULL
+
 statement ok
 SET pivot_limit=10000
 

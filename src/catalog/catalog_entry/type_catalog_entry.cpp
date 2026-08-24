@@ -12,7 +12,7 @@ namespace duckdb {
 constexpr const char *TypeCatalogEntry::Name;
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type),
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.GetTypeName()), user_type(info.type),
       bind_function(info.bind_function) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
@@ -31,9 +31,7 @@ unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTypeInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->name = name;
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->type = user_type;
 	result->extension_name = extension_name;
 	result->dependencies = dependencies;
@@ -49,10 +47,8 @@ string TypeCatalogEntry::ToSQL() const {
 	ss << SQLIdentifier(name);
 	ss << " AS ";
 
-	auto user_type_copy = user_type;
-
 	// Strip off the potential alias so ToString doesn't just output the alias
-	user_type_copy.SetAlias("");
+	auto user_type_copy = user_type.WithAlias("");
 	D_ASSERT(user_type_copy.GetAlias().empty());
 
 	ss << user_type_copy.ToString();

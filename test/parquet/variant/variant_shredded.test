@@ -85,7 +85,7 @@ from '{DATA_DIR}/parquet-testing/variant_shredded_string.parquet';
 query II
 from '{DATA_DIR}/parquet-testing/variant_shredded_binary.parquet';
 ----
-1	CgsMDQ==
+1	\x0A\x0B\x0C\x0D
 
 # float - positive
 query II

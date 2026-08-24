@@ -20,7 +20,6 @@ FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	WRITE	4	0
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	OPEN	NULL	NULL
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	4	0
-FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	0	4
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
 
 statement ok

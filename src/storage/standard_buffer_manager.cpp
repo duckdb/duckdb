@@ -13,6 +13,7 @@
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
@@ -123,9 +124,10 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 }
 
 template <typename... ARGS>
-TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
-                                                                    unique_ptr<FileBuffer> *buffer, ARGS... args) {
-	auto r = buffer_pool.EvictBlocks(tag, memory_delta, buffer_pool.maximum_memory, buffer);
+TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
+                                                                    idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+                                                                    ARGS... args) {
+	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
 		                                       StringUtil::BytesToHumanReadableString(GetMaxMemory()));
@@ -151,7 +153,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
 	D_ASSERT(size < GetBlockSize());
-	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
+	auto reservation = EvictBlocksOrThrow(QueryContext(), tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, nullptr, FileBufferType::TINY_BUFFER);
@@ -167,12 +169,12 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
-                                                              bool can_destroy) {
+                                                              bool can_destroy, QueryContext context) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
-	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
+	auto res = EvictBlocksOrThrow(context, tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
@@ -214,40 +216,51 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	return Pin(block);
 }
 
-void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
-                                      block_id_t first_block, block_id_t last_block) {
-	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-	if (block_count == 1) {
-		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
-			// prefetching with block_count == 1 has no performance impact since we can't batch reads
-			// skip the prefetch in this case
-			// we do it anyway if alternative_verify is on for extra testing
-			return;
-		}
-	}
+BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy) {
+	auto block = RegisterMemory(tag, block_size, Storage::DEFAULT_BLOCK_HEADER_SIZE, can_destroy, context);
+
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*block);
+#endif
+	return Pin(context, block);
+}
+
+BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+                                             bool can_destroy) {
+	auto block =
+	    RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy, context);
+
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*block);
+#endif
+	return Pin(context, block);
+}
+
+void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
+	idx_t block_count = run.handles.size();
 
 	// Allocate a buffer to hold the data of all blocks.
-	auto block_alloc_size = handles[0]->GetBlockAllocSize();
+	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
 	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
 	auto intermediate_buffer = Pin(batch_memory);
 
 	// perform a batch read of the blocks into the buffer
-	auto &block_manager = handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
+	auto &block_manager = run.handles[0]->GetBlockManager();
+	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
 
 	// the blocks are read - now we need to assign them to the individual blocks
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		block_id_t block_id = first_block + NumericCast<block_id_t>(block_idx);
-		auto entry = load_map.find(block_id);
-		D_ASSERT(entry != load_map.end()); // if we allow gaps we might not return true here
-		auto &handle = handles[entry->second];
+		auto &handle = run.handles[block_idx];
+		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
 
 		// reserve memory for the block
 		auto &block_memory = handle->GetMemory();
 		idx_t required_memory = block_memory.GetMemoryUsage();
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
+		auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
 		// now load the block from the buffer
@@ -267,43 +280,55 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	}
 }
 
-void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
+vector<StandardBufferManager::PrefetchRun>
+StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	// figure out which set of blocks we should load
-	map<block_id_t, idx_t> to_be_loaded;
-	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
-		auto &handle = handles[block_idx];
+	map<block_id_t, shared_ptr<BlockHandle>> to_be_loaded;
+	for (auto &handle : handles) {
 		if (handle->GetMemory().GetState() != BlockState::BLOCK_LOADED) {
-			// need to load this block - add it to the map
-			to_be_loaded.insert(make_pair(handle->BlockId(), block_idx));
+			to_be_loaded.insert(make_pair(handle->BlockId(), handle));
 		}
 	}
-	if (to_be_loaded.empty()) {
-		// nothing to fetch
-		return;
-	}
-	// iterate over the blocks and perform bulk reads
-	block_id_t first_block = -1;
-	block_id_t previous_block_id = -1;
+	vector<PrefetchRun> plan;
 	for (auto &entry : to_be_loaded) {
-		if (previous_block_id < 0) {
-			// this the first block we are seeing
-			first_block = entry.first;
-			previous_block_id = first_block;
-		} else if (previous_block_id + 1 == entry.first) {
-			// this block is adjacent to the previous block - add it to the batch read
-			previous_block_id = entry.first;
-		} else {
-			// this block is not adjacent to the previous block
-			// perform the batch read for the previous batch
-			BatchRead(handles, to_be_loaded, first_block, previous_block_id);
-
-			// set the first_block and previous_block_id to the current block
-			first_block = entry.first;
-			previous_block_id = entry.first;
+		if (plan.empty() ||
+		    plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first) {
+			// this block is not adjacent to the previous block, start a new run
+			plan.push_back(PrefetchRun {entry.first, {}});
 		}
+		plan.back().handles.push_back(std::move(entry.second));
 	}
-	// batch read the final batch
-	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+	return plan;
+}
+
+void StandardBufferManager::ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan) {
+	for (auto &run : plan) {
+		if (run.handles.size() == 1 &&
+		    Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+			// skip runs of a single block unless debug_force_always is set, a single read cannot be batched
+			continue;
+		}
+		BatchRead(context, run);
+	}
+}
+
+void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
+	auto plan = RegisterPrefetch(handles);
+	ExecutePrefetch(context, plan);
+}
+
+vector<unique_ptr<AsyncTask>> StandardBufferManager::CreatePrefetchTasks(QueryContext context,
+                                                                         vector<shared_ptr<BlockHandle>> &handles) {
+	auto plan = RegisterPrefetch(handles);
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.reserve(plan.size());
+	for (auto &run : plan) {
+		// the io size is the number of bytes this run will read
+		auto io_size = run.handles.size() * run.handles[0]->GetBlockAllocSize();
+		tasks.push_back(make_uniq<CallbackAsyncTask>(
+		    [this, context, run = std::move(run)]() mutable { BatchRead(context, run); }, io_size));
+	}
+	return tasks;
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -336,7 +361,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 	// evict blocks until we have space for the current block
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto reservation =
-	    EvictBlocksOrThrow(block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
+	    EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
 	                       "failed to pin block of size %s%s", StringUtil::BytesToHumanReadableString(required_memory));
 
 	// lock the handle again and repeat the check (in case anybody loaded in the meantime)
@@ -474,13 +499,14 @@ bool StandardBufferManager::EncryptTemporaryFiles() {
 	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
-void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+void StandardBufferManager::WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id,
+                                                 FileBuffer &buffer) {
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
-		idx_t eviction_size = temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
+		idx_t eviction_size = temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(context, block_id, buffer);
 		evicted_data_per_tag[uint8_t(tag)] += eviction_size;
 		return;
 	}
@@ -503,8 +529,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	idx_t block_header_size = buffer.GetHeaderSize();
 	auto user_size = buffer.Size();
-	handle->Write(QueryContext(), &user_size, sizeof(idx_t), 0);
-	handle->Write(QueryContext(), &block_header_size, sizeof(idx_t), sizeof(idx_t));
+	handle->Write(context, &user_size, sizeof(idx_t), 0);
+	handle->Write(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
 
@@ -512,11 +538,11 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
 		//! Write the nonce (and tag for GCM).
-		handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+		handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
 		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
-	buffer.Write(QueryContext(), *handle, offset);
+	buffer.Write(context, *handle, offset);
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag,
@@ -692,8 +718,8 @@ void StandardBufferManager::ReserveMemory(idx_t size) {
 		return;
 	}
 	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::EXTENSION, size, nullptr, "failed to reserve memory data of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(size));
+	    EvictBlocksOrThrow(QueryContext(), MemoryTag::EXTENSION, size, nullptr,
+	                       "failed to reserve memory data of size %s%s", StringUtil::BytesToHumanReadableString(size));
 	reservation.size = 0;
 }
 
@@ -709,9 +735,9 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 //===--------------------------------------------------------------------===//
 data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = private_data->Cast<BufferAllocatorData>();
-	auto reservation =
-	    data.manager.EvictBlocksOrThrow(MemoryTag::ALLOCATOR, size, nullptr, "failed to allocate data of size %s%s",
-	                                    StringUtil::BytesToHumanReadableString(size));
+	auto reservation = data.manager.EvictBlocksOrThrow(QueryContext(), MemoryTag::ALLOCATOR, size, nullptr,
+	                                                   "failed to allocate data of size %s%s",
+	                                                   StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;
 	return Allocator::Get(data.manager.db).AllocateData(size);

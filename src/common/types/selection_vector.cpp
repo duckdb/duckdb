@@ -16,6 +16,8 @@ SelectionData::SelectionData(idx_t count) {
 #endif
 }
 
+SelectionData::~SelectionData() = default;
+
 // LCOV_EXCL_START
 string SelectionVector::ToString(idx_t count) const {
 	string result = "Selection Vector (" + to_string(count) + ") [";
@@ -31,6 +33,17 @@ string SelectionVector::ToString(idx_t count) const {
 
 void SelectionVector::Sort(idx_t count) {
 	std::sort(sel_vector, sel_vector + count);
+}
+
+void SelectionVector::ShiftLeft(const idx_t offset, const idx_t count) {
+	D_ASSERT(sel_vector);
+	D_ASSERT(offset + count <= capacity);
+	if (offset == 0) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		sel_vector[i] = sel_vector[i + offset];
+	}
 }
 
 void SelectionVector::Print(idx_t count) const {

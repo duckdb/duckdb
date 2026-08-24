@@ -22,14 +22,17 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
-	                      LogicalType::BOOLEAN, ListSearchFunction<bool>);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
+	                          LogicalType::BOOLEAN, ListSearchFunction<bool>);
+	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	return fun;
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return fun;
 }
 

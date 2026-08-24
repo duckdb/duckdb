@@ -12,7 +12,7 @@ struct AsciiOperator {
 			return str[0];
 		}
 		int utf8_bytes = 4;
-		return Utf8Proc::UTF8ToCodepoint(str, utf8_bytes);
+		return Utf8Proc::UTF8ToCodepoint(str, utf8_bytes, input.GetSize());
 	}
 };
 

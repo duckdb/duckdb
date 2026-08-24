@@ -19,8 +19,10 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/function/compression_info.hpp"
 
 namespace duckdb {
+class CompressionFunction;
 class DatabaseInstance;
 class ColumnData;
 struct ColumnDataCheckpointData;
@@ -33,34 +35,6 @@ struct ColumnFetchState;
 struct ColumnScanState;
 struct PrefetchState;
 struct SegmentScanState;
-
-class CompressionInfo {
-public:
-	explicit CompressionInfo(BlockManager &block_manager) : block_manager(block_manager) {
-	}
-
-public:
-	//! The size below which the segment is compacted on flushing.
-	idx_t GetCompactionFlushLimit() const {
-		return block_manager.GetBlockSize() / 5 * 4;
-	}
-	//! The block size for blocks using this compression.
-	idx_t GetBlockSize() const {
-		return block_manager.GetBlockSize();
-	}
-
-	//! The block header size for blocks using this compression.
-	idx_t GetBlockHeaderSize() const {
-		return block_manager.GetBlockHeaderSize();
-	}
-
-	BlockManager &GetBlockManager() const {
-		return block_manager;
-	}
-
-private:
-	BlockManager &block_manager;
-};
 
 struct AnalyzeState {
 	explicit AnalyzeState(BlockManager &block_manager_p) : block_manager(block_manager_p), info(block_manager) {

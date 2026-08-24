@@ -8,7 +8,10 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "json_geojson.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -46,7 +49,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
-		auto key_str = unsafe_yyjson_get_str(key);
+		string key_str(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		if (names.find(key_str) != names.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
@@ -79,20 +82,15 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("JSON structure must be a constant!");
-	}
-	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto structure_val = input.GetConstant(1);
 	if (structure_val.IsNull() || arguments[1]->GetReturnType() == LogicalTypeId::SQLNULL) {
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {
-		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
+		auto json_structure_val = structure_val.DefaultTryCastAs(LogicalType::JSON());
+		if (!json_structure_val) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
-		auto structure_string = structure_val.GetValueUnsafe<string_t>();
+		auto structure_string = json_structure_val->GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
 		bound_function.SetReturnType(StructureStringToType(doc->root, context));
@@ -298,6 +296,62 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		options.error_message +=
 		    "\n If this error occurred during read_json, line/object number information is approximate";
 		success = false;
+	}
+	return success;
+}
+
+//! GEOMETRY accepts both WKT strings and GeoJSON geometry fragments. A JSON object is never valid WKT, so the two
+//! are unambiguous and no option is needed to tell them apart.
+static bool TransformGeometry(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
+	bool any_object = false;
+	for (idx_t i = 0; i < count; i++) {
+		if (vals[i] && unsafe_yyjson_is_obj(vals[i])) {
+			any_object = true;
+			break;
+		}
+	}
+	if (!any_object) {
+		// Nothing but WKT here, so use the regular string cast
+		return TransformFromString(vals, result, count, options);
+	}
+
+	auto data = FlatVector::GetDataMutable<string_t>(result);
+	auto &validity = FlatVector::ValidityMutable(result);
+	validity.SetAllValid(count);
+
+	bool success = true;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val || unsafe_yyjson_is_null(val)) {
+			validity.SetInvalid(i);
+			continue;
+		}
+
+		string error;
+		if (unsafe_yyjson_is_obj(val)) {
+			if (JSONGeometry::FromGeoJSON(val, data[i], result, error)) {
+				continue;
+			}
+		} else if (unsafe_yyjson_is_str(val)) {
+			try {
+				if (Geometry::FromString(GetString(val), data[i], result, true)) {
+					continue;
+				}
+			} catch (std::exception &ex) {
+				ErrorData error_data(ex);
+				error = error_data.RawMessage();
+			}
+		}
+
+		if (error.empty()) {
+			error = StringUtil::Format("Unable to cast '%s' to GEOMETRY", JSONCommon::ValToString(val, 50));
+		}
+		validity.SetInvalid(i);
+		if (success && options.strict_cast) {
+			options.error_message = error;
+			options.object_index = i;
+			success = false;
+		}
 	}
 	return success;
 }
@@ -652,6 +706,60 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	return success;
 }
 
+static bool TransformArrayToTuple(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                  JSONTransformOptions &options) {
+	// A TUPLE is serialized as a JSON array - read each array element positionally into the matching struct child
+	bool success = true;
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto &child_vs = StructVector::GetEntries(result);
+	const idx_t child_count = child_vs.size();
+
+	// nested_vals[child_i * count + i] holds the JSON value for child child_i of row i
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, child_count * count);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &arr = arrays[i];
+		bool valid = arr && !unsafe_yyjson_is_null(arr) && unsafe_yyjson_is_arr(arr);
+		if (!valid) {
+			result_validity.SetInvalid(i);
+			if (success && options.strict_cast && arr && !unsafe_yyjson_is_null(arr)) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arr),
+				                       JSONCommon::ValToString(arr, 50));
+				options.object_index = i;
+				success = false;
+			}
+			for (idx_t child_i = 0; child_i < child_count; child_i++) {
+				nested_vals[child_i * count + i] = nullptr;
+			}
+			continue;
+		}
+		// gather up to child_count elements - missing elements become NULL, extra elements are ignored
+		size_t idx, max;
+		yyjson_val *val;
+		idx_t child_i = 0;
+		yyjson_arr_foreach(arr, idx, max, val) {
+			if (child_i < child_count) {
+				nested_vals[child_i * count + i] = val;
+			}
+			child_i++;
+		}
+		for (; child_i < child_count; child_i++) {
+			nested_vals[child_i * count + i] = nullptr;
+		}
+	}
+
+	for (idx_t child_i = 0; child_i < child_count; child_i++) {
+		if (!JSONTransform::Transform(nested_vals + child_i * count, alc, child_vs[child_i], count, options, nullptr)) {
+			success = false;
+		}
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
+	return success;
+}
+
 static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
                                   JSONTransformOptions &options) {
 	bool success = true;
@@ -975,13 +1083,16 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::GEOMETRY:
 		return TransformFromString(vals, result, count, options);
+	case LogicalTypeId::GEOMETRY:
+		return TransformGeometry(vals, result, count, options);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
+	case LogicalTypeId::TUPLE:
+		return TransformArrayToTuple(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
@@ -1033,17 +1144,15 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<false>,
-	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({{"json", input_type}, {"structure", LogicalType::VARCHAR}}, LogicalType::ANY,
+	                               TransformFunction<false>, JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformFunctionInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -1056,9 +1165,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -1088,6 +1195,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) 
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT:
 			target_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::TUPLE:
+			target_type = LogicalType::TUPLE({LogicalType::ANY});
 			break;
 		case LogicalTypeId::LIST:
 			target_type = LogicalType::LIST(LogicalType::ANY);

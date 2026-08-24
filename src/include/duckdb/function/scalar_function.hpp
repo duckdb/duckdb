@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -59,12 +60,22 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
+	FunctionStatisticsPruneInput(const BoundFunctionExpression &function_p, optional_ptr<FunctionData> bind_data_p,
+	                             const vector<optional_ptr<const BaseStatistics>> &child_stats_p)
+	    : function(function_p), bind_data(bind_data_p), child_stats(child_stats_p) {
 	}
 
+	//! The bound function expression being checked (gives access to the argument expressions)
+	const BoundFunctionExpression &function;
 	optional_ptr<FunctionData> bind_data;
-	const BaseStatistics &stats;
+
+	//! Statistics for each function argument (an entry is null if it could not be derived for that argument)
+	const vector<optional_ptr<const BaseStatistics>> &child_stats;
+
+	//! Convenience accessor: statistics of the i-th argument, or null if absent / not derivable
+	optional_ptr<const BaseStatistics> ChildStats(idx_t i) const {
+		return i < child_stats.size() ? child_stats[i] : optional_ptr<const BaseStatistics>();
+	}
 };
 
 struct FunctionStatisticsInput {
@@ -194,6 +205,11 @@ public:
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
 };
 
+//! Functions that can throw runtime errors must be marked as fallible using SetFallible(), since many parts of the
+//! system rely on this (e.g. dictionary expression caching, filter pushdown, TRY)
+//! Rethrows an execution error thrown by a function that is not marked as fallible as an internal error
+[[noreturn]] DUCKDB_API void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex);
+
 template <class IMPL>
 class BaseScalarFunction {
 	friend IMPL; // Only allow the derived class to access the protected members of this class.
@@ -225,6 +241,9 @@ public: // Properties
 
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+
+	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
+	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
@@ -292,6 +311,33 @@ public: // Callbacks
 	}
 	// clang-format on
 
+public: // Execution
+	//! Execute the function, verifying that functions that are not marked as fallible do not throw execution errors
+	void Execute(DataChunk &args, ExpressionState &state, Vector &result) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			callbacks.function(args, state, result);
+			return;
+		}
+		try {
+			callbacks.function(args, state, result);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
+
+	//! Execute the select callback of the function, verifying that non-fallible functions do not throw
+	idx_t Select(DataChunk &args, ExpressionState &state, const SelectionVector *sel, SelectionVector *true_sel,
+	             SelectionVector *false_sel) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		}
+		try {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
+
 public:
 	bool HasExtraFunctionInfo() const {
 		return function_info != nullptr;
@@ -309,6 +355,11 @@ public:
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {
 		return function_info;
+	}
+
+private:
+	const Identifier &Name() const {
+		return static_cast<const IMPL &>(*this).GetName();
 	}
 
 protected:
@@ -362,6 +413,22 @@ public:
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	                          bind_scalar_function_t bind = nullptr, function_statistics_t statistics = nullptr,
 	                          init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
+	DUCKDB_API ScalarFunction(Identifier name, std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
+	DUCKDB_API ScalarFunction(std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
@@ -494,26 +561,47 @@ public:
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
+	explicit BoundScalarFunction(shared_ptr<const ScalarFunction> function);
 
 	bool operator==(const BoundScalarFunction &rhs) const;
 	bool operator!=(const BoundScalarFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function, e.g. statistics
+	//! propagation swapping in a specialized implementation. For a function bound from a ScalarFunctionSet this is
+	//! the set's own overload, so it compares equal by pointer across binds. Functions bound outside of a set are
+	//! copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const ScalarFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
+
+private:
+	shared_ptr<const ScalarFunction> definition;
 };
 
-class BindScalarFunctionInput {
+class BindScalarFunctionInput : public BindFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), binder(binder_p) {
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
+	      bound_function(bound_function_p), binder(binder_p) {
 	}
 
-	ClientContext &GetClientContext() const {
-		return context;
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
+	      binder(binder_p) {
 	}
+
 	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
-	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
 	}
 	bool HasBinder() const {
 		return binder != nullptr;
@@ -526,9 +614,7 @@ public:
 	}
 
 private:
-	ClientContext &context;
 	BoundScalarFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 	optional_ptr<Binder> binder;
 };
 

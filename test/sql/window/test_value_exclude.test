@@ -1,0 +1,61 @@
+# name: test/sql/window/test_value_exclude.test
+# description: Validate binding of window value functions and EXCLUDE
+# group: [window]
+
+foreach vfunc FIRST_VALUE LAST_VALUE
+
+statement ok
+WITH src(id, v) AS (
+	VALUES
+	(1, 10),
+	(2, 20)
+)
+SELECT
+	id,
+	{vfunc}(v ORDER BY v DESC) OVER (
+	  ORDER BY id
+	  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	  EXCLUDE CURRENT ROW
+	) AS actual
+FROM src
+ORDER BY id;
+
+endloop
+
+statement ok
+WITH src(id, v) AS (
+	VALUES
+	(1, 10),
+	(2, 20)
+)
+SELECT
+	id,
+	NTH_VALUE(v, 0 ORDER BY v DESC) OVER (
+	  ORDER BY id
+	  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	  EXCLUDE CURRENT ROW
+	) AS actual
+FROM src
+ORDER BY id;
+
+foreach vfunc LEAD LAG FILL
+
+statement error
+WITH src(id, v) AS (
+	VALUES
+	(1, 10),
+	(2, 20)
+)
+SELECT
+	id,
+	{vfunc}(v ORDER BY v DESC) OVER (
+	  ORDER BY id
+	  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	  EXCLUDE CURRENT ROW
+	) AS actual
+FROM src
+ORDER BY id;
+----
+EXCLUDE is not supported for the window function
+
+endloop

@@ -15,7 +15,7 @@ statement ok
 INSERT INTO Buy values(30, 300);
 
 # basic returning
-query III
+query III rowsort
 WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
 MERGE INTO Stock USING initial_stocks ON FALSE
 WHEN MATCHED THEN DO NOTHING
@@ -34,7 +34,7 @@ RETURNING *
 ----
 
 # update and insert
-query III
+query III rowsort
 MERGE INTO Stock AS s USING Buy AS b ON s.item_id = b.item_id
 WHEN MATCHED THEN UPDATE SET balance = balance + b.volume
 WHEN NOT MATCHED THEN INSERT VALUES (b.item_id, b.volume)
@@ -53,7 +53,7 @@ INSERT INTO Sale VALUES (10, 2200);
 statement ok
 INSERT INTO Sale VALUES (20, 1900);
 
-query III
+query III rowsort
 MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
 WHEN MATCHED AND Sale.volume > balance THEN ERROR
 WHEN MATCHED AND Sale.volume = balance THEN DELETE
@@ -62,8 +62,8 @@ WHEN MATCHED THEN ERROR
 WHEN NOT MATCHED THEN ERROR
 RETURNING Stock.item_id, merge_action, Stock.balance
 ----
-20	DELETE	1900
 10	UPDATE	1000
+20	DELETE	1900
 
 query III
 WITH deleted_stocks(item_id) AS (VALUES (30))

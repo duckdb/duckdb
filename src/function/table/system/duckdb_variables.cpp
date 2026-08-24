@@ -25,7 +25,7 @@ struct DuckDBVariablesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBVariablesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -44,7 +44,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBVariablesInit(ClientContext &context,
 
 	for (auto &entry : config.user_variables) {
 		VariableData data;
-		data.name = entry.first;
+		data.name = entry.first.GetIdentifierName();
 		data.value = entry.second;
 		result->variables.push_back(std::move(data));
 	}

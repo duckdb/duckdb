@@ -4,7 +4,7 @@
  */
 #ifndef STREAMS_H
 #define STREAMS_H
-rng_t Streams[] = {
+thread_local rng_t Streams[] = {
     {0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, CC_CALL_CENTER_SK, CALL_CENTER, CC_CALL_CENTER_SK},
     {0, 15, 0, 0, CC_CALL_CENTER_ID, CALL_CENTER, CC_CALL_CENTER_ID},

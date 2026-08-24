@@ -34,4 +34,20 @@ struct DSDGenWrapper {
 	static std::string GetAnswer(double sf, int query);
 };
 
+class DSDGenGenerator {
+public:
+	virtual ~DSDGenGenerator();
+
+	//! Generate the next batch of data, returning true when generation is complete
+	virtual bool GenerateNext() = 0;
+	//! Returns the progress percentage in [0, 100]
+	virtual double Progress() const = 0;
+	//! Returns whether generation can safely be resumed by a different async task
+	virtual bool CanYield() const = 0;
+};
+
+duckdb::unique_ptr<DSDGenGenerator> CreateDSDGenGenerator(duckdb::ClientContext &context, double sf,
+                                                          const duckdb::Identifier &catalog,
+                                                          const duckdb::Identifier &schema, std::string suffix);
+
 } // namespace tpcds

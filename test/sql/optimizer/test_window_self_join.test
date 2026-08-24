@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE services (date DATE, train_number INT);
 
 statement ok
@@ -176,6 +179,57 @@ FROM services
 2024-01-01	101	[101, 100, 100]
 2024-01-02	100	[100]
 
+query II
+EXPLAIN
+SELECT *,
+	list(DISTINCT train_number) OVER(
+		PARTITION BY date
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+FROM services
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III rowsort
+SELECT
+	*,
+	list(DISTINCT train_number) OVER(
+		PARTITION BY date
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+FROM services
+----
+2024-01-01	100	[101, 100]
+2024-01-01	100	[101, 100]
+2024-01-01	101	[101, 100]
+2024-01-02	100	[100]
+
+query II
+EXPLAIN
+SELECT *,
+	list(DISTINCT train_number) OVER(
+		PARTITION BY train_number
+		ORDER BY date DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+FROM services
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query I
+SELECT
+  SUM(DISTINCT q) OVER (
+    PARTITION BY 1
+    ORDER BY b
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS wf
+FROM (VALUES (1, 1), (2, 1)) AS t(b, q);
+----
+1
+1
+
 # 13. ROWS framing should not apply
 query II
 explain
@@ -265,3 +319,24 @@ FROM (
 ) AS b;
 ----
 1	10.0
+
+statement ok 
+CREATE OR REPLACE SEQUENCE seq;
+
+statement ok 
+CREATE OR REPLACE TABLE t AS SELECT * FROM range(6) tt(i);
+
+query III
+SELECT g, n, sum(n) OVER (PARTITION BY g) s 
+FROM (
+	SELECT nextval('seq') g, i n 
+	FROM t
+) 
+ORDER BY n;
+----
+1	0	0
+2	1	1
+3	2	2
+4	3	3
+5	4	4
+6	5	5

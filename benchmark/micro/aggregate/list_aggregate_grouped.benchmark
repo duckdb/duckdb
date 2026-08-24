@@ -1,0 +1,22 @@
+# name: benchmark/micro/aggregate/list_aggregate_grouped.benchmark
+# description: Grouped list() aggregate with few groups (clustered grouped hash-table path)
+# group: [aggregate]
+
+name List Aggregate (Grouped)
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i, i % 8 AS g FROM range(0, 10000000) tbl(i);
+
+run
+SELECT g, len(list(i)) FROM integers GROUP BY g ORDER BY g
+
+result II
+0	1250000
+1	1250000
+2	1250000
+3	1250000
+4	1250000
+5	1250000
+6	1250000
+7	1250000

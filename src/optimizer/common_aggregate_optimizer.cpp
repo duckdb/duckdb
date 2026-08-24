@@ -18,7 +18,6 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.StandardVisitOperator(op);
@@ -50,6 +49,15 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		ProjectionIndex original_index(i + total_erased);
 		ProjectionIndex new_index(i);
+		// volatile aggregates must not be deduplicated: each call is independent
+		if (aggr.expressions[i]->IsVolatile()) {
+			if (new_index != original_index) {
+				ColumnBinding original_binding(aggr.aggregate_index, original_index);
+				ColumnBinding new_binding(aggr.aggregate_index, new_index);
+				aggregate_map[original_binding] = new_binding;
+			}
+			continue;
+		}
 		auto entry = aggregate_remap.find(*aggr.expressions[i]);
 		if (entry == aggregate_remap.end()) {
 			// aggregate does not exist yet: add it to the map

@@ -27,7 +27,7 @@ namespace duckdb {
 constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
@@ -68,8 +68,7 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_
 		}
 		auto candidates =
 		    StringUtil::CandidatesErrorMessage(column_names, column_name.GetIdentifierName(), "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetIdentifierName(),
-		                      column_name, candidates);
+		throw BinderException("Table %s does not have a column with name %s\n%s", name, column_name, candidates);
 	}
 	return entry;
 }
@@ -96,9 +95,8 @@ vector<LogicalType> TableCatalogEntry::GetTypes() const {
 
 unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->table = name;
+	// carry the full (possibly nested) schema path: [catalog, schema_path..., name]
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
 	result->dependencies = dependencies;
@@ -208,6 +206,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 
 string TableCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
+	create_info->StripCatalogQualification();
 	return create_info->ToString();
 }
 
@@ -392,14 +391,28 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 }
 
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
-                                                                                    TriggerTiming timing,
-                                                                                    TriggerEventType event_type) const {
+                                                                                    TriggerEventType event_type,
+                                                                                    TriggerForEach for_each) const {
 	vector<const_reference<TriggerCatalogEntry>> result;
 	// CatalogSet is backed by case_insensitive_tree_t (a map with case-insensitive comparator),
 	// so ScanTriggers yields entries in alphabetical order by name
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
-		if (trigger.timing == timing && trigger.event_type == event_type) {
+		if (trigger.event_type == event_type && trigger.for_each == for_each) {
+			result.emplace_back(trigger);
+		}
+	});
+	return result;
+}
+
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type,
+                                                                                    TriggerForEach for_each) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.event_type == event_type && trigger.for_each == for_each && trigger.timing == timing) {
 			result.emplace_back(trigger);
 		}
 	});

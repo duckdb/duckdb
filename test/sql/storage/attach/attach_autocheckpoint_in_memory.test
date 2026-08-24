@@ -1,0 +1,47 @@
+# name: test/sql/storage/attach/attach_autocheckpoint_in_memory.test
+# description: A failing autocheckpoint on an in-memory database invalidates it and its data is unrecoverable
+# group: [attach]
+
+require no_alternative_verify
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET auto_checkpoint_skip_wal_threshold = 9999999999;
+
+statement ok
+ATTACH ':memory:' AS m;
+
+statement ok
+CREATE TABLE m.tbl(i INTEGER);
+
+statement ok
+SET wal_autocheckpoint = '1B';
+
+statement ok
+PRAGMA debug_checkpoint_abort = 'IN_MEMORY_CHECKPOINT';
+
+statement error
+INSERT INTO m.tbl SELECT range::INTEGER FROM range(10);
+----
+<REGEX>:.*Failed to commit.*Checkpoint failed for database "m".*has been invalidated.*In-memory checkpoint aborted.*
+
+statement error
+SELECT COUNT(*) FROM m.tbl;
+----
+<REGEX>:IO Error: Database "m" has been invalidated because checkpointing failed. It is an in-memory database, so its data cannot be recovered.*
+
+statement ok
+PRAGMA debug_checkpoint_abort = 'NONE';
+
+statement ok
+DETACH m;
+
+statement ok
+ATTACH ':memory:' AS m;
+
+statement error
+SELECT COUNT(*) FROM m.tbl;
+----
+<REGEX>:Catalog Error: Table with name tbl does not exist.*

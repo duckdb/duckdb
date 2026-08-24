@@ -28,17 +28,23 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type != duckdb::ShowType::DESCRIBE) {
+	// DESCRIBE always uses the compact describe rendering. Using SHOW to describe something - bareword "SHOW name" or
+	// "SHOW (query)" - is deprecated, but while it is still supported we render it the same way for consistency with
+	// DESCRIBE. Note that a bareword "SHOW name" may instead resolve to a setting value at execution time; that is a
+	// regular (non-describe) result, which ExecuteStatement detects from the result shape and renders with the default
+	// mode.
+	bool is_show = showref.show_type == duckdb::ShowType::SHOW && (!showref.GetTableName().empty() || showref.query);
+	if (showref.show_type != duckdb::ShowType::DESCRIBE && !is_show) {
 		return false;
 	}
 	describe_table_name = "Describe";
-	if (!showref.table_name.empty()) {
-		describe_table_name = showref.table_name.GetIdentifierName();
+	if (!showref.GetTableName().empty()) {
+		describe_table_name = showref.GetTableName().GetIdentifierName();
 	} else if (showref.query && showref.query->type == duckdb::QueryNodeType::SELECT_NODE) {
 		auto &show_select = showref.query->Cast<duckdb::SelectNode>();
 		if (show_select.from_table->type == duckdb::TableReferenceType::BASE_TABLE) {
 			auto &base_table = show_select.from_table->Cast<duckdb::BaseTableRef>();
-			describe_table_name = base_table.table_name.GetIdentifierName();
+			describe_table_name = base_table.Table().GetIdentifierName();
 		}
 	}
 	return true;

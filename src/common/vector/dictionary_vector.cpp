@@ -46,6 +46,9 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 		throw InternalException("Dictionary expression type mismatch - type %s does not match child type %s", type,
 		                        child.GetType());
 	}
+	// consumers may read any entry in [0, dictionary size), not only the ones the selection vector references - e.g.
+	// ColumnDataCollection copies the whole dictionary to keep it compressed - so verify the entire child
+	child.Verify();
 	if (!sel.IsSet()) {
 		// sel is not set - directly pass in the dictionary
 		child.Verify(sel_vector, count);
@@ -164,6 +167,13 @@ buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const Log
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
 	FlatVector::SetSize(entry->data, size);
 	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
+	return entry;
+}
+
+buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableGlobalDictionary(const LogicalType &type,
+                                                                             const idx_t &size) {
+	auto entry = CreateReusableDictionary(type, size);
+	entry->global_dictionary = true;
 	return entry;
 }
 

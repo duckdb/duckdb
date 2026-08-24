@@ -91,8 +91,8 @@ typedef struct TDEF_T {
 
 /*
 extern tdef *tdefs;
-extern tdef w_tdefs[];
-extern tdef s_tdefs[];
+extern thread_local tdef w_tdefs[];
+extern thread_local tdef s_tdefs[];
 */
 
 #define tdefIsFlagSet(t, f) (tdefs[t].flags & f)

@@ -1,0 +1,75 @@
+# name: test/sql/catalog/nested_schema/create_nested_schema.test
+# description: Test creation of nested schemas
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+# top-level schemas (catalog.schema or schema)
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA memory.s2;
+
+statement ok
+CREATE SCHEMA db2.s3;
+
+# nested: <parent_schema>.<nested_schema>
+statement ok
+CREATE SCHEMA s1.child;
+
+# nested with explicit catalog: <catalog>.<parent_schema>.<nested_schema>
+statement ok
+CREATE SCHEMA memory.s1.child2;
+
+# two levels of nesting: <parent_schema>.<nested1>.<nested2>
+statement ok
+CREATE SCHEMA s1.child.grandchild;
+
+# nested in an attached catalog
+statement ok
+CREATE SCHEMA db2.s3.s3child;
+
+query IIII
+SELECT database_name, schema_name, parent_schema, parent_schema_oid IS NULL
+FROM duckdb_schemas()
+WHERE schema_name IN ('s1','s2','s3','child','child2','grandchild','s3child')
+ORDER BY database_name, schema_name;
+----
+db2	s3	NULL	true
+db2	s3child	s3	false
+memory	child	s1	false
+memory	child2	s1	false
+memory	grandchild	child	false
+memory	s1	NULL	true
+memory	s2	NULL	true
+
+# the parent_schema_oid points at the parent schema's oid
+query I
+SELECT p.oid = c.parent_schema_oid
+FROM duckdb_schemas() c, duckdb_schemas() p
+WHERE c.schema_name = 'child' AND p.schema_name = 's1' AND p.database_name = 'memory';
+----
+true
+
+# IF NOT EXISTS on a nested schema
+statement ok
+CREATE SCHEMA IF NOT EXISTS s1.child;
+
+statement error
+CREATE SCHEMA s1.child;
+----
+<REGEX>:.*already exists.*
+
+# a nested schema whose root component is neither a catalog nor a schema
+statement error
+CREATE SCHEMA does_not_exist.child;
+----
+<REGEX>:.*"does_not_exist" is not a catalog or schema.*
+
+# a deeper parent schema that does not exist (s1 exists, missing does not)
+statement error
+CREATE SCHEMA s1.missing.grandchild;
+----
+<REGEX>:.*parent schema "missing" does not exist.*

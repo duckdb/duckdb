@@ -1,5 +1,6 @@
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
 

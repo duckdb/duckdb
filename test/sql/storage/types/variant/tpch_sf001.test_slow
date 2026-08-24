@@ -25,6 +25,9 @@ checkpoint;
 
 restart
 
+statement ok
+SELECT stats(lineitem.l_orderkey)::VARCHAR FROM lineitem_variant LIMIT 1
+
 # --- Create views ----
 
 statement ok

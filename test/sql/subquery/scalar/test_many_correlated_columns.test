@@ -50,14 +50,14 @@ SELECT a, a>=ANY(SELECT test2.a+c-b FROM test2 WHERE c>=b AND str=str2) FROM tes
 
 # string comparison
 query TT
-SELECT str, str=ANY(SELECT str2 FROM test2) FROM test
+SELECT str, str=ANY(SELECT str2 FROM test2) FROM test ORDER BY ALL
 ----
 a	1
 b	1
 c	0
 
 query TT
-SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test
+SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test ORDER BY ALL
 ----
 a	0
 b	1

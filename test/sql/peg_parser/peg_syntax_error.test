@@ -13,6 +13,11 @@ SELECT (1 + (2 * 3);
 Parser Error: syntax error at or near ";"
 
 statement error
+SELECT (((((((((((((((((((;
+----
+Parser Error: syntax error at or near ";"
+
+statement error
 SELECT 1 + 2 * ;
 ----
 Parser Error: syntax error at or near ";"
@@ -42,10 +47,11 @@ SELECT (10).;
 ----
 Parser Error: syntax error at or near ";"
 
+# note: "IN ()" is no longer a syntax error - () is an empty TUPLE literal (membership is simply false)
 statement error
-SELECT * FROM tbl WHERE id IN ();
+SELECT * FROM tbl WHERE id IN (,);
 ----
-Parser Error: syntax error at or near ")"
+Parser Error: syntax error at or near ","
 
 statement error
 SELECT a, b,, FROM tbl;

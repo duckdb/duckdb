@@ -35,6 +35,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return 149;
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::UNION:
@@ -312,6 +313,7 @@ static int64_t ImplicitCastVariant(const LogicalType &to) {
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::LIST:
@@ -331,7 +333,8 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 		return false;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto child_count = StructType::GetChildCount(type);
 		for (idx_t i = 0; i < child_count; i++) {
 			if (!LogicalTypeIsValid(StructType::GetChildType(type, i))) {
@@ -513,7 +516,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			return cost;
 		}
 	}
-	if ((from.id() == LogicalTypeId::STRUCT) && (to.id() == LogicalTypeId::STRUCT)) {
+	if (StructType::IsStruct(from) && StructType::IsStruct(to)) {
 		if (to.AuxInfo() == nullptr) {
 			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
 			return 0;
@@ -525,6 +528,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		if (source_children.size() != target_children.size()) {
 			// different number of children: not possible
 			return -1;
+		}
+
+		if (source_children.empty()) {
+			// both are empty - empty STRUCT and empty TUPLE are trivially inter-castable
+			return 0;
 		}
 
 		auto target_is_unnamed = StructType::IsUnnamed(to);

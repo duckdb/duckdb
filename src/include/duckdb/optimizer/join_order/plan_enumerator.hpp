@@ -28,14 +28,12 @@ class QueryGraphManager;
 
 class PlanEnumerator {
 public:
-	static constexpr idx_t THRESHOLD_TO_SWAP_TO_APPROXIMATE = 12;
-
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
 	                        const QueryGraphEdges &query_graph);
 
 public:
 	//! Perform the join order solving
-	void SolveJoinOrder();
+	bool SolveJoinOrder();
 	void InitLeafPlans();
 
 	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans() const;
@@ -46,8 +44,10 @@ private:
 	                                      DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
-	//! the newly created plan, or an existing plan)
-	DPJoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	//! the newly created plan, or an existing plan). Returns nullptr if the partition violates a non-inner join's
+	//! semantic input sides.
+	optional_ptr<DPJoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
+	                                  const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
@@ -60,14 +60,14 @@ private:
 	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<RelationIndex> &exclusion_set);
-	//! Generate cross product edges inside the side
-	void GenerateCrossProducts();
-
 	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e. did
 	//! not time-out)
 	bool SolveJoinOrderExactly();
 	//! Solve the join order approximately using a greedy algorithm
-	void SolveJoinOrderApproximately();
+	bool SolveJoinOrderApproximately();
+	bool PlanUsesCrossProduct(const DPJoinNode &node) const;
+	bool HasCompletePlan() const;
+	bool ActivateRequiredCrossProducts();
 
 private:
 	//! The set of edges used in the join optimizer

@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -82,7 +83,7 @@ struct CastParameters {
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
 	//! Query location (if any)
-	optional_idx query_location;
+	QueryLocation query_location;
 	//! In the case of a nested type, when facing a cast error, if we nullify the parent
 	bool nullify_parent = false;
 };
@@ -133,6 +134,9 @@ public:
 		return function;
 	}
 	bool IsNopCast() const;
+	//! Whether this is the fallback cast used when no cast exists between the types
+	//! It throws for any non-NULL value, regardless of the types involved
+	bool IsNullCast() const;
 	void SetFunction(cast_function_t new_function) {
 		function = new_function;
 	}
@@ -150,7 +154,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
-	optional_idx query_location;
+	QueryLocation query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
@@ -178,6 +182,7 @@ private:
 	static BoundCastInfo PointerCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo StringCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo StructCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo TupleCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo TimeCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo TimeNsCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo TimeTzCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);

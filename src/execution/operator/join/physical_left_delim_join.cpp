@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_left_delim_join.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"

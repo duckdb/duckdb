@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,21 @@ ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundSca
 	return bound_function.GetExpressionType(input);
 }
 
+bool BoundFunctionExpression::RequiresOrderedExecution() const {
+	if (function.RequiresOrderedExecution()) {
+		return true;
+	}
+	bool has_value = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+			return;
+		}
+		auto &child_function = child.Cast<BoundFunctionExpression>().Function();
+		has_value |= child_function.RequiresOrderedExecution();
+	});
+	return has_value;
+}
+
 bool BoundFunctionExpression::IsVolatile() const {
 	return function.GetStability() == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
 }
@@ -39,12 +55,10 @@ bool BoundFunctionExpression::IsFoldable() const {
 	if (function.HasBindLambdaCallback()) {
 		// This is a lambda function
 		D_ASSERT(bind_info);
-		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
-		if (lambda_bind_data.lambda_expr) {
-			auto &expr = *lambda_bind_data.lambda_expr;
-			if (expr.IsVolatile()) {
-				return false;
-			}
+		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
+		auto lambda_expr = lambda_bind_data.GetLambdaExpression();
+		if (lambda_expr && lambda_expr->IsVolatile()) {
+			return false;
 		}
 	}
 	return function.GetStability() == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
@@ -132,6 +146,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.GetName().empty());
+	D_ASSERT(function.GetDefinition());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {

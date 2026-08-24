@@ -1,4 +1,6 @@
 #include "shell_prompt.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -281,7 +283,12 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		if (component.literal == "connect_name_prefix") {
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
-				return connected->GetCatalog().GetAttached().GetName() + " ";
+				auto &catalog = connected->GetCatalog();
+				// Ephemeral connections (CONNECT '<uri>') have no user-facing name; show the display (URI).
+				if (catalog.GetAttached().IsEphemeral()) {
+					return catalog.GetConnectDisplay() + " ";
+				}
+				return catalog.GetAttached().GetName() + " ";
 			}
 			return string();
 		}
@@ -290,7 +297,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		return string();
 	}
 	auto current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
-	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
+	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().GetSchema();
 	if (component.literal == "current_database") {
 		return current_db.GetIdentifierName();
 	}

@@ -18,11 +18,11 @@ insert into t(ts_start, ts_stop, id)
   select d.x, null, i.y from dates d, ids i;
 
 
-# this is hard to test but basically you need to make sure that the left child of the hash
-# join is a projection, and the right is a sequential scan.
-# the child of the projection is then the window and sequential scan
+# the probe side (serialized first) is the sequential scan, the build side is the projection
+# whose child is the window over the sequential scan
+# use json format so the child order is checked independently of the rendered box layout
 query II
-explain update t as this
+explain (format json) update t as this
 set ts_stop = next.ts_start_next
 from (
 select id, ts_start, LEAD(ts_start) over (partition by id order by ts_start)

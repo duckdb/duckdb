@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -119,6 +120,17 @@ unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	return result;
 }
 
+bool TableIndexList::AllIndexesBoundOfType(const char *index_type) const {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (!index.IsBound() || index.GetIndexType() != index_type) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool TableIndexList::NameIsUnique(const string &name) {
 	// Only covers PK, FK, and UNIQUE indexes.
 	lock_guard<mutex> lock(index_entries_lock);
@@ -157,9 +169,11 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 	// Get the table from the catalog, so we can add it to the binder.
 	auto &catalog = table_info.GetDB().GetCatalog();
-	auto schema = table_info.GetSchemaName();
-	auto table_name = table_info.GetTableName();
-	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+	// the table can live in a nested schema - qualify it with the full schema path
+	auto schema_path = table_info.GetSchemaPath();
+	schema_path.insert(schema_path.begin(), catalog.GetName());
+	auto &table_entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(std::move(schema_path), table_info.GetTableName()));
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;
@@ -393,8 +407,7 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	auto &index_list = data_table_info.GetIndexes();
 	auto indexed_columns = index_list.GetRequiredColumns();
 
-	// Store the mapped_column_ids and index_types in sorted canonical form, needed for
-	// buffering WAL index operations during replay (see notes in unbound_index.hpp).
+	// Store the mapped_column_ids and index_types in sorted canonical form.
 	// First sort mapped_column_ids, then populate index_types according to the sorted order.
 	for (auto &col : indexed_columns) {
 		mapped_column_ids.emplace_back(col);

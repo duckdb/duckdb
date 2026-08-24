@@ -127,6 +127,8 @@ struct QuantileOperation {
 //! Creates a quantile aggregate that buffers the input values in a linked list, sharing the "list" aggregate
 //! callbacks for update/combine - the operation only provides the finalizer.
 //! Quantiles ignore NULL values, so they are filtered out while appending.
+//! The quantile parameter is folded into the bind data by the bind, but stays part of the expression tree - the
+//! update callback is handed it along with the input and simply does not read it
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
 	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
@@ -396,12 +398,12 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
-	if (function.GetOriginalArguments().size() == 2) {
-		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -
+	if (function.GetArguments().size() == 2) {
+		// the quantile parameter must be a constant at bind time (BindQuantile folds it into the bind data) -
 		// record its value so that re-binding the exported state can supply it
 		// median and mad have no parameter argument (their binds create the quantile themselves) and skip this
 		auto &bind_data = input.bind_data->Cast<QuantileBindData>();
-		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetOriginalArguments()[1]));
+		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetArguments()[1]));
 	}
 	return layout;
 }

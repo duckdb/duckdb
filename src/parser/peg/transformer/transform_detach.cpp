@@ -4,7 +4,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatement(PEGTransformer &transformer,
-                                                                         const bool &if_exists,
+                                                                         const bool &has_result,
+                                                                         const optional<bool> &if_exists,
                                                                          const Identifier &catalog_name) {
 	auto result = make_uniq<DetachStatement>();
 	auto info = make_uniq<DetachInfo>();

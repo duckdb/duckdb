@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/statement/connect_statement.hpp"
+#include "duckdb/parser/statement/external_resource_statement.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"

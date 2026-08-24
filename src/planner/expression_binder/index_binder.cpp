@@ -24,8 +24,8 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	// Do we know the type of this index now?
 	auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
 	if (!index_type) {
-		throw MissingExtensionException("Cannot bind index '%s', unknown index type '%s'. You need to load the "
-		                                "extension that provides this index type before table '%s' can be modified.",
+		throw MissingExtensionException("Cannot bind index %s, unknown index type '%s'. You need to load the "
+		                                "extension that provides this index type before table %s can be modified.",
 		                                unbound_index.GetTableName(), index_type_name, unbound_index.GetTableName());
 	}
 
@@ -42,13 +42,18 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	}
 
 	CreateIndexInput input(context, unbound_index.table_io_manager, unbound_index.db, create_info.constraint_type,
-	                       create_info.index_name, create_info.column_ids, unbound_expressions, storage_info,
+	                       create_info.GetIndexName(), create_info.column_ids, unbound_expressions, storage_info,
 	                       create_info.options);
 
 	return index_type->create_instance(input);
 }
 
 void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema) {
+	// the schema is taken from the table the index is created on - it can be a nested schema
+	InitCreateIndexInfo(get, info);
+}
+
+void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info) {
 	auto &column_ids = get.GetColumnIds();
 	for (auto &column_id : column_ids) {
 		if (column_id.IsRowIdColumn()) {
@@ -61,8 +66,8 @@ void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, co
 
 	info.scan_types.emplace_back(LogicalType::ROW_TYPE);
 	info.names = get.names;
-	info.schema = Identifier(schema);
-	info.catalog = get.GetTable()->catalog.GetName();
+	// the index lives in the same (possibly nested) schema as the table it is created on
+	info.SetQualifiedName(get.GetTable()->schema.GetQualifiedName(info.GetQualifiedName().Name()));
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 }
 
@@ -73,7 +78,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
                                                          unique_ptr<AlterTableInfo> alter_table_info) {
 	// Add the dependencies.
 	auto &dependencies = create_index_info->dependencies;
-	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
+	auto &catalog = table_entry.ParentCatalog();
 	SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
@@ -88,7 +93,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	}
 
 	auto &get = plan->Cast<LogicalGet>();
-	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name);
+	InitCreateIndexInfo(get, *create_index_info);
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 

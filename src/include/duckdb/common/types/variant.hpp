@@ -21,6 +21,7 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 class Vector;
+class VariantNode;
 struct ValidityMask;
 struct UnifiedVariantVector;
 struct RecursiveUnifiedVectorFormat;
@@ -70,6 +71,16 @@ struct VariantNestedData {
 	uint32_t child_count;
 	//! Index of the first child
 	uint32_t children_idx;
+};
+
+//! The (width, scale) of a DECIMAL value - the physical storage type (and hence the payload) follows
+//! from the width (see VariantDecimalData::GetPhysicalType)
+struct VariantDecimalProperties {
+	VariantDecimalProperties(uint32_t width, uint32_t scale) : width(width), scale(scale) {
+	}
+
+	uint32_t width;
+	uint32_t scale;
 };
 
 struct VariantDecimalData {
@@ -199,6 +210,8 @@ struct VariantCasts {
 	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
 	                                                           const UnifiedVariantVectorData &source, idx_t row,
 	                                                           uint32_t values_idx);
+	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
+	                                                           const VariantNode &source, bool sort_object_keys = true);
 };
 
 } // namespace duckdb

@@ -14,7 +14,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/main/query_context.hpp"
+#include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
 
@@ -136,10 +136,13 @@ enum class StorageVersion : uint64_t {
     V1_4_2 = 67,
     V1_4_3 = 67,
     V1_4_4 = 67,
+    V1_4_5 = 67,
     V1_5_0 = 68,
     V1_5_1 = 68,
     V1_5_2 = 68,
     V1_5_3 = 68,
+    V1_5_4 = 68,
+    V1_5_5 = 68,
     V2_0_0 = 69,
     LATEST = 69,
     DEPRECATED = 999,
@@ -169,10 +172,13 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_4_2 = 6,
     V1_4_3 = 6,
     V1_4_4 = 6,
+    V1_4_5 = 6,
     V1_5_0 = 7,
     V1_5_1 = 7,
     V1_5_2 = 7,
     V1_5_3 = 7,
+    V1_5_4 = 7,
+    V1_5_5 = 7,
     V2_0_0 = 8,
     LATEST = 8,
     INVALID = UINT64_MAX
@@ -182,7 +188,7 @@ enum class SerializationVersionDeprecated : uint64_t {
 
 struct StorageVersionInfo {
 	// When the default storage version has to be updated, do it here
-	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
+	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V2_0_0;
 
 	const char *version_name;
 	StorageVersion storage_version;

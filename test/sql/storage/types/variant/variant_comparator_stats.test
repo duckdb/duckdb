@@ -1,0 +1,170 @@
+# name: test/sql/storage/types/variant/variant_comparator_stats.test
+# description: statistics propagation for variant_comparator over (fully) shredded variants
+# group: [variant]
+
+require noforcestorage
+
+load {TEST_DIR}/variant_comparator_stats.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# ------------------------------ Fully shredded on a primitive (INTEGER) ------------------------------
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+statement ok
+CREATE TABLE ints(col VARIANT);
+
+statement ok
+INSERT INTO ints SELECT (i + 1)::INTEGER FROM range(100) t(i);
+
+statement ok
+CHECKPOINT;
+
+# reopen so the variant column is scanned from storage as a shredded vector
+restart
+
+# the comparator stats push the bucket (type-rank prefix) and the typed min/max, so the BLOB min/max
+# are exactly the comparator sort keys of the typed extremes (1 and 100)
+query II
+SELECT
+	s.min::VARCHAR = variant_comparator(1::INTEGER::VARIANT)::VARCHAR,
+	s.max::VARCHAR = variant_comparator(100::INTEGER::VARIANT)::VARCHAR
+FROM (SELECT stats(variant_comparator(col)) s FROM ints LIMIT 1);
+----
+true	true
+
+# the derived bounds must be correct - filtering against them returns the right rows
+query I
+SELECT count(*) FROM ints WHERE col > 50::INTEGER::VARIANT;
+----
+50
+
+query I
+SELECT count(*) FROM ints WHERE col <= 10::INTEGER::VARIANT;
+----
+10
+
+# a value outside the bucket range matches nothing
+query I
+SELECT count(*) FROM ints WHERE col = 1000::INTEGER::VARIANT;
+----
+0
+
+# ------------------------------ Fully shredded on VARCHAR ------------------------------
+
+statement ok
+SET force_variant_shredding = 'VARCHAR';
+
+statement ok
+CREATE TABLE strs(col VARIANT);
+
+statement ok
+INSERT INTO strs VALUES ('apple'::VARIANT), ('mango'::VARIANT), ('cherry'::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+# the bucket + bounds are derived (the exact max can be a rounded-up valid upper bound when the typed
+# string stats are stored truncated - so we assert the bounds exist and filter correctly instead)
+query II
+SELECT s.min IS NOT NULL, s.max IS NOT NULL
+FROM (SELECT stats(variant_comparator(col)) s FROM strs LIMIT 1);
+----
+true	true
+
+query I
+SELECT count(*) FROM strs WHERE col > 'cherry'::VARIANT;
+----
+1
+
+query I
+SELECT count(*) FROM strs WHERE col >= 'apple'::VARIANT;
+----
+3
+
+query I
+SELECT count(*) FROM strs WHERE col > 'zzzzz'::VARIANT;
+----
+0
+
+# ------------------------------ Nullable column, still fully shredded ------------------------------
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+statement ok
+CREATE TABLE nullable_ints(col VARIANT);
+
+statement ok
+INSERT INTO nullable_ints SELECT (i + 1)::INTEGER FROM range(10) t(i);
+
+statement ok
+INSERT INTO nullable_ints VALUES (NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+# SQL-NULL rows are handled by validity and never widen the primitive bucket
+query II
+SELECT
+	s.min::VARCHAR = variant_comparator(1::INTEGER::VARIANT)::VARCHAR,
+	s.max::VARCHAR = variant_comparator(10::INTEGER::VARIANT)::VARCHAR
+FROM (SELECT stats(variant_comparator(col)) s FROM nullable_ints LIMIT 1);
+----
+true	true
+
+# ------------------------------ Not fully shredded -> no bounds ------------------------------
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+statement ok
+CREATE TABLE mixed(col VARIANT);
+
+statement ok
+INSERT INTO mixed SELECT (i + 1)::INTEGER FROM range(10) t(i);
+
+# a non-integer value spills into the unshredded component - the column is no longer fully shredded
+statement ok
+INSERT INTO mixed VALUES ('hello'::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT s.min IS NULL, s.max IS NULL
+FROM (SELECT stats(variant_comparator(col)) s FROM mixed LIMIT 1);
+----
+true	true
+
+# ------------------------------ Shredded on a nested type -> no primitive bucket ------------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER)';
+
+statement ok
+CREATE TABLE objs(col VARIANT);
+
+statement ok
+INSERT INTO objs SELECT {'a': (i + 1)::INTEGER} FROM range(10) t(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+# only a primitive shredding maps every value into a single comparator bucket
+query I
+SELECT s.min IS NULL
+FROM (SELECT stats(variant_comparator(col)) s FROM objs LIMIT 1);
+----
+true

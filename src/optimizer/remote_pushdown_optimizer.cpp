@@ -15,13 +15,26 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -82,7 +95,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// Deduplicate by catalog name.
 	identifier_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
-		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
+		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.GetCatalog());
 		if (!catalog_entry) {
 			continue;
 		}
@@ -94,6 +107,36 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 			}
 		}
 	}
+}
+
+optional_ptr<CatalogEntry> RemotePushdownOptimizer::LookupEntry(const Identifier &catalog_name,
+                                                                const EntryLookupInfo &lookup,
+                                                                const Identifier &schema_name) {
+	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
+	return Catalog::GetEntry(binder.context,
+	                         EntryLookupInfo(lookup, QualifiedName(catalog_name, schema, lookup.GetEntryIdentifier())),
+	                         OnEntryNotFound::RETURN_NULL);
+}
+
+bool RemotePushdownOptimizer::EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const Identifier &schema_name) {
+	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
+		// if the name specifies a schema use it, otherwise use the search path schema
+		const auto &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
+		if (LookupEntry(local_entry.GetCatalog(), lookup, schema)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::ResolveRemoteCatalog(const Identifier &catalog_name,
+                                                                    RemoteCapability capability) {
+	auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
+	if (!catalog || !catalog->Supports(capability)) {
+		// a local catalog, or a catalog that does not exist
+		return CatalogPushdownResult::Unknown();
+	}
+	return CatalogPushdownResult::RemoteReference(*catalog);
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, CatalogPushdownResult b) {
@@ -169,6 +212,18 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	case StatementType::UPDATE_STATEMENT:
 		result = Rewrite(*statement->Cast<UpdateStatement>().node);
 		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		result = Rewrite(*statement->Cast<MergeIntoStatement>().node);
+		break;
+	case StatementType::CREATE_STATEMENT:
+		result = RewriteStatement(statement->Cast<CreateStatement>());
+		break;
+	case StatementType::DROP_STATEMENT:
+		result = RewriteStatement(statement->Cast<DropStatement>());
+		break;
+	case StatementType::ALTER_STATEMENT:
+		result = RewriteStatement(statement->Cast<AlterStatement>());
+		break;
 	case StatementType::EXPLAIN_STATEMENT:
 		Rewrite(statement->Cast<ExplainStatement>().stmt);
 		return;
@@ -211,6 +266,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		break;
 	case QueryNodeType::UPDATE_QUERY_NODE:
 		result = RewriteNode(node.Cast<UpdateQueryNode>());
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = RewriteNode(node.Cast<MergeQueryNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
 		result = RewriteNode(node.Cast<SetOperationNode>());
@@ -359,9 +417,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node) {
 	// first bind the target table for the insert
 	BaseTableRef target_ref;
-	target_ref.catalog_name = node.catalog;
-	target_ref.schema_name = node.schema;
-	target_ref.table_name = node.table;
+	target_ref.SetQualifiedName(node.qualified_name);
 
 	RemotePushdownOptimizer target_optimizer(this);
 	auto result = target_optimizer.Rewrite(target_ref);
@@ -449,6 +505,38 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(UpdateQueryNode &node
 	return result;
 }
 
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(MergeQueryNode &node) {
+	// the target and the source form a join - like UPDATE ... FROM they are analyzed in the same scope,
+	// so a local table on either side is tracked for the action expressions below
+	auto result = Rewrite(node.target);
+	result = Merge(result, Rewrite(node.source));
+	if (node.join_condition) {
+		result = Merge(result, Rewrite(node.join_condition));
+	}
+	for (auto &entry : node.actions) {
+		for (auto &action : entry.second) {
+			if (action->condition) {
+				result = Merge(result, Rewrite(action->condition));
+			}
+			if (action->update_info) {
+				if (action->update_info->condition) {
+					result = Merge(result, Rewrite(action->update_info->condition));
+				}
+				for (auto &expr : action->update_info->expressions) {
+					result = Merge(result, Rewrite(expr));
+				}
+			}
+			for (auto &expr : action->expressions) {
+				result = Merge(result, Rewrite(expr));
+			}
+		}
+	}
+	for (auto &expr : node.returning_list) {
+		result = Merge(result, Rewrite(expr));
+	}
+	return result;
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &node) {
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
@@ -516,6 +604,156 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &nod
 		FinishPushdown(node.children[i], child_results[i]);
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// DDL statements
+//===--------------------------------------------------------------------===//
+CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedName &name, DDLTarget target,
+                                                                CatalogType entry_type) {
+	Identifier catalog_name = name.Catalog();
+	Identifier schema_name = name.Schema();
+	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	if (!catalog_name.empty()) {
+		return ResolveRemoteCatalog(catalog_name, RemoteCapability::EXECUTE_STATEMENT);
+	}
+	// no explicit catalog - the statement is only pushed down if the search path resolves it to a remote
+	FindRemoteCatalogsInSearchPath();
+	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
+		return CatalogPushdownResult::Unknown();
+	}
+	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
+	if (target == DDLTarget::NEW_ENTRY) {
+		// the entry does not exist yet - it is created in the catalog Binder::SearchSchema would pick
+		auto &search_path = *ClientData::Get(binder.context).catalog_search_path;
+		auto resolved =
+		    schema_name.empty() ? search_path.GetDefault().GetCatalog() : search_path.GetDefaultCatalog(schema_name);
+		if (resolved != remote_catalog.GetName()) {
+			return CatalogPushdownResult::Unknown();
+		}
+		return ResolveRemoteCatalog(remote_catalog.GetName(), RemoteCapability::EXECUTE_STATEMENT);
+	}
+	if (entry_type == CatalogType::SCHEMA_ENTRY) {
+		// a schema is not looked up as a (catalog, schema, name) triple - only push DROP/ALTER SCHEMA
+		// when the catalog is named explicitly
+		return CatalogPushdownResult::Unknown();
+	}
+	// the entry must already exist - if any local catalog in the search path holds it, stay local
+	EntryLookupInfo entry_lookup(entry_type, QualifiedName(name.Name()));
+	if (EntryExistsInLocalCatalog(entry_lookup, schema_name)) {
+		return CatalogPushdownResult::Unknown();
+	}
+	return ResolveRemoteCatalog(remote_catalog.GetName(), RemoteCapability::EXECUTE_STATEMENT);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::VerifyStatementSupport(const SQLStatement &statement,
+                                                                      CatalogPushdownResult target) {
+	if (target.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return target;
+	}
+	if (!target.catalog->SupportsPushdown(statement)) {
+		// the catalog cannot execute this statement as a whole - a definition query within it may still
+		// be pushed on its own, so this is resolved before the statement's contents are analyzed
+		return CatalogPushdownResult::Unknown();
+	}
+	return target;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteCreateInfo(CreateInfo &info,
+                                                                 const CatalogPushdownResult &target) {
+	if (info.type != CatalogType::TABLE_ENTRY) {
+		return CatalogPushdownResult::NoCatalogReference();
+	}
+	auto &table_info = info.Cast<CreateTableInfo>();
+	if (!table_info.query) {
+		return CatalogPushdownResult::NoCatalogReference();
+	}
+	// CREATE TABLE AS - the query is evaluated once, so it is analyzed like any other query. Everything
+	// else a CREATE carries (column types and defaults, constraints, view / macro bodies, ...) is shipped
+	// verbatim: whether the statement can be pushed is decided by the target catalog alone
+	RemotePushdownOptimizer child_optimizer(this);
+	auto result = child_optimizer.Rewrite(*table_info.query->node);
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+	    (target.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG || target.catalog != result.catalog)) {
+		// the table itself is not created in the remote catalog - push down only the query that fills it
+		FinishPushdown(table_info.query->node, result);
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(CreateStatement &statement) {
+	auto &info = *statement.info;
+	CatalogPushdownResult target;
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::INDEX_ENTRY:
+	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::TYPE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+		break;
+	default:
+		// an entry type that never lives in a remote catalog (secrets, ...)
+		return CatalogPushdownResult::Unknown();
+	}
+	if (info.temporary) {
+		// temporary entries always live in the local temp catalog
+		target = CatalogPushdownResult::Unknown();
+	} else if (info.type == CatalogType::SCHEMA_ENTRY) {
+		// CREATE SCHEMA stores its name as [catalog, parent schemas..., new schema, <empty name>], so the
+		// generic Catalog()/Schema() split does not apply to it
+		auto &schema_info = info.Cast<CreateSchemaInfo>();
+		target = ResolveDDLTarget(QualifiedName(schema_info.SchemaCatalog(), Identifier(), schema_info.SchemaName()),
+		                          DDLTarget::NEW_ENTRY, info.type);
+	} else {
+		target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::NEW_ENTRY, info.type);
+	}
+	target = VerifyStatementSupport(statement, std::move(target));
+	return Merge(target, RewriteCreateInfo(info, target));
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(DropStatement &statement) {
+	auto &info = *statement.info;
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::INDEX_ENTRY:
+	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::TYPE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+		break;
+	default:
+		// prepared statements, secrets, ... never live in a remote catalog
+		return CatalogPushdownResult::Unknown();
+	}
+	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.type);
+	return VerifyStatementSupport(statement, std::move(target));
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &statement) {
+	auto &info = *statement.info;
+	switch (info.type) {
+	case AlterType::ALTER_TABLE:
+	case AlterType::ALTER_VIEW:
+	case AlterType::ALTER_SEQUENCE:
+	case AlterType::CHANGE_OWNERSHIP:
+	case AlterType::SET_COMMENT:
+	case AlterType::SET_COLUMN_COMMENT:
+		break;
+	case AlterType::ALTER_DATABASE:
+		// renaming a database renames the attachment, which only exists locally
+		return CatalogPushdownResult::Unknown();
+	default:
+		// ALTER_SCALAR_FUNCTION / ALTER_TABLE_FUNCTION are only built by CreateInfo::GetAlterInfo when a
+		// CREATE resolves an OnCreateConflict, so they never reach the optimizer as a parsed statement
+		return CatalogPushdownResult::Unknown();
+	}
+	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, info.GetCatalogType());
+	return VerifyStatementSupport(statement, std::move(target));
 }
 
 void RemotePushdownOptimizer::TrackLocalTable(const TableRef &ref) {
@@ -599,8 +837,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	Identifier catalog_name = func_expr.Catalog();
-	Identifier schema_name = func_expr.Schema();
+	Identifier catalog_name = func_expr.GetQualifiedName().Catalog();
+	Identifier schema_name = func_expr.GetQualifiedName().Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// If the function has an explicit catalog prefix, check if it's remote
@@ -619,16 +857,18 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	// this function can either live in a local / system catalog, or in a remote (if it is in the search path)
 	// check the search path
 	FindRemoteCatalogsInSearchPath();
-	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
+	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry =
-		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
+		const Identifier &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema,
+		                                                                          func_lookup.GetEntryIdentifier())),
+		                               OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
 			for (auto &func : tf_entry.functions.functions) {
-				if (func.return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
+				if (func->return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
 					is_set_returning = true;
 					break;
 				}
@@ -643,7 +883,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 			// the generic TableRef dispatch records the function so a remote catalog can veto it
 			auto result = CatalogPushdownResult::NoCatalogReference();
 			for (auto &arg : func_expr.GetArgumentsMutable()) {
-				result = Merge(result, Rewrite(arg.GetExpressionMutable()));
+				result = Merge(result, RewriteTableFunctionArgument(arg.GetExpressionMutable()));
 			}
 			return result;
 		}
@@ -662,6 +902,17 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	return CatalogPushdownResult::Unknown();
 }
 
+CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionArgument(unique_ptr<ParsedExpression> &arg) {
+	// folding names the constant after the expression it replaces, but the binder reads an alias on a
+	// table function argument as a named parameter - so only an alias the user wrote may survive
+	const bool user_aliased = !arg->GetAlias().empty();
+	auto result = Rewrite(arg);
+	if (!user_aliased) {
+		arg->SetAlias(Identifier());
+	}
+	return result;
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	// rewrite the table function only
 	auto result = RewriteTableFunctionOnly(ref);
@@ -672,7 +923,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	// recurse into the function arguments
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 	for (auto &arg : func_expr.GetArgumentsMutable()) {
-		result = Merge(result, Rewrite(arg.GetExpressionMutable()));
+		result = Merge(result, RewriteTableFunctionArgument(arg.GetExpressionMutable()));
 	}
 	return result;
 }
@@ -697,7 +948,7 @@ void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref) {
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	} else {
-		local_table_names.insert(ref.table_name);
+		local_table_names.insert(ref.Table());
 	}
 }
 
@@ -731,14 +982,14 @@ bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPus
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	Identifier catalog_name = ref.catalog_name;
-	Identifier schema_name = ref.schema_name;
+	Identifier catalog_name = ref.GetQualifiedName().Catalog();
+	Identifier schema_name = ref.GetQualifiedName().Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
 	if (catalog_name.empty() && schema_name.empty()) {
 		CatalogPushdownResult pushdown_result;
-		if (RefersToCTE(ref.table_name, pushdown_result)) {
+		if (RefersToCTE(ref.Table(), pushdown_result)) {
 			if (pushdown_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 				// Local/unknown CTE - track as local for correlated subquery detection
 				TrackLocalTable(ref);
@@ -747,21 +998,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		}
 	}
 
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()));
+
 	// Case 1: catalog is explicitly specified - check if it's a remote catalog
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			// verify the table actually exists in the remote catalog - if it does not, fall back
-			// to the binder so it can report a proper error message
-			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
-			const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-			auto entry = Catalog::GetEntry(binder.context, catalog->GetName(), schema, table_lookup,
-			                               OnEntryNotFound::RETURN_NULL);
-			if (!entry) {
-				TrackLocalTable(ref);
-				return CatalogPushdownResult::Unknown();
-			}
-			return CatalogPushdownResult::RemoteReference(*catalog);
+		auto result = ResolveRemoteCatalog(catalog_name, RemoteCapability::EXECUTE_QUERY_NODE);
+		// verify the table actually exists in the remote catalog - if it does not, fall back
+		// to the binder so it can report a proper error message
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+		    LookupEntry(result.catalog->GetName(), table_lookup, schema_name)) {
+			return result;
 		}
 		// A local table always blocks pushdown of any query that contains it.
 		// Returning UNKNOWN (not NO_CATALOG) ensures Merge(SINGLE_REMOTE, UNKNOWN) = UNKNOWN
@@ -773,32 +1019,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
 	FindRemoteCatalogsInSearchPath();
 
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
-
-	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
+	if (pushdown_state.remote_catalogs_in_search_path.size() != 1 ||
+	    EntryExistsInLocalCatalog(table_lookup, schema_name)) {
+		// Same as Case 1: a local table → UNKNOWN to prevent Merge from treating it as neutral.
 		TrackLocalTable(ref);
 		return CatalogPushdownResult::Unknown();
-	}
-
-	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		// If the ref specifies a schema, use it; otherwise use the search path schema
-		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry =
-		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
-		if (entry) {
-			TrackLocalTable(ref);
-			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
-			return CatalogPushdownResult::Unknown();
-		}
 	}
 
 	// Not found in any local catalog - push to the single remote catalog in the search path,
 	// but only if the table actually exists there (otherwise fall back to the binder for a proper error)
 	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
-	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-	auto entry =
-	    Catalog::GetEntry(binder.context, remote_catalog.GetName(), schema, table_lookup, OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
+	if (!LookupEntry(remote_catalog.GetName(), table_lookup, schema_name)) {
 		TrackLocalTable(ref);
 		return CatalogPushdownResult::Unknown();
 	}
@@ -834,26 +1065,21 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const P
 	Identifier catalog_name = catalog_p;
 	Identifier schema_name = schema_p;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
-	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			// the generic expression dispatch verifies that the catalog supports pushing down this expression
-			return CatalogPushdownResult::RemoteReference(*catalog);
-		}
-		// Explicitly local-catalog: block pushdown.
-		return CatalogPushdownResult::Unknown();
+	if (catalog_name.empty()) {
+		return CatalogPushdownResult::NoCatalogReference();
 	}
-	return CatalogPushdownResult::NoCatalogReference();
+	// remote: the generic expression dispatch verifies that the catalog supports pushing down this
+	// expression. Explicitly local-catalog: block pushdown
+	return ResolveRemoteCatalog(catalog_name, RemoteCapability::EXECUTE_QUERY_NODE);
 }
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const FunctionExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
 	// look up the function once - this determines both whether it can be constant-folded and
 	// whether it is a macro in a local catalog (which cannot be evaluated remotely)
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.FunctionName());
-	auto entry =
-	    Catalog::GetEntry(binder.context, func.Catalog(), func.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.GetQualifiedName());
+	auto entry = Catalog::GetEntry(binder.context, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return state;
 	}
@@ -876,7 +1102,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 		// at least one overload must be non-volatile (the selected overload is verified after binding)
 		auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
 		for (auto &overload : scalar_entry.functions.functions) {
-			if (foldable_modifiers && overload.GetStability() != FunctionStability::VOLATILE) {
+			if (foldable_modifiers && overload->GetStability() != FunctionStability::VOLATILE) {
 				state.foldability = ExpressionFoldability::FOLDABLE;
 				break;
 			}
@@ -891,7 +1117,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const WindowExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
 	return state;
 }
 
@@ -1055,16 +1281,23 @@ unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPus
 	return result.catalog->RemoteExecute(binder.context, std::move(node));
 }
 
+//! Drop the catalog qualifier from a name. A two-part name (e.g. "rpc.t") parses as schema.name, so the
+//! catalog being pushed to can sit in either slot
+static void StripCatalogFromName(QualifiedName &name, const Identifier &catalog_name) {
+	if (name.Catalog() == catalog_name) {
+		name.StripCatalog();
+	} else if (name.Catalog().empty() && name.Schema() == catalog_name) {
+		name = QualifiedName(Identifier(), Identifier(), name.Name());
+	}
+}
+
 void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &catalog_name) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (base.catalog_name == catalog_name) {
-			base.catalog_name = "";
-		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
-			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
-			base.schema_name = "";
-		}
+		auto name = base.GetQualifiedName();
+		StripCatalogFromName(name, catalog_name);
+		base.SetQualifiedName(std::move(name));
 		break;
 	}
 	case TableReferenceType::JOIN: {
@@ -1130,18 +1363,22 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
-		if (func.Catalog() == catalog_name) {
-			func.CatalogMutable() = "";
-		} else if (func.Catalog().empty() && func.Schema() == catalog_name) {
-			func.SchemaMutable() = "";
+		if (func.GetQualifiedName().Catalog() == catalog_name) {
+			func.SetQualifiedName(
+			    QualifiedName(Identifier(), func.GetQualifiedName().Schema(), func.GetQualifiedName().Name()));
+		} else if (func.GetQualifiedName().Catalog().empty() && func.GetQualifiedName().Schema() == catalog_name) {
+			func.SetQualifiedName(
+			    QualifiedName(func.GetQualifiedName().Catalog(), Identifier(), func.GetQualifiedName().Name()));
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
-		if (win.Catalog() == catalog_name) {
-			win.CatalogMutable() = "";
-		} else if (win.Catalog().empty() && win.Schema() == catalog_name) {
-			win.SchemaMutable() = "";
+		if (win.GetQualifiedName().Catalog() == catalog_name) {
+			win.SetQualifiedName(
+			    QualifiedName(Identifier(), win.GetQualifiedName().Schema(), win.GetQualifiedName().Name()));
+		} else if (win.GetQualifiedName().Catalog().empty() && win.GetQualifiedName().Schema() == catalog_name) {
+			win.SetQualifiedName(
+			    QualifiedName(win.GetQualifiedName().Catalog(), Identifier(), win.GetQualifiedName().Name()));
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {
@@ -1244,11 +1481,7 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
-		if (insert.catalog == catalog_name) {
-			insert.catalog = "";
-		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
-			insert.schema = "";
-		}
+		StripCatalogFromName(insert.qualified_name, catalog_name);
 		if (insert.select_statement) {
 			StripCatalogName(*insert.select_statement->node, catalog_name);
 		}
@@ -1319,6 +1552,48 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 			}
 		}
 		for (auto &expr : upd.returning_list) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		break;
+	}
+	case QueryNodeType::MERGE_QUERY_NODE: {
+		auto &merge = node.Cast<MergeQueryNode>();
+		for (auto &cte_pair : merge.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
+		}
+		if (merge.target) {
+			StripCatalogName(*merge.target, catalog_name);
+		}
+		if (merge.source) {
+			StripCatalogName(*merge.source, catalog_name);
+		}
+		if (merge.join_condition) {
+			StripCatalogName(*merge.join_condition, catalog_name);
+		}
+		for (auto &entry : merge.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					StripCatalogName(*action->condition, catalog_name);
+				}
+				if (action->update_info) {
+					if (action->update_info->condition) {
+						StripCatalogName(*action->update_info->condition, catalog_name);
+					}
+					for (auto &expr : action->update_info->expressions) {
+						StripCatalogName(*expr, catalog_name);
+					}
+				}
+				for (auto &expr : action->expressions) {
+					StripCatalogName(*expr, catalog_name);
+				}
+			}
+		}
+		for (auto &expr : merge.returning_list) {
 			StripCatalogName(*expr, catalog_name);
 		}
 		break;
@@ -1424,6 +1699,77 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 	}
 }
 
+void RemotePushdownOptimizer::StripCatalogName(CreateInfo &info, const Identifier &catalog_name) {
+	if (info.type == CatalogType::SCHEMA_ENTRY) {
+		// the name is [catalog, parent schemas..., new schema, <empty name>] - the catalog is only ever
+		// the leading component, so the two-part fallback below must not be applied
+		if (info.Cast<CreateSchemaInfo>().SchemaCatalog() == catalog_name) {
+			info.StripCatalogQualification();
+		}
+		return;
+	}
+	auto name = info.GetQualifiedName();
+	StripCatalogFromName(name, catalog_name);
+	info.SetQualifiedName(std::move(name));
+	// a definition body is shipped verbatim, so any catalog qualifier the user wrote in it still has to go
+	switch (info.type) {
+	case CatalogType::TABLE_ENTRY: {
+		auto &table_info = info.Cast<CreateTableInfo>();
+		if (table_info.query) {
+			StripCatalogName(*table_info.query->node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::VIEW_ENTRY: {
+		auto &view_info = info.Cast<CreateViewInfo>();
+		if (view_info.query) {
+			StripCatalogName(*view_info.query->node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		auto &type_info = info.Cast<CreateTypeInfo>();
+		if (type_info.query && type_info.query->type == StatementType::SELECT_STATEMENT) {
+			StripCatalogName(*type_info.query->Cast<SelectStatement>().node, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		auto &index_info = info.Cast<CreateIndexInfo>();
+		for (auto &expr : index_info.parsed_expressions) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		for (auto &expr : index_info.expressions) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		break;
+	}
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto &macro_info = info.Cast<CreateMacroInfo>();
+		for (auto &macro : macro_info.macros) {
+			for (auto &default_param : macro->default_parameters) {
+				StripCatalogName(*default_param.second, catalog_name);
+			}
+			if (macro->type == MacroType::SCALAR_MACRO) {
+				StripCatalogName(*macro->Cast<ScalarMacroFunction>().expression, catalog_name);
+			} else if (macro->type == MacroType::TABLE_MACRO) {
+				StripCatalogName(*macro->Cast<TableMacroFunction>().query_node, catalog_name);
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void RemotePushdownOptimizer::StripCatalogName(AlterInfo &info, const Identifier &catalog_name) {
+	auto name = info.GetQualifiedName();
+	StripCatalogFromName(name, catalog_name);
+	info.SetQualifiedName(std::move(name));
+}
+
 void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Identifier &catalog_name) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
@@ -1437,6 +1783,22 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Id
 		break;
 	case StatementType::UPDATE_STATEMENT:
 		StripCatalogName(*statement.Cast<UpdateStatement>().node, catalog_name);
+		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		StripCatalogName(*statement.Cast<MergeIntoStatement>().node, catalog_name);
+		break;
+	case StatementType::CREATE_STATEMENT:
+		StripCatalogName(*statement.Cast<CreateStatement>().info, catalog_name);
+		break;
+	case StatementType::DROP_STATEMENT: {
+		auto &info = *statement.Cast<DropStatement>().info;
+		auto name = info.GetQualifiedName();
+		StripCatalogFromName(name, catalog_name);
+		info.SetQualifiedName(std::move(name));
+		break;
+	}
+	case StatementType::ALTER_STATEMENT:
+		StripCatalogName(*statement.Cast<AlterStatement>().info, catalog_name);
 		break;
 	default:
 		break;
@@ -1453,9 +1815,20 @@ unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
 		return std::move(statement.Cast<DeleteStatement>().node);
 	case StatementType::UPDATE_STATEMENT:
 		return std::move(statement.Cast<UpdateStatement>().node);
+	case StatementType::MERGE_INTO_STATEMENT:
+		return std::move(statement.Cast<MergeIntoStatement>().node);
 	default:
 		return nullptr;
 	}
+}
+
+unique_ptr<SelectStatement> RemotePushdownOptimizer::WrapRemoteRef(unique_ptr<TableRef> ref) {
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(ref);
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	return select_stmt;
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
@@ -1465,16 +1838,20 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement
 	// Strip the catalog name so the remote server doesn't recursively re-push
 	StripCatalogName(*statement, result.catalog->GetName());
 	auto node = GetNodeFromStatement(*statement);
-	if (!node) {
+	if (node) {
+		statement = WrapRemoteRef(CreateRemoteFunctionRef(result, std::move(node)));
 		return;
 	}
-
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));
-	auto select_stmt = make_uniq<SelectStatement>();
-	select_stmt->node = std::move(select_node);
-	statement = std::move(select_stmt);
+	switch (statement->type) {
+	case StatementType::CREATE_STATEMENT:
+	case StatementType::DROP_STATEMENT:
+	case StatementType::ALTER_STATEMENT:
+		break;
+	default:
+		return;
+	}
+	// a statement that is not built around a query node (DDL) is shipped to the remote as a whole
+	statement = WrapRemoteRef(result.catalog->RemoteExecute(binder.context, std::move(statement)));
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {

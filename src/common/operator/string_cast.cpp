@@ -105,16 +105,21 @@ duckdb::string_t StringCast::Operation(date_t input, StringHeap &heap) {
 	return result;
 }
 
-template <bool HAS_NANOS>
-duckdb::string_t StringAsTime(dtime_t input, StringHeap &heap) {
+template <typename T>
+duckdb::string_t StringAsTime(const T input, StringHeap &heap) {
 	int32_t picos = 0;
-	if (HAS_NANOS) {
-		picos = UnsafeNumericCast<int32_t>(input.micros % 1000);
-		picos *= 1000;
-		input.micros /= 1000;
+	dtime_t micros(input.value);
+	if (micros.PRECISION < input.PRECISION) {
+		const int64_t scaling = input.PRECISION / micros.PRECISION;
+		picos = UnsafeNumericCast<int32_t>(input.value % scaling);
+		picos *= scaling;
+		micros.value /= scaling;
+	} else {
+		const int64_t scaling = micros.PRECISION / input.PRECISION;
+		micros.value *= scaling;
 	}
 	int32_t time[4];
-	Time::Convert(input, time[0], time[1], time[2], time[3]);
+	Time::Convert(micros, time[0], time[1], time[2], time[3]);
 
 	char micro_buffer[10] = {};
 	char nano_buffer[6] = {};
@@ -145,12 +150,12 @@ duckdb::string_t StringAsTime(dtime_t input, StringHeap &heap) {
 
 template <>
 duckdb::string_t StringCast::Operation(dtime_t input, StringHeap &heap) {
-	return StringAsTime<false>(input, heap);
+	return StringAsTime(input, heap);
 }
 
 template <>
 duckdb::string_t StringCast::Operation(dtime_ns_t input, StringHeap &heap) {
-	return StringAsTime<true>(input, heap);
+	return StringAsTime(input, heap);
 }
 
 template <typename T>

@@ -1,0 +1,116 @@
+# name: test/sql/copy/parquet/parquet_all_null_column.test
+# description: Read Parquet columns that are entirely NULL (served as constant NULL from statistics)
+# group: [parquet]
+
+require parquet
+
+# a file with a fully-NULL typed column "n" next to a non-null column "i", spread over multiple row groups
+statement ok
+COPY (SELECT range AS i, NULL::BIGINT AS n FROM range(10000)) TO '{TEST_DIR}/all_null.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+# plain projection of the NULL column
+query I
+SELECT count(n) FROM '{TEST_DIR}/all_null.parquet';
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_null.parquet' WHERE n IS NULL;
+----
+10000
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_null.parquet' WHERE n IS NOT NULL;
+----
+0
+
+# filter directly on the all-NULL column - comparisons against NULL never pass
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_null.parquet' WHERE n > 5;
+----
+0
+
+# the NULL column read alongside a filter on another column (goes through the Select path)
+query II
+SELECT i, n FROM '{TEST_DIR}/all_null.parquet' WHERE i IN (0, 5000, 9999) ORDER BY i;
+----
+0	NULL
+5000	NULL
+9999	NULL
+
+# every value really is NULL
+query I
+SELECT n FROM '{TEST_DIR}/all_null.parquet' WHERE i = 1234;
+----
+NULL
+
+# combining the NULL column with the live column in an expression
+query I
+SELECT count(*) FROM '{TEST_DIR}/all_null.parquet' WHERE coalesce(n, i) = i;
+----
+10000
+
+# different types are all handled
+statement ok
+COPY (SELECT range AS i, NULL::VARCHAR AS s, NULL::DOUBLE AS d, NULL::DATE AS dt FROM range(5000)) TO '{TEST_DIR}/all_null_types.parquet' (FORMAT PARQUET);
+
+query IIII
+SELECT count(i), count(s), count(d), count(dt) FROM '{TEST_DIR}/all_null_types.parquet';
+----
+5000	0	0	0
+
+query III
+SELECT s, d, dt FROM '{TEST_DIR}/all_null_types.parquet' WHERE i = 42;
+----
+NULL	NULL	NULL
+
+# nested: a struct with an all-NULL field must NOT be mis-served (struct validity must be preserved).
+# Here the struct itself is sometimes NULL while its field is always NULL.
+statement ok
+COPY (SELECT i, CASE WHEN i % 2 = 0 THEN {'a': NULL::INTEGER} ELSE NULL END AS s FROM range(10) t(i)) TO '{TEST_DIR}/nested_null.parquet' (FORMAT PARQUET);
+
+query II
+SELECT i, s FROM '{TEST_DIR}/nested_null.parquet' ORDER BY i;
+----
+0	{'a': NULL}
+1	NULL
+2	{'a': NULL}
+3	NULL
+4	{'a': NULL}
+5	NULL
+6	{'a': NULL}
+7	NULL
+8	{'a': NULL}
+9	NULL
+
+# the struct column is NULL for exactly the odd rows, even though field 'a' is always NULL
+query I
+SELECT count(*) FROM '{TEST_DIR}/nested_null.parquet' WHERE s IS NULL;
+----
+5
+
+# a list with all-NULL elements keeps its list structure (lengths) intact
+statement ok
+COPY (SELECT i, [NULL, NULL]::INTEGER[] AS l FROM range(5) t(i)) TO '{TEST_DIR}/list_null.parquet' (FORMAT PARQUET);
+
+query II
+SELECT i, l FROM '{TEST_DIR}/list_null.parquet' ORDER BY i;
+----
+0	[NULL, NULL]
+1	[NULL, NULL]
+2	[NULL, NULL]
+3	[NULL, NULL]
+4	[NULL, NULL]
+
+# regression: a struct field inside a list (a repeated leaf) must NOT be collapsed to NULL. Its
+# null_count == num_values statistic can be true even when non-NULL values are present, because for
+# repeated columns num_values counts leaf slots rather than rows.
+statement ok
+COPY (SELECT i, [{'a': NULL}, {'a': i}, NULL]::STRUCT(a INTEGER)[] AS los FROM range(3) t(i)) TO '{TEST_DIR}/list_of_structs.parquet' (FORMAT PARQUET);
+
+query II
+SELECT i, los FROM '{TEST_DIR}/list_of_structs.parquet' ORDER BY i;
+----
+0	[{'a': NULL}, {'a': 0}, NULL]
+1	[{'a': NULL}, {'a': 1}, NULL]
+2	[{'a': NULL}, {'a': 2}, NULL]

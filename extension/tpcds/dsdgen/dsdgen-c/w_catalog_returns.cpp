@@ -47,8 +47,8 @@
 #include "tdefs.h"
 #include "parallel.h"
 
-struct W_CATALOG_RETURNS_TBL g_w_catalog_returns;
-extern struct W_CATALOG_SALES_TBL g_w_catalog_sales;
+thread_local struct W_CATALOG_RETURNS_TBL g_w_catalog_returns;
+extern thread_local struct W_CATALOG_SALES_TBL g_w_catalog_sales;
 
 /*
  * Routine: mk_catalog_returns()
@@ -70,11 +70,11 @@ extern struct W_CATALOG_SALES_TBL g_w_catalog_sales;
 int mk_w_catalog_returns(void *row, ds_key_t index) {
 	int res = 0;
 
-	static decimal_t dHundred;
+	static thread_local decimal_t dHundred;
 	int nTemp;
 	struct W_CATALOG_RETURNS_TBL *r;
 	struct W_CATALOG_SALES_TBL *sale = &g_w_catalog_sales;
-	static int bStandAlone = 0;
+	static thread_local int bStandAlone = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_RETURNS);
 
 	if (row == NULL)

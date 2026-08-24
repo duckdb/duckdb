@@ -12,6 +12,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_options.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
@@ -58,6 +59,8 @@ struct StorageManagerOptions {
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	EncryptionOptions encryption_options;
+	//! Header prefetched during file-type detection; DatabaseHandle::Open reuses it. Empty unless opened via ATTACH.
+	PrefetchedFileData prefetched;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -106,7 +109,7 @@ public:
 	void ReadBlock(Block &block, bool skip_block_header = false) const;
 	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
-	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
+	void ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the block to disk. Use Write with client context instead.
 	void Write(FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the block to disk.

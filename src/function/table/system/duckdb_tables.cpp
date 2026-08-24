@@ -22,7 +22,7 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -168,7 +168,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		index_count.Append(Value::BIGINT(NumericCast<int64_t>(storage_info.index_info.size())));
 		check_constraint_count.Append(Value::BIGINT(NumericCast<int64_t>(CheckConstraintCount(table))));
 		auto table_info = table.GetInfo();
-		table_info->catalog.clear();
+		table_info->StripCatalogQualification();
 		sql.Append(Value(table_info->ToString()));
 		count++;
 	}

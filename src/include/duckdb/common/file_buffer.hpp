@@ -42,6 +42,8 @@ public:
 	void Read(QueryContext context, FileHandle &handle, uint64_t location);
 	//! Read into the FileBuffer from a memory-mapped file at the location.
 	void Read(QueryContext context, MemoryMappedFile &handle, uint64_t location);
+	//! Read into the FileBuffer from an in-memory source; the source must cover location + AllocSize() bytes.
+	void ReadFromMemory(const_data_ptr_t source, uint64_t location);
 	//! Write the FileBuffer to the location.
 	void Write(QueryContext context, FileHandle &handle, const uint64_t location);
 	//! Write the FileBuffer to the location in a memory-mapped file.

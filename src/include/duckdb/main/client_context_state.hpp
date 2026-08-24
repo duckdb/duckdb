@@ -11,13 +11,8 @@
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_context.hpp"
 #include <mutex>
 
 namespace duckdb {
@@ -30,15 +25,6 @@ struct PendingQueryParameters;
 class RegisteredStateManager;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
-
-struct PreparedStatementCallbackInfo {
-	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const PendingQueryParameters &parameters)
-	    : prepared_statement(prepared_statement), parameters(parameters) {
-	}
-
-	PreparedStatementData &prepared_statement;
-	const PendingQueryParameters &parameters;
-};
 
 struct BindPreparedStatementCallbackInfo {
 	PreparedStatementData &prepared_statement;
@@ -78,10 +64,6 @@ public:
 	}
 	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared_statement,
 	                                          PreparedStatementMode mode) {
-		return RebindQueryInfo::DO_NOT_REBIND;
-	}
-	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
-	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	virtual RebindQueryInfo OnRebindPreparedStatement(ClientContext &context, BindPreparedStatementCallbackInfo &info,

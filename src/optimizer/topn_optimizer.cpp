@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 

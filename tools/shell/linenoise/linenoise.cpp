@@ -346,7 +346,7 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 		}
 
 		// --- 4. Handle UTF-8 grapheme clusters ---
-		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz);
+		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz, len - cpos);
 		if (codepoint < 0) {
 			// invalid byte, treat as width 1
 			cpos++;
@@ -407,7 +407,7 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	}
 	int sz;
 	int char_render_width;
-	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz, len - cpos) < 0) {
 		char_render_width = 1;
 		cpos++;
 	} else {

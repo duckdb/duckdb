@@ -1,6 +1,13 @@
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
+
+void OuterJoinLocalScanState::Reset() {
+	scan_chunk.Reset();
+	local_scan = ColumnDataLocalScanState();
+}
 
 OuterJoinMarker::OuterJoinMarker(bool enabled_p) : enabled(enabled_p), count(0) {
 }

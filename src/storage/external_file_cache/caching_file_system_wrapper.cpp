@@ -206,8 +206,8 @@ FileType CachingFileSystemWrapper::GetFileType(FileHandle &handle) {
 		return underlying_file_system.GetFileType(handle);
 	}
 
-	auto &file_handle = caching_handle->GetFileHandle();
-	return underlying_file_system.GetFileType(file_handle);
+	auto file_handle = caching_handle->GetFileHandle();
+	return underlying_file_system.GetFileType(*file_handle);
 }
 
 FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
@@ -216,8 +216,8 @@ FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 		return underlying_file_system.Stats(handle);
 	}
 
-	auto &file_handle = caching_handle->GetFileHandle();
-	return underlying_file_system.Stats(file_handle);
+	auto file_handle = caching_handle->GetFileHandle();
+	return underlying_file_system.Stats(*file_handle);
 }
 
 //===----------------------------------------------------------------------===//
@@ -253,7 +253,7 @@ bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
 }
 
 bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
-	// Cannot delegate to internal filesystem's invocaton since it's `protected`.
+	// Cannot delegate to internal filesystem's invocation since it's `protected`.
 	return true;
 }
 

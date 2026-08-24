@@ -38,6 +38,16 @@
         "type": "optional_idx",
         "default": "optional_idx()",
         "equals_skip": true
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },
@@ -232,17 +242,8 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier",
-        "accessor_mut": "FunctionNameMutable()",
-        "accessor": "FunctionName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier",
-        "accessor_mut": "SchemaMutable()",
-        "accessor": "Schema()"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 202,
@@ -289,13 +290,6 @@
         "type": "bool",
         "accessor_mut": "ExportStateMutable()",
         "accessor": "ExportState()"
-      },
-      {
-        "id": 208,
-        "name": "catalog",
-        "type": "Identifier",
-        "accessor_mut": "CatalogMutable()",
-        "accessor": "Catalog()"
       },
       {
         "id": 209,
@@ -478,18 +472,8 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier"
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "Identifier"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 203,
@@ -605,19 +589,33 @@
     "enum": "TYPE",
     "members": [
       {
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "serialize_skip": true
+      },
+      {
         "id": 200,
         "name": "catalog",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Catalog()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Schema()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
         "name": "type_name",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Name()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 203,
@@ -625,6 +623,13 @@
         "type": "vector<unique_ptr<ParsedExpression>>",
         "accessor_mut": "GetChildren()"
       }
-    ]
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog",
+        "schema",
+        "type_name"
+      ]
+    }
   }
 ]

@@ -2,7 +2,6 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
@@ -89,6 +89,29 @@
 #endif
 
 namespace duckdb {
+
+//! Loads an extension that was linked into the binary, via the registry the config carries. This is
+//! deliberately not generated code: an extension with its own copy of DuckDB links no generated
+//! loader, so a compile-time list would be invisible to it, while the config is data it can read.
+ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
+	auto &config = DBConfig::GetConfig(*db.instance);
+	for (auto &linked : config.linked_extensions) {
+		if (StringUtil::CIEquals(linked.name, extension)) {
+			linked.load(db);
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		}
+	}
+	return ExtensionLoadResult::NOT_LOADED;
+}
+
+void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
+	// registration order, so a binary loads its extensions the same way on every run
+	auto &config = DBConfig::GetConfig(*db.instance);
+	auto linked = config.linked_extensions;
+	for (auto &entry : linked) {
+		entry.load(db);
+	}
+}
 
 //===--------------------------------------------------------------------===//
 // Default Extensions

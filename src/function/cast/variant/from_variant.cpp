@@ -5,7 +5,7 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "yyjson_utils.hpp"
+#include "yyjson_memory.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -182,13 +182,14 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			if (!value.DefaultTryCastAs(target_type, true)) {
+			auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+			if (!cast_value) {
 				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
 				                                           EnumUtil::ToString(type_id), value.ToString());
-				value = Value(target_type);
+				cast_value = Value(target_type);
 				all_valid = false;
 			}
-			result.SetValue(i + offset, value);
+			result.SetValue(i + offset, *cast_value);
 		}
 	}
 	return all_valid;
@@ -330,7 +331,9 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		}
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
-		CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index);
+		if (!CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index)) {
+			return false;
+		}
 		total_offset += array_size;
 	}
 	return true;
@@ -417,34 +420,93 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	return true;
 }
 
+//! A TUPLE is read from a variant ARRAY - each element is read positionally into the matching tuple child
+static bool ConvertVariantToTuple(FromVariantConversionData &conversion_data, Vector &result,
+                                  const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
+	auto &target_type = result.GetType();
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr child_data(owned_child_data.get(), count);
+
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
+	                                                         count, row, offset, child_data, validity);
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
+		return false;
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, offset + i, true);
+		}
+	}
+
+	auto &children = StructVector::GetEntries(result);
+	auto &child_types = StructType::GetChildTypes(target_type);
+
+	SelectionVector child_values_sel;
+	child_values_sel.Initialize(count);
+
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
+	if (row.IsValid()) {
+		auto row_index = row.GetIndex();
+		for (idx_t i = 0; i < count; i++) {
+			row_sel[i] = static_cast<uint32_t>(row_index);
+		}
+	}
+
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		//! Find the relevant element of the ARRAYs we're converting by position
+		VariantPathComponent component(NumericCast<uint32_t>(child_idx));
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
+		                              child_data, validity, count);
+		if (lookup_validity.CanHaveNull()) {
+			conversion_data.error =
+			    StringUtil::Format("VARIANT(ARRAY) is missing element at index %d, can't convert to TUPLE", child_idx);
+			return false;
+		}
+		//! Now cast all the values we found to the target type
+		auto &child = children[child_idx];
+		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
                               idx_t offset, idx_t count, optional_idx row) {
 	auto &error = conversion_data.error;
 
-	ConvertedJSONHolder json_holder;
+	ConvertedJSONHolder holder(Allocator::DefaultAllocator());
 
 	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
+		const auto row_index = row.IsValid() ? row.GetIndex() : i;
+		const auto json_val =
+		    VariantCasts::ConvertVariantToJSON(holder.GetDocument(), conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
 			return false;
 		}
 
-		size_t len;
-		json_holder.stringified_json =
-		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!json_holder.stringified_json) {
-			error = "Could not serialize the JSON to string, yyjson failed";
+		const auto serialized = holder.Serialize(json_val, error);
+		if (!serialized) {
 			return false;
 		}
-		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data.WriteValue(res);
-		free(json_holder.stringified_json);
-		json_holder.stringified_json = nullptr;
+
+		result_data.WriteValue(*serialized);
+		holder.Reset();
 	}
 
 	return true;
@@ -465,6 +527,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT: {
 			if (ConvertVariantToStruct(conversion_data, result, sel, offset, count, row)) {
+				return true;
+			}
+			break;
+		}
+		case LogicalTypeId::TUPLE: {
+			if (ConvertVariantToTuple(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
 			break;
@@ -508,11 +576,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
 			try {
-				if (!value.DefaultTryCastAs(target_type, true)) {
-					value = Value(target_type);
+				auto cast_value = value.DefaultTryCastAs(target_type, nullptr, true);
+				if (!cast_value) {
+					cast_value = Value(target_type);
 					all_valid = false;
 				}
-				result.SetValue(i + offset, value);
+				result.SetValue(i + offset, *cast_value);
 			} catch (const BinderException &) {
 				// Bind-time exceptions (e.g., incompatible struct layouts) should be treated as conversion failures
 				// Set the value to NULL and mark as failed
@@ -753,6 +822,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
