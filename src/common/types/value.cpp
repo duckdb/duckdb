@@ -178,6 +178,13 @@ Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
 }
 
+Value::Value(std::string_view val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.data(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(string(val), "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(string(val));
+}
+
 Value::~Value() {
 }
 
@@ -1689,6 +1696,14 @@ template <>
 interval_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
+}
+
+//===--------------------------------------------------------------------===//
+// GetPointerToData
+//===--------------------------------------------------------------------===//
+const_data_ptr_t Value::GetPointerToData() const {
+	D_ASSERT(TypeIsConstantSize(type_.InternalType()));
+	return const_data_ptr_cast(&value_);
 }
 
 //===--------------------------------------------------------------------===//
