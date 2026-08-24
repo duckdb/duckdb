@@ -26,7 +26,7 @@ enum class CSVNewLineMode {
 };
 
 struct CSVWriterOptions {
-	CSVWriterOptions(const string &delim, const char &quote, const string &write_newline);
+	CSVWriterOptions(const string &delim, const char &quote, const string &write_newline, char comment_char = '#');
 	explicit CSVWriterOptions(CSVReaderOptions &options);
 
 	//! The newline string to write
@@ -60,7 +60,7 @@ struct CSVWriterState {
 class CSVWriter {
 public:
 	//! Create a CSVWriter that writes to a (non-owned) WriteStream
-	CSVWriter(WriteStream &stream, vector<string> name_list, bool shared = true);
+	CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool shared = true);
 
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,

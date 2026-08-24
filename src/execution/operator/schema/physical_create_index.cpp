@@ -148,7 +148,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->GetIndexName());
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-				throw CatalogException("Index with name \"%s\" already exists!", info->GetIndexName());
+				throw CatalogException("Index with name %s already exists!", info->GetIndexName());
 			}
 			// IF NOT EXISTS on existing index. We are done.
 			return SinkFinalizeType::READY;
@@ -165,7 +165,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		for (auto &index : indexes.Indexes()) {
 			if (index.GetIndexName() == info->GetIndexName()) {
 				throw CatalogException("an index with that name already exists for this table: %s",
-				                       info->GetIndexName());
+				                       SQLIdentifier(info->GetIndexName()));
 			}
 		}
 

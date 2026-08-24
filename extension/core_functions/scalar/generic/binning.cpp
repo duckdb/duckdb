@@ -502,11 +502,11 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
 	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
 	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
-	for (auto &function : functions.functions) {
+	functions.ApplyToFunctions([](ScalarFunction &function) {
 		function.SetSerializeCallback(EquiWidthBinSerialize);
 		function.SetDeserializeCallback(EquiWidthBinDeserialize);
 		function.SetFallible();
-	}
+	});
 	return functions;
 }
 

@@ -936,6 +936,14 @@ ShellState &ShellState::Get() {
 	return *GetReference();
 }
 
+static bool ResultIsDescribeShaped(const duckdb::QueryResult &result) {
+	// The describe renderer reads the fixed column layout produced by DESCRIBE / a table describe (column_name,
+	// column_type, null, key, default, extra). Anything else - e.g. a setting value from a bareword "SHOW name" - is a
+	// regular result that must not be rendered in describe mode.
+	auto &names = result.GetNames();
+	return names.size() == 6 && names[0] == "column_name" && names[1] == "column_type";
+}
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (statement->has_anonymous_parameters) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -966,9 +974,12 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		if (result_chunk && result_chunk->size() == 1) {
 			// update total changes
 			auto row_changes = result_chunk->GetValue(0, 0);
-			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
-				last_changes = row_changes.GetValue<int64_t>();
-				total_changes += last_changes;
+			if (!row_changes.IsNull()) {
+				auto cast_row_changes = row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT);
+				if (cast_row_changes) {
+					last_changes = cast_row_changes->GetValue<int64_t>();
+					total_changes += last_changes;
+				}
 			}
 		}
 	}
@@ -978,6 +989,13 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	if (res.GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	}
+	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
+	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
+	// the default rendering otherwise.
+	if (cMode == RenderMode::DESCRIBE && !ResultIsDescribeShaped(res)) {
+		cMode = mode;
+		renderer = GetRenderer();
 	}
 	// analyze the query result so we know how long/wide the result will be
 	auto render_state = RenderQueryResult(*renderer, res);

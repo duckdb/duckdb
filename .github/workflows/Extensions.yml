@@ -27,6 +27,10 @@ on:
         type: string
         required: false
         default: ''
+      allow_failure_archs:
+        type: string
+        required: false
+        default: ''
       runners:
         type: string
         required: true
@@ -173,12 +177,6 @@ jobs:
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
             extra_toolchains: rust
-          - name: External Extensions
-            artifact_prefix: external-extensions
-            exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
-            opt_in_archs: ''
-            extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
-            extra_toolchains: rust
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       # We piggy-back extension-template to build the extensions in extension_config
@@ -194,6 +192,7 @@ jobs:
       ci_tools_version: main
       exclude_archs: ${{ matrix.exclude_archs }}
       opt_in_archs: ${{ matrix.opt_in_archs }}
+      allow_failure_archs: ${{ inputs.allow_failure_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.override_git_describe }}

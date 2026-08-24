@@ -34,9 +34,7 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTHandlingResult : uint8_t;
-
-enum class ARTScanHandling : uint8_t;
+enum class ARTScanNodeResult : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
@@ -51,6 +49,10 @@ enum class AggregateDistinctDependent : uint8_t;
 enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
+
+enum class AggregateRewritePolicy : uint8_t;
+
+enum class AggregateRewriteSourceType : uint8_t;
 
 enum class AggregateStateExportMode : uint8_t;
 
@@ -190,8 +192,6 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
-enum class DeprecatedUsingKeySyntax : uint8_t;
-
 enum class DestroyBufferUpon : uint8_t;
 
 enum class DialectCompatibilityMode : uint8_t;
@@ -271,6 +271,8 @@ enum class GroupByExpressionInfoType : uint8_t;
 enum class HLLStorageType : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
+
+enum class IdentifierCaseMode : uint8_t;
 
 enum class IndexAppendMode : uint8_t;
 
@@ -494,6 +496,8 @@ enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
 
+enum class ShowBehaviorType : uint8_t;
+
 enum class ShowType : uint8_t;
 
 enum class SimplifiedTokenType : uint8_t;
@@ -513,6 +517,8 @@ enum class SourceBatchIndexState : uint8_t;
 enum class SourceResultType : uint8_t;
 
 enum class StarExpressionType : uint8_t;
+
+enum class StateMemoryOwnership : uint8_t;
 
 enum class StatementReturnType : uint8_t;
 
@@ -598,6 +604,8 @@ enum class VariantStatsShreddingState : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
+enum class VectorPrepareState : uint8_t;
+
 enum class VectorType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
@@ -605,6 +613,8 @@ enum class VerifyExistenceType : uint8_t;
 enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
+
+enum class ViewSecurityType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -621,10 +631,7 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
@@ -646,6 +653,12 @@ const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewritePolicy>(AggregateRewritePolicy value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewriteSourceType>(AggregateRewriteSourceType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value);
@@ -855,9 +868,6 @@ template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
-const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
-
-template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
 
 template<>
@@ -976,6 +986,9 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
+
+template<>
+const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
@@ -1311,6 +1324,9 @@ template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
+
+template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
 
 template<>
@@ -1339,6 +1355,9 @@ const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
 
 template<>
 const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
+
+template<>
+const char* EnumUtil::ToChars<StateMemoryOwnership>(StateMemoryOwnership value);
 
 template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
@@ -1467,6 +1486,9 @@ template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
+const char* EnumUtil::ToChars<VectorPrepareState>(VectorPrepareState value);
+
+template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
 
 template<>
@@ -1477,6 +1499,9 @@ const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
+
+template<>
+const char* EnumUtil::ToChars<ViewSecurityType>(ViewSecurityType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1498,10 +1523,7 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
-
-template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
@@ -1523,6 +1545,12 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
 
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value);
+
+template<>
+AggregateRewritePolicy EnumUtil::FromString<AggregateRewritePolicy>(const char *value);
+
+template<>
+AggregateRewriteSourceType EnumUtil::FromString<AggregateRewriteSourceType>(const char *value);
 
 template<>
 AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value);
@@ -1732,9 +1760,6 @@ template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
 
 template<>
-DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
-
-template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
 
 template<>
@@ -1853,6 +1878,9 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
+
+template<>
+IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
@@ -2188,6 +2216,9 @@ template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
+
+template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
 
 template<>
@@ -2216,6 +2247,9 @@ SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
 
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
+
+template<>
+StateMemoryOwnership EnumUtil::FromString<StateMemoryOwnership>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);
@@ -2344,6 +2378,9 @@ template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
+VectorPrepareState EnumUtil::FromString<VectorPrepareState>(const char *value);
+
+template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
 
 template<>
@@ -2354,6 +2391,9 @@ VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const ch
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);
+
+template<>
+ViewSecurityType EnumUtil::FromString<ViewSecurityType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);
