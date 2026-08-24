@@ -9,7 +9,9 @@
 namespace duckdb {
 
 // Remove this when we switch C++17: https://stackoverflow.com/a/53350948
-constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
+// Initialized from the raw flag bits to avoid depending on cross-translation-unit initialization order
+const FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE);
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags,
                                        QueryContext context_p)

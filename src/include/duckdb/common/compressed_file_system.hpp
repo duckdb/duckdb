@@ -52,6 +52,12 @@ public:
 	DUCKDB_API bool OnDiskFile(FileHandle &handle) override;
 	DUCKDB_API bool CanSeek() override;
 
+	//! The compression scheme provided by this filesystem, e.g. "gzip"
+	DUCKDB_API virtual FileCompressionType GetCompressionType() = 0;
+	//! Whether this filesystem can decompress the given file - used to auto-detect compression from the file name.
+	//! Filesystems that do not override this do not participate in compression auto-detection.
+	DUCKDB_API bool CanHandleFile(const string &fpath) override;
+
 	DUCKDB_API virtual unique_ptr<StreamWrapper> CreateStream() = 0;
 	DUCKDB_API virtual idx_t InBufferSize() = 0;
 	DUCKDB_API virtual idx_t OutBufferSize() = 0;

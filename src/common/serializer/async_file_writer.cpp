@@ -9,6 +9,10 @@
 
 namespace duckdb {
 
+// Initialized from the raw flag bits to avoid depending on cross-translation-unit initialization order
+const FileOpenFlags AsyncFileWriter::DEFAULT_OPEN_FLAGS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE);
+
 class CopiedAsyncWriteBuffer : public AsyncWriteBuffer {
 public:
 	CopiedAsyncWriteBuffer(ClientContext &context, idx_t capacity_p)

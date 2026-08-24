@@ -70,6 +70,9 @@ public:
 		return make_uniq<FakeCompressFileHandle>(*this, std::move(handle));
 	}
 
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType("fake_compress");
+	}
 	bool CanHandleFile(const string &fpath) override {
 		return StringUtil::EndsWith(fpath, ".compress");
 	}
@@ -1176,9 +1179,9 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	}
 
 	VirtualFileSystem vfs;
-	auto fake_compress_filesystem = make_uniq<FakeCompressFileSystem>();
-	vfs.RegisterCompressionFilesystem(std::move(fake_compress_filesystem));
+	vfs.RegisterCompressionFilesystem(make_uniq<FakeCompressFileSystem>());
 
+	// Auto-detection matches the fake compression filesystem based on the file name.
 	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
 	flags.SetCompression(FileCompressionType::AUTO_DETECT);
 	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
@@ -1188,10 +1191,17 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	auto &compressed_file_handle = file_handle->Cast<FakeCompressFileHandle>();
 	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
 	file_handle.reset();
-	fs->RemoveFile(filepath);
 
-	// If we give a new compressed file, which cannot be handled by already registered compression filesystems, we
-	// cannot proceed.
-	const string another_compressed_filepath = "fake_compression_file.another_compress";
+	// Explicitly requesting the registered compression type works as well.
+	flags.SetCompression(FileCompressionType("fake_compress"));
+	file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	REQUIRE(file_handle != nullptr);
+	REQUIRE(file_handle->Cast<FakeCompressFileHandle>().internal_file_handle != nullptr);
+	file_handle.reset();
+
+	// Explicitly requesting a compression type that has not been registered throws.
+	flags.SetCompression(FileCompressionType("nonexistent_compress"));
 	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
+
+	fs->RemoveFile(filepath);
 }

@@ -1,5 +1,6 @@
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -303,8 +304,8 @@ void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) 
 	underlying_file_system.RegisterSubSystem(std::move(sub_fs));
 }
 
-void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
-	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
+void CachingFileSystemWrapper::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
+	underlying_file_system.RegisterCompressionFilesystem(std::move(fs));
 }
 
 void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {

@@ -39,6 +39,7 @@ class FileOpener;
 class FileSystem;
 class Logger;
 class ClientContext;
+class CompressedFileSystem;
 class QueryContext;
 class MemoryMappedFile;
 struct MMapOptions;
@@ -290,10 +291,8 @@ public:
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
-	//! Register a duckdb internally supported compression filesystem.
-	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
-	//! Register an external compression filesystem (i.e., by extensions).
-	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<FileSystem> fs);
+	//! Register a compression filesystem (both built-in and provided by extensions), keyed by its compression type
+	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
 
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
