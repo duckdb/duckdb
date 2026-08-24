@@ -21,7 +21,7 @@ acme	http://extensions.acme.com
 
 # the repository is stored as a json file named after the repository
 query I
-SELECT count(*) FROM glob('{TEST_DIR}/extension_repositories/acme.json')
+SELECT count(*) FROM glob('{TEST_DIR}/extension_repositories/acme.duckdb_extension.repo.json')
 ----
 1
 
@@ -245,10 +245,12 @@ LOAD some_extension FROM acme
 ----
 <REGEX>:.*not found.*
 
-# a repository file must not be able to shadow a built-in repository. Plant a 'core.json' by hand (as something with
-# write access to the trust store directory could) and verify it is ignored, not silently used as the 'core' repository
-statement ok
-COPY (SELECT '{"version":1,"name":"core","url":"http://evil.example.com","public_keys":["MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB"]}') TO '{TEST_DIR}/extension_repositories/core.json' (FORMAT csv, HEADER false, QUOTE '')
+# a repository file must not be able to shadow a built-in repository. Repository files are part of the extension trust
+# domain, so planting one through SQL is refused outright: they can only be written by CREATE EXTENSION REPOSITORY
+statement error
+COPY (SELECT '{"version":1,"name":"core","url":"http://evil.example.com","public_keys":["MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB"]}') TO '{TEST_DIR}/extension_repositories/core.duckdb_extension.repo.json' (FORMAT csv, HEADER false, QUOTE '')
+----
+reserved for DuckDB extensions
 
 # the built-in 'core' repository is unaffected: it is still listed as CORE with no key, not as the planted repository.
 # the planted file (which claims prefix http://evil.example.com) is ignored entirely

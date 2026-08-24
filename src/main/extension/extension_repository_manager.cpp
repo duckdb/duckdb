@@ -428,8 +428,9 @@ ExtensionRepository ExtensionRepositoryManager::CreateRepository(DatabaseInstanc
 	auto temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 	fs.TryRemoveFile(temp_path);
 	{
-		auto file_writer =
-		    BufferedFileWriter(fs, temp_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		auto file_writer = BufferedFileWriter(fs, temp_path,
+		                                      FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+		                                          FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 		file_writer.WriteData(const_data_ptr_cast(contents.c_str()), contents.size());
 		file_writer.Close();
 	}
