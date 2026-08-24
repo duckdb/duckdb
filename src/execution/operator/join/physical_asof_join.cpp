@@ -75,11 +75,6 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	}
 }
 
-PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-                                   PhysicalOperator &right)
-    : PhysicalAsOfJoin(physical_plan, op, left, right, {}, {}) {
-}
-
 //===--------------------------------------------------------------------===//
 // AsOfGlobalSinkState
 //===--------------------------------------------------------------------===//
@@ -91,10 +86,6 @@ public:
 
 	AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op);
 
-	bool SupportsReuse() const override {
-		return true;
-	}
-
 	void Reset(ClientContext &context) override {
 		// The sort strategy, executors, and shared expression layout are iteration-invariant. Only the
 		// sort sink holds per-iteration materialized data, so replace that while preserving the setup.
@@ -102,7 +93,6 @@ public:
 		if (op.partition_infos.empty()) {
 			strategy_sinks[child][Value()] = sort_strategies[child]->GetGlobalSinkState(context);
 		}
-		count = 0;
 		GlobalSinkState::Reset(context);
 	}
 
@@ -130,12 +120,9 @@ public:
 	array<SortStrategyPtr, 2> sort_strategies;
 	//! The child's partitioning buffer
 	array<value_map_t<SortStrategySinkPtr>, 2> strategy_sinks;
-	//! The number of sunk rows (for progress)
-	atomic<idx_t> count;
 };
 
-AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op)
-    : op(op), child(op.child), count(0) {
+AsOfGlobalSinkState::AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op) : op(op), child(op.child) {
 	// Set up partitions for both sides
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	auto &lhs = op.children[0].get();

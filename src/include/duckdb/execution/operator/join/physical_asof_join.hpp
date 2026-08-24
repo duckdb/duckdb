@@ -21,8 +21,6 @@ public:
 public:
 	PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
 	                 PhysicalOperator &right, vector<column_t> lhs_partition_cols, vector<column_t> rhs_partition_cols);
-	PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-	                 PhysicalOperator &right);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
