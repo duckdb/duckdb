@@ -9,6 +9,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -22,13 +24,12 @@ namespace {
 constexpr double MINIMUM_COST_RATIO = 0.75;
 
 struct PathStep {
-	LogicalOperator *op;
+	reference<LogicalOperator> op;
 	idx_t child_index;
 };
 
 struct ExpressionPlacement {
 	idx_t expression_index = 0;
-	unique_ptr<LogicalOperator> *target = nullptr;
 	vector<PathStep> path;
 	unique_ptr<Expression> expression;
 	double evaluation_cardinality = 0;
@@ -37,10 +38,15 @@ struct ExpressionPlacement {
 };
 
 struct PlacementGroup {
-	unique_ptr<LogicalOperator> *target = nullptr;
 	vector<PathStep> path;
 	vector<ExpressionPlacement> placements;
 };
+
+static unique_ptr<LogicalOperator> &GetPathTarget(const vector<PathStep> &path) {
+	D_ASSERT(!path.empty());
+	auto &last_step = path.back();
+	return last_step.op.get().children[last_step.child_index];
+}
 
 static void CopyStatistics(column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                            const ColumnBinding &source, const ColumnBinding &target) {
@@ -73,7 +79,7 @@ static bool GetBindingWidth(const ColumnBinding &binding, const LogicalType &typ
 
 static bool GetExpressionWidth(const Expression &expression,
                                const column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
-                               idx_t &input_width, vector<pair<ColumnBinding, idx_t>> *binding_widths = nullptr) {
+                               idx_t &input_width, vector<pair<ColumnBinding, idx_t>> &binding_widths) {
 	vector<pair<ColumnBinding, LogicalType>> bindings;
 	bool valid = true;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
@@ -99,9 +105,7 @@ static bool GetExpressionWidth(const Expression &expression,
 			return false;
 		}
 		input_width += binding_width;
-		if (binding_widths) {
-			binding_widths->emplace_back(entry.first, binding_width);
-		}
+		binding_widths.emplace_back(entry.first, binding_width);
 	}
 	return true;
 }
@@ -180,9 +184,9 @@ static bool IsEligibleJoin(LogicalOperator &op) {
 
 static bool ProjectionExpressionUsedByJoin(LogicalOperator &join, LogicalProjection &projection) {
 	bool result = false;
-	LogicalOperatorVisitor::EnumerateExpressions(join, [&](unique_ptr<Expression> *expression) {
+	auto inspect_expression = [&](const Expression &expression) {
 		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-		    **expression, [&](const BoundColumnRefExpression &colref) {
+		    expression, [&](const BoundColumnRefExpression &colref) {
 			    if (colref.Depth() != 0 || colref.Binding().table_index != projection.table_index) {
 				    return;
 			    }
@@ -192,7 +196,26 @@ static bool ProjectionExpressionUsedByJoin(LogicalOperator &join, LogicalProject
 				    result = true;
 			    }
 		    });
-	});
+	};
+	if (join.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		inspect_expression(*join.Cast<LogicalAnyJoin>().condition);
+	} else {
+		auto &comparison_join = join.Cast<LogicalComparisonJoin>();
+		for (auto &expression : comparison_join.duplicate_eliminated_columns) {
+			inspect_expression(*expression);
+		}
+		for (auto &condition : comparison_join.conditions) {
+			if (condition.IsComparison()) {
+				inspect_expression(condition.GetLHS());
+				inspect_expression(condition.GetRHS());
+			} else {
+				inspect_expression(condition.GetJoinExpression());
+			}
+		}
+	}
+	for (auto &expression : join.expressions) {
+		inspect_expression(*expression);
+	}
 	return result;
 }
 
@@ -215,7 +238,7 @@ static bool ShouldLiftProjection(LogicalOperator &join, LogicalProjection &proje
 		idx_t input_width;
 		idx_t output_width;
 		vector<pair<ColumnBinding, idx_t>> input_bindings;
-		if (!GetExpressionWidth(expression, statistics_map, input_width, &input_bindings) ||
+		if (!GetExpressionWidth(expression, statistics_map, input_width, input_bindings) ||
 		    !GetBindingWidth(ColumnBinding(projection.table_index, ProjectionIndex(expression_index)),
 		                     expression.GetReturnType(), statistics_map, output_width)) {
 			return false;
@@ -255,9 +278,9 @@ static bool LiftFirstProfitableProjection(Optimizer &optimizer,
 		if (!ShouldLiftProjection(*op, projection, statistics_map)) {
 			continue;
 		}
-		auto join = op.get();
+		auto &join = *op;
 		ProjectionPullup pullup(optimizer, root);
-		return pullup.OptimizeJoinChild(*join, join->children[child_index]);
+		return pullup.OptimizeJoinChild(join, join.children[child_index]);
 	}
 	return false;
 }
@@ -282,7 +305,7 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 
 	idx_t input_width;
 	vector<pair<ColumnBinding, idx_t>> input_bindings;
-	if (!GetExpressionWidth(expression, statistics_map, input_width, &input_bindings)) {
+	if (!GetExpressionWidth(expression, statistics_map, input_width, input_bindings)) {
 		return false;
 	}
 	auto exclusive_input_width = GetExclusiveInputWidth(projection, expression_index, input_bindings);
@@ -301,7 +324,7 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 	}
 
 	auto current_expression = expression.Copy();
-	auto current = &projection.children[0];
+	reference<unique_ptr<LogicalOperator>> current = projection.children[0];
 	vector<PathStep> path;
 	double transport_cardinality = 0;
 	double input_transport_savings_cardinality = 0;
@@ -310,15 +333,15 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 	vector<ExpressionPlacement> candidates;
 
 	// Compare every position on the dependency path instead of making a greedy per-join decision.
-	while (current && current->get()) {
-		auto &op = **current;
+	while (current.get()) {
+		auto &op = *current.get();
 		if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (op.children.size() != 1 || !BindingsBelongToChild(*current_expression, op)) {
 				break;
 			}
-			path.push_back({&op, 0});
+			path.push_back({op, 0});
 			can_credit_input_transport = false;
-			current = &op.children[0];
+			current = op.children[0];
 			continue;
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -326,9 +349,9 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 			if (!RewriteThroughProjection(current_expression, lower_projection)) {
 				break;
 			}
-			path.push_back({&op, 0});
+			path.push_back({op, 0});
 			can_credit_input_transport = false;
-			current = &op.children[0];
+			current = op.children[0];
 			continue;
 		}
 		if (!IsEligibleJoin(op) || !op.has_estimated_cardinality) {
@@ -342,7 +365,7 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 		if (!child->has_estimated_cardinality) {
 			break;
 		}
-		path.push_back({&op, child_index.GetIndex()});
+		path.push_back({op, child_index.GetIndex()});
 		transport_cardinality += static_cast<double>(op.estimated_cardinality);
 		if (can_credit_input_transport) {
 			input_transport_savings_cardinality += static_cast<double>(op.estimated_cardinality);
@@ -350,14 +373,13 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 		can_credit_input_transport = false;
 		ExpressionPlacement candidate;
 		candidate.expression_index = expression_index;
-		candidate.target = &child;
 		candidate.path = path;
 		candidate.expression = current_expression->Copy();
 		candidate.evaluation_cardinality = static_cast<double>(child->estimated_cardinality);
 		candidate.output_transport_cardinality = transport_cardinality;
 		candidate.input_transport_savings_cardinality = input_transport_savings_cardinality;
 		candidates.push_back(std::move(candidate));
-		current = &child;
+		current = child;
 	}
 
 	const double current_cost =
@@ -380,13 +402,14 @@ static bool FindPlacement(LogicalProjection &projection, idx_t expression_index,
 }
 
 static void ExposeBinding(PathStep &step, const ColumnBinding &binding) {
-	auto &child = *step.op->children[step.child_index];
+	auto &op = step.op.get();
+	auto &child = *op.children[step.child_index];
 	auto child_bindings = child.GetColumnBindings();
 	auto entry = std::find(child_bindings.begin(), child_bindings.end(), binding);
 	if (entry == child_bindings.end()) {
 		throw InternalException("Projection placement lost binding %s", binding.ToString());
 	}
-	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(*step.op, step.child_index);
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, step.child_index);
 	if (!projection_map || projection_map->empty()) {
 		return;
 	}
@@ -398,7 +421,7 @@ static void ExposeBinding(PathStep &step, const ColumnBinding &binding) {
 
 static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                                 LogicalProjection &upper_projection, PlacementGroup &group) {
-	auto &target = *group.target;
+	auto &target = GetPathTarget(group.path);
 	target->ResolveOperatorTypes();
 	auto old_bindings = target->GetColumnBindings();
 	auto old_types = target->types;
@@ -443,8 +466,8 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 
 	for (idx_t path_idx = group.path.size(); path_idx > 0; path_idx--) {
 		auto &step = group.path[path_idx - 1];
-		if (step.op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &projection = step.op->Cast<LogicalProjection>();
+		if (step.op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &projection = step.op.get().Cast<LogicalProjection>();
 			for (idx_t i = 0; i < computed_bindings.size(); i++) {
 				auto type = upper_projection.expressions[group.placements[i].expression_index]->GetReturnType();
 				projection.expressions.push_back(make_uniq<BoundColumnRefExpression>(type, computed_bindings[i]));
@@ -486,11 +509,10 @@ static void OptimizeOperator(Optimizer &optimizer, column_binding_map_t<unique_p
 			if (!FindPlacement(projection, expression_index, statistics_map, placement)) {
 				continue;
 			}
-			if (!group.target) {
-				group.target = placement.target;
+			if (group.placements.empty()) {
 				group.path = placement.path;
 			}
-			if (group.target == placement.target) {
+			if (RefersToSameObject(*GetPathTarget(group.path), *GetPathTarget(placement.path))) {
 				group.placements.push_back(std::move(placement));
 			}
 		}

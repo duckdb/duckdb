@@ -227,11 +227,11 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 }
 
 bool ProjectionPullup::OptimizeJoinChild(LogicalOperator &join, unique_ptr<LogicalOperator> &child) {
-	auto child_before = child.get();
+	auto child_bindings_before = child->GetColumnBindings();
 	parents.push_back(join);
 	VisitOperator(child);
 	PopParents(join);
-	return child.get() != child_before;
+	return child_bindings_before != child->GetColumnBindings();
 }
 
 void ProjectionPullup::VisitOperator(unique_ptr<LogicalOperator> &op) {
