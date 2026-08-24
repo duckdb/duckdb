@@ -785,9 +785,9 @@ public:
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Returns null when there are no more jobs to produce.
-	static unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
-	                                               MultiFileGlobalState &gstate,
-	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
+	static unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>>
+	ProduceJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	           vector<unique_ptr<AsyncTask>> &io_tasks) {
 		auto job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
 		// jobs recycle finished scan states, create a fresh one when none was available
 		job->scan_state = gstate.TryPopState();
@@ -849,7 +849,8 @@ public:
 			gstate.state_pool.clear();
 			return acquired;
 		}
-		lstate.job = unique_ptr_cast<ScanReadAheadJob, ScanReadAheadJobWrapper<MultiFileScanJobState>>(std::move(claimed));
+		lstate.job =
+		    unique_ptr_cast<ScanReadAheadJob, ScanReadAheadJobWrapper<MultiFileScanJobState>>(std::move(claimed));
 		lstate.job_state =
 		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
 		return acquired;
