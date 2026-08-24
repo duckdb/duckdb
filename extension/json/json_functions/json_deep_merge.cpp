@@ -3,9 +3,14 @@
 
 namespace duckdb {
 
+static constexpr idx_t MAX_RECURSION_DEPTH = 128;
+
 //! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
 //! Non-null patch values overwrite. Nested objects are merged recursively.
-static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
+static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch, idx_t depth = 0) {
+	if (depth == MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("json_deep_merge: JSON exceeds maximum recursion depth of %d", MAX_RECURSION_DEPTH);
+	}
 	// If patch is not an object, it replaces orig entirely (unless null)
 	if (!yyjson_mut_is_obj(patch)) {
 		if (unsafe_yyjson_is_null(patch) && orig) {
@@ -46,7 +51,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 			}
 			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
 			auto orig_val = yyjson_mut_obj_getn(orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-			auto merged_val = DeepMerge(doc, orig_val, patch_val);
+			auto merged_val = DeepMerge(doc, orig_val, patch_val, depth + 1);
 			yyjson_mut_obj_add(builder, mut_key, merged_val);
 		}
 	}
@@ -112,6 +117,7 @@ ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
 	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetVarArgs(LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 
 	return ScalarFunctionSet(fun);
 }
