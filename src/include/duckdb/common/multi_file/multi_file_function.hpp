@@ -64,6 +64,11 @@ struct MultiFileReaderInterface {
 	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
+	//! Emit one chunk after every file has been read. Implementations must sync inside this function so
+	//! chunk is produced once per scan
+	virtual bool FinalizeScan(ClientContext &context, GlobalTableFunctionState &global_state, DataChunk &output) {
+		return false;
+	}
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
 		return nullptr;
 	}
@@ -74,6 +79,11 @@ struct MultiFileReaderInterface {
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 	virtual FileGlobInput GetGlobInput();
+	//! True if reader can compute all aggregates in "input".
+	virtual bool TryPushdownAggregates(ClientContext &context, MultiFileBindData &bind_data,
+	                                   const TableFunctionAggregateInput &input) {
+		return false;
+	}
 };
 
 template <class OP>
@@ -91,6 +101,7 @@ public:
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
 		get_metrics = MultiFileGetMetrics;
+		aggregate_pushdown = MultiFileAggregatePushdown;
 		MultiFileReader::AddParameters(*this);
 	}
 
@@ -260,6 +271,24 @@ public:
 
 		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
 		                             expected_names, std::move(file_options), std::move(options), std::move(interface));
+	}
+
+	static bool MultiFileAggregatePushdown(ClientContext &context, const TableFunctionAggregateInput &input) {
+		auto &bind_data = input.get.bind_data->CastNoConst<MultiFileBindData>();
+		if (IsEmptyResult(bind_data)) {
+			return false;
+		}
+		if (input.get.table_filters.HasFilters()) {
+			return false;
+		}
+		if (input.get.extra_info.sample_options) {
+			return false;
+		}
+		if (!bind_data.interface->TryPushdownAggregates(context, bind_data, input)) {
+			return false;
+		}
+		bind_data.aggregates_pushed = true;
+		return true;
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
@@ -629,6 +658,13 @@ public:
 			return std::move(result);
 		}
 
+		if (bind_data.aggregates_pushed) {
+			// column ids refer to aggregates GET was rewritten to return and not
+			// bind_data.columns
+			input.column_ids.clear();
+			input.column_indexes.clear();
+		}
+
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
 		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_indexes, input.filters);
 		if (new_list) {
@@ -730,8 +766,11 @@ public:
 	static OperatorPartitionData MultiFileGetPartitionData(ClientContext &context,
 	                                                       TableFunctionGetPartitionInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
-		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+		if (!input.local_state || bind_data.aggregates_pushed) {
+			return OperatorPartitionData(gstate.batch_index);
+		}
+		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		OperatorPartitionData partition_data(data.job.batch_index);
 		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.job.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
@@ -877,6 +916,13 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
+			auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+			if (gstate.global_state && bind_data.interface &&
+			    bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				return;
+			}
 			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
@@ -893,6 +939,10 @@ public:
 				case MultiFileAcquireResult::PARKED:
 					return;
 				case MultiFileAcquireResult::EXHAUSTED:
+					if (bind_data.interface->FinalizeScan(context, *gstate.global_state, output)) {
+						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+						return;
+					}
 					data_p.async_result = SourceResultType::FINISHED;
 					return;
 				case MultiFileAcquireResult::ACQUIRED:

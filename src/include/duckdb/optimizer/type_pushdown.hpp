@@ -112,6 +112,9 @@ unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<
 
 	bool any_pushed = false;
 	for (auto &[_, analysis] : analyses) {
+		if (analysis.get.function.projection_expression_pushdown == nullptr) {
+			continue;
+		}
 		for (auto &[column_index, expr] : analysis.col_to_expr) {
 			if (expr == nullptr) { // Conflict for column
 				continue;

@@ -89,6 +89,7 @@ struct MultiFileBindData : public TableFunctionData {
 	shared_ptr<BaseFileReader> initial_reader;
 	// The union readers are created (when the union_by_name option is on) during binding
 	vector<shared_ptr<BaseUnionData>> union_readers;
+	bool aggregates_pushed = false;
 
 	void Initialize(shared_ptr<BaseFileReader> reader) {
 		initial_reader = std::move(reader);

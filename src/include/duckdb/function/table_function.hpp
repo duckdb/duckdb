@@ -211,6 +211,13 @@ struct TableFunctionProjectionExpressionInput {
 	ProjectionIndex column_index;
 };
 
+struct TableFunctionAggregateInput {
+	const LogicalGet &get;
+	//! Column scan index -> aggregate expression
+	//! For count_star() ProjectionIndex is default-constructed
+	const vector<pair<ProjectionIndex, reference<const Expression>>> &projections;
+};
+
 struct TableFunctionToStringInput {
 	TableFunctionToStringInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
 	    : table_function(table_function_p), bind_data(bind_data_p) {
@@ -368,6 +375,7 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 
 typedef bool (*table_function_projection_expression_pushdown_t)(ClientContext &context,
                                                                 const TableFunctionProjectionExpressionInput &input);
+typedef bool (*table_function_aggregate_pushdown_t)(ClientContext &context, const TableFunctionAggregateInput &input);
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
 
@@ -492,6 +500,9 @@ public:
 	//! casts like "col as UINTEGER" in "SELECT col::UINTEGER" to scanner.
 	//! Returns true if pushdown was successful
 	table_function_projection_expression_pushdown_t projection_expression_pushdown;
+	//! (Optional) pushes aggregates like count_star() in "SELECT count(*)" to scanner.
+	//! Returns true if pushdown was successful
+	table_function_aggregate_pushdown_t aggregate_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
