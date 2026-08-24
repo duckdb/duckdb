@@ -33,6 +33,25 @@ build/reldebug/test/unittest "*"
 
 It is recommended to use `make reldebug` and `build/reldebug/test/unittest` unless a good reason exists to use the debug build - the debug build is much slower than the reldebug build.
 
+### Time-Limiting Queries
+
+Use the `max_execution_time` setting (milliseconds, `0` = no limit) to abort a query that runs too long:
+
+```sql
+SET max_execution_time=5000;
+SELECT count(*) FROM range(100000000) t1, range(1000) t2;
+-- INTERRUPT Error: Query exceeded maximum execution time
+```
+
+The setting is `LOCAL` by default; use `SET GLOBAL max_execution_time=...` to apply it to all connections. From the shell:
+
+```bash
+build/reldebug/duckdb -c "SET max_execution_time=5000; SELECT ..."
+```
+
+The deadline is enforced at `ClientContext::InterruptCheck()` call sites, so it only fires once execution reaches one of them. Queries that check in frequently abort close to the limit, but time spent in planning or inside a long non-interruptible stretch is not bounded by it.
+
+
 ### Test File Format
 Tests use the sqllogictest format (`.test` files). Example structure:
 ```sql
@@ -64,6 +83,8 @@ Test directives:
 - `require-env VAR` - Test requires environment variable
 
 Slow tests should use `.test_slow` extension instead of `.test`.
+
+Do not add `PRAGMA enable_verification` to tests - it should no longer be used in new tests.
 
 ## Code Formatting
 

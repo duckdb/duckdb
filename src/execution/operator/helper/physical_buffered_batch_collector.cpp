@@ -70,6 +70,14 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalBufferedBatchCollector::UpdateMinBatchIndex(ExecutionContext &,
+                                                                      OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
+	auto min_batch_index = input.local_state.partition_info.min_batch_index.GetIndex();
+	gstate.buffered_data->Cast<BatchedBufferedData>().UpdateMinBatchIndex(min_batch_index);
+	return SinkNextBatchType::READY;
+}
+
 SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &context,
                                                               OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();

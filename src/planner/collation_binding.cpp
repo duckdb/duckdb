@@ -48,7 +48,7 @@ static vector<string> GetVarcharCollationFunctions(ClientContext &context, const
 			entries.insert(entries.begin(), collation_entry);
 		} else {
 			if (!entries.empty() && !entries.back().get().combinable) {
-				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back().get().name,
+				throw BinderException("Cannot combine collation types %s and %s", entries.back().get().name,
 				                      collation_entry.name);
 			}
 			entries.push_back(collation_entry);

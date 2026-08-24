@@ -9,6 +9,9 @@ on:
       build_current_release:
         default: false
         type: boolean
+      images:
+        required: true
+        type: string
       run_slow_tests:
         default: false
         type: boolean
@@ -28,6 +31,10 @@ concurrency:
   group: regression-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   GIT_REF: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
@@ -38,6 +45,8 @@ jobs:
   linux-base:
     name: Linux Base
     runs-on: ${{ inputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       GEN: ninja
 
@@ -48,10 +57,6 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           fetch_depth: 0
           ref: ${{ env.GIT_REF }}
-
-      - name: Install tools
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - uses: ./.github/actions/ccache-action
 
@@ -120,6 +125,8 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -141,21 +148,13 @@ jobs:
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           - name: Recursive CTE
             benchmark: benchmark/recursive_cte/recursive_cte.csv
-            timed_runs: 7
-            regression_threshold_seconds: 0.01
           - name: AoC24
             benchmark: benchmark/aoc24/aoc24.csv
-            timed_runs: 7
-            regression_threshold_seconds: 0.01
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -185,16 +184,9 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          extra_args=(--clear-benchmark-cache)
+          extra_args=(--benchmark-cache=clear)
           if [[ "${{ matrix.benchmark }}" == ".github/regression/realnest.csv" ]]; then
             extra_args=()
-          fi
-
-          if [[ -n "${{ matrix.timed_runs }}" ]]; then
-            extra_args+=(--timed-runs "${{ matrix.timed_runs }}")
-          fi
-          if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
-            extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
           fi
 
           python scripts/regression/test_runner.py \
@@ -202,6 +194,7 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
+            --early-stop \
             --threads 2 \
             "${extra_args[@]}"
 
@@ -211,6 +204,8 @@ jobs:
     needs:
       - linux-base
     runs-on: namespace-profile-linux-small
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -218,12 +213,15 @@ jobs:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
             threads: 4
-          - name: TPCDS SF3
-            benchmarks: .github/regression/tpcds_sf3.csv
+            sf: 10
+          - name: TPCDS SF10
+            benchmarks: .github/regression/tpcds_sf10.csv
             threads: 4
+            sf: 10
           - name: TPCH-PARQUET SF1
             benchmarks: .github/regression/tpch_parquet.csv
             threads: 2
+            sf: 1
 
     steps:
       - name: "Checkout"
@@ -231,10 +229,6 @@ jobs:
         with:
           runner_provider: namespace
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -265,11 +259,11 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
-            --clear-benchmark-cache \
+            --early-stop \
+            --benchmark-cache=clear \
             --disable-timeout \
-            --max-timeout 3600 \
-            --threads ${{ matrix.threads }} \
-            --timed-runs 30
+            --benchmark-argument sf=${{ matrix.sf }} \
+            --threads ${{ matrix.threads }}
 
   regression-bench-fivetran:
     name: Bench Fivetran
@@ -277,15 +271,13 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -320,22 +312,20 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2 --benchmark-cache=clear
 
   regression-test-storage:
     name: Storage Size Regression Test
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -368,6 +358,8 @@ jobs:
     needs:
       - linux-base
     runs-on: ${{ inputs.runner_linux_small }}
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       EXTENSION_STATIC_BUILD: 1
 
@@ -377,10 +369,6 @@ jobs:
         with:
           runner_provider: ${{ inputs.runner_provider }}
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -413,17 +401,13 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: |
-          python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-          python3 scripts/ci/retry.py --timeout 2m -- pip install tqdm
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8

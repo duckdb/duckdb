@@ -197,22 +197,22 @@ No function matches the given name and argument types
 statement error
 select extract(dow from time '10:00:00');
 ----
-No function matches the given name and argument types
+Not implemented Error: "time" units "dow" not recognized
 
 statement error
 select extract(doy from time '10:00:00');
 ----
-No function matches the given name and argument types
+Not implemented Error: "time" units "doy" not recognized
 
 statement error
 select extract(yearweek from time '10:00:00');
 ----
-No function matches the given name and argument types
+Not implemented Error: "time" units "yearweek" not recognized
 
 statement error
 select extract(century from time '10:00:00');
 ----
-No function matches the given name and argument types
+Not implemented Error: "time" units "CENTURY" not recognized
 
 statement error
 select extract(era from time '10:00:00');
@@ -227,12 +227,12 @@ Not implemented Error: "time" units "era" not recognized
 statement error
 select extract(julian from time '10:00:00');
 ----
-julian can only take DATE or TIMESTAMP arguments
+Not implemented Error: "time" units "julian" not recognized
 
 statement error
 select date_part('julian', time '10:00:00');
 ----
-julian can only take DATE or TIMESTAMP arguments
+Not implemented Error: "time" units "julian" not recognized
 
 # Correctness: Compare date_part against function value
 foreach partcode hour minute second millisecond microsecond epoch

@@ -51,7 +51,10 @@ static void JaccardFunction(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction JaccardFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaccardFunction);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaccardFunction);
+	// throws if one of the strings is empty
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

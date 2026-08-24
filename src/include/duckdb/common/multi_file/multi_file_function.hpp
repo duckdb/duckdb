@@ -32,12 +32,12 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-	                             BaseFileReaderOptions &options, vector<string> &expected_names,
+	                             BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                             vector<LogicalType> &expected_types) = 0;
 	virtual bool ParseOption(ClientContext &context, const Identifier &key, const Value &val,
 	                         MultiFileOptions &file_options, BaseFileReaderOptions &options) = 0;
 	virtual void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
+	                              const vector<Identifier> &expected_names, const vector<LogicalType> &expected_types);
 	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
 	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
@@ -101,7 +101,7 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context,
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
+	                                                      vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
@@ -120,7 +120,16 @@ public:
 			result->names.emplace_back("empty");
 			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
+			return std::move(result);
+		}
+
+		if (result->file_list->IsEmpty() && !return_types.empty()) {
+			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
+			// left to bind the readers on, but the schema is already known so we can use it as-is
+			result->types = return_types;
+			result->names = names;
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return std::move(result);
 		}
 
@@ -143,7 +152,7 @@ public:
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
-			names = IdentifiersToStrings(result->names);
+			names = result->names;
 		} else {
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
@@ -183,14 +192,14 @@ public:
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
-			result->table_columns = names;
+			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	                                              vector<LogicalType> &return_types, vector<string> &names) {
+	                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
@@ -226,7 +235,7 @@ public:
 	}
 
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
-	                                                  vector<string> &expected_names,
+	                                                  vector<Identifier> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
@@ -927,6 +936,14 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+
+		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
+		// file describe the overridden column and can even have a different type, so they cannot be used here
+		for (auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (hive_partitioning_index.index == primary_index) {
+				return nullptr;
+			}
+		}
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {

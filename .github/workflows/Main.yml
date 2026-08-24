@@ -79,6 +79,7 @@ jobs:
       runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
       runners: ${{ steps.runners.outputs.runners }}
+      images: ${{ steps.config.outputs.images }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
@@ -92,6 +93,7 @@ jobs:
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
+      extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
       GEN: ninja
     steps:
@@ -116,11 +118,15 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
             effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+            extension_allow_failure_archs="linux_amd64_musl;linux_arm64_musl"
           fi
           echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
+          echo "extension_allow_failure_archs=$extension_allow_failure_archs" >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
+          echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -175,15 +181,27 @@ jobs:
 
           runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
           runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
+          image_version="$(<scripts/ci/image_version.txt)"
+
+          images=$(
+            jq -nc --arg image_version "$image_version" \
+              '{
+                manylinux_amd64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:" + $image_version),
+                manylinux_arm64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_main:" + $image_version),
+                alpine_amd64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_main:" + $image_version),
+                alpine_arm64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_aarch64_main:" + $image_version),
+                ubuntu_24_04_amd64_lint: ("ghcr.io/duckdb/duckdb-ci/ubuntu_24_04_amd64_lint:" + $image_version)
+              }'
+          )
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
-              '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
+              '[{runner: $runner, arch: "amd64", image: "manylinux_amd64_main"}]'
           )
 
           linux_musl_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_arm64" \
-              '[{runner: $runner, arch: "arm64"}]'
+              '[{runner: $runner, arch: "arm64", image: "alpine_arm64_main"}]'
           )
 
           static_libs_linux_matrix=$(
@@ -194,12 +212,12 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
               jq -c --arg runner "$runner_linux_arm64" \
-                '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
+                '. += [{runner: $runner, arch: "arm64", image: "manylinux_arm64_main"}]' <<<"$linux_cli_matrix"
             )
 
             linux_musl_cli_matrix=$(
               jq -c --arg runner "$runner_linux_x64" \
-                '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
+                '. |= [{runner: $runner, arch: "amd64", image: "alpine_amd64_main"}] + .' <<<"$linux_musl_cli_matrix"
             )
           fi
 
@@ -219,6 +237,7 @@ jobs:
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           {
+            echo "images=$images"
             echo "linux_cli_matrix=$linux_cli_matrix"
             echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
@@ -252,9 +271,11 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: clang
+      CXX: clang++
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -275,28 +296,13 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Fix ASan runtime
-      shell: bash
-      run: |
-        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
-        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
-        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
-        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
-          sudo mkdir -p "${asan_static_dir}"
-          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
-        fi
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -306,7 +312,7 @@ jobs:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
-        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
@@ -322,6 +328,8 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
 
     steps:
     - name: "Checkout"
@@ -329,10 +337,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
@@ -373,17 +377,15 @@ jobs:
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+      images: ${{ needs.prepare.outputs.images }}
 
  tidy-check:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    env:
-      CC: gcc
-      CXX: g++
-      GEN: ninja
-      CLANGD_BINARY: clangd-20
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).ubuntu_24_04_amd64_lint }}
 
     steps:
     - name: "Checkout"
@@ -393,17 +395,6 @@ jobs:
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install
-      timeout-minutes: 10
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
-        python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-
-    - name: Install clangd-tidy
-      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
-
     - name: Tidy Check (clangd)
       run: |
         mkdir -p ~/.config/clangd
@@ -411,7 +402,7 @@ jobs:
         Diagnostics:
           UnusedIncludes: None
         EOF
-        make tidy-check-clangd 'CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*'
+        make tidy-check-clangd
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}
@@ -436,6 +427,7 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
       opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
+      allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       runners: ${{ needs.prepare.outputs.runners }}
       runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -447,6 +439,8 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
       GEN: make
 
@@ -461,10 +455,6 @@ jobs:
       with:
         version: latest
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -477,6 +467,8 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -488,17 +480,13 @@ jobs:
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -544,9 +532,11 @@ jobs:
       - prepare
       - linux-release
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: clang
+      CXX: clang++
       GEN: ninja
 
     steps:
@@ -556,14 +546,6 @@ jobs:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq lcov llvm-20
-        echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -597,6 +579,8 @@ jobs:
     needs:
       - prepare
       - linux-release
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
@@ -606,10 +590,6 @@ jobs:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -636,6 +616,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -647,49 +629,24 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
         fetch_depth: 0
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Install pytest
-      timeout-minutes: 10
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: |
-        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
-
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
-      run: |
-        docker run                                                             \
-        -v"$PWD:$PWD"                                                          \
-        -e GEN=ninja                                                           \
-        -e CC='ccache gcc'                                                     \
-        -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR="$PWD/.ccache"                                           \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
-        -e BUILD_BENCHMARK=1                                                   \
-        -e FORCE_WARN_UNUSED=1                                                 \
-        -e OVERRIDE_GIT_DESCRIBE                                               \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
-        bash -c "
-          set -e
-          cat /etc/os-release
-          dnf install -y \
-            ccache       \
-            ninja-build  \
-            python3.12   \
-            perl-IPC-Cmd
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
-        "
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        BUILD_BENCHMARK: 1
+        FORCE_WARN_UNUSED: 1
+      with:
+        build: make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: linux-cli-${{ matrix.config.arch }}-glibc
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: CLI check
       shell: bash
@@ -706,18 +663,19 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        make cli-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }} CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-linux-${{ matrix.config.arch }}.tar.gz duckdb-shared-libs-linux-${{ matrix.config.arch }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        path: duckdb-cli-linux-${{ matrix.config.arch }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-linux-${{ matrix.config.arch }}.tar.gz
+        archive: false
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -731,7 +689,7 @@ jobs:
 
     - name: Tools Tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -746,7 +704,7 @@ jobs:
       - prepare
       - extensions
       - linux-release-cli
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
 
     steps:
     - name: "Checkout"
@@ -774,6 +732,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_musl_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
@@ -785,47 +745,24 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
         fetch_depth: 0
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
-      shell: bash
-      run: |
-        docker run                                                          \
-        -v"$PWD:$PWD"                                                       \
-        -e GEN=ninja                                                        \
-        -e CC='ccache gcc'                                                  \
-        -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR="$PWD/.ccache"                                        \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
-        -e BUILD_BENCHMARK=1                                                \
-        -e FORCE_WARN_UNUSED=1                                              \
-        -e OVERRIDE_GIT_DESCRIBE                                            \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add   \
-            ccache  \
-            cmake   \
-            g++     \
-            git     \
-            make    \
-            python3 \
-            samurai
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
-        "
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        BUILD_BENCHMARK: 1
+        FORCE_WARN_UNUSED: 1
+      with:
+        build: make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: linux-cli-${{ matrix.config.arch }}-musl
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Deploy
       shell: bash
@@ -834,50 +771,39 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        make cli-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }}-musl CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-${{ matrix.config.arch }}-musl SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-linux-${{ matrix.config.arch }}-musl.tar.gz duckdb-shared-libs-linux-${{ matrix.config.arch }}-musl.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}-musl
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        path: duckdb-cli-linux-${{ matrix.config.arch }}-musl.tar.gz
+        archive: false
 
-    - name: Test
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-linux-${{ matrix.config.arch }}-musl.tar.gz
+        archive: false
+
+    - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
-      env:
-        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
-        docker run   \
-        -v"$PWD:$PWD" \
-        -e CI=1      \
-        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add      \
-            make       \
-            python3    \
-            py3-pytest
-          cd \"$PWD\"
-          echo Release tests
-          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
-            make alltest_release_tag
-          else
-            make test_release_tag
-          fi
-          echo Tools Tests
-          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-          echo Examples
-          build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
-          build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
-        "
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
+
+    - name: Tools Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: Examples
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: |
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
@@ -1161,12 +1087,14 @@ jobs:
     name: No String Inline / Destroy Unpinned Blocks
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: clang
+      CXX: clang++
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1176,10 +1104,6 @@ jobs:
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1211,10 +1135,54 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
+ no-rtti:
+    name: No RTTI
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-rtti') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
+    needs:
+      - prepare
+      - linux-relassert
+    env:
+      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
+      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
+      DISABLE_RTTI: 1
+      EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
+
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        with:
+          build-type: release
+          build: python3 scripts/ci/retry.py -- make release
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_rtti
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      # Loadable extensions are the part a plain build cannot check: each one links its own
+      # copy of duckdb, so a type identity that is not stable across images only fails here.
+      - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+        run: make unittest_release
+
  vector-sizes:
     name: Vector Sizes
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
@@ -1230,10 +1198,6 @@ jobs:
         with:
           runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1253,10 +1217,12 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
+      CC: clang
+      CXX: clang++
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
@@ -1265,10 +1231,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -1298,12 +1260,26 @@ jobs:
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
-    name: Tests a release build with different configurations
+    name: Linux Config (${{ matrix.group }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-configs') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: Query Verification
+            target: test_configs_query_verification
+          - group: Execution
+            target: test_configs_execution
+          - group: Persistence
+            target: test_configs_persistence
+          - group: Storage Engine
+            target: test_configs_storage_engine
 
     steps:
     - name: "Checkout"
@@ -1311,14 +1287,6 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -1334,22 +1302,22 @@ jobs:
     - name: Test Configurations
       if: success() || failure()
       run: |
-        make test_configs
+        make ${{ matrix.target }}
+
+    - name: Test Storage Compatibility
+      if: ${{ (success() || failure()) && matrix.group == 'Persistence' }}
+      run: |
+        make test_storage
 
     - name: Test Vector Verification
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_vector
 
     - name: Test Synchronous Table Scan
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_table_scan
-
-    - name: Test Storage Compatibility
-      if: success() || failure()
-      run: |
-        make test_storage
 
  summary:
     name: Summary
@@ -1376,6 +1344,7 @@ jobs:
       - static-libs-osx
       - static-libs-windows-mingw
       - no-string-inline
+      - no-rtti
       - vector-sizes
       - threadsan
       - linux-configs

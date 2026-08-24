@@ -52,6 +52,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -68,6 +69,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -327,12 +329,14 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
-	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+	unique_ptr<FileCryptoMetaData> crypto_metadata;
+	string encryption_key_hash;
 
 	if (footer_encrypted) {
 		// Get the encryption util
 		// The parquet reader only reads data, so we set util to true
 		encryption_util = context.db->GetEncryptionUtil(true);
+		crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
 
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
@@ -349,6 +353,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), *encryption_util,
 		                    aad_crypto_metadata);
+		auto hash_util = context.db->GetMbedTLSUtil(false);
+		encryption_key_hash = ParquetFileMetadataCache::CreateEncryptionKeyHash(*encryption_config, *hash_util);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -361,7 +367,22 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 std::move(crypto_metadata), footer_len);
+	                                                 std::move(crypto_metadata), std::move(encryption_key_hash),
+	                                                 footer_len);
+}
+
+static bool CanUseParquetMetadataStatistics(ClientContext &context,
+                                            const shared_ptr<ParquetFileMetadataCache> &metadata,
+                                            const ParquetOptions &parquet_options) {
+	string encryption_key_hash;
+	optional_ptr<const string> encryption_key_hash_ptr;
+	if (metadata->IsEncrypted() && parquet_options.encryption_config) {
+		auto hash_util = context.db->GetMbedTLSUtil(false);
+		encryption_key_hash =
+		    ParquetFileMetadataCache::CreateEncryptionKeyHash(*parquet_options.encryption_config, *hash_util);
+		encryption_key_hash_ptr = encryption_key_hash;
+	}
+	return metadata->CanUseMetadataStatistics(parquet_options.encryption_config, encryption_key_hash_ptr);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
@@ -624,6 +645,9 @@ static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &fil
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name) {
+	if (!can_use_metadata_statistics) {
+		return nullptr;
+	}
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
 		if (columns[file_col_idx].name == name) {
@@ -640,11 +664,18 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name)
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
                                                          shared_ptr<ParquetFileMetadataCache> metadata,
                                                          const Identifier &name) {
+	if (!CanUseParquetMetadataStatistics(context, metadata, parquet_options)) {
+		return nullptr;
+	}
 	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
 	return reader.ReadStatistics(name);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const Identifier &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, const ParquetUnionData &union_data,
+                                                         const Identifier &name) {
+	if (!CanUseParquetMetadataStatistics(context, union_data.metadata, union_data.options)) {
+		return nullptr;
+	}
 	const auto &col_names = union_data.names;
 
 	idx_t file_col_idx;
@@ -1230,10 +1261,12 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	result.name = StringValue::Get(children[0]);
 	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
 	string error_message;
-	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+	auto default_value = children[2].TryCastAs(context, result.type, &error_message);
+	if (!default_value) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
 		                      result.type.ToString());
 	}
+	result.default_value = std::move(*default_value);
 
 	return result;
 }
@@ -1283,8 +1316,21 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	} else {
 		metadata = std::move(metadata_p);
 	}
-	if (parquet_options.encryption_config && !encryption_util) {
-		encryption_util = context_p.db->GetEncryptionUtil(true);
+	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
+	if (metadata->IsEncrypted()) {
+		if (!parquet_options.encryption_config) {
+			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
+			                            file_handle->GetPath());
+		}
+		if (!can_use_metadata_statistics) {
+			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+		}
+		if (!encryption_util) {
+			encryption_util = context_p.db->GetEncryptionUtil(true);
+		}
+	} else if (parquet_options.encryption_config) {
+		throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
+		                            file_handle->GetPath());
 	}
 	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
@@ -1327,13 +1373,14 @@ unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &contex
 	if (reader) {
 		return reader->Cast<ParquetReader>().GetStatistics(context, name);
 	}
-	return ParquetReader::ReadStatistics(*this, name);
+	return ParquetReader::ReadStatistics(context, *this, name);
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
 	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 }
@@ -1552,10 +1599,9 @@ static optional_ptr<ColumnReader> TryGetBloomFilterSource(ColumnReader &column_r
 	return TryGetBloomFilterSource(*expr_reader.child_readers[0]);
 }
 
-static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
-                                  optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
-	auto &expr = *expr_filter.expr;
+static bool TryGetComparisonBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                            optional_ptr<ColumnReader> &leaf_reader,
+                                            unique_ptr<TableFilter> &leaf_filter) {
 	auto comparison_type = expr.GetExpressionType();
 	if (!BoundComparisonExpression::IsComparison(expr) ||
 	    (comparison_type != ExpressionType::COMPARE_EQUAL &&
@@ -1587,10 +1633,55 @@ static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter
 	}
 
 	auto leaf_comparison = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
+	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
 	    make_uniq<BoundConstantExpression>(constant->GetValue()));
 	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
 	return true;
+}
+
+static bool TryGetInBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                    optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+	    expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &in_expr = expr.Cast<BoundOperatorExpression>();
+	auto &children = in_expr.GetChildren();
+	if (children.size() <= 1 || !TryGetNestedBloomFilterLeaf(column_reader, *children[0], leaf_reader)) {
+		return false;
+	}
+
+	vector<Value> values;
+	values.reserve(children.size() - 1);
+	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
+		if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return false;
+		}
+		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull()) {
+			continue;
+		}
+		if (leaf_reader->Type() != constant.type()) {
+			return false;
+		}
+		values.push_back(constant);
+	}
+	if (values.empty()) {
+		return false;
+	}
+
+	auto column = make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL);
+	leaf_filter =
+	    make_uniq<ExpressionFilter>(ExpressionFilter::CreateInExpression(std::move(column), std::move(values)));
+	return true;
+}
+
+static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
+                                  optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
+	auto &expr = *expr_filter.expr;
+	return TryGetComparisonBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter) ||
+	       TryGetInBloomFilterLeaf(column_reader, expr, leaf_reader, leaf_filter);
 }
 
 ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
@@ -1603,7 +1694,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	auto &column_reader = state.GetColumnReader(col_idx);
 
 	// keep track of column and row group ordinal if data is encrypted
-	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+	if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 		                                       GetGroup(state).ordinal);
 	}
@@ -1632,13 +1723,10 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
 					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
 				}
-				if (is_expression) {
-					// no pruning possible for expressions
-					prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				} else if (!is_generated_column && has_min_max &&
-				           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-				            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				           parquet_options.can_have_nan) {
+				if (!is_expression && !is_generated_column && has_min_max &&
+				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+				    parquet_options.can_have_nan) {
 					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 					// based on nan
@@ -1812,6 +1900,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
+	if (!can_use_metadata_statistics) {
+		return;
+	}
 	GetPartitionStats(*GetFileMetadata(), result, *root_schema, parquet_options);
 }
 
@@ -2197,7 +2288,7 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 		}
 		auto &result_vector = result.data[i];
 		auto &child_reader = state.GetColumnReader(col_idx);
-		if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+		if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 			child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 			                                      GetGroup(state).ordinal);
 		}
@@ -2274,7 +2365,7 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = state.GetColumnReader(col_idx);
-			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+			if (metadata->crypto_metadata && metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}

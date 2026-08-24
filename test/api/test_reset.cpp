@@ -1,9 +1,10 @@
 #include "catch.hpp"
 #include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
-#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
+#include "duckdb/common/enums/show_behavior.hpp"
+#include "duckdb/parser/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -69,12 +70,12 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
-	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
 	    {"table_function_identifier_conversion",
 	     {EnumUtil::ToString(TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING)}},
 	    {"dialect_compatibility_mode", {EnumUtil::ToString(DialectCompatibilityMode::SPARK)}},
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
+	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
@@ -110,7 +111,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
 	    {"partitioned_write_flush_threshold", {123}},
-	    {"preserve_identifier_case", {false}},
+	    {"preserve_identifier_case", {"lowercase"}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
 	    {"profiling_mode", {"standard"}},
@@ -143,6 +144,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
+	    {"current_dialect", {"test"}},
 	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
@@ -260,6 +262,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DBConfig config;
 	config.options.load_extensions = false;
+	DialectExtension::Register(config, DialectExtension("test"));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");

@@ -1071,9 +1071,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	for (auto &func : multiply.functions) {
-		func.SetFallible();
-	}
+	multiply.SetFallible();
 
 	return multiply;
 }
@@ -1226,9 +1224,7 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, double, interval_t, DivideOperator>));
-	for (auto &func : fp_divide.functions) {
-		func.SetFallible();
-	}
+	fp_divide.SetFallible();
 	return fp_divide;
 }
 
@@ -1242,9 +1238,7 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : full_divide.functions) {
-		func.SetFallible();
-	}
+	full_divide.SetFallible();
 	return full_divide;
 }
 
@@ -1300,9 +1294,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : modulo.functions) {
-		func.SetFallible();
-	}
+	modulo.SetFallible();
 
 	return modulo;
 }
@@ -1328,6 +1320,14 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	hugeint_t delta_hugeint = hi;
+	if (Hugeint::TrySubtractInPlace(delta_hugeint, lo)) {
+		const auto delta = Hugeint::Cast<double>(delta_hugeint);
+		return lo + Hugeint::Convert(delta * d);
+	}
+
+	// if delta overflows, we fall back to original subtraction to avoid UB
+	// only happens when lo and hi are so apart that their difference can't be stored in a hugeint
 	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 

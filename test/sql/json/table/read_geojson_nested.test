@@ -1,0 +1,104 @@
+# name: test/sql/json/table/read_geojson_nested.test
+# description: Fold stray GeoJSON fragments in ordinary JSON into GEOMETRY columns
+# group: [table]
+
+require json
+
+# A geometry fragment sitting inside an otherwise ordinary record
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/nested.ndjson', geojson=true));
+----
+id	BIGINT
+loc	GEOMETRY
+tag	VARCHAR
+
+query III
+SELECT id, ST_AsText(loc), tag FROM read_json('data/json/geojson/nested.ndjson', geojson=true) ORDER BY id;
+----
+1	POINT (1 2)	x
+2	POLYGON ((0 0, 1 0, 1 1, 0 0))	y
+
+# Off by default for a .ndjson file
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/nested.ndjson'));
+----
+id	BIGINT
+loc	STRUCT("type" VARCHAR, coordinates JSON[])
+tag	VARCHAR
+
+# Detection fires at any depth
+statement ok
+COPY (SELECT '{"id":1,"a":{"b":{"c":{"type":"Point","coordinates":[5,6]}}}}' AS c) TO '{TEST_DIR}/deep.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/deep.geojsonl'));
+----
+id	BIGINT
+a	STRUCT(b STRUCT(c GEOMETRY))
+
+query I
+SELECT ST_AsText(a.b.c) FROM read_json('{TEST_DIR}/deep.geojsonl');
+----
+POINT (5 6)
+
+# And inside a list
+statement ok
+COPY (SELECT '{"id":1,"g":[{"type":"Point","coordinates":[1,2]},{"type":"Point","coordinates":[3,4]}]}' AS c) TO '{TEST_DIR}/inlist.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/inlist.geojsonl'));
+----
+id	BIGINT
+g	GEOMETRY[]
+
+query I
+SELECT ST_AsText(g[1]) FROM read_json('{TEST_DIR}/inlist.geojsonl');
+----
+POINT (1 2)
+
+# Near misses are left as ordinary structs:
+#   a: "type" is a geometry name but there is no "coordinates"
+#   b: "coordinates" is present but "type" is not a geometry name
+#   c: the type is under the wrong key
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/near_miss.ndjson', geojson=true));
+----
+id	BIGINT
+a	STRUCT("type" VARCHAR)
+b	STRUCT("type" VARCHAR, coordinates DOUBLE[])
+c	STRUCT(kind VARCHAR, coordinates DOUBLE[])
+
+# "coordinates" must be an array
+statement ok
+COPY (SELECT '{"g":{"type":"Point","coordinates":"1,2"}}' AS c) TO '{TEST_DIR}/badcoords.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/badcoords.geojsonl'));
+----
+g	STRUCT("type" VARCHAR, coordinates VARCHAR)
+
+# GeoJSON type names are case-sensitive
+statement ok
+COPY (SELECT '{"g":{"type":"point","coordinates":[1,2]}}' AS c) TO '{TEST_DIR}/lowercase.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/lowercase.geojsonl'));
+----
+g	STRUCT("type" VARCHAR, coordinates BIGINT[])
+
+# If some records have a geometry there and others have an unrelated object, we fall back to JSON
+statement ok
+COPY (SELECT unnest(['{"g":{"type":"Point","coordinates":[1,2]}}', '{"g":{"other":1}}']) AS c) TO '{TEST_DIR}/inconsistent.geojsonl' (FORMAT CSV, HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('{TEST_DIR}/inconsistent.geojsonl'));
+----
+g	JSON

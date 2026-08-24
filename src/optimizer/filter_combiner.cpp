@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -401,6 +402,42 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	ColumnLifetimeAnalyzer::ExtractColumnBindings(expr, bindings);
 	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto table = get.GetTable();
+	if (bindings.size() == 2 && bindings[0] != bindings[1] && table && table->IsDuckTable() &&
+	    BoundComparisonExpression::IsComparison(expr)) {
+		const auto &comparison = expr.Cast<BoundFunctionExpression>();
+		const auto &left = BoundComparisonExpression::Left(comparison);
+		const auto &right = BoundComparisonExpression::Right(comparison);
+		const auto comparison_type = comparison.GetExpressionType();
+		const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
+		                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		if (!supported_comparison || left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsNumeric() ||
+		    !right.GetReturnType().IsNumeric()) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+		const auto &left_ref = left.Cast<BoundColumnRefExpression>();
+		const auto &right_ref = right.Cast<BoundColumnRefExpression>();
+		if (left_ref.Binding().table_index != get.table_index || right_ref.Binding().table_index != get.table_index ||
+		    left_ref.Binding().column_index >= get.GetColumnIds().size() ||
+		    right_ref.Binding().column_index >= get.GetColumnIds().size() ||
+		    get.GetColumnIds()[left_ref.Binding().column_index].IsVirtualColumn() ||
+		    get.GetColumnIds()[right_ref.Binding().column_index].IsVirtualColumn()) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+
+		auto left_bound_ref = make_uniq<BoundReferenceExpression>(left_ref.GetAlias(), left_ref.GetReturnType(), 0);
+		auto right_bound_ref = make_uniq<BoundReferenceExpression>(right_ref.GetAlias(), right_ref.GetReturnType(), 1);
+		auto filter_expr =
+		    BoundComparisonExpression::Create(comparison_type, std::move(left_bound_ref), std::move(right_bound_ref));
+		vector<ProjectionIndex> column_indexes {left_ref.Binding().column_index, right_ref.Binding().column_index};
+		get.table_filters.PushMultiColumnFilter(
+		    make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes)));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 	// we can only pushdown expressions that refer to exactly one column
 	for (idx_t i = 1; i < bindings.size(); i++) {
@@ -893,7 +930,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// evaluate the constant side
-	Value constant_value, casted_value;
+	Value constant_value;
 	string error_msg;
 	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -901,9 +938,11 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	if (constant_value.IsNull()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	if (!constant_value.TryCastAs(context, source_type, casted_value, &error_msg)) {
+	auto cast_result = constant_value.TryCastAs(context, source_type, &error_msg);
+	if (!cast_result) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto cast_value = std::move(*cast_result);
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
 		auto filter_expr =
@@ -914,14 +953,14 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	// push relaxed filter(s) as OptionalFilter
 	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 	if (IsGreaterThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value lower = casted_value;
+		Value lower = cast_value;
 		if (!AdjustTemporalValue(lower, -margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		push_optional(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(lower));
 	}
 	if (IsLessThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
-		Value upper = casted_value;
+		Value upper = cast_value;
 		if (!AdjustTemporalValue(upper, margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}

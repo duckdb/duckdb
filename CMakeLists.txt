@@ -121,11 +121,25 @@ if (DUCKDB_LINKER)
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   if(CMAKE_BUILD_TYPE STREQUAL "Release" AND DUCKDB_LINKER STREQUAL "mold")
-    set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
-    set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+    # --icf=safe was introduced in mold 1.1; older mold (e.g. the 1.0.3 shipped in Ubuntu 22.04)
+    # aborts the link with "mold: unknown --icf argument: safe". Probe the version and only enable
+    # identical code folding when the linker actually supports it.
+    execute_process(COMMAND ${DUCKDB_LINKER} --version OUTPUT_VARIABLE DUCKDB_MOLD_VERSION_OUTPUT ERROR_QUIET)
+    if(DUCKDB_MOLD_VERSION_OUTPUT MATCHES "mold ([0-9]+\\.[0-9]+(\\.[0-9]+)?)")
+      set(DUCKDB_MOLD_VERSION "${CMAKE_MATCH_1}")
+      if(DUCKDB_MOLD_VERSION VERSION_GREATER_EQUAL "1.1")
+        set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+        set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+      else()
+        set(DUCKDB_LINKER_MESSAGE
+            "${DUCKDB_LINKER_MESSAGE} (mold ${DUCKDB_MOLD_VERSION} too old for --icf=safe, skipping ICF)")
+      endif()
+    else()
+      set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} (could not determine mold version, skipping ICF)")
+    endif()
   endif()
   message(STATUS "${DUCKDB_LINKER_MESSAGE}")
 endif()
@@ -677,6 +691,17 @@ endif()
 
 if(DISABLE_ASSERTIONS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_ASSERTIONS")
+endif()
+
+# Build without C++ RTTI. A dependency that cannot build this way can re-enable it for its
+# own targets, but only if its class hierarchy is self-contained: a type deriving from a
+# duckdb type needs the base's typeinfo, which this build never emits.
+if(DISABLE_RTTI)
+  if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  endif()
 endif()
 
 if(DESTROY_UNPINNED_BLOCKS)

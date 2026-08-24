@@ -159,6 +159,7 @@ static const DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "weighted_avg",
      "(value, weight) AS SUM(value * weight) / SUM(CASE WHEN value IS NOT NULL THEN weight ELSE 0 END)"},
     {DEFAULT_SCHEMA, "wavg", "(value, weight) AS weighted_avg(value, weight)"},
+    {DEFAULT_SCHEMA, "variant_group_array", "(x) AS list(x)::VARIANT"},
 
     {DEFAULT_SCHEMA, "list_reverse", "(l) AS l[:-:-1]"},
     {DEFAULT_SCHEMA, "array_reverse", "(l) AS list_reverse(l)"},

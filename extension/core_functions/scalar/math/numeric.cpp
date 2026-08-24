@@ -9,6 +9,7 @@
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
@@ -264,9 +265,7 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 			break;
 		}
 	}
-	for (auto &func : abs.functions) {
-		func.SetFallible();
-	}
+	abs.SetFallible();
 	return abs;
 }
 
@@ -1085,9 +1084,16 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({{"x", type}}, type, round_func, bind_func));
-		round.AddFunction(
-		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
+		ScalarFunction round_function({{"x", type}}, type, round_func, bind_func);
+		ScalarFunction round_prec_function({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func,
+		                                   bind_prec_func);
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			// rounding a DECIMAL can overflow
+			round_function.SetFallible();
+			round_prec_function.SetFallible();
+		}
+		round.AddFunction(std::move(round_function));
+		round.AddFunction(std::move(round_prec_function));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
@@ -1357,9 +1363,7 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
-	for (auto &function : funcs.functions) {
-		function.SetFallible();
-	}
+	funcs.SetFallible();
 	return funcs;
 }
 
@@ -1457,14 +1461,51 @@ struct IsNanOperator {
 		return Value::IsNan(input);
 	}
 };
+
+static unique_ptr<BaseStatistics> PropagateIsNanStats(ClientContext &, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 1);
+	auto &child_stats = input.child_stats[0];
+	if (!NumericStats::HasMinMax(child_stats)) {
+		return nullptr;
+	}
+
+	// NaN sorts above every other floating-point value, so a non-NaN maximum proves there is no NaN.
+	bool max_is_nan;
+	switch (input.expr.GetChildren()[0]->GetReturnType().id()) {
+	case LogicalTypeId::FLOAT:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<float>(child_stats));
+		break;
+	case LogicalTypeId::DOUBLE:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<double>(child_stats));
+		break;
+	default:
+		throw InternalException("Unsupported type for isnan statistics propagation");
+	}
+	if (max_is_nan) {
+		return nullptr;
+	}
+
+	auto result = NumericStats::CreateEmpty(LogicalType::BOOLEAN);
+	NumericStats::SetMin(result, false);
+	NumericStats::SetMax(result, false);
+	result.CopyValidity(child_stats);
+	if (!child_stats.CanHaveNull()) {
+		*input.expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	}
+	return result.ToUnique();
+}
 } // namespace
 
 ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	ScalarFunction float_function({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                              ScalarFunction::UnaryFunction<float, bool, IsNanOperator>);
+	float_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(float_function);
+	ScalarFunction double_function({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                               ScalarFunction::UnaryFunction<double, bool, IsNanOperator>);
+	double_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(double_function);
 	return funcs;
 }
 
@@ -2047,6 +2088,8 @@ ScalarFunctionSet GreatestCommonDivisorFun::GetFunctions() {
 	funcs.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
+	// negating the minimum value overflows, so the failure must be reportable
+	funcs.SetFallible();
 	return funcs;
 }
 
@@ -2080,9 +2123,7 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	funcs.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
-	for (auto &function : funcs.functions) {
-		function.SetFallible();
-	}
+	funcs.SetFallible();
 	return funcs;
 }
 

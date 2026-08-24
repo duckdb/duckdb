@@ -323,7 +323,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			}
 			lowercase_name = "mode";
 		} else {
-			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.Name());
+			throw ParserException("Unknown ordered aggregate %s.", qualified_function.Name());
 		}
 	}
 	auto result = make_uniq<FunctionExpression>(
@@ -496,10 +496,10 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 		for (auto &order : aggr->OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant_expr = order.expression->Cast<ConstantExpression>();
-				Value bigint_value;
 				string error;
-				if (constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
-					int64_t order_index = BigIntValue::Get(bigint_value);
+				auto bigint_value = constant_expr.GetValue().DefaultTryCastAs(LogicalType::BIGINT, &error);
+				if (bigint_value) {
+					int64_t order_index = BigIntValue::Get(*bigint_value);
 					idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
 					order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
 				}
@@ -1601,13 +1601,14 @@ void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer 
 		frame.ReserveChildSlots(1 + prefix_count);
 		for (idx_t i = prefix_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			stack.PushFrame(prefix_children[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("PrefixOperator"),
+			stack.PushFrame(prefix_children[child_idx].get(),
+			                PEGTransformerFactory::GetTrampolineOps(prefix_children[child_idx].get()),
 			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
 		}
 	} else {
 		frame.ReserveChildSlots(1);
 	}
-	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("BaseExpression"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(1)),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -2093,7 +2094,7 @@ void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &trans
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	transformer.in_window_definition = true;
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("WindowFrame"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(1)),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -2679,17 +2680,10 @@ CaseCheck PEGTransformerFactory::TransformCaseWhenThen(PEGTransformer &transform
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTransformer &transformer,
-                                                                         const Identifier &col_id,
+                                                                         const LogicalType &type,
                                                                          const string &string_literal) {
-	auto colid = col_id.GetIdentifierName();
-	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
-	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::STRUCT) {
-		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
-		                      EnumUtil::ToString(type.id()));
-	}
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
-	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
-	auto result = make_uniq<CastExpression>(unbound_type, std::move(child));
+	auto result = make_uniq<CastExpression>(type, std::move(child));
 	return std::move(result);
 }
 
