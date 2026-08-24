@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/parquet_suffix_range_httpfs.test
+# description: Test Parquet suffix reads with the non-validating external file cache
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+SET validate_external_file_cache='NO_VALIDATION';
+
+query I
+SELECT count(*)
+FROM 'https://blobs.duckdb.org/data/taxi_2019_04.parquet';
+----
+7433139

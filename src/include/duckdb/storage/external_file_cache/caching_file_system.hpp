@@ -70,8 +70,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
-	//! Try to read a suffix directly from the underlying filesystem.
-	DUCKDB_API bool TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result);
+	//! Try to read a suffix into an owned buffer-manager allocation.
+	DUCKDB_API bool TryReadSuffix(idx_t max_bytes, FileBufferHandleGroup &data, SuffixReadResult &result);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -95,6 +95,9 @@ private:
 	//! Populate this handle and the shared cache entry with metadata from the underlying handle.
 	void InitializeFileMetadata(const shared_ptr<FileHandle> &handle);
 	void EnsureFileMetadata();
+	//! Cache the aligned final block contained in a successful suffix read, adopting the buffer when provided.
+	void TryCacheSuffixBlock(optional_ptr<BufferHandle> owned_suffix, const_data_ptr_t suffix_data,
+	                         const SuffixReadResult &suffix_result, idx_t block_size);
 
 private:
 	QueryContext context;

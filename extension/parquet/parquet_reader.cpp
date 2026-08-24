@@ -210,11 +210,11 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftMemoryProtocol(data_ptr_t buffer,
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftMemoryProtocol(const_data_ptr_t buffer,
                                                                                          idx_t buffer_size) {
 	using duckdb_apache::thrift::transport::TMemoryBuffer;
-	auto transport =
-	    duckdb_base_std::make_shared<TMemoryBuffer>(buffer, NumericCast<uint32_t>(buffer_size), TMemoryBuffer::OBSERVE);
+	auto transport = duckdb_base_std::make_shared<TMemoryBuffer>(
+	    const_cast<data_ptr_t>(buffer), NumericCast<uint32_t>(buffer_size), TMemoryBuffer::OBSERVE);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<TMemoryBuffer>>(std::move(transport));
 }
 
@@ -278,16 +278,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	static constexpr idx_t MAX_PREFETCH_SIZE = 262144;    // Prefetch/read at most this many bytes
 
 	unique_ptr<duckdb_apache::thrift::protocol::TProtocol> file_proto;
-	ResizeableBuffer suffix_buffer;
+	FileBufferHandleGroup suffix_buffer;
 	idx_t file_size = 0;
 	bool footer_encrypted;
 	uint32_t footer_len;
 	bool suffix_read = false;
 
 	if (!footer_size.IsValid() && file_handle.IsRemoteFile()) {
-		suffix_buffer.resize(allocator, MAX_PREFETCH_SIZE);
 		SuffixReadResult suffix_result;
-		if (file_handle.TryReadSuffix(suffix_buffer.ptr, MAX_PREFETCH_SIZE, suffix_result)) {
+		if (file_handle.TryReadSuffix(MAX_PREFETCH_SIZE, suffix_buffer, suffix_result)) {
 			if (suffix_result.bytes_read > MAX_PREFETCH_SIZE || suffix_result.start_offset > suffix_result.file_size ||
 			    suffix_result.bytes_read != suffix_result.file_size - suffix_result.start_offset) {
 				throw IOException("Filesystem returned an invalid suffix range for file '%s'", file_handle.GetPath());
@@ -299,13 +298,14 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			if (suffix_result.bytes_read < 8) {
 				throw IOException("Filesystem returned an incomplete suffix for file '%s'", file_handle.GetPath());
 			}
-			ParseParquetFooter(suffix_buffer.ptr + suffix_result.bytes_read - 8, file_handle.GetPath(), file_size,
+			auto suffix_ptr = suffix_buffer.Ptr();
+			ParseParquetFooter(suffix_ptr + suffix_result.bytes_read - 8, file_handle.GetPath(), file_size,
 			                   encryption_config, footer_len, footer_encrypted);
 			suffix_read = true;
 
 			const idx_t total_footer_len = footer_len + 8;
 			if (total_footer_len <= suffix_result.bytes_read) {
-				auto metadata_ptr = suffix_buffer.ptr + suffix_result.bytes_read - total_footer_len;
+				auto metadata_ptr = suffix_ptr + suffix_result.bytes_read - total_footer_len;
 				file_proto = CreateThriftMemoryProtocol(metadata_ptr, footer_len);
 			}
 		}

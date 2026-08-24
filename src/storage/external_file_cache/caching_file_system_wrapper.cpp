@@ -176,7 +176,12 @@ bool CachingFileSystemWrapper::TryReadSuffix(FileHandle &handle, data_ptr_t buff
 	if (!caching_handle) {
 		return underlying_file_system.TryReadSuffix(handle, buffer, buffer_len, result);
 	}
-	return caching_handle->TryReadSuffix(buffer, buffer_len, result);
+	FileBufferHandleGroup data;
+	if (!caching_handle->TryReadSuffix(buffer_len, data, result)) {
+		return false;
+	}
+	data.CopyTo(buffer, result.bytes_read);
+	return true;
 }
 
 //===----------------------------------------------------------------------===//

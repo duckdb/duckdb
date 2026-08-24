@@ -1,12 +1,12 @@
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
-#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -52,7 +52,8 @@ public:
 				auto pin = buffer_manager.Pin(block->block_handle);
 				if (pin.IsValid()) {
 #ifdef DEBUG
-					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
+					D_ASSERT(Hash(const_char_ptr_cast(pin.Ptr() + block->buffer_offset), block->nr_bytes) ==
+					         block->checksum);
 #endif
 					result_pin = std::move(pin);
 					return;
@@ -84,10 +85,11 @@ public:
 
 					lk.lock();
 					block->block_handle = buf.GetBlockHandle();
+					block->buffer_offset = 0;
 					block->nr_bytes = to_read;
 					block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
-					block->checksum = Checksum(buf.Ptr(), to_read);
+					block->checksum = Hash(const_char_ptr_cast(buf.Ptr()), to_read);
 #endif
 					result_pin = std::move(buf);
 					block->cv.notify_all();
@@ -295,15 +297,123 @@ void CachingFileHandle::EnsureFileMetadata() {
 	}
 }
 
-bool CachingFileHandle::TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) {
-	auto handle = GetFileHandle();
-	if (!handle->TryReadSuffix(buffer, buffer_len, result)) {
+void CachingFileHandle::TryCacheSuffixBlock(optional_ptr<BufferHandle> owned_suffix, const_data_ptr_t suffix_data,
+                                            const SuffixReadResult &suffix_result, idx_t block_size) {
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) ||
+	    suffix_result.file_size == 0) {
+		return;
+	}
+
+	if (Validate()) {
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		const bool no_validation_metadata =
+		    version_tag.empty() && (!last_modified.IsFinite() || last_modified == timestamp_t(0));
+		if (no_validation_metadata) {
+			return;
+		}
+	}
+
+	const idx_t last_block_idx = (suffix_result.file_size - 1) / block_size;
+	const idx_t last_block_start = last_block_idx * block_size;
+	const idx_t last_block_size = suffix_result.file_size - last_block_start;
+	if (last_block_start < suffix_result.start_offset) {
+		return;
+	}
+	const idx_t suffix_offset = last_block_start - suffix_result.start_offset;
+	if (suffix_offset > suffix_result.bytes_read || last_block_size > suffix_result.bytes_read - suffix_offset) {
+		return;
+	}
+
+	auto current_cached_file = EnsureCachedFileCurrent();
+	auto blocks = external_file_cache.ReindexAndAcquireBlocks(*current_cached_file, block_size, last_block_idx, 1);
+	auto &block = blocks[0];
+	{
+		annotated_lock_guard<annotated_mutex> block_guard(block->mtx);
+		if (block->state == CacheBlockState::LOADED || block->state == CacheBlockState::LOADING) {
+			return;
+		}
+		block->state = CacheBlockState::LOADING;
+	}
+
+	try {
+		BufferHandle copied_buffer;
+		shared_ptr<BlockHandle> cached_block_handle;
+		idx_t buffer_offset;
+		if (owned_suffix) {
+			cached_block_handle = owned_suffix->GetBlockHandle();
+			cached_block_handle->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
+			buffer_offset = suffix_offset;
+		} else {
+			auto &buffer_manager = external_file_cache.GetBufferManager();
+			copied_buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, last_block_size);
+			memcpy(copied_buffer.GetDataMutable(), suffix_data + suffix_offset, last_block_size);
+			cached_block_handle = copied_buffer.GetBlockHandle();
+			buffer_offset = 0;
+		}
+
+		annotated_lock_guard<annotated_mutex> block_guard(block->mtx);
+		block->block_handle = std::move(cached_block_handle);
+		block->buffer_offset = buffer_offset;
+		block->nr_bytes = last_block_size;
+		block->state = CacheBlockState::LOADED;
+#ifdef DEBUG
+		block->checksum = Hash(const_char_ptr_cast(suffix_data + suffix_offset), last_block_size);
+#endif
+		block->cv.notify_all();
+	} catch (...) {
+		annotated_lock_guard<annotated_mutex> block_guard(block->mtx);
+		block->state = CacheBlockState::IO_ERROR;
+		block->cv.notify_all();
+		throw;
+	}
+}
+
+bool CachingFileHandle::TryReadSuffix(idx_t max_bytes, FileBufferHandleGroup &data, SuffixReadResult &result) {
+	result = SuffixReadResult();
+	if (max_bytes == 0) {
 		return false;
 	}
-	annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-	if (!file_metadata_initialized) {
-		InitializeFileMetadata(handle);
+
+	auto handle = GetFileHandle();
+	const bool should_cache = external_file_cache.IsEnabled() && external_file_cache.ShouldCacheFile(path.path);
+	const idx_t block_size = should_cache ? external_file_cache.GetCacheBlockSize(path.path) : 0;
+	const idx_t suffix_read_size = should_cache ? MaxValue(max_bytes, block_size) : max_bytes;
+	auto &buffer_manager = external_file_cache.GetBufferManager();
+	auto suffix_buffer = AllocateUncachedReadBuffer(buffer_manager, suffix_read_size);
+	SuffixReadResult suffix_result;
+	if (!handle->TryReadSuffix(suffix_buffer.GetDataMutable(), suffix_read_size, suffix_result)) {
+		return false;
 	}
+	if (suffix_result.bytes_read > suffix_read_size || suffix_result.start_offset > suffix_result.file_size ||
+	    suffix_result.bytes_read != suffix_result.file_size - suffix_result.start_offset) {
+		throw IOException("Filesystem returned an invalid suffix range for file '%s'", path.path);
+	}
+
+	{
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (!file_metadata_initialized) {
+			InitializeFileMetadata(handle);
+		}
+	}
+
+	if (should_cache) {
+		if (max_bytes <= block_size) {
+			// The suffix and the aligned final cache block can begin at different offsets in the same allocation.
+			TryCacheSuffixBlock(&suffix_buffer, suffix_buffer.Ptr(), suffix_result, block_size);
+		} else {
+			TryCacheSuffixBlock(nullptr, suffix_buffer.Ptr(), suffix_result, block_size);
+		}
+	}
+
+	const idx_t returned_bytes = MinValue(max_bytes, suffix_result.bytes_read);
+	const idx_t returned_offset = suffix_result.bytes_read - returned_bytes;
+	result.bytes_read = returned_bytes;
+	result.file_size = suffix_result.file_size;
+	result.start_offset = suffix_result.file_size - returned_bytes;
+
+	vector<FileBufferHandleGroup::MemoryHandle> handles;
+	handles.push_back({std::move(suffix_buffer), returned_offset, returned_bytes});
+	data = FileBufferHandleGroup(std::move(handles));
 	return true;
 }
 
@@ -360,16 +470,18 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
 		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
+		idx_t block_buffer_offset = 0;
 		idx_t block_valid_bytes = 0;
 		{
 			auto &block = *blocks[idx];
 			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+			block_buffer_offset = block.buffer_offset;
 			block_valid_bytes = block.nr_bytes;
 		}
 		const idx_t available_in_block =
 		    (block_valid_bytes > offset_in_block) ? (block_valid_bytes - offset_in_block) : 0;
 		const idx_t length = MinValue(available_in_block, remaining);
-		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
+		mem_handles.push_back({std::move(pins[idx]), block_buffer_offset + offset_in_block, length});
 		remaining -= length;
 	}
 
@@ -496,6 +608,10 @@ bool CachingFileHandle::Validate() const {
 }
 
 bool CachingFileHandle::CanSeek() {
+	if (defer_file_info && !file_metadata_initialized) {
+		// Seekability is a filesystem capability and does not require loading deferred file metadata.
+		return GetFileHandle()->CanSeek();
+	}
 	if (!Validate()) {
 		auto current_cached_file = EnsureCachedFileCurrent();
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);

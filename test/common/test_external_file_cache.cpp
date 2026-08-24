@@ -19,6 +19,26 @@ using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
 using EFCNoMetadataFileSystem = NoValidationMetadataFileSystem;
 
+class EFCSuffixFileSystem : public SimpleTrackingFileSystem {
+public:
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		positional_reads++;
+		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	bool TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) override {
+		suffix_read_size = buffer_len;
+		result.file_size = NumericCast<idx_t>(LocalFileSystem::GetFileSize(handle));
+		result.bytes_read = MinValue(buffer_len, result.file_size);
+		result.start_offset = result.file_size - result.bytes_read;
+		LocalFileSystem::Read(handle, buffer, NumericCast<int64_t>(result.bytes_read), result.start_offset);
+		return true;
+	}
+
+	idx_t suffix_read_size = 0;
+	idx_t positional_reads = 0;
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -373,6 +393,44 @@ TEST_CASE("Re-enabled external file cache refreshes deferred live handle metadat
 	cache.SetEnabled(true);
 	REQUIRE(handle->GetFileSize() == content_b.size());
 	REQUIRE(cache.GetCachedFileCount() == 1);
+}
+
+TEST_CASE("Suffix reads cache the aligned final block", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	constexpr idx_t BLOCK_SIZE = 16384;
+	constexpr idx_t REQUEST_SIZE = 4096;
+	constexpr idx_t FINAL_BLOCK_SIZE = 12288;
+	constexpr idx_t FILE_SIZE = BLOCK_SIZE * 2 + FINAL_BLOCK_SIZE;
+	const auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_suffix_block.bin", content);
+
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+
+	auto suffix_fs = make_uniq<EFCSuffixFileSystem>();
+	auto suffix_fs_ptr = suffix_fs.get();
+	CachingFileSystem cfs(*suffix_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	FileBufferHandleGroup suffix_data;
+	SuffixReadResult suffix_result;
+	REQUIRE(handle->TryReadSuffix(REQUEST_SIZE, suffix_data, suffix_result));
+	REQUIRE(suffix_fs_ptr->suffix_read_size == BLOCK_SIZE);
+	REQUIRE(suffix_result.bytes_read == REQUEST_SIZE);
+	REQUIRE(suffix_result.file_size == FILE_SIZE);
+	REQUIRE(suffix_result.start_offset == FILE_SIZE - REQUEST_SIZE);
+
+	string suffix(REQUEST_SIZE, '\0');
+	suffix_data.CopyTo(reinterpret_cast<data_ptr_t>(&suffix[0]), REQUEST_SIZE);
+	REQUIRE(suffix == content.substr(FILE_SIZE - REQUEST_SIZE));
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(TotalCachedBytes(cache) == FINAL_BLOCK_SIZE);
+
+	REQUIRE(ReadFull(*handle, FINAL_BLOCK_SIZE, BLOCK_SIZE * 2) == content.substr(BLOCK_SIZE * 2));
+	REQUIRE(suffix_fs_ptr->positional_reads == 0);
 }
 
 TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[external_file_cache]") {
