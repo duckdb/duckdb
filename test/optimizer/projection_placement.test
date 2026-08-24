@@ -8,8 +8,9 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
+# Test projection placement independently of compressed-materialization projection barriers
 statement ok
-SET disabled_optimizers = '';
+SET disabled_optimizers = 'compressed_materialization';
 
 statement ok
 CREATE TABLE placement_dimension AS
@@ -56,7 +57,7 @@ logical_opt	<REGEX>:.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]s[ 
 
 # The placement decision is independently configurable
 statement ok
-SET disabled_optimizers = 'projection_placement';
+SET disabled_optimizers = 'projection_placement,compressed_materialization';
 
 query II
 EXPLAIN SELECT s
@@ -66,11 +67,11 @@ JOIN placement_fact USING (i);
 logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]s[ ,│].*
 
 statement ok
-SET disabled_optimizers = '';
+SET disabled_optimizers = 'compressed_materialization';
 
 # Placement does not depend on column-lifetime projection maps
 statement ok
-SET disabled_optimizers = 'column_lifetime';
+SET disabled_optimizers = 'column_lifetime,compressed_materialization';
 
 query II
 EXPLAIN SELECT s
@@ -102,7 +103,7 @@ JOIN placement_selective USING (i);
 10000
 
 statement ok
-SET disabled_optimizers = '';
+SET disabled_optimizers = 'compressed_materialization';
 
 # Fixed-size results over bounded strings use the input width in the cost model
 query II
@@ -321,7 +322,7 @@ CREATE TABLE placement_matches(i INTEGER);
 statement ok
 INSERT INTO placement_matches VALUES (1), (1), (2), (NULL);
 
-foreach do '' 'projection_placement'
+foreach do 'compressed_materialization' 'projection_placement,compressed_materialization'
 
 statement ok
 SET disabled_optimizers = {do};
@@ -354,7 +355,7 @@ statement ok
 INSERT INTO placement_cast_match VALUES (1), (2);
 
 statement ok
-SET disabled_optimizers = '';
+SET disabled_optimizers = 'compressed_materialization';
 
 query II
 EXPLAIN SELECT SUM(n)
