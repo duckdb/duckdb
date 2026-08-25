@@ -264,23 +264,14 @@ SELECT count(*) FROM duckdb_extension_repositories() WHERE prefix='http://evil.e
 ----
 0
 
-# the setting can only be tightened at runtime, never loosened - repositories can only be enabled at startup. Tighten
-# to 'undecided': existing repositories stay trusted, but adding new ones is now blocked
-statement ok
+# while the database is running the setting can only move down ('undecided' -> 'allowed' -> 'forbidden'): once
+# repositories are allowed, the decision cannot be reverted to the 'undecided' default
+statement error
 SET allow_extension_repositories='undecided'
-
-statement error
-CREATE EXTENSION REPOSITORY blocked WITH PREFIX 'http://blocked.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
 ----
-<REGEX>:Permission Error.*not enabled.*
+<REGEX>:.*can only be changed from 'undecided'.*
 
-# once tightened, it cannot be loosened back to 'allowed' while the database is running
-statement error
-SET allow_extension_repositories='allowed'
-----
-<REGEX>:.*more restrictive.*
-
-# existing repositories are still listed and trusted while undecided
+# existing repositories are still listed and trusted
 query I
 SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
 ----
@@ -315,8 +306,13 @@ INSTALL some_extension FROM acme
 statement ok
 DROP EXTENSION REPOSITORY acme
 
-# once forbidden, adding repositories cannot be re-enabled while the database is running
+# once forbidden, repositories cannot be re-enabled or reset to 'undecided' while the database is running
 statement error
 SET allow_extension_repositories='allowed'
 ----
-<REGEX>:.*more restrictive.*
+<REGEX>:.*can only be changed from 'undecided'.*
+
+statement error
+SET allow_extension_repositories='undecided'
+----
+<REGEX>:.*can only be changed from 'undecided'.*

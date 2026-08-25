@@ -149,8 +149,9 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 //===----------------------------------------------------------------------===//
 // Allow Extension Repositories
 //===----------------------------------------------------------------------===//
-// How permissive an access level is, independent of the enum's numeric values. Higher is more permissive
-static int ExtensionRepositoryPermissiveness(ExtensionRepositoryAccess access) {
+// Ordering of the access levels, independent of the enum's numeric values: while the database is running the setting
+// can only move to a lower level ('undecided' -> 'allowed' -> 'forbidden')
+static int ExtensionRepositoryAccessLevel(ExtensionRepositoryAccess access) {
 	switch (access) {
 	case ExtensionRepositoryAccess::UNDECIDED:
 		return 2;
@@ -168,15 +169,13 @@ void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &
 		// the value is set before the database is running (startup) - any value is allowed
 		return;
 	}
-	// while the database is running the setting can only be tightened, never loosened. Trusting a new signing key is at
-	// least as consequential as re-enabling unsigned or community extensions, so - mirroring allow_unsigned_extensions
-	// and allow_community_extensions - extension repositories can only be enabled at startup. This also makes the
-	// 'forbidden' state a one-way ratchet within a session
+	// while the database is running the setting can only move down: the 'undecided' default can be decided either way,
+	// 'allowed' can still be forbidden, but a decision cannot be reverted. This makes 'forbidden' a one-way ratchet
+	// within a session
 	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
-	if (ExtensionRepositoryPermissiveness(new_access) > ExtensionRepositoryPermissiveness(current_access)) {
-		throw InvalidInputException(
-		    "allow_extension_repositories can only be made more restrictive while the database is running; enabling "
-		    "extension repositories is only possible at startup");
+	if (ExtensionRepositoryAccessLevel(new_access) > ExtensionRepositoryAccessLevel(current_access)) {
+		throw InvalidInputException("allow_extension_repositories can only be changed from 'undecided' to 'allowed' or "
+		                            "'forbidden', or from 'allowed' to 'forbidden', while the database is running");
 	}
 }
 

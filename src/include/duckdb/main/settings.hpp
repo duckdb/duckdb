@@ -177,7 +177,8 @@ struct AllowExtensionRepositoriesSetting {
 	static constexpr const char *Description =
 	    "Whether custom trusted extension repositories are 'allowed', 'forbidden' (which also distrusts existing "
 	    "repositories) or 'undecided' (the default: blocks adding new repositories, but keeps trusting existing ones). "
-	    "Can only be enabled at startup; while the database is running it can only be made more restrictive";
+	    "While the database is running the setting can only move from 'undecided' to 'allowed' or 'forbidden', or from "
+	    "'allowed' to 'forbidden'";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "undecided";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
