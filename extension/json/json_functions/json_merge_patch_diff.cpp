@@ -7,7 +7,8 @@ namespace duckdb {
 //! which is used to skip unchanged keys in the parent object's diff.
 static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val, idx_t depth = 0) {
 	if (depth == JSONCommon::MAX_RECURSION_DEPTH) {
-		throw InvalidInputException("json_merge_patch_diff: JSON exceeds maximum recursion depth of %d", JSONCommon::MAX_RECURSION_DEPTH);
+		throw InvalidInputException("json_merge_patch_diff: JSON exceeds maximum recursion depth of %d",
+		                            JSONCommon::MAX_RECURSION_DEPTH);
 	}
 
 	// Both objects: compute recursive structural diff

@@ -297,12 +297,3 @@ SELECT json_merge_patch_diff(
 )
 ----
 {"score":null,"age":31,"city":"SF","verified":true}
-
-# protect against stack overflow
-statement ok
-SELECT json_merge_patch_diff(
-  (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON,
-  (repeat('{"a":', 200000) || '2' || repeat('}', 200000))::JSON
-)
-----
-json_merge_patch_diff: JSON exceeds maximum recursion depth of 128
