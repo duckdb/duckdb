@@ -25,6 +25,8 @@ blacklist = [
     "BatchDrainMode",
     "AccountedWriteAdoption",
     "FileWritePublicationState",
+    "CreateDirectoryMode",
+    "RemoveDirectoryMode",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
     "ClaimState",

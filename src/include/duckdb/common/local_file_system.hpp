@@ -57,8 +57,13 @@ public:
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;

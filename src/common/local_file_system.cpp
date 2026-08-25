@@ -714,19 +714,34 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	struct stat st;
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
 
-	auto normalized_dir = ExpandPath(directory, opener);
-	if (stat(normalized_dir.c_str(), &st) != 0) {
-		/* Directory does not exist. EEXIST for race condition */
-		if (mkdir(normalized_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException({{"errno", std::to_string(errno)}}, "Failed to create directory \"%s\": %s", directory,
-			                  strerror(errno));
-		}
-	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException({{"errno", std::to_string(errno)}},
-		                  "Failed to create directory \"%s\": path exists but is not a directory!", directory);
+void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == CreateDirectoryMode::RECURSIVE) {
+		return FileSystem::CreateDirectoryExtended(directory, options, opener);
 	}
+	if (options.mode != CreateDirectoryMode::SINGLE) {
+		throw InternalException("Unknown CreateDirectoryMode");
+	}
+	auto normalized_dir = ExpandPath(directory, opener);
+	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
+		return true;
+	}
+	auto error = errno;
+	if (error == EEXIST) {
+		struct stat st;
+		if (stat(normalized_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+			return false;
+		}
+	}
+	throw IOException({{"errno", std::to_string(error)}}, "Failed to create directory \"%s\": %s", directory,
+	                  strerror(error));
 }
 
 int RemoveDirectoryRecursive(const char *path) {
@@ -770,8 +785,27 @@ int RemoveDirectoryRecursive(const char *path) {
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
+		auto normalized_dir = ExpandPath(directory, opener);
+		return RemoveDirectoryRecursive(normalized_dir.c_str()) == 0;
+	}
+	if (options.mode != RemoveDirectoryMode::SINGLE) {
+		throw InternalException("Unknown RemoveDirectoryMode");
+	}
 	auto normalized_dir = ExpandPath(directory, opener);
-	RemoveDirectoryRecursive(normalized_dir.c_str());
+	if (rmdir(normalized_dir.c_str()) == 0) {
+		return true;
+	}
+	if (errno == ENOENT || errno == ENOTEMPTY || errno == EEXIST) {
+		return false;
+	}
+	throw IOException({{"errno", std::to_string(errno)}}, "Failed to remove empty directory \"%s\": %s", directory,
+	                  strerror(errno));
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
@@ -1459,25 +1493,49 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	if (DirectoryExists(directory)) {
-		return;
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+void LocalFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == CreateDirectoryMode::RECURSIVE) {
+		return FileSystem::CreateDirectoryExtended(directory, options, opener);
+	}
+	if (options.mode != CreateDirectoryMode::SINGLE) {
+		throw InternalException("Unknown CreateDirectoryMode");
 	}
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
-	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
-		throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
+	if (!directory.empty() && CreateDirectoryW(unicode_path.c_str(), NULL)) {
+		return true;
 	}
+	auto error_code = GetLastError();
+	if (error_code == ERROR_ALREADY_EXISTS) {
+		auto attributes = GetFileAttributesW(unicode_path.c_str());
+		if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			return false;
+		}
+	}
+	SetLastError(error_code);
+	auto error = LocalFileSystem::GetLastErrorAsString();
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 }
 
 static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_ptr<FileOpener> opener) {
-	fs.ListFiles(directory, [&](const string &fname, bool is_directory) {
-		if (is_directory) {
-			DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), opener);
-		} else {
-			fs.RemoveFile(fs.JoinPath(directory, fname));
-		}
-	});
+	fs.ListFiles(
+	    directory,
+	    [&](const string &fname, bool is_directory) {
+		    if (is_directory) {
+			    DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname), opener);
+		    } else {
+			    fs.RemoveFile(fs.JoinPath(directory, fname), opener);
+		    }
+	    },
+	    opener.get());
 	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, opener);
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1487,13 +1545,35 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	if (FileExists(directory)) {
-		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	if (options.mode == RemoveDirectoryMode::RECURSIVE) {
+		if (FileExists(directory, opener)) {
+			throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!",
+			                  directory);
+		}
+		if (!DirectoryExists(directory, opener)) {
+			return false;
+		}
+		DeleteDirectoryRecursive(*this, directory, opener);
+		return true;
 	}
-	if (!DirectoryExists(directory)) {
-		return;
+	if (options.mode != RemoveDirectoryMode::SINGLE) {
+		throw InternalException("Unknown RemoveDirectoryMode");
 	}
-	DeleteDirectoryRecursive(*this, directory, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
+	if (RemoveDirectoryW(unicode_path.c_str())) {
+		return true;
+	}
+	auto error = GetLastError();
+	if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_DIR_NOT_EMPTY) {
+		return false;
+	}
+	auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+	throw IOException("Failed to remove empty directory \"%s\": %s", abs_path, GetLastErrorAsString());
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {

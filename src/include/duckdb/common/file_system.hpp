@@ -44,6 +44,28 @@ class MemoryMappedFile;
 struct MMapOptions;
 class MultiFileList;
 
+enum class CreateDirectoryMode : uint8_t {
+	//! Create the target directory only; its parent directory must already exist.
+	SINGLE,
+	//! Create the target directory and any missing parent directories.
+	RECURSIVE
+};
+
+enum class RemoveDirectoryMode : uint8_t {
+	//! Remove the target only; return false if it is missing or non-empty and never remove its contents.
+	SINGLE,
+	//! Remove the target directory and all files and directories contained in it.
+	RECURSIVE
+};
+
+struct CreateDirectoryOptions {
+	CreateDirectoryMode mode = CreateDirectoryMode::SINGLE;
+};
+
+struct RemoveDirectoryOptions {
+	RemoveDirectoryMode mode = RemoveDirectoryMode::SINGLE;
+};
+
 enum class FileType {
 	//! Regular file
 	FILE_TYPE_REGULAR,
@@ -212,10 +234,16 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Create one directory or a directory tree. Returns whether this call is known to have created the target.
+	DUCKDB_API virtual bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove an empty directory or a directory tree. Returns whether the target was removed.
+	DUCKDB_API virtual bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,

@@ -231,11 +231,25 @@ bool DebugFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void DebugFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	inner_fs->CreateDirectory(directory, opener);
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+bool DebugFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	return inner_fs->CreateDirectoryExtended(directory, options, opener);
+}
+
+void DebugFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 }
 
 void DebugFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	inner_fs->RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool DebugFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	return inner_fs->RemoveDirectoryExtended(directory, options, opener);
 }
 
 void DebugFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
