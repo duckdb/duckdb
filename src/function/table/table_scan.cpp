@@ -704,13 +704,8 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(IndexHandle<Index> index, const ColumnList &column_list, TableFunctionInitInput &input,
+bool TryScanIndex(const IndexReadHandle<ART> &art, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
-	if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
-		return false;
-	}
-	const auto art = std::move(index).Into<ART>();
-
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art->UnboundExpressionCount() > 1) {
@@ -790,7 +785,7 @@ bool TryScanIndex(IndexHandle<Index> index, const ColumnList &column_list, Table
 			return false;
 		}
 		for (const auto delta : {IndexDeltaType::DELETED_ROWS_IN_USE, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT}) {
-			auto delta_index = art.FindDelta<ART>(delta);
+			auto delta_index = art.FindDelta(delta);
 			if (!delta_index) {
 				continue;
 			}
@@ -867,8 +862,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	for (auto index : indexes.IndexHandles()) {
-		index_scan = TryScanIndex(std::move(index), column_list, input, filter_set, max_count, row_ids);
+	for (auto entry : indexes.IndexEntries()) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
+			continue;
+		}
+		auto index = entry->GetReadHandle<ART>();
+		index_scan = TryScanIndex(index, column_list, input, filter_set, max_count, row_ids);
 		if (index_scan) {
 			// found an index - break
 			break;

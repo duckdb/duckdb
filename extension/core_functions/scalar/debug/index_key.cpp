@@ -84,8 +84,8 @@ static shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_li
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (const auto index : index_list.IndexHandles()) {
-		available.push_back(index->GetIndexName());
+	for (auto entry : index_list.IndexEntries()) {
+		available.push_back(entry->GetName());
 	}
 
 	if (available.empty()) {
@@ -149,7 +149,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 	const auto &index_list = data_table_info.GetIndexes();
 	const auto index_entry = FindBoundIndexEntry(index_list, Identifier(index_name), path);
-	const auto index = index_entry->GetHandle<BoundIndex>();
+	const auto index = index_entry->GetReadHandle<BoundIndex>();
 
 	const auto &index_type = index->GetIndexType();
 	if (index_type != ART::TYPE_NAME) {
@@ -193,7 +193,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	const auto art = bind_data.index_entry->GetHandle<ART>();
+	const auto art = bind_data.index_entry->GetReadHandle<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art->GenerateKeys(allocator, key_chunk, keys);

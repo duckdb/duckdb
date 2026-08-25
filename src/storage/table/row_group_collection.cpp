@@ -56,16 +56,15 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 		return false;
 	}
 	bool any_index = false;
-	for (auto &entry : table_info.GetIndexes().GetEntries()) {
+	for (auto entry : table_info.GetIndexes().IndexEntries()) {
 		any_index = true;
-		auto index = entry->GetHandle();
-		if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
+		if (entry->GetBindState() != IndexBindState::BOUND || entry->GetIndexType() != ART::TYPE_NAME) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}
 			return false;
 		}
-		const auto art = std::move(index).Into<ART>();
+		const auto art = entry->GetReadHandle<ART>();
 		// Remap regenerates keys from column values, which cannot reproduce legacy-encoded geometry keys.
 		if (art->HasLegacyGeometryKeys()) {
 			if (remap_indexes) {
@@ -1178,7 +1177,7 @@ public:
 
 		index_handles.reserve(entries.size());
 		for (const auto &entry : entries) {
-			index_handles.push_back(entry->GetMutableHandle<BoundIndex>());
+			index_handles.push_back(entry->GetWriteHandle<BoundIndex>());
 		}
 		old_rowid_idx = mapped_column_ids.size();
 		new_rowid_idx = old_rowid_idx + 1;
@@ -1283,7 +1282,7 @@ private:
 
 private:
 	//! Keep every physical index stable while this task remaps its row IDs.
-	vector<MutableIndexHandle<BoundIndex>> index_handles;
+	vector<IndexWriteHandle<BoundIndex>> index_handles;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;

@@ -599,22 +599,8 @@ bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableInd
 	return index != other.index || index_entries != other.index_entries;
 }
 
-TableIndexIterationHelper<IndexHandle<Index>> TableIndexList::IndexHandles() const {
-	return TableIndexIterationHelper<IndexHandle<Index>>(*this);
-}
-
 TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries() const {
 	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
-}
-
-vector<shared_ptr<IndexEntry>> TableIndexList::GetEntries() const {
-	annotated_lock_guard lock(index_entries_lock);
-	return index_entries;
-}
-
-template <>
-IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIterator::operator*() const {
-	return index_entries->at(index.GetIndex())->GetHandle();
 }
 
 template <>
@@ -622,7 +608,6 @@ shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableI
 	return index_entries->at(index.GetIndex());
 }
 
-template class TableIndexIterationHelper<IndexHandle<Index>>;
 template class TableIndexIterationHelper<shared_ptr<IndexEntry>>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {

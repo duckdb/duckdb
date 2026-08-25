@@ -26,9 +26,9 @@ class ConflictInfo;
 class IndexEntry;
 class TableIndexList;
 template <class TARGET>
-class IndexHandle;
+class IndexReadHandle;
 template <class TARGET>
-class MutableIndexHandle;
+class IndexWriteHandle;
 class IndexBinder;
 struct IndexStorageInfo;
 struct DataTableInfo;
@@ -38,11 +38,6 @@ class TableIndexIterationHelper;
 template <class T>
 struct TableIndexIterationResult {
 	using type = T &;
-};
-
-template <>
-struct TableIndexIterationResult<IndexHandle<Index>> {
-	using type = IndexHandle<Index>;
 };
 
 template <>
@@ -83,31 +78,20 @@ private:
 //! IndexReadHandle provides shared access to a stable physical index.
 //! Other readers can access the entry concurrently, while replacement and entry-level mutations are blocked.
 template <class TARGET>
-class IndexHandle {
+class IndexReadHandle {
 public:
-	IndexHandle(IndexHandle &&) = default;
-	IndexHandle &operator=(IndexHandle &&) = delete;
+	IndexReadHandle(IndexReadHandle &&) = default;
+	IndexReadHandle &operator=(IndexReadHandle &&) = delete;
 
 	const TARGET *operator->() const &;
 	const TARGET *operator->() const && = delete;
 
-	template <class OTHER>
-	[[nodiscard]] IndexHandle<OTHER> Into() &&;
-	template <class OTHER>
-	IndexHandle<OTHER> Into() & = delete;
-
-	template <class OTHER = BoundIndex>
-	optional_ptr<const OTHER> FindDelta(IndexDeltaType type) const &;
-	template <class OTHER = BoundIndex>
-	optional_ptr<const OTHER> FindDelta(IndexDeltaType type) const && = delete;
+	optional_ptr<const TARGET> FindDelta(IndexDeltaType type) const &;
+	optional_ptr<const TARGET> FindDelta(IndexDeltaType type) const && = delete;
 
 private:
 	friend class IndexEntry;
-	template <class>
-	friend class IndexHandle;
-	template <class>
-	friend class MutableIndexHandle;
-	IndexHandle(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
+	IndexReadHandle(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
 
 	bool IsValid() const;
 	const IndexEntry &GetEntry() const;
@@ -119,34 +103,24 @@ private:
 
 //! IndexWriteHandle provides exclusive access to the physical index and checkpoint state.
 template <class TARGET>
-class MutableIndexHandle : public IndexHandle<TARGET> {
+class IndexWriteHandle {
 public:
-	MutableIndexHandle(MutableIndexHandle &&) = default;
-	MutableIndexHandle &operator=(MutableIndexHandle &&) = delete;
-
-	using IndexHandle<TARGET>::FindDelta;
-	using IndexHandle<TARGET>::operator->;
+	IndexWriteHandle(IndexWriteHandle &&) = default;
+	IndexWriteHandle &operator=(IndexWriteHandle &&) = delete;
 
 	TARGET *operator->() &;
 	TARGET *operator->() && = delete;
 
-	template <class OTHER>
-	[[nodiscard]] MutableIndexHandle<OTHER> Into() &&;
-	template <class OTHER>
-	MutableIndexHandle<OTHER> Into() & = delete;
-
-	template <class OTHER = BoundIndex>
-	optional_ptr<OTHER> FindDelta(IndexDeltaType type) &;
-	template <class OTHER = BoundIndex>
-	optional_ptr<OTHER> FindDelta(IndexDeltaType type) && = delete;
-
 private:
 	friend class IndexEntry;
-	template <class>
-	friend class MutableIndexHandle;
-	MutableIndexHandle(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
+	IndexWriteHandle(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
 
+	bool IsValid() const;
 	IndexEntry &GetMutableEntry();
+
+	//! Declared before lock so the lock is released before the entry can be destroyed.
+	shared_ptr<IndexEntry> entry;
+	unique_ptr<StorageLockKey> lock;
 };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
@@ -213,14 +187,14 @@ public:
 
 public:
 	//! Acquire shared access to a stable physical index.
-	template <class TARGET = Index>
-	IndexHandle<TARGET> GetHandle() {
-		return IndexHandle<TARGET>(shared_from_this(), lock.GetSharedLock());
+	template <class TARGET>
+	IndexReadHandle<TARGET> GetReadHandle() {
+		return IndexReadHandle<TARGET>(shared_from_this(), lock.GetSharedLock());
 	}
 	//! Acquire exclusive access to the physical index and checkpoint state.
-	template <class TARGET = Index>
-	MutableIndexHandle<TARGET> GetMutableHandle() {
-		return MutableIndexHandle<TARGET>(shared_from_this(), lock.GetExclusiveLock());
+	template <class TARGET>
+	IndexWriteHandle<TARGET> GetWriteHandle() {
+		return IndexWriteHandle<TARGET>(shared_from_this(), lock.GetExclusiveLock());
 	}
 	IndexBindState GetBindState() const {
 		return bind_state.load();
@@ -231,9 +205,9 @@ public:
 
 private:
 	template <class>
-	friend class IndexHandle;
+	friend class IndexReadHandle;
 	template <class>
-	friend class MutableIndexHandle;
+	friend class IndexWriteHandle;
 
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
@@ -244,82 +218,60 @@ private:
 };
 
 template <class TARGET>
-IndexHandle<TARGET>::IndexHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
+IndexReadHandle<TARGET>::IndexReadHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
     : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 	D_ASSERT(IsValid());
+	GetEntry().owned_index->template Cast<TARGET>();
 }
 
 template <class TARGET>
-bool IndexHandle<TARGET>::IsValid() const {
+bool IndexReadHandle<TARGET>::IsValid() const {
 	D_ASSERT(bool(entry) == bool(lock));
 	return entry != nullptr;
 }
 
 template <class TARGET>
-const IndexEntry &IndexHandle<TARGET>::GetEntry() const {
+const IndexEntry &IndexReadHandle<TARGET>::GetEntry() const {
 	D_ASSERT(IsValid());
 	return *entry;
 }
 
 template <class TARGET>
-const TARGET *IndexHandle<TARGET>::operator->() const & {
+const TARGET *IndexReadHandle<TARGET>::operator->() const & {
 	return std::addressof(GetEntry().owned_index->template Cast<TARGET>());
 }
 
 template <class TARGET>
-template <class OTHER>
-IndexHandle<OTHER> IndexHandle<TARGET>::Into() && {
-	GetEntry().owned_index->template Cast<OTHER>();
-	auto result = IndexHandle<OTHER>(std::move(entry), std::move(lock));
-	D_ASSERT(!entry);
-	D_ASSERT(!lock);
-	return result;
-}
-
-template <class TARGET>
-template <class OTHER>
-optional_ptr<const OTHER> IndexHandle<TARGET>::FindDelta(IndexDeltaType type) const & {
+optional_ptr<const TARGET> IndexReadHandle<TARGET>::FindDelta(IndexDeltaType type) const & {
 	auto index = GetEntry().deltas.Find(type);
 	if (!index) {
 		return nullptr;
 	}
-	return index->template Cast<OTHER>();
+	return index->template Cast<TARGET>();
 }
 
 template <class TARGET>
-MutableIndexHandle<TARGET>::MutableIndexHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
-    : IndexHandle<TARGET>(std::move(entry_p), std::move(lock_p)) {
+IndexWriteHandle<TARGET>::IndexWriteHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
+    : entry(std::move(entry_p)), lock(std::move(lock_p)) {
+	D_ASSERT(IsValid());
+	GetMutableEntry().owned_index->template Cast<TARGET>();
 }
 
 template <class TARGET>
-IndexEntry &MutableIndexHandle<TARGET>::GetMutableEntry() {
-	D_ASSERT(this->IsValid());
-	return *this->entry;
+bool IndexWriteHandle<TARGET>::IsValid() const {
+	D_ASSERT(bool(entry) == bool(lock));
+	return entry != nullptr;
 }
 
 template <class TARGET>
-TARGET *MutableIndexHandle<TARGET>::operator->() & {
+IndexEntry &IndexWriteHandle<TARGET>::GetMutableEntry() {
+	D_ASSERT(IsValid());
+	return *entry;
+}
+
+template <class TARGET>
+TARGET *IndexWriteHandle<TARGET>::operator->() & {
 	return std::addressof(GetMutableEntry().owned_index->template Cast<TARGET>());
-}
-
-template <class TARGET>
-template <class OTHER>
-MutableIndexHandle<OTHER> MutableIndexHandle<TARGET>::Into() && {
-	GetMutableEntry().owned_index->template Cast<OTHER>();
-	auto result = MutableIndexHandle<OTHER>(std::move(this->entry), std::move(this->lock));
-	D_ASSERT(!this->entry);
-	D_ASSERT(!this->lock);
-	return result;
-}
-
-template <class TARGET>
-template <class OTHER>
-optional_ptr<OTHER> MutableIndexHandle<TARGET>::FindDelta(IndexDeltaType type) & {
-	auto index = GetMutableEntry().deltas.Find(type);
-	if (!index) {
-		return nullptr;
-	}
-	return index->template Cast<OTHER>();
 }
 
 struct IndexSerializationInfo {
@@ -337,11 +289,8 @@ struct IndexSerializationResult {
 
 class TableIndexList {
 public:
-	TableIndexIterationHelper<IndexHandle<Index>> IndexHandles() const;
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
-	//! Returns shared ownership of the stable logical index entries.
-	vector<shared_ptr<IndexEntry>> GetEntries() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Initializes the transaction-local delete and append indexes.
@@ -488,9 +437,6 @@ public:
 		return TableIndexIterator(nullptr);
 	}
 };
-
-template <>
-IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIterator::operator*() const;
 
 template <>
 shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const;
