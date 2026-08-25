@@ -452,7 +452,8 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
                                          CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
-                                         DataChunk &scan_chunk, TransactionData transaction) {
+                                         DataChunk &scan_chunk, TransactionData transaction,
+                                         ColumnStatistics &changed_stats) {
 	Verify();
 
 	// construct a new column data for this type
@@ -469,6 +470,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
+	Vector hashes(LogicalType::HASH);
 	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
@@ -482,6 +484,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		// execute the expression
 		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
+		changed_stats.UpdateDistinctStatistics(append_vector, scan_chunk.size(), hashes);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
 	column_data->FinalizeAppend(nullptr, append_state);
@@ -522,7 +525,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor) {
+                                         ExpressionExecutor &executor, ColumnStatistics &new_column_stats) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -535,6 +538,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		DataChunk result_chunk;
 		result_chunk.Initialize(Allocator::DefaultAllocator(), {new_column.GetType()});
 		auto &result = result_chunk.data[0];
+		Vector hashes(LogicalType::HASH);
 
 		ColumnAppendState state;
 		added_column->InitializeAppend(state);
@@ -543,6 +547,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			dummy_chunk.SetChildCardinality(rows_in_this_vector);
 			result_chunk.Reset();
 			executor.ExecuteExpression(dummy_chunk, result);
+			new_column_stats.UpdateDistinctStatistics(result, rows_in_this_vector, hashes);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 		added_column->FinalizeAppend(nullptr, state);

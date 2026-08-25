@@ -1,0 +1,36 @@
+# name: test/sql/alter/add_col/test_add_col_distinct_stats.test
+# description: ADD COLUMN must build the distinct count statistics of the new column
+# group: [add_col]
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+statement ok
+CREATE TABLE t AS SELECT range AS i FROM range(100000);
+
+statement ok
+CREATE SEQUENCE seq;
+
+# IF NOT EXISTS fills the column with the default directly instead of through an UPDATE
+statement ok
+ALTER TABLE t ADD COLUMN IF NOT EXISTS u VARCHAR DEFAULT (nextval('seq') % 1000)::VARCHAR;
+
+# 1000 distinct values over 100K rows
+query II
+EXPLAIN (FORMAT JSON) SELECT u FROM t GROUP BY u;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"u",[^}]*"Estimated Cardinality":\s*"[0-9]{3,4}".*
+
+# appended rows must extend the distinct count instead of replacing it
+statement ok
+INSERT INTO t SELECT 100000 + range, (nextval('seq') % 1000)::VARCHAR FROM range(10);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT u FROM t GROUP BY u;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"u",[^}]*"Estimated Cardinality":\s*"[0-9]{3,4}".*
+
+query I
+SELECT COUNT(DISTINCT u) FROM t;
+----
+1000

@@ -26,6 +26,7 @@ class AsyncTask;
 class AttachedDatabase;
 class BlockManager;
 class ColumnData;
+class ColumnStatistics;
 class DatabaseInstance;
 class DataTable;
 class DuckTableEntry;
@@ -131,9 +132,10 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction,
+	                               ColumnStatistics &changed_stats);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor);
+	                               ExpressionExecutor &executor, ColumnStatistics &new_column_stats);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	//! Accumulates this row group's on-disk blocks into the drop state.
