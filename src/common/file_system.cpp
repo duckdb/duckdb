@@ -534,7 +534,7 @@ void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpene
 bool FileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
                                          optional_ptr<FileOpener> opener) {
 	switch (options.mode) {
-	case RemoveDirectoryMode::SINGLE:
+	case RemoveDirectoryMode::IF_EMPTY:
 		return false;
 	case RemoveDirectoryMode::RECURSIVE:
 		RemoveDirectory(directory, opener);

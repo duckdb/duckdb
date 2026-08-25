@@ -45,14 +45,14 @@ struct MMapOptions;
 class MultiFileList;
 
 enum class RemoveDirectoryMode : uint8_t {
-	//! Remove the target only; return false if it is missing or non-empty and never remove its contents.
-	SINGLE,
+	//! Remove the target only if it is empty; return false if it is missing or non-empty.
+	IF_EMPTY,
 	//! Remove the target directory and all files and directories contained in it.
 	RECURSIVE
 };
 
 struct RemoveDirectoryOptions {
-	RemoveDirectoryMode mode = RemoveDirectoryMode::SINGLE;
+	RemoveDirectoryMode mode = RemoveDirectoryMode::IF_EMPTY;
 };
 
 enum class FileType {

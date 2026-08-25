@@ -779,7 +779,7 @@ bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const Rem
 		auto normalized_dir = ExpandPath(directory, opener);
 		return RemoveDirectoryRecursive(normalized_dir.c_str()) == 0;
 	}
-	if (options.mode != RemoveDirectoryMode::SINGLE) {
+	if (options.mode != RemoveDirectoryMode::IF_EMPTY) {
 		throw InternalException("Unknown RemoveDirectoryMode");
 	}
 	auto normalized_dir = ExpandPath(directory, opener);
@@ -1546,7 +1546,7 @@ bool LocalFileSystem::RemoveDirectoryExtended(const string &directory, const Rem
 		DeleteDirectoryRecursive(*this, directory, opener);
 		return true;
 	}
-	if (options.mode != RemoveDirectoryMode::SINGLE) {
+	if (options.mode != RemoveDirectoryMode::IF_EMPTY) {
 		throw InternalException("Unknown RemoveDirectoryMode");
 	}
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
