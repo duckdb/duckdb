@@ -607,13 +607,9 @@ public:
 
 	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
-	//! Statistics callback for aggregates whose result is always one of the values of their first
-	//! argument (e.g. min, max, first): the output inherits the input column statistics
-	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
-	                                                           AggregateStatisticsInput &input);
 	//! Statistics callback for aggregates whose result always lies within the range of their first
-	//! argument (e.g. avg, median): as above, but casts the min/max bounds if the types differ
-	static unique_ptr<BaseStatistics> PropagateInputRangeStats(ClientContext &context, BoundAggregateExpression &expr,
+	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
+	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
 	                                                           AggregateStatisticsInput &input);
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {

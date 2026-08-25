@@ -591,7 +591,7 @@ struct ListContinuousQuantile {
 
 AggregateFunction GetContinuousQuantile(const LogicalType &type) {
 	auto fun = GetContinuousQuantileTemplated<ScalarContinuousQuantile>(type);
-	fun.SetStatisticsCallback(AggregateFunction::PropagateInputRangeStats);
+	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
 

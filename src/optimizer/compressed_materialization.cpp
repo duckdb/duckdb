@@ -593,12 +593,12 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 		if (statistics[col_idx]) {
 			statistics_map[new_binding] = statistics[col_idx]->ToUnique();
 		} else {
-			// not compressed: transfer the statistics of the old binding (if any) to the new binding,
-			// so that references rebound to the decompress projection keep their statistics
+			// not compressed: move the statistics of the old binding (if any) to the new binding
 			auto stats_it = statistics_map.find(old_binding);
 			if (stats_it != statistics_map.end() && stats_it->second) {
-				statistics_map[new_binding] = std::move(stats_it->second);
+				auto old_stats = std::move(stats_it->second);
 				statistics_map.erase(stats_it);
+				statistics_map[new_binding] = std::move(old_stats);
 			}
 		}
 	}

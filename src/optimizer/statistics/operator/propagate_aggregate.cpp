@@ -496,8 +496,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	count_matcher->policy = SetMatcher::Policy::ORDERED;
 	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
 
-	// with a GROUP BY, aggregates only run over non-empty groups; without one (or with an empty
-	// grouping set) they can aggregate zero rows, in which case they produce NULL
+	// grouped aggregates only run over non-empty groups; ungrouped ones (or empty grouping sets) can see zero rows
 	aggregate_input_may_be_empty = aggr.groups.empty();
 	for (auto &grouping_set : aggr.grouping_sets) {
 		if (grouping_set.empty()) {

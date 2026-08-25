@@ -161,8 +161,7 @@ struct AggregateStatisticsInput {
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
 	optional_ptr<NodeStatistics> node_stats;
-	//! Whether the aggregate can be evaluated over zero input rows (e.g. an ungrouped aggregate
-	//! over an empty table), in which case value-returning aggregates produce NULL
+	//! Whether the aggregate can see zero input rows (e.g. ungrouped over an empty table)
 	bool input_may_be_empty = true;
 };
 
