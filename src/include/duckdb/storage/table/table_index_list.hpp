@@ -428,6 +428,8 @@ public:
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Returns the physical table columns referenced by any index.
 	unordered_set<column_t> GetIndexedColumns() const;
+	//! Returns the column sets of unique indexes matching the conflict target.
+	vector<unordered_set<column_t>> GetConflictTargetColumns(const ConflictInfo &conflict_info) const;
 	//! Get the combined column ids of the unique indexes.
 	unordered_set<column_t> GetUniqueIndexColumns() const;
 	//! Serialize all indexes of the table.

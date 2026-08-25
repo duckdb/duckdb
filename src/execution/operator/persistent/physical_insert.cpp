@@ -7,7 +7,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/persistent/collection_merger.hpp"
 #include "duckdb/execution/row_id_deduplicator.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -354,7 +353,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   const vector<shared_ptr<IndexEntry>> &matched_indexes) {
+                                                   const vector<unordered_set<column_t>> &matched_index_columns) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -362,9 +361,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
-		for (const auto &entry : matched_indexes) {
-			auto index = entry->GetHandle();
-			auto index_column_ids = index->GetColumnIdSet();
+		for (const auto &index_column_ids : matched_index_columns) {
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -525,42 +522,21 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	}
 
 	ConflictInfo conflict_info(conflict_target);
-	vector<shared_ptr<IndexEntry>> matching_indexes;
+	vector<unordered_set<column_t>> matching_index_columns;
 
 	if (conflict_info.column_ids.empty()) {
 		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (const auto &entry : global_indexes.GetEntries()) {
-			auto index = entry->GetHandle();
-
-			if (!index->IsUnique()) {
-				continue;
-			}
-			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
-				continue;
-			}
-			D_ASSERT(index->IsBound());
-
-			matching_indexes.push_back(entry);
-		}
+		matching_index_columns = global_indexes.GetConflictTargetColumns(conflict_info);
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (const auto &entry : local_indexes.GetEntries()) {
-			auto index = entry->GetHandle();
-
-			if (!index->IsUnique()) {
-				continue;
-			}
-			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
-				continue;
-			}
-			D_ASSERT(index->IsBound());
-
-			matching_indexes.push_back(entry);
+		auto local_index_columns = local_indexes.GetConflictTargetColumns(conflict_info);
+		for (auto &column_set : local_index_columns) {
+			matching_index_columns.push_back(std::move(column_set));
 		}
 	}
 
-	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matching_indexes);
+	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matching_index_columns);
 	idx_t count = insert_chunk.size();
 	if (!inner_conflicts.empty()) {
 		// We have at least one inner conflict to filter out.

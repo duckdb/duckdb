@@ -998,6 +998,21 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	return column_ids;
 }
 
+vector<unordered_set<column_t>> TableIndexList::GetConflictTargetColumns(const ConflictInfo &conflict_info) const {
+	annotated_lock_guard lock(index_entries_lock);
+	vector<unordered_set<column_t>> result;
+	for (const auto &entry : index_entries) {
+		auto index_info = entry->GetStorageInfo();
+		if (!index_info.is_unique ||
+		    !conflict_info.ConflictTargetMatches(index_info.is_unique, index_info.column_set)) {
+			continue;
+		}
+		D_ASSERT(entry->GetBindState() == IndexBindState::BOUND);
+		result.push_back(std::move(index_info.column_set));
+	}
+	return result;
+}
+
 unordered_set<column_t> TableIndexList::GetUniqueIndexColumns() const {
 	annotated_lock_guard lock(index_entries_lock);
 	unordered_set<column_t> result;
