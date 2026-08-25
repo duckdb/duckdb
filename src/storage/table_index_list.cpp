@@ -34,6 +34,61 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 	bound_index.Append(chunk, row_ids);
 }
 
+ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
+                             IndexAppendMode append_mode, optional_idx active_checkpoint) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!owned_index->IsBound()) {
+		auto &unbound_index = owned_index->Cast<UnboundIndex>();
+		unbound_index.BufferChunk(chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
+		return ErrorData();
+	}
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+
+	unique_ptr<StorageLockKey> delete_lock;
+	optional_ptr<const BoundIndex> delete_index;
+	if (bound_index.IsUnique() && delete_entry) {
+		delete_lock = delete_entry->lock.GetSharedLock();
+		D_ASSERT(delete_entry->owned_index->IsBound());
+		delete_index = delete_entry->owned_index->Cast<BoundIndex>();
+	}
+
+	bool lookup_main_index = false;
+	optional_ptr<BoundIndex> append_index;
+	if (bound_index.SupportsDeltaIndexes() && deltas.ShouldUse(active_checkpoint)) {
+		append_index = deltas.GetOrCreate(bound_index, IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
+		if (bound_index.IsUnique()) {
+			lookup_main_index = true;
+		}
+	}
+
+	ErrorData error;
+	try {
+		if (lookup_main_index) {
+			IndexAppendInfo lookup_append_info;
+			if (delete_index) {
+				delete_index->AddToDeleteIndexes(lookup_append_info);
+			}
+			if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+				delta->AddToDeleteIndexes(lookup_append_info);
+			}
+			bound_index.VerifyAppend(chunk, lookup_append_info, optional_ptr<ConflictManager>());
+		}
+
+		IndexAppendInfo index_append_info(append_mode, nullptr);
+		if (delete_index) {
+			delete_index->AddToDeleteIndexes(index_append_info);
+		}
+		if (append_index) {
+			error = append_index->Append(chunk, row_ids, index_append_info);
+		} else {
+			error = bound_index.Append(chunk, row_ids, index_append_info);
+		}
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
+	}
+	return error;
+}
+
 void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
@@ -72,6 +127,11 @@ bool IndexEntry::IsUnique() const {
 bool IndexEntry::NameEquals(const Identifier &name) const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->GetIndexName() == name;
+}
+
+Identifier IndexEntry::GetName() const {
+	auto entry_lock = lock.GetSharedLock();
+	return owned_index->GetIndexName();
 }
 
 void IndexEntry::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
@@ -312,6 +372,35 @@ void TableIndexList::Append(DataChunk &chunk, Vector &row_ids) {
 	for (const auto &entry : index_entries) {
 		entry->Append(chunk, row_ids);
 	}
+}
+
+ErrorData TableIndexList::Append(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+                                 IndexAppendMode append_mode, optional_idx active_checkpoint) {
+	Vector row_ids(LogicalType::ROW_TYPE);
+	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
+
+	annotated_lock_guard lock(index_entries_lock);
+	vector<shared_ptr<IndexEntry>> already_appended;
+
+	ErrorData error;
+	for (const auto &entry : index_entries) {
+		shared_ptr<IndexEntry> delete_entry;
+		if (delete_indexes && entry->IsUnique()) {
+			delete_entry = delete_indexes->FindEntry(entry->GetName());
+		}
+		error = entry->Append(chunk, row_ids, delete_entry, append_mode, active_checkpoint);
+		if (error.HasError()) {
+			break;
+		}
+		already_appended.push_back(entry);
+	}
+
+	if (error.HasError()) {
+		for (auto &entry : already_appended) {
+			entry->RevertAppend(chunk, row_ids);
+		}
+	}
+	return error;
 }
 
 void TableIndexList::RevertAppend(DataChunk &chunk, Vector &row_ids) {

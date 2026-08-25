@@ -197,13 +197,6 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
-	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
-	//! table_chunk is in physical table layout. Unbound indexes buffer their own columns of it.
-	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &table_chunk, row_t row_start, const IndexAppendMode index_append_mode,
-	                                 optional_idx active_checkpoint);
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk, row_t row_start,
-	                          const IndexAppendMode index_append_mode);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());

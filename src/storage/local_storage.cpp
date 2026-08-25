@@ -193,8 +193,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 			table_chunk.data[col_id].Reference(index_chunk.data[i]);
 		}
 
-		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, start_row, index_append_mode,
-		                                   checkpoint_id);
+		error = index_list.Append(delete_indexes, table_chunk, start_row, index_append_mode, checkpoint_id);
 		if (error.HasError()) {
 			break;
 		}
@@ -474,9 +473,8 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	if (!storage->append_indexes.Empty()) {
-		auto error =
-		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
-		                               NumericCast<row_t>(base_id), storage->index_append_mode, optional_idx());
+		auto error = storage->append_indexes.Append(storage->delete_indexes, table_chunk, NumericCast<row_t>(base_id),
+		                                             storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}

@@ -167,6 +167,9 @@ public:
 	explicit IndexEntry(unique_ptr<Index> index);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
+	//! Appends a chunk using delete and checkpoint indexes where required.
+	ErrorData Append(DataChunk &chunk, Vector &row_ids, const shared_ptr<IndexEntry> &delete_entry,
+	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to the physical index or its checkpoint delta.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Reverts an append made directly to the bound physical index.
@@ -177,6 +180,8 @@ public:
 	bool IsUnique() const;
 	//! Returns whether the physical index has the given name.
 	bool NameEquals(const Identifier &name) const;
+	//! Returns the name of the physical index.
+	Identifier GetName() const;
 	//! Verifies that the physical index is not updated by the given columns.
 	void VerifyUpdate(const vector<PhysicalIndex> &column_ids) const;
 	//! Vacuums the physical index if it is bound.
@@ -354,6 +359,9 @@ public:
 	void AddLocalIndex(const IndexHandle<BoundIndex> &source);
 	//! Appends a chunk to all index entries.
 	void Append(DataChunk &chunk, Vector &row_ids);
+	//! Appends a table chunk with generated row IDs, using delete and checkpoint indexes where required.
+	ErrorData Append(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+	                 IndexAppendMode append_mode, optional_idx active_checkpoint);
 	//! Reverts an append to all index entries.
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Reverts an append made directly to all bound physical indexes.
