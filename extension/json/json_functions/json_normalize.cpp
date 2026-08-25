@@ -4,7 +4,12 @@
 namespace duckdb {
 
 //! Recursively sort all object keys alphabetically (byte-order) in a mutable JSON value
-static void SortKeys(yyjson_mut_val *val) {
+static void SortKeys(yyjson_mut_val *val, idx_t depth = 0) {
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("json_normalize: JSON exceeds maximum recursion depth of %d",
+		                            JSONCommon::MAX_RECURSION_DEPTH);
+	}
+
 	if (!val) {
 		return;
 	}
@@ -15,7 +20,7 @@ static void SortKeys(yyjson_mut_val *val) {
 				yyjson_mut_obj_iter iter;
 				yyjson_mut_obj_iter_init(val, &iter);
 				yyjson_mut_val *key = yyjson_mut_obj_iter_next(&iter);
-				SortKeys(yyjson_mut_obj_iter_get_val(key));
+				SortKeys(yyjson_mut_obj_iter_get_val(key), depth + 1);
 			}
 			return;
 		}
@@ -40,7 +45,7 @@ static void SortKeys(yyjson_mut_val *val) {
 
 		// Recursively sort nested values
 		for (auto &pair : pairs) {
-			SortKeys(pair.second);
+			SortKeys(pair.second, depth + 1);
 		}
 
 		// Clear and rebuild in sorted order
@@ -52,7 +57,7 @@ static void SortKeys(yyjson_mut_val *val) {
 		idx_t idx, max;
 		yyjson_mut_val *elem;
 		yyjson_mut_arr_foreach(val, idx, max, elem) {
-			SortKeys(elem);
+			SortKeys(elem, depth + 1);
 		}
 	}
 }
@@ -74,13 +79,16 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 			result_data.WriteNull();
 			continue;
 		}
-
+		fprintf(stderr, "82\n");
 		auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
+		fprintf(stderr, "84");
 		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+		fprintf(stderr, "86\n");
 		auto root = yyjson_mut_doc_get_root(mut_doc);
+		fprintf(stderr, "88\n");
 
 		SortKeys(root);
-
+		fprintf(stderr, "91\n");
 		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
@@ -94,6 +102,7 @@ static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {
 	ScalarFunctionSet set("json_normalize");
 	GetNormalizeFunctionInternal(set, LogicalType::JSON());
+	set.SetFallible();
 	return set;
 }
 

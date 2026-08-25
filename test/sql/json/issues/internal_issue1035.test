@@ -11,7 +11,7 @@ SELECT json_deep_merge(repeat('{"a":',20000) || '1' || repeat('}',20000), repeat
 json_deep_merge: JSON exceeds maximum recursion depth of 128
 
 # Vuln152: json_merge_patch_diff
-statement ok
+statement error
 SELECT json_merge_patch_diff(
   (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON,
   (repeat('{"a":', 200000) || '2' || repeat('}', 200000))::JSON

@@ -6,7 +6,7 @@ namespace duckdb {
 //! Internal recursive diff. Returns nullptr to signal "no changes" to the caller,
 //! which is used to skip unchanged keys in the parent object's diff.
 static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyjson_val *new_val, idx_t depth = 0) {
-	if (depth == JSONCommon::MAX_RECURSION_DEPTH) {
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
 		throw InvalidInputException("json_merge_patch_diff: JSON exceeds maximum recursion depth of %d",
 		                            JSONCommon::MAX_RECURSION_DEPTH);
 	}
@@ -113,6 +113,7 @@ ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
 	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
 	                   MergePatchDiffFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 
 	return ScalarFunctionSet(fun);
 }
