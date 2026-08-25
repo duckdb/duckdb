@@ -140,8 +140,6 @@ public:
 	template <class OTHER = BoundIndex>
 	optional_ptr<OTHER> FindDelta(IndexDeltaType type) && = delete;
 
-	void ReplaceIndex(unique_ptr<Index> index);
-
 private:
 	friend class IndexEntry;
 	template <class>
@@ -172,16 +170,18 @@ public:
 	                     optional_idx active_checkpoint);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
-	//! Returns whether the physical index is an ART index.
-	bool IsART() const;
-	//! Returns whether the physical index matches the conflict target.
-	bool ConflictTargetMatches(const ConflictInfo &conflict_info) const;
 	//! Returns whether the physical index matches the foreign key columns and role.
 	bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) const;
-	//! Returns whether the physical index has the given name.
-	bool NameEquals(const Identifier &name) const;
 	//! Returns the name of the physical index.
 	Identifier GetName() const;
+	//! Returns the physical index type.
+	string GetIndexType() const;
+	//! Resets any storage owned by the physical index.
+	void ResetStorage();
+	//! Binds the unbound physical index without replacing it.
+	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types);
+	//! Replaces the unbound physical index with its bound representation.
+	void CommitBind(unique_ptr<BoundIndex> bound_index);
 	//! Verifies that rows can be appended to the bound physical index.
 	void VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,
 	                  optional_ptr<ConflictManager> manager);
@@ -322,11 +322,6 @@ optional_ptr<OTHER> MutableIndexHandle<TARGET>::FindDelta(IndexDeltaType type) &
 	return index->template Cast<OTHER>();
 }
 
-template <class TARGET>
-void MutableIndexHandle<TARGET>::ReplaceIndex(unique_ptr<Index> index) {
-	GetMutableEntry().owned_index = std::move(index);
-}
-
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
 	transaction_t checkpoint_id;
@@ -374,7 +369,7 @@ public:
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
 	//! Binds unbound indexes possibly present after loading an extension.
-	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
+	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
 	//! Returns true, if there are no index entries.
 	bool Empty() const {
 		return Count() == 0;
@@ -409,7 +404,7 @@ public:
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
 	//! Returns true if every index is bound and has the given type (vacuously true for an empty list).
-	bool AllIndexesBoundOfType(const char *index_type) const;
+	bool AllIndexesBoundOfType(const string &index_type) const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 		D_ASSERT(this != &other);

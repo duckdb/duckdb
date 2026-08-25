@@ -48,7 +48,7 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
 	D_ASSERT(!this->schema_path.empty());
 }
 
-void DataTableInfo::BindIndexes(ClientContext &context, const char *index_type) {
+void DataTableInfo::BindIndexes(ClientContext &context, const optional<string> &index_type) {
 	indexes.Bind(context, *this, index_type);
 }
 

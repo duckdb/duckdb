@@ -26,8 +26,8 @@ public:
 	              Identifier table);
 
 	//! Bind unknown indexes throwing an exception if binding fails.
-	//! Only binds the specified index type, or all, if nullptr.
-	void BindIndexes(ClientContext &context, const char *index_type = nullptr);
+	//! Only binds the specified index type, or all if no type is specified.
+	void BindIndexes(ClientContext &context, const optional<string> &index_type = {});
 
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
