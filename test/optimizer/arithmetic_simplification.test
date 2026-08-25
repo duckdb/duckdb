@@ -39,7 +39,7 @@ EXPLAIN SELECT X//1 FROM test
 
 # division by zero results in a NULL
 query I nosort xnull
-EXPLAIN SELECT NULL FROM test
+EXPLAIN SELECT NULL::INTEGER FROM test
 ----
 
 query I nosort xnull
