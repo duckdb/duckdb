@@ -87,10 +87,7 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
-ScanReadAheadJob::~ScanReadAheadJob() {
-	// safety net for jobs without I/O-written members, other subclasses settle in their own destructor
-	SettleIO();
-}
+ScanReadAheadJob::~ScanReadAheadJob() = default;
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)

@@ -236,28 +236,7 @@ enum class MultiFileDecodeResult : uint8_t {
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob : public ScanReadAheadJob {
-	MultiFileScanJob() = default;
-	MultiFileScanJob(MultiFileScanJob &&) noexcept = default;
-	MultiFileScanJob &operator=(MultiFileScanJob &&other) noexcept {
-		if (this == &other) {
-			return *this;
-		}
-		// settle the previous job first, its I/O and scan state must go before its reader is released
-		SettleIO();
-		scan_state.reset();
-		ScanReadAheadJob::operator=(std::move(other));
-		reader = std::move(other.reader);
-		reader_data = other.reader_data;
-		file_index = other.file_index;
-		scan_state = std::move(other.scan_state);
-		return *this;
-	}
-	~MultiFileScanJob() override {
-		// scheduled reads might still be in flight, settle them before the members they write to are destroyed
-		SettleIO();
-	}
-
+struct MultiFileScanJobState {
 	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
 	//! Per-file data for the reader
@@ -275,7 +254,7 @@ public:
 
 public:
 	//! The job currently being scanned by this thread
-	MultiFileScanJob job;
+	unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>> job;
 	//! Job's state
 	MultiFileJobState job_state = MultiFileJobState::NONE;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
