@@ -8708,20 +8708,27 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInnerTableRefIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTableSubqueryInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<Identifier> table_alias_colon {};
+	auto &table_alias_colon_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (table_alias_colon_opt.HasResult()) {
+		auto table_alias_colon_value = transformer.Transform<Identifier>(table_alias_colon_opt.GetResult());
+		table_alias_colon = table_alias_colon_value;
+	}
 	optional<bool> lateral {};
-	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	auto &lateral_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (lateral_opt.HasResult()) {
 		auto lateral_value = transformer.Transform<bool>(lateral_opt.GetResult());
 		lateral = lateral_value;
 	}
-	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
 	optional<TableAlias> table_alias {};
-	auto &table_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	auto &table_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
 		auto table_alias_value = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
 		table_alias = table_alias_value;
 	}
-	auto result = TransformTableSubquery(transformer, lateral, std::move(subquery_reference), table_alias);
+	auto result =
+	    TransformTableSubquery(transformer, table_alias_colon, lateral, std::move(subquery_reference), table_alias);
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 
@@ -8769,14 +8776,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTableAliasColon
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformValuesRefInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto values_clause = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	optional<Identifier> table_alias_colon {};
+	auto &table_alias_colon_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (table_alias_colon_opt.HasResult()) {
+		auto table_alias_colon_value = transformer.Transform<Identifier>(table_alias_colon_opt.GetResult());
+		table_alias_colon = table_alias_colon_value;
+	}
+	auto values_clause = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(1));
 	optional<TableAlias> table_alias {};
-	auto &table_alias_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	auto &table_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (table_alias_opt.HasResult()) {
 		auto table_alias_value = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
 		table_alias = table_alias_value;
 	}
-	auto result = TransformValuesRef(transformer, std::move(values_clause), table_alias);
+	auto result = TransformValuesRef(transformer, table_alias_colon, std::move(values_clause), table_alias);
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 
