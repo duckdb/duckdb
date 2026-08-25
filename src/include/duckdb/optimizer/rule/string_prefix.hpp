@@ -22,6 +22,15 @@ public:
 	                             bool is_root) override;
 };
 
+//! Rewrite IN comparisons on zero-length string prefixes to a constant-or-null expression.
+class StringPrefixInRule : public Rule {
+public:
+	explicit StringPrefixInRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 //! Rewrite instr(string, constant) = 1 into prefix(string, constant).
 class InstrPrefixRule : public Rule {
 public:

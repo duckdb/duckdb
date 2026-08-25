@@ -1,0 +1,68 @@
+# name: test/optimizer/zero_length_prefix_stats.test
+# description: Test aggregate precomputation for zero-length string prefixes
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/zero_length_prefix_stats.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE db.prefixes(i BIGINT, s VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO db.prefixes SELECT i, 'x' FROM range(6144) t(i);
+
+# Reopen to clear version information and expose exact partition statistics
+statement ok
+ATTACH '{TEST_DIR}/zero_length_prefix_stats_tmp.duckdb' AS tmp;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/zero_length_prefix_stats.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+DETACH tmp;
+
+# An empty LEFT prefix is always in a set containing the empty string
+query II
+EXPLAIN SELECT count(*) FROM db.prefixes WHERE left(s, 0) IN ('');
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# SUBSTRING has the same zero-length semantics
+query II
+EXPLAIN SELECT count(*) FROM db.prefixes WHERE substring(s, 1, 0) IN ('');
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT count(*) FROM db.prefixes WHERE left(s, 0) IN ('');
+----
+6144
+
+# Queries that need column values must still scan every row group
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM db.prefixes WHERE left(s, 0) IN ('');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+# Preserve NULL semantics
+query I
+SELECT left(s, 0) IN ('') FROM (VALUES (NULL), ('x')) t(s);
+----
+NULL
+true
+
+# A NULL member makes non-matching IN comparisons NULL for every input
+query II
+SELECT left(s, 0) IN ('x', NULL), substring(s, 1, 0) IN ('x', NULL)
+FROM (VALUES (NULL), ('x')) t(s);
+----
+NULL	NULL
+NULL	NULL

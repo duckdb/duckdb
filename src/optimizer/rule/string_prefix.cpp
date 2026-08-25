@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/string_prefix.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -9,6 +10,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -42,6 +44,14 @@ StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter
 	constant->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(constant));
 
+	root = std::move(op);
+}
+
+StringPrefixInRule::StringPrefixInRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<InUniformExpressionMatcher>();
+	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_IN);
+	op->probe_matcher = make_uniq<ExpressionMatcher>();
+	op->child_matcher = make_uniq<ConstantExpressionMatcher>();
 	root = std::move(op);
 }
 
@@ -165,6 +175,45 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	prefix_children.emplace_back(make_uniq<BoundConstantExpression>(constant.GetValue()));
 	auto prefix_expr = PrefixFun::GetFunction().Bind(GetContext(), std::move(prefix_children));
 	return std::move(prefix_expr);
+}
+
+unique_ptr<Expression> StringPrefixInRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                 bool &changes_made, bool is_root) {
+	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
+	auto &probe = expr.GetChildrenMutable()[0];
+	if (probe->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = probe->Cast<BoundFunctionExpression>();
+	auto &children = func.GetChildrenMutable();
+	auto &function_name = func.Function().GetName();
+	if (function_name == "left") {
+		if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(0)) {
+			return nullptr;
+		}
+	} else if (function_name == "substring" || function_name == "substr") {
+		if (children.size() != 3 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(1) ||
+		    children[2]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(0)) {
+			return nullptr;
+		}
+	} else {
+		return nullptr;
+	}
+
+	auto constant_in = expr.Copy();
+	constant_in->Cast<BoundOperatorExpression>().GetChildrenMutable()[0] =
+	    make_uniq<BoundConstantExpression>(Value(string()));
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_in, result)) {
+		return nullptr;
+	}
+	if (result.IsNull()) {
+		return make_uniq<BoundConstantExpression>(std::move(result));
+	}
+	return ExpressionRewriter::ConstantOrNull(std::move(children[0]), std::move(result));
 }
 
 unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
