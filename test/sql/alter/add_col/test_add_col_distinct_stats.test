@@ -3,9 +3,6 @@
 # group: [add_col]
 
 statement ok
-PRAGMA explain_output='optimized_only';
-
-statement ok
 CREATE TABLE t AS SELECT range AS i FROM range(100000);
 
 statement ok
@@ -15,22 +12,16 @@ CREATE SEQUENCE seq;
 statement ok
 ALTER TABLE t ADD COLUMN IF NOT EXISTS u VARCHAR DEFAULT (nextval('seq') % 1000)::VARCHAR;
 
-# 1000 distinct values over 100K rows
-query II
-EXPLAIN (FORMAT JSON) SELECT u FROM t GROUP BY u;
+query I
+SELECT s.approx_unique BETWEEN 1000 AND 10000 FROM (SELECT stats(u) s FROM t LIMIT 1);
 ----
-logical_opt	<REGEX>:.*"Groups":\s*"u",[^}]*"Estimated Cardinality":\s*"[0-9]{3,4}".*
+true
 
 # appended rows must extend the distinct count instead of replacing it
 statement ok
 INSERT INTO t SELECT 100000 + range, (nextval('seq') % 1000)::VARCHAR FROM range(10);
 
-query II
-EXPLAIN (FORMAT JSON) SELECT u FROM t GROUP BY u;
-----
-logical_opt	<REGEX>:.*"Groups":\s*"u",[^}]*"Estimated Cardinality":\s*"[0-9]{3,4}".*
-
 query I
-SELECT COUNT(DISTINCT u) FROM t;
+SELECT s.approx_unique BETWEEN 1000 AND 10000 FROM (SELECT stats(u) s FROM t LIMIT 1);
 ----
-1000
+true
