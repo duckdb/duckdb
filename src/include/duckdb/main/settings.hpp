@@ -427,8 +427,9 @@ struct CheckpointOnDetachSetting {
 	using RETURN_TYPE = CheckpointOnDetach;
 	static constexpr const char *Name = "checkpoint_on_detach";
 	static constexpr const char *Description =
-	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
-	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	    "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint "
+	    "does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT "
+	    "defers to the global checkpoint_on_shutdown setting.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -1728,14 +1729,15 @@ struct PreferRangeJoinsSetting {
 };
 
 struct PreserveIdentifierCaseSetting {
-	using RETURN_TYPE = bool;
+	using RETURN_TYPE = IdentifierCaseMode;
 	static constexpr const char *Name = "preserve_identifier_case";
-	static constexpr const char *Description =
-	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *Description = "How to fold non-quoted identifiers: 'preserve_case' keeps the case as "
+	                                           "written, 'lowercase' lowercases them, 'uppercase' uppercases them";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "preserve_case";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PreserveInsertionOrderSetting {

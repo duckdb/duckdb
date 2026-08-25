@@ -146,6 +146,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.GetName().empty());
+	D_ASSERT(function.GetDefinition());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {

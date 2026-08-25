@@ -4,9 +4,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
-// uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
-// #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
-
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -21,29 +18,34 @@
 namespace duckdb {
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	auto result = MatcherResult::Failure();
 	if (!state.packrat_cache || !IsPackratMemoized() || !GetPackratId().IsValid()) {
-		return MatchParseResultInternal(state);
-	}
-
-	auto token_index = state.token_iterator.Position();
-	auto cached_result = state.packrat_cache->Lookup(*this, token_index);
-	if (cached_result) {
-		state.token_iterator.SetPosition(cached_result->token_index_after);
-		state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
-		if (cached_result->success) {
-			return MatcherResult::Success(cached_result->result);
+		result = MatchParseResultInternal(state);
+	} else {
+		auto token_index = state.token_iterator.Position();
+		auto cached_result = state.packrat_cache->Lookup(*this, token_index);
+		if (cached_result) {
+			state.token_iterator.SetPosition(cached_result->token_index_after);
+			state.max_token_index = MaxValue(state.max_token_index, cached_result->max_token_index_seen);
+			if (cached_result->success) {
+				result = MatcherResult::Success(cached_result->result);
+			}
+		} else {
+			auto max_token_index_before = state.GetMaxTokenIndex();
+			result = MatchParseResultInternal(state);
+			ParserPackratEntry cache_entry;
+			cache_entry.success = result.IsSuccess();
+			cache_entry.token_index_after = state.token_iterator.Position();
+			cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
+			cache_entry.result = result.GetParseResult();
+			state.packrat_cache->Store(*this, token_index, std::move(cache_entry));
 		}
-		return MatcherResult::Failure();
 	}
-
-	auto max_token_index_before = state.GetMaxTokenIndex();
-	auto result = MatchParseResultInternal(state);
-	ParserPackratEntry cache_entry;
-	cache_entry.success = result.IsSuccess();
-	cache_entry.token_index_after = state.token_iterator.Position();
-	cache_entry.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-	cache_entry.result = result.GetParseResult();
-	state.packrat_cache->Store(*this, token_index, std::move(cache_entry));
+	if (result.HasParseResult() && rule) {
+		auto parse_result = result.GetParseResult();
+		parse_result->SetRule(*rule);
+		parse_result->name = rule->name;
+	}
 	return result;
 }
 

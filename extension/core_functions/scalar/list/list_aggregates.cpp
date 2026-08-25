@@ -101,14 +101,17 @@ struct StateVector {
 	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-		if (aggr.Function().HasStateDestructorCallback()) {
+		if (initialized_count != 0 && aggr.Function().HasStateDestructorCallback()) {
 			ArenaAllocator allocator(Allocator::DefaultAllocator());
 			AggregateInputData aggr_input_data(aggr, allocator);
-			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, count);
+			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, initialized_count);
 		}
 	}
 
 	idx_t count;
+	//! The number of states that have been initialized so far. The vector holds uninitialized memory until then,
+	//! so an exception during initialization must not leave the destructor reading it as state pointers.
+	idx_t initialized_count = 0;
 	unique_ptr<Expression> aggr_expr;
 	Vector state_vector;
 };
@@ -275,6 +278,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
 		aggr.Function().GetStateInitCallback()(state_input, &states[i], 1);
+		state_vector.initialized_count = i + 1;
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -492,7 +496,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = *func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
