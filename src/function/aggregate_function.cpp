@@ -2,9 +2,58 @@
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+static unique_ptr<BaseStatistics> PropagateStatsFromInput(BoundAggregateExpression &expr,
+                                                          AggregateStatisticsInput &input, bool allow_cast) {
+	if (input.child_stats.empty()) {
+		return nullptr;
+	}
+	if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		// the expression returns the internal aggregate state instead of a value
+		return nullptr;
+	}
+	auto &child_stats = input.child_stats[0];
+	auto &return_type = expr.GetReturnType();
+	unique_ptr<BaseStatistics> result;
+	if (child_stats.GetType() == return_type) {
+		result = child_stats.ToUnique();
+	} else if (allow_cast) {
+		result = StatisticsPropagator::TryPropagateCast(child_stats, child_stats.GetType(), return_type);
+	}
+	if (!result) {
+		return nullptr;
+	}
+	// the result is NULL when the aggregate sees no valid rows: an empty input for ungrouped
+	// aggregates, a FILTER clause that discards every row of a group, or a group in which every
+	// value of any argument is NULL (e.g. arg_min over an all-NULL "by" column)
+	if (input.input_may_be_empty || expr.GetFilter()) {
+		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	for (auto &stats : input.child_stats) {
+		if (stats.CanHaveNull()) {
+			result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			break;
+		}
+	}
+	return result;
+}
+
+unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
+                                                                       BoundAggregateExpression &expr,
+                                                                       AggregateStatisticsInput &input) {
+	return PropagateStatsFromInput(expr, input, false);
+}
+
+unique_ptr<BaseStatistics> AggregateFunction::PropagateInputRangeStats(ClientContext &context,
+                                                                       BoundAggregateExpression &expr,
+                                                                       AggregateStatisticsInput &input) {
+	return PropagateStatsFromInput(expr, input, true);
+}
 
 AggregateInputData::AggregateInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
                                        AggregateCombineType combine_type_p)

@@ -582,6 +582,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 	auto name = function.GetName();
 	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
 	function.SetName(std::move(name));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -918,10 +919,19 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 // Function Registration
 //------------------------------------------------------------------------------
 
+static void SetArgMinMaxStatisticsCallback(AggregateFunctionSet &fun) {
+	// the result is always one of the values of the first argument; the "arg_min(a, b, n)"
+	// variants return a LIST, for which the callback bails out at propagation time
+	for (auto &function : fun.functions) {
+		function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
+	}
+}
+
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
 	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, LessThan>(fun);
+	SetArgMinMaxStatisticsCallback(fun);
 	return fun;
 }
 
@@ -929,6 +939,7 @@ AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
 	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, GreaterThan>(fun);
+	SetArgMinMaxStatisticsCallback(fun);
 	return fun;
 }
 
