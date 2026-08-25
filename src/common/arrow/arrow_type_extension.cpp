@@ -562,31 +562,80 @@ struct ArrowVariant {
 		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[1]);
 		schema.children = root_holder.nested_children_ptr.back().data();
 
+		// The appender picks the binary layout from the session settings — declare the same one, or the
+		// schema and the produced buffers disagree (same rule as SetArrowFormat's BLOB case).
+		const auto options = context.GetClientProperties();
+		const char *binary_format;
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			binary_format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			binary_format = "Z";
+		} else {
+			binary_format = "z";
+		}
+
 		const char *child_names[] = {"metadata", "value"};
 		for (idx_t i = 0; i < 2; i++) {
 			auto &child = *schema.children[i];
-			child.format = "z";
+			child.format = binary_format;
 			child.name = child_names[i];
-			child.flags = ARROW_FLAG_NULLABLE;
+			// the spec requires `metadata` non-nullable; `value` stays nullable (it may be absent per row
+			// once shredding exists)
+			child.flags = i == 0 ? 0 : ARROW_FLAG_NULLABLE;
 			child.release = release_child;
 		}
 	}
 
 	//! Maps a tagged schema back: the VARIANT logical type, with type info describing the storage struct
-	//! for the reader's buffer walk (children parsed from the actual schema, so binary/large binary/view
-	//! layouts from foreign writers are all accepted).
+	//! for the reader's buffer walk. The spec allows the fields in ANY order, in any binary layout
+	//! (binary / large binary / view), and dictionary- or run-end-encoded — so the fields are resolved by
+	//! NAME and the children are parsed from the actual schema. The resolved order is recorded on a
+	//! per-column ArrowTypeExtensionData whose internal type is the storage struct in the schema's OWN
+	//! field order (the buffer walk is positional), so the conversion can normalize by name.
 	static unique_ptr<ArrowType> GetType(ClientContext &context, const ArrowSchema &schema,
 	                                     const ArrowSchemaMetadata &schema_metadata) {
-		if (schema.n_children != 2) {
+		if (!schema.format || string(schema.format) != "+s") {
+			throw InvalidInputException("arrow.parquet.variant column must have a struct storage type, got format '%s'",
+			                            schema.format ? schema.format : "(none)");
+		}
+		idx_t metadata_idx = DConstants::INVALID_INDEX;
+		idx_t value_idx = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < NumericCast<idx_t>(schema.n_children); i++) {
+			const string name = schema.children[i]->name ? schema.children[i]->name : "";
+			if (name == "metadata" && metadata_idx == DConstants::INVALID_INDEX) {
+				metadata_idx = i;
+			} else if (name == "value" && value_idx == DConstants::INVALID_INDEX) {
+				value_idx = i;
+			} else if (name == "typed_value") {
+				// TODO: support shredded variants — the value has to be re-assembled from typed_value
+				// (and, when both are present, merged with the residual value field).
+				throw NotImplementedException(
+				    "arrow.parquet.variant column with a 'typed_value' field (a shredded variant) is not supported "
+				    "yet");
+			} else {
+				throw InvalidInputException(
+				    "arrow.parquet.variant column has an unexpected or duplicate field '%s' (expected 'metadata' and "
+				    "'value')",
+				    name);
+			}
+		}
+		if (metadata_idx == DConstants::INVALID_INDEX || value_idx == DConstants::INVALID_INDEX) {
 			throw InvalidInputException(
-			    "arrow.parquet.variant column must have a struct<metadata, value> storage type, got %lld children",
+			    "arrow.parquet.variant column must have a 'metadata' and a 'value' field, got %lld children",
 			    schema.n_children);
 		}
 		vector<shared_ptr<ArrowType>> children;
-		for (idx_t i = 0; i < 2; i++) {
-			children.push_back(ArrowType::GetTypeFromSchema(context, *schema.children[i]));
+		child_list_t<LogicalType> storage_children;
+		for (idx_t i = 0; i < NumericCast<idx_t>(schema.n_children); i++) {
+			// GetArrowLogicalType, not GetTypeFromSchema: a dictionary-encoded child carries its value
+			// type in schema.dictionary, which only this entry point resolves.
+			children.push_back(ArrowType::GetArrowLogicalType(context, *schema.children[i]));
+			storage_children.emplace_back(schema.children[i]->name, LogicalType::BLOB);
 		}
-		return make_uniq<ArrowType>(LogicalType::VARIANT(), make_uniq<ArrowStructInfo>(std::move(children)));
+		auto result = make_uniq<ArrowType>(LogicalType::VARIANT(), make_uniq<ArrowStructInfo>(std::move(children)));
+		result->extension_data = make_shared_ptr<ArrowTypeExtensionData>(
+		    LogicalType::VARIANT(), LogicalType::STRUCT(std::move(storage_children)), ArrowToDuck, DuckToArrow);
+		return result;
 	}
 
 	//! Binds one of the parquet extension's variant conversion functions by name (triggering an extension
@@ -628,33 +677,78 @@ struct ArrowVariant {
 		Vector transformed(StorageType(), count);
 		ExecuteConversion(context, "variant_to_parquet_variant", input, count, transformed);
 
-		// The transform's return type carries its own alias; move the data over child-wise so `result`
-		// keeps the extension's declared storage type.
-		auto &result_entries = StructVector::GetEntries(result);
-		auto &transformed_entries = StructVector::GetEntries(transformed);
-		result_entries[0].Reference(transformed_entries[0]);
-		result_entries[1].Reference(transformed_entries[1]);
-
 		// The transform encodes a SQL NULL as a Variant-null VALUE (the parquet writer's convention, where
 		// nullability lives at the column level) — over Arrow the SQL NULL must stay a top-level null, so
 		// the mask comes from the SOURCE's validity.
 		UnifiedVectorFormat source_format;
 		source.ToUnifiedFormat(source_format);
+		bool has_nulls = false;
 		for (idx_t i = 0; i < count; i++) {
 			if (!source_format.validity.RowIsValid(source_format.sel->get_index(i)) ||
 			    FlatVector::IsNull(transformed, i)) {
 				FlatVector::SetNull(result, i, true);
+				has_nulls = true;
 			}
 		}
+
+		// The transform's return type carries its own alias; move the data over child-wise so `result`
+		// keeps the extension's declared storage type.
+		auto &result_entries = StructVector::GetEntries(result);
+		auto &transformed_entries = StructVector::GetEntries(transformed);
+		if (!has_nulls) {
+			result_entries[0].Reference(transformed_entries[0]);
+			result_entries[1].Reference(transformed_entries[1]);
+			return;
+		}
+		// `metadata` is declared non-nullable, as the spec requires — so a NULL row's child slots carry
+		// the minimal valid encoding (v1 empty-dictionary metadata + a Variant null value) instead of the
+		// child-level NULLs a strict consumer would reject. Copy into the result's OWN children rather
+		// than patching buffers shared with the transform's output.
+		static constexpr const char MINIMAL_METADATA[] = "\x01\x00\x00";
+		static constexpr const char VARIANT_NULL_VALUE[] = "\x00";
+		transformed_entries[0].Flatten(count);
+		transformed_entries[1].Flatten(count);
+		auto src_metadata = FlatVector::GetData<string_t>(transformed_entries[0]);
+		auto src_value = FlatVector::GetData<string_t>(transformed_entries[1]);
+		auto &metadata_entry = result_entries[0];
+		auto &value_entry = result_entries[1];
+		auto dst_metadata = FlatVector::GetDataMutable<string_t>(metadata_entry);
+		auto dst_value = FlatVector::GetDataMutable<string_t>(value_entry);
+		for (idx_t i = 0; i < count; i++) {
+			if (FlatVector::IsNull(result, i)) {
+				dst_metadata[i] = string_t(MINIMAL_METADATA, 3);
+				dst_value[i] = string_t(VARIANT_NULL_VALUE, 1);
+			} else {
+				dst_metadata[i] = StringVector::AddStringOrBlob(metadata_entry, src_metadata[i]);
+				dst_value[i] = StringVector::AddStringOrBlob(value_entry, src_value[i]);
+			}
+		}
+		FlatVector::ValidityMutable(metadata_entry).SetAllValid(count);
+		FlatVector::ValidityMutable(value_entry).SetAllValid(count);
 	}
 
 	//! Arrow -> DuckDB: concatenate each row's metadata and value bytes (the self-delimiting Variant
 	//! binary form) and decode through `variant_bytes_to_variant`.
 	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
 		source.Flatten();
+		// The storage vector's type records the incoming schema's own field order (see GetType) — resolve
+		// the two fields by NAME, as the spec allows them in any order.
+		auto &source_children = StructType::GetChildTypes(source.GetType());
+		idx_t metadata_idx = DConstants::INVALID_INDEX;
+		idx_t value_idx = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < source_children.size(); i++) {
+			if (source_children[i].first == "metadata") {
+				metadata_idx = i;
+			} else if (source_children[i].first == "value") {
+				value_idx = i;
+			}
+		}
+		if (metadata_idx == DConstants::INVALID_INDEX || value_idx == DConstants::INVALID_INDEX) {
+			throw InternalException("arrow.parquet.variant storage struct is missing its metadata/value fields");
+		}
 		auto &entries = StructVector::GetEntries(source);
-		Vector &metadata = entries[0];
-		Vector &value = entries[1];
+		Vector &metadata = entries[metadata_idx];
+		Vector &value = entries[value_idx];
 		metadata.Flatten();
 		value.Flatten();
 
