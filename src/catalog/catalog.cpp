@@ -482,7 +482,9 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 
 static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction transaction, SchemaCatalogEntry &parent,
                                                              const Identifier &name, OnEntryNotFound if_not_found) {
-	auto entry = parent.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, name);
+	// go through the schema's own lookup so that nested schemas work for any catalog, not only DuckCatalog
+	EntryLookupInfo nested_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(name));
+	auto entry = parent.LookupEntry(transaction, nested_lookup);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException("Schema with name %s does not exist!", name);
