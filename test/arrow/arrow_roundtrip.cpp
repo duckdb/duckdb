@@ -8,6 +8,7 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
+#include "duckdb/common/identifier.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -457,9 +458,7 @@ LogicalType PairLogicalType() {
 	// alias-carrying types — the logical pair type therefore carries an alias. (A SQL cast to a
 	// CREATE TYPE alias resolves the alias away, so the test produces values through a registered
 	// scalar function whose RETURN type carries it — the same way extension-defined types do.)
-	auto type = PairStorageMemberType();
-	type.SetAlias("arrow_test_pair");
-	return type;
+	return PairStorageMemberType().WithAlias("arrow_test_pair");
 }
 
 // pair_typed(STRUCT(a, b)) -> the alias-carrying logical pair type (children pass through).
@@ -605,15 +604,518 @@ TEST_CASE("Test Arrow extension type with nested storage", "[arrow]") {
 }
 
 TEST_CASE("Test Arrow VARIANT roundtrip", "[arrow]") {
-	// VARIANT travels as the canonical arrow.parquet.variant extension type (registered by the parquet
-	// extension, statically linked here): struct<metadata: binary, value: binary> storage carrying the
-	// Variant spec's binary encoding.
-	TestArrowRoundtrip("SELECT 42::VARIANT AS v");
-	TestArrowRoundtrip("SELECT {'a': i, 'b': 'x' || i::VARCHAR}::VARIANT AS v FROM range(3000) t(i)");
-	TestArrowRoundtrip("SELECT [i, i + 1, NULL]::VARIANT AS v FROM range(100) t(i)");
-	TestArrowRoundtrip("SELECT CASE WHEN i % 2 = 0 THEN i::VARIANT ELSE ('s' || i::VARCHAR)::VARIANT END "
-	                   "AS v FROM range(10) t(i)"); // mixed types, no NULLs
-	TestArrowRoundtrip("SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(10) t(i)");
-	TestArrowRoundtrip("SELECT CASE WHEN i % 3 = 0 THEN NULL WHEN i % 3 = 1 THEN i::VARIANT "
-	                   "ELSE ('s' || i::VARCHAR)::VARIANT END AS v FROM range(100) t(i)");
+	// VARIANT travels as the canonical arrow.parquet.variant extension type: struct<metadata: binary,
+	// value: binary> storage carrying the Variant spec's binary encoding.
+	vector<string> queries = {
+	    "SELECT 42::VARIANT AS v",
+	    "SELECT {'a': i, 'b': 'x' || i::VARCHAR}::VARIANT AS v FROM range(3000) t(i)",
+	    "SELECT [i, i + 1, NULL]::VARIANT AS v FROM range(100) t(i)",
+	    // mixed types, no NULLs
+	    "SELECT CASE WHEN i % 2 = 0 THEN i::VARIANT ELSE ('s' || i::VARCHAR)::VARIANT END AS v FROM range(10) t(i)",
+	    "SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(10) t(i)",
+	    "SELECT CASE WHEN i % 3 = 0 THEN NULL WHEN i % 3 = 1 THEN i::VARIANT "
+	    "ELSE ('s' || i::VARCHAR)::VARIANT END AS v FROM range(100) t(i)",
+	};
+	for (auto &query : queries) {
+		INFO("query: " << query);
+		TestArrowRoundtrip(query);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// arrow.parquet.variant — foreign-writer shapes
+//===--------------------------------------------------------------------===//
+// DuckDB's own export always produces struct<metadata, value> in that order, with plain binary
+// children. The canonical spec is wider: the fields may appear in ANY order, may be dictionary- or
+// run-end-encoded, and a shredded variant carries a typed_value field. These tests imitate such
+// foreign writers — by mutating a DuckDB-exported schema/array, or by hand-building the Arrow C Data
+// structures outright.
+
+namespace {
+
+enum class VariantMutation : uint8_t {
+	NONE,             // control
+	SWAP_FIELD_ORDER, // struct<value, metadata> — spec-valid, must be resolved by name
+	SHREDDED_FIELD,   // value renamed typed_value — a (fully) shredded variant, unsupported
+	UNKNOWN_FIELD,    // value renamed to a foreign name — invalid
+	UNION_FORMAT      // parent format +us:0,1 — not a struct
+};
+
+struct MutatedVariantData {
+	vector<LogicalType> types;
+	vector<string> names;
+	duckdb::unique_ptr<QueryResult> result;
+	ClientProperties options;
+	ClientContext *context;
+	VariantMutation mutation;
+};
+
+void ApplyVariantSchemaMutation(ArrowSchema &column, VariantMutation mutation) {
+	switch (mutation) {
+	case VariantMutation::SWAP_FIELD_ORDER:
+		std::swap(column.children[0], column.children[1]);
+		break;
+	case VariantMutation::SHREDDED_FIELD:
+		column.children[1]->name = "typed_value";
+		break;
+	case VariantMutation::UNKNOWN_FIELD:
+		column.children[1]->name = "sidecar";
+		break;
+	case VariantMutation::UNION_FORMAT:
+		column.format = "+us:0,1";
+		break;
+	case VariantMutation::NONE:
+		break;
+	}
+}
+
+int MutatedVariantGetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+	auto &data = *reinterpret_cast<MutatedVariantData *>(stream->private_data);
+	ArrowConverter::ToArrowSchema(out, data.types, data.names, data.options);
+	ApplyVariantSchemaMutation(*out->children[0], data.mutation);
+	return 0;
+}
+
+int MutatedVariantGetNext(ArrowArrayStream *stream, ArrowArray *out) {
+	auto &data = *reinterpret_cast<MutatedVariantData *>(stream->private_data);
+	auto chunk = data.result->Fetch();
+	if (!chunk || chunk->size() == 0) {
+		return 0;
+	}
+	auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*data.context, data.types);
+	ArrowConverter::ToArrowArray(*chunk, out, data.options, extension_types);
+	if (data.mutation == VariantMutation::SWAP_FIELD_ORDER) {
+		auto &column = *out->children[0];
+		std::swap(column.children[0], column.children[1]);
+	}
+	return 0;
+}
+
+const char *MutatedVariantGetLastError(ArrowArrayStream *) {
+	return nullptr;
+}
+
+void MutatedVariantRelease(ArrowArrayStream *stream) {
+	if (!stream || !stream->private_data) {
+		return;
+	}
+	delete reinterpret_cast<MutatedVariantData *>(stream->private_data);
+	stream->private_data = nullptr;
+	stream->release = nullptr;
+}
+
+void MakeMutatedVariantStream(Connection &con, const string &query, VariantMutation mutation,
+                              ArrowArrayStream &stream) {
+	auto result = con.Query(query);
+	REQUIRE(!result->HasError());
+	auto data = make_uniq<MutatedVariantData>();
+	data->types = result->GetTypes();
+	data->names = IdentifiersToStrings(result->GetNames());
+	data->options = con.context->GetClientProperties();
+	data->context = con.context.get();
+	data->result = std::move(result);
+	data->mutation = mutation;
+	stream.get_schema = MutatedVariantGetSchema;
+	stream.get_next = MutatedVariantGetNext;
+	stream.get_last_error = MutatedVariantGetLastError;
+	stream.release = MutatedVariantRelease;
+	stream.private_data = data.release();
+}
+
+//! Scans the stream and expects the BIND to refuse it with `expected_error` (a refusal may surface as
+//! an error result or as an exception escaping the relation, depending on where the bind runs).
+void ExpectVariantScanError(Connection &con, ArrowArrayStream &stream, const string &expected_error) {
+	auto params = ArrowTestHelper::ConstructArrowScan(stream);
+	bool refused = false;
+	string error_message;
+	try {
+		auto result = con.TableFunction("arrow_scan", params)->Execute();
+		if (result->HasError()) {
+			refused = true;
+			error_message = result->GetError();
+		}
+	} catch (std::exception &ex) {
+		refused = true;
+		error_message = ex.what();
+	}
+	REQUIRE(refused);
+	REQUIRE(StringUtil::Contains(error_message, expected_error));
+	if (stream.release) {
+		stream.release(&stream);
+	}
+}
+
+} // namespace
+
+TEST_CASE("Test Arrow VARIANT foreign field order and refusals", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+	const string query = "SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE {'a': i}::VARIANT END AS v FROM range(50) t(i)";
+
+	{ // control: the unmutated stream round-trips
+		ArrowArrayStream stream;
+		MakeMutatedVariantStream(con, query, VariantMutation::NONE, stream);
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, stream));
+	}
+	{ // struct<value, metadata> is spec-valid: the fields are resolved by NAME, not position
+		ArrowArrayStream stream;
+		MakeMutatedVariantStream(con, query, VariantMutation::SWAP_FIELD_ORDER, stream);
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, stream));
+	}
+	{ // a fully shredded variant (metadata + typed_value) is refused clearly, not misread as value bytes
+		ArrowArrayStream stream;
+		MakeMutatedVariantStream(con, query, VariantMutation::SHREDDED_FIELD, stream);
+		ExpectVariantScanError(con, stream, "shredded");
+	}
+	{ // an unknown field name is refused
+		ArrowArrayStream stream;
+		MakeMutatedVariantStream(con, query, VariantMutation::UNKNOWN_FIELD, stream);
+		ExpectVariantScanError(con, stream, "unexpected or duplicate field");
+	}
+	{ // a non-struct storage type is refused, even with a plausible child count
+		ArrowArrayStream stream;
+		MakeMutatedVariantStream(con, query, VariantMutation::UNION_FORMAT, stream);
+		ExpectVariantScanError(con, stream, "must have a struct storage type");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// arrow.parquet.variant — hand-built dictionary / run-end-encoded metadata
+//===--------------------------------------------------------------------===//
+
+namespace {
+
+//! Hand-built Arrow C Data for a variant column of `count` integer rows (1..count) whose METADATA
+//! child is dictionary- or run-end-encoded — every row shares one metadata blob, which is exactly the
+//! shape those encodings exist for. All memory lives on this holder; the STREAM release frees it (the
+//! schema/array releases are no-ops, mirroring how children are owned in the C Data interface).
+struct HandBuiltVariantHolder {
+	enum class Encoding : uint8_t { DICTIONARY, RUN_END };
+
+	Encoding encoding = Encoding::DICTIONARY;
+	idx_t count = 0;
+	bool array_served = false;
+
+	// data buffers
+	string metadata_bytes;          // the one shared metadata blob
+	string value_bytes;             // concatenated per-row value blobs
+	vector<int32_t> value_offsets;  // count + 1
+	vector<int8_t> dict_indices;    // DICTIONARY: count zeros
+	vector<int32_t> run_ends;       // RUN_END: {count}
+	vector<int32_t> single_offsets; // {0, len(metadata_bytes)} — the 1-element binary child
+
+	// buffer pointer tables
+	const void *no_buffers[1] = {nullptr};
+	const void *value_buffers[3] = {nullptr, nullptr, nullptr};
+	const void *indices_buffers[2] = {nullptr, nullptr};
+	const void *single_binary_buffers[3] = {nullptr, nullptr, nullptr};
+	const void *run_ends_buffers[2] = {nullptr, nullptr};
+
+	// schema nodes
+	unsafe_unique_array<char> extension_metadata;
+	ArrowSchema s_root {}, s_col {}, s_metadata {}, s_value {}, s_typed_value {}, s_dict {}, s_run_ends {}, s_values {};
+	ArrowSchema *s_root_children[1] = {nullptr};
+	ArrowSchema *s_col_children[3] = {nullptr, nullptr, nullptr};
+	ArrowSchema *s_ree_children[2] = {nullptr, nullptr};
+
+	// array nodes
+	ArrowArray a_root {}, a_col {}, a_metadata {}, a_value {}, a_dict {}, a_run_ends {}, a_values {};
+	ArrowArray *a_root_children[1] = {nullptr};
+	ArrowArray *a_col_children[2] = {nullptr, nullptr};
+	ArrowArray *a_ree_children[2] = {nullptr, nullptr};
+};
+
+void HandBuiltSchemaRelease(ArrowSchema *schema) {
+	// memory is owned by the holder, freed with the stream
+	schema->release = nullptr;
+}
+
+void HandBuiltArrayRelease(ArrowArray *array) {
+	array->release = nullptr;
+}
+
+duckdb::unique_ptr<HandBuiltVariantHolder> BuildEncodedVariant(Connection &con, idx_t count,
+                                                               HandBuiltVariantHolder::Encoding encoding,
+                                                               bool with_typed_value = false) {
+	auto holder = make_uniq<HandBuiltVariantHolder>();
+	holder->encoding = encoding;
+	holder->count = count;
+
+	// take the REAL encodings from the parquet extension's own conversion instead of hand-writing spec
+	// bytes (cast away the PARQUET_VARIANT alias — an aliased struct does not bind struct_extract)
+	auto encoded = con.Query("SELECT pv.metadata, pv.value FROM (SELECT "
+	                         "variant_to_parquet_variant((i + 1)::VARIANT)::STRUCT(metadata BLOB, value BLOB) AS pv "
+	                         "FROM range(" +
+	                         to_string(count) + ") t(i))");
+	REQUIRE(!encoded->HasError());
+	holder->value_offsets.push_back(0);
+	for (idx_t row = 0; row < count; row++) {
+		auto metadata = StringValue::Get(encoded->GetValue(0, row));
+		auto value = StringValue::Get(encoded->GetValue(1, row));
+		if (row == 0) {
+			holder->metadata_bytes = metadata;
+		} else {
+			// integer-only variants carry no dictionary keys => identical metadata across the rows,
+			// which is the shape a dictionary/run-end encoding exists for
+			REQUIRE(metadata == holder->metadata_bytes);
+		}
+		holder->value_bytes += value;
+		holder->value_offsets.push_back(static_cast<int32_t>(holder->value_bytes.size()));
+	}
+	holder->single_offsets = {0, static_cast<int32_t>(holder->metadata_bytes.size())};
+
+	// ---- schema ----
+	const auto tag = ArrowSchemaMetadata::ArrowCanonicalType("arrow.parquet.variant");
+	holder->extension_metadata = tag.SerializeMetadata();
+
+	auto &s_value = holder->s_value;
+	s_value.format = "z";
+	s_value.name = "value";
+	s_value.flags = ARROW_FLAG_NULLABLE;
+	s_value.release = HandBuiltSchemaRelease;
+
+	auto &s_metadata = holder->s_metadata;
+	s_metadata.name = "metadata";
+	s_metadata.release = HandBuiltSchemaRelease;
+	if (encoding == HandBuiltVariantHolder::Encoding::DICTIONARY) {
+		s_metadata.format = "c"; // int8 indices
+		holder->s_dict.format = "z";
+		holder->s_dict.name = "";
+		holder->s_dict.release = HandBuiltSchemaRelease;
+		s_metadata.dictionary = &holder->s_dict;
+	} else {
+		s_metadata.format = "+r";
+		holder->s_run_ends.format = "i";
+		holder->s_run_ends.name = "run_ends";
+		holder->s_run_ends.release = HandBuiltSchemaRelease;
+		holder->s_values.format = "z";
+		holder->s_values.name = "values";
+		holder->s_values.release = HandBuiltSchemaRelease;
+		holder->s_ree_children[0] = &holder->s_run_ends;
+		holder->s_ree_children[1] = &holder->s_values;
+		s_metadata.n_children = 2;
+		s_metadata.children = holder->s_ree_children;
+	}
+
+	auto &s_col = holder->s_col;
+	s_col.format = "+s";
+	s_col.name = "v";
+	s_col.flags = ARROW_FLAG_NULLABLE;
+	s_col.metadata = holder->extension_metadata.get();
+	s_col.release = HandBuiltSchemaRelease;
+	holder->s_col_children[0] = &s_metadata;
+	holder->s_col_children[1] = &s_value;
+	s_col.n_children = 2;
+	s_col.children = holder->s_col_children;
+	if (with_typed_value) {
+		holder->s_typed_value.format = "z";
+		holder->s_typed_value.name = "typed_value";
+		holder->s_typed_value.flags = ARROW_FLAG_NULLABLE;
+		holder->s_typed_value.release = HandBuiltSchemaRelease;
+		holder->s_col_children[2] = &holder->s_typed_value;
+		s_col.n_children = 3;
+	}
+
+	auto &s_root = holder->s_root;
+	s_root.format = "+s";
+	s_root.name = "";
+	s_root.release = HandBuiltSchemaRelease;
+	holder->s_root_children[0] = &s_col;
+	s_root.n_children = 1;
+	s_root.children = holder->s_root_children;
+
+	// ---- array ----
+	auto &a_value = holder->a_value;
+	a_value.length = static_cast<int64_t>(count);
+	a_value.n_buffers = 3;
+	holder->value_buffers[1] = holder->value_offsets.data();
+	holder->value_buffers[2] = holder->value_bytes.data();
+	a_value.buffers = holder->value_buffers;
+	a_value.release = HandBuiltArrayRelease;
+
+	auto &a_metadata = holder->a_metadata;
+	a_metadata.length = static_cast<int64_t>(count);
+	a_metadata.release = HandBuiltArrayRelease;
+	if (encoding == HandBuiltVariantHolder::Encoding::DICTIONARY) {
+		holder->dict_indices.assign(count, 0);
+		a_metadata.n_buffers = 2;
+		holder->indices_buffers[1] = holder->dict_indices.data();
+		a_metadata.buffers = holder->indices_buffers;
+		auto &a_dict = holder->a_dict;
+		a_dict.length = 1;
+		a_dict.n_buffers = 3;
+		holder->single_binary_buffers[1] = holder->single_offsets.data();
+		holder->single_binary_buffers[2] = holder->metadata_bytes.data();
+		a_dict.buffers = holder->single_binary_buffers;
+		a_dict.release = HandBuiltArrayRelease;
+		a_metadata.dictionary = &a_dict;
+	} else {
+		holder->run_ends = {static_cast<int32_t>(count)};
+		a_metadata.n_buffers = 1;
+		a_metadata.buffers = holder->no_buffers;
+		auto &a_run_ends = holder->a_run_ends;
+		a_run_ends.length = 1;
+		a_run_ends.n_buffers = 2;
+		holder->run_ends_buffers[1] = holder->run_ends.data();
+		a_run_ends.buffers = holder->run_ends_buffers;
+		a_run_ends.release = HandBuiltArrayRelease;
+		auto &a_values = holder->a_values;
+		a_values.length = 1;
+		a_values.n_buffers = 3;
+		holder->single_binary_buffers[1] = holder->single_offsets.data();
+		holder->single_binary_buffers[2] = holder->metadata_bytes.data();
+		a_values.buffers = holder->single_binary_buffers;
+		a_values.release = HandBuiltArrayRelease;
+		holder->a_ree_children[0] = &a_run_ends;
+		holder->a_ree_children[1] = &a_values;
+		a_metadata.n_children = 2;
+		a_metadata.children = holder->a_ree_children;
+	}
+
+	auto &a_col = holder->a_col;
+	a_col.length = static_cast<int64_t>(count);
+	a_col.n_buffers = 1;
+	a_col.buffers = holder->no_buffers;
+	a_col.release = HandBuiltArrayRelease;
+	holder->a_col_children[0] = &a_metadata;
+	holder->a_col_children[1] = &a_value;
+	a_col.n_children = 2;
+	a_col.children = holder->a_col_children;
+
+	auto &a_root = holder->a_root;
+	a_root.length = static_cast<int64_t>(count);
+	a_root.n_buffers = 1;
+	a_root.buffers = holder->no_buffers;
+	a_root.release = HandBuiltArrayRelease;
+	holder->a_root_children[0] = &a_col;
+	a_root.n_children = 1;
+	a_root.children = holder->a_root_children;
+	return holder;
+}
+
+int HandBuiltGetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+	auto &holder = *reinterpret_cast<HandBuiltVariantHolder *>(stream->private_data);
+	*out = holder.s_root;
+	return 0;
+}
+
+int HandBuiltGetNext(ArrowArrayStream *stream, ArrowArray *out) {
+	auto &holder = *reinterpret_cast<HandBuiltVariantHolder *>(stream->private_data);
+	if (holder.array_served) {
+		return 0;
+	}
+	holder.array_served = true;
+	*out = holder.a_root;
+	return 0;
+}
+
+void HandBuiltRelease(ArrowArrayStream *stream) {
+	if (!stream || !stream->private_data) {
+		return;
+	}
+	delete reinterpret_cast<HandBuiltVariantHolder *>(stream->private_data);
+	stream->private_data = nullptr;
+	stream->release = nullptr;
+}
+
+void MakeHandBuiltStream(duckdb::unique_ptr<HandBuiltVariantHolder> holder, ArrowArrayStream &stream) {
+	stream.get_schema = HandBuiltGetSchema;
+	stream.get_next = HandBuiltGetNext;
+	stream.get_last_error = MutatedVariantGetLastError;
+	stream.release = HandBuiltRelease;
+	stream.private_data = holder.release();
+}
+
+} // namespace
+
+TEST_CASE("Test Arrow VARIANT dictionary and run-end encoded metadata", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+	const idx_t count = 5;
+	const string expected = "SELECT (i + 1)::VARIANT AS v FROM range(5) t(i)";
+
+	for (auto encoding : {HandBuiltVariantHolder::Encoding::DICTIONARY, HandBuiltVariantHolder::Encoding::RUN_END}) {
+		ArrowArrayStream stream;
+		MakeHandBuiltStream(BuildEncodedVariant(con, count, encoding), stream);
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, expected, stream));
+	}
+
+	{ // a partially shredded variant (metadata + value + typed_value) is refused with the clear message
+		ArrowArrayStream stream;
+		MakeHandBuiltStream(BuildEncodedVariant(con, count, HandBuiltVariantHolder::Encoding::DICTIONARY, true),
+		                    stream);
+		ExpectVariantScanError(con, stream, "shredded");
+	}
+}
+
+namespace {
+
+//! The schema export resolves settings and extension population through the client context, which
+//! needs an active transaction — run it inside one, the way every real caller (a query) already does.
+void ExportVariantSchema(Connection &con, ArrowSchema &schema) {
+	auto result = con.Query("SELECT 42::VARIANT AS v");
+	REQUIRE(!result->HasError());
+	con.context->RunFunctionInTransaction([&]() {
+		auto properties = con.context->GetClientProperties();
+		ArrowConverter::ToArrowSchema(&schema, result->GetTypes(), IdentifiersToStrings(result->GetNames()),
+		                              properties);
+	});
+}
+
+} // namespace
+
+TEST_CASE("Test Arrow VARIANT export layouts and schema flags", "[arrow]") {
+	{ // default layout + the spec's nullability: metadata non-nullable, value nullable
+		DuckDB db;
+		Connection con(db);
+		ArrowSchema schema;
+		ExportVariantSchema(con, schema);
+		auto &col = *schema.children[0];
+		REQUIRE(string(col.format) == "+s");
+		REQUIRE(col.n_children == 2);
+		REQUIRE(string(col.children[0]->name) == "metadata");
+		REQUIRE((col.children[0]->flags & ARROW_FLAG_NULLABLE) == 0);
+		REQUIRE(string(col.children[1]->name) == "value");
+		REQUIRE((col.children[1]->flags & ARROW_FLAG_NULLABLE) != 0);
+		REQUIRE(string(col.children[0]->format) == "z");
+		schema.release(&schema);
+	}
+	{ // the declared child format must match the layout the appender actually writes: large binary
+		DuckDB db;
+		Connection con(db);
+		REQUIRE(!con.Query("SET arrow_large_buffer_size=true")->HasError());
+		ArrowSchema schema;
+		ExportVariantSchema(con, schema);
+		REQUIRE(string(schema.children[0]->children[0]->format) == "Z");
+		schema.release(&schema);
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT {'a': i}::VARIANT AS v FROM range(100) t(i)"));
+	}
+	{ // ... and binary view at arrow_output_version >= 1.4
+		DuckDB db;
+		Connection con(db);
+		REQUIRE(!con.Query("SET arrow_output_version='1.4'")->HasError());
+		ArrowSchema schema;
+		ExportVariantSchema(con, schema);
+		REQUIRE(string(schema.children[0]->children[0]->format) == "vz");
+		schema.release(&schema);
+		REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT {'a': i}::VARIANT AS v FROM range(100) t(i)"));
+	}
+	{ // NULL rows must not put NULLs into the non-nullable metadata child (backfilled with the minimal
+	  // encoding instead)
+		DuckDB db;
+		Connection con(db);
+		auto result = con.Query("SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(4) t(i)");
+		REQUIRE(!result->HasError());
+		auto chunk = result->Fetch();
+		ArrowArray array;
+		con.context->RunFunctionInTransaction([&]() {
+			auto properties = con.context->GetClientProperties();
+			auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*con.context, result->GetTypes());
+			ArrowConverter::ToArrowArray(*chunk, &array, properties, extension_types);
+		});
+		auto &col = *array.children[0];
+		REQUIRE(col.null_count == 2);
+		REQUIRE(col.children[0]->null_count == 0);
+		array.release(&array);
+	}
 }
