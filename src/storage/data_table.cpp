@@ -1456,27 +1456,6 @@ ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes
 	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, row_start, index_append_mode, checkpoint_id);
 }
 
-void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	D_ASSERT(IsMainTable());
-	if (info->indexes.Empty()) {
-		return;
-	}
-	// first generate the vector of row identifiers
-	Vector row_identifiers(LogicalType::ROW_TYPE);
-	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
-
-	// now remove the entries from the indices
-	RevertIndexAppend(state, chunk, row_identifiers);
-}
-
-void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
-	D_ASSERT(IsMainTable());
-	for (auto index : info->indexes.MutableIndexHandles()) {
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		bound_index->Delete(chunk, row_identifiers);
-	}
-}
-
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -42,6 +43,11 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	if (owned_index->IsBound()) {
 		owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
 	}
+}
+
+void IndexEntry::RevertIndexAppend(DataChunk &chunk, Vector &row_ids) {
+	auto entry_lock = lock.GetExclusiveLock();
+	owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
 }
 
 bool IndexEntry::IsUnique() const {
@@ -278,6 +284,16 @@ void TableIndexList::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->RevertAppend(chunk, row_ids);
+	}
+}
+
+void TableIndexList::RevertIndexAppend(DataChunk &chunk, row_t row_start) {
+	Vector row_ids(LogicalType::ROW_TYPE);
+	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
+	
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->RevertIndexAppend(chunk, row_ids);
 	}
 }
 

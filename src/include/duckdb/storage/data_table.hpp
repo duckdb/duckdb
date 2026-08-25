@@ -204,10 +204,6 @@ public:
 	                                 optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
-	//! Revert a previous append made to indexes in a chunk with the row ids [row_start, ..., row_start + chunk.size()]
-	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start);
-	//! Revert a previous append made to indexes with the given row-ids
-	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());

@@ -237,7 +237,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			}
 			// Remove the chunk.
 			try {
-				table.RevertIndexAppend(append_state, chunk, current_row);
+				index_list.RevertIndexAppend(chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 				break;
