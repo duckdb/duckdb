@@ -162,6 +162,8 @@ public:
 	explicit IndexEntry(unique_ptr<Index> index);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
+	//! Reverts an append to the physical index or its checkpoint delta.
+	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
 	//! Returns whether the physical index has the given name.
@@ -341,6 +343,8 @@ public:
 	void AddLocalIndex(const IndexHandle<BoundIndex> &source);
 	//! Appends a chunk to all index entries.
 	void Append(DataChunk &chunk, Vector &row_ids);
+	//! Reverts an append to all index entries.
+	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.

@@ -33,6 +33,17 @@ void IndexEntry::Append(DataChunk &chunk, Vector &row_ids) {
 	bound_index.Append(chunk, row_ids);
 }
 
+void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+		delta->Delete(chunk, row_ids);
+		return;
+	}
+	if (owned_index->IsBound()) {
+		owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
+	}
+}
+
 bool IndexEntry::IsUnique() const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->IsUnique();
@@ -260,6 +271,13 @@ void TableIndexList::Append(DataChunk &chunk, Vector &row_ids) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->Append(chunk, row_ids);
+	}
+}
+
+void TableIndexList::RevertAppend(DataChunk &chunk, Vector &row_ids) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->RevertAppend(chunk, row_ids);
 	}
 }
 

@@ -1326,30 +1326,14 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_id_writer.WriteValue(NumericCast<row_t>(current_row_base + i));
 			}
-			for (auto index : info->indexes.MutableIndexHandles()) {
-				if (auto delta = index.FindDelta(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
-					delta->Delete(chunk, row_identifiers);
-				} else {
-					if (!index->IsBound()) {
-						// We cannot add to unbound indexes, so there is no need to revert them.
-						continue;
-					}
-					auto bound_index = std::move(index).Into<BoundIndex>();
-					bound_index->Delete(chunk, row_identifiers);
-				}
-			}
+			info->indexes.RevertAppend(chunk, row_identifiers);
 			current_row_base += chunk.size();
 		});
 	}
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.
-	for (auto index : info->indexes.MutableIndexHandles()) {
-		if (index->IsBound()) {
-			auto bound_index = std::move(index).Into<BoundIndex>();
-			bound_index->VerifyBuffers();
-		}
-	}
+	info->indexes.VerifyBuffers();
 #endif
 
 	if (!IsMainTable()) {
