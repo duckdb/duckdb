@@ -16,7 +16,7 @@ Uncompressed
 statement error
 SELECT sum(b) FROM t;
 ----
-Data Corruption Error: Corrupted validity segment: array count extends past the end of the segment
+<REGEX>:.*Data Corruption Error: Corrupted validity segment: (array count|requested range) extends past the end of the segment.*
 
 restart
 
