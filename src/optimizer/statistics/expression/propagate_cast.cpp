@@ -29,6 +29,22 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	return result.ToUnique();
 }
 
+static bool IsPlainTimestamp(const LogicalTypeId id) {
+	switch (id) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsTzTimestamp(const LogicalTypeId id) {
+	return id == LogicalTypeId::TIMESTAMP_TZ || id == LogicalTypeId::TIMESTAMP_TZ_NS;
+}
+
 bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const LogicalType &target) {
 	if (source == target) {
 		return true;
@@ -88,89 +104,19 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		}
 		break;
 	}
-	// FIXME: perform actual stats propagation for these casts
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP;
-		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ;
-		//  Casting to timestamp[_tz] (us) from a different unit can not re-use stats
-		switch (source.id()) {
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS: {
+		if (IsTzTimestamp(source.id())) {
 			return false;
-		case LogicalTypeId::TIMESTAMP: {
-			if (to_timestamp_tz) {
-				// Both use INT64 physical type, but should not be treated equal
-				return false;
-			}
-			break;
-		}
-		case LogicalTypeId::TIMESTAMP_TZ: {
-			if (to_timestamp) {
-				// Both use INT64 physical type, but should not be treated equal
-				return false;
-			}
-			break;
-		}
-		default:
-			break;
 		}
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ_NS: {
-		// Same as above ^
-		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP_NS;
-		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ_NS;
-		switch (source.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
+		if (IsPlainTimestamp(source.id())) {
 			return false;
-		case LogicalTypeId::TIMESTAMP_NS:
-			if (to_timestamp_tz) {
-				// Both use INT64 physical type, but should not be treated equal
-				return false;
-			}
-			break;
-		case LogicalTypeId::TIMESTAMP_TZ_NS:
-			if (to_timestamp) {
-				// Both use INT64 physical type, but should not be treated equal
-				return false;
-			}
-			break;
-		default:
-			break;
-		}
-		break;
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		// Same as above ^
-		switch (source.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::TIMESTAMP_TZ_NS:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-			return false;
-		default:
-			break;
-		}
-		break;
-	}
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Same as above ^
-		switch (source.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
-			return false;
-		default:
-			break;
 		}
 		break;
 	}
