@@ -1,10 +1,8 @@
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -48,37 +46,10 @@ static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPru
 	const auto filter_false =
 	    can_have_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 
-	if (child.GetStatsType() == StatisticsType::NUMERIC_STATS &&
-	    needle_stats->GetStatsType() == StatisticsType::NUMERIC_STATS) {
-		auto zonemap = StatisticsPropagator::PropagateComparison(child, *needle_stats, ExpressionType::COMPARE_EQUAL);
-		if (zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
-		    zonemap == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
-			return filter_false;
-		}
-	} else if (child.GetStatsType() == StatisticsType::STRING_STATS &&
-	           needle_stats->GetStatsType() == StatisticsType::STRING_STATS) {
-		if (StringStats::HasMin(*needle_stats) &&
-		    StringStats::GetMinType(*needle_stats) == StringStatsType::EXACT_STATS) {
-			auto needle_min = StringStats::Min(*needle_stats);
-			auto needle_value =
-			    child.GetType().id() == LogicalTypeId::BLOB ? Value::BLOB_RAW(needle_min) : Value(needle_min);
-			auto zonemap = StringStats::CheckZonemap(child, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                                         array_ptr<const Value>(&needle_value, 1));
-			if (zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return filter_false;
-			}
-		}
-		if (StringStats::HasMax(*needle_stats) &&
-		    StringStats::GetMaxType(*needle_stats) == StringStatsType::EXACT_STATS) {
-			auto needle_max = StringStats::Max(*needle_stats);
-			auto needle_value =
-			    child.GetType().id() == LogicalTypeId::BLOB ? Value::BLOB_RAW(needle_max) : Value(needle_max);
-			auto zonemap = StringStats::CheckZonemap(child, ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                                         array_ptr<const Value>(&needle_value, 1));
-			if (zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return filter_false;
-			}
-		}
+	auto zonemap = StatisticsPropagator::PropagateComparison(child, *needle_stats, ExpressionType::COMPARE_EQUAL);
+	if (zonemap == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+	    zonemap == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		return filter_false;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }

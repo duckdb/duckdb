@@ -3,13 +3,61 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
+
+static Value TryGetStringStatsMin(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::VARCHAR) {
+		return StringStats::TryGetValidMin(stats);
+	}
+	if (stats.GetType().id() == LogicalTypeId::BLOB && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS) {
+		return Value::BLOB_RAW(StringStats::Min(stats));
+	}
+	return Value();
+}
+
+static Value TryGetStringStatsMax(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::VARCHAR) {
+		return StringStats::TryGetValidMax(stats);
+	}
+	if (stats.GetType().id() == LogicalTypeId::BLOB && StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS) {
+		return Value::BLOB_RAW(StringStats::Max(stats));
+	}
+	return Value();
+}
 
 FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
                                                                 const BaseStatistics &rstats,
                                                                 ExpressionType comparison) {
-	// only handle numerics for now
+	if (lstats.GetStatsType() == StatisticsType::STRING_STATS &&
+	    rstats.GetStatsType() == StatisticsType::STRING_STATS) {
+		if (comparison != ExpressionType::COMPARE_EQUAL || lstats.GetType() != rstats.GetType()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		Value lmin;
+		Value lmax;
+		Value rmin;
+		Value rmax;
+		if (StringStats::HasMin(lstats)) {
+			lmin = TryGetStringStatsMin(lstats);
+		}
+		if (StringStats::HasMax(lstats)) {
+			lmax = TryGetStringStatsMax(lstats);
+		}
+		if (StringStats::HasMin(rstats)) {
+			rmin = TryGetStringStatsMin(rstats);
+		}
+		if (StringStats::HasMax(rstats)) {
+			rmax = TryGetStringStatsMax(rstats);
+		}
+		if ((!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax)) {
+			bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
+			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
 	switch (lstats.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
