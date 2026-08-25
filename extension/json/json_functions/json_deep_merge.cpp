@@ -5,7 +5,14 @@ namespace duckdb {
 
 //! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
 //! Non-null patch values overwrite. Nested objects are merged recursively.
+static constexpr idx_t MAX_RECURSION_DEPTH = 128;
+
+//! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
+//! Non-null patch values overwrite. Nested objects are merged recursively.
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch, idx_t depth = 0) {
+	if (depth == MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("json_deep_merge: JSON exceeds maximum recursion depth of %d", MAX_RECURSION_DEPTH);
+	}
 	// If patch  or orig is not an object, orig is replaced entirely
 	// if patch is null while orig is not null, orig is returned instead
 	if (!yyjson_mut_is_obj(patch) || !yyjson_mut_is_obj(orig)) {
