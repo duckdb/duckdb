@@ -156,6 +156,37 @@ public:
 	}
 };
 
+class OpenFlagsRecordingFileSystem : public LocalFileSystem {
+public:
+	mutable annotated_mutex mu;
+	vector<FileOpenFlags> open_flags DUCKDB_GUARDED_BY(mu);
+
+	string GetName() const override {
+		return "OpenFlagsRecordingFileSystem";
+	}
+
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		const annotated_lock_guard<annotated_mutex> lock(mu);
+		open_flags.push_back(flags);
+		return LocalFileSystem::OpenFile(path, flags, opener);
+	}
+
+	FileOpenFlags GetLastOpenFlags() const {
+		const annotated_lock_guard<annotated_mutex> lock(mu);
+		D_ASSERT(!open_flags.empty());
+		return open_flags.back();
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+};
+
 //===----------------------------------------------------------------------===//
 // CachingFileSystemWrapper Tests
 //===----------------------------------------------------------------------===//
@@ -558,6 +589,30 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	const idx_t actual_read = handle->Read(QueryContext(), &buffer[0], test_content.length() + 1);
 	REQUIRE(actual_read == test_content.length());
 	REQUIRE(buffer.substr(0, test_content.length()) == test_content);
+}
+
+TEST_CASE("CachingFileSystemWrapper preserves upstream compression wrapper flag", "[file_system][caching]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<OpenFlagsRecordingFileSystem>();
+	auto *recording_fs_ptr = recording_fs.get();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*recording_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content = "File used for caching flag propagation testing";
+	TestFileGuard test_file("test_caching_flags.txt", test_content);
+
+	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
+	flags |= FileOpenFlags(FileOpenFlags::FILE_FLAGS_COMPRESSION_WRAPPER_UPSTREAM);
+
+	auto handle = caching_wrapper->OpenFile(test_file.GetPath(), flags);
+	string buffer(TEST_BUFFER_SIZE, '\0');
+	handle->Read(QueryContext(), &buffer[0], test_content.length(), /*location=*/0);
+	REQUIRE(buffer.substr(0, test_content.length()) == test_content);
+
+	auto observed_flags = recording_fs_ptr->GetLastOpenFlags();
+	REQUIRE(observed_flags.HasUpstreamCompressionWrapper());
+	REQUIRE(observed_flags.RequireParallelAccess());
 }
 
 TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system][caching]") {

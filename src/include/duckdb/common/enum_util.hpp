@@ -460,6 +460,8 @@ enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
 
+enum class ResponseContentEncodingMode : uint8_t;
+
 enum class ResultModifierType : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
@@ -1270,6 +1272,9 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
+
+template<>
+const char* EnumUtil::ToChars<ResponseContentEncodingMode>(ResponseContentEncodingMode value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -2165,6 +2170,9 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
+
+template<>
+ResponseContentEncodingMode EnumUtil::FromString<ResponseContentEncodingMode>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
