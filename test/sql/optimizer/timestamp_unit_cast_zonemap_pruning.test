@@ -96,19 +96,17 @@ SELECT count(*) FROM ts_ns WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
 ----
 39
 
-# TZ -> TZ unit conversion: a TIMESTAMPTZ column compared against a TIMESTAMPTZ_NS constant
-# casts the column to ns. Both types store UTC instants, so the cast is a pure unit
-# conversion independent of the session time zone.
-# to_timestamp() builds the instants from epoch seconds (1970-01-01 00:00:00+00 onwards).
+# TZ -> TZ unit conversion: casting a TIMESTAMPTZ_NS column to TIMESTAMPTZ. Both types store
+# UTC instants, so the cast is a pure unit conversion independent of the session time zone.
 statement ok
-CREATE TABLE ts_tz AS SELECT to_timestamp(range) AS ts FROM range(10240);
+CREATE TABLE ts_tz_ns AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMPTZ_NS AS ts FROM range(10240);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM ts_tz WHERE ts > '1970-01-01 02:50:00+00'::TIMESTAMPTZ_NS;
+EXPLAIN ANALYZE SELECT count(*) FROM ts_tz_ns WHERE ts::TIMESTAMPTZ > TIMESTAMPTZ '2000-01-01 02:50:00+00';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
 
 query I
-SELECT count(*) FROM ts_tz WHERE ts > '1970-01-01 02:50:00+00'::TIMESTAMPTZ_NS;
+SELECT count(*) FROM ts_tz_ns WHERE ts::TIMESTAMPTZ > TIMESTAMPTZ '2000-01-01 02:50:00+00';
 ----
 39
