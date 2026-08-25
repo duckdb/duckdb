@@ -786,99 +786,6 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<LocalTableStorage> storage,
-                                    DataChunk &chunk, optional_ptr<ConflictManager> manager) {
-	// Verify the constraint without a conflict manager.
-	if (!manager) {
-		for (auto index : indexes.MutableIndexHandles()) {
-			if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
-				continue;
-			}
-			D_ASSERT(index->IsBound());
-			auto bound_index = std::move(index).Into<BoundIndex>();
-
-			IndexAppendInfo index_append_info;
-			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
-			if (storage) {
-				auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
-				if (delete_entry) {
-					delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
-					(*delete_handle)->AddToDeleteIndexes(index_append_info);
-				}
-			}
-			if (auto delta = bound_index.FindDelta(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
-				delta->AddToDeleteIndexes(index_append_info);
-			}
-			bound_index->VerifyAppend(chunk, index_append_info, nullptr);
-		}
-		return;
-	}
-
-	// The conflict manager is only provided for statements containing ON CONFLICT.
-	auto &conflict_info = manager->GetConflictInfo();
-	const auto index_entries = indexes.GetEntries();
-
-	// Find all indexes matching the conflict target.
-	for (const auto &entry : index_entries) {
-		auto index = entry->GetHandle();
-		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
-			continue;
-		}
-		if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
-			continue;
-		}
-		D_ASSERT(index->IsBound());
-		if (storage) {
-			auto delete_entry = storage->delete_indexes.FindEntry(index->GetIndexName());
-			manager->AddIndex(entry, index->GetIndexName(), std::move(delete_entry));
-		} else {
-			manager->AddIndex(entry, index->GetIndexName(), nullptr);
-		}
-	}
-
-	// Verify indexes matching the conflict target.
-	manager->SetMode(ConflictManagerMode::SCAN);
-	auto &matching_indexes = manager->MatchingIndexes();
-	auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
-	for (idx_t i = 0; i < matching_indexes.size(); i++) {
-		auto bound_index = matching_indexes[i]->GetMutableHandle<BoundIndex>();
-		unique_ptr<IndexHandle<BoundIndex>> delete_handle;
-		IndexAppendInfo index_append_info;
-		if (matching_delete_indexes[i]) {
-			delete_handle = make_uniq<IndexHandle<BoundIndex>>(matching_delete_indexes[i]->GetHandle<BoundIndex>());
-			(*delete_handle)->AddToDeleteIndexes(index_append_info);
-		}
-		bound_index->VerifyAppend(chunk, index_append_info, *manager);
-	}
-
-	// Scan the other indexes and throw, if there are any conflicts.
-	manager->SetMode(ConflictManagerMode::THROW);
-	for (const auto &entry : index_entries) {
-		auto index = entry->GetMutableHandle();
-		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
-			continue;
-		}
-		if (manager->IndexMatches(index->GetIndexName())) {
-			continue;
-		}
-		D_ASSERT(index->IsBound());
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		if (storage) {
-			auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
-			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
-			IndexAppendInfo index_append_info;
-			if (delete_entry) {
-				delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
-				(*delete_handle)->AddToDeleteIndexes(index_append_info);
-			}
-			bound_index->VerifyAppend(chunk, index_append_info, *manager);
-		} else {
-			IndexAppendInfo index_append_info;
-			bound_index->VerifyAppend(chunk, index_append_info, *manager);
-		}
-	}
-}
-
 void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
                                         optional_ptr<LocalTableStorage> storage,
                                         optional_ptr<ConflictManager> manager) {
@@ -901,7 +808,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 	}
 
 	if (HasUniqueIndexes()) {
-		VerifyUniqueIndexes(info->indexes, storage, chunk, manager);
+		info->indexes.VerifyUniqueIndexes(storage ? &storage->delete_indexes : nullptr, chunk, manager);
 	}
 
 	auto &constraints = table.GetConstraints();

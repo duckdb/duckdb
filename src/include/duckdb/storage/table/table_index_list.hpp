@@ -178,10 +178,17 @@ public:
 	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
+	//! Returns whether the physical index is an ART index.
+	bool IsART() const;
+	//! Returns whether the physical index matches the conflict target.
+	bool ConflictTargetMatches(const ConflictInfo &conflict_info) const;
 	//! Returns whether the physical index has the given name.
 	bool NameEquals(const Identifier &name) const;
 	//! Returns the name of the physical index.
 	Identifier GetName() const;
+	//! Verifies that rows can be appended to the bound physical index.
+	void VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,
+	                  optional_ptr<ConflictManager> manager);
 	//! Verifies that the physical index is not updated by the given columns.
 	void VerifyUpdate(const vector<PhysicalIndex> &column_ids) const;
 	//! Vacuums the physical index if it is bound.
@@ -394,6 +401,9 @@ public:
 	}
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
+	//! Verifies all unique ART indexes, optionally recording conflicts.
+	void VerifyUniqueIndexes(optional_ptr<const TableIndexList> delete_indexes, DataChunk &chunk,
+	                         optional_ptr<ConflictManager> manager) const;
 	//! Vacuums all bound indexes.
 	void Vacuum();
 	//! Rebuilds all indexes with chunks supplied by the scan callback.

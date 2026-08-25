@@ -1,9 +1,11 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -124,6 +126,16 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
+bool IndexEntry::IsART() const {
+	auto entry_lock = lock.GetSharedLock();
+	return owned_index->GetIndexType() == ART::TYPE_NAME;
+}
+
+bool IndexEntry::ConflictTargetMatches(const ConflictInfo &conflict_info) const {
+	auto entry_lock = lock.GetSharedLock();
+	return conflict_info.ConflictTargetMatches(owned_index->IsUnique(), owned_index->GetColumnIdSet());
+}
+
 bool IndexEntry::NameEquals(const Identifier &name) const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->GetIndexName() == name;
@@ -132,6 +144,27 @@ bool IndexEntry::NameEquals(const Identifier &name) const {
 Identifier IndexEntry::GetName() const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->GetIndexName();
+}
+
+void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,
+                              optional_ptr<ConflictManager> manager) {
+	auto entry_lock = lock.GetExclusiveLock();
+	D_ASSERT(owned_index->IsBound());
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+
+	IndexAppendInfo index_append_info;
+	unique_ptr<StorageLockKey> delete_lock;
+	if (delete_entry) {
+		delete_lock = delete_entry->lock.GetSharedLock();
+		D_ASSERT(delete_entry->owned_index->IsBound());
+		delete_entry->owned_index->Cast<BoundIndex>().AddToDeleteIndexes(index_append_info);
+	}
+	if (!manager) {
+		if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+			delta->AddToDeleteIndexes(index_append_info);
+		}
+	}
+	bound_index.VerifyAppend(chunk, index_append_info, manager);
 }
 
 void IndexEntry::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
@@ -155,10 +188,10 @@ void IndexEntry::Rebuild(const IndexRebuildScan &scan) {
 	if (!owned_index->IsBound()) {
 		throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 	}
-	
+
 	auto &bound_index = owned_index->Cast<BoundIndex>();
 	bound_index.ResetStorage();
-	
+
 	IndexRebuildAppend append = [&](DataChunk &chunk, Vector &row_ids) {
 		auto error = bound_index.Append(chunk, row_ids);
 		if (error.HasError()) {
@@ -413,7 +446,7 @@ void TableIndexList::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 void TableIndexList::RevertIndexAppend(DataChunk &chunk, row_t row_start) {
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
-	
+
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->RevertIndexAppend(chunk, row_ids);
@@ -450,6 +483,50 @@ bool TableIndexList::HasUniqueIndexes() const {
 		}
 	}
 	return false;
+}
+
+void TableIndexList::VerifyUniqueIndexes(optional_ptr<const TableIndexList> delete_indexes, DataChunk &chunk,
+                                         optional_ptr<ConflictManager> manager) const {
+	annotated_lock_guard lock(index_entries_lock);
+	if (!manager) {
+		for (const auto &entry : index_entries) {
+			if (!entry->IsUnique() || !entry->IsART()) {
+				continue;
+			}
+			auto delete_entry = delete_indexes ? delete_indexes->FindEntry(entry->GetName()) : nullptr;
+			entry->VerifyAppend(delete_entry, chunk, nullptr);
+		}
+		return;
+	}
+
+	// Find all indexes matching the conflict target.
+	const auto &conflict_info = manager->GetConflictInfo();
+	for (const auto &entry : index_entries) {
+		if (!entry->IsUnique() || !entry->IsART() || !entry->ConflictTargetMatches(conflict_info)) {
+			continue;
+		}
+		auto index_name = entry->GetName();
+		auto delete_entry = delete_indexes ? delete_indexes->FindEntry(index_name) : nullptr;
+		manager->AddIndex(entry, index_name, std::move(delete_entry));
+	}
+
+	// Verify indexes matching the conflict target.
+	manager->SetMode(ConflictManagerMode::SCAN);
+	const auto &matching_indexes = manager->MatchingIndexes();
+	const auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
+	for (idx_t i = 0; i < matching_indexes.size(); i++) {
+		matching_indexes[i]->VerifyAppend(matching_delete_indexes[i], chunk, manager);
+	}
+
+	// Scan the other indexes and throw if there are any conflicts.
+	manager->SetMode(ConflictManagerMode::THROW);
+	for (const auto &entry : index_entries) {
+		if (!entry->IsUnique() || !entry->IsART() || manager->IndexMatches(entry->GetName())) {
+			continue;
+		}
+		auto delete_entry = delete_indexes ? delete_indexes->FindEntry(entry->GetName()) : nullptr;
+		entry->VerifyAppend(delete_entry, chunk, manager);
+	}
 }
 
 void TableIndexList::Vacuum() {
