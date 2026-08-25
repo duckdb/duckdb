@@ -14,6 +14,7 @@
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
+class AsyncFileWriter;
 class MemoryStream;
 
 enum class CSVNewLineMode {
@@ -61,6 +62,8 @@ class CSVWriter {
 public:
 	//! Create a CSVWriter that writes to a (non-owned) WriteStream
 	CSVWriter(WriteStream &stream, vector<Identifier> name_list, bool shared = true);
+	//! Create a CSVWriter with the full set of options that writes to a (non-owned) AsyncFileWriter
+	CSVWriter(CSVReaderOptions &options, AsyncFileWriter &file_writer, bool shared = true);
 
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,
@@ -122,6 +125,8 @@ protected:
 
 	//! (optional) The owned file writer of this CSVWriter
 	unique_ptr<BufferedFileWriter> file_writer;
+	//! (optional) The non-owned async file writer of this CSVWriter
+	optional_ptr<AsyncFileWriter> async_file_writer;
 
 	//! The WriteStream to write the CSV data to
 	WriteStream &write_stream;

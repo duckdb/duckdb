@@ -193,6 +193,15 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs->FileExists(fname_in_dir2));
 }
 
+#ifndef _WIN32
+TEST_CASE("Character devices use streaming file semantics", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	REQUIRE(fs->IsPipe("/dev/null"));
+	auto handle = fs->OpenFile("/dev/null", FileFlags::FILE_FLAGS_WRITE);
+	REQUIRE(handle->GetWriteMode() == FileWriteMode::SEQUENTIAL);
+}
+#endif
+
 TEST_CASE("RemoveDirectoryExtended never removes directory contents in single mode", "[file_system]") {
 	DuckDB db(nullptr);
 	Connection con(db);

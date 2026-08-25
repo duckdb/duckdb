@@ -108,6 +108,15 @@ idx_t AsyncFileWriter::GetFileSize() {
 	return GetTotalWritten();
 }
 
+idx_t AsyncFileWriter::GetPhysicalFileSize() {
+	WaitAll();
+	return handle->GetFileSize();
+}
+
+FileCompressionType AsyncFileWriter::GetFileCompressionType() {
+	return handle->GetFileCompressionType();
+}
+
 idx_t AsyncFileWriter::GetTotalWritten() const {
 	return total_written;
 }

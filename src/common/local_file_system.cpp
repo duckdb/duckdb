@@ -88,7 +88,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 		if (access(normalized_file.c_str(), 0) == 0) {
 			struct stat status;
 			stat(normalized_file.c_str(), &status);
-			if (S_ISFIFO(status.st_mode)) {
+			if (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode)) {
 				return true;
 			}
 		}
@@ -1314,7 +1314,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	share_mode |= FILE_SHARE_DELETE;
 
 	if (open_write) {
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.ExclusiveCreate()) {
+			creation_disposition = CREATE_NEW;
+		} else if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags.OverwriteExistingFile()) {
 			creation_disposition = CREATE_ALWAYS;
@@ -1938,6 +1940,10 @@ bool LocalFileSystem::CanSeek() {
 }
 
 FileWriteMode LocalFileSystem::GetWriteMode(FileHandle &handle) {
+	auto type = GetFileType(handle);
+	if (type == FileType::FILE_TYPE_FIFO || type == FileType::FILE_TYPE_CHARDEV) {
+		return FileWriteMode::SEQUENTIAL;
+	}
 	return FileWriteMode::POSITIONAL;
 }
 

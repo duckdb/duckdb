@@ -258,7 +258,7 @@ public:
 	                                 optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
 	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Check if path is pipe
+	//! Check if path is a pipe or character device
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);

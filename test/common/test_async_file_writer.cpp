@@ -1,9 +1,12 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -1037,6 +1040,63 @@ TEST_CASE("AsyncFileWriter requires a client context", "[async_file_writer]") {
 	REQUIRE(!fs.FileExists(path));
 }
 
+TEST_CASE("CSVWriter applies backpressure on automatic async flushes", "[async_file_writer][csv_writer]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(con->Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con->Query("SET async_threads=1"));
+
+	AsyncThreadBlocker async_thread_blocker(*con->context, 1);
+	REQUIRE(async_thread_blocker.WaitForStarted());
+
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
+	auto path = TestCreatePath("csv_writer_async_backpressure.tmp");
+	fs.TryRemoveFile(path);
+
+	AsyncFileWriter file_writer(*con->context, fs, path);
+	CSVReaderOptions options;
+	options.force_quote.push_back(false);
+	CSVWriter writer(options, file_writer);
+	CSVWriterState local_state(*con->context, writer.writer_options.flush_size);
+	string data(writer.writer_options.flush_size, 'x');
+	DataChunk input;
+	input.Initialize(Allocator::Get(*con->context), {LogicalType::VARCHAR});
+	input.SetChildCardinality(1);
+	input.data[0].SetValue(0, Value(data));
+	auto &scheduler = TaskScheduler::GetScheduler(*con->context);
+	const auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+	const auto max_pending_bytes = ManagedAsyncMemoryConfig::MAX_PENDING_BYTES_PER_THREAD * regular_threads;
+	const auto write_count = (max_pending_bytes + 2 * AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET) / data.size() + 1;
+
+	atomic<bool> write_finished {false};
+	std::exception_ptr write_error;
+	std::thread write_thread([&]() {
+		try {
+			for (idx_t write_idx = 0; write_idx < write_count; write_idx++) {
+				writer.WriteChunk(input, local_state);
+			}
+		} catch (...) {
+			write_error = std::current_exception();
+		}
+		write_finished = true;
+	});
+
+	auto entered_backend = fs.WaitForBlockedWrites(1);
+	auto finished_before_release = write_finished.load();
+	fs.ReleaseWrites();
+	async_thread_blocker.Release();
+	write_thread.join();
+
+	REQUIRE(entered_backend);
+	REQUIRE(!finished_before_release);
+	if (write_error) {
+		std::rethrow_exception(write_error);
+	}
+	file_writer.Close();
+	REQUIRE(file_writer.GetTotalWritten() == writer.BytesWritten());
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter batches write registration before scheduling", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
@@ -1861,6 +1921,25 @@ TEST_CASE("AsyncFileWriter publishes only on successful explicit close", "[async
 
 	REQUIRE(fs.AbortCount() == 0);
 	REQUIRE(ReadFile(path) == "published");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter exclusive creation preserves existing files", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_exclusive_existing.tmp");
+	fs.TryRemoveFile(path);
+	{
+		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		string contents = "existing";
+		handle->Write(data_ptr_cast(contents.data()), contents.size());
+		handle->Close();
+	}
+
+	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+	REQUIRE_THROWS(AsyncFileWriter(*con->context, fs, path, flags));
+	REQUIRE(ReadFile(path) == "existing");
 	fs.RemoveFile(path);
 }
 

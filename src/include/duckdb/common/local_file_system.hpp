@@ -70,7 +70,7 @@ public:
 	//! Check if a file exists
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 
-	//! Check if path is a pipe
+	//! Check if path is a pipe or character device
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;

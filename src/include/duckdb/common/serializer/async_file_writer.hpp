@@ -82,6 +82,10 @@ public:
 
 	//! Return the logical file size, including writes that have been registered but not drained yet.
 	DUCKDB_API idx_t GetFileSize();
+	//! Wait for registered writes, then return the current size reported by the file handle.
+	DUCKDB_API idx_t GetPhysicalFileSize();
+	//! Return the compression type resolved when the file handle was opened.
+	DUCKDB_API FileCompressionType GetFileCompressionType();
 	//! Return the logical number of bytes written, including writes that are still pending.
 	DUCKDB_API idx_t GetTotalWritten() const;
 
