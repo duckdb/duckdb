@@ -32,6 +32,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -1748,6 +1749,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::ENUM: {
@@ -1781,7 +1783,7 @@ string Value::ToSQLString() const {
 			if (is_unnamed) {
 				ret += child.ToSQLString();
 			} else {
-				ret += "'" + name + "': " + child.ToSQLString();
+				ret += "'" + StringUtil::Replace(name.GetIdentifierName(), "'", "''") + "': " + child.ToSQLString();
 			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
@@ -1858,9 +1860,9 @@ string Value::ToSQLString() const {
 		string ret = "union_value(";
 		auto union_tag = UnionValue::GetTag(*this);
 		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
-		ret += tag_name + " := ";
+		ret += SQLIdentifier(tag_name) + " := ";
 		ret += UnionValue::GetValue(*this).ToSQLString();
-		ret += ")";
+		ret += ")::" + type_.ToString();
 		return ret;
 	}
 	default:
