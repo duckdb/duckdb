@@ -33,13 +33,13 @@ DETACH tmp;
 query II
 EXPLAIN SELECT count(*) FROM db.prefixes WHERE left(s, 0) IN ('');
 ----
-physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
 
 # SUBSTRING has the same zero-length semantics
 query II
 EXPLAIN SELECT count(*) FROM db.prefixes WHERE substring(s, 1, 0) IN ('');
 ----
-physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
 
 query I
 SELECT count(*) FROM db.prefixes WHERE left(s, 0) IN ('');

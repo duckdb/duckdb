@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/rule/string_prefix.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -10,7 +9,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
@@ -21,6 +19,30 @@ static unique_ptr<Expression> RewriteAsEquality(unique_ptr<Expression> input, co
 
 static unique_ptr<BoundConstantExpression> RewriteAsNull(const BoundFunctionExpression &comparison) {
 	return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
+}
+
+static unique_ptr<Expression> RewriteZeroLength(BoundFunctionExpression &func) {
+	auto &children = func.GetChildrenMutable();
+	auto &function_name = func.Function().GetName();
+	if (function_name == "left") {
+		if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
+			return nullptr;
+		}
+	} else if (function_name == "substring" || function_name == "substr") {
+		if (children.size() != 3 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
+		    children[2]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
+		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 1 ||
+		    children[2]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
+			return nullptr;
+		}
+	} else {
+		return nullptr;
+	}
+	return ExpressionRewriter::ConstantOrNull(std::move(children[0]), Value(string()));
 }
 
 StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -47,11 +69,11 @@ StringPrefixRule::StringPrefixRule(ExpressionRewriter &rewriter) : Rule(rewriter
 	root = std::move(op);
 }
 
-StringPrefixInRule::StringPrefixInRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	auto op = make_uniq<InUniformExpressionMatcher>();
-	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_IN);
-	op->probe_matcher = make_uniq<ExpressionMatcher>();
-	op->child_matcher = make_uniq<ConstantExpressionMatcher>();
+StringPrefixZeroLengthRule::StringPrefixZeroLengthRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<FunctionExpressionMatcher>();
+	op->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"left", "substring", "substr"});
+	op->matchers.push_back(make_uniq<ExpressionMatcher>());
+	op->policy = SetMatcher::Policy::SOME_ORDERED;
 	root = std::move(op);
 }
 
@@ -81,6 +103,9 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	auto &func = bindings[1].get().Cast<BoundFunctionExpression>();
 	const auto &constant = bindings[4].get().Cast<BoundConstantExpression>();
 	auto &children = func.GetChildrenMutable();
+	if (auto result = RewriteZeroLength(func)) {
+		return result;
+	}
 
 	if (constant.GetValue().IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
@@ -177,45 +202,11 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	return std::move(prefix_expr);
 }
 
-unique_ptr<Expression> StringPrefixInRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
-                                                 bool &changes_made, bool is_root) {
-	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
-	auto &probe = expr.GetChildrenMutable()[0];
-	if (probe->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return nullptr;
-	}
-	auto &func = probe->Cast<BoundFunctionExpression>();
-	auto &children = func.GetChildrenMutable();
-	auto &function_name = func.Function().GetName();
-	if (function_name == "left") {
-		if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
-			return nullptr;
-		}
-	} else if (function_name == "substring" || function_name == "substr") {
-		if (children.size() != 3 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 1 ||
-		    children[2]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
-			return nullptr;
-		}
-	} else {
-		return nullptr;
-	}
-
-	auto constant_in = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	constant_in->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value(string())));
-	for (idx_t i = 1; i < expr.GetChildren().size(); i++) {
-		constant_in->GetChildrenMutable().push_back(expr.GetChildren()[i]->Copy());
-	}
-	Value result;
-	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_in, result)) {
-		return nullptr;
-	}
-	if (result.IsNull()) {
-		return make_uniq<BoundConstantExpression>(std::move(result));
-	}
-	return ExpressionRewriter::ConstantOrNull(std::move(children[0]), std::move(result));
+unique_ptr<Expression> StringPrefixZeroLengthRule::Apply(LogicalOperator &op,
+                                                         vector<reference<Expression>> &bindings,
+                                                         bool &changes_made, bool is_root) {
+	auto &func = bindings[0].get().Cast<BoundFunctionExpression>();
+	return RewriteZeroLength(func);
 }
 
 unique_ptr<Expression> InstrPrefixRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
