@@ -44,6 +44,17 @@ class MemoryMappedFile;
 struct MMapOptions;
 class MultiFileList;
 
+enum class RemoveDirectoryMode : uint8_t {
+	//! Remove the target only; return false if it is missing or non-empty and never remove its contents.
+	SINGLE,
+	//! Remove the target directory and all files and directories contained in it.
+	RECURSIVE
+};
+
+struct RemoveDirectoryOptions {
+	RemoveDirectoryMode mode = RemoveDirectoryMode::SINGLE;
+};
+
 enum class FileType {
 	//! Regular file
 	FILE_TYPE_REGULAR,
@@ -214,6 +225,9 @@ public:
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove an empty directory or a directory tree. Returns whether the target was removed.
+	DUCKDB_API virtual bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,

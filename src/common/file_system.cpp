@@ -531,6 +531,19 @@ void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
+bool FileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                         optional_ptr<FileOpener> opener) {
+	switch (options.mode) {
+	case RemoveDirectoryMode::SINGLE:
+		return false;
+	case RemoveDirectoryMode::RECURSIVE:
+		RemoveDirectory(directory, opener);
+		return false;
+	default:
+		throw InternalException("Unknown RemoveDirectoryMode");
+	}
+}
+
 bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	if (!info.extended_info) {
 		return false;

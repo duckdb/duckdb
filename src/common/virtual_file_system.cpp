@@ -244,7 +244,12 @@ void VirtualFileSystem::CreateDirectory(const string &directory, optional_ptr<Fi
 }
 
 void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	FindFileSystem(directory, opener).RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool VirtualFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                                optional_ptr<FileOpener> opener) {
+	return FindFileSystem(directory, opener).RemoveDirectoryExtended(directory, options, opener);
 }
 
 bool VirtualFileSystem::ListFilesExtended(const string &directory,

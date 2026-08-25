@@ -236,7 +236,12 @@ void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, op
 }
 
 void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	underlying_file_system.RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool CachingFileSystemWrapper::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                                       optional_ptr<FileOpener> opener) {
+	return underlying_file_system.RemoveDirectoryExtended(directory, options, opener);
 }
 
 bool CachingFileSystemWrapper::ListFiles(const string &directory,

@@ -87,9 +87,13 @@ public:
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().RemoveDirectory(directory, GetOpener());
+		return GetFileSystem().RemoveDirectoryExtended(directory, options, GetOpener());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
@@ -114,6 +118,9 @@ public:
 	}
 	void RemoveDirectory(const string &directory) {
 		RemoveDirectory(directory, nullptr);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options) {
+		return RemoveDirectoryExtended(directory, options, nullptr);
 	}
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);

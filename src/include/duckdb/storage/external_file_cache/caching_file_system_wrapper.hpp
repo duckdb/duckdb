@@ -80,6 +80,8 @@ public:
 	DUCKDB_API void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	DUCKDB_API bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                        optional_ptr<FileOpener> opener = nullptr) override;
 
 	DUCKDB_API bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	                          FileOpener *opener = nullptr) override;
