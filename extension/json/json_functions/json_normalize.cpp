@@ -79,16 +79,13 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 			result_data.WriteNull();
 			continue;
 		}
-		fprintf(stderr, "82\n");
+
 		auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
-		fprintf(stderr, "84");
 		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
-		fprintf(stderr, "86\n");
 		auto root = yyjson_mut_doc_get_root(mut_doc);
-		fprintf(stderr, "88\n");
 
 		SortKeys(root);
-		fprintf(stderr, "91\n");
+		
 		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
