@@ -259,7 +259,7 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
-AggregateFunction GetAverageAggregateInternal(PhysicalType type) {
+AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
 		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
@@ -284,15 +284,6 @@ AggregateFunction GetAverageAggregateInternal(PhysicalType type) {
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
-}
-
-AggregateFunction GetAverageAggregate(PhysicalType type) {
-	auto function = GetAverageAggregateInternal(type);
-	// the average always lies within the range of the input values
-	// note: the DOUBLE overload does not use this function - summing doubles can overflow to
-	// infinity, in which case the result escapes the input range
-	function.SetStatisticsCallback(AggregateFunction::PropagateInputRangeStats);
-	return function;
 }
 
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
