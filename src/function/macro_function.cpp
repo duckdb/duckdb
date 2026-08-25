@@ -335,7 +335,7 @@ string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
 		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		auto param_string = SQLIdentifier::ToString(param_name.GetIdentifierName());
+		auto param_string = SQLIdentifier::ToString(param_name);
 		if (types[param_idx] != LogicalType::UNKNOWN) {
 			param_string += " " + types[param_idx].ToString();
 		}

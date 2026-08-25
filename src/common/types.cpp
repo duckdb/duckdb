@@ -1276,6 +1276,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 				bound_type.Serialize(serializer);
 				return;
 			}
+		} catch (const InternalException &) {
+			throw;
+		} catch (const OutOfMemoryException &) {
+			// binding allocates, and a failure to allocate is not a failure to bind: falling back here reports it
+			// as "Cannot serialize non-constant type parameter", which says nothing about what went wrong
+			throw;
+		} catch (const InterruptException &) {
+			throw;
 		} catch (...) {
 			// Ignore errors, just try to write as a USER type instead
 		}

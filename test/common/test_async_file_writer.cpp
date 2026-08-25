@@ -1592,12 +1592,9 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 	fs.fail_writes = true;
 
 	AsyncFileWriter writer(*con->context, fs, path);
-	{
+	try {
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
-		batch_guard.Finish();
-	}
-	try {
 		writer.Close();
 		FAIL("Expected async write failure");
 	} catch (const Exception &ex) {

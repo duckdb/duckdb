@@ -310,12 +310,13 @@ def check_undefined_rules(all_rules):
 
 
 def get_grammar_bytes(contents):
-    result_text = ""
-    for line in contents.split('\n'):
-        if len(line) == 0:
-            continue
-        result_text += "\t\"" + line.replace('\\', '\\\\').replace('"', '\\"') + "\\n\"\n"
-    return result_text
+    grammar = "".join(line + "\n" for line in contents.split('\n') if len(line) > 0)
+    data = bytearray(grammar.encode('utf-8'))
+    data.append(0)  # null terminator so the array can be used directly as a C string
+    lines = []
+    for i in range(0, len(data), 20):
+        lines.append("    " + ", ".join(str(b) for b in data[i : i + 20]) + ",")
+    return "\n".join(lines)
 
 
 def load_all_rules():
@@ -418,7 +419,7 @@ def main():
 
 namespace duckdb {
 
-const char INLINED_PEG_GRAMMAR[] = {
+const unsigned char INLINED_PEG_GRAMMAR[] = {
 '''
             + get_grammar_bytes(contents)
             + '''

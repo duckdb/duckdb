@@ -106,7 +106,63 @@ NULL
 statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
 ----
-<REGEX>:.*Binder Error.*Could not choose a best candidate.*
+Invalid Input Error: Unrecognized Regex option 1
+
+query T
+SELECT regexp_extract('I am the DUCKIEST duck to ever duck', 'D..k', 'c')
+----
+(empty)
+
+query T
+SELECT regexp_extract('I am the DUCKIEST duck to ever duck', 'duck', 'il')
+----
+DUCK
+
+query T
+SELECT regexp_extract('bibitybobbitybarbazity', '(b..)(b..)', 'i')
+----
+bobbit
+
+statement error
+SELECT regexp_extract('to quack or not to quack', 'lalalala', 'g')
+----
+Invalid Input Error: Option 'g' (global replace) is only valid for regexp_replace
+
+statement ok
+CREATE TABLE test_opts (s VARCHAR, p VARCHAR, o VARCHAR)
+
+statement ok
+INSERT INTO test_opts VALUES ('foobarbaz', 'b..', 'i'), ('FOOBARBAZ', 'b..', 'i')
+
+statement error
+SELECT regexp_extract(s, p, o) FROM test_opts
+----
+<REGEX>:.*Binder Error.*must be a constant.*
+
+query T
+SELECT regexp_extract('all hail Anas platyrhynchos', 'zzzz', 'k')
+----
+all hail Anas platyrhynchos
+
+query T
+SELECT regexp_extract('glory to Anas platyrhynchos', 'p....', 'k')
+----
+platy
+
+query T
+SELECT regexp_extract('how much good would a good duck duck if a good duck could duck good????', 'g..', '')
+----
+goo
+
+statement error
+SELECT regexp_extract('foobarbaz', 'B..', CAST(NULL as CHAR))
+----
+must not be NULL
+
+statement error
+SELECT regexp_extract('abcdefg', 'A..', 'i', 'c');
+----
+Binder Error: Could not choose a best candidate function 
 
 # 'k' option: keep (return) the input on no match instead of an empty string
 query T

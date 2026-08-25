@@ -272,6 +272,8 @@ enum class HLLStorageType : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
 
+enum class IdentifierCaseMode : uint8_t;
+
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexBindState : uint8_t;
@@ -333,8 +335,6 @@ enum class MergeActionType : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
-
-enum class MultiFileAcquireResult : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -470,6 +470,8 @@ enum class SampleType : uint8_t;
 
 enum class SamplingState : uint8_t;
 
+enum class ScanReadAheadAcquire : uint8_t;
+
 enum class ScanType : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
@@ -493,6 +495,8 @@ enum class SetScope : uint8_t;
 enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
+
+enum class ShowBehaviorType : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -984,6 +988,9 @@ template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
 
 template<>
+const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
+
+template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
@@ -1075,9 +1082,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
-
-template<>
-const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1281,6 +1285,9 @@ template<>
 const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
 
 template<>
+const char* EnumUtil::ToChars<ScanReadAheadAcquire>(ScanReadAheadAcquire value);
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
 
 template<>
@@ -1315,6 +1322,9 @@ const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
+
+template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -1870,6 +1880,9 @@ template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
 
 template<>
+IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
+
+template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
@@ -1961,9 +1974,6 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
-
-template<>
-MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
@@ -2167,6 +2177,9 @@ template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value);
 
 template<>
+ScanReadAheadAcquire EnumUtil::FromString<ScanReadAheadAcquire>(const char *value);
+
+template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
 
 template<>
@@ -2201,6 +2214,9 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
+
+template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
