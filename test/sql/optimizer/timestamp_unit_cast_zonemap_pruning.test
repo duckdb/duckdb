@@ -1,0 +1,104 @@
+# name: test/sql/optimizer/timestamp_unit_cast_zonemap_pruning.test
+# description: Casts between timestamp units propagate zonemap stats for row group pruning
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/ts_unit_cast_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 10240 rows -> 5 row groups of 2048 rows. ts increases with the row id, so each row group
+# covers a contiguous, disjoint time range. The data is second-granular, so casting between
+# timestamp units is lossless and the counts are exact.
+statement ok
+CREATE TABLE ts_ms AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMP_MS AS ts FROM range(10240);
+
+statement ok
+CREATE TABLE ts_sec AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMP_S AS ts FROM range(10240);
+
+statement ok
+CREATE TABLE ts_us AS SELECT TIMESTAMP '2000-01-01' + to_seconds(range) AS ts FROM range(10240);
+
+statement ok
+CREATE TABLE ts_ns AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMP_NS AS ts FROM range(10240);
+
+# comparing a TIMESTAMP_MS column against a TIMESTAMP constant wraps the column in
+# CAST(ts AS TIMESTAMP) - the zonemap stats must propagate through the unit cast
+
+# tail: only the last row group can contain matches (2000-01-01 + 10200 seconds)
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_ms WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_ms WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+39
+
+# head: only the first row group (2000-01-01 + 100 seconds)
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_ms WHERE ts < TIMESTAMP '2000-01-01 00:01:40';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_ms WHERE ts < TIMESTAMP '2000-01-01 00:01:40';
+----
+100
+
+# point lookup in a middle row group (2000-01-01 + 5000 seconds -> row group 2)
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_ms WHERE ts = TIMESTAMP '2000-01-01 01:23:20';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_ms WHERE ts = TIMESTAMP '2000-01-01 01:23:20';
+----
+1
+
+# same for a TIMESTAMP_S column
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_sec WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_sec WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+39
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_sec WHERE ts < TIMESTAMP '2000-01-01 00:01:40';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_sec WHERE ts < TIMESTAMP '2000-01-01 00:01:40';
+----
+100
+
+# a TIMESTAMP (us) column compared against a TIMESTAMP_NS constant casts the column to ns
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_us WHERE ts > '2000-01-01 02:50:00'::TIMESTAMP_NS;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_us WHERE ts > '2000-01-01 02:50:00'::TIMESTAMP_NS;
+----
+39
+
+# control: TIMESTAMP_NS column vs TIMESTAMP constant casts the constant (not the column),
+# so this prunes without cast stats propagation - guards against regressions
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_ns WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_ns WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+39
