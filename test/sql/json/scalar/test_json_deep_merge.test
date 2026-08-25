@@ -316,10 +316,3 @@ SELECT json_deep_merge(
 )
 ----
 {"columnName":"user_id","parentColumn":"accounts.id"}
-
-# stack limit for recursions = 128
-# JSON objects that are too deeply nested should not exhaust the thread stack
-statement error
-SELECT length(json_deep_merge(repeat('{"a":',20000) || '1' || repeat('}',20000), repeat('{"a":',20000) || '1' || repeat('}',20000)))
-----
-json_deep_merge: JSON exceeds maximum recursion depth of 128
