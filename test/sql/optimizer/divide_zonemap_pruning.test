@@ -1,0 +1,129 @@
+# name: test/sql/optimizer/divide_zonemap_pruning.test
+# description: Row group pruning for filters on division expressions
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/divide_zonemap_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048 rows.
+statement ok
+CREATE TABLE divide_pruning AS
+SELECT i::INTEGER AS i
+FROM range(6144) r(i);
+
+# Integer division by a positive constant: i // 1000 = 5 only holds for i in [5000, 5999], entirely inside the last row group.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE i // 1000 = 5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE i // 1000 = 5;
+----
+1000
+
+# Float division by a positive constant: i / 100.0 < 5 only holds for i < 500.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE i / 100.0 < 5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE i / 100.0 < 5;
+----
+500
+
+# Float division by a negative constant flips the corners: i / -100.0 > -5 only holds for i < 500.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE i / -100.0 > -5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE i / -100.0 > -5;
+----
+500
+
+# Float division where the divisor is itself a range: the outer row groups derive
+# small quotient ranges and are pruned, while the middle row group's divisor range
+# contains zero, so no statistics can be derived and it is scanned.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE 6144.0 / (i - 3000) = 123456;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE 6144.0 / (i - 3000) = 123456;
+----
+0
+
+# Float division by a zero constant never matches, whether it yields NULL or infinity.
+query I
+SELECT count(*) FROM divide_pruning WHERE i / 0.0 = 123;
+----
+0
+
+# A negative divisor flips the corners: the result range of the first two row
+# groups is above -4, so only the last row group can match.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE i // -1000 = -5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE i // -1000 = -5;
+----
+1000
+
+# The divisor is itself a range: the outer row groups derive small quotient
+# ranges and are pruned, while the middle row group's divisor range
+# [-952, 1095] contains zero, so no statistics can be derived and it is scanned.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE 6144 // (i - 3000) = 123456;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_pruning WHERE 6144 // (i - 3000) = 123456;
+----
+0
+
+# A constant zero divisor yields NULL for every row: no row matches.
+query I
+SELECT count(*) FROM divide_pruning WHERE i // 0 = 5;
+----
+0
+
+# The first row group contains the minimum integer: statistics derivation must
+# not evaluate INT32_MIN // -1, and pruning must not swallow the overflow error
+# raised when the row group is scanned.
+statement ok
+CREATE TABLE divide_overflow AS
+SELECT CASE WHEN i = 0 THEN -2147483648 ELSE i END::INTEGER AS i
+FROM range(6144) r(i);
+
+statement error
+SELECT count(*) FROM divide_overflow WHERE i // -1 = 42;
+----
+<REGEX>:.*Overflow in division.*
+
+# A row group containing infinity: the corner evaluation hits a non-finite
+# value, so no statistics are derived for it and it is scanned rather than
+# incorrectly pruned. The finite row groups are still pruned.
+statement ok
+CREATE TABLE divide_float AS
+SELECT CASE WHEN i = 5000 THEN 'infinity'::DOUBLE ELSE i::DOUBLE END AS d
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM divide_float WHERE d / 2.0 > 1e308;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM divide_float WHERE d / 2.0 > 1e308;
+----
+1

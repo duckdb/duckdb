@@ -1071,9 +1071,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	for (auto &func : multiply.functions) {
-		func.SetFallible();
-	}
+	multiply.SetFallible();
 
 	return multiply;
 }
@@ -1216,19 +1214,65 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	return nullptr;
 }
 
+struct DividePropagateStatistics {
+	template <class T, class OP>
+	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
+	                      Value &new_max) {
+		D_ASSERT(NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats));
+		// A divisor range that contains zero produces NULLs, and the result grows without
+		// bound as the divisor approaches zero - no statistics can be derived
+		if (NumericStats::GetMin<T>(rstats) <= T(0) && NumericStats::GetMax<T>(rstats) >= T(0)) {
+			return true;
+		}
+		// The extremes depend on the signs of the inputs: evaluate all combinations of the bounds and take the
+		// minimum/maximum
+		T lvals[] {NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(lstats)};
+		T rvals[] {NumericStats::GetMin<T>(rstats), NumericStats::GetMax<T>(rstats)};
+		T min = NumericLimits<T>::Maximum();
+		T max = NumericLimits<T>::Minimum();
+		for (idx_t l = 0; l < 2; l++) {
+			for (idx_t r = 0; r < 2; r++) {
+				T result;
+				if (!OP::Operation(lvals[l], rvals[r], result)) {
+					return true;
+				}
+				if (result < min) {
+					min = result;
+				}
+				if (result > max) {
+					max = result;
+				}
+			}
+		}
+		new_min = NumericStatsValue(type, min);
+		new_max = NumericStatsValue(type, max);
+		return false;
+	}
+};
+
+// When propagation fails the divisor range may contain zero, and division by zero produces NULLs that the inputs do not
+// have: return no statistics instead of the validity-only statistics that PropagateNumericStats falls back to.
+unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto stats = PropagateNumericStats<TryDivideOperator, DividePropagateStatistics, DivideOperator>(context, input);
+	if (stats && !NumericStats::HasMinMax(*stats)) {
+		return nullptr;
+	}
+	return stats;
+}
+
 } // namespace
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
-	                                     BindBinaryFloatingPoint<DivideOperator>));
+	                                     BindBinaryFloatingPoint<DivideOperator>,
+	                                     PropagateFloatingStats<DividePropagateStatistics, DivideOperator>));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
-	                                     BindBinaryFloatingPoint<DivideOperator>));
+	                                     BindBinaryFloatingPoint<DivideOperator>,
+	                                     PropagateFloatingStats<DividePropagateStatistics, DivideOperator>));
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, double, interval_t, DivideOperator>));
-	for (auto &func : fp_divide.functions) {
-		func.SetFallible();
-	}
+	fp_divide.SetFallible();
 	return fp_divide;
 }
 
@@ -1237,14 +1281,16 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
+		} else if (TypeIsIntegral(type.InternalType())) {
+			full_divide.AddFunction(ScalarFunction({type, type}, type,
+			                                       GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType()),
+			                                       nullptr, PropagateIntegerDivideStats));
 		} else {
 			full_divide.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : full_divide.functions) {
-		func.SetFallible();
-	}
+	full_divide.SetFallible();
 	return full_divide;
 }
 
@@ -1300,9 +1346,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
 		}
 	}
-	for (auto &func : modulo.functions) {
-		func.SetFallible();
-	}
+	modulo.SetFallible();
 
 	return modulo;
 }

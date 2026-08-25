@@ -1,0 +1,288 @@
+module: configuration
+# The option handle is an opaque carrier of an option's name, its current
+# setting, and — when populated by a database/connection get — its description,
+# default setting, target scope, and aliases.
+#
+# Terminology used in this module:
+#   * option  — a named, registered config item (e.g. "memory_limit").
+#   * setting — the string-encoded value of an option at some scope.
+#   * config  — a collection of option settings (database GLOBAL or
+#               connection LOCAL).
+#
+# Implementation note: *_option_set, on both database and connection, delegates
+# to PhysicalSet::ApplyVariable. That helper was extracted from
+# PhysicalSet::GetDataInternal so SQL `SET` and the V2 C API share one
+# resolution and dispatch path: lock check, core-then-extension lookup with
+# autoload, scope target validation, value cast, and generic vs legacy apply.
+# V2 therefore inherits any change to the behavior of `SET` automatically. See
+# src/include/duckdb/execution/operator/helper/physical_set.hpp.
+enums:
+  OPTION_TARGET_SCOPE:
+    description: |
+      The scope target of an option: where DuckDB permits its setting to be
+      written. UNKNOWN is reported for an option whose declaration carries no
+      explicit scope target, and for one created via option_create that has not
+      yet been resolved through a database/connection get.
+    values:
+      OPTION_TARGET_SCOPE_UNKNOWN:
+        value: 0
+        description: "Target scope is not known."
+      OPTION_TARGET_SCOPE_GLOBAL_ONLY:
+        description: "May only be written at GLOBAL (database) scope."
+      OPTION_TARGET_SCOPE_LOCAL_ONLY:
+        description: "May only be written at LOCAL (session) scope."
+      OPTION_TARGET_SCOPE_GLOBAL_DEFAULT:
+        description: "May be written at either scope; defaults to GLOBAL when unspecified."
+      OPTION_TARGET_SCOPE_LOCAL_DEFAULT:
+        description: "May be written at either scope; defaults to LOCAL when unspecified."
+  SETTING_SCOPE:
+    description: |
+      Destination scope for a connection-side option write, as taken by
+      connection_option_set. AUTOMATIC defers to the option's target scope,
+      like SQL `SET name = value`. GLOBAL writes through to the database,
+      visible to all connections, like `SET GLOBAL`. LOCAL writes to the
+      connection's session only, like `SET LOCAL` / `SET SESSION`.
+    values:
+      SETTING_SCOPE_AUTOMATIC:
+        value: 0
+        description: "Resolve from the option's target scope."
+      SETTING_SCOPE_GLOBAL:
+        description: "Write through to the database (visible to all connections)."
+      SETTING_SCOPE_LOCAL:
+        description: "Write to the connection's session only."
+
+functions:
+  option_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Creates an option handle carrying a name and a setting.
+
+      The name and setting are copied in. The remaining fields — description,
+      default setting, target scope, aliases — stay empty, or UNKNOWN, until
+      the option is resolved through a database/connection get. The caller
+      destroys it via option_destroy.
+    role: constructor
+    belongs_to: option
+    parameters:
+      name:
+        type: identifier
+        description: "Option name."
+      setting:
+        type: str
+        description: "Setting (string-encoded value)."
+      out_option:
+        type: option
+        indirection: 1
+        kind: OUT
+        description: "Receives the new option handle."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys an option handle.
+
+      Frees the handle along with the strings it owns. On success the slot is
+      set to null. Safe to call on an already-null slot.
+    role: destructor
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        indirection: 1
+        description: "The option handle to destroy."
+    return_type: ERROR
+
+  option_get_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the option's canonical name.
+
+      When a database/connection get resolved the option from an alias, this
+      still reports the canonical name; the alias is reachable via
+      option_get_alias.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the option name. Valid until the option is destroyed."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_setting:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the option's current setting (its string-encoded value).
+
+      For an option created via option_create this is the caller-supplied
+      setting verbatim. For one resolved through a database/connection get it
+      is the effective setting at that source's scope.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_setting:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the setting. Valid until the option is destroyed."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_default_setting:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the option's static default setting.
+
+      The empty view for an option created via option_create, until it has been
+      resolved through a database/connection get.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_default_setting:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the default setting. Valid until the option is destroyed."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_description:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the option's human-readable description.
+
+      The empty view for an option created via option_create, until it has been
+      resolved through a database/connection get.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_description:
+        type: str
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the description. Valid until the option is destroyed."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_target_scope:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the option's target scope.
+
+      OPTION_TARGET_SCOPE_UNKNOWN for an option created via option_create until
+      it has been resolved through a database/connection get, and for one whose
+      declaration carries no explicit scope target.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_target_scope:
+        type: OPTION_TARGET_SCOPE
+        indirection: 1
+        kind: OUT
+        description: "Receives the target scope."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_alias_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the number of aliases registered for this option.
+
+      Zero for an option created via option_create, until it has been resolved
+      through a database/connection get.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      out_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: "Receives the alias count."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR
+
+  option_get_alias:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the alias name at the given index.
+
+      An out-of-range index returns ERROR_INPUT_INVALID.
+    role: getter
+    belongs_to: option
+    parameters:
+      option:
+        type: option
+        description: "The option."
+      index:
+        type: idx
+        description: "The alias index, in [0, alias_count)."
+      out_alias:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: "Receives a borrowed view of the alias. Valid until the option is destroyed."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR

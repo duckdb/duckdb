@@ -337,18 +337,42 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		column_chunk.meta_data.encodings.push_back(encoding);
 	};
 
+	auto add_encoding_stat = [&](duckdb_parquet::PageType::type page_type, duckdb_parquet::Encoding::type encoding) {
+		for (auto &existing_stat : column_chunk.meta_data.encoding_stats) {
+			if (existing_stat.page_type == page_type && existing_stat.encoding == encoding) {
+				existing_stat.count++;
+				return;
+			}
+		}
+		duckdb_parquet::PageEncodingStats stat;
+		stat.page_type = page_type;
+		stat.encoding = encoding;
+		stat.count = 1;
+		column_chunk.meta_data.encoding_stats.push_back(stat);
+	};
+
 	for (const auto &write_info : state.write_info) {
 		// only care about data page encodings, data_page_header.encoding is meaningless for dict
 		switch (write_info.page_header.type) {
 		case PageType::DATA_PAGE:
 			add_encoding(write_info.page_header.data_page_header.encoding);
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.data_page_header.encoding);
 			break;
 		case PageType::DATA_PAGE_V2:
 			add_encoding(write_info.page_header.data_page_header_v2.encoding);
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.data_page_header_v2.encoding);
+			break;
+		case PageType::DICTIONARY_PAGE:
+			add_encoding_stat(write_info.page_header.type, write_info.page_header.dictionary_page_header.encoding);
 			break;
 		default:
 			break;
 		}
+	}
+	// write_info holds the dictionary page (if any) first, so encoding_stats lists it first -
+	// the physical page order, and the order other writers (parquet-cpp, parquet-rs) produce
+	if (!column_chunk.meta_data.encoding_stats.empty()) {
+		column_chunk.meta_data.__isset.encoding_stats = true;
 	}
 
 	if (!state.stats_state) {
