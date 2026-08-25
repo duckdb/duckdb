@@ -174,23 +174,34 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 		return nullptr;
 	}
 
-	// Evaluate and apply compression option then.
-	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
-	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
-	} else if (compression != FileCompressionType::UNCOMPRESSED) {
-		auto entry = registry->compressed_fs.find(compression);
-		if (entry == registry->compressed_fs.end()) {
-			if (compression == FileCompressionType::ZSTD) {
+	try {
+		// Evaluate and apply compression option then.
+		const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
+		if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
+			file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
+		} else if (compression != FileCompressionType::UNCOMPRESSED) {
+			auto entry = registry->compressed_fs.find(compression);
+			if (entry == registry->compressed_fs.end()) {
+				if (compression == FileCompressionType::ZSTD) {
+					throw NotImplementedException(
+					    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
+					    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+				}
 				throw NotImplementedException(
-				    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
-				    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+				    "Attempting to open a compressed file, but the compression type is not supported");
 			}
-			throw NotImplementedException(
-			    "Attempting to open a compressed file, but the compression type is not supported");
+			auto &compressed_fs = *entry->second->file_system;
+			file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
 		}
-		auto &compressed_fs = *entry->second->file_system;
-		file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+	} catch (...) {
+		auto error = std::current_exception();
+		if (flags.OpenForWriting() && file_handle) {
+			try {
+				file_handle->AbortWrite();
+			} catch (...) { // NOLINT
+			}
+		}
+		std::rethrow_exception(error);
 	}
 	return file_handle;
 }

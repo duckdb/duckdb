@@ -104,6 +104,8 @@ public:
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
+	//! Abandon an incomplete write without publishing any buffered or staged data.
+	DUCKDB_API void AbortWrite();
 	DUCKDB_API string ReadLine();
 	DUCKDB_API string ReadLine(QueryContext context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
@@ -238,6 +240,8 @@ public:
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
+	//! Abandon an incomplete write represented by this file handle.
+	DUCKDB_API virtual void AbortFileWrite(FileHandle &handle);
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory

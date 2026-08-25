@@ -54,6 +54,7 @@ public:
 	FileMetadata Stats(FileHandle &handle) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	void FileSync(FileHandle &handle) override;
+	void AbortFileWrite(FileHandle &handle) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	void Reset(FileHandle &handle) override;
 	idx_t SeekPosition(FileHandle &handle) override;

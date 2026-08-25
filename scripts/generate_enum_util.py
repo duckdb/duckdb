@@ -24,6 +24,7 @@ blacklist = [
     "SchedulePolicy",
     "BatchDrainMode",
     "AccountedWriteAdoption",
+    "FileWritePublicationState",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
     "ClaimState",

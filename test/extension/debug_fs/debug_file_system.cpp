@@ -179,6 +179,10 @@ void DebugFileSystem::FileSync(FileHandle &handle) {
 	inner.file_system.FileSync(inner);
 }
 
+void DebugFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<DebugFileHandle>().inner->AbortWrite();
+}
+
 void DebugFileSystem::Seek(FileHandle &handle, idx_t location) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Seek(inner, location);

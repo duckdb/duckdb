@@ -1844,6 +1844,15 @@ unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &
 
 #endif
 
+void LocalFileSystem::AbortFileWrite(FileHandle &handle) {
+	auto remove_path = handle.GetFlags().ExclusiveCreate();
+	auto path = handle.GetPath();
+	handle.Close();
+	if (remove_path) {
+		TryRemoveFile(path);
+	}
+}
+
 bool LocalFileSystem::CanSeek() {
 	return true;
 }

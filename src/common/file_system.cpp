@@ -609,6 +609,10 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
+void FileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Close();
+}
+
 bool FileSystem::HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
 		switch (str[i]) {
@@ -781,11 +785,12 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (track_io && context.GetClientContext() != nullptr) {
-		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
+	auto bytes_written = file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	if (bytes_written > 0 && track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(UnsafeNumericCast<idx_t>(bytes_written));
 	}
 
-	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	return bytes_written;
 }
 
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
@@ -882,6 +887,10 @@ void FileHandle::Sync() {
 
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
+}
+
+void FileHandle::AbortWrite() {
+	file_system.AbortFileWrite(*this);
 }
 
 FileType FileHandle::GetType() {
