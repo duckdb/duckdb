@@ -296,6 +296,37 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 
 		return nullptr;
 	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetExpressionType() != ExpressionType::OPERATOR_COALESCE || op.GetChildren().empty()) {
+			return nullptr;
+		}
+		// COALESCE returns the first non-NULL child: merge the stats of every reachable child,
+		// stopping at the first child that can never be NULL since later children are unreachable
+		unique_ptr<BaseStatistics> merged;
+		bool last_child_can_be_null = true;
+		for (auto &child : op.GetChildren()) {
+			auto child_stats = TryGetExpressionStats(context_p, *child, input_stats, owned_stats);
+			if (!child_stats) {
+				return nullptr;
+			}
+			if (!merged) {
+				merged = child_stats->ToUnique();
+			} else {
+				merged->Merge(*child_stats);
+			}
+			last_child_can_be_null = child_stats->CanHaveNull();
+			if (!last_child_can_be_null) {
+				break;
+			}
+		}
+		if (!last_child_can_be_null) {
+			// the result is NULL only if every considered child is NULL
+			merged->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		owned_stats.push_back(std::move(merged));
+		return owned_stats.back().get();
+	}
 	default:
 		return nullptr;
 	}
