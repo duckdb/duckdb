@@ -2,6 +2,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -231,13 +232,11 @@ static optional_ptr<const BaseStatistics> TryGetExpressionStats(optional_ptr<Cli
 			if (!child_stats) {
 				return nullptr;
 			}
-			auto cast_stats =
-			    StatisticsPropagator::TryPropagateCast(*child_stats, cast_child.GetReturnType(), func.GetReturnType());
+			auto expr_copy = func.Copy();
+			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
+			auto cast_stats = BoundCastExpression::PropagateStatistics(func_copy, *child_stats, context_p);
 			if (!cast_stats) {
 				return nullptr;
-			}
-			if (BoundCastExpression::IsTryCast(func)) {
-				cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			}
 			owned_stats.push_back(std::move(cast_stats));
 			return owned_stats.back().get();
@@ -400,7 +399,7 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 		return &typed_stats;
 	}
 
-	auto cast_stats = StatisticsPropagator::TryPropagateCast(typed_stats, typed_type, comparison_type);
+	auto cast_stats = CastStatistics::TryPropagate(typed_stats, typed_type, comparison_type);
 	if (!cast_stats) {
 		return nullptr;
 	}

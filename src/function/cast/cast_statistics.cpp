@@ -1,7 +1,9 @@
-#include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
+
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
@@ -12,6 +14,11 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	// Bail out if the stats are not numeric
 	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
 		return nullptr;
+	}
+	if (!input.CanHaveNoNull()) {
+		auto result = NumericStats::CreateEmpty(target);
+		result.CopyBase(input);
+		return result.ToUnique();
 	}
 	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
@@ -45,7 +52,7 @@ static bool IsTzTimestamp(const LogicalTypeId id) {
 	return id == LogicalTypeId::TIMESTAMP_TZ || id == LogicalTypeId::TIMESTAMP_TZ_NS;
 }
 
-bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const LogicalType &target) {
+bool CastStatistics::CanPropagate(const LogicalType &source, const LogicalType &target) {
 	if (source == target) {
 		return true;
 	}
@@ -163,7 +170,7 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 		return typed_stats.ToUnique();
 	}
 	// typed stats don't match - try to cast
-	return StatisticsPropagator::TryPropagateCast(typed_stats, structured_type, target);
+	return CastStatistics::TryPropagate(typed_stats, structured_type, target);
 }
 
 static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStatistics &input, const LogicalType &source,
@@ -183,9 +190,8 @@ static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStati
 	return result.ToUnique();
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
-                                                                  const LogicalType &source,
-                                                                  const LogicalType &target) {
+unique_ptr<BaseStatistics> CastStatistics::TryPropagate(const BaseStatistics &stats, const LogicalType &source,
+                                                        const LogicalType &target) {
 	if (source.id() == LogicalTypeId::VARIANT) {
 		return StatisticsPropagateVariant(stats, target);
 	}
@@ -201,24 +207,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {
 		return StatisticsPropagateArrayToList(stats, source, target);
 	}
-	if (!CanPropagateCast(source, target)) {
+	if (!CanPropagate(source, target)) {
 		return nullptr;
 	}
 	return StatisticsOperationsNumericNumericCast(stats, target);
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateCast(BoundFunctionExpression &cast,
-                                                               unique_ptr<Expression> &expr_ptr) {
-	auto child_stats = PropagateExpression(BoundCastExpression::ChildMutable(cast));
-	if (!child_stats) {
-		return nullptr;
-	}
-	auto result_stats =
-	    TryPropagateCast(*child_stats, BoundCastExpression::Child(cast).GetReturnType(), cast.GetReturnType());
-	if (BoundCastExpression::IsTryCast(cast) && result_stats) {
-		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-	}
-	return result_stats;
+unique_ptr<BaseStatistics> CastStatistics::Propagate(CastStatisticsInput &input) {
+	return TryPropagate(input.child_stats, input.source_type, input.target_type);
 }
 
 } // namespace duckdb
