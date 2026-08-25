@@ -153,30 +153,36 @@ void PhysicalMergeInto::PlanAction(PhysicalPlan &physical_plan, MergeActionCondi
 	action_pipeline_count++;
 
 	auto &input = children[0].get();
-	auto &source = physical_plan.Make<PhysicalMergeActionSource>(input.types, input.estimated_cardinality, condition,
-	                                                             action.action_type, parallel);
-	action.source = source.Cast<PhysicalMergeActionSource>();
+	if (!action.source) {
+		// the catalog planned the operators of this action without a merge action source - insert one
+		// FIXME: remove this once all catalogs plan their actions through PlanMergeActionSource
+		auto &source = physical_plan.Make<PhysicalMergeActionSource>(input.types, input.estimated_cardinality,
+		                                                             condition, action.action_type, parallel);
+		action.source = source.Cast<PhysicalMergeActionSource>();
+		action.source->merge_input = input;
 
-	reference<PhysicalOperator> action_input = source;
-	if (!action.expressions.empty()) {
-		// the action has expressions (e.g. the values of an INSERT) - execute them in a projection
-		vector<LogicalType> projection_types;
-		for (auto &expr : action.expressions) {
-			projection_types.push_back(expr->GetReturnType());
+		reference<PhysicalOperator> action_input = source;
+		if (!action.expressions.empty()) {
+			// the action has expressions (e.g. the values of an INSERT) - execute them in a projection
+			vector<LogicalType> projection_types;
+			for (auto &expr : action.expressions) {
+				projection_types.push_back(expr->GetReturnType());
+			}
+			auto &projection = physical_plan.Make<PhysicalProjection>(
+			    std::move(projection_types), std::move(action.expressions), input.estimated_cardinality);
+			projection.children.push_back(action_input);
+			action.expressions.clear();
+			action_input = projection;
 		}
-		auto &projection = physical_plan.Make<PhysicalProjection>(
-		    std::move(projection_types), std::move(action.expressions), input.estimated_cardinality);
-		projection.children.push_back(action_input);
-		action.expressions.clear();
-		action_input = projection;
+		if (action.op->children.empty()) {
+			action.op->children.push_back(action_input);
+		} else {
+			// catalogs can plan their action operators with the merge input as their child - the data of an action
+			// is pushed in by the merge into, so the merge action source takes its place
+			action.op->children[0] = action_input;
+		}
 	}
-	if (action.op->children.empty()) {
-		action.op->children.push_back(action_input);
-	} else {
-		// catalogs can plan their action operators with the merge input as their child - the data of an action is
-		// pushed in by the merge into, so the merge action source takes its place
-		action.op->children[0] = action_input;
-	}
+	action.source->parallel = parallel;
 
 	if (!return_chunk) {
 		children.push_back(*action.op);

@@ -14,6 +14,7 @@
 namespace duckdb {
 class MergeActionQueue;
 class MergeIntoLocalState;
+class PhysicalPlanGenerator;
 
 //! The source of a MERGE INTO action pipeline - the merge into pushes the rows that belong to this action into the
 //! queue of the action, which this operator scans. The pipeline blocks while no data is available.
@@ -32,6 +33,10 @@ public:
 	bool parallel;
 	//! The queue that the merge into pushes the rows of this action into - set up when building the pipelines
 	shared_ptr<MergeActionQueue> queue;
+	//! The plan that produces the rows that the merge into pushes into this source. This is not a child - the rows
+	//! are pushed in by the merge into - but the source stands in for it when the operators of the action are
+	//! planned, so plan walks that look for the origin of the rows can continue here.
+	optional_ptr<PhysicalOperator> merge_input;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
@@ -72,6 +77,12 @@ public:
 	//! Projection that emits the RETURNING data of this action - set up by the PhysicalMergeInto
 	optional_ptr<PhysicalOperator> returning_projection;
 };
+
+//! Plans the source that feeds the operators of the given merge action, together with a projection for the
+//! expressions of the action (if any). The result must be used as the child plan when planning the operators of the
+//! action, so that the merge into can push the rows of the action into them.
+PhysicalOperator &PlanMergeActionSource(PhysicalPlanGenerator &planner, PhysicalOperator &merge_input,
+                                        MergeActionCondition condition, MergeIntoOperator &action);
 
 struct MergeActionRange {
 	MergeActionCondition condition;
