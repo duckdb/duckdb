@@ -67,7 +67,7 @@ public:
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-	                   const SelectionVector &sel, idx_t sel_count);
+	                   const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type);
 
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);

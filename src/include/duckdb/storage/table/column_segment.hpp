@@ -64,7 +64,8 @@ public:
 	//! Scan one vector from this segment
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, ScanVectorType scan_type);
 	//! Scan a subset of a vector (defined by the selection vector)
-	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel, idx_t sel_count);
+	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel, idx_t sel_count,
+	            idx_t result_offset, ScanVectorType scan_type);
 	//! Scan one vector while applying a filter to the vector, returning only the matching elements
 	void Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t &sel_count,
 	            const TableFilter &filter, TableFilterState &filter_state);

@@ -121,7 +121,8 @@ void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanSta
 // Select
 //===--------------------------------------------------------------------===//
 void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
-                                       Vector &result, const SelectionVector &sel, idx_t sel_count) {
+                                       Vector &result, const SelectionVector &sel, idx_t sel_count, idx_t result_offset,
+                                       ScanVectorType) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = state.GetPositionInSegment();
@@ -136,7 +137,8 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(prev_offset));
-		result_data[i] = FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
+		result_data[result_offset + i] =
+		    FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
 	}
 }
 

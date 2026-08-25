@@ -487,8 +487,10 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 // Select
 //===--------------------------------------------------------------------===//
 void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
-                    idx_t sel_count) {
-	result.Flatten();
+                    idx_t sel_count, idx_t result_offset, ScanVectorType) {
+	if (result_offset == 0) {
+		result.Flatten();
+	}
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
@@ -500,7 +502,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto source_idx = start + sel.get_index(i);
 		if (!source_mask.RowIsValidUnsafe(source_idx)) {
-			result_mask.SetInvalid(i);
+			result_mask.SetInvalid(result_offset + i);
 		}
 	}
 }
@@ -597,12 +599,14 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
+	CompressionFunction result(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
 	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
 	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityInitAppend,
 	                           ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
+	result.select = ValiditySelect;
+	return result;
 }
 
 } // namespace duckdb

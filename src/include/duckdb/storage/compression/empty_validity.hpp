@@ -98,7 +98,7 @@ public:
 	                   TableFilterState &filter_state) {
 	}
 	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-	                   const SelectionVector &sel, idx_t sel_count) {
+	                   const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType scan_type) {
 	}
 };
 
