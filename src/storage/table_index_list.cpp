@@ -90,6 +90,26 @@ void IndexEntry::Vacuum() {
 	}
 }
 
+void IndexEntry::Rebuild(const IndexRebuildScan &scan) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!owned_index->IsBound()) {
+		throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
+	}
+	
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	bound_index.ResetStorage();
+	
+	IndexRebuildAppend append = [&](DataChunk &chunk, Vector &row_ids) {
+		auto error = bound_index.Append(chunk, row_ids);
+		if (error.HasError()) {
+			throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index.GetIndexName(),
+			                        error.Message());
+		}
+	};
+	scan(bound_index.GetColumnIds(), append);
+	bound_index.Verify();
+}
+
 void IndexEntry::VerifyBuffers() {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {
@@ -347,6 +367,13 @@ void TableIndexList::Vacuum() {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->Vacuum();
+	}
+}
+
+void TableIndexList::Rebuild(const IndexRebuildScan &scan) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->Rebuild(scan);
 	}
 }
 

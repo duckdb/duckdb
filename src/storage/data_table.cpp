@@ -365,16 +365,7 @@ void DataTable::VacuumIndexes() {
 
 void DataTable::RebuildIndexes() {
 	auto &types = row_groups->GetTypes();
-
-	for (auto index : info->indexes.MutableIndexHandles()) {
-		if (!index->IsBound()) {
-			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
-		}
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		bound_index->ResetStorage();
-
-		auto col_ids = bound_index->GetColumnIds();
-
+	info->indexes.Rebuild([&](const vector<column_t> &col_ids, const IndexRebuildAppend &append) {
 		vector<StorageIndex> scan_column_ids;
 		vector<LogicalType> scan_types;
 		for (auto col_id : col_ids) {
@@ -407,15 +398,9 @@ void DataTable::RebuildIndexes() {
 				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
 			}
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
-
-			auto error = bound_index->Append(table_chunk, row_ids);
-			if (error.HasError()) {
-			throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index->GetIndexName(),
-			                        error.Message());
-			}
+			append(table_chunk, row_ids);
 		}
-		bound_index->Verify();
-	}
+	});
 }
 
 void DataTable::VerifyIndexBuffers() const {

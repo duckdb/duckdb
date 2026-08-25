@@ -15,6 +15,7 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
+#include <functional>
 #include <memory>
 
 namespace duckdb {
@@ -55,6 +56,10 @@ struct TableIndexIterationResult<shared_ptr<IndexEntry>> {
 
 //! IndexBindState transitions index binding phases while preventing lock order inversion.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
+
+using IndexRebuildAppend = std::function<void(DataChunk &chunk, Vector &row_ids)>;
+using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, const IndexRebuildAppend &append)>;
+
 //! Owns the optional indexes used to represent transaction and checkpoint deltas for an IndexEntry.
 class IndexDeltas {
 public:
@@ -176,6 +181,8 @@ public:
 	void VerifyUpdate(const vector<PhysicalIndex> &column_ids) const;
 	//! Vacuums the physical index if it is bound.
 	void Vacuum();
+	//! Rebuilds the bound physical index with chunks supplied by the scan callback.
+	void Rebuild(const IndexRebuildScan &scan);
 	//! Verifies the buffers of the physical index and its delete delta.
 	void VerifyBuffers();
 	//! Returns a copy of the physical index's table storage metadata.
@@ -381,6 +388,8 @@ public:
 	bool HasUniqueIndexes() const;
 	//! Vacuums all bound indexes.
 	void Vacuum();
+	//! Rebuilds all indexes with chunks supplied by the scan callback.
+	void Rebuild(const IndexRebuildScan &scan);
 	//! Verifies the buffers of all bound indexes and their delete deltas.
 	void VerifyBuffers() const;
 	//! Verifies that no index is updated by the given columns.
