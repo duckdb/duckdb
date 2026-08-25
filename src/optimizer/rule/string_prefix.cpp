@@ -202,8 +202,7 @@ unique_ptr<Expression> StringPrefixRule::Apply(LogicalOperator &op, vector<refer
 	return std::move(prefix_expr);
 }
 
-unique_ptr<Expression> StringPrefixZeroLengthRule::Apply(LogicalOperator &op,
-                                                         vector<reference<Expression>> &bindings,
+unique_ptr<Expression> StringPrefixZeroLengthRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
 	auto &func = bindings[0].get().Cast<BoundFunctionExpression>();
 	return RewriteZeroLength(func);
