@@ -68,6 +68,7 @@ public:
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression,
 	          QueryContext context = QueryContext(), bool shared = true);
+	~CSVWriter();
 
 	//! Writes header and prefix if necessary
 	void Initialize(bool force = false);

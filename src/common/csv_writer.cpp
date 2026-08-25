@@ -99,6 +99,8 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &
 	}
 }
 
+CSVWriter::~CSVWriter() = default;
+
 void CSVWriter::Initialize(bool force) {
 	if (!force && !should_initialize) {
 		return;
