@@ -93,6 +93,7 @@ jobs:
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
+      staged_version: ${{ steps.version.outputs.staged_version }}
       extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
       GEN: ninja
@@ -118,14 +119,21 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          staged_version=""
           extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
             effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+            commit="${{ steps.resolve_git_sha.outputs.git_sha }}"
+            staged_version="${commit:0:10}/$effective_git_describe"
             extension_allow_failure_archs="linux_amd64_musl;linux_arm64_musl"
           fi
-          echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
-          echo "extension_allow_failure_archs=$extension_allow_failure_archs" >> "$GITHUB_OUTPUT"
+          {
+            echo "effective_git_describe=$effective_git_describe"
+            echo "staged_version=$staged_version"
+            echo "extension_allow_failure_archs=$extension_allow_failure_archs"
+          } >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
+          echo "Using staged_version=$staged_version"
           echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: "Checkout"
@@ -1383,6 +1391,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
           OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+          STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
           is_release_event=false
@@ -1405,6 +1414,11 @@ jobs:
             run_release_dispatch=true
           fi
 
+          publish_latest_alpha=false
+          if [[ "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
+            publish_latest_alpha=true
+          fi
+
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
@@ -1414,9 +1428,12 @@ jobs:
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  has_no_override=$has_no_override"
           echo "  run_release_dispatch=$run_release_dispatch"
+          echo "  staged_version=$STAGED_VERSION"
+          echo "  publish_latest_alpha=$publish_latest_alpha"
 
           {
             echo "run_release_dispatch=$run_release_dispatch"
+            echo "publish_latest_alpha=$publish_latest_alpha"
           } >> "$GITHUB_OUTPUT"
 
       - name: Run release dispatch
@@ -1454,3 +1471,40 @@ jobs:
             echo "$failed_or_cancelled"
             exit 1
           fi
+
+      - name: Install rclone
+        if: ${{ steps.summary-context.outputs.publish_latest_alpha == 'true' }}
+        shell: bash
+        run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
+
+      - name: Publish latest alpha version
+        if: ${{ steps.summary-context.outputs.publish_latest_alpha == 'true' }}
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+          STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
+        run: |
+          set -euo pipefail
+
+          pointer_file="$(mktemp "${TMPDIR:-/tmp}/latest-alpha-version.XXXXXX")"
+          trap 'rm -f "$pointer_file"' EXIT
+          printf '%s\n' "$STAGED_VERSION" > "$pointer_file"
+
+          s3_provider="AWS"
+          if [[ "$AWS_ENDPOINT_URL" == *"r2.cloudflarestorage.com"* ]]; then
+            s3_provider="Cloudflare"
+          fi
+
+          rclone copyto \
+            --s3-provider "$s3_provider" \
+            --s3-endpoint "$AWS_ENDPOINT_URL" \
+            --s3-access-key-id "$AWS_ACCESS_KEY_ID" \
+            --s3-secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+            --s3-no-check-bucket \
+            --s3-no-head \
+            --header-upload "Content-Type: text/plain" \
+            --header-upload "Cache-Control: no-cache" \
+            "$pointer_file" \
+            ":s3:duckdb-staging/latest_alpha_version.txt"
