@@ -389,6 +389,21 @@ IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> 
 	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
 }
 
+void IndexEntry::MergeCheckpointDeltas(const transaction_t checkpoint_id) {
+	auto entry_lock = lock.GetExclusiveLock();
+	// Merge any data appended to the index while the checkpoint was running.
+	if (!owned_index->IsBound()) {
+		return;
+	}
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	auto error = deltas.MergeCheckpointDeltas(bound_index);
+	if (error.HasError()) {
+		throw InternalException("Failed to merge checkpoint delta - this signifies a bug or broken index: %s",
+		                        error.Message());
+	}
+	deltas.MarkWritten(checkpoint_id);
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -510,10 +525,6 @@ TableIndexIterationHelper<IndexHandle<Index>> TableIndexList::IndexHandles() con
 	return TableIndexIterationHelper<IndexHandle<Index>>(*this);
 }
 
-TableIndexIterationHelper<MutableIndexHandle<Index>> TableIndexList::MutableIndexHandles() const {
-	return TableIndexIterationHelper<MutableIndexHandle<Index>>(*this);
-}
-
 TableIndexIterationHelper<shared_ptr<IndexEntry>> TableIndexList::IndexEntries() const {
 	return TableIndexIterationHelper<shared_ptr<IndexEntry>>(*this);
 }
@@ -529,17 +540,11 @@ IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIter
 }
 
 template <>
-MutableIndexHandle<Index> TableIndexIterationHelper<MutableIndexHandle<Index>>::TableIndexIterator::operator*() const {
-	return index_entries->at(index.GetIndex())->GetMutableHandle();
-}
-
-template <>
 shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const {
 	return index_entries->at(index.GetIndex());
 }
 
 template class TableIndexIterationHelper<IndexHandle<Index>>;
-template class TableIndexIterationHelper<MutableIndexHandle<Index>>;
 template class TableIndexIterationHelper<shared_ptr<IndexEntry>>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -1013,18 +1018,9 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &na
 }
 
 void TableIndexList::MergeCheckpointDeltas(const transaction_t checkpoint_id) const {
-	for (auto index : MutableIndexHandles()) {
-		// Merge any data appended to the index while the checkpoint was running.
-		if (!index->IsBound()) {
-			continue;
-		}
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		auto error = bound_index.MergeCheckpointDeltas();
-		if (error.HasError()) {
-			throw InternalException("Failed to merge checkpoint delta - this signifies a bug or broken index: %s",
-			                        error.Message());
-		}
-		bound_index.MarkWrittenForCheckpoint(checkpoint_id);
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->MergeCheckpointDeltas(checkpoint_id);
 	}
 }
 

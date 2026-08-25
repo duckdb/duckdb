@@ -46,11 +46,6 @@ struct TableIndexIterationResult<IndexHandle<Index>> {
 };
 
 template <>
-struct TableIndexIterationResult<MutableIndexHandle<Index>> {
-	using type = MutableIndexHandle<Index>;
-};
-
-template <>
 struct TableIndexIterationResult<shared_ptr<IndexEntry>> {
 	using type = shared_ptr<IndexEntry>;
 };
@@ -145,11 +140,6 @@ public:
 	template <class OTHER = BoundIndex>
 	optional_ptr<OTHER> FindDelta(IndexDeltaType type) && = delete;
 
-	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint);
-	BoundIndex &GetOrCreateDelta(IndexDeltaType type) &;
-	BoundIndex &GetOrCreateDelta(IndexDeltaType type) && = delete;
-	ErrorData MergeCheckpointDeltas();
-	void MarkWrittenForCheckpoint(transaction_t checkpoint_id);
 	void ReplaceIndex(unique_ptr<Index> index);
 
 private:
@@ -209,6 +199,8 @@ public:
 	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
+	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
+	void MergeCheckpointDeltas(transaction_t checkpoint_id);
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -322,27 +314,6 @@ optional_ptr<OTHER> MutableIndexHandle<TARGET>::FindDelta(IndexDeltaType type) &
 }
 
 template <class TARGET>
-bool MutableIndexHandle<TARGET>::ShouldUseDeltaIndexes(optional_idx active_checkpoint) {
-	return GetMutableEntry().deltas.ShouldUse(active_checkpoint);
-}
-
-template <class TARGET>
-BoundIndex &MutableIndexHandle<TARGET>::GetOrCreateDelta(IndexDeltaType type) & {
-	auto &index = GetMutableEntry().owned_index->template Cast<BoundIndex>();
-	return GetMutableEntry().deltas.GetOrCreate(index, type);
-}
-
-template <class TARGET>
-ErrorData MutableIndexHandle<TARGET>::MergeCheckpointDeltas() {
-	return GetMutableEntry().deltas.MergeCheckpointDeltas(*this->operator->());
-}
-
-template <class TARGET>
-void MutableIndexHandle<TARGET>::MarkWrittenForCheckpoint(transaction_t checkpoint_id) {
-	GetMutableEntry().deltas.MarkWritten(checkpoint_id);
-}
-
-template <class TARGET>
 void MutableIndexHandle<TARGET>::ReplaceIndex(unique_ptr<Index> index) {
 	GetMutableEntry().owned_index = std::move(index);
 }
@@ -363,7 +334,6 @@ struct IndexSerializationResult {
 class TableIndexList {
 public:
 	TableIndexIterationHelper<IndexHandle<Index>> IndexHandles() const;
-	TableIndexIterationHelper<MutableIndexHandle<Index>> MutableIndexHandles() const;
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Returns shared ownership of the stable logical index entries.
@@ -515,9 +485,6 @@ public:
 
 template <>
 IndexHandle<Index> TableIndexIterationHelper<IndexHandle<Index>>::TableIndexIterator::operator*() const;
-
-template <>
-MutableIndexHandle<Index> TableIndexIterationHelper<MutableIndexHandle<Index>>::TableIndexIterator::operator*() const;
 
 template <>
 shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableIndexIterator::operator*() const;
