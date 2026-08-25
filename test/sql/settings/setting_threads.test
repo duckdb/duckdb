@@ -17,4 +17,9 @@ SET {thread_type} TO 'blabla'
 ----
 <REGEX>:Invalid Input Error.*Failed to cast value.*
 
+statement error
+SET {thread_type} TO NULL
+----
+<REGEX>:Invalid Input Error.*must be a positive integer.*
+
 endloop
