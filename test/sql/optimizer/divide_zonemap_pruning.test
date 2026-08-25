@@ -81,6 +81,21 @@ SELECT count(*) FROM divide_pruning WHERE i // -1000 = -5;
 # The divisor is itself a range: the outer row groups derive small quotient
 # ranges and are pruned, while the middle row group's divisor range
 # [-952, 1095] contains zero, so no statistics can be derived and it is scanned.
+# Scanning it hits the division by zero, which raises by default.
+statement error
+SELECT count(*) FROM divide_pruning WHERE 6144 // (i - 3000) = 123456;
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT count(*) FROM divide_pruning WHERE i // 0 = 5;
+----
+<REGEX>:.*Division by zero.*
+
+# With null_on_division_by_zero the middle row group is scanned and yields NULLs.
+statement ok
+SET null_on_division_by_zero=true;
+
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM divide_pruning WHERE 6144 // (i - 3000) = 123456;
 ----
@@ -96,6 +111,9 @@ query I
 SELECT count(*) FROM divide_pruning WHERE i // 0 = 5;
 ----
 0
+
+statement ok
+SET null_on_division_by_zero=false;
 
 # The first row group contains the minimum integer: statistics derivation must
 # not evaluate INT32_MIN // -1, and pruning must not swallow the overflow error
