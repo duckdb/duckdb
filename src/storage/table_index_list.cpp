@@ -121,6 +121,149 @@ void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 	}
 }
 
+static void AppendIndexEntries(BoundIndex &index, DataChunk &chunk, Vector &row_ids) {
+	IndexAppendInfo append_info;
+	const auto error = index.Append(chunk, row_ids, append_info);
+	if (error.HasError()) {
+		throw InternalException("Failed to append to %s: %s", index.GetIndexName(), error.Message());
+	}
+}
+
+static bool TryDeleteAll(BoundIndex &index, DataChunk &chunk, Vector &row_ids) {
+	const auto delete_count = index.TryDelete(chunk, row_ids, nullptr, nullptr);
+	if (delete_count == 0) {
+		return false;
+	}
+	if (delete_count != chunk.size()) {
+		// This should not happen: RemoveFromIndexes works on a per-row-group basis, and appends during a checkpoint
+		// always use new row groups, so the two groups of data should be separate.
+		throw InternalException("IndexEntry::RemoveFromIndex - partially deleted from the checkpoint delta");
+	}
+	return true;
+}
+
+static void ApplyIndexRemoval(BoundIndex &index, IndexDeltas &deltas, DataChunk &chunk, Vector &row_ids,
+                              const IndexRemovalType removal_type) {
+	const auto supports_delta_indexes = index.SupportsDeltaIndexes();
+	// Not all indexes require delta indexes - if an index does not require this we skip creating and appending to
+	// "deleted_rows_in_use".
+	switch (removal_type) {
+	case IndexRemovalType::MAIN_INDEX_ONLY:
+		// Directly remove from the main index without appending to delta indexes.
+		index.Delete(chunk, row_ids);
+		break;
+	case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
+		// Revert main index only append - just add back to the index.
+		AppendIndexEntries(index, chunk, row_ids);
+		break;
+	case IndexRemovalType::MAIN_INDEX:
+		// Regular removal from the main index - add rows to the delta index if required.
+		if (supports_delta_indexes) {
+			auto &deleted_rows = deltas.GetOrCreate(index, IndexDeltaType::DELETED_ROWS_IN_USE);
+			AppendIndexEntries(deleted_rows, chunk, row_ids);
+		}
+		index.Delete(chunk, row_ids);
+		break;
+	case IndexRemovalType::REVERT_MAIN_INDEX:
+		// Revert regular append to the main index - remove from deleted_rows_in_use if we appended there before.
+		AppendIndexEntries(index, chunk, row_ids);
+		if (supports_delta_indexes) {
+			if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {
+				delta->Delete(chunk, row_ids);
+			}
+		}
+		break;
+	case IndexRemovalType::DELETED_ROWS_IN_USE:
+		// Remove from the removal index if we appended any rows.
+		if (supports_delta_indexes) {
+			if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {
+				delta->Delete(chunk, row_ids);
+			}
+		}
+		break;
+	default:
+		throw InternalException("Unsupported IndexRemovalType");
+	}
+}
+
+static void ApplyIndexRemovalDuringCheckpoint(BoundIndex &index, IndexDeltas &deltas, DataChunk &chunk, Vector &row_ids,
+                                              const IndexRemovalType removal_type) {
+	D_ASSERT(removal_type != IndexRemovalType::DELETED_ROWS_IN_USE);
+
+	switch (removal_type) {
+	case IndexRemovalType::MAIN_INDEX_ONLY:
+	case IndexRemovalType::MAIN_INDEX: {
+		// Removing from the main index cannot happen directly due to the concurrent checkpoint; add the removal to a
+		// delta index.
+		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
+		auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT);
+
+		// If we have also added data during this checkpoint, we might need to remove from there instead.
+		// We FIRST try to remove from "added_data_during_checkpoint"; any rows that are not there are added to
+		// "removed_data_during_checkpoint".
+		if (!added_data || !TryDeleteAll(*added_data, chunk, row_ids)) {
+			AppendIndexEntries(removed_data, chunk, row_ids);
+		}
+		if (removal_type == IndexRemovalType::MAIN_INDEX) {
+			// MAIN_INDEX also needs to retain the rows in deleted_rows_in_use.
+			auto &deleted_rows = deltas.GetOrCreate(index, IndexDeltaType::DELETED_ROWS_IN_USE);
+			AppendIndexEntries(deleted_rows, chunk, row_ids);
+		}
+		break;
+	}
+	case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
+	case IndexRemovalType::REVERT_MAIN_INDEX: {
+		auto &removed_data = deltas.GetOrCreate(index, IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT);
+		// Revert adding to the main index.
+		// We have added data during this checkpoint as well, so the removal might have EITHER:
+		// (1) added data to "removed_data_during_checkpoint" or
+		// (2) removed data from "added_data_during_checkpoint".
+		// Revert by first trying to remove from "removed_data_during_checkpoint"; any rows that were not removed are
+		// re-added to "added_data_during_checkpoint".
+		if (auto added_data = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+			if (!TryDeleteAll(removed_data, chunk, row_ids)) {
+				AppendIndexEntries(*added_data, chunk, row_ids);
+			}
+		} else {
+			removed_data.Delete(chunk, row_ids);
+		}
+		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
+			// We also need to remove from "deleted_rows_in_use".
+			if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {
+				delta->Delete(chunk, row_ids);
+			}
+		}
+		break;
+	}
+	default:
+		throw InternalException("Unsupported IndexRemovalType");
+	}
+}
+
+void IndexEntry::RemoveFromIndex(DataChunk &chunk, Vector &row_ids, const IndexRemovalType removal_type,
+                                 const optional_idx active_checkpoint) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!owned_index->IsBound()) {
+		// Buffer the delete: chunk is in table layout with all indexed columns populated.
+		owned_index->Cast<UnboundIndex>().BufferChunk(chunk, row_ids, BufferedIndexReplay::DEL_ENTRY);
+		return;
+	}
+
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	// Check which indexes we should append to or remove from. This method might also involve appending to indexes:
+	// delta indexes must be filled with data we are removing, or we may be reverting a previous removal.
+	// Not all indexes require delta indexes, so those skip "deleted_rows_in_use" bookkeeping.
+	if (removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
+		// Cleanup always removes directly from "deleted_rows_in_use", even during a checkpoint.
+		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
+	} else if (bound_index.SupportsDeltaIndexes() && deltas.ShouldUse(active_checkpoint)) {
+		// During a checkpoint, route changes through the checkpoint deltas instead of the main index.
+		ApplyIndexRemovalDuringCheckpoint(bound_index, deltas, chunk, row_ids, removal_type);
+	} else {
+		ApplyIndexRemoval(bound_index, deltas, chunk, row_ids, removal_type);
+	}
+}
+
 bool IndexEntry::IsUnique() const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->IsUnique();
@@ -457,6 +600,14 @@ void TableIndexList::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->AppendToDeleteIndexes(chunk, row_ids);
+	}
+}
+
+void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const IndexRemovalType removal_type,
+                                       const optional_idx active_checkpoint) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->RemoveFromIndex(chunk, row_ids, removal_type, active_checkpoint);
 	}
 }
 
