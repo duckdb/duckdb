@@ -27,6 +27,8 @@ blacklist = [
     "FileWritePublicationState",
     "CreateDirectoryMode",
     "RemoveDirectoryMode",
+    "CopyOutputOwnership",
+    "CopyOutputPublicationState",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
     "ClaimState",
