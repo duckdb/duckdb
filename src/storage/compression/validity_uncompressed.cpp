@@ -520,7 +520,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 // Select
 //===--------------------------------------------------------------------===//
 void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                    const SelectionVector &sel, idx_t sel_count) {
+                    const SelectionVector &sel, idx_t sel_count, idx_t result_offset, ScanVectorType) {
 	auto start = state.GetPositionInSegment();
 	if (sel_count == 0) {
 		return;
@@ -528,7 +528,9 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 	D_ASSERT(start <= segment.count && vector_count <= segment.count - start);
 	D_ASSERT(sel_count <= vector_count);
 
-	result.Flatten();
+	if (result_offset == 0) {
+		result.Flatten();
+	}
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto &result_mask = FlatVector::ValidityMutable(result);
@@ -539,7 +541,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 		auto entry_offset = source_idx / ValidityMask::BITS_PER_VALUE * sizeof(validity_t);
 		auto entry = scan_state.reader.Get<validity_t>(entry_offset);
 		if (!ValidityMask::RowIsValid(entry, source_idx % ValidityMask::BITS_PER_VALUE)) {
-			result_mask.SetInvalid(i);
+			result_mask.SetInvalid(result_offset + i);
 		}
 	}
 }
@@ -638,12 +640,14 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
+	CompressionFunction result(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
 	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
 	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityInitAppend,
 	                           ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
+	result.select = ValiditySelect;
+	return result;
 }
 
 } // namespace duckdb
