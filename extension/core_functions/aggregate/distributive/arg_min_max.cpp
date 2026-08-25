@@ -412,6 +412,7 @@ AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_h
 	    AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 }
 
@@ -426,6 +427,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                                  AggregateFunction::StateCombine<STATE, OP>,
 	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
 	AggregateFunction::WireStructStateType<STATE>(function);
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
@@ -484,6 +486,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
+	function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetSignature().GetParameter(0).SetType(type);
@@ -919,17 +922,10 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 // Function Registration
 //------------------------------------------------------------------------------
 
-static void SetArgMinMaxStatisticsCallback(AggregateFunctionSet &fun) {
-	for (auto &function : fun.functions) {
-		function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
-	}
-}
-
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
 	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, LessThan>(fun);
-	SetArgMinMaxStatisticsCallback(fun);
 	return fun;
 }
 
@@ -937,7 +933,6 @@ AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
 	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, GreaterThan>(fun);
-	SetArgMinMaxStatisticsCallback(fun);
 	return fun;
 }
 
