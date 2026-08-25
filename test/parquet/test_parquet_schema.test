@@ -605,6 +605,40 @@ statement error
 SELECT * FROM read_parquet(
 	'{TEMP_DIR}/nested_schema.parquet',
 	schema=map {
+		'l': {
+			name: 'l',
+			type: 'STRUCT(y BIGINT)[]',
+			default_value: NULL,
+			children: map {
+				'list': {name: 'item', type: 'STRUCT(y BIGINT)', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema column "l" expects child STRUCT(y BIGINT)[] to be named "element", not "item"
+
+query I
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'l': {
+			name: 'l',
+			type: 'STRUCT(y BIGINT)[]',
+			default_value: NULL,
+			children: map {
+				'list': {name: 'element', type: 'STRUCT(y BIGINT)', default_value: NULL}
+			}
+		}
+	}
+)
+----
+[{'y': 100}]
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
 		'i': {
 			name: 'i',
 			type: 'BIGINT',

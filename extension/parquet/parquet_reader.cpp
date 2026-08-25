@@ -1330,7 +1330,7 @@ static void VerifyParquetSchemaChildren(const ParquetColumnDefinition &column) {
 		break;
 	}
 	case LogicalTypeId::LIST:
-		VerifyParquetSchemaChildType(column, column.children[0], string(), ListType::GetChildType(column.type), false);
+		VerifyParquetSchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type), true);
 		break;
 	case LogicalTypeId::MAP:
 		VerifyParquetSchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type), true);
