@@ -267,16 +267,16 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
 	}
 	if (options.UserSetUseTmpFile() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITIONED BY for COPY");
 	}
 	if (options.UserSetUseTmpFile() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine USE_TMP_FILE and ORDER BY for COPY");
 	}
 	if (options.PerThreadOutput() && options.Partitioned()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITIONED BY for COPY");
 	}
 	if (options.PerThreadOutput() && !options.order_columns.empty()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER_BY for COPY");
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and ORDER BY for COPY");
 	}
 	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
 		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
@@ -287,10 +287,10 @@ static void ValidateCopyToOptionCombinations(const CopyToParsedOptions &options,
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
 		}
 		if (options.Partitioned()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITIONED BY");
 		}
 		if (!options.order_columns.empty()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER_BY");
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with ORDER BY");
 		}
 	}
 	if (options.ReturnType() == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
@@ -551,19 +551,19 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
-	vector<string> expected_names;
+	vector<Identifier> expected_names;
 	BindInsertColumnList(table, stmt.info->select_list, false, named_column_map, expected_types, column_index_map);
 	D_ASSERT(expected_types == bound_insert.expected_types);
 	expected_names.reserve(named_column_map.size());
 	for (auto &column_index : named_column_map) {
-		expected_names.push_back(table.GetColumn(column_index).Name().GetIdentifierName());
+		expected_names.push_back(table.GetColumn(column_index).Name());
 	}
 
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 expected_types, StringsToIdentifiers(expected_names));
+	                                 expected_types, expected_names);
 	for (idx_t i = 0; i < expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}

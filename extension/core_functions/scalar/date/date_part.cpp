@@ -2050,9 +2050,7 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
 	                                        ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2175,7 +2173,6 @@ struct StructDatePart {
 			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
-		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		return make_uniq<BindData>(bound_function.GetReturnType(), part_codes);
 	}
@@ -2184,10 +2181,11 @@ struct StructDatePart {
 	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		D_ASSERT(args.ColumnCount() == 1);
-
+		// the part list is folded into the bind data during the bind - only the trailing temporal argument is read.
+		// plans written by versions that erased the part list have a single argument
+		D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 		const auto count = args.size();
-		const Vector &input = args.data[0];
+		const Vector &input = args.data[args.ColumnCount() - 1];
 
 		//	Type counts
 		const auto BIGINT_COUNT = size_t(DatePartSpecifier::BEGIN_DOUBLE) - size_t(DatePartSpecifier::BEGIN_BIGINT);
@@ -2343,9 +2341,7 @@ ScalarFunctionSet QuarterFun::GetFunctions() {
 
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DayOfWeekOperator>();
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	return set;
 }
 
@@ -2382,9 +2378,7 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 
 	operator_set.AddFunction(function);
 
-	for (auto &func : operator_set.functions) {
-		func.SetFallible();
-	}
+	operator_set.SetFallible();
 
 	return operator_set;
 }
@@ -2416,6 +2410,8 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2429,6 +2425,8 @@ ScalarFunctionSet EpochUsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2447,6 +2445,8 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2455,6 +2455,8 @@ ScalarFunctionSet MakeTimestampMsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	// these overflow at the representable extremes, so the failure must be reportable
+	operator_set.SetFallible();
 	return operator_set;
 }
 
@@ -2521,6 +2523,7 @@ ScalarFunctionSet LastDayFun::GetFunctions() {
 	                                    DatePart::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
 	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
+	last_day.SetFallible();
 	return last_day;
 }
 
@@ -2579,9 +2582,7 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_tz_t>(LogicalType::TIME_TZ));
 
-	for (auto &func : date_part.functions) {
-		func.SetFallible();
-	}
+	date_part.SetFallible();
 
 	return date_part;
 }

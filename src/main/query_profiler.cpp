@@ -9,6 +9,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
+#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -533,8 +534,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	for (auto &node : profiler.operator_metrics) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
+		// all profiled operators should be registered in the tree
 		D_ASSERT(entry != tree_map.end());
-
+		if (entry == tree_map.end()) {
+			continue;
+		}
 		auto &tree_node = entry->second.get();
 		auto &info = tree_node.GetOperatorMetrics();
 		info.Merge(node.second);
@@ -1015,6 +1019,15 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 			    make_pair(reference<const PhysicalOperator>(*cte_scan.cte_source), reference<ProfilingNode>(*node)));
 		}
 	}
+	if (root_p.type == PhysicalOperatorType::MERGE_INTO) {
+		// merge actions hold their target operators outside of the children - add them to the tree explicitly
+		auto &merge_into = root_p.Cast<PhysicalMergeInto>();
+		for (auto &action : merge_into.actions) {
+			if (action->op) {
+				node->AddChild(CreateTree(*action->op, depth + 1));
+			}
+		}
+	}
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {
 		auto child_node = CreateTree(child.get(), depth + 1);
@@ -1063,6 +1076,31 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &resu
 	}
 }
 
+static double SumSubtreeTime(ProfilingNode &node) {
+	auto result = node.GetOperatorMetrics().time;
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		result += SumSubtreeTime(*node.GetChild(i));
+	}
+	return result;
+}
+
+//! Drop the operators of a secure view, keeping only the metrics that describe the view as a whole: the time spent
+//! in it (accumulated over its operators) and the rows it returned, which are observable regardless. The remaining
+//! metrics of the operators inside the view are discarded rather than accumulated, because their sum describes the
+//! contents of the view - how many rows it processed internally, how much of the table it scanned.
+//! This runs before any profiling output is produced, so every consumer (EXPLAIN ANALYZE in any format, the
+//! profiling output, the query profile result) sees the collapsed tree.
+static void CollapseSecureViews(ProfilingNode &node) {
+	if (node.GetOperatorMetrics().operator_type == PhysicalOperatorType::SECURE_VIEW) {
+		node.GetOperatorMetrics().time = SumSubtreeTime(node);
+		node.children.clear();
+		return;
+	}
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		CollapseSecureViews(*node.GetChild(i));
+	}
+}
+
 void QueryProfiler::FinalizeMetricsInternal() {
 	if (metrics_finalized || !IsEnabled() || !metrics) {
 		return;
@@ -1071,6 +1109,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		query_metrics.latency_timer->EndTimer();
 	}
 	if (root) {
+		// collapse secure views first - the query-wide totals are sums over the operator tree, so leaving the
+		// operators of the view in would expose how much of the table behind it was scanned. The time of the view
+		// is accumulated onto its boundary node, so the total CPU time still covers the whole query.
+		CollapseSecureViews(*root);
 		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
 		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);

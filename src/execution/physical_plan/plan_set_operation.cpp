@@ -100,6 +100,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
+			// Restore the logical operator's types: the ROW_NUMBER column is an implementation detail of the physical
+			// plan.
+			op.types.pop_back();
+
 			vector<unique_ptr<Expression>> select_list;
 			for (idx_t i = 0; i < types.size(); i++) {
 				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));

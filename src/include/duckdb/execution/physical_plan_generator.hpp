@@ -28,6 +28,9 @@ struct RecursiveCTEPlanningInfo {
 	bool using_key = false;
 	vector<idx_t> distinct_indices;
 	vector<idx_t> payload_indices;
+	vector<LogicalType> hash_key_types;
+	vector<LogicalType> aggregate_types;
+	vector<bool> key_requires_normalization;
 	vector<reference<PhysicalRecursiveCTEStateScan>> state_scans;
 };
 
@@ -161,6 +164,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalExecute &op);
 	PhysicalOperator &CreatePlan(LogicalPragma &op);
 	PhysicalOperator &CreatePlan(LogicalSample &op);
+	PhysicalOperator &CreatePlan(LogicalSecureView &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
 	PhysicalOperator &CreatePlan(LogicalAlter &op);

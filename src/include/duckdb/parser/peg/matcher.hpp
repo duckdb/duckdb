@@ -12,10 +12,14 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/enums/identifier_case_mode.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -88,22 +92,40 @@ struct AutoCompleteSuggestion {
 	char extra_char;
 };
 
-enum class MatchResultType { SUCCESS, FAIL };
-
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-struct MatcherToken {
-	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
-	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
-		length = text.length();
+enum class MatchMode : uint8_t { BUILD_PARSE_RESULT, RECOGNIZE_ONLY };
+
+class MatcherResult {
+public:
+	static MatcherResult Success(optional_ptr<ParseResult> parse_result = nullptr) {
+		return MatcherResult(true, parse_result);
 	}
 
-	TokenType type;
-	string text;
-	idx_t offset = 0;
-	idx_t length = 0;
-	bool unterminated = false;
+	static MatcherResult Failure() {
+		return MatcherResult(false, nullptr);
+	}
+
+	bool IsSuccess() const {
+		return success;
+	}
+
+	bool HasParseResult() const {
+		return parse_result != nullptr;
+	}
+
+	optional_ptr<ParseResult> GetParseResult() const {
+		return parse_result;
+	}
+
+private:
+	MatcherResult(bool success_p, optional_ptr<ParseResult> parse_result_p)
+	    : success(success_p), parse_result(parse_result_p) {
+	}
+
+private:
+	bool success;
+	optional_ptr<ParseResult> parse_result;
 };
 
 struct MatcherSuggestion {
@@ -122,36 +144,58 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	           idx_t &max_token_index, MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
+	           IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
 	           ParserPackratCache *packrat_cache_p = nullptr)
-	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
-	      packrat_cache(packrat_cache_p) {
+	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
+	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
+	      packrat_cache(packrat_cache_p), mode(mode_p) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
+	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
+	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
+	      packrat_cache(state.packrat_cache), mode(state.mode) {
 	}
 
-	vector<MatcherToken> &tokens;
+	TokenIterator token_iterator;
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
-	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
-	bool preserve_identifier_case = true;
+	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
 	ParserPackratCache *packrat_cache;
+	MatchMode mode;
+
+	bool BuildParseResult() const {
+		return mode == MatchMode::BUILD_PARSE_RESULT;
+	}
+
+	template <class RESULT, class... ARGS>
+	MatcherResult AllocateParseResult(ARGS &&... args);
 
 	void UpdateMaxTokenIndex() {
-		if (token_index > max_token_index) {
-			max_token_index = token_index;
+		if (token_iterator.Position() > max_token_index) {
+			max_token_index = token_iterator.Position();
 		}
 	}
 
 	idx_t GetMaxTokenIndex() const {
 		return max_token_index;
+	}
+
+	//! Fold a non-quoted identifier in-place according to the configured case mode
+	void FoldIdentifier(string &text) const {
+		switch (identifier_case_mode) {
+		case IdentifierCaseMode::LOWERCASE:
+			text = StringUtil::Lower(text);
+			break;
+		case IdentifierCaseMode::UPPERCASE:
+			text = StringUtil::Upper(text);
+			break;
+		default:
+			break;
+		}
 	}
 
 	void AddSuggestion(MatcherSuggestion suggestion);
@@ -176,10 +220,9 @@ public:
 	}
 	virtual ~Matcher() = default;
 
-	//! Match
-	virtual MatchResultType Match(MatchState &state) const = 0;
-	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const;
-	virtual optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const = 0;
+	//! Match and construct the parse result
+	MatcherResult MatchParseResult(MatchState &state) const;
+	virtual MatcherResult MatchParseResultInternal(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -190,6 +233,13 @@ public:
 	}
 	void SetName(string name_p) {
 		name = std::move(name_p);
+	}
+	void SetRule(const CompiledGrammarRule &rule_p) {
+		rule = rule_p;
+		name = rule_p.name;
+	}
+	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		return rule;
 	}
 	bool HasName() const {
 		return !name.empty();
@@ -228,6 +278,20 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	optional_ptr<const CompiledGrammarRule> rule;
+};
+
+class KeywordInfo {
+public:
+	KeywordInfo() {
+	}
+	explicit KeywordInfo(int32_t score_bonus, char extra_char = ' ')
+	    : score_bonus(score_bonus), extra_char(extra_char) {
+	}
+
+public:
+	int32_t score_bonus = 0;
+	char extra_char = '\0';
 };
 
 class MatcherAllocator {
@@ -246,36 +310,12 @@ private:
 	vector<unique_ptr<ParseResult>> parse_results;
 };
 
-struct PEGMatcher {
-	MatcherAllocator allocator;
-
-	Matcher &ProgramMatcher() {
-		return *program_matcher;
+template <class RESULT, class... ARGS>
+MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
+	if (!BuildParseResult()) {
+		return MatcherResult::Success();
 	}
-	Matcher &TopLevelStatementMatcher() {
-		return *top_level_statement_matcher;
-	}
-
-	static shared_ptr<PEGMatcher> Get(ClientContext &context);
-	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
-
-private:
-	friend struct ParserCache;
-	optional_ptr<Matcher> program_matcher;
-	optional_ptr<Matcher> top_level_statement_matcher;
-};
-
-//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
-//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
-struct ParserCache {
-	shared_ptr<PEGMatcher> GetMatcher();
-	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	void Invalidate();
-
-private:
-	std::mutex mutex;
-	shared_ptr<PEGMatcher> matcher;
-	shared_ptr<PEGTransformerFactory> transformer_factory;
-};
+	return MatcherResult::Success(allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...)));
+}
 
 } // namespace duckdb

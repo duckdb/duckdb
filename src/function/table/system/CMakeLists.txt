@@ -8,6 +8,7 @@ add_library_unity(
   duckdb_coordinate_systems.cpp
   duckdb_databases.cpp
   duckdb_dependencies.cpp
+  duckdb_dialects.cpp
   create_external_resource.cpp
   duckdb_extensions.cpp
   duckdb_external_file_cache.cpp

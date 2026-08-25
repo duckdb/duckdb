@@ -55,21 +55,9 @@ private:
 
 //! Base of the job types driven by ScanReadAhead
 struct ScanReadAheadJob {
-	ScanReadAheadJob() = default;
 	virtual ~ScanReadAheadJob();
 
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return static_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return static_cast<const TARGET &>(*this);
-	}
-
-	//! Settle in-flight I/O, subclass destructors must call this before the members the I/O writes to are destroyed
+	//! Settle in-flight I/O
 	void SettleIO() {
 		if (io_completion) {
 			io_completion->WaitForIO();
@@ -85,10 +73,20 @@ struct ScanReadAheadJob {
 	//! Total bytes of scheduled I/O for this job
 	idx_t io_bytes = 0;
 
-protected:
-	//! Only subclasses move jobs, a base-level move would slice off the subclass members
-	ScanReadAheadJob(ScanReadAheadJob &&) noexcept = default;
-	ScanReadAheadJob &operator=(ScanReadAheadJob &&) noexcept = default;
+private:
+	ScanReadAheadJob() = default;
+	ScanReadAheadJob(const ScanReadAheadJob &) = delete;
+	ScanReadAheadJob &operator=(const ScanReadAheadJob &) = delete;
+	template <class JOB_STATE>
+	friend struct ScanReadAheadJobWrapper;
+};
+
+//! Wraps job-specific state so in-flight I/O is settled before that state is destroyed
+template <class JOB_STATE>
+struct ScanReadAheadJobWrapper final : public ScanReadAheadJob, public JOB_STATE {
+	~ScanReadAheadJobWrapper() override {
+		SettleIO();
+	}
 };
 
 //! Outcome of ScanReadAhead::AcquireJob
@@ -99,7 +97,7 @@ enum class ScanReadAheadAcquire : uint8_t {
 };
 
 //! Drives read-ahead for a scan, its purpose is to keep several scan jobs scheduled ahead of decoding.
-//! Jobs derive from ScanReadAheadJob, callers claim them back with Cast.
+//! Job state is held in a ScanReadAheadJobWrapper, callers claim jobs back with unique_ptr_cast.
 class ScanReadAhead {
 public:
 	ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,

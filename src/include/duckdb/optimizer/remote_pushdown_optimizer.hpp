@@ -10,7 +10,9 @@
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
 
 namespace duckdb {
@@ -29,6 +31,15 @@ class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
+class MergeQueryNode;
+class SelectStatement;
+class CatalogEntry;
+struct EntryLookupInfo;
+enum class RemoteCapability : uint8_t;
+struct AlterInfo;
+struct CreateInfo;
+struct CreateTableInfo;
+struct DropInfo;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
@@ -91,6 +102,30 @@ private:
 	CatalogPushdownResult RewriteNode(InsertQueryNode &node);
 	CatalogPushdownResult RewriteNode(DeleteQueryNode &node);
 	CatalogPushdownResult RewriteNode(UpdateQueryNode &node);
+	CatalogPushdownResult RewriteNode(MergeQueryNode &node);
+	//! Whether the target entry of a DDL statement already exists (DROP/ALTER) or is being created (CREATE).
+	//! The two resolve differently when the statement's name carries no explicit catalog qualifier
+	enum class DDLTarget { NEW_ENTRY, EXISTING_ENTRY };
+	//! The per-statement DDL handlers. Like the query node handlers above these are deliberately not
+	//! overloads of Rewrite - they are only ever reached from Rewrite(unique_ptr<SQLStatement> &)
+	CatalogPushdownResult RewriteStatement(CreateStatement &statement);
+	CatalogPushdownResult RewriteStatement(DropStatement &statement);
+	CatalogPushdownResult RewriteStatement(AlterStatement &statement);
+	//! Analyze the CTAS query of a CREATE statement. "target" is where the table itself is created - when
+	//! the query is fully remote but the table is not, the query alone is pushed down. Nothing else a
+	//! CREATE carries is analyzed: the pushdown decision is made by the target catalog alone
+	CatalogPushdownResult RewriteCreateInfo(CreateInfo &info, const CatalogPushdownResult &target);
+	//! Resolve the catalog that the target of a DDL statement lives in
+	CatalogPushdownResult ResolveDDLTarget(const QualifiedName &name, DDLTarget target, CatalogType entry_type);
+	//! Resolve an explicitly named catalog to a remote reference, or Unknown if it is local / missing
+	CatalogPushdownResult ResolveRemoteCatalog(const Identifier &catalog_name, RemoteCapability capability);
+	//! Give the resolved catalog the chance to veto pushing down this statement as a whole
+	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
+	//! Look an entry up in a catalog, defaulting to the main schema when the name carries no schema
+	optional_ptr<CatalogEntry> LookupEntry(const Identifier &catalog_name, const EntryLookupInfo &lookup,
+	                                       const Identifier &schema_name);
+	//! Whether any non-remote catalog in the search path holds this entry
+	bool EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const Identifier &schema_name);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
@@ -140,12 +175,16 @@ private:
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
+	//! Wrap a table ref that produces a remote statement's result into "SELECT * FROM <ref>"
+	static unique_ptr<SelectStatement> WrapRemoteRef(unique_ptr<TableRef> ref);
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
 	static void StripCatalogName(SQLStatement &statement, const Identifier &catalog_name);
 	static void StripCatalogName(QueryNode &node, const Identifier &catalog_name);
 	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
+	static void StripCatalogName(CreateInfo &info, const Identifier &catalog_name);
+	static void StripCatalogName(AlterInfo &info, const Identifier &catalog_name);
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
 	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);

@@ -29,6 +29,12 @@
       "paths": [
         "test/sql/json/test_json_copy_serialize_plan.test"
       ]
+    },
+    {
+      "reason": "Writes and reads a local profiling JSON file.",
+      "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test"
+      ]
     }
   ]
 }

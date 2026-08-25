@@ -8,3 +8,5 @@ if(BUILD_SHELL)
                         ${DUCKDB_EXTRA_LINK_FLAGS})
   link_extension_libraries(plan_serializer "")
 endif()
+
+add_subdirectory(cpp)

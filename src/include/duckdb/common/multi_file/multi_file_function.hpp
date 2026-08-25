@@ -31,12 +31,12 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-	                             BaseFileReaderOptions &options, vector<string> &expected_names,
+	                             BaseFileReaderOptions &options, vector<Identifier> &expected_names,
 	                             vector<LogicalType> &expected_types) = 0;
 	virtual bool ParseOption(ClientContext &context, const Identifier &key, const Value &val,
 	                         MultiFileOptions &file_options, BaseFileReaderOptions &options) = 0;
 	virtual void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
-	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
+	                              const vector<Identifier> &expected_names, const vector<LogicalType> &expected_types);
 	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
 	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
@@ -120,6 +120,15 @@ public:
 			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
 			names = result->names;
+			return std::move(result);
+		}
+
+		if (result->file_list->IsEmpty() && !return_types.empty()) {
+			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
+			// left to bind the readers on, but the schema is already known so we can use it as-is
+			result->types = return_types;
+			result->names = names;
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return std::move(result);
 		}
 
@@ -225,7 +234,7 @@ public:
 	}
 
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
-	                                                  vector<string> &expected_names,
+	                                                  vector<Identifier> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
@@ -248,12 +257,8 @@ public:
 		}
 		interface->FinalizeCopyBind(context, *options, expected_names, expected_types);
 
-		// the COPY bind still operates on plain strings - convert around the table function bind
-		auto names = StringsToIdentifiers(expected_names);
-		auto result = MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-		                                    names, std::move(file_options), std::move(options), std::move(interface));
-		expected_names = IdentifiersToStrings(names);
-		return result;
+		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
+		                             expected_names, std::move(file_options), std::move(options), std::move(interface));
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
@@ -429,8 +434,9 @@ public:
 
 	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
 	                                  MultiFileGlobalState &gstate) {
-		auto &reader = *lstate.job.reader;
-		auto &reader_data = *lstate.job.reader_data;
+		auto &job = *lstate.job;
+		auto &reader = *job.reader;
+		auto &reader_data = *job.reader_data;
 		auto &projection_ids = gstate.projection_ids;
 
 		if (!reader_data.extra_columns.empty()) {
@@ -508,11 +514,11 @@ public:
 				executor.AddExpression(*expr);
 			}
 		}
-		lstate.scan_chunk_file_index = lstate.job.file_index;
+		lstate.scan_chunk_file_index = job.file_index;
 	}
 
 	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
-	                         MultiFileScanJob &job) {
+	                         ScanReadAheadJobWrapper<MultiFileScanJobState> &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
@@ -587,10 +593,10 @@ public:
 			return std::move(result);
 		}
 
-		result->job.batch_index = 0;
-		result->job.scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
+		result->job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
+		result->job->scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
 
-		if (!ClaimNextJob(context.client, bind_data, gstate, result->job)) {
+		if (!ClaimNextJob(context.client, bind_data, gstate, *result->job)) {
 			return nullptr;
 		}
 		result->job_state = MultiFileJobState::SCHEDULE;
@@ -724,8 +730,9 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		OperatorPartitionData partition_data(data.job.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.job.reader_data,
+		auto &job = *data.job;
+		OperatorPartitionData partition_data(job.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *job.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
 		                                              partition_data);
 		return partition_data;
@@ -743,7 +750,8 @@ public:
 	static MultiFileDecodeResult DecodeCurrentJob(ClientContext &context, TableFunctionInput &data_p,
 	                                              MultiFileLocalState &data, MultiFileGlobalState &gstate,
 	                                              MultiFileBindData &bind_data, DataChunk &output) {
-		if (data.scan_chunk_file_index != data.job.file_index) {
+		auto &job = *data.job;
+		if (data.scan_chunk_file_index != job.file_index) {
 			// if the file changes we need to initialize the chunk again
 			InitializeDecodeChunk(context, data, gstate);
 		}
@@ -753,7 +761,7 @@ public:
 			// keep. Hence, we only reset if we are not resuming from a blocked scan.
 			scan_chunk.Reset();
 		}
-		auto res = data.job.reader->Scan(context, *gstate.global_state, *data.job.scan_state, scan_chunk);
+		auto res = job.reader->Scan(context, *gstate.global_state, *job.scan_state, scan_chunk);
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
@@ -764,9 +772,8 @@ public:
 		output.SetChildCardinality(scan_chunk.size());
 		if (scan_chunk.size() > 0) {
 			data.rows_scanned += scan_chunk.size();
-			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
-			                                           scan_chunk, output, data.executor,
-			                                           gstate.multi_file_reader_state);
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *job.reader, *job.reader_data, scan_chunk,
+			                                           output, data.executor, gstate.multi_file_reader_state);
 			output.SetChildCardinality(output.size());
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
@@ -783,10 +790,10 @@ public:
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Returns null when there are no more jobs to produce.
-	static unique_ptr<MultiFileScanJob> ProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
-	                                               MultiFileGlobalState &gstate,
-	                                               vector<unique_ptr<AsyncTask>> &io_tasks) {
-		auto job = make_uniq<MultiFileScanJob>();
+	static unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>>
+	ProduceJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	           vector<unique_ptr<AsyncTask>> &io_tasks) {
+		auto job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
 		// jobs recycle finished scan states, create a fresh one when none was available
 		job->scan_state = gstate.TryPopState();
 		if (!job->scan_state) {
@@ -807,13 +814,14 @@ public:
 	                                                 MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
 	                                                 MultiFileBindData &bind_data) {
 		if (lstate.job_state == MultiFileJobState::NONE) {
-			if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
+			if (!ClaimNextJob(context, bind_data, gstate, *lstate.job)) {
 				return ScanReadAheadAcquire::EXHAUSTED;
 			}
 			lstate.job_state = MultiFileJobState::SCHEDULE;
 		}
 		if (lstate.job_state == MultiFileJobState::SCHEDULE) {
-			auto scheduled = lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.scan_state);
+			auto &job = *lstate.job;
+			auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.scan_state);
 			lstate.job_state = MultiFileJobState::DECODE;
 			if (scheduled.GetResultType() == AsyncResultType::BLOCKED && input.HandleBlocked(scheduled)) {
 				return ScanReadAheadAcquire::PARKED;
@@ -828,7 +836,7 @@ public:
 		auto &read_ahead = *gstate.read_ahead;
 		if (lstate.job_state == MultiFileJobState::WAIT_IO) {
 			// resuming after parking, the job's I/O has completed
-			read_ahead.WaitForJob(lstate.job);
+			read_ahead.WaitForJob(*lstate.job);
 			lstate.job_state = MultiFileJobState::DECODE;
 			return ScanReadAheadAcquire::ACQUIRED;
 		}
@@ -846,7 +854,8 @@ public:
 			gstate.state_pool.clear();
 			return acquired;
 		}
-		lstate.job = std::move(claimed->Cast<MultiFileScanJob>());
+		lstate.job =
+		    unique_ptr_cast<ScanReadAheadJob, ScanReadAheadJobWrapper<MultiFileScanJobState>>(std::move(claimed));
 		lstate.job_state =
 		    acquired == ScanReadAheadAcquire::PARKED ? MultiFileJobState::WAIT_IO : MultiFileJobState::DECODE;
 		return acquired;
@@ -884,7 +893,7 @@ public:
 			case MultiFileDecodeResult::JOB_FINISHED: {
 				if (gstate.read_ahead) {
 					// hand the scan state back so learned reader state carries over to jobs created later
-					gstate.PushState(std::move(data.job.scan_state));
+					gstate.PushState(std::move(data.job->scan_state));
 				}
 				data.job_state = MultiFileJobState::NONE;
 				// emit any trailing chunk, then loop to acquire the next job
@@ -913,6 +922,14 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+
+		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
+		// file describe the overridden column and can even have a different type, so they cannot be used here
+		for (auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (hive_partitioning_index.index == primary_index) {
+				return nullptr;
+			}
+		}
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {

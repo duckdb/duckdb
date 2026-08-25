@@ -46,6 +46,9 @@ public:
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
 	                                                          const BoundFunctionExpression &func,
 	                                                          const vector<BaseStatistics> &child_stats);
+	//! Compare two sets of statistics and return whether the comparison is always true or false
+	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
+	                                                 ExpressionType comparison);
 
 private:
 	//! Propagate statistics through an operator
@@ -59,6 +62,7 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalPositionalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalSecureView &op, unique_ptr<LogicalOperator> &node_ptr);
 	void PropagateStatistics(LogicalComparisonJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	void PropagateStatistics(LogicalAnyJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalSetOperation &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -72,9 +76,6 @@ private:
 
 	//! Return statistics from a constant value
 	unique_ptr<BaseStatistics> StatisticsFromValue(const Value &input);
-	//! Run a comparison with two sets of statistics, returns if the comparison will always returns true/false or not
-	FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison);
-
 	//! Update filter statistics from a filter with a constant
 	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
@@ -85,8 +86,14 @@ private:
 	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+	//! Propagate a filter condition and determine whether it can be pruned; does not update any statistics
+	FilterPropagateResult ClassifyFilter(unique_ptr<Expression> &condition);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
+	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
+	bool HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
+	//! Rewrite a join whose condition always matches; returns true if the operator was replaced
+	bool HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr);
 
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);

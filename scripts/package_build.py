@@ -332,7 +332,7 @@ def build_package(
     # include the main extension helper
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     # include the separate extensions
-    ext_loader_body = ''
+    ext_register_body = ''
     ext_loader_defines = ''
     ext_headers = ''
     ext_name_vector_initializer = ''
@@ -356,10 +356,23 @@ def build_package(
                 f'extern "C" bool {ext}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n'
                 "#endif\n"
             )
+            ext_register_body += (
+                f"#if {ext_linked_define}\n"
+                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
+                f"        db.LoadStaticCAPIExtension(\"{ext}\", {ext}_init_c_api);\n"
+                "    }});\n"
+                "#endif\n"
+            )
+        elif ext_kind == 'CAPI_V2':
+            ext_capi_declarations += (
+                f'#if {ext_linked_define}\n'
+                f'extern "C" void {ext}_init_c_api_v2(struct duckdb_v2_extension_input *);\n'
+                "#endif\n"
+            )
             ext_loader_body += (
                 f"#if {ext_linked_define}\n"
                 f"    if (extension==\"{ext}\") {{\n"
-                f"        db.LoadStaticCAPIExtension(\"{ext}\", {ext}_init_c_api);\n"
+                f"        db.LoadStaticCAPIExtensionV2(\"{ext}\", {ext}_init_c_api_v2);\n"
                 "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
                 "    }\n"
                 "#endif\n"
@@ -367,12 +380,11 @@ def build_package(
         else:
             ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
             ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
-            ext_loader_body += (
+            ext_register_body += (
                 f"#if {ext_linked_define}\n"
-                f"    if (extension==\"{ext}\") {{\n"
+                f"    config.linked_extensions.push_back({{\"{ext}\", [](DuckDB &db) {{\n"
                 f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
-                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
-                "    }\n"
+                "    }});\n"
                 "#endif\n"
             )
 
@@ -380,7 +392,7 @@ def build_package(
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
-        loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
+        loader_code.replace('${EXT_REGISTER_BODY}', ext_register_body)
         .replace('${EXT_CAPI_DECLARATIONS}', ext_capi_declarations)
         .replace('${EXT_NAME_VECTOR_INITIALIZER}', ext_name_vector_initializer)
         .replace('${EXT_TEST_PATH_INITIALIZER}', '')

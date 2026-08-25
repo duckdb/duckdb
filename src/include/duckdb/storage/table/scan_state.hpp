@@ -194,6 +194,12 @@ public:
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
 	}
+	optional_ptr<const TableFilterSet> GetTableFilters() const {
+		return table_filters.get();
+	}
+	optional_ptr<const vector<StorageIndex>> GetColumnIds() const {
+		return column_ids;
+	}
 
 	optional_ptr<AdaptiveFilter> GetAdaptiveFilter();
 	AdaptiveFilterState BeginFilter() const;
@@ -214,6 +220,8 @@ public:
 private:
 	//! The table filters (if any)
 	optional_ptr<TableFilterSet> table_filters;
+	//! Maps scan projection indexes to storage column indexes
+	optional_ptr<const vector<StorageIndex>> column_ids;
 	//! Adaptive filter info (if any)
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! The set of filters
