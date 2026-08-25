@@ -46,12 +46,13 @@
 namespace duckdb {
 
 //! A pre-claimed scan assignment whose I/O is scheduled on the async pool ahead of decoding
-struct TableScanJob : public ScanReadAheadJob {
+struct TableScanJobState {
 	//! The number of rows in the assignment
 	idx_t rows = 0;
 	//! The scan state the job's I/O and decoding operate on
 	unique_ptr<TableScanState> scan_state;
 };
+using TableScanJob = ScanReadAheadJobWrapper<TableScanJobState>;
 
 //! Create the read-ahead driver, returns null when read-ahead is disabled or prefetching is not beneficial
 static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context, DataTable &storage) {
