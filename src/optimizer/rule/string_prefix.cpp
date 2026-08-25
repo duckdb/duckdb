@@ -189,23 +189,25 @@ unique_ptr<Expression> StringPrefixInRule::Apply(LogicalOperator &op, vector<ref
 	auto &function_name = func.Function().GetName();
 	if (function_name == "left") {
 		if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(0)) {
+		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
 			return nullptr;
 		}
 	} else if (function_name == "substring" || function_name == "substr") {
 		if (children.size() != 3 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
 		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(1) ||
-		    children[2]->Cast<BoundConstantExpression>().GetValue() != Value::BIGINT(0)) {
+		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 1 ||
+		    children[2]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
 			return nullptr;
 		}
 	} else {
 		return nullptr;
 	}
 
-	auto constant_in = expr.Copy();
-	constant_in->Cast<BoundOperatorExpression>().GetChildrenMutable()[0] =
-	    make_uniq<BoundConstantExpression>(Value(string()));
+	auto constant_in = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
+	constant_in->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value(string())));
+	for (idx_t i = 1; i < expr.GetChildren().size(); i++) {
+		constant_in->GetChildrenMutable().push_back(expr.GetChildren()[i]->Copy());
+	}
 	Value result;
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_in, result)) {
 		return nullptr;
