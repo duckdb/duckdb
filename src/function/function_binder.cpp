@@ -566,6 +566,46 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	return BindScalarFunction(func, std::move(arguments), error, is_operator, binder);
 }
 
+//! Returns true if any argument is an untyped NULL, i.e. has type SQLNULL
+static bool HasUntypedNullArgument(const vector<unique_ptr<Expression>> &regular_args,
+                                   const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+	for (auto &child : regular_args) {
+		if (child->GetReturnType() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	for (auto &child : keyword_args) {
+		if (child.second->GetReturnType() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool FoldsToNull(ClientContext &context, const Expression &child) {
+	if (!child.IsFoldable()) {
+		return false;
+	}
+	Value result;
+	return ExpressionExecutor::TryEvaluateScalar(context, child, result) && result.IsNull();
+}
+
+//! Returns true if any argument is a constant expression that evaluates to NULL
+static bool HasNullConstantArgument(ClientContext &context, const vector<unique_ptr<Expression>> &regular_args,
+                                    const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+	for (auto &child : regular_args) {
+		if (FoldsToNull(context, *child)) {
+			return true;
+		}
+	}
+	for (auto &child : keyword_args) {
+		if (FoldsToNull(context, *child.second)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
@@ -585,42 +625,21 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
-	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
-	// because functions with DEFAULT_NULL_HANDLING should not have to deal with NULL inputs in their bind code.
-	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
-	// In those cases, we default to SQLNULL.
-	const auto return_type_if_null =
-	    bound_function.GetReturnType().IsComplete() ? bound_function.GetReturnType() : LogicalType::SQLNULL;
+	// Bind code should not have to deal with untyped NULL inputs, so for those we never bind the function.
+	// Typed NULL constants are safe to bind, so we bind when that is the only way to determine the return type.
 	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		for (auto &child : regular_args) {
-			if (child->GetReturnType() == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
-			if (!child->IsFoldable()) {
-				continue;
-			}
-			Value result;
-			if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
-				continue;
-			}
-			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
+		const auto &return_type = bound_function.GetReturnType();
+		if (HasUntypedNullArgument(regular_args, keyword_args)) {
+			return make_uniq<BoundConstantExpression>(
+			    Value(return_type.IsComplete() ? return_type : LogicalType::SQLNULL));
 		}
-		for (auto &child : keyword_args) {
-			if (child.second->GetReturnType() == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
+		if (HasNullConstantArgument(context, regular_args, keyword_args)) {
+			if (return_type.IsComplete()) {
+				return make_uniq<BoundConstantExpression>(Value(return_type));
 			}
-			if (!child.second->IsFoldable()) {
-				continue;
-			}
-			Value result;
-			if (!ExpressionExecutor::TryEvaluateScalar(context, *child.second, result)) {
-				continue;
-			}
-			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
-			}
+			auto bound_expr = BindScalarFunction(std::move(selected_function), std::move(regular_args),
+			                                     std::move(keyword_args), is_operator, binder);
+			return make_uniq<BoundConstantExpression>(Value(bound_expr->GetReturnType()));
 		}
 	}
 	return BindScalarFunction(std::move(selected_function), std::move(regular_args), std::move(keyword_args),
