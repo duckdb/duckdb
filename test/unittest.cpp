@@ -5,6 +5,7 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 #include <stdlib.h>
+#include <cerrno>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -62,6 +63,88 @@ static string PthreadError(const char *function, int error) {
 	return string(function) + " failed: " + std::strerror(error);
 }
 
+enum class ThreadStackProbeResult : uint8_t { SUCCESS, TOO_SMALL, ERROR };
+
+// glibc's fixed Linux minimum excludes the binary-specific static TLS overhead.
+static constexpr size_t GLIBC_PTHREAD_STACK_MIN = 16384;
+
+static void *MinimumThreadStackProbe(void *) {
+	return nullptr;
+}
+
+static ThreadStackProbeResult TryThreadStackSize(size_t stack_size, string &error) {
+	pthread_attr_t attributes;
+	auto result = pthread_getattr_default_np(&attributes);
+	if (result != 0) {
+		error = PthreadError("pthread_getattr_default_np", result);
+		return ThreadStackProbeResult::ERROR;
+	}
+
+	result = pthread_attr_setstacksize(&attributes, stack_size);
+	if (result != 0) {
+		pthread_attr_destroy(&attributes);
+		if (result == EINVAL) {
+			return ThreadStackProbeResult::TOO_SMALL;
+		}
+		error = PthreadError("pthread_attr_setstacksize", result);
+		return ThreadStackProbeResult::ERROR;
+	}
+
+	pthread_t probe;
+	result = pthread_create(&probe, &attributes, MinimumThreadStackProbe, nullptr);
+	auto destroy_result = pthread_attr_destroy(&attributes);
+	if (result != 0) {
+		if (result == EINVAL) {
+			return ThreadStackProbeResult::TOO_SMALL;
+		}
+		error = PthreadError("pthread_create", result);
+		return ThreadStackProbeResult::ERROR;
+	}
+	auto join_result = pthread_join(probe, nullptr);
+	if (join_result != 0) {
+		error = PthreadError("pthread_join", join_result);
+		return ThreadStackProbeResult::ERROR;
+	}
+	if (destroy_result != 0) {
+		error = PthreadError("pthread_attr_destroy", destroy_result);
+		return ThreadStackProbeResult::ERROR;
+	}
+	return ThreadStackProbeResult::SUCCESS;
+}
+
+static bool GetMinimumThreadStackSize(size_t default_stack_size, size_t page_size, size_t &minimum_stack_size,
+                                      string &error) {
+	auto lower_page = (GLIBC_PTHREAD_STACK_MIN + page_size - 1) / page_size;
+	auto upper_page = default_stack_size / page_size;
+	if (upper_page < lower_page) {
+		error = "Default pthread stack size is below the glibc minimum";
+		return false;
+	}
+	auto default_probe_result = TryThreadStackSize(upper_page * page_size, error);
+	if (default_probe_result != ThreadStackProbeResult::SUCCESS) {
+		if (default_probe_result == ThreadStackProbeResult::TOO_SMALL) {
+			error = "Unable to create a thread with the default pthread stack size";
+		} else {
+			error = "Unable to create a thread with the default pthread stack size: " + error;
+		}
+		return false;
+	}
+
+	while (lower_page < upper_page) {
+		auto middle_page = lower_page + (upper_page - lower_page) / 2;
+		auto probe_result = TryThreadStackSize(middle_page * page_size, error);
+		if (probe_result == ThreadStackProbeResult::SUCCESS) {
+			upper_page = middle_page;
+		} else if (probe_result == ThreadStackProbeResult::TOO_SMALL) {
+			lower_page = middle_page + 1;
+		} else {
+			return false;
+		}
+	}
+	minimum_stack_size = lower_page * page_size;
+	return true;
+}
+
 static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
 	pthread_attr_t default_attributes;
 	auto result = pthread_getattr_default_np(&default_attributes);
@@ -70,7 +153,34 @@ static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
 		return false;
 	}
 
-	result = pthread_attr_setstacksize(&default_attributes, requested_stack_size);
+	size_t default_stack_size;
+	result = pthread_attr_getstacksize(&default_attributes, &default_stack_size);
+	if (result != 0) {
+		pthread_attr_destroy(&default_attributes);
+		error = PthreadError("pthread_attr_getstacksize", result);
+		return false;
+	}
+	auto page_size_result = sysconf(_SC_PAGESIZE);
+	if (page_size_result <= 0) {
+		pthread_attr_destroy(&default_attributes);
+		error = "Failed to determine the system page size";
+		return false;
+	}
+	auto page_size = static_cast<size_t>(page_size_result);
+	size_t minimum_stack_size;
+	if (!GetMinimumThreadStackSize(default_stack_size, page_size, minimum_stack_size, error)) {
+		pthread_attr_destroy(&default_attributes);
+		return false;
+	}
+	auto stack_overhead = minimum_stack_size - GLIBC_PTHREAD_STACK_MIN;
+	if (requested_stack_size > std::numeric_limits<size_t>::max() - stack_overhead) {
+		pthread_attr_destroy(&default_attributes);
+		error = "--thread-stack-size is too large";
+		return false;
+	}
+	auto configured_stack_size = requested_stack_size + stack_overhead;
+
+	result = pthread_attr_setstacksize(&default_attributes, configured_stack_size);
 	if (result == 0) {
 		result = pthread_setattr_default_np(&default_attributes);
 	}
@@ -109,15 +219,12 @@ static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
 		return false;
 	}
 
-	auto page_size = sysconf(_SC_PAGESIZE);
-	if (page_size <= 0) {
-		error = "Failed to determine the system page size";
-		return false;
-	}
-	auto difference = observed_stack_size > requested_stack_size ? observed_stack_size - requested_stack_size
-	                                                             : requested_stack_size - observed_stack_size;
-	if (difference > static_cast<size_t>(page_size)) {
-		error = "Thread stack size probe reported " + to_string(observed_stack_size) + " bytes after requesting " +
+	auto effective_stack_size = observed_stack_size > stack_overhead ? observed_stack_size - stack_overhead : 0;
+	auto difference = effective_stack_size > requested_stack_size ? effective_stack_size - requested_stack_size
+	                                                              : requested_stack_size - effective_stack_size;
+	if (difference > page_size) {
+		error = "Thread stack size probe reported " + to_string(observed_stack_size) + " total bytes (" +
+		        to_string(effective_stack_size) + " after glibc overhead) after requesting " +
 		        to_string(requested_stack_size) + " bytes";
 		return false;
 	}
