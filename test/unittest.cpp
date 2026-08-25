@@ -1,8 +1,21 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 #include <stdlib.h>
+#include <cstring>
 #include <fstream>
+#include <limits>
+#include <thread>
 #include <unordered_set>
+
+#if defined(__linux__)
+#include <features.h>
+#include <pthread.h>
+#include <unistd.h>
+#endif
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -15,6 +28,137 @@
 using namespace duckdb;
 
 namespace {
+
+#if defined(__linux__) && !defined(DUCKDB_NO_THREADS) && defined(__GLIBC_PREREQ)
+#if __GLIBC_PREREQ(2, 18)
+#define DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
+#endif
+#endif
+
+static bool TryParseThreadStackSize(const string &value, size_t &result) {
+	if (value.empty()) {
+		return false;
+	}
+	size_t parsed_value = 0;
+	for (auto character : value) {
+		if (character < '0' || character > '9') {
+			return false;
+		}
+		auto digit = static_cast<size_t>(character - '0');
+		if (parsed_value > (std::numeric_limits<size_t>::max() - digit) / 10) {
+			return false;
+		}
+		parsed_value = parsed_value * 10 + digit;
+	}
+	if (parsed_value == 0) {
+		return false;
+	}
+	result = parsed_value;
+	return true;
+}
+
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
+static string PthreadError(const char *function, int error) {
+	return string(function) + " failed: " + std::strerror(error);
+}
+
+static bool SetThreadStackSize(size_t requested_stack_size, string &error) {
+	pthread_attr_t default_attributes;
+	auto result = pthread_getattr_default_np(&default_attributes);
+	if (result != 0) {
+		error = PthreadError("pthread_getattr_default_np", result);
+		return false;
+	}
+
+	result = pthread_attr_setstacksize(&default_attributes, requested_stack_size);
+	if (result == 0) {
+		result = pthread_setattr_default_np(&default_attributes);
+	}
+	auto destroy_result = pthread_attr_destroy(&default_attributes);
+	if (result != 0) {
+		error = PthreadError("setting the default pthread stack size", result);
+		return false;
+	}
+	if (destroy_result != 0) {
+		error = PthreadError("pthread_attr_destroy", destroy_result);
+		return false;
+	}
+
+	size_t observed_stack_size = 0;
+	int probe_result = 0;
+	try {
+		std::thread probe([&]() {
+			pthread_attr_t probe_attributes;
+			probe_result = pthread_getattr_np(pthread_self(), &probe_attributes);
+			if (probe_result != 0) {
+				return;
+			}
+			probe_result = pthread_attr_getstacksize(&probe_attributes, &observed_stack_size);
+			auto probe_destroy_result = pthread_attr_destroy(&probe_attributes);
+			if (probe_result == 0) {
+				probe_result = probe_destroy_result;
+			}
+		});
+		probe.join();
+	} catch (std::exception &ex) {
+		error = string("Failed to create thread stack size probe: ") + ex.what();
+		return false;
+	}
+	if (probe_result != 0) {
+		error = PthreadError("reading the probe thread stack size", probe_result);
+		return false;
+	}
+
+	auto page_size = sysconf(_SC_PAGESIZE);
+	if (page_size <= 0) {
+		error = "Failed to determine the system page size";
+		return false;
+	}
+	auto difference = observed_stack_size > requested_stack_size ? observed_stack_size - requested_stack_size
+	                                                             : requested_stack_size - observed_stack_size;
+	if (difference > static_cast<size_t>(page_size)) {
+		error = "Thread stack size probe reported " + to_string(observed_stack_size) + " bytes after requesting " +
+		        to_string(requested_stack_size) + " bytes";
+		return false;
+	}
+	return true;
+}
+#endif
+
+static bool ConfigureThreadStackSize(int argc, char *argv[], string &error) {
+	bool stack_size_specified = false;
+	size_t requested_stack_size = 0;
+	for (int i = 1; i < argc; i++) {
+		if (string(argv[i]) != "--thread-stack-size") {
+			continue;
+		}
+		if (stack_size_specified) {
+			error = "--thread-stack-size may only be specified once";
+			return false;
+		}
+		if (++i >= argc) {
+			error = "--thread-stack-size expected a size in bytes";
+			return false;
+		}
+		size_t parsed_stack_size;
+		if (!TryParseThreadStackSize(argv[i], parsed_stack_size)) {
+			error = "--thread-stack-size expected a positive integer size in bytes";
+			return false;
+		}
+		requested_stack_size = parsed_stack_size;
+		stack_size_specified = true;
+	}
+	if (!stack_size_specified) {
+		return true;
+	}
+
+#ifdef DUCKDB_UNITTEST_HAS_DEFAULT_PTHREAD_ATTRIBUTES
+	return SetThreadStackSize(requested_stack_size, error);
+#else
+	error = "--thread-stack-size is only supported on Linux with glibc 2.18 or newer";
+	return false;
+#endif
+}
 
 struct TempDirReclaimer {
 	~TempDirReclaimer() {
@@ -65,6 +209,12 @@ static bool TryReadExactSQLLogicTestFilter(const vector<string> &input_files, ve
 }
 
 int main(int argc_in, char *argv[]) {
+	string thread_stack_error;
+	if (!ConfigureThreadStackSize(argc_in, argv, thread_stack_error)) {
+		fprintf(stderr, "%s\n", thread_stack_error.c_str());
+		return 1;
+	}
+
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	// route the sqllogictest runner's verdicts into the Catch session
@@ -104,6 +254,8 @@ int main(int argc_in, char *argv[]) {
 			use_stdin = true;
 		} else if (argument == "--emit-test-events") {
 			SetEmitTestEvents(true);
+		} else if (argument == "--thread-stack-size") {
+			i++;
 		} else {
 			try {
 				if (!test_config.ParseArgument(argument, argc, argv, i)) {
