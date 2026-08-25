@@ -251,7 +251,8 @@
       {
         "id": 203,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "serialize_property": "GetQueryForSerialization(serializer)"
       },
       {
         "id": 204,
