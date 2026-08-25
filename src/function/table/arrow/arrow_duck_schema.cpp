@@ -424,7 +424,11 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(ClientContext &context, Arrow
 		if (config.HasArrowExtension(extension_info)) {
 			auto extension = config.GetArrowExtension(extension_info);
 			arrow_type = extension.GetType(context, schema, schema_metadata);
-			arrow_type->extension_data = extension.GetTypeExtension();
+			if (!arrow_type->extension_data) {
+				// GetType may have attached per-column extension data (e.g. to record the incoming
+				// schema's field order); fall back to the registered instance otherwise
+				arrow_type->extension_data = extension.GetTypeExtension();
+			}
 		}
 	}
 
