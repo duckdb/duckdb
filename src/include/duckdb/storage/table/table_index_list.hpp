@@ -205,6 +205,8 @@ public:
 	IndexInfo GetStorageInfo() const;
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
+	//! Serializes the bound physical index for the write-ahead log.
+	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -452,6 +454,8 @@ public:
 	unordered_set<column_t> GetUniqueIndexColumns() const;
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
+	//! Serializes the index matching the name for the write-ahead log, if it exists.
+	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const case_insensitive_map_t<Value> &options);
 
 public:
 	//! Initialize an index_chunk from a table.

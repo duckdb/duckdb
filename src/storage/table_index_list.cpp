@@ -374,6 +374,13 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
+IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	auto entry_lock = lock.GetExclusiveLock();
+	// We never write an unbound index to the WAL.
+	D_ASSERT(owned_index->IsBound());
+	return owned_index->Cast<BoundIndex>().SerializeToWAL(options);
+}
+
 const unique_ptr<BoundIndex> &IndexDeltas::GetPointer(const IndexDeltaType type) const {
 	switch (type) {
 	case IndexDeltaType::DELETED_ROWS_IN_USE:
@@ -992,6 +999,17 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 	}
 
 	return result;
+}
+
+unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &name,
+                                                            const case_insensitive_map_t<Value> &options) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		if (entry->NameEquals(name)) {
+			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
+		}
+	}
+	return nullptr;
 }
 
 void TableIndexList::MergeCheckpointDeltas(const transaction_t checkpoint_id) const {
