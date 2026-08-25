@@ -857,6 +857,13 @@ static void ExposeBinding(PathStep &step, const ColumnBinding &binding) {
 
 static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<unique_ptr<BaseStatistics>> &statistics_map,
                                 LogicalProjection &upper_projection, PlacementGroup &group) {
+	auto old_upper_child_bindings = upper_projection.children[0]->GetColumnBindings();
+	vector<vector<ColumnBinding>> old_path_child_bindings;
+	old_path_child_bindings.reserve(group.path.size());
+	for (auto &step : group.path) {
+		old_path_child_bindings.push_back(step.op.get().children[step.child_index]->GetColumnBindings());
+	}
+
 	auto &target = GetPathTarget(group.path);
 	target->ResolveOperatorTypes();
 	auto old_bindings = target->GetColumnBindings();
@@ -879,15 +886,12 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 	lower_projection->children.push_back(std::move(target));
 	target = std::move(lower_projection);
 
-	ColumnBindingReplacer replacer;
+	BindingReplacementGraph replacements;
 	for (idx_t i = 0; i < old_bindings.size(); i++) {
 		auto new_binding = ColumnBinding(lower_index, ProjectionIndex(i));
-		replacer.replacement_bindings.emplace_back(old_bindings[i], new_binding);
+		replacements.Add(old_bindings[i], new_binding);
 		CopyStatistics(statistics_map, old_bindings[i], new_binding);
 	}
-	replacer.stop_operator = target.get();
-	replacer.VisitOperator(*upper_projection.children[0]);
-	replacer.VisitOperatorBindings(upper_projection);
 
 	vector<ColumnBinding> computed_bindings;
 	computed_bindings.reserve(group.placements.size());
@@ -902,6 +906,12 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 
 	for (idx_t path_idx = group.path.size(); path_idx > 0; path_idx--) {
 		auto &step = group.path[path_idx - 1];
+		auto step_ptr = FindOperator(upper_projection.children[0], step.op.get());
+		if (!step_ptr) {
+			throw InternalException("Projection placement lost a path operator");
+		}
+		ColumnBindingRewrite::ApplyToChild(*step_ptr, step.child_index,
+		                                   std::move(old_path_child_bindings[path_idx - 1]), replacements);
 		if (step.op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			auto &projection = step.op.get().Cast<LogicalProjection>();
 			for (idx_t i = 0; i < computed_bindings.size(); i++) {
@@ -918,6 +928,9 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 			}
 		}
 	}
+	ColumnBindingRewrite::ApplyToOperatorBindings(upper_projection, replacements);
+	ColumnBindingRewrite::ValidateOutput(old_upper_child_bindings, upper_projection.children[0]->GetColumnBindings(),
+	                                     replacements);
 
 	for (idx_t i = 0; i < group.placements.size(); i++) {
 		auto expression_index = group.placements[i].expression_index;

@@ -248,6 +248,15 @@ FROM (
 ----
 20000	30000
 
+# Sequential placements preserve indexed outputs above the rewritten join
+query II
+EXPLAIN SELECT substring(r.v, 1, 20) AS rs, substring(l.v, 1, 30) AS ls
+FROM placement_dimension l
+JOIN placement_dimension r USING (k)
+JOIN placement_fact f ON f.i = l.i;
+----
+logical_opt	<REGEX>:.*JOIN.*PROJECTION.*PROJECTION.*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]ls[ ,│].*Expressions:([^\n]*\n){0,8}[^\n]*[ ,]rs[ ,│].*
+
 # Expressions that depend on both sides of a join cannot move into either child
 query II
 EXPLAIN SELECT s

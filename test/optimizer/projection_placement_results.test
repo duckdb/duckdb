@@ -29,6 +29,18 @@ FROM (
 ----
 20000	30000
 
+# Preserve the first placed expression when a later placement shifts its join output
+query II
+SELECT sum(length(rs)), sum(length(ls))
+FROM (
+	SELECT substring(r.v, 1, 20) AS rs, substring(l.v, 1, 30) AS ls
+	FROM placement_result_dimension l
+	JOIN placement_result_dimension r USING (k)
+	JOIN placement_result_fact f ON f.i = l.i
+);
+----
+200000	300000
+
 statement ok
 CREATE TABLE placement_result_values(i INTEGER, v VARCHAR);
 
