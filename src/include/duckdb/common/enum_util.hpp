@@ -330,6 +330,8 @@ enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
 
+enum class MatchMode : uint8_t;
+
 enum class MemoryTag : uint8_t;
 
 enum class MergeActionCondition : uint8_t;
@@ -339,8 +341,6 @@ enum class MergeActionType : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
-
-enum class MultiFileAcquireResult : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -475,6 +475,8 @@ enum class SampleMethod : uint8_t;
 enum class SampleType : uint8_t;
 
 enum class SamplingState : uint8_t;
+
+enum class ScanReadAheadAcquire : uint8_t;
 
 enum class ScanType : uint8_t;
 
@@ -1079,6 +1081,9 @@ template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
+
+template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
@@ -1092,9 +1097,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
-
-template<>
-const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1296,6 +1298,9 @@ const char* EnumUtil::ToChars<SampleType>(SampleType value);
 
 template<>
 const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
+
+template<>
+const char* EnumUtil::ToChars<ScanReadAheadAcquire>(ScanReadAheadAcquire value);
 
 template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
@@ -1977,6 +1982,9 @@ template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
+MatchMode EnumUtil::FromString<MatchMode>(const char *value);
+
+template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
@@ -1990,9 +1998,6 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
-
-template<>
-MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
@@ -2194,6 +2199,9 @@ SampleType EnumUtil::FromString<SampleType>(const char *value);
 
 template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value);
+
+template<>
+ScanReadAheadAcquire EnumUtil::FromString<ScanReadAheadAcquire>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
