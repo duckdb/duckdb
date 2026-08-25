@@ -8,9 +8,7 @@ ATTACH '{TEST_DIR}/ts_unit_cast_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
 statement ok
 USE db;
 
-# 10240 rows -> 5 row groups of 2048 rows. ts increases with the row id, so each row group
-# covers a contiguous, disjoint time range. The data is second-granular, so casting between
-# timestamp units is lossless and the counts are exact.
+# 10240 rows -> 5 row groups of 2048 rows.
 statement ok
 CREATE TABLE ts_ms AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMP_MS AS ts FROM range(10240);
 
@@ -22,9 +20,6 @@ CREATE TABLE ts_us AS SELECT TIMESTAMP '2000-01-01' + to_seconds(range) AS ts FR
 
 statement ok
 CREATE TABLE ts_ns AS SELECT (TIMESTAMP '2000-01-01' + to_seconds(range))::TIMESTAMP_NS AS ts FROM range(10240);
-
-# comparing a TIMESTAMP_MS column against a TIMESTAMP constant wraps the column in
-# CAST(ts AS TIMESTAMP) - the zonemap stats must propagate through the unit cast
 
 # tail: only the last row group can contain matches (2000-01-01 + 10200 seconds)
 query II
@@ -91,8 +86,6 @@ SELECT count(*) FROM ts_us WHERE ts > '2000-01-01 02:50:00'::TIMESTAMP_NS;
 ----
 39
 
-# control: TIMESTAMP_NS column vs TIMESTAMP constant casts the constant (not the column),
-# so this prunes without cast stats propagation - guards against regressions
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM ts_ns WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
 ----
@@ -100,5 +93,22 @@ analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
 
 query I
 SELECT count(*) FROM ts_ns WHERE ts > TIMESTAMP '2000-01-01 02:50:00';
+----
+39
+
+# TZ -> TZ unit conversion: a TIMESTAMPTZ column compared against a TIMESTAMPTZ_NS constant
+# casts the column to ns. Both types store UTC instants, so the cast is a pure unit
+# conversion independent of the session time zone.
+# to_timestamp() builds the instants from epoch seconds (1970-01-01 00:00:00+00 onwards).
+statement ok
+CREATE TABLE ts_tz AS SELECT to_timestamp(range) AS ts FROM range(10240);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM ts_tz WHERE ts > '1970-01-01 02:50:00+00'::TIMESTAMPTZ_NS;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM ts_tz WHERE ts > '1970-01-01 02:50:00+00'::TIMESTAMPTZ_NS;
 ----
 39
