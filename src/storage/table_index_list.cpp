@@ -374,6 +374,14 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
+IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (owned_index->IsBound()) {
+		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
+	}
+	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
+}
+
 IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 	auto entry_lock = lock.GetExclusiveLock();
 	// We never write an unbound index to the WAL.
@@ -984,15 +992,7 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 
 	result.owned_infos.reserve(index_entries.size());
 	for (const auto &entry : index_entries) {
-		auto index = entry->GetMutableHandle();
-		IndexStorageInfo storage_info;
-		if (index->IsBound()) {
-			auto bound_index = std::move(index).Into<BoundIndex>();
-			storage_info = bound_index->SerializeToDisk(context, info.options);
-		} else {
-			auto unbound_index = std::move(index).Into<UnboundIndex>();
-			storage_info = unbound_index->CopyStorageInfo();
-		}
+		auto storage_info = entry->SerializeToDisk(context, info.options);
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
 		result.owned_infos.push_back(std::move(storage_info));
 		result.ordered_infos.push_back(result.owned_infos.back());

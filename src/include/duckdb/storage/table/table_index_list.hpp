@@ -205,6 +205,8 @@ public:
 	IndexInfo GetStorageInfo() const;
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
+	//! Serializes the physical index for a checkpoint.
+	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
