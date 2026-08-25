@@ -142,6 +142,11 @@ CREATE VIEW invoke_shadow_view AS
 	SELECT CASE nextval('invoke_shadow_seq') WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
 
 statement ok
+CREATE VIEW invoke_shadow_dependent_view AS
+	SELECT "CASE nextval('invoke_shadow_seq') WHEN (1) THEN (42) WHEN (2) THEN (0) ELSE 0 END" AS result
+	FROM invoke_shadow_view
+
+statement ok
 CREATE MACRO invoke(x, y) AS 999
 
 query I
@@ -150,9 +155,25 @@ SELECT CASE 1 + random() * 0 WHEN 1 THEN 42 WHEN 2 THEN 0 ELSE 0 END
 42
 
 query I
-SELECT * FROM invoke_shadow_view
+SELECT result FROM invoke_shadow_dependent_view
 ----
 42
+
+# Legacy view serialization also preserves names derived from nested simple CASE expressions.
+statement ok
+CREATE VIEW nested_simple_case_name_view AS
+	SELECT sum(CASE i WHEN w THEN t ELSE e END)
+	FROM (VALUES (0, 0, 1, 0), (1, 0, 1, 0)) tbl(i, w, t, e)
+
+statement ok
+CREATE VIEW nested_simple_case_name_dependent_view AS
+	SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)" AS result
+	FROM nested_simple_case_name_view
+
+query I
+SELECT result FROM nested_simple_case_name_dependent_view
+----
+1
 
 # CASE bodies that cannot execute inside a lambda keep working for deterministic operands.
 query I
