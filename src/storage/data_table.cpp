@@ -126,13 +126,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the removed column
-	for (const auto index : info->indexes.IndexHandles()) {
-		for (auto &column_id : index->GetColumnIds()) {
-			if (column_id == removed_column) {
-				throw CatalogException("Cannot drop this column: an index depends on it!");
-			} else if (column_id > removed_column) {
-				throw CatalogException("Cannot drop this column: an index depends on a column after it!");
-			}
+	for (const auto column_id : info->indexes.GetIndexedColumns()) {
+		if (column_id == removed_column) {
+			throw CatalogException("Cannot drop this column: an index depends on it!");
+		} else if (column_id > removed_column) {
+			throw CatalogException("Cannot drop this column: an index depends on a column after it!");
 		}
 	}
 
@@ -195,11 +193,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
-	for (const auto index : info->indexes.IndexHandles()) {
-		for (auto &column_id : index->GetColumnIds()) {
-			if (column_id == changed_idx) {
-				throw CatalogException("Cannot change the type of this column: an index depends on it!");
-			}
+	for (const auto column_id : info->indexes.GetIndexedColumns()) {
+		if (column_id == changed_idx) {
+			throw CatalogException("Cannot change the type of this column: an index depends on it!");
 		}
 	}
 

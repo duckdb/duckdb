@@ -1013,7 +1013,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
                                            Vector &row_identifiers, idx_t count, IndexRemovalType removal_type,
                                            optional_idx active_checkpoint) {
 	// Collect all Indexed columns on the table.
-	auto indexed_column_id_set = indexes.GetRequiredColumns();
+	auto indexed_column_id_set = indexes.GetIndexedColumns();
 
 	// Sorted so that the fetched columns align with the ascending physical order used when
 	// referencing them into result_chunk below.

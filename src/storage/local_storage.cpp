@@ -170,7 +170,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
 	// the table's physical column mapped_column_ids[i].
 	D_ASSERT(!index_list.Empty());
-	auto indexed_columns = index_list.GetRequiredColumns();
+	auto indexed_columns = index_list.GetIndexedColumns();
 	vector<StorageIndex> mapped_column_ids;
 	for (auto &col : indexed_columns) {
 		mapped_column_ids.emplace_back(col);
@@ -474,7 +474,7 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 
 	if (!storage->append_indexes.Empty()) {
 		auto error = storage->append_indexes.Append(storage->delete_indexes, table_chunk, NumericCast<row_t>(base_id),
-		                                             storage->index_append_mode, optional_idx());
+		                                            storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}

@@ -967,7 +967,7 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	}
 }
 
-unordered_set<column_t> TableIndexList::GetRequiredColumns() const {
+unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	unordered_set<column_t> column_ids;
 	for (auto index : IndexHandles()) {
 		for (auto col_id : index->GetColumnIds()) {
@@ -1029,7 +1029,7 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	// table_chunk contains all table columns.
 	// We only reference the index columns in the index chunk.
 	auto &index_list = data_table_info.GetIndexes();
-	auto indexed_columns = index_list.GetRequiredColumns();
+	auto indexed_columns = index_list.GetIndexedColumns();
 
 	// Store the mapped_column_ids and index_types in sorted canonical form.
 	// First sort mapped_column_ids, then populate index_types according to the sorted order.

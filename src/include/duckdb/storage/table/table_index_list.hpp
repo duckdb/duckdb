@@ -420,8 +420,8 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
-	//! Get the combined column ids of the indexes.
-	unordered_set<column_t> GetRequiredColumns() const;
+	//! Returns the physical table columns referenced by any index.
+	unordered_set<column_t> GetIndexedColumns() const;
 	//! Get the combined column ids of the unique indexes.
 	unordered_set<column_t> GetUniqueIndexColumns() const;
 	//! Serialize all indexes of the table.
