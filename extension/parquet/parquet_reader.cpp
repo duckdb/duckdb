@@ -1258,9 +1258,11 @@ static void VerifyParquetSchemaDefinitionType(const LogicalType &definition_type
 		                      definition_type.ToString());
 	}
 	auto &fields = StructType::GetChildTypes(definition_type);
-	if (fields.size() < 3) {
+	if (fields.size() != 3 && fields.size() != 4) {
 		throw InvalidInputException(
-		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value'");
+		    "'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally "
+		    "'children', not %d",
+		    fields.size());
 	}
 	if (fields[0].first != "name") {
 		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
@@ -1279,7 +1281,7 @@ static void VerifyParquetSchemaDefinitionType(const LogicalType &definition_type
 	if (fields[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 	}
-	if (fields.size() > 3 && fields[3].first != "children") {
+	if (fields.size() == 4 && fields[3].first != "children") {
 		throw InvalidInputException("'schema' expects the fourth field of the struct to be called 'children'");
 	}
 }

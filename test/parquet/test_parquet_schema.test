@@ -617,3 +617,37 @@ SELECT * FROM read_parquet(
 )
 ----
 Binder Error: Parquet schema column "i" of type BIGINT cannot define nested children
+
+# schema definitions have exactly three fields, or four when children is present
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'i': {name: 'i', type: 'BIGINT', default_value: NULL, children: NULL, extra_field: 42}
+	}
+)
+----
+Invalid Input Error: 'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally 'children', not 5
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(source_x BIGINT))',
+			default_value: NULL,
+			children: map {
+				'inner': {
+					name: 'inner',
+					type: 'STRUCT(source_x BIGINT)',
+					default_value: NULL,
+					children: NULL,
+					extra_field: 42
+				}
+			}
+		}
+	}
+)
+----
+Invalid Input Error: 'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally 'children', not 5
