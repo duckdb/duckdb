@@ -3550,6 +3550,24 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	return static_cast<MapInvalidReason>(StringUtil::StringToEnum(GetMapInvalidReasonValues(), 5, "MapInvalidReason", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMatchModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MatchMode::BUILD_PARSE_RESULT), "BUILD_PARSE_RESULT" },
+		{ static_cast<uint32_t>(MatchMode::RECOGNIZE_ONLY), "RECOGNIZE_ONLY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MatchMode>(MatchMode value) {
+	return StringUtil::EnumToString(GetMatchModeValues(), 2, "MatchMode", static_cast<uint32_t>(value));
+}
+
+template<>
+MatchMode EnumUtil::FromString<MatchMode>(const char *value) {
+	return static_cast<MatchMode>(StringUtil::StringToEnum(GetMatchModeValues(), 2, "MatchMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MemoryTag::BASE_TABLE), "BASE_TABLE" },
