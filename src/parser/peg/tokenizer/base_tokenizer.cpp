@@ -181,6 +181,10 @@ TokenType Tokenizer::TokenizeStateToType(TokenizeState state) {
 
 void TokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
 	if (type == TokenType::COMMENT) {
+		if (end >= start + 2 && sql[start] == '/' && sql[start + 1] == '*') {
+			has_block_comment = true;
+			last_block_comment_position = start;
+		}
 		return;
 	}
 	if (start >= end) {
@@ -188,6 +192,20 @@ void TokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool u
 	}
 	string last_token = sql.substr(start, end - start);
 	tokens.emplace_back(std::move(last_token), start, type, unterminated);
+	if (tokens.size() < 2) {
+		return;
+	}
+	auto &previous_token = tokens[tokens.size() - 2];
+	auto previous_token_end = previous_token.offset + previous_token.length;
+	if (has_block_comment && last_block_comment_position >= previous_token_end && last_block_comment_position < start) {
+		tokens.back().preceded_by_block_comment = true;
+	}
+	for (idx_t pos = previous_token_end; pos < start; pos++) {
+		if (StringUtil::CharacterIsNewline(sql[pos])) {
+			tokens.back().preceded_by_newline = true;
+			break;
+		}
+	}
 }
 
 // Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377

@@ -27,6 +27,9 @@ public:
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
+		while (IsStringLiteralContinuation(state)) {
+			Advance(state);
+		}
 		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
 		return MatchResultType::SUCCESS;
 	}
@@ -38,21 +41,22 @@ public:
 		}
 
 		auto start_offset = optional_idx(token->offset);
-		auto token_length = optional_idx(token->length);
 		auto string_info = GetSpecialStringInfo(token->text);
 
-		if (!MatchStringLiteral(state, string_info)) {
+		if (!IsStringLiteral(*token, string_info)) {
 			return nullptr;
 		}
-
-		idx_t suffix_len = 1;
-		if (token->text.length() < string_info.prefix_len + suffix_len) {
-			return nullptr;
+		string stripped_string = StripStringLiteral(*token, string_info);
+		idx_t end_offset = token->offset + token->length;
+		Advance(state);
+		while (IsStringLiteralContinuation(state)) {
+			token = state.token_iterator.Current();
+			auto continuation_info = GetSpecialStringInfo(token->text);
+			stripped_string += StripStringLiteral(*token, continuation_info);
+			end_offset = token->offset + token->length;
+			Advance(state);
 		}
-
-		string stripped_string =
-		    token->text.substr(string_info.prefix_len, token->text.length() - (string_info.prefix_len + suffix_len));
-		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
+		auto token_length = optional_idx(end_offset - start_offset.GetIndex());
 
 		auto result = state.allocator.Allocate(
 		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset, token_length));
@@ -69,19 +73,61 @@ public:
 	}
 
 private:
+	static bool IsStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
+		if (string_info.prefix_len == 0) {
+			return false;
+		}
+		const idx_t minimum_literal_length = string_info.prefix_len + 1;
+		if (token.text.size() < minimum_literal_length) {
+			return false;
+		}
+		const idx_t opening_quote_position = string_info.prefix_len - 1;
+		if (token.text[opening_quote_position] != '\'') {
+			return false;
+		}
+		return token.text.back() == '\'';
+	}
+
+	static string StripStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
+		idx_t suffix_len = 1;
+		auto stripped_string =
+		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		return StringUtil::Replace(stripped_string, "''", "'");
+	}
+
+	static void Advance(MatchState &state) {
+		state.token_iterator.Advance();
+		state.UpdateMaxTokenIndex();
+	}
+
+	static bool IsStringLiteralContinuation(MatchState &state) {
+		auto token = state.token_iterator.Current();
+		if (!token) {
+			return false;
+		}
+		if (!token->preceded_by_newline) {
+			return false;
+		}
+		if (token->preceded_by_block_comment) {
+			return false;
+		}
+		if (token->type != TokenType::STRING_LITERAL) {
+			return false;
+		}
+		auto string_info = GetSpecialStringInfo(token->text);
+		if (string_info.type != SpecialStringCharacter::STANDARD) {
+			return false;
+		}
+		return IsStringLiteral(*token, string_info);
+	}
+
 	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return false;
 		}
-		auto &token_text = token->text;
-
-		idx_t open_quote_idx = string_info.prefix_len - 1;
-		idx_t min_len = string_info.prefix_len + 1;
-
-		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
-			state.token_iterator.Advance();
-			state.UpdateMaxTokenIndex();
+		if (IsStringLiteral(*token, string_info)) {
+			Advance(state);
 			return true;
 		}
 		return false;
