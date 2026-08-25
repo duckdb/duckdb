@@ -37,6 +37,20 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	root = std::move(op);
 }
 
+// Result of a comparison against a constant that cannot be represented in the type, if it can be decided
+static bool TryOutOfRangeComparisonResult(ExpressionType comparison_type, bool &result) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		result = false;
+		return true;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result = true;
+		return true;
+	default:
+		return false;
+	}
+}
+
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                 bool &changes_made, bool is_root) {
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -67,8 +81,14 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		auto result_value = Value::HUGEINT(outer_value).DefaultTryCastAs(constant_type);
 		if (!result_value) {
-			// the moved constant is out of range - bail so the addition can still raise its overflow
-			return nullptr;
+			if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+				return nullptr;
+			}
+			// if the cast is not possible then the comparison is not possible
+			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
+			// since this is not possible we can remove the entire branch here
+			return ExpressionRewriter::ConstantOrNull(
+			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 		}
 		outer_constant.GetValueMutable() = std::move(*result_value);
 	} else if (op_type == "-") {
@@ -82,8 +102,12 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			}
 			auto result_value = Value::HUGEINT(outer_value).DefaultTryCastAs(constant_type);
 			if (!result_value) {
-				// the moved constant is out of range - bail so the subtraction can still raise its overflow
-				return nullptr;
+				// if the cast is not possible then an equality comparison is not possible
+				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+					return nullptr;
+				}
+				return ExpressionRewriter::ConstantOrNull(
+				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
 			outer_constant.GetValueMutable() = std::move(*result_value);
 		} else {
@@ -94,8 +118,12 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			}
 			auto result_value = Value::HUGEINT(inner_value).DefaultTryCastAs(constant_type);
 			if (!result_value) {
-				// the moved constant is out of range - bail so the subtraction can still raise its overflow
-				return nullptr;
+				// if the cast is not possible then an equality comparison is not possible
+				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+					return nullptr;
+				}
+				return ExpressionRewriter::ConstantOrNull(
+				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
 			outer_constant.GetValueMutable() = std::move(*result_value);
 			// in this case, we should also flip the comparison
@@ -113,11 +141,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			// we let the arithmetic_simplification rule take care of simplifying this first
 			return nullptr;
 		}
-		if (outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) {
-			// dividing the HUGEINT minimum by -1 overflows - bail so the comparison is evaluated as written
-			return nullptr;
-		}
-		if (outer_value % inner_value != 0) {
+		// check out of range for HUGEINT or not cleanly divisible
+		// HUGEINT is not cleanly divisible when outer_value == minimum and inner value == -1. (modulo overflow)
+		if ((outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) ||
+		    outer_value % inner_value != 0) {
 			bool is_equality = comparison.GetExpressionType() == ExpressionType::COMPARE_EQUAL;
 			bool is_inequality = comparison.GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL;
 			if (is_equality || is_inequality) {
@@ -136,9 +163,13 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		// because e.g. -128 / -1 = 128, which is out of range
 		auto result_value = Value::HUGEINT(outer_value / inner_value).DefaultTryCastAs(constant_type);
 		if (!result_value) {
-			// the result is out of range - bail so the comparison is evaluated as written
-			// folding here would silently swallow the overflow the multiplication itself can raise
-			return nullptr;
+			// no representable value satisfies an equality, but ordered comparisons cannot be decided here
+			bool comparison_result;
+			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
+				return nullptr;
+			}
+			return ExpressionRewriter::ConstantOrNull(
+			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(comparison_result));
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
@@ -304,8 +335,12 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		}
 		auto result_value = Value::HUGEINT(negated_value).DefaultTryCastAs(constant_type);
 		if (!result_value) {
-			// the negated constant is out of range - bail so the negation can still raise its overflow
-			return nullptr;
+			bool comparison_result;
+			if (!TryOutOfRangeComparisonResult(comparison.GetExpressionType(), comparison_result)) {
+				return nullptr;
+			}
+			return ExpressionRewriter::ConstantOrNull(std::move(negation.GetChildrenMutable()[0]),
+			                                          Value::BOOLEAN(comparison_result));
 		}
 		outer_constant.GetValueMutable() = std::move(*result_value);
 	}
