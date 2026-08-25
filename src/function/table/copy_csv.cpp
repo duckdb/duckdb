@@ -188,19 +188,11 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	}
 	bind_data->Finalize();
 
-	switch (bind_data->options.compression) {
-	case FileCompressionType::GZIP:
-		if (!IsFileCompressed(input.file_extension, FileCompressionType::GZIP)) {
-			input.file_extension += CompressionExtensionFromType(FileCompressionType::GZIP);
+	auto &compression = bind_data->options.compression;
+	if (compression == FileCompressionType::GZIP || compression == FileCompressionType::ZSTD) {
+		if (!IsFileCompressed(input.file_extension, compression)) {
+			input.file_extension += CompressionExtensionFromType(compression);
 		}
-		break;
-	case FileCompressionType::ZSTD:
-		if (!IsFileCompressed(input.file_extension, FileCompressionType::ZSTD)) {
-			input.file_extension += CompressionExtensionFromType(FileCompressionType::ZSTD);
-		}
-		break;
-	default:
-		break;
 	}
 
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
@@ -274,7 +266,7 @@ public:
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
 	                   FileCompressionType compression, QueryContext context)
-	    : writer(options, fs, file_path, compression, context) {
+	    : writer(options, fs, file_path, std::move(compression), context) {
 	}
 
 	idx_t FileSize() {
