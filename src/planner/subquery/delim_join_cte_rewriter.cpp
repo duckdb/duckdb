@@ -250,6 +250,13 @@ static void CollectDelimJoinMarkerIndexes(LogicalOperator &op, set<TableIndex> &
 	}
 }
 
+struct MarkerBindingInfo {
+	set<TableIndex> marker_indexes;
+	bool simple = false;
+};
+
+using marker_binding_map_t = column_binding_map_t<MarkerBindingInfo>;
+
 static void CollectExpressionMarkerReferences(Expression &expr, const set<TableIndex> &marker_indexes,
                                               set<TableIndex> &referenced_markers) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
@@ -259,44 +266,103 @@ static void CollectExpressionMarkerReferences(Expression &expr, const set<TableI
 	});
 }
 
-static bool ExpressionHasComplexMarkerReference(Expression &expr, const set<TableIndex> &marker_indexes) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		return false;
+static marker_binding_map_t CreateMarkerBindingMap(const set<TableIndex> &marker_indexes) {
+	marker_binding_map_t result;
+	for (auto marker_index : marker_indexes) {
+		MarkerBindingInfo info;
+		info.marker_indexes.insert(marker_index);
+		info.simple = true;
+		result.emplace(ColumnBinding(marker_index, ProjectionIndex(0)), std::move(info));
 	}
-	if (expr.GetExpressionType() == ExpressionType::OPERATOR_NOT) {
-		auto &not_expr = expr.Cast<BoundOperatorExpression>();
-		if (not_expr.GetChildren().size() == 1 &&
-		    not_expr.GetChildren()[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			return false;
-		}
-	}
-	set<TableIndex> referenced_markers;
-	CollectExpressionMarkerReferences(expr, marker_indexes, referenced_markers);
-	return !referenced_markers.empty();
+	return result;
 }
 
-static void CollectComplexMarkerReferences(LogicalOperator &op, const set<TableIndex> &marker_indexes,
-                                           set<TableIndex> &preserve_marker_indexes,
-                                           set<TableIndex> &simple_marker_indexes) {
+static void CollectExpressionMarkerReferences(Expression &expr, const marker_binding_map_t &marker_bindings,
+                                              set<TableIndex> &referenced_markers) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (colref.Depth() != 0) {
+			return;
+		}
+		auto entry = marker_bindings.find(colref.Binding());
+		if (entry == marker_bindings.end()) {
+			return;
+		}
+		referenced_markers.insert(entry->second.marker_indexes.begin(), entry->second.marker_indexes.end());
+	});
+}
+
+static bool ExpressionIsSimpleMarkerBinding(Expression &expr, const marker_binding_map_t &marker_bindings) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	auto &colref = expr.Cast<BoundColumnRefExpression>();
+	if (colref.Depth() != 0) {
+		return false;
+	}
+	auto entry = marker_bindings.find(colref.Binding());
+	return entry != marker_bindings.end() && entry->second.simple;
+}
+
+static bool ExpressionIsSimpleMarkerReference(Expression &expr, const marker_binding_map_t &marker_bindings) {
+	if (ExpressionIsSimpleMarkerBinding(expr, marker_bindings)) {
+		return true;
+	}
+	if (expr.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
+		return false;
+	}
+	auto &not_expr = expr.Cast<BoundOperatorExpression>();
+	return not_expr.GetChildren().size() == 1 &&
+	       ExpressionIsSimpleMarkerBinding(*not_expr.GetChildren()[0], marker_bindings);
+}
+
+static MarkerBindingInfo GetMarkerBindingInfo(Expression &expr, const marker_binding_map_t &marker_bindings) {
+	MarkerBindingInfo result;
+	CollectExpressionMarkerReferences(expr, marker_bindings, result.marker_indexes);
+	result.simple = !result.marker_indexes.empty() && ExpressionIsSimpleMarkerReference(expr, marker_bindings);
+	return result;
+}
+
+static void AddProjectionMarkerBindings(LogicalProjection &projection, marker_binding_map_t &marker_bindings) {
+	auto projection_bindings = projection.GetColumnBindings();
+	D_ASSERT(projection_bindings.size() == projection.expressions.size());
+	for (idx_t expr_idx = 0; expr_idx < projection.expressions.size(); expr_idx++) {
+		auto info = GetMarkerBindingInfo(*projection.expressions[expr_idx], marker_bindings);
+		if (info.marker_indexes.empty()) {
+			continue;
+		}
+		marker_bindings.emplace(projection_bindings[expr_idx], std::move(info));
+	}
+}
+
+static void CollectMarkerReferences(LogicalOperator &op, marker_binding_map_t &marker_bindings,
+                                    set<TableIndex> &preserve_marker_indexes, set<TableIndex> &simple_marker_indexes) {
+	for (auto &child : op.children) {
+		CollectMarkerReferences(*child, marker_bindings, preserve_marker_indexes, simple_marker_indexes);
+	}
 	vector<reference<Expression>> expressions;
 	LogicalOperatorVisitor::EnumerateExpressions(
 	    op, [&](unique_ptr<Expression> *expr) { expressions.emplace_back(**expr); });
+	set<TableIndex> simple_filter_markers;
 	bool has_complex_marker_reference = false;
 	for (auto &expr : expressions) {
-		has_complex_marker_reference =
-		    has_complex_marker_reference || ExpressionHasComplexMarkerReference(expr.get(), marker_indexes);
-	}
-	set<TableIndex> referenced_markers;
-	for (auto &expr : expressions) {
-		CollectExpressionMarkerReferences(expr.get(), marker_indexes, referenced_markers);
+		auto info = GetMarkerBindingInfo(expr.get(), marker_bindings);
+		if (info.marker_indexes.empty()) {
+			continue;
+		}
+		if (!info.simple) {
+			preserve_marker_indexes.insert(info.marker_indexes.begin(), info.marker_indexes.end());
+			has_complex_marker_reference = true;
+		} else if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			simple_filter_markers.insert(info.marker_indexes.begin(), info.marker_indexes.end());
+		} else {
+			simple_marker_indexes.insert(info.marker_indexes.begin(), info.marker_indexes.end());
+		}
 	}
 	if (has_complex_marker_reference) {
-		preserve_marker_indexes.insert(referenced_markers.begin(), referenced_markers.end());
-	} else if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
-		simple_marker_indexes.insert(referenced_markers.begin(), referenced_markers.end());
+		simple_marker_indexes.insert(simple_filter_markers.begin(), simple_filter_markers.end());
 	}
-	for (auto &child : op.children) {
-		CollectComplexMarkerReferences(*child, marker_indexes, preserve_marker_indexes, simple_marker_indexes);
+	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		AddProjectionMarkerBindings(op.Cast<LogicalProjection>(), marker_bindings);
 	}
 }
 
@@ -2634,8 +2700,9 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	preserve_marker_indexes.clear();
 	preserve_nested_marker_indexes.clear();
 	CollectDelimJoinMarkerIndexes(*plan, marker_indexes);
+	auto marker_bindings = CreateMarkerBindingMap(marker_indexes);
 	set<TableIndex> simple_marker_indexes;
-	CollectComplexMarkerReferences(*plan, marker_indexes, preserve_marker_indexes, simple_marker_indexes);
+	CollectMarkerReferences(*plan, marker_bindings, preserve_marker_indexes, simple_marker_indexes);
 	CollectEligibleSimpleMarkerIndexes(*plan, simple_marker_indexes, preserve_nested_marker_indexes);
 	preserve_marker_indexes.insert(preserve_nested_marker_indexes.begin(), preserve_nested_marker_indexes.end());
 	bool filters_pushed;

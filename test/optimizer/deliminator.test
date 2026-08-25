@@ -488,6 +488,132 @@ ORDER BY x, z;
 1	0	false
 1	1	true
 
+# Complex marker expressions preserve only the marker domains they reference
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT x, z,
+	EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+# Simple filter markers remain subject to the single-equality guard
+query II
+EXPLAIN SELECT count(*)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10
+	AND EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+	);
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT count(*)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10
+	AND EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1000000000) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(1000000000) c(y) WHERE y = o.x)
+	);
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query I
+SELECT count(*)
+FROM range(2) o(x), range(2) p(z)
+WHERE EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+	);
+----
+1
+
+# Marker provenance is preserved through projection aliases
+query II
+EXPLAIN SELECT x, z,
+	coalesce(EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z), false)
+FROM range(1000000) o(x), range(1000000) p(z)
+WHERE x < 10 AND z < 10;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query II
+EXPLAIN SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(1000000) o(x), range(1000000) p(z)
+	WHERE x < 10 AND z < 10
+) q;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+query II
+EXPLAIN SELECT x, z, coalesce(m2, false)
+FROM (
+	SELECT x, z, m AS m2
+	FROM (
+		SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+		FROM range(1000000) o(x), range(1000000) p(z)
+		WHERE x < 10 AND z < 10
+	) q1
+) q2;
+----
+logical_opt	<REGEX>:.*CTE Name: __duckdb_delim.*Join Type: RIGHT_SEMI.*Conditions: x = y,.*z = y.*
+
+# A simple aliased marker with multiple equality keys stays on the ordinary MARK path
+query II
+EXPLAIN SELECT x, z, m
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(1000000000) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(1000000) o(x), range(1000000) p(z)
+	WHERE x < 10 AND z < 10
+) q;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim.*
+
+query IIII
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true	true
+0	1	false	true
+1	0	false	false
+1	1	true	false
+
+query III
+SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(2) o(x), range(2) p(z)
+) q
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
 query I
 SELECT count(*) FILTER (WHERE
 	EXISTS (SELECT 1 FROM range(3) a(y) WHERE y = o.x)
@@ -548,6 +674,43 @@ query III
 SELECT x, z,
 	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
 FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true
+0	1	false
+1	0	false
+1	1	true
+
+query IIII
+SELECT x, z,
+	EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z),
+	EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+FROM range(2) o(x), range(2) p(z)
+ORDER BY x, z;
+----
+0	0	true	true
+0	1	false	true
+1	0	false	false
+1	1	true	false
+
+query I
+SELECT count(*)
+FROM range(2) o(x), range(2) p(z)
+WHERE EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z)
+	AND (
+		EXISTS (SELECT 1 FROM range(1) b(y) WHERE y = o.x)
+		OR EXISTS (SELECT 1 FROM range(2, 3) c(y) WHERE y = o.x)
+	);
+----
+1
+
+query III
+SELECT x, z, coalesce(m, false)
+FROM (
+	SELECT x, z, EXISTS (SELECT 1 FROM range(2) a(y) WHERE y = o.x AND y = p.z) AS m
+	FROM range(2) o(x), range(2) p(z)
+) q
 ORDER BY x, z;
 ----
 0	0	true
