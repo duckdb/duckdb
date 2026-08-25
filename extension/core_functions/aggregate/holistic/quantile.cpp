@@ -491,7 +491,6 @@ struct ListDiscreteQuantile {
 
 AggregateFunction GetDiscreteQuantile(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileTemplated<ScalarDiscreteQuantile>(type);
-	// a discrete quantile is always one of the input values
 	fun.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	return fun;
 }
@@ -592,7 +591,6 @@ struct ListContinuousQuantile {
 
 AggregateFunction GetContinuousQuantile(const LogicalType &type) {
 	auto fun = GetContinuousQuantileTemplated<ScalarContinuousQuantile>(type);
-	// a continuous quantile interpolates between two input values, staying within their range
 	fun.SetStatisticsCallback(AggregateFunction::PropagateInputRangeStats);
 	return fun;
 }

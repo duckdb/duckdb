@@ -920,8 +920,6 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 //------------------------------------------------------------------------------
 
 static void SetArgMinMaxStatisticsCallback(AggregateFunctionSet &fun) {
-	// the result is always one of the values of the first argument; the "arg_min(a, b, n)"
-	// variants return a LIST, for which the callback bails out at propagation time
 	for (auto &function : fun.functions) {
 		function.SetStatisticsCallback(AggregateFunction::PropagateInputValueStats);
 	}
