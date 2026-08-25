@@ -279,6 +279,31 @@ bool IndexEntry::ConflictTargetMatches(const ConflictInfo &conflict_info) const 
 	return conflict_info.ConflictTargetMatches(owned_index->IsUnique(), owned_index->GetColumnIdSet());
 }
 
+bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
+	auto entry_lock = lock.GetSharedLock();
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !owned_index->IsUnique() : !owned_index->IsForeign()) {
+		return false;
+	}
+	const auto &column_ids = owned_index->GetColumnIds();
+	if (fk_keys.size() != column_ids.size()) {
+		return false;
+	}
+
+	for (const auto &fk_key : fk_keys) {
+		bool found = false;
+		for (const auto index_key : column_ids) {
+			if (fk_key.index == index_key) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool IndexEntry::NameEquals(const Identifier &name) const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->GetIndexName() == name;
@@ -308,6 +333,38 @@ void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataCh
 		}
 	}
 	bound_index.VerifyAppend(chunk, index_append_info, manager);
+}
+
+void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,
+                                  ConflictManager &conflict_manager) {
+	auto entry_lock = lock.GetExclusiveLock();
+	D_ASSERT(owned_index->IsBound());
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+
+	IndexAppendInfo index_append_info;
+	unique_ptr<StorageLockKey> delete_lock;
+	if (delete_entry) {
+		delete_lock = delete_entry->lock.GetSharedLock();
+		D_ASSERT(delete_entry->owned_index->IsBound());
+		delete_entry->owned_index->Cast<BoundIndex>().AddToDeleteIndexes(index_append_info);
+	}
+	if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
+		delta->AddToDeleteIndexes(index_append_info);
+	}
+
+	bound_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+		// if we have added any rows during checkpoint - check in that index as well
+		IndexAppendInfo added_during_checkpoint_info;
+		delta->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
+	}
+}
+
+string IndexEntry::GetConstraintViolationMessage(const VerifyExistenceType verify_type, const idx_t failed_index,
+                                                 DataChunk &input) const {
+	auto entry_lock = lock.GetSharedLock();
+	D_ASSERT(owned_index->IsBound());
+	return owned_index->Cast<BoundIndex>().GetConstraintViolationMessage(verify_type, failed_index, input);
 }
 
 void IndexEntry::VerifyUpdate(const vector<PhysicalIndex> &column_ids) const {
@@ -896,75 +953,39 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	}
 }
 
-bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const IndexHandle<Index> &index,
-                       const ForeignKeyType fk_type) {
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index->IsUnique() : !index->IsForeign()) {
-		return false;
-	}
-	auto column_ids = index->GetColumnIds();
-	if (fk_keys.size() != column_ids.size()) {
-		return false;
-	}
-
-	for (auto &fk_key : fk_keys) {
-		bool found = false;
-		for (auto &index_key : column_ids) {
-			if (fk_key.index == index_key) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			return false;
-		}
-	}
-	return true;
-}
-
 shared_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
                                                            const ForeignKeyType fk_type) {
 	annotated_lock_guard<annotated_mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
-		auto index = entry->GetHandle();
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+		if (entry->IsForeignKeyIndex(fk_keys, fk_type)) {
 			return entry;
 		}
 	}
 	return nullptr;
 }
 
-void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
-                                      DataChunk &chunk, ConflictManager &conflict_manager) {
+void TableIndexList::VerifyForeignKey(optional_ptr<const TableIndexList> delete_indexes,
+                                      const vector<PhysicalIndex> &fk_keys, DataChunk &chunk,
+                                      ConflictManager &conflict_manager) {
 	const auto fk_type = conflict_manager.GetVerifyExistenceType() == VerifyExistenceType::APPEND_FK
 	                         ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                         : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
-	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
+	annotated_lock_guard lock(index_entries_lock);
+	shared_ptr<IndexEntry> entry;
+	for (const auto &candidate : index_entries) {
+		if (candidate->IsForeignKeyIndex(fk_keys, fk_type)) {
+			entry = candidate;
+			break;
+		}
+	}
 	if (!entry) {
 		throw InternalException("TableIndexList::VerifyForeignKey failed to find foreign key index");
 	}
 
-	auto bound_index = entry->GetMutableHandle<BoundIndex>();
-	IndexAppendInfo index_append_info;
-	unique_ptr<IndexHandle<BoundIndex>> delete_handle;
-	if (storage) {
-		auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
-		if (delete_entry) {
-			delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
-			(*delete_handle)->AddToDeleteIndexes(index_append_info);
-		}
-	}
-	if (auto delta = bound_index.FindDelta(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
-		delta->AddToDeleteIndexes(index_append_info);
-	}
-
-	bound_index->VerifyConstraint(chunk, index_append_info, conflict_manager);
-	if (auto delta = bound_index.FindDelta(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
-		// if we have added any rows during checkpoint - check in that index as well
-		IndexAppendInfo added_during_checkpoint_info;
-		delta->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
-	}
+	auto delete_entry = delete_indexes ? delete_indexes->FindEntry(entry->GetName()) : nullptr;
+	entry->VerifyForeignKey(delete_entry, chunk, conflict_manager);
 }
 
 unordered_set<column_t> TableIndexList::GetIndexedColumns() const {

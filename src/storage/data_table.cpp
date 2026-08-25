@@ -612,9 +612,8 @@ idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx
 
 static string ConstructForeignKeyError(optional_idx conflict, bool is_append, const shared_ptr<IndexEntry> &entry,
                                        DataChunk &input) {
-	auto index = entry->GetHandle<BoundIndex>();
 	const auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
-	return index->GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
+	return entry->GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
 }
 
 bool IsForeignKeyConstraintError(const ConflictManager &manager, const bool is_append, const idx_t input_count) {
@@ -677,7 +676,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
-	data_table.info->indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
+	data_table.info->indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
+	                                          global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -687,7 +687,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Local constraint verification.
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
-		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
+		local_indexes.VerifyForeignKey(storage ? &storage->delete_indexes : nullptr, dst_keys_ptr, dst_chunk,
+		                               local_conflict_manager);
 		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
 	// Global constraint verification.
