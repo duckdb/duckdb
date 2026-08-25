@@ -464,18 +464,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
 	committed_row_ids.Flatten();
 
-	for (auto index : delete_indexes.MutableIndexHandles()) {
-		D_ASSERT(index->IsBound());
-		if (!index->IsUnique()) {
-			continue;
-		}
-		auto bound_index = std::move(index).Into<BoundIndex>();
-		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = bound_index->Append(committed_chunk, committed_row_ids, index_append_info);
-		if (result.HasError()) {
-			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
-		}
-	}
+	delete_indexes.AppendToDeleteIndexes(committed_chunk, committed_row_ids);
 }
 
 void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk) {

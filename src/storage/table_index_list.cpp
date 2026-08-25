@@ -50,6 +50,20 @@ void IndexEntry::RevertIndexAppend(DataChunk &chunk, Vector &row_ids) {
 	owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
 }
 
+void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
+	auto entry_lock = lock.GetExclusiveLock();
+	D_ASSERT(owned_index->IsBound());
+	if (!owned_index->IsUnique()) {
+		return;
+	}
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
+	auto result = bound_index.Append(chunk, row_ids, index_append_info);
+	if (result.HasError()) {
+		throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
+	}
+}
+
 bool IndexEntry::IsUnique() const {
 	auto entry_lock = lock.GetSharedLock();
 	return owned_index->IsUnique();
@@ -294,6 +308,13 @@ void TableIndexList::RevertIndexAppend(DataChunk &chunk, row_t row_start) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		entry->RevertIndexAppend(chunk, row_ids);
+	}
+}
+
+void TableIndexList::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->AppendToDeleteIndexes(chunk, row_ids);
 	}
 }
 

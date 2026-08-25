@@ -166,6 +166,8 @@ public:
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Reverts an append made directly to the bound physical index.
 	void RevertIndexAppend(DataChunk &chunk, Vector &row_ids);
+	//! Appends deleted rows to the bound physical index if it enforces uniqueness.
+	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
 	//! Returns whether the physical index has the given name.
@@ -349,6 +351,8 @@ public:
 	void RevertAppend(DataChunk &chunk, Vector &row_ids);
 	//! Reverts an append made directly to all bound physical indexes.
 	void RevertIndexAppend(DataChunk &chunk, row_t row_start);
+	//! Appends deleted rows to all unique indexes.
+	void AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.
