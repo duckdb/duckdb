@@ -27,7 +27,7 @@ class TableIOManager;
 class Transaction;
 class ConflictManager;
 class IndexDeltas;
-class TableIndexList;
+class IndexEntry;
 
 struct IndexLock;
 struct IndexScanState;
@@ -216,7 +216,7 @@ public:
 
 protected:
 	friend class IndexDeltas;
-	friend class TableIndexList;
+	friend class IndexEntry;
 
 	//! Creates an empty physical copy with the requested constraint type.
 	virtual unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const;

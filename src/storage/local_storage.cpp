@@ -25,23 +25,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (auto index : data_table_info->GetIndexes().IndexHandles()) {
-		const auto constraint = index->GetConstraintType();
-		if (constraint == IndexConstraintType::NONE) {
-			continue;
-		}
-		if (!index->IsBound()) {
-			continue;
-		}
-		const auto bound_index = std::move(index).Into<BoundIndex>();
-		if (!bound_index->SupportsDeltaIndexes()) {
-			continue;
-		}
-
-		// Create the transaction-local delete and append indexes.
-		delete_indexes.AddLocalIndex(bound_index);
-		append_indexes.AddLocalIndex(bound_index);
-	}
+	// Create the transaction-local delete and append indexes.
+	data_table_info->GetIndexes().InitializeLocalIndexes(delete_indexes, append_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,

@@ -107,6 +107,21 @@ void IndexEntry::RevertIndexAppend(DataChunk &chunk, Vector &row_ids) {
 	owned_index->Cast<BoundIndex>().Delete(chunk, row_ids);
 }
 
+void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
+	auto entry_lock = lock.GetSharedLock();
+	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {
+		return;
+	}
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+	if (!bound_index.SupportsDeltaIndexes()) {
+		return;
+	}
+
+	auto constraint_type = bound_index.GetConstraintType();
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+}
+
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(owned_index->IsBound());
@@ -615,9 +630,17 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	}
 }
 
-void TableIndexList::AddLocalIndex(const IndexHandle<BoundIndex> &source) {
-	D_ASSERT(source->SupportsDeltaIndexes());
-	AddIndex(source->CreateEmptyCopy(source->GetConstraintType()));
+void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
+	D_ASSERT(this != &delete_indexes);
+	D_ASSERT(this != &append_indexes);
+	D_ASSERT(&delete_indexes != &append_indexes);
+	D_ASSERT(delete_indexes.Empty());
+	D_ASSERT(append_indexes.Empty());
+
+	annotated_lock_guard lock(index_entries_lock);
+	for (const auto &entry : index_entries) {
+		entry->InitializeLocalIndexes(delete_indexes, append_indexes);
+	}
 }
 
 void TableIndexList::Append(DataChunk &chunk, Vector &row_ids) {

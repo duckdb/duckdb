@@ -24,6 +24,7 @@ namespace duckdb {
 class ConflictManager;
 class ConflictInfo;
 class IndexEntry;
+class TableIndexList;
 template <class TARGET>
 class IndexHandle;
 template <class TARGET>
@@ -207,6 +208,8 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	//! Adds transaction-local copies of the physical index to the target lists when required.
+	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -346,8 +349,8 @@ public:
 	vector<shared_ptr<IndexEntry>> GetEntries() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
-	//! Adds an empty copy of an index for transaction-local storage.
-	void AddLocalIndex(const IndexHandle<BoundIndex> &source);
+	//! Initializes the transaction-local delete and append indexes.
+	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a table chunk with generated row IDs, using delete and checkpoint indexes where required.
