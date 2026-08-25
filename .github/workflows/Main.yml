@@ -724,7 +724,7 @@ jobs:
         tar -xzf build/release-artifact.tar.gz -C build
 
     - name: Run all release unit tests
-      run: make allunit
+      run: make allunit T="--test-flags='--thread-stack-size 131072'"
 
     - name: Release tests
       shell: bash
