@@ -247,7 +247,7 @@ MatcherResult MatchStackFrame::TakeChildResult() {
 	return MatcherResult::Success(parse_result);
 }
 
-match_frame_index_t MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
+void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	auto frame_index = frames.size();
 	switch (matcher.Type()) {
 	case MatcherType::OPTIONAL:
@@ -266,20 +266,13 @@ match_frame_index_t MatchStack::PushFrame(const Matcher &matcher, MatchState &st
 		frames.push_back(make_uniq<MatchStackFrame>(frame_index, matcher, state));
 		break;
 	}
-	frame_stack.push_back(frame_index);
-	return frame_index;
 }
 
 void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state) {
-	D_ASSERT(!frame_stack.empty());
-	D_ASSERT(frame_stack.back() == parent.frame_index);
+	D_ASSERT(!frames.empty());
+	D_ASSERT(frames.back()->frame_index == parent.frame_index);
 	D_ASSERT(!parent.HasChildResult());
 	PushFrame(matcher, state);
-}
-
-MatchStackFrame &MatchStack::GetFrame(match_frame_index_t frame_index) {
-	D_ASSERT(frame_index < frames.size());
-	return *frames[frame_index];
 }
 
 void MatchStack::InitializeFrame(MatchStackFrame &frame) {
@@ -336,25 +329,21 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 
 MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &state) {
 	D_ASSERT(frames.empty());
-	D_ASSERT(frame_stack.empty());
 	PushFrame(matcher, state);
-	while (!frame_stack.empty()) {
-		auto frame_index = frame_stack.back();
-		auto &frame = GetFrame(frame_index);
-		auto frame_count = frame_stack.size();
+	while (!frames.empty()) {
+		auto &frame = *frames.back();
+		auto frame_count = frames.size();
 		ExecuteFrame(frame);
 		if (!frame.HasResult()) {
-			D_ASSERT(frame_stack.size() > frame_count);
+			D_ASSERT(frames.size() > frame_count);
 			continue;
 		}
 		auto result = FinalizeFrame(frame);
-		frame_stack.pop_back();
-		D_ASSERT(frame_index + 1 == frames.size());
 		frames.pop_back();
-		if (frame_stack.empty()) {
+		if (frames.empty()) {
 			return result;
 		}
-		auto &parent = GetFrame(frame_stack.back());
+		auto &parent = *frames.back();
 		parent.SetChildResult(result);
 	}
 	throw InternalException("Matcher stack completed without a result");

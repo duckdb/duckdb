@@ -49,8 +49,7 @@ public:
 	void PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state);
 
 private:
-	match_frame_index_t PushFrame(const Matcher &matcher, MatchState &state);
-	MatchStackFrame &GetFrame(match_frame_index_t frame_index);
+	void PushFrame(const Matcher &matcher, MatchState &state);
 	void InitializeFrame(MatchStackFrame &frame);
 	void ExecuteFrame(MatchStackFrame &frame);
 	MatcherResult FinalizeFrame(MatchStackFrame &frame);
@@ -58,7 +57,6 @@ private:
 
 private:
 	vector<unique_ptr<MatchStackFrame>> frames;
-	vector<match_frame_index_t> frame_stack;
 };
 
 } // namespace duckdb
