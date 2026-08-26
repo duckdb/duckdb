@@ -3,8 +3,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <random>
+#include <utility>
 #include <vector>
+
+static constexpr double TEST_PI = 3.14159265358979323846;
 
 using namespace duckdb; // NOLINT
 
@@ -242,6 +246,195 @@ TEST_CASE("Extent: NaN ordinates degrade the axis to unknown instead of losing c
 		acc.Merge(MakeLonArc(50, 60), geodetic);
 		REQUIRE(acc.IntersectsXY(MakeLonArc(5, 5), geodetic));
 	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Edge-aware (coverage) extents: helpers to build WKB and sample geodesics
+// ---------------------------------------------------------------------------------------------------------------------
+
+static void AppendDouble(std::string &buf, double v) {
+	char raw[sizeof(double)];
+	memcpy(raw, &v, sizeof(double));
+	buf.append(raw, sizeof(double));
+}
+
+static void AppendUint32(std::string &buf, uint32_t v) {
+	char raw[sizeof(uint32_t)];
+	memcpy(raw, &v, sizeof(uint32_t));
+	buf.append(raw, sizeof(uint32_t));
+}
+
+static std::string MakeLineStringWKB(const std::vector<std::pair<double, double>> &pts) {
+	std::string buf;
+	buf.push_back(1); // little-endian
+	AppendUint32(buf, 2);
+	AppendUint32(buf, uint32_t(pts.size()));
+	for (auto &p : pts) {
+		AppendDouble(buf, p.first);
+		AppendDouble(buf, p.second);
+	}
+	return buf;
+}
+
+static std::string MakePolygonWKB(const std::vector<std::pair<double, double>> &ring) {
+	std::string buf;
+	buf.push_back(1);
+	AppendUint32(buf, 3);
+	AppendUint32(buf, 1);
+	AppendUint32(buf, uint32_t(ring.size()));
+	for (auto &p : ring) {
+		AppendDouble(buf, p.first);
+		AppendDouble(buf, p.second);
+	}
+	return buf;
+}
+
+struct Vec3 {
+	double x, y, z;
+};
+
+static Vec3 ToVec3(double lon_deg, double lat_deg) {
+	const double lam = lon_deg * TEST_PI / 180.0;
+	const double phi = lat_deg * TEST_PI / 180.0;
+	return {cos(phi) * cos(lam), cos(phi) * sin(lam), sin(phi)};
+}
+
+static std::pair<double, double> ToLonLat(const Vec3 &v) {
+	const double norm = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+	return {atan2(v.y, v.x) * 180.0 / TEST_PI, asin(v.z / norm) * 180.0 / TEST_PI};
+}
+
+// Spherical linear interpolation along the geodesic between a and b
+static Vec3 Slerp(const Vec3 &a, const Vec3 &b, double t) {
+	double dot = a.x * b.x + a.y * b.y + a.z * b.z;
+	dot = std::max(-1.0, std::min(1.0, dot));
+	const double theta = acos(dot);
+	if (theta < 1e-12) {
+		return a;
+	}
+	const double s = sin(theta);
+	const double wa = sin((1.0 - t) * theta) / s;
+	const double wb = sin(t * theta) / s;
+	return {wa * a.x + wb * b.x, wa * a.y + wb * b.y, wa * a.z + wb * b.z};
+}
+
+TEST_CASE("Geodetic extent: covers sampled points along geodesic edges", "[geometry]") {
+	// Random geodesic edges: every point sampled along the great-circle arc must lie within the
+	// computed extent (the edge-aware "bulge" handling). This is the coverage contract of the
+	// geodetic extents.
+	std::mt19937_64 gen(2024);
+	std::normal_distribution<double> gauss(0.0, 1.0);
+	auto random_point = [&]() {
+		Vec3 v {gauss(gen), gauss(gen), gauss(gen)};
+		const double norm = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+		return Vec3 {v.x / norm, v.y / norm, v.z / norm};
+	};
+	for (int iter = 0; iter < 20000; iter++) {
+		const auto a = random_point();
+		const auto b = random_point();
+		const double dot = a.x * b.x + a.y * b.y + a.z * b.z;
+		if (dot < -0.99) {
+			continue; // skip (near-)antipodal pairs: those are covered by the full-globe fallback
+		}
+		const auto ll_a = ToLonLat(a);
+		const auto ll_b = ToLonLat(b);
+		const auto wkb = MakeLineStringWKB({ll_a, ll_b});
+
+		auto extent = GeometryExtent::Empty();
+		Geometry::GetExtent(string_t(wkb.data(), uint32_t(wkb.size())), extent, true);
+
+		for (int s = 0; s <= 32; s++) {
+			const auto p = ToLonLat(Slerp(a, b, double(s) / 32.0));
+			INFO("edge (" << ll_a.first << " " << ll_a.second << ") -> (" << ll_b.first << " " << ll_b.second
+			              << ") sample (" << p.first << " " << p.second << ")");
+			// Latitude must be within the (bulge-aware) Y range; tiny slack for the sampling math itself
+			REQUIRE(p.second >= extent.y_min - 1e-9);
+			REQUIRE(p.second <= extent.y_max + 1e-9);
+			// Longitude must be within the arc
+			REQUIRE(LonExtentContains(extent.x_min, extent.x_max, p.first));
+		}
+	}
+}
+
+TEST_CASE("Geodetic extent: polygon interiors follow the interior-on-the-left rule", "[geometry]") {
+	auto get_extent = [](const std::string &wkb) {
+		auto extent = GeometryExtent::Empty();
+		Geometry::GetExtent(string_t(wkb.data(), uint32_t(wkb.size())), extent, true);
+		return extent;
+	};
+
+	// A shell winding east around the globe at 80N: interior is the northern cap
+	auto north = get_extent(MakePolygonWKB({{0, 80}, {90, 80}, {180, 80}, {-90, 80}, {0, 80}}));
+	REQUIRE(north.x_min == -180.0);
+	REQUIRE(north.x_max == 180.0);
+	REQUIRE(north.y_max == 90.0);
+	REQUIRE(north.y_min == 80.0);
+
+	// The same ring wound west: interior is everything EXCEPT the northern cap. The boundary edges
+	// still bulge to ~82.9N, but the north pole itself is not covered.
+	auto north_cw = get_extent(MakePolygonWKB({{0, 80}, {-90, 80}, {180, 80}, {90, 80}, {0, 80}}));
+	REQUIRE(north_cw.x_min == -180.0);
+	REQUIRE(north_cw.x_max == 180.0);
+	REQUIRE(north_cw.y_min == -90.0);
+	REQUIRE(north_cw.y_max < 84.0);
+
+	// Antarctica-style: a west-wound shell at 80S encloses the south pole, the north stays bounded
+	auto south = get_extent(MakePolygonWKB({{0, -80}, {-90, -80}, {180, -80}, {90, -80}, {0, -80}}));
+	REQUIRE(south.y_min == -90.0);
+	REQUIRE(south.y_max < -70.0);
+
+	// An east-winding shell straddling the equator encloses the north side only
+	auto straddle = get_extent(MakePolygonWKB({{0, 10}, {90, -10}, {180, 10}, {-90, -10}, {0, 10}}));
+	REQUIRE(straddle.y_max == 90.0);
+	REQUIRE(straddle.y_min > -90.0);
+	REQUIRE(straddle.x_min == -180.0);
+	REQUIRE(straddle.x_max == 180.0);
+
+	// A counterclockwise shell encloses its bounded side: tight bounds
+	auto small_ccw = get_extent(MakePolygonWKB({{0, 0}, {10, 0}, {10, 10}, {0, 10}, {0, 0}}));
+	REQUIRE(small_ccw.y_max < 11.0);
+	REQUIRE(LonExtentContains(small_ccw.x_min, small_ccw.x_max, 5.0));
+	REQUIRE(!LonExtentContains(small_ccw.x_min, small_ccw.x_max, 50.0));
+
+	// A clockwise shell encloses the complement of its bounded side: (almost) the whole globe
+	auto small_cw = get_extent(MakePolygonWKB({{0, 0}, {0, 10}, {10, 10}, {10, 0}, {0, 0}}));
+	REQUIRE(small_cw.x_min == -180.0);
+	REQUIRE(small_cw.x_max == 180.0);
+	REQUIRE(small_cw.y_min == -90.0);
+	REQUIRE(small_cw.y_max == 90.0);
+
+	// Holes never extend the interior: a clockwise hole inside a counterclockwise shell must not
+	// trigger the complement rule
+	std::string with_hole;
+	{
+		std::string buf;
+		buf.push_back(1);
+		AppendUint32(buf, 3);
+		AppendUint32(buf, 2);
+		const std::vector<std::pair<double, double>> shell = {{0, 0}, {20, 0}, {20, 20}, {0, 20}, {0, 0}};
+		const std::vector<std::pair<double, double>> hole = {{5, 5}, {5, 15}, {15, 15}, {15, 5}, {5, 5}};
+		AppendUint32(buf, uint32_t(shell.size()));
+		for (auto &p : shell) {
+			AppendDouble(buf, p.first);
+			AppendDouble(buf, p.second);
+		}
+		AppendUint32(buf, uint32_t(hole.size()));
+		for (auto &p : hole) {
+			AppendDouble(buf, p.first);
+			AppendDouble(buf, p.second);
+		}
+		with_hole = buf;
+	}
+	auto holed = get_extent(with_hole);
+	REQUIRE(holed.y_max < 21.0);
+	REQUIRE(!LonExtentContains(holed.x_min, holed.x_max, 50.0));
+
+	// Antipodal endpoints make the geodesic ambiguous: full globe
+	auto ambiguous = get_extent(MakeLineStringWKB({{-90, 0}, {90, 0}}));
+	REQUIRE(ambiguous.y_min == -90.0);
+	REQUIRE(ambiguous.y_max == 90.0);
+	REQUIRE(ambiguous.x_min == -180.0);
+	REQUIRE(ambiguous.x_max == 180.0);
 }
 
 TEST_CASE("Geodetic extent: known ULP regression cases", "[geometry]") {

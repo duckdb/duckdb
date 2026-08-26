@@ -1,0 +1,149 @@
+# name: test/sql/types/geo/geography_coverage.test
+# description: GEOGRAPHY extents bound coverage: geodesic edge bulge, pole-enclosing rings, ambiguous edges
+# group: [geo]
+
+# Stats are not preserved when serialized in the stats() function, so this doesnt work
+require no_alternative_verify
+
+# ---------------------------------------------------------------------------------------------------
+# Geodesic edges bulge poleward: a segment between two points at 45N over 90 degrees of longitude
+# reaches ~54.7356N (tan(phi_max) = tan(45) / cos(45)).
+# ---------------------------------------------------------------------------------------------------
+
+query II
+SELECT 'LINESTRING(0 45, 90 45)'::GEOGRAPHY && 'POINT(45 54)'::GEOGRAPHY,
+       'LINESTRING(0 45, 90 45)'::GEOGRAPHY && 'POINT(45 55)'::GEOGRAPHY;
+----
+true	false
+
+statement ok
+CREATE TABLE t_bulge(g GEOGRAPHY);
+
+statement ok
+INSERT INTO t_bulge VALUES ('LINESTRING(0 45, 90 45)');
+
+query IIII
+SELECT round(s.extent.y_max::DOUBLE, 4), s.extent.y_min, s.extent.x_min, s.extent.x_max
+FROM (SELECT stats(g) s FROM t_bulge LIMIT 1);
+----
+54.7356	45.0	0.0	90.0
+
+# The southern mirror bulges south
+query II
+SELECT 'LINESTRING(0 -45, 90 -45)'::GEOGRAPHY && 'POINT(45 -54)'::GEOGRAPHY,
+       'LINESTRING(0 -45, 90 -45)'::GEOGRAPHY && 'POINT(45 -55)'::GEOGRAPHY;
+----
+true	false
+
+# Meridian and equator segments are geodesics themselves: no bulge
+query II
+SELECT 'LINESTRING(10 10, 10 50)'::GEOGRAPHY && 'POINT(10 60)'::GEOGRAPHY,
+       'LINESTRING(-89 0, 89 0)'::GEOGRAPHY && 'POINT(0 45)'::GEOGRAPHY;
+----
+false	false
+
+# The planar GEOMETRY interpretation of the same coordinates does not bulge
+query I
+SELECT 'LINESTRING(0 45, 90 45)'::GEOMETRY && 'POINT(45 54)'::GEOMETRY;
+----
+false
+
+# ---------------------------------------------------------------------------------------------------
+# Polygon interiors follow the interior-on-the-left rule (the S2/BigQuery convention)
+# ---------------------------------------------------------------------------------------------------
+
+# A shell winding east around the globe encloses the north pole (the interior is on the left of the
+# eastward travel direction); the equator side is not covered.
+query II
+SELECT 'POLYGON((0 80, 90 80, 180 80, -90 80, 0 80))'::GEOGRAPHY && 'POINT(12 90)'::GEOGRAPHY,
+       'POLYGON((0 80, 90 80, 180 80, -90 80, 0 80))'::GEOGRAPHY && 'POINT(12 0)'::GEOGRAPHY;
+----
+true	false
+
+# The same ring wound west encloses everything EXCEPT the northern cap: the south pole is inside,
+# the north pole is not, and points near the equator are covered.
+query III
+SELECT 'POLYGON((0 80, -90 80, 180 80, 90 80, 0 80))'::GEOGRAPHY && 'POINT(12 90)'::GEOGRAPHY,
+       'POLYGON((0 80, -90 80, 180 80, 90 80, 0 80))'::GEOGRAPHY && 'POINT(12 -90)'::GEOGRAPHY,
+       'POLYGON((0 80, -90 80, 180 80, 90 80, 0 80))'::GEOGRAPHY && 'POINT(12 0)'::GEOGRAPHY;
+----
+false	true	true
+
+# Antarctica-style: a shell winding west around the globe at 80S encloses the south pole
+query II
+SELECT 'POLYGON((0 -80, -90 -80, 180 -80, 90 -80, 0 -80))'::GEOGRAPHY && 'POINT(5 -90)'::GEOGRAPHY,
+       'POLYGON((0 -80, -90 -80, 180 -80, 90 -80, 0 -80))'::GEOGRAPHY && 'POINT(5 90)'::GEOGRAPHY;
+----
+true	false
+
+statement ok
+CREATE TABLE t_polar(g GEOGRAPHY);
+
+statement ok
+INSERT INTO t_polar VALUES ('POLYGON((0 80, 90 80, 180 80, -90 80, 0 80))');
+
+query IIII
+SELECT s.extent.x_min, s.extent.x_max, s.extent.y_min, s.extent.y_max
+FROM (SELECT stats(g) s FROM t_polar LIMIT 1);
+----
+-180.0	180.0	80.0	90.0
+
+# An east-winding ring straddling the equator encloses the north pole side only
+query II
+SELECT 'POLYGON((0 10, 90 -10, 180 10, -90 -10, 0 10))'::GEOGRAPHY && 'POINT(5 90)'::GEOGRAPHY,
+       'POLYGON((0 10, 90 -10, 180 10, -90 -10, 0 10))'::GEOGRAPHY && 'POINT(5 -90)'::GEOGRAPHY;
+----
+true	false
+
+# A counterclockwise shell encloses its bounded side: tight bounds
+query II
+SELECT 'POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY && 'POINT(5 5)'::GEOGRAPHY,
+       'POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY && 'POINT(50 50)'::GEOGRAPHY;
+----
+true	false
+
+# A clockwise shell encloses the complement of its bounded side: it covers (almost) everything
+query II
+SELECT 'POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'::GEOGRAPHY && 'POINT(50 50)'::GEOGRAPHY,
+       'POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'::GEOGRAPHY && 'POINT(-120 -45)'::GEOGRAPHY;
+----
+true	true
+
+# Holes never extend the interior: a counterclockwise shell with a (clockwise) hole keeps tight
+# bounds - the hole's orientation must not trigger the complement rule.
+query II
+SELECT 'POLYGON((0 0, 20 0, 20 20, 0 20, 0 0), (5 5, 5 15, 15 15, 15 5, 5 5))'::GEOGRAPHY && 'POINT(10 10)'::GEOGRAPHY,
+       'POLYGON((0 0, 20 0, 20 20, 0 20, 0 0), (5 5, 5 15, 15 15, 15 5, 5 5))'::GEOGRAPHY && 'POINT(50 50)'::GEOGRAPHY;
+----
+true	false
+
+# ---------------------------------------------------------------------------------------------------
+# (Near-)antipodal endpoints make the geodesic ambiguous: the extent covers the whole globe
+# ---------------------------------------------------------------------------------------------------
+
+query II
+SELECT 'LINESTRING(-90 0, 90 0)'::GEOGRAPHY && 'POINT(0 90)'::GEOGRAPHY,
+       'LINESTRING(0 45, 180 -45)'::GEOGRAPHY && 'POINT(90 0)'::GEOGRAPHY;
+----
+true	true
+
+# ---------------------------------------------------------------------------------------------------
+# Zonemap pruning agrees with the row-level operator for bulging edges
+# ---------------------------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_prune(g GEOGRAPHY);
+
+statement ok
+INSERT INTO t_prune VALUES ('LINESTRING(0 45, 90 45)'), ('POINT(0 -45)');
+
+# The bulge row must be found when probing above the vertex latitudes
+query I
+SELECT count(*) FROM t_prune WHERE g && 'POINT(45 54)'::GEOGRAPHY;
+----
+1
+
+query I
+SELECT count(*) FROM t_prune WHERE (g && 'POINT(45 54)'::GEOGRAPHY) OR random() < -1;
+----
+1

@@ -570,6 +570,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 				auto &bbox = column_chunk->meta_data.geospatial_statistics.bbox;
 				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
 
+				// For GEOGRAPHY the bbox is assumed to be a *coverage* bound: it bounds the geodesic edges
+				// and polygon interiors, not just the coordinate values (which is what we write ourselves,
+				// and what other spherical engines write - even though the Parquet spec's definition is
+				// coordinate-based). A file whose writer stored coordinate-only boxes for line/polygon
+				// geography data may prune incorrectly under this assumption.
+				//
 				// xmin > xmax means the bounding box wraps across the antimeridian. This is only valid for
 				// GEOGRAPHY (whose extent math is antimeridian-aware); for GEOMETRY we ignore such a box.
 				// The geodetic arc math requires X within [-180, 180], so a file-provided GEOGRAPHY bbox

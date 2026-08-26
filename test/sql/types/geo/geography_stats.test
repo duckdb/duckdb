@@ -82,7 +82,7 @@ statement ok
 CREATE TABLE t_full(g GEOGRAPHY);
 
 statement ok
-INSERT INTO t_full VALUES ('LINESTRING(-90 0, 90 0)'), ('LINESTRING(90 1, -90 1)');
+INSERT INTO t_full VALUES ('LINESTRING(-90 0, 0 0, 90 0)'), ('LINESTRING(90 0, 179 0, -90 0)');
 
 query II
 SELECT s.extent.x_min, s.extent.x_max FROM (SELECT stats(g) s FROM t_full LIMIT 1);
@@ -91,7 +91,7 @@ SELECT s.extent.x_min, s.extent.x_max FROM (SELECT stats(g) s FROM t_full LIMIT 
 
 # Each row still only matches its own (half-circle) extent
 query I
-SELECT count(*) FROM t_full WHERE g && 'POINT(123 1)'::GEOGRAPHY;
+SELECT count(*) FROM t_full WHERE g && 'POINT(123 0)'::GEOGRAPHY;
 ----
 1
 

@@ -1386,6 +1386,235 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool g
 	return GetExtent(wkb, extent, has_any_empty, geodetic);
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// Geodetic (GEOGRAPHY) coverage extents
+//----------------------------------------------------------------------------------------------------------------------
+// For GEOGRAPHY, edges are geodesics (great-circle arcs), which can reach latitudes beyond their
+// endpoints ("bulge"), and polygon rings can wind around the globe and enclose a pole. The geodetic
+// extent therefore bounds the *coverage* of vertices, edges, and pole-enclosing rings - not just the
+// coordinate values. Only latitude needs edge handling: longitude varies monotonically along any
+// geodesic spanning less than half a circle. Inverted ("interior-on-the-left", larger-than-a-
+// hemisphere) polygon interiors are not modeled; rings are read as enclosing their smaller side.
+
+namespace {
+
+struct GeodeticRingState {
+	//! Accumulated signed longitude change, degrees. A ring that winds around the globe (~ +-360)
+	//! encloses a pole: with the interior on the left of the travel direction, winding east encloses
+	//! the north pole and winding west the south pole.
+	double winding = 0;
+	//! Twice the signed shoelace area of the ring in unwrapped (longitude, latitude) coordinates
+	//! relative to the first vertex. For a non-winding ring the sign gives the orientation:
+	//! positive = counterclockwise (the interior is the enclosed side), negative = clockwise (the
+	//! interior is the complement of the enclosed side).
+	double area2 = 0;
+	//! Saw an edge spanning (nearly) half a circle: the geodesic between (near-)antipodal points is
+	//! ambiguous and can pass arbitrarily close to a pole, so the whole globe must be covered.
+	bool ambiguous = false;
+};
+
+} // namespace
+
+//! Signed eastward longitude difference in degrees, in [-180, 180].
+static double LonSignedDelta(double from, double to) {
+	double d = to - from;
+	if (d > 180.0) {
+		d -= 360.0;
+	} else if (d < -180.0) {
+		d += 360.0;
+	}
+	return d;
+}
+
+//! Extend the extent to cover the entire globe (used for ambiguous edges and pole-enclosing rings).
+static void ExtendFullGlobeXY(GeometryExtent &extent) {
+	extent.x_min = -180.0;
+	extent.x_max = 180.0;
+	extent.y_min = MinValue(extent.y_min, -90.0);
+	extent.y_max = MaxValue(extent.y_max, 90.0);
+}
+
+//! Outward padding applied to synthesized (computed) apex latitudes, in degrees.
+static constexpr double APEX_EPSILON = 1e-9;
+
+//! Extend the latitude range of the extent with the poleward bulge of the geodesic edge a->b, whose
+//! endpoints have already been added. Returns false when the edge is ambiguous (endpoints antipodal
+//! or nearly so) and the caller must fall back to covering the whole globe.
+static bool TryExtendGeodesicEdge(GeometryExtent &extent, double lon1, double lat1, double lon2, double lat2) {
+	const double delta = LonSignedDelta(lon1, lon2);
+	if (!(std::fabs(delta) < 180.0 - 1e-9)) {
+		// Antipodal or near-half-circle longitude span (or NaN): ambiguous
+		return false;
+	}
+	if (delta == 0.0) {
+		// A meridian (or degenerate) edge: its latitude range is exactly the endpoint range
+		return true;
+	}
+	constexpr double DEG_TO_RAD = 0.017453292519943295;
+	// 3D unit vectors of the endpoints and the great-circle normal n = p1 x p2
+	const double phi1 = lat1 * DEG_TO_RAD;
+	const double lam1 = lon1 * DEG_TO_RAD;
+	const double phi2 = lat2 * DEG_TO_RAD;
+	const double lam2 = lon2 * DEG_TO_RAD;
+	const double x1 = std::cos(phi1) * std::cos(lam1);
+	const double y1 = std::cos(phi1) * std::sin(lam1);
+	const double z1 = std::sin(phi1);
+	const double x2 = std::cos(phi2) * std::cos(lam2);
+	const double y2 = std::cos(phi2) * std::sin(lam2);
+	const double z2 = std::sin(phi2);
+	const double nx = y1 * z2 - z1 * y2;
+	const double ny = z1 * x2 - x1 * z2;
+	const double nz = x1 * y2 - y1 * x2;
+	const double nxy = std::hypot(nx, ny);
+	const double nlen = std::hypot(nxy, nz);
+	if (!(nlen > 1e-14)) {
+		// Degenerate normal: (near-)coincident or (near-)antipodal endpoints
+		return false;
+	}
+	if (std::fabs(nz) <= 1e-14 * nlen) {
+		// The great circle runs through the poles: only reachable here when an endpoint sits (nearly)
+		// on a pole, in which case latitude is monotone along the edge and there is no bulge.
+		return true;
+	}
+	// Highest latitude reached by the great circle, and the longitude at which it is reached
+	const double apex_lat = std::asin(MinValue(nxy / nlen, 1.0)) / DEG_TO_RAD;
+	const double apex_lon = std::atan2(-ny * nz, -nx * nz) / DEG_TO_RAD;
+	// The edge covers the longitudes traversed from lon1 by `delta`; the apex belongs to the edge iff
+	// its longitude lies within that span. An apex exactly at the span boundary coincides with an
+	// endpoint and adds nothing, so only a bulge beyond the endpoint latitudes is applied.
+	const double d_north = LonSignedDelta(lon1, apex_lon);
+	const bool north_in = delta > 0 ? (d_north >= 0 && d_north <= delta) : (d_north <= 0 && d_north >= delta);
+	if (north_in && apex_lat > MaxValue(lat1, lat2)) {
+		extent.y_max = MaxValue(extent.y_max, MinValue(apex_lat + APEX_EPSILON, 90.0));
+	}
+	// The southernmost point of the great circle is antipodal to the northernmost
+	const double sapex_lon = apex_lon > 0 ? apex_lon - 180.0 : apex_lon + 180.0;
+	const double d_south = LonSignedDelta(lon1, sapex_lon);
+	const bool south_in = delta > 0 ? (d_south >= 0 && d_south <= delta) : (d_south <= 0 && d_south >= delta);
+	if (south_in && -apex_lat < MinValue(lat1, lat2)) {
+		extent.y_min = MinValue(extent.y_min, MaxValue(-apex_lat - APEX_EPSILON, -90.0));
+	}
+	return true;
+}
+
+//! Parse a geodetic vertex sequence (a linestring or a polygon ring), extending the extent with the
+//! vertices and the geodesic edges between them. Rings are implicitly closed if the last vertex does
+//! not repeat the first. Returns the number of vertices parsed.
+static uint32_t ParseGeodeticVertices(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count,
+                                      VertexType vert_type, bool is_ring, GeodeticRingState &ring) {
+	uint32_t vert_width = 2;
+	switch (vert_type) {
+	case VertexType::XYZ:
+	case VertexType::XYM:
+		vert_width = 3;
+		break;
+	case VertexType::XYZM:
+		vert_width = 4;
+		break;
+	default:
+		break;
+	}
+
+	double vals[4] = {0, 0, 0, 0};
+	double first_lon = 0;
+	double first_lat = 0;
+	double prev_lon = 0;
+	double prev_lat = 0;
+	// Unwrapped longitude of the previous vertex, relative to the first vertex (for the shoelace sum)
+	double prev_unwrapped = 0;
+	uint32_t count = 0;
+
+	for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+		for (uint32_t d_idx = 0; d_idx < vert_width; d_idx++) {
+			vals[d_idx] = reader.Read<double>();
+		}
+		switch (vert_type) {
+		case VertexType::XYZ:
+			extent.Extend(VertexXYZ {vals[0], vals[1], vals[2]}, true);
+			break;
+		case VertexType::XYM:
+			extent.Extend(VertexXYM {vals[0], vals[1], vals[2]}, true);
+			break;
+		case VertexType::XYZM:
+			extent.Extend(VertexXYZM {vals[0], vals[1], vals[2], vals[3]}, true);
+			break;
+		default:
+			extent.Extend(VertexXY {vals[0], vals[1]}, true);
+			break;
+		}
+		if (vert_idx == 0) {
+			first_lon = vals[0];
+			first_lat = vals[1];
+		} else if (!TryExtendGeodesicEdge(extent, prev_lon, prev_lat, vals[0], vals[1])) {
+			ring.ambiguous = true;
+		} else {
+			const double delta = LonSignedDelta(prev_lon, vals[0]);
+			const double unwrapped = prev_unwrapped + delta;
+			ring.winding += delta;
+			// Shoelace term in coordinates relative to the first vertex
+			ring.area2 += prev_unwrapped * (vals[1] - first_lat) - unwrapped * (prev_lat - first_lat);
+			prev_unwrapped = unwrapped;
+		}
+		prev_lon = vals[0];
+		prev_lat = vals[1];
+		count++;
+	}
+
+	if (is_ring && count > 1 && (prev_lon != first_lon || prev_lat != first_lat)) {
+		// Implicitly close the ring
+		if (!TryExtendGeodesicEdge(extent, prev_lon, prev_lat, first_lon, first_lat)) {
+			ring.ambiguous = true;
+		} else {
+			const double delta = LonSignedDelta(prev_lon, first_lon);
+			const double unwrapped = prev_unwrapped + delta;
+			ring.winding += delta;
+			ring.area2 += prev_unwrapped * 0.0 - unwrapped * (prev_lat - first_lat);
+		}
+	}
+	return count;
+}
+
+//! Apply the accumulated ring state to the extent. Ambiguous edges cover the whole globe. For a
+//! polygon's shell ring (is_shell), the ring's interior lies on the LEFT of the travel direction
+//! (the S2 convention): a ring winding east around the globe encloses the north pole, one winding
+//! west the south pole, a non-winding counterclockwise ring encloses its bounded side (already
+//! covered by the edge-aware boundary rect), and a non-winding clockwise ring encloses the
+//! complement of its bounded side - which covers (almost) the whole globe. Hole rings never extend
+//! the interior, so only their edges contribute.
+static void FinishGeodeticRing(GeometryExtent &extent, const GeodeticRingState &ring, bool is_shell) {
+	if (ring.ambiguous) {
+		ExtendFullGlobeXY(extent);
+		return;
+	}
+	if (!is_shell) {
+		return;
+	}
+	if (std::fabs(ring.winding) >= 540.0) {
+		// Wound around the globe more than once: not a valid simple ring, cover everything
+		ExtendFullGlobeXY(extent);
+		return;
+	}
+	if (ring.winding >= 180.0) {
+		// Wound east (~ +360): the interior extends north of the ring and contains the north pole
+		extent.x_min = -180.0;
+		extent.x_max = 180.0;
+		extent.y_max = MaxValue(extent.y_max, 90.0);
+		return;
+	}
+	if (ring.winding <= -180.0) {
+		// Wound west (~ -360): the interior extends south of the ring and contains the south pole
+		extent.x_min = -180.0;
+		extent.x_max = 180.0;
+		extent.y_min = MinValue(extent.y_min, -90.0);
+		return;
+	}
+	if (!(ring.area2 > 0)) {
+		// Clockwise (or degenerate): the interior is the complement of the bounded side
+		ExtendFullGlobeXY(extent);
+	}
+	// Counterclockwise: the interior is the bounded side, within the edge-aware boundary rect
+}
+
 uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty, bool geodetic) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
@@ -1423,7 +1652,13 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 				has_any_empty = true;
 				continue;
 			}
-			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
+			if (!geodetic) {
+				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
+				break;
+			}
+			GeodeticRingState line_state;
+			vertex_count += ParseGeodeticVertices(reader, extent, vert_count, vert_type, false, line_state);
+			FinishGeodeticRing(extent, line_state, false);
 		} break;
 		case GeometryType::POLYGON: {
 			const auto ring_count = reader.Read<uint32_t>();
@@ -1431,13 +1666,23 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 				has_any_empty = true;
 				continue;
 			}
+			// The first (non-empty) ring is the shell whose orientation defines the interior; the
+			// remaining rings are holes, which never extend the interior.
+			bool is_shell = true;
 			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
 				const auto vert_count = reader.Read<uint32_t>();
 				if (vert_count == 0) {
 					has_any_empty = true;
 					continue;
 				}
-				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
+				if (!geodetic) {
+					vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
+					continue;
+				}
+				GeodeticRingState ring_state;
+				vertex_count += ParseGeodeticVertices(reader, extent, vert_count, vert_type, true, ring_state);
+				FinishGeodeticRing(extent, ring_state, is_shell);
+				is_shell = false;
 			}
 		} break;
 		case GeometryType::MULTIPOINT:

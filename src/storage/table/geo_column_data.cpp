@@ -690,12 +690,16 @@ void GeoColumnData::InterpretStats(const BaseStatistics &source, BaseStatistics 
 	extent.y_max = NumericStats::GetMax<double>(vert_stats[1]);
 
 	// For GEOGRAPHY, the per-ordinate min/max only covers the vertices. That is exact for the point
-	// layouts, but a linestring/polygon row's own bounding arc may wrap the antimeridian and cover
-	// longitudes outside the numeric vertex range, so widen X to the full circle for those layouts.
+	// layouts, but for layouts with edges the row-level coverage extent is wider: a bounding arc may
+	// wrap the antimeridian, geodesic edges bulge poleward beyond their vertices, and rings can
+	// enclose a pole. None of that is reconstructible from per-ordinate stats, so widen X/Y to the
+	// full globe for the non-point layouts.
 	if (target.GetType().id() == LogicalTypeId::GEOGRAPHY && geom_type != GeometryType::POINT &&
 	    geom_type != GeometryType::MULTIPOINT) {
 		extent.x_min = -180.0;
 		extent.x_max = 180.0;
+		extent.y_min = -90.0;
+		extent.y_max = 90.0;
 	}
 
 	switch (vert_type) {

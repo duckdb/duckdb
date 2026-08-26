@@ -153,13 +153,16 @@ public:
 		return std::isfinite(m_min) && std::isfinite(m_max);
 	}
 
-	// NOTE: extents are *coordinate* (vertex) extents, matching the Parquet geospatial statistics
-	// definition: they bound the coordinate values of the geometries, not the region a geometry
-	// covers. Under spherical edge semantics a geography's coverage can exceed its coordinate extent
-	// (great-circle edges bulge poleward, and an interior-on-the-left polygon can cover more than a
-	// hemisphere while its vertices stay in a small band), so predicates that reason about interiors
-	// must not treat these extents as coverage bounds. The GeometryTypeSet in the stats records
-	// whether such (polygon) types are present.
+	// NOTE: planar (GEOMETRY) extents are exact vertex min/max. Geodetic (GEOGRAPHY) extents are
+	// *coverage* extents: Geometry::GetExtent additionally bounds the geodesic edges between the
+	// vertices (great-circle arcs bulge poleward beyond their endpoints) and the polygon interiors
+	// under the interior-on-the-left rule (the S2/BigQuery convention): a shell winding east around
+	// the globe encloses the north pole, one winding west the south pole, a counterclockwise shell
+	// encloses its bounded side, and a clockwise shell encloses the complement - covering (almost)
+	// the whole globe, so ESRI-style clockwise shells get full-globe extents. This follows the
+	// precedent of other spherical engines that write coverage bounds into Parquet geospatial
+	// statistics; the bounds are wider than the Parquet spec's coordinate-based bbox definition,
+	// which is safe for any reader.
 
 	// The `geodetic` flag enables antimeridian-aware longitude (X axis) math used by GEOGRAPHY:
 	// the X axis is treated as a circular [-180,180] degree axis where an arc may wrap (x_min > x_max),
@@ -339,14 +342,14 @@ private:
 	// inputs). The narrowest covering arc starts at one arc's start and ends at one arc's end: try
 	// those four candidates with their exact endpoint values and keep the narrowest one that covers
 	// both inputs. If none does (the arcs jointly cover the whole circle), the result is the full circle.
-	static void LonArcMerge(double alo, double ahi, double blo, double bhi, double &out_lo, double &out_hi) {
-		const double cand_lo[4] = {alo, alo, blo, blo};
+	static void LonArcMerge(double also, double ahi, double blo, double bhi, double &out_lo, double &out_hi) {
+		const double cand_lo[4] = {also, also, blo, blo};
 		const double cand_hi[4] = {ahi, bhi, ahi, bhi};
 		double best_lo = -180.0;
 		double best_hi = 180.0;
 		double best_width = 360.0;
 		for (idx_t i = 0; i < 4; i++) {
-			if (!LonArcContainsArc(cand_lo[i], cand_hi[i], alo, ahi) ||
+			if (!LonArcContainsArc(cand_lo[i], cand_hi[i], also, ahi) ||
 			    !LonArcContainsArc(cand_lo[i], cand_hi[i], blo, bhi)) {
 				continue;
 			}

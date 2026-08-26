@@ -65,12 +65,12 @@ SELECT count(*) FROM geogs WHERE g && 'POINT(0 0)'::GEOGRAPHY;
 # An antimeridian-crossing probe box: x in [179, 180] u [-180, -179] covers 33 of the 64 grid
 # columns, over all 64 latitudes. The result must agree with a scan that defeats pruning.
 query I
-SELECT count(*) FROM geogs WHERE g && 'LINESTRING(179 -90, -179 90)'::GEOGRAPHY;
+SELECT count(*) FROM geogs WHERE g && 'MULTIPOINT(179 -90, -179 90)'::GEOGRAPHY;
 ----
 2112
 
 query I
-SELECT count(*) FROM geogs WHERE (g && 'LINESTRING(179 -90, -179 90)'::GEOGRAPHY) OR i < 0;
+SELECT count(*) FROM geogs WHERE (g && 'MULTIPOINT(179 -90, -179 90)'::GEOGRAPHY) OR i < 0;
 ----
 2112
 
@@ -111,7 +111,7 @@ SELECT count(*) FROM geogs WHERE g && 'POINT(0 0)'::GEOGRAPHY;
 0
 
 query I
-SELECT count(*) FROM geogs WHERE g && 'LINESTRING(179 -90, -179 90)'::GEOGRAPHY;
+SELECT count(*) FROM geogs WHERE g && 'MULTIPOINT(179 -90, -179 90)'::GEOGRAPHY;
 ----
 2112
 

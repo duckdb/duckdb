@@ -87,6 +87,31 @@ SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(0 0)'
 0
 
 query I
-SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'LINESTRING(179 -90, -179 90)'::GEOGRAPHY;
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'MULTIPOINT(179 -90, -179 90)'::GEOGRAPHY;
 ----
 2112
+
+# Geography bboxes are written (and read back) as *coverage* bounds: the geodesic edge bulge of a
+# linestring is part of its bbox, so probing the bulge region above the vertex latitudes still finds
+# the row through the file statistics.
+statement ok
+COPY (
+	SELECT 'LINESTRING(0 45, 90 45)'::GEOGRAPHY AS g
+	UNION ALL
+	SELECT printf('POINT(%.6f -45.000000)', -170.0 + i * 0.01)::GEOGRAPHY FROM range(2000) t(i)
+) TO '{TEST_DIR}/geography_bulge.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 500);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_bulge.parquet' WHERE g && 'POINT(45 54)'::GEOGRAPHY;
+----
+1
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_bulge.parquet' WHERE g && 'POINT(45 55)'::GEOGRAPHY;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_bulge.parquet' WHERE g && 'POINT(-165.000000 -45.000000)'::GEOGRAPHY;
+----
+1
