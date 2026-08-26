@@ -153,7 +153,8 @@ public:
 	void Vacuum();
 	//! Rebuilds the bound physical index with chunks supplied by the scan callback.
 	void Rebuild(const IndexRebuildScan &scan);
-	//! Replaces old row IDs with new row IDs using chunks supplied by the scan callback.
+	//! Holds the exclusive entry lock while invoking scan once for deletes and once for appends.
+	//! The scan callback must not re-enter this IndexEntry.
 	void RemapRowIds(const IndexRemapScan &scan);
 	//! Verifies the buffers of the physical index and its delete delta.
 	void VerifyBuffers();
