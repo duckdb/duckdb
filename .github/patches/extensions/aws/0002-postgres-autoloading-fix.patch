@@ -1,0 +1,20 @@
+diff --git a/src/utils/utils.cpp b/src/utils/utils.cpp
+index f2dc653..bbe039c 100644
+--- a/src/utils/utils.cpp
++++ b/src/utils/utils.cpp
+@@ -164,12 +164,11 @@ optional_ptr<StorageExtension> FindPostgresStorageExtension(const DBConfig &conf
+ }
+ 
+ optional_ptr<StorageExtension> RequirePostgresStorageExtension(ClientContext &context, const string &attach_type) {
++	auto &instance = DatabaseInstance::GetDatabase(context);
+ 	auto &db_config = DBConfig::GetConfig(context);
++
++	ExtensionHelper::AutoLoadExtension(instance, POSTGRES_EXTENSION_NAME);
+ 	auto postgres_extension = FindPostgresStorageExtension(db_config);
+-	if (!postgres_extension) {
+-		Catalog::TryAutoLoad(context, POSTGRES_EXTENSION_NAME);
+-		postgres_extension = FindPostgresStorageExtension(db_config);
+-	}
+ 	if (!postgres_extension || !postgres_extension->attach) {
+ 		throw InvalidConfigurationException("Attaching %s requires the postgres extension, which could not be loaded. "
+ 		                                    "Run 'INSTALL postgres; LOAD postgres;' and retry",
