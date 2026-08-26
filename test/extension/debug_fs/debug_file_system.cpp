@@ -180,6 +180,10 @@ void DebugFileSystem::FileSync(FileHandle &handle) {
 	inner.file_system.FileSync(inner);
 }
 
+void DebugFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<DebugFileHandle>().inner->AbortWrite();
+}
+
 void DebugFileSystem::Seek(FileHandle &handle, idx_t location) {
 	auto &inner = *handle.Cast<DebugFileHandle>().inner;
 	inner.file_system.Seek(inner, location);
@@ -228,11 +232,25 @@ bool DebugFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 }
 
 void DebugFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	inner_fs->CreateDirectory(directory, opener);
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+bool DebugFileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	return inner_fs->CreateDirectoryExtended(directory, options, opener);
+}
+
+void DebugFileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 }
 
 void DebugFileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	inner_fs->RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool DebugFileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                              optional_ptr<FileOpener> opener) {
+	return inner_fs->RemoveDirectoryExtended(directory, options, opener);
 }
 
 void DebugFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
