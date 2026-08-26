@@ -1,4 +1,4 @@
-commit a4e4cc5e9d46cb108fdb48a64a1ab44a9dd4ff53
+commit 18f8cdfdafef98e9b6648287dd0b78fccb084117
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -61,7 +61,7 @@ index 3b4f97c..29ea242 100644
  	active = false;
  	file->download_complete.notify_all();
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..7a0143b 100644
+index 2efd0fa..07f66fc 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -111,7 +111,7 @@ index 2efd0fa..7a0143b 100644
  	}
  }
  
-@@ -648,6 +669,188 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +669,196 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -163,41 +163,49 @@ index 2efd0fa..7a0143b 100644
 +	return false;
 +}
 +
++static bool TryGetCacheControlSeconds(const HTTPHeaders &headers, const string &name, bool &found, int64_t &result) {
++	found = false;
++	for (auto directive : GetCacheControlDirectives(headers)) {
++		StringUtil::Trim(directive);
++		const auto separator = directive.find('=');
++		if (separator == string::npos) {
++			continue;
++		}
++		auto directive_name = directive.substr(0, separator);
++		StringUtil::Trim(directive_name);
++		if (!StringUtil::CIEquals(directive_name, name)) {
++			continue;
++		}
++		if (found) {
++			return false;
++		}
++		found = true;
++		auto value = directive.substr(separator + 1);
++		StringUtil::Trim(value);
++		if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
++			value = value.substr(1, value.size() - 2);
++		}
++		if (!TryParseNonNegativeSeconds(value, result)) {
++			return false;
++		}
++	}
++	return true;
++}
++
 +optional<timestamp_t> HTTPFileSystem::ComputeCacheValidUntil(const HTTPHeaders &headers, timestamp_t request_time,
 +                                                             timestamp_t response_time) {
-+	// Freshness lifetime in seconds (RFC 9111): Cache-Control max-age takes precedence over Expires
++	// Freshness lifetime in seconds (RFC 9111): s-maxage takes precedence over max-age, then Expires.
 +	if (HasCacheControlDirective(headers, "no-cache")) {
 +		return timestamp_t::ninfinity();
 +	}
 +	int64_t freshness_lifetime = 0;
-+	bool has_freshness_lifetime = false;
-+	bool has_max_age = false;
-+	if (headers.HasHeader("Cache-Control")) {
-+		for (auto directive : GetCacheControlDirectives(headers)) {
-+			StringUtil::Trim(directive);
-+			const auto separator = directive.find('=');
-+			if (separator == string::npos) {
-+				continue;
-+			}
-+			auto name = directive.substr(0, separator);
-+			StringUtil::Trim(name);
-+			if (!StringUtil::CIEquals(name, "max-age")) {
-+				continue;
-+			}
-+			if (has_max_age) {
-+				return timestamp_t::ninfinity();
-+			}
-+			has_max_age = true;
-+			auto value = directive.substr(separator + 1);
-+			StringUtil::Trim(value);
-+			if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
-+				value = value.substr(1, value.size() - 2);
-+			}
-+			if (!TryParseNonNegativeSeconds(value, freshness_lifetime)) {
-+				return timestamp_t::ninfinity();
-+			}
-+			has_freshness_lifetime = true;
-+		}
++	bool has_freshness_lifetime;
++	if (!TryGetCacheControlSeconds(headers, "s-maxage", has_freshness_lifetime, freshness_lifetime)) {
++		return timestamp_t::ninfinity();
++	}
++	if (!has_freshness_lifetime &&
++	    !TryGetCacheControlSeconds(headers, "max-age", has_freshness_lifetime, freshness_lifetime)) {
++		return timestamp_t::ninfinity();
 +	}
 +	if (!has_freshness_lifetime && headers.HasHeader("Expires")) {
 +		timestamp_t expires;
@@ -217,7 +225,7 @@ index 2efd0fa..7a0143b 100644
 +		}
 +	}
 +	if (!has_freshness_lifetime) {
-+		if (has_max_age || headers.HasHeader("Expires")) {
++		if (headers.HasHeader("Expires")) {
 +			return timestamp_t::ninfinity();
 +		}
 +		return nullopt;
@@ -300,7 +308,7 @@ index 2efd0fa..7a0143b 100644
  struct HTTPFileInfoParser {
  public:
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
-@@ -701,8 +903,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
+@@ -701,8 +912,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
  	return false;
  }
  
@@ -313,7 +321,7 @@ index 2efd0fa..7a0143b 100644
  	if (response->status == HTTPStatusCode::OK_200) {
  		return response;
  	}
-@@ -716,14 +921,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
+@@ -716,14 +930,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
  	}
  	if (flags.OpenForReading() && response->status != HTTPStatusCode::NotFound_404 &&
  	    response->status != HTTPStatusCode::MovedPermanently_301) {
@@ -333,7 +341,7 @@ index 2efd0fa..7a0143b 100644
  	if (response->status == HTTPStatusCode::PartialContent_206 || response->status == HTTPStatusCode::Accepted_202 ||
  	    response->status == HTTPStatusCode::OK_200) {
  		return response;
-@@ -735,7 +943,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
+@@ -735,7 +952,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
  	throw hfs.GetHTTPError(*this, *response, RequestType::GET_REQUEST, path);
  }
  
@@ -342,7 +350,7 @@ index 2efd0fa..7a0143b 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -750,6 +958,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +967,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -350,7 +358,7 @@ index 2efd0fa..7a0143b 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -769,9 +978,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -769,9 +987,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -364,7 +372,7 @@ index 2efd0fa..7a0143b 100644
  	}
  }
  
-@@ -791,6 +1002,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +1011,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -372,7 +380,7 @@ index 2efd0fa..7a0143b 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +1013,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +1022,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -380,7 +388,7 @@ index 2efd0fa..7a0143b 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1081,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1090,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
