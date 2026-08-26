@@ -32,6 +32,9 @@ CREATE TRIGGER del_trigger BEFORE DELETE ON t1 DELETE FROM log_table WHERE log_t
 statement ok
 CREATE TRIGGER upd_trigger AFTER UPDATE OF id ON t1 UPDATE log_table SET id = 99 WHERE log_table.id = 1;
 
+statement ok
+ALTER TABLE t1 RENAME COLUMN id TO renamed_id;
+
 query I
 SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't1';
 ----
@@ -58,7 +61,56 @@ upd_trigger	t1	AFTER	UPDATE
 query TTT
 SELECT trigger_name, for_each, columns FROM duckdb_triggers() WHERE trigger_name = 'upd_trigger';
 ----
-upd_trigger	STATEMENT	[id]
+upd_trigger	STATEMENT	[renamed_id]
+
+statement ok
+USE triggerdb;
+
+statement ok
+INSERT INTO log_table VALUES (1);
+
+statement ok
+UPDATE t1 SET renamed_id = 1;
+
+query I
+SELECT id FROM log_table;
+----
+99
+
+# The renamed trigger also survives checkpoint serialization
+statement ok
+CHECKPOINT triggerdb;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
+
+statement ok
+ATTACH '{TEST_DIR}/create_trigger_wal.db' AS triggerdb;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'upd_trigger';
+----
+[renamed_id]
+
+statement ok
+USE triggerdb;
+
+statement ok
+DELETE FROM log_table;
+
+statement ok
+INSERT INTO log_table VALUES (1);
+
+statement ok
+UPDATE t1 SET renamed_id = 2;
+
+query I
+SELECT id FROM log_table;
+----
+99
 
 statement ok
 USE memory;
