@@ -10,9 +10,7 @@
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 
 namespace duckdb {
 
@@ -530,9 +528,9 @@ struct ArrowGeometry {
 
 struct ArrowVariant {
 	//! VARIANT travels as the canonical `arrow.parquet.variant` extension: the Variant spec's binary
-	//! encoding in a struct<metadata: binary, value: binary> storage type. The value conversions are the
-	//! parquet extension's `variant_to_parquet_variant` / `variant_bytes_to_variant` functions, resolved
-	//! by name at conversion time (both are autoloadable catalog entries).
+	//! encoding in a struct<metadata: binary, value: binary> storage type. The values convert through
+	//! ParquetVariantConversion's encode/decode directly — never through the binder, since a conversion
+	//! can run without a valid transaction (e.g. duckdb_result_arrow_array over a materialized result).
 
 	static LogicalType StorageType() {
 		child_list_t<LogicalType> children;
@@ -638,44 +636,12 @@ struct ArrowVariant {
 		return result;
 	}
 
-	//! Binds one of the parquet extension's variant conversion functions by name (triggering an extension
-	//! autoload where enabled) and runs it over `input` into `result`.
-	static void ExecuteConversion(ClientContext &context, const char *function_name, Vector &input, idx_t count,
-	                              Vector &result) {
-		vector<unique_ptr<Expression>> args;
-		args.push_back(make_uniq<BoundReferenceExpression>(input.GetType(), 0ULL));
-		FunctionBinder binder(context);
-		ErrorData error;
-		auto bound = binder.BindScalarFunction(DEFAULT_SCHEMA, function_name, std::move(args), error);
-		if (!bound) {
-			throw InvalidInputException(
-			    "VARIANT over the Arrow interface requires the parquet extension (resolving '%s' failed: %s)",
-			    function_name, error.Message());
-		}
-
-		DataChunk chunk;
-		chunk.InitializeEmpty({input.GetType()});
-		chunk.data[0].Reference(input);
-		chunk.SetCardinalityUnsafe(count);
-
-		ExpressionExecutor executor(context, *bound);
-		Vector transformed(bound->GetReturnType(), count);
-		executor.ExecuteExpression(chunk, transformed);
-		transformed.Flatten();
-		// Reinterpret, not Reference: the bound function's return type and `result`'s type have the same
-		// physical layout but can differ in the ALIAS (VARIANT / the parquet variant struct both carry one),
-		// and LogicalType equality compares the alias — Reference would trip its type assertion in an
-		// assertion-enabled build.
-		result.Reinterpret(transformed);
-	}
-
-	//! DuckDB -> Arrow: convert VARIANT values into the storage struct via `variant_to_parquet_variant`
-	//! (bound without a shredding argument, so the result is the unshredded struct<metadata, value>).
-	static void DuckToArrow(ClientContext &context, const Vector &source, Vector &result, idx_t count) {
-		Vector input(source.GetType());
-		input.Reference(source);
+	//! DuckDB -> Arrow: convert VARIANT values into the storage struct via the Parquet Variant encode
+	//! (the result vector declares no typed_value child, so the result is the unshredded
+	//! struct<metadata, value>).
+	static void DuckToArrow(ClientContext &, const Vector &source, Vector &result, idx_t count) {
 		Vector transformed(StorageType(), count);
-		ExecuteConversion(context, "variant_to_parquet_variant", input, count, transformed);
+		ParquetVariantConversion::ToParquetVariant(source, count, transformed);
 
 		// The transform encodes a SQL NULL as a Variant-null VALUE (the parquet writer's convention, where
 		// nullability lives at the column level) — over Arrow the SQL NULL must stay a top-level null, so
@@ -691,8 +657,8 @@ struct ArrowVariant {
 			}
 		}
 
-		// The transform's return type carries its own alias; move the data over child-wise so `result`
-		// keeps the extension's declared storage type.
+		// Move the encoded data over child-wise so `result` (the extension's declared storage type)
+		// shares the encode's buffers where possible.
 		auto &result_entries = StructVector::GetEntries(result);
 		auto &transformed_entries = StructVector::GetEntries(transformed);
 		if (!has_nulls) {
@@ -728,8 +694,8 @@ struct ArrowVariant {
 	}
 
 	//! Arrow -> DuckDB: concatenate each row's metadata and value bytes (the self-delimiting Variant
-	//! binary form) and decode through `variant_bytes_to_variant`.
-	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+	//! binary form) and decode through the Parquet Variant binary decode.
+	static void ArrowToDuck(ClientContext &, Vector &source, Vector &result, idx_t count) {
 		source.Flatten();
 		// The storage vector's type records the incoming schema's own field order (see GetType) — resolve
 		// the two fields by NAME, as the spec allows them in any order.
@@ -781,7 +747,7 @@ struct ArrowVariant {
 			blob_data[i] = target;
 		}
 
-		ExecuteConversion(context, "variant_bytes_to_variant", blob, count, result);
+		ParquetVariantConversion::ConvertBinary(blob, result, count);
 		if (has_nulls) {
 			result.Flatten();
 			for (idx_t i = 0; i < count; i++) {
