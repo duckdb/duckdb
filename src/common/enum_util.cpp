@@ -230,11 +230,11 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_order_options.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
-#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 namespace duckdb {
