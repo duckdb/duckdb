@@ -17,8 +17,7 @@ FunctionExpression::FunctionExpression(const QualifiedName &function_name,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),
-      qualified_name {function_name.Catalog(), function_name.Schema(),
-                      Identifier(StringUtil::Lower(function_name.Name().GetIdentifierName()))},
+      qualified_name(function_name.WithName(Identifier(StringUtil::Lower(function_name.Name().GetIdentifierName())))),
       is_operator(is_operator), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
       export_state(export_state_p) {
 	arguments.reserve(children_p.size());
@@ -42,8 +41,7 @@ FunctionExpression::FunctionExpression(const QualifiedName &function_name, vecto
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),
-      qualified_name {function_name.Catalog(), function_name.Schema(),
-                      Identifier(StringUtil::Lower(function_name.Name().GetIdentifierName()))},
+      qualified_name(function_name.WithName(Identifier(StringUtil::Lower(function_name.Name().GetIdentifierName())))),
       is_operator(is_operator), arguments(std::move(children)), distinct(distinct), filter(std::move(filter)),
       order_bys(std::move(order_bys_p)), export_state(export_state) {
 	D_ASSERT(!function_name.Name().empty());

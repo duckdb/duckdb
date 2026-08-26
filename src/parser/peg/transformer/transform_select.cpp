@@ -437,9 +437,13 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
-	return result;
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
+	for (auto &schema : reserved_schema_qualification) {
+		qualification.push_back(schema);
+	}
+	return QualifiedName(std::move(qualification), reserved_identifier_or_string_literal);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
@@ -1651,23 +1655,29 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEG
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTable(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
-    const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
-	const auto description =
-	    TableDescription(QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_table_name));
+    const vector<Identifier> &reserved_schema_qualification, const Identifier &reserved_table_name) {
+	vector<Identifier> qualification;
+	qualification.push_back(catalog_qualification);
+	for (auto &schema : reserved_schema_qualification) {
+		qualification.push_back(schema);
+	}
+	const auto description = TableDescription(QualifiedName(std::move(qualification), reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
-                                                                     const optional<Identifier> &catalog_qualification,
-                                                                     const optional<Identifier> &schema_qualification,
-                                                                     const Identifier &table_function_name) {
-	Identifier catalog = catalog_qualification ? *catalog_qualification : Identifier();
-	Identifier schema = schema_qualification ? *schema_qualification : Identifier();
-	if (!catalog.empty() && schema.empty()) {
-		schema = std::move(catalog);
-		catalog = Identifier();
+QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(
+    PEGTransformer &transformer, const optional<Identifier> &catalog_qualification,
+    const optional<vector<Identifier>> &schema_qualification, const Identifier &table_function_name) {
+	vector<Identifier> qualification;
+	if (catalog_qualification) {
+		qualification.push_back(*catalog_qualification);
 	}
-	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
+	if (schema_qualification) {
+		for (auto &schema : *schema_qualification) {
+			qualification.push_back(schema);
+		}
+	}
+	return QualifiedName(std::move(qualification), table_function_name);
 }
 
 vector<FunctionArgument>

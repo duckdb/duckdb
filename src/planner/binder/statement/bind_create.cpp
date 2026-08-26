@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }

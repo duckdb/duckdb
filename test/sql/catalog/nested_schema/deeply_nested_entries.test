@@ -1,0 +1,210 @@
+# name: test/sql/catalog/nested_schema/deeply_nested_entries.test
+# description: Test entries qualified with a schema path deeper than one level
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE SCHEMA s1.s2.s3;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas() WHERE schema_name IN ('s1','s2','s3','s4') ORDER BY schema_name;
+----
+s1	NULL
+s2	s1
+s3	s2
+s4	s3
+
+# TABLE
+
+statement ok
+CREATE TABLE s1.s2.s3.tbl(i INTEGER, s STRUCT(a INTEGER));
+
+statement ok
+INSERT INTO s1.s2.s3.tbl VALUES (42, {'a': 7});
+
+query I
+SELECT i FROM s1.s2.s3.tbl;
+----
+42
+
+# the catalog can be spelled out on top of the schema path
+query I
+SELECT i FROM memory.s1.s2.s3.tbl;
+----
+42
+
+statement error
+SELECT 1 FROM s1.s2.s3.missing;
+----
+<REGEX>:.*does not exist.*
+
+# qualified column references
+
+query I
+SELECT s1.s2.s3.tbl.i FROM s1.s2.s3.tbl;
+----
+42
+
+query I
+SELECT memory.s1.s2.s3.tbl.i FROM s1.s2.s3.tbl;
+----
+42
+
+query I
+SELECT memory.s1.s2.s3.tbl.s.a FROM s1.s2.s3.tbl;
+----
+7
+
+query I
+SELECT s3.tbl.i FROM s1.s2.s3.tbl;
+----
+42
+
+# DML and DDL
+
+statement ok
+UPDATE memory.s1.s2.s3.tbl SET i = i + 1;
+
+query I
+SELECT i FROM s1.s2.s3.tbl;
+----
+43
+
+statement ok
+DELETE FROM s1.s2.s3.tbl WHERE i = 43;
+
+query I
+SELECT count(*) FROM s1.s2.s3.tbl;
+----
+0
+
+statement ok
+ALTER TABLE s1.s2.s3.tbl RENAME TO tbl_renamed;
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'tbl_renamed';
+----
+memory	s3	tbl_renamed
+
+statement ok
+DROP TABLE memory.s1.s2.s3.tbl_renamed;
+
+# VIEW
+
+statement ok
+CREATE VIEW s1.s2.s3.s4.v AS SELECT 42 AS x;
+
+query I
+SELECT * FROM s1.s2.s3.s4.v;
+----
+42
+
+query I
+SELECT * FROM memory.s1.s2.s3.s4.v;
+----
+42
+
+# MACRO
+
+statement ok
+CREATE MACRO s1.s2.s3.dbl(a) AS a * 2;
+
+query II
+SELECT s1.s2.s3.dbl(21), memory.s1.s2.s3.dbl(10);
+----
+42	20
+
+statement ok
+CREATE MACRO s1.s2.s3.tbl_macro() AS TABLE SELECT 99 AS x;
+
+query I
+SELECT * FROM s1.s2.s3.tbl_macro();
+----
+99
+
+query I
+SELECT * FROM memory.s1.s2.s3.tbl_macro();
+----
+99
+
+# TYPE
+
+statement ok
+CREATE TYPE s1.s2.s3.mood AS ENUM ('happy');
+
+query II
+SELECT 'happy'::s1.s2.s3.mood, 'happy'::memory.s1.s2.s3.mood;
+----
+happy	happy
+
+# SEQUENCE
+
+statement ok
+CREATE SEQUENCE s1.s2.s3.seq START 5;
+
+query II
+SELECT nextval('s1.s2.s3.seq'), nextval('memory.s1.s2.s3.seq');
+----
+5	6
+
+# PRAGMA table_info takes the same dotted path
+
+statement ok
+CREATE TABLE s1.s2.s3.s4.info_tbl(i INTEGER, j VARCHAR);
+
+query I
+SELECT name FROM pragma_table_info('s1.s2.s3.s4.info_tbl');
+----
+i
+j
+
+query I
+SELECT name FROM pragma_table_info('memory.s1.s2.s3.s4.info_tbl');
+----
+i
+j
+
+# an attached catalog holding a deep schema path
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA db2.a;
+
+statement ok
+CREATE SCHEMA db2.a.b;
+
+statement ok
+CREATE SCHEMA db2.a.b.c;
+
+statement ok
+CREATE TABLE db2.a.b.c.t(i INTEGER);
+
+statement ok
+INSERT INTO db2.a.b.c.t VALUES (1);
+
+query I
+SELECT i FROM db2.a.b.c.t;
+----
+1
+
+# a missing schema in the middle of the path errors
+
+statement error
+CREATE TABLE s1.s2.nope.t(i INTEGER);
+----
+<REGEX>:.*does not exist.*
+
+statement error
+SELECT * FROM s1.nope.s3.tbl;
+----
+<REGEX>:.*does not exist.*

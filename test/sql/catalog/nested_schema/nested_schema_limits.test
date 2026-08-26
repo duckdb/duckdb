@@ -14,18 +14,6 @@ CREATE TABLE s1.s2.t(i INTEGER);
 statement ok
 INSERT INTO s1.s2.t VALUES (1);
 
-# a dotted name is at most three components: a nested table cannot additionally be qualified with its catalog
-
-statement error
-SELECT * FROM memory.s1.s2.t;
-----
-<REGEX>:.*syntax error.*
-
-statement error
-CREATE TABLE memory.s1.s2.t2(i INTEGER);
-----
-<REGEX>:.*syntax error.*
-
 # nested schemas cannot be used in the search path - the error says so explicitly
 
 statement error

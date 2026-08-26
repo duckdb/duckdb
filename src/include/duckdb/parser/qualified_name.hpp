@@ -35,8 +35,8 @@ struct QualifiedName {
 		path.push_back(std::move(name_p));
 	}
 	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) {
-		// store the catalog/schema/name as a single path - in preparation for multi-level schema support
-		// for now we only support a single schema level, so the path is at most [catalog, schema, name]
+		// store the catalog/schema/name as a single path - deeper (nested schema) paths are built with the
+		// vector<Identifier> constructor below
 		if (!catalog_p.empty()) {
 			path.push_back(std::move(catalog_p));
 			path.push_back(std::move(schema_p));
@@ -128,7 +128,7 @@ struct QualifiedName {
 
 private:
 	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
-	//! are actually present precede it. For now at most [catalog, schema, name] (single schema level).
+	//! are actually present precede it, and the schema part can be a nested chain ([catalog, s1, s2, ..., name]).
 	vector<Identifier> path;
 	//! Always-empty identifier, returned by the accessors when a catalog/schema/name component is absent
 	Identifier empty;

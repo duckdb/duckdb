@@ -131,14 +131,10 @@ bool QualifiedName::operator!=(const QualifiedName &rhs) const {
 
 QualifiedName QualifiedName::Parse(const string &input) {
 	auto entries = ParseComponents(input);
-	if (entries.size() > 3) {
-		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
-		                      input);
-	}
 	if (entries.empty()) {
 		return QualifiedName();
 	}
-	// the last component is the name, anything before it is the schema path (at most [catalog, schema])
+	// the last component is the name, anything before it is the (possibly nested) catalog/schema path
 	Identifier name = std::move(entries.back());
 	entries.pop_back();
 	return QualifiedName(std::move(entries), std::move(name));
