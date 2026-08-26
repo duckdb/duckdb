@@ -1,4 +1,4 @@
-commit 35f32a7b4107342f4962bd2c16fa2bbb65130d03
+commit 0f5247d27ca6ff671366b4dbf6f1055d9d146f5e
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -61,7 +61,7 @@ index 3b4f97c..29ea242 100644
  	active = false;
  	file->download_complete.notify_all();
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..974223c 100644
+index 2efd0fa..3c97584 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -111,7 +111,7 @@ index 2efd0fa..974223c 100644
  	}
  }
  
-@@ -648,6 +669,186 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +669,182 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -271,15 +271,12 @@ index 2efd0fa..974223c 100644
 +                                      timestamp_t response_time) {
 +	auto response_valid_until =
 +	    HTTPFileSystem::ComputeCacheValidUntil(response.headers, request_time, response_time);
-+	const bool response_reuse_disabled =
-+	    HasCacheControlDirective(response.headers, "no-store") || response.headers.HasHeader("Vary");
++	if (HasCacheControlDirective(response.headers, "no-store") || response.headers.HasHeader("Vary")) {
++		response_valid_until = timestamp_t::ninfinity();
++	}
 +
 +	annotated_lock_guard<annotated_mutex> guard(cache_policy_lock);
-+	cache_reuse_disabled = cache_reuse_disabled || response_reuse_disabled;
-+	if (cache_reuse_disabled) {
-+		cache_valid_until = timestamp_t::ninfinity();
-+	} else if (response_valid_until &&
-+	           (!cache_valid_until || *response_valid_until < *cache_valid_until)) {
++	if (response_valid_until && (!cache_valid_until || *response_valid_until < *cache_valid_until)) {
 +		cache_valid_until = response_valid_until;
 +	}
 +}
@@ -291,14 +288,13 @@ index 2efd0fa..974223c 100644
 +
 +bool HTTPFileHandle::CanReuseCachedData() const {
 +	annotated_lock_guard<annotated_mutex> guard(cache_policy_lock);
-+	return !cache_reuse_disabled &&
-+	       (!cache_valid_until || Timestamp::GetCurrentTimestamp() <= *cache_valid_until);
++	return !cache_valid_until || Timestamp::GetCurrentTimestamp() <= *cache_valid_until;
 +}
 +
  struct HTTPFileInfoParser {
  public:
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
-@@ -701,8 +902,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
+@@ -701,8 +898,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
  	return false;
  }
  
@@ -311,7 +307,7 @@ index 2efd0fa..974223c 100644
  	if (response->status == HTTPStatusCode::OK_200) {
  		return response;
  	}
-@@ -716,14 +920,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
+@@ -716,14 +916,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
  	}
  	if (flags.OpenForReading() && response->status != HTTPStatusCode::NotFound_404 &&
  	    response->status != HTTPStatusCode::MovedPermanently_301) {
@@ -331,7 +327,7 @@ index 2efd0fa..974223c 100644
  	if (response->status == HTTPStatusCode::PartialContent_206 || response->status == HTTPStatusCode::Accepted_202 ||
  	    response->status == HTTPStatusCode::OK_200) {
  		return response;
-@@ -735,7 +942,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
+@@ -735,7 +938,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
  	throw hfs.GetHTTPError(*this, *response, RequestType::GET_REQUEST, path);
  }
  
@@ -340,7 +336,7 @@ index 2efd0fa..974223c 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -750,6 +957,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +953,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -348,7 +344,7 @@ index 2efd0fa..974223c 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -769,9 +977,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -769,9 +973,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -362,7 +358,7 @@ index 2efd0fa..974223c 100644
  	}
  }
  
-@@ -791,6 +1001,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +997,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -370,7 +366,7 @@ index 2efd0fa..974223c 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +1012,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +1008,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -378,7 +374,7 @@ index 2efd0fa..974223c 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1080,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1076,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
@@ -477,7 +473,7 @@ index 8738e94..ba9f40f 100644
  private:
  	void ReserveInternal(idx_t capacity);
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
-index 6d19b18..01b09be 100644
+index 6d19b18..3b0d066 100644
 --- a/src/include/http/httpfs.hpp
 +++ b/src/include/http/httpfs.hpp
 @@ -2,6 +2,7 @@
@@ -514,7 +510,7 @@ index 6d19b18..01b09be 100644
  	void InitializeRequestState(optional_ptr<FileOpener> opener);
  	bool TryInitializeRead(HTTPFileSystem &file_system, optional_ptr<HTTPMetadataCache> cache,
  	                       bool &should_write_cache);
-@@ -99,6 +106,12 @@ public:
+@@ -99,6 +106,10 @@ public:
  	idx_t length;
  	timestamp_t last_modified;
  	string etag;
@@ -522,12 +518,10 @@ index 6d19b18..01b09be 100644
 +	//! Unset means no freshness information; positive/negative infinity mean always valid/invalid.
 +	//! Used to bound how long cached file data may be served.
 +	optional<timestamp_t> cache_valid_until;
-+	//! Whether response metadata or data must not be reused across handles.
-+	bool cache_reuse_disabled = false;
  	bool force_full_download;
  	bool initialized = false;
  	bool auto_fallback_to_full_file_download = true;
-@@ -123,11 +136,18 @@ private:
+@@ -123,11 +134,18 @@ private:
  	double tp_bandwidth_bps DUCKDB_GUARDED_BY(network_estimator_lock) = 0;
  	idx_t tp_sample_count DUCKDB_GUARDED_BY(network_estimator_lock) = 0;
  	static constexpr idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16;
@@ -546,7 +540,7 @@ index 6d19b18..01b09be 100644
  
  	//! FileSystem overrides.
  	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-@@ -140,6 +160,8 @@ public:
+@@ -140,6 +158,8 @@ public:
  	int64_t GetFileSize(FileHandle &handle) override;
  	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
  	string GetVersionTag(FileHandle &handle) override;
