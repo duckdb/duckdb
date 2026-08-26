@@ -471,7 +471,7 @@ static int pk_parse_key_rfc8410_der(mbedtls_pk_context *pk,
 static int pk_get_pk_alg(unsigned char **p,
                          const unsigned char *end,
                          mbedtls_pk_type_t *pk_alg, mbedtls_asn1_buf *params,
-                         void *ec_grp_id)
+                         mbedtls_ecp_group_id *ec_grp_id)
 {
     int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
     mbedtls_asn1_buf alg_oid;
@@ -485,7 +485,7 @@ static int pk_get_pk_alg(unsigned char **p,
     ret = mbedtls_oid_get_pk_alg(&alg_oid, pk_alg);
 #if defined(MBEDTLS_PK_HAVE_ECC_KEYS)
     if (ret == MBEDTLS_ERR_OID_NOT_FOUND) {
-        ret = mbedtls_oid_get_ec_grp_algid(&alg_oid, reinterpret_cast<mbedtls_ecp_group_id*>(ec_grp_id));
+        ret = mbedtls_oid_get_ec_grp_algid(&alg_oid, ec_grp_id);
         if (ret == 0) {
             *pk_alg = MBEDTLS_PK_ECKEY;
         }
@@ -521,7 +521,7 @@ int mbedtls_pk_parse_subpubkey(unsigned char **p, const unsigned char *end,
     size_t len;
     mbedtls_asn1_buf alg_params;
     mbedtls_pk_type_t pk_alg = MBEDTLS_PK_NONE;
-    int ec_grp_id = 0;
+    mbedtls_ecp_group_id ec_grp_id = MBEDTLS_ECP_DP_NONE;
     const mbedtls_pk_info_t *pk_info;
 
     if ((ret = mbedtls_asn1_get_tag(p, end, &len,
@@ -750,7 +750,7 @@ static int pk_parse_key_pkcs8_unencrypted_der(
     unsigned char *p = (unsigned char *) key;
     unsigned char *end = p + keylen;
     mbedtls_pk_type_t pk_alg = MBEDTLS_PK_NONE;
-    int ec_grp_id = 0;
+    mbedtls_ecp_group_id ec_grp_id = MBEDTLS_ECP_DP_NONE;
     const mbedtls_pk_info_t *pk_info;
 
 #if !defined(MBEDTLS_PK_HAVE_ECC_KEYS)

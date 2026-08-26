@@ -1,5 +1,5 @@
 import os
-version = '3.6.4'
+version = '3.6.7'
 
 # assert(os.system(f'wget https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/mbedtls-{version}.tar.gz') == 0)
 # assert(os.system(f'tar xvf mbedtls-{version}.tar.gz') == 0)

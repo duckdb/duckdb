@@ -10,15 +10,14 @@
  * might be translated to branches by some compilers on some platforms.
  */
 
-#include <stdint.h>
-#include <limits.h>
-
 #include "common.h"
 #include "constant_time_internal.h"
 #include "mbedtls/constant_time.h"
 #include "mbedtls/error.h"
 #include "mbedtls/platform_util.h"
 
+#include <limits.h>
+#include <stdint.h>
 #include <string.h>
 
 #if !defined(MBEDTLS_CT_ASM)
@@ -150,7 +149,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
 
 void mbedtls_ct_memmove_left(void *start, size_t total, size_t offset)
 {
-    volatile unsigned char *buf = (unsigned char *) start;
+    volatile unsigned char *buf = start;
     for (size_t i = 0; i < total; i++) {
         mbedtls_ct_condition_t no_op = mbedtls_ct_uint_gt(total - offset, i);
         /* The first `total - offset` passes are a no-op. The last
