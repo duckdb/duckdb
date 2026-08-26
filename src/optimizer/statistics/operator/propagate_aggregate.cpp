@@ -503,15 +503,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	count_matcher->policy = SetMatcher::Policy::ORDERED;
 	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
 
-	// grouped aggregates only run over non-empty groups; ungrouped ones (or empty grouping sets) can see zero rows
-	aggregate_input_may_be_empty = aggr.groups.empty();
-	for (auto &grouping_set : aggr.grouping_sets) {
-		if (grouping_set.empty()) {
-			aggregate_input_may_be_empty = true;
-			break;
-		}
-	}
-
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
 		auto &expr = aggr.expressions[aggregate_idx];
@@ -533,7 +524,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		ColumnBinding aggregate_binding(aggr.aggregate_index, ProjectionIndex(aggregate_idx));
 		statistics_map[aggregate_binding] = std::move(stats);
 	}
-	aggregate_input_may_be_empty = true;
 
 	// check whether all inputs to the aggregate functions are valid
 	TupleDataValidityType distinct_validity = TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;

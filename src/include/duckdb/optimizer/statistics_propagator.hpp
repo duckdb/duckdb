@@ -148,8 +148,6 @@ private:
 	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
-	//! Whether the aggregate expressions currently being propagated can see zero input rows
-	bool aggregate_input_may_be_empty = true;
 };
 
 } // namespace duckdb

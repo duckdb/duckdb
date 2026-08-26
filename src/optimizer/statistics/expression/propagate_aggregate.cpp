@@ -19,7 +19,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 		return nullptr;
 	}
 	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
-	input.input_may_be_empty = aggregate_input_may_be_empty;
 	return aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 }
 

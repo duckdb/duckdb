@@ -23,11 +23,11 @@ EXPLAIN SELECT g, min(x) AS m FROM t GROUP BY g HAVING m > 20000;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
 
-# an always-true HAVING is removed instead
+# aggregate results remain nullable, so retain the null-preserving HAVING filter
 query II
 EXPLAIN SELECT g, min(x) AS m FROM t GROUP BY g HAVING m >= 0;
 ----
-physical_plan	<!REGEX>:.*Filter.*
+physical_plan	<REGEX>:.*constant_or_null\(true, m, 0\).*
 
 query I
 SELECT count(*) FROM (SELECT g, min(x) AS m FROM t GROUP BY g HAVING m > 20000) sub;

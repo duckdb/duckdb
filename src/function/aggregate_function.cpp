@@ -1,8 +1,8 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -18,21 +18,12 @@ unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientCon
 	auto &return_type = expr.GetReturnType();
 	auto result = child_stats.GetType() == return_type
 	                  ? child_stats.ToUnique()
-	                  : StatisticsPropagator::TryPropagateCast(child_stats, child_stats.GetType(), return_type);
+	                  : CastStatistics::TryPropagate(child_stats, child_stats.GetType(), return_type);
 	if (!result) {
 		return nullptr;
 	}
-	// the result is NULL when the aggregate sees no valid rows (empty ungrouped input, all rows
-	// filtered out, or a group in which every value of any argument is NULL)
-	if (input.input_may_be_empty || expr.GetFilter()) {
-		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-	}
-	for (auto &stats : input.child_stats) {
-		if (stats.CanHaveNull()) {
-			result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-			break;
-		}
-	}
+	// the result is NULL when the aggregate sees no valid rows
+	result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return result;
 }
 
