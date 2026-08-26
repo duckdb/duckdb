@@ -29,6 +29,23 @@ BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t siz
 	return buffer;
 }
 
+// IO operation is performed to stat the file.
+CacheValidationInfo GetValidationInfo(FileSystem &file_system, FileHandle &handle) {
+	auto stats = file_system.Stats(handle);
+	CacheValidationInfo result;
+	result.file_size = NumericCast<idx_t>(stats.file_size);
+	result.last_modified = stats.last_modification_time;
+	result.cache_valid_until = stats.cache_valid_until;
+	result.version_tag = std::move(stats.version_tag);
+	return result;
+}
+
+void TightenCacheDeadline(optional<timestamp_t> &cached, const optional<timestamp_t> &current) {
+	if (current && (!cached || *current < *cached)) {
+		cached = current;
+	}
+}
+
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -219,6 +236,26 @@ bool CachingFileHandle::CanUseCache() {
 	return Timestamp::GetCurrentTimestamp() <= *cache_valid_until;
 }
 
+void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
+                                                const vector<shared_ptr<CacheBlock>> &blocks) {
+	CacheValidationInfo current;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		current = validation_info;
+	}
+
+	const annotated_lock_guard<annotated_mutex> guard(cached_file.meta_lock);
+	auto &cached = cached_file.validation_info;
+	if (ExternalFileCache::IsValid(Validate(), cached, current)) {
+		TightenCacheDeadline(cached.cache_valid_until, current.cache_valid_until);
+		return;
+	}
+
+	cached = current;
+	// Existing readers retain their pinned blocks while future reads fetch replacements.
+	external_file_cache.RetireBlocks(cached_file, first_block, blocks);
+}
+
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
@@ -263,11 +300,7 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
-	auto stats = caching_file_system.file_system.Stats(*file_handle);
-	validation_info.file_size = NumericCast<idx_t>(stats.file_size);
-	validation_info.last_modified = stats.last_modification_time;
-	validation_info.cache_valid_until = stats.cache_valid_until;
-	validation_info.version_tag = std::move(stats.version_tag);
+	validation_info = GetValidationInfo(caching_file_system.file_system, *file_handle);
 
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
@@ -353,21 +386,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		remaining -= length;
 	}
 
-	// After all tasks complete, check if the cache was invalidated by another thread.
-	if (Validate()) {
-		CacheValidationInfo current_validation_info;
-		{
-			const annotated_lock_guard<annotated_mutex> file_handle_guard(file_handle_mutex);
-			current_validation_info = validation_info;
-		}
-		const annotated_lock_guard<annotated_mutex> meta_guard(current_cached_file->meta_lock);
-		if (!ExternalFileCache::IsValid(true, current_cached_file->validation_info, current_validation_info)) {
-			// Do not reset blocks in place: another reader may already have pinned the same blocks and still need their
-			// byte counts. Removing only the matching map entries preserves those readers while forcing future reads
-			// to fetch fresh blocks.
-			external_file_cache.RetireBlocks(*current_cached_file, first_block, blocks);
-		}
-	}
+	ReconcileCacheAfterRead(*current_cached_file, first_block, blocks);
 
 	return FileBufferHandleGroup(std::move(mem_handles));
 }
@@ -525,6 +544,13 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 	auto handle = GetFileHandle();
 	const auto read_start = steady_clock::now();
 	handle->Read(context, buffer, nr_bytes, location);
+	auto cache_valid_until = caching_file_system.file_system.GetCacheValidUntil(*handle);
+	if (cache_valid_until) {
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (file_handle == handle) {
+			TightenCacheDeadline(validation_info.cache_valid_until, cache_valid_until);
+		}
+	}
 	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
 }
 

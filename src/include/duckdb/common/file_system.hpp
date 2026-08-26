@@ -206,6 +206,8 @@ public:
 	//! Returns a tag that uniquely identifies the version of the file,
 	//! used for checking cache invalidation for CachingFileSystem httpfs files
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
+	//! Returns the current cache freshness deadline, if provided by the file system
+	DUCKDB_API virtual optional<timestamp_t> GetCacheValidUntil(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Returns the file stats of the attached handle.
