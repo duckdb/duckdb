@@ -80,11 +80,16 @@ public:
 	// Contains the result of the key variant
 	shared_ptr<ColumnDataCollection> recurring_table;
 	// Contains the types of the payload and key columns.
-	vector<LogicalType> payload_types, distinct_types, internal_types;
+	vector<LogicalType> payload_types, distinct_types, hash_key_types, aggregate_types, internal_types;
 	// Contains the payload and key indices
 	vector<idx_t> payload_idx, distinct_idx;
 	// Contains the aggregates for the payload
 	vector<unique_ptr<Expression>> payload_aggregates;
+	// Contains physical collation normalizers and representative aggregate indices for key columns
+	vector<unique_ptr<Expression>> key_normalizers;
+	vector<idx_t> key_representative_indices;
+	// Contains SQL-level distinct comparisons for the finalized payload columns
+	vector<unique_ptr<Expression>> payload_comparisons;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 	//! Physical recursive inputs inside the recursive member
@@ -152,6 +157,9 @@ public:
 	optional_ptr<PhysicalRecursiveCTE> recursive_cte;
 	vector<idx_t> distinct_idx;
 	vector<idx_t> payload_idx;
+	vector<LogicalType> hash_key_types;
+	vector<LogicalType> aggregate_types;
+	vector<bool> key_requires_normalization;
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

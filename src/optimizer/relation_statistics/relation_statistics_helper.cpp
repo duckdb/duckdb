@@ -39,6 +39,7 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		result.child_binding = expr.Cast<BoundColumnRefExpression>().Binding();
 		return result;
 	}
+	case ExpressionClass::BOUND_LAMBDA:
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:

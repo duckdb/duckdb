@@ -8,6 +8,10 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
+bool CompressedFileSystem::CanHandleFile(const string &fpath) {
+	return false;
+}
+
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
     : FileHandle(fs, path, child_handle_p->GetFlags()), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
 	// The real on-disk I/O happens on the (compressed) child handle; attribute the bytes there instead of

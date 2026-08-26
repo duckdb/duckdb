@@ -1,36 +1,64 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
-FileCompressionType FileCompressionTypeFromString(const string &input) {
-	auto parameter = StringUtil::Lower(input);
-	if (parameter == "infer" || parameter == "auto") {
-		return FileCompressionType::AUTO_DETECT;
-	} else if (parameter == "gzip") {
-		return FileCompressionType::GZIP;
-	} else if (parameter == "zstd") {
-		return FileCompressionType::ZSTD;
-	} else if (parameter == "uncompressed" || parameter == "none" || parameter.empty()) {
-		return FileCompressionType::UNCOMPRESSED;
-	} else {
-		throw ParserException("Unrecognized file compression type \"%s\"", input);
+const FileCompressionType FileCompressionType::AUTO_DETECT = FileCompressionType("auto_detect");
+const FileCompressionType FileCompressionType::UNCOMPRESSED = FileCompressionType("uncompressed");
+const FileCompressionType FileCompressionType::GZIP = FileCompressionType("gzip");
+const FileCompressionType FileCompressionType::ZSTD = FileCompressionType("zstd");
+
+// note: the constructors and predicates below use string literals instead of the constants above, as they can run
+// during static initialization of globals in other translation units (e.g. FileFlags), before the constants are
+// initialized
+FileCompressionType::FileCompressionType() : compression("uncompressed") {
+}
+
+FileCompressionType::FileCompressionType(string compression_p) : compression(std::move(compression_p)) {
+	compression = StringUtil::Lower(compression);
+	if (compression == "infer" || compression == "auto") {
+		compression = "auto_detect";
+	} else if (compression == "none" || compression.empty()) {
+		compression = "uncompressed";
 	}
 }
 
-string CompressionExtensionFromType(const FileCompressionType type) {
-	switch (type) {
-	case FileCompressionType::GZIP:
+bool FileCompressionType::operator==(const FileCompressionType &other) const {
+	return compression == other.compression;
+}
+
+bool FileCompressionType::operator!=(const FileCompressionType &other) const {
+	return compression != other.compression;
+}
+
+bool FileCompressionType::IsCompressed() const {
+	return !IsUncompressed() && !IsAutoDetect();
+}
+
+bool FileCompressionType::IsUncompressed() const {
+	return compression == "uncompressed";
+}
+
+bool FileCompressionType::IsAutoDetect() const {
+	return compression == "auto_detect";
+}
+
+const string &FileCompressionType::ToString() const {
+	return compression;
+}
+
+string CompressionExtensionFromType(const FileCompressionType &type) {
+	if (type == FileCompressionType::GZIP) {
 		return ".gz";
-	case FileCompressionType::ZSTD:
-		return ".zst";
-	default:
-		throw NotImplementedException("Compression Extension of file compression type is not implemented");
 	}
+	if (type == FileCompressionType::ZSTD) {
+		return ".zst";
+	}
+	throw NotImplementedException("Compression Extension of file compression type is not implemented");
 }
 
-bool IsFileCompressed(string path, FileCompressionType type) {
+bool IsFileCompressed(string path, const FileCompressionType &type) {
 	auto extension = CompressionExtensionFromType(type);
 	std::size_t question_mark_pos = std::string::npos;
 	if (!StringUtil::StartsWith(path, "\\\\?\\")) {

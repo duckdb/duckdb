@@ -615,7 +615,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(
-			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
+			    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
 		meta_transaction.ModifyDatabase(*entry, it.second.modifications);
@@ -1599,7 +1599,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 
 ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
-	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
 	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);

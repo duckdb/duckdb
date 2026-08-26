@@ -37,7 +37,16 @@ query I nosort xnorm
 EXPLAIN SELECT X//1 FROM test
 ----
 
-# division by zero results in a NULL
+# division by zero is an error by default and is not simplified away
+statement error
+SELECT X//0 FROM (VALUES (1)) t(X)
+----
+<REGEX>:.*Division by zero.*
+
+# with null_on_division_by_zero, division by zero results in a NULL
+statement ok
+SET null_on_division_by_zero=true;
+
 query I nosort xnull
 EXPLAIN SELECT NULL FROM test
 ----

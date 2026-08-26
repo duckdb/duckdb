@@ -1,0 +1,19 @@
+# Tests for the stable C++ API. The sources live next to the API itself, in
+# tools/cpp/tests, so the package carries its own tests; they are compiled into
+# the unittest binary from here, which is where UNITTEST_OBJECT_FILES is
+# assembled.
+include_directories(${CMAKE_SOURCE_DIR}/tools/cpp
+                    ${CMAKE_SOURCE_DIR}/tools/cpp/tests)
+
+# Plain add_library rather than add_library_unity: the unity helper writes
+# relative #includes into a generated file, which cannot reach out of the tree.
+add_library(
+  test_cpp_api OBJECT
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_types_values.cpp
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp)
+
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_cpp_api>
+    PARENT_SCOPE)
