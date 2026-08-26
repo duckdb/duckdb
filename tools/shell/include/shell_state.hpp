@@ -200,6 +200,14 @@ public:
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
+	//! The command to execute when `-serve` is passed in
+	string serve_command = "CALL quack_serve('quack:{host|localhost}:{port|9494}', token='{token|quack}')";
+	//! The command to execute when `-connect` is passed in
+	string connect_command = "CONNECT 'quack:{host|localhost}:{port|9494}' (TOKEN '{token|quack}')";
+	//! Parameters (e.g. host/port/token) used to expand placeholders in the serve/connect commands
+	unordered_map<string, string> command_parameters;
+	//! Whether the shell was launched as a client using `-connect` - Ctrl-D then exits instead of disconnecting
+	bool started_as_client = false;
 	idx_t last_changes = 0;
 	idx_t total_changes = 0;
 	bool readStdin = true;
@@ -355,6 +363,8 @@ public:
 
 	void PrintDatabaseError(const string &zErr);
 	int RunInitialCommand(const char *sql, bool bail);
+	//! Expand `{parameter|default}` placeholders in a command using the parameters set on the command line
+	bool ExpandCommandParameters(const string &command, string &result);
 	void AddError();
 
 	SuccessState ExecuteSQL(const string &zSql);

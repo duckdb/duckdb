@@ -582,10 +582,7 @@ MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
 	return state.DisplayTables(args);
 }
 
-MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
-	if (args.size() < 1) {
-		return MetadataResult::PRINT_USAGE;
-	}
+static string JoinArguments(const vector<string> &args) {
 	string command;
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
@@ -593,7 +590,30 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 		}
 		command += args[i];
 	}
-	state.ui_command = "CALL " + command;
+	return command;
+}
+
+MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 1) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.ui_command = "CALL " + JoinArguments(args);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetServeCommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.serve_command = JoinArguments(args);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetConnectCommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.connect_command = JoinArguments(args);
 	return MetadataResult::SUCCESS;
 }
 
@@ -876,6 +896,8 @@ static const MetadataCommand metadata_commands[] = {
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
     {"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3, ""},
     {"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0, ""},
+    {"connect_command", 0, SetConnectCommand, "COMMAND", "Set the command executed by -connect", 0,
+     "Placeholders of the form {parameter|default} are replaced by the -host/-port/-token arguments"},
 #ifdef HAVE_LINENOISE
     {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for comment values", 0, nullptr},
@@ -990,6 +1012,8 @@ static const MetadataCommand metadata_commands[] = {
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
     {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
+    {"serve_command", 0, SetServeCommand, "COMMAND", "Set the command executed by -serve", 0,
+     "Placeholders of the form {parameter|default} are replaced by the -host/-port/-token arguments"},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
      "By default the schema is pretty-printed using the SQL formatter.\nOptions:\n\t--no-indent\tPrint the schema as "
      "it is stored, without formatting\n\t--no-format\tAlias for --no-indent\n\t--indent\tForce pretty-printing (the "

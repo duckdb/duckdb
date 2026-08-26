@@ -94,6 +94,97 @@ MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+bool ShellState::ExpandCommandParameters(const string &command, string &result) {
+	result.clear();
+	for (idx_t pos = 0; pos < command.size(); pos++) {
+		if (command[pos] != '{') {
+			result += command[pos];
+			continue;
+		}
+		auto close_pos = command.find('}', pos);
+		if (close_pos == string::npos) {
+			// no closing bracket - emit the remainder of the command verbatim
+			result += command.substr(pos);
+			break;
+		}
+		auto placeholder = command.substr(pos + 1, close_pos - pos - 1);
+		pos = close_pos;
+
+		// placeholders have the form {parameter} or {parameter|default_value}
+		auto separator = placeholder.find('|');
+		auto parameter = placeholder.substr(0, separator);
+		auto entry = command_parameters.find(parameter);
+		if (entry != command_parameters.end()) {
+			result += entry->second;
+			continue;
+		}
+		if (separator == string::npos) {
+			// no value provided and no default value specified
+			PrintDatabaseError(
+			    StringUtil::Format("Invalid Command Error: no value provided for parameter '%s' in command \"%s\"\n"
+			                       "Provide a value using '-%s VALUE', or specify a default value using '{%s|default}'",
+			                       parameter, command, parameter, parameter));
+			return false;
+		}
+		result += placeholder.substr(separator + 1);
+	}
+	return true;
+}
+
+//! Expand and run one of the configurable commands (e.g. the serve/connect command)
+static MetadataResult RunConfiguredCommand(ShellState &state, const string &command) {
+	string expanded_command;
+	if (!state.ExpandCommandParameters(command, expanded_command)) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	auto rc = state.RunInitialCommand(expanded_command.c_str(), true);
+	if (rc != 0) {
+		ShellState::Exit(rc);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult LaunchServer(ShellState &state, const vector<string> &args) {
+	return RunConfiguredCommand(state, state.serve_command);
+}
+
+MetadataResult ConnectToServer(ShellState &state, const vector<string> &args) {
+	// the shell is a client for the remainder of the session - Ctrl-D exits instead of disconnecting
+	state.started_as_client = true;
+	return RunConfiguredCommand(state, state.connect_command);
+}
+
+MetadataResult SetHostParameter(ShellState &state, const vector<string> &args) {
+	state.command_parameters["host"] = args[1];
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetTokenParameter(ShellState &state, const vector<string> &args) {
+	state.command_parameters["token"] = args[1];
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetPortParameter(ShellState &state, const vector<string> &args) {
+	auto &port = args[1];
+	bool is_number = !port.empty();
+	for (auto c : port) {
+		if (c < '0' || c > '9') {
+			is_number = false;
+			break;
+		}
+	}
+	if (!is_number) {
+		state.PrintF(PrintOutput::STDERR, "%s: Error: invalid argument (%s) for '-port': expected a port number\n",
+		             state.program_name, port.c_str());
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	state.command_parameters["port"] = port;
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args) {
 	// run the UI command
 	state.rowSeparator = args[1];
@@ -216,6 +307,8 @@ static const CommandLineOption command_line_options[] = {
     {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
     {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
+    {"connect", 0, "", nullptr, ConnectToServer,
+     "connect to a server started with -serve (configurable with .connect_command)"},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"dark-mode", 0, "", SetColorScheme<HighlightMode::DARK_MODE>, SetColorScheme<HighlightMode::DARK_MODE>,
@@ -228,6 +321,7 @@ static const CommandLineOption command_line_options[] = {
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
     {"h", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
     {"help", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
+    {"host", 1, "HOST", SetHostParameter, nullptr, "host used by -serve and -connect. Default: 'localhost'"},
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
@@ -243,14 +337,17 @@ static const CommandLineOption command_line_options[] = {
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
     {"nullvalue", 1, "TEXT", nullptr, ShellState::SetNullValue, "set text string for NULL values. Default 'NULL'"},
+    {"port", 1, "PORT", SetPortParameter, nullptr, "port used by -serve and -connect. Default: '9494'"},
     {"quote", 0, "", nullptr, ToggleOutputMode<RenderMode::QUOTE>, "set output mode to 'quote'"},
     {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
     {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"safe", 0, "", ShellState::EnableSafeMode, nullptr, "enable safe-mode"},
     {"separator", 1, "SEP", nullptr, ShellState::SetSeparator, "set output column separator. Default: '|'"},
+    {"serve", 0, "", nullptr, LaunchServer, "launches a server for this database (configurable with .serve_command)"},
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
+    {"token", 1, "TOKEN", SetTokenParameter, nullptr, "token used by -serve and -connect"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},

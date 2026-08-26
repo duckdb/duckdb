@@ -86,5 +86,58 @@ def test_storage_version_error(shell):
     result = test.run()
     result.check_stderr("XXX")
 
+SERVE_TEMPLATE = ".serve_command .print quack:{host|localhost}:{port|9494} token={token|quack}"
+CONNECT_TEMPLATE = ".connect_command .print attach quack:{host|localhost}:{port|9494} token={token|quack}"
+
+def test_serve_defaults(shell):
+    test = (
+        ShellTest(shell)
+        .add_argument("-cmd", SERVE_TEMPLATE, "-serve", "-no-stdin")
+    )
+    result = test.run()
+    result.check_stdout("quack:localhost:9494 token=quack")
+
+def test_serve_parameters(shell):
+    test = (
+        ShellTest(shell)
+        .add_argument("-cmd", SERVE_TEMPLATE, "-serve", "-host", "myhost", "-port", "1234", "-token", "mytoken", "-no-stdin")
+    )
+    result = test.run()
+    result.check_stdout("quack:myhost:1234 token=mytoken")
+
+def test_serve_parameters_before_command(shell):
+    # parameters are set in the first pass - so they can be provided after the -serve flag
+    test = (
+        ShellTest(shell)
+        .add_argument("-port", "1234", "-cmd", SERVE_TEMPLATE, "-serve", "-no-stdin")
+    )
+    result = test.run()
+    result.check_stdout("quack:localhost:1234 token=quack")
+
+def test_connect(shell):
+    test = (
+        ShellTest(shell)
+        .add_argument("-cmd", CONNECT_TEMPLATE, "-connect", "-host", "myhost", "-no-stdin")
+    )
+    result = test.run()
+    result.check_stdout("attach quack:myhost:9494 token=quack")
+
+def test_serve_missing_parameter(shell):
+    test = (
+        ShellTest(shell)
+        .add_argument("-cmd", ".serve_command .print {unknown_parameter}", "-serve", "-no-stdin")
+    )
+    result = test.run()
+    result.check_stderr("no value provided for parameter 'unknown_parameter'")
+
+def test_invalid_port(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT 42")
+        .add_argument("-port", "abc")
+    )
+    result = test.run()
+    result.check_stderr("invalid argument (abc) for '-port'")
+
 
 # fmt: on

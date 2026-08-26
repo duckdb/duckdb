@@ -3014,9 +3014,11 @@ int ShellState::ProcessInput(InputMode mode) {
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
-			if (!in && stdin_is_interactive && conn && conn->context && conn->context->IsConnected()) {
+			if (!in && stdin_is_interactive && !started_as_client && conn && conn->context &&
+			    conn->context->IsConnected()) {
 				// First Ctrl-D while CONNECT-ed: implicit DISCONNECT instead of exiting. A second
-				// Ctrl-D (now unbound) will exit normally.
+				// Ctrl-D (now unbound) will exit normally. Shells launched with `-connect` skip this
+				// and exit right away - disconnecting would leave a local shell that was never asked for.
 				printf("\n");
 				conn->Query("DISCONNECT");
 				nSql = 0;
