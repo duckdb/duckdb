@@ -52,7 +52,6 @@
 #include "aesce.h"
 #endif
 
-#include "mbedtls/platform.h"
 #include "ctr.h"
 
 /*

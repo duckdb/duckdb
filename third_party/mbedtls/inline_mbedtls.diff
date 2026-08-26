@@ -1,16 +1,7 @@
-diff --git a/third_party/mbedtls/VERSION b/third_party/mbedtls/VERSION
-index 77a069e39b..c3f6bdc3de 100644
---- a/third_party/mbedtls/VERSION
-+++ b/third_party/mbedtls/VERSION
-@@ -1 +1 @@
--3.6.2
-\ No newline at end of file
-+3.6.4
-\ No newline at end of file
-diff --git a/third_party/mbedtls/library/aes.cpp b/third_party/mbedtls/library/aes.cpp
+diff --git i/third_party/mbedtls/library/aes.cpp w/third_party/mbedtls/library/aes.cpp
 index b1a5c3ed10..00d64c6173 100644
---- a/third_party/mbedtls/library/aes.cpp
-+++ b/third_party/mbedtls/library/aes.cpp
+--- i/third_party/mbedtls/library/aes.cpp
++++ w/third_party/mbedtls/library/aes.cpp
 @@ -52,7 +52,6 @@
  #include "aesce.h"
  #endif
@@ -19,10 +10,10 @@ index b1a5c3ed10..00d64c6173 100644
  #include "ctr.h"
  
  /*
-diff --git a/third_party/mbedtls/library/asn1parse.cpp b/third_party/mbedtls/library/asn1parse.cpp
+diff --git i/third_party/mbedtls/library/asn1parse.cpp w/third_party/mbedtls/library/asn1parse.cpp
 index e33fdf71da..8db38d8921 100644
---- a/third_party/mbedtls/library/asn1parse.cpp
-+++ b/third_party/mbedtls/library/asn1parse.cpp
+--- i/third_party/mbedtls/library/asn1parse.cpp
++++ w/third_party/mbedtls/library/asn1parse.cpp
 @@ -315,7 +315,7 @@ static int asn1_get_sequence_of_cb(void *ctx,
          cb_ctx->cur;
  
@@ -32,10 +23,10 @@ index e33fdf71da..8db38d8921 100644
              mbedtls_calloc(1, sizeof(mbedtls_asn1_sequence));
  
          if (cur->next == NULL) {
-diff --git a/third_party/mbedtls/library/asn1write.cpp b/third_party/mbedtls/library/asn1write.cpp
+diff --git i/third_party/mbedtls/library/asn1write.cpp w/third_party/mbedtls/library/asn1write.cpp
 index 97f9db039b..431c7ba8bb 100644
---- a/third_party/mbedtls/library/asn1write.cpp
-+++ b/third_party/mbedtls/library/asn1write.cpp
+--- i/third_party/mbedtls/library/asn1write.cpp
++++ w/third_party/mbedtls/library/asn1write.cpp
 @@ -391,7 +391,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
          }
  
@@ -70,10 +61,10 @@ index 97f9db039b..431c7ba8bb 100644
          cur->val.len = val_len;
      }
  
-diff --git a/third_party/mbedtls/library/bignum.cpp b/third_party/mbedtls/library/bignum.cpp
-index 424490951d..3e743b0291 100644
---- a/third_party/mbedtls/library/bignum.cpp
-+++ b/third_party/mbedtls/library/bignum.cpp
+diff --git i/third_party/mbedtls/library/bignum.cpp w/third_party/mbedtls/library/bignum.cpp
+index 03201a99a3..793836eabd 100644
+--- i/third_party/mbedtls/library/bignum.cpp
++++ w/third_party/mbedtls/library/bignum.cpp
 @@ -88,7 +88,7 @@ int mbedtls_mpi_lt_mpi_ct(const mbedtls_mpi *X,
      /* This array is used to conditionally swap the pointers in const time */
      void * const p[2] = { X->p, Y->p };
@@ -83,23 +74,181 @@ index 424490951d..3e743b0291 100644
  
      /*
       * Store in result iff the signs are the same (i.e., iff different_sign == false). If
-diff --git a/third_party/mbedtls/library/bignum_core.cpp b/third_party/mbedtls/library/bignum_core.cpp
-index 88582c2d38..c8bc21c5f9 100644
---- a/third_party/mbedtls/library/bignum_core.cpp
-+++ b/third_party/mbedtls/library/bignum_core.cpp
-@@ -19,7 +19,6 @@
+@@ -1786,30 +1786,32 @@ int mbedtls_mpi_gcd_modinv_odd(mbedtls_mpi *G,
+         MBEDTLS_MPI_CHK(mbedtls_mpi_grow(I, N->n));
+     }
+ 
+-    T = mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
+-    if (T == NULL) {
+-        ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
+-        goto cleanup;
+-    }
++    {
++        T = (mbedtls_mpi_uint *) mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
++        if (T == NULL) {
++            ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
++            goto cleanup;
++        }
+ 
+-    mbedtls_mpi_uint *Ip = I != NULL ? I->p : NULL;
+-    /* If A is 0 (null), then A->p would be null, and A->n would be 0,
+-     * which would be an issue if A->p and A->n were passed to
+-     * mbedtls_mpi_core_gcd_modinv_odd below. */
+-    const mbedtls_mpi_uint *Ap = A->p != NULL ? A->p : &zero;
+-    size_t An = A->n >= N->n ? N->n : A->p != NULL ? A->n : 1;
+-    mbedtls_mpi_core_gcd_modinv_odd(G->p, Ip, Ap, An, N->p, N->n, T);
++        mbedtls_mpi_uint *Ip = I != NULL ? I->p : NULL;
++        /* If A is 0 (null), then A->p would be null, and A->n would be 0,
++        * which would be an issue if A->p and A->n were passed to
++        * mbedtls_mpi_core_gcd_modinv_odd below. */
++        const mbedtls_mpi_uint *Ap = A->p != NULL ? A->p : &zero;
++        size_t An = A->n >= N->n ? N->n : A->p != NULL ? A->n : 1;
++        mbedtls_mpi_core_gcd_modinv_odd(G->p, Ip, Ap, An, N->p, N->n, T);
+ 
+-    G->s = 1;
+-    if (I != NULL) {
+-        I->s = 1;
+-    }
++        G->s = 1;
++        if (I != NULL) {
++            I->s = 1;
++        }
+ 
+-    if (G->n > N->n) {
+-        memset(G->p + N->n, 0, ciL * (G->n - N->n));
+-    }
+-    if (I != NULL && I->n > N->n) {
+-        memset(I->p + N->n, 0, ciL * (I->n - N->n));
++        if (G->n > N->n) {
++            memset(G->p + N->n, 0, ciL * (G->n - N->n));
++        }
++        if (I != NULL && I->n > N->n) {
++            memset(I->p + N->n, 0, ciL * (I->n - N->n));
++        }
+     }
+ 
+ cleanup:
+@@ -1833,38 +1835,38 @@ int mbedtls_mpi_gcd(mbedtls_mpi *G, const mbedtls_mpi *A, const mbedtls_mpi *B)
+     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TA, A));
+     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TB, B));
+     TA.s = TB.s = 1;
++    {
++        /* Make the two values the same (non-zero) number of limbs.
++        * This is needed to use mbedtls_mpi_core functions below. */
++        MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TA, TB.n != 0 ? TB.n : 1));
++        MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TB, TA.n)); // non-zero from above
+ 
+-    /* Make the two values the same (non-zero) number of limbs.
+-     * This is needed to use mbedtls_mpi_core functions below. */
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TA, TB.n != 0 ? TB.n : 1));
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TB, TA.n)); // non-zero from above
++        /* Handle special cases (that don't happen in crypto usage) */
++        if (mbedtls_mpi_core_check_zero_ct(TA.p, TA.n) == MBEDTLS_CT_FALSE) {
++            MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TB)); // GCD(0, B) = abs(B)
++            goto cleanup;
++        }
++        if (mbedtls_mpi_core_check_zero_ct(TB.p, TB.n) == MBEDTLS_CT_FALSE) {
++            MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TA)); // GCD(A, 0) = abs(A)
++            goto cleanup;
++        }
+ 
+-    /* Handle special cases (that don't happen in crypto usage) */
+-    if (mbedtls_mpi_core_check_zero_ct(TA.p, TA.n) == MBEDTLS_CT_FALSE) {
+-        MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TB)); // GCD(0, B) = abs(B)
+-        goto cleanup;
++        /* Make boths inputs odd by putting powers of 2 on the side */
++        const size_t za = mbedtls_mpi_lsb(&TA);
++        const size_t zb = mbedtls_mpi_lsb(&TB);
++        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TA, za));
++        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TB, zb));
++
++        /* Ensure A <= B: if B < A, swap them */
++        mbedtls_ct_condition_t swap = mbedtls_mpi_core_lt_ct(TB.p, TA.p, TA.n);
++        mbedtls_mpi_core_cond_swap(TA.p, TB.p, TA.n, swap);
++
++        MBEDTLS_MPI_CHK(mbedtls_mpi_gcd_modinv_odd(G, NULL, &TA, &TB));
++
++        /* Re-inject the power of 2 we had previously put aside */
++        size_t zg = za > zb ? zb : za; // zg = min(za, zb)
++        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_l(G, zg));
+     }
+-    if (mbedtls_mpi_core_check_zero_ct(TB.p, TB.n) == MBEDTLS_CT_FALSE) {
+-        MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TA)); // GCD(A, 0) = abs(A)
+-        goto cleanup;
+-    }
+-
+-    /* Make boths inputs odd by putting powers of 2 on the side */
+-    const size_t za = mbedtls_mpi_lsb(&TA);
+-    const size_t zb = mbedtls_mpi_lsb(&TB);
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TA, za));
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TB, zb));
+-
+-    /* Ensure A <= B: if B < A, swap them */
+-    mbedtls_ct_condition_t swap = mbedtls_mpi_core_lt_ct(TB.p, TA.p, TA.n);
+-    mbedtls_mpi_core_cond_swap(TA.p, TB.p, TA.n, swap);
+-
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_gcd_modinv_odd(G, NULL, &TA, &TB));
+-
+-    /* Re-inject the power of 2 we had previously put aside */
+-    size_t zg = za > zb ? zb : za; // zg = min(za, zb)
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_l(G, zg));
+-
+ cleanup:
+ 
+     mbedtls_mpi_free(&TA); mbedtls_mpi_free(&TB);
+@@ -2015,19 +2017,21 @@ static int mbedtls_mpi_inv_mod_even(mbedtls_mpi *X,
+     /* Bring A in the range [0, N). */
+     MBEDTLS_MPI_CHK(mbedtls_mpi_mod_mpi(&AA, A, N));
+ 
+-    /* We know A >= 0 but the next function wants A > 1 */
+-    int cmp = mbedtls_mpi_cmp_int(&AA, 1);
+-    if (cmp < 0) { // AA == 0
+-        ret = MBEDTLS_ERR_MPI_NOT_ACCEPTABLE;
+-        goto cleanup;
+-    }
+-    if (cmp == 0) { // AA = 1
+-        MBEDTLS_MPI_CHK(mbedtls_mpi_lset(X, 1));
+-        goto cleanup;
+-    }
++    {
++        /* We know A >= 0 but the next function wants A > 1 */
++        int cmp = mbedtls_mpi_cmp_int(&AA, 1);
++        if (cmp < 0) { // AA == 0
++            ret = MBEDTLS_ERR_MPI_NOT_ACCEPTABLE;
++            goto cleanup;
++        }
++        if (cmp == 0) { // AA = 1
++            MBEDTLS_MPI_CHK(mbedtls_mpi_lset(X, 1));
++            goto cleanup;
++        }
+ 
+-    /* Now we know 1 < A < N, N is even and AA is still odd */
+-    MBEDTLS_MPI_CHK(mbedtls_mpi_inv_mod_even_in_range(X, &AA, N));
++        /* Now we know 1 < A < N, N is even and AA is still odd */
++        MBEDTLS_MPI_CHK(mbedtls_mpi_inv_mod_even_in_range(X, &AA, N));
++    }
+ 
+ cleanup:
+     mbedtls_mpi_free(&AA);
+diff --git i/third_party/mbedtls/library/bignum_core.cpp w/third_party/mbedtls/library/bignum_core.cpp
+index 8091694615..8dc0b1b401 100644
+--- i/third_party/mbedtls/library/bignum_core.cpp
++++ w/third_party/mbedtls/library/bignum_core.cpp
+@@ -18,9 +18,7 @@
+ #include "mbedtls/platform.h"
  
  #include "bignum_core.h"
+-#include "bignum_core_invasive.h"
  #include "bn_mul.h"
 -#include "constant_time_internal.h"
  
  size_t mbedtls_mpi_core_clz(mbedtls_mpi_uint a)
  {
-diff --git a/third_party/mbedtls/library/cipher.cpp b/third_party/mbedtls/library/cipher.cpp
-index 2ae01dd84d..8d473a7597 100644
---- a/third_party/mbedtls/library/cipher.cpp
-+++ b/third_party/mbedtls/library/cipher.cpp
-@@ -1451,7 +1451,7 @@ static int mbedtls_cipher_aead_encrypt(mbedtls_cipher_context_t *ctx,
+diff --git i/third_party/mbedtls/library/cipher.cpp w/third_party/mbedtls/library/cipher.cpp
+index f9d46213db..e6c4f526da 100644
+--- i/third_party/mbedtls/library/cipher.cpp
++++ w/third_party/mbedtls/library/cipher.cpp
+@@ -1474,7 +1474,7 @@ static int mbedtls_cipher_aead_encrypt(mbedtls_cipher_context_t *ctx,
  #if defined(MBEDTLS_GCM_C)
      if (MBEDTLS_MODE_GCM == ((mbedtls_cipher_mode_t) ctx->cipher_info->mode)) {
          *olen = ilen;
@@ -108,7 +257,7 @@ index 2ae01dd84d..8d473a7597 100644
                                           ilen, iv, iv_len, ad, ad_len,
                                           input, output, tag_len, tag);
      }
-@@ -1531,7 +1531,7 @@ static int mbedtls_cipher_aead_decrypt(mbedtls_cipher_context_t *ctx,
+@@ -1554,7 +1554,7 @@ static int mbedtls_cipher_aead_decrypt(mbedtls_cipher_context_t *ctx,
          int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
  
          *olen = ilen;
@@ -117,10 +266,10 @@ index 2ae01dd84d..8d473a7597 100644
                                         iv, iv_len, ad, ad_len,
                                         tag, tag_len, input, output);
  
-diff --git a/third_party/mbedtls/library/cipher_wrap.cpp b/third_party/mbedtls/library/cipher_wrap.cpp
+diff --git i/third_party/mbedtls/library/cipher_wrap.cpp w/third_party/mbedtls/library/cipher_wrap.cpp
 index b4c21ee395..005e99d313 100644
---- a/third_party/mbedtls/library/cipher_wrap.cpp
-+++ b/third_party/mbedtls/library/cipher_wrap.cpp
+--- i/third_party/mbedtls/library/cipher_wrap.cpp
++++ w/third_party/mbedtls/library/cipher_wrap.cpp
 @@ -131,7 +131,7 @@ static void *gcm_ctx_alloc(void)
  
  static void gcm_ctx_free(void *ctx)
@@ -139,11 +288,11 @@ index b4c21ee395..005e99d313 100644
  
      if (aes == NULL) {
          return NULL;
-diff --git a/third_party/mbedtls/library/constant_time.cpp b/third_party/mbedtls/library/constant_time.cpp
-index d212ddfd81..285f963b3c 100644
---- a/third_party/mbedtls/library/constant_time.cpp
-+++ b/third_party/mbedtls/library/constant_time.cpp
-@@ -150,7 +150,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
+diff --git i/third_party/mbedtls/library/constant_time.cpp w/third_party/mbedtls/library/constant_time.cpp
+index afea99c7ec..8736562def 100644
+--- i/third_party/mbedtls/library/constant_time.cpp
++++ w/third_party/mbedtls/library/constant_time.cpp
+@@ -149,7 +149,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
  
  void mbedtls_ct_memmove_left(void *start, size_t total, size_t offset)
  {
@@ -152,10 +301,10 @@ index d212ddfd81..285f963b3c 100644
      for (size_t i = 0; i < total; i++) {
          mbedtls_ct_condition_t no_op = mbedtls_ct_uint_gt(total - offset, i);
          /* The first `total - offset` passes are a no-op. The last
-diff --git a/third_party/mbedtls/library/md.cpp b/third_party/mbedtls/library/md.cpp
+diff --git i/third_party/mbedtls/library/md.cpp w/third_party/mbedtls/library/md.cpp
 index c95846aa04..00addd62c3 100644
---- a/third_party/mbedtls/library/md.cpp
-+++ b/third_party/mbedtls/library/md.cpp
+--- i/third_party/mbedtls/library/md.cpp
++++ w/third_party/mbedtls/library/md.cpp
 @@ -283,7 +283,7 @@ void mbedtls_md_free(mbedtls_md_context_t *ctx)
  #endif
  #if defined(MBEDTLS_SHA1_C)
@@ -255,10 +404,10 @@ index c95846aa04..00addd62c3 100644
  #endif
  #if defined(MBEDTLS_SHA384_C)
          case MBEDTLS_MD_SHA384:
-diff --git a/third_party/mbedtls/library/oid.cpp b/third_party/mbedtls/library/oid.cpp
+diff --git i/third_party/mbedtls/library/oid.cpp w/third_party/mbedtls/library/oid.cpp
 index 1d6b1eb866..fdaa52deeb 100644
---- a/third_party/mbedtls/library/oid.cpp
-+++ b/third_party/mbedtls/library/oid.cpp
+--- i/third_party/mbedtls/library/oid.cpp
++++ w/third_party/mbedtls/library/oid.cpp
 @@ -1071,7 +1071,7 @@ int mbedtls_oid_from_numeric_string(mbedtls_asn1_buf *oid,
      size_t bytes_per_subidentifier = (((sizeof(unsigned int) * 8) - 1) / 7)
                                       + 1;
@@ -277,10 +426,10 @@ index 1d6b1eb866..fdaa52deeb 100644
      if (resized_mem == NULL) {
          ret = MBEDTLS_ERR_ASN1_ALLOC_FAILED;
          goto error;
-diff --git a/third_party/mbedtls/library/pem.cpp b/third_party/mbedtls/library/pem.cpp
+diff --git i/third_party/mbedtls/library/pem.cpp w/third_party/mbedtls/library/pem.cpp
 index 119fd59e12..f2d06b1d22 100644
---- a/third_party/mbedtls/library/pem.cpp
-+++ b/third_party/mbedtls/library/pem.cpp
+--- i/third_party/mbedtls/library/pem.cpp
++++ w/third_party/mbedtls/library/pem.cpp
 @@ -419,7 +419,7 @@ int mbedtls_pem_read_buffer(mbedtls_pem_context *ctx, const char *header, const
          return MBEDTLS_ERR_PEM_BAD_INPUT_DATA;
      }
@@ -290,10 +439,10 @@ index 119fd59e12..f2d06b1d22 100644
          return MBEDTLS_ERR_PEM_ALLOC_FAILED;
      }
  
-diff --git a/third_party/mbedtls/library/pk_wrap.cpp b/third_party/mbedtls/library/pk_wrap.cpp
-index 19196b559a..380144ae3d 100644
---- a/third_party/mbedtls/library/pk_wrap.cpp
-+++ b/third_party/mbedtls/library/pk_wrap.cpp
+diff --git i/third_party/mbedtls/library/pk_wrap.cpp w/third_party/mbedtls/library/pk_wrap.cpp
+index b8e5160e57..f1bf293fe6 100644
+--- i/third_party/mbedtls/library/pk_wrap.cpp
++++ w/third_party/mbedtls/library/pk_wrap.cpp
 @@ -29,7 +29,6 @@
  #if defined(MBEDTLS_USE_PSA_CRYPTO)
  #include "psa_util_internal.h"
@@ -302,10 +451,10 @@ index 19196b559a..380144ae3d 100644
  
  #if defined(MBEDTLS_RSA_C)
  #include "pkwrite.h"
-diff --git a/third_party/mbedtls/library/pkparse.cpp b/third_party/mbedtls/library/pkparse.cpp
+diff --git i/third_party/mbedtls/library/pkparse.cpp w/third_party/mbedtls/library/pkparse.cpp
 index 4f6ee13986..6f478f0120 100644
---- a/third_party/mbedtls/library/pkparse.cpp
-+++ b/third_party/mbedtls/library/pkparse.cpp
+--- i/third_party/mbedtls/library/pkparse.cpp
++++ w/third_party/mbedtls/library/pkparse.cpp
 @@ -471,7 +471,7 @@ static int pk_parse_key_rfc8410_der(mbedtls_pk_context *pk,
  static int pk_get_pk_alg(unsigned char **p,
                           const unsigned char *end,
@@ -342,11 +491,11 @@ index 4f6ee13986..6f478f0120 100644
      const mbedtls_pk_info_t *pk_info;
  
  #if !defined(MBEDTLS_PK_HAVE_ECC_KEYS)
-diff --git a/third_party/mbedtls/library/rsa.cpp b/third_party/mbedtls/library/rsa.cpp
-index 557faaf363..63faf1c8cc 100644
---- a/third_party/mbedtls/library/rsa.cpp
-+++ b/third_party/mbedtls/library/rsa.cpp
-@@ -2458,12 +2458,12 @@ int mbedtls_rsa_rsassa_pkcs1_v15_sign(mbedtls_rsa_context *ctx,
+diff --git i/third_party/mbedtls/library/rsa.cpp w/third_party/mbedtls/library/rsa.cpp
+index e2b8fdd26b..6b584158a0 100644
+--- i/third_party/mbedtls/library/rsa.cpp
++++ w/third_party/mbedtls/library/rsa.cpp
+@@ -2513,12 +2513,12 @@ int mbedtls_rsa_rsassa_pkcs1_v15_sign(mbedtls_rsa_context *ctx,
       * temporary buffer and check it before returning it.
       */
  
@@ -361,7 +510,7 @@ index 557faaf363..63faf1c8cc 100644
      if (verif == NULL) {
          mbedtls_free(sig_try);
          return MBEDTLS_ERR_MPI_ALLOC_FAILED;
-@@ -2692,8 +2692,8 @@ int mbedtls_rsa_rsassa_pkcs1_v15_verify(mbedtls_rsa_context *ctx,
+@@ -2747,8 +2747,8 @@ int mbedtls_rsa_rsassa_pkcs1_v15_verify(mbedtls_rsa_context *ctx,
       * Prepare expected PKCS1 v1.5 encoding of hash.
       */
  
@@ -372,10 +521,10 @@ index 557faaf363..63faf1c8cc 100644
          ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
          goto cleanup;
      }
-diff --git a/third_party/mbedtls/library/sha1.cpp b/third_party/mbedtls/library/sha1.cpp
+diff --git i/third_party/mbedtls/library/sha1.cpp w/third_party/mbedtls/library/sha1.cpp
 index dfbe481f39..dacfe263f3 100644
---- a/third_party/mbedtls/library/sha1.cpp
-+++ b/third_party/mbedtls/library/sha1.cpp
+--- i/third_party/mbedtls/library/sha1.cpp
++++ w/third_party/mbedtls/library/sha1.cpp
 @@ -88,7 +88,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
  
  #define S(x, n) (((x) << (n)) | (((x) & 0xFFFFFFFF) >> (32 - (n))))

@@ -88,7 +88,7 @@ int mbedtls_mpi_lt_mpi_ct(const mbedtls_mpi *X,
     /* This array is used to conditionally swap the pointers in const time */
     void * const p[2] = { X->p, Y->p };
     size_t i = mbedtls_ct_size_if_else_0(X_is_negative, 1);
-    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct(p[i], p[i ^ 1], X->n);
+    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct((const mbedtls_mpi_uint *) p[i], (const mbedtls_mpi_uint *) p[i ^ 1], X->n);
 
     /*
      * Store in result iff the signs are the same (i.e., iff different_sign == false). If
@@ -1786,30 +1786,31 @@ int mbedtls_mpi_gcd_modinv_odd(mbedtls_mpi *G,
         MBEDTLS_MPI_CHK(mbedtls_mpi_grow(I, N->n));
     }
 
-    T = mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
+    T = (mbedtls_mpi_uint* ) mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
     if (T == NULL) {
         ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
         goto cleanup;
     }
+    {
+        mbedtls_mpi_uint *Ip = I != NULL ? I->p : NULL;
+        /* If A is 0 (null), then A->p would be null, and A->n would be 0,
+        * which would be an issue if A->p and A->n were passed to
+        * mbedtls_mpi_core_gcd_modinv_odd below. */
+        const mbedtls_mpi_uint *Ap = A->p != NULL ? A->p : &zero;
+        size_t An = A->n >= N->n ? N->n : A->p != NULL ? A->n : 1;
+        mbedtls_mpi_core_gcd_modinv_odd(G->p, Ip, Ap, An, N->p, N->n, T);
 
-    mbedtls_mpi_uint *Ip = I != NULL ? I->p : NULL;
-    /* If A is 0 (null), then A->p would be null, and A->n would be 0,
-     * which would be an issue if A->p and A->n were passed to
-     * mbedtls_mpi_core_gcd_modinv_odd below. */
-    const mbedtls_mpi_uint *Ap = A->p != NULL ? A->p : &zero;
-    size_t An = A->n >= N->n ? N->n : A->p != NULL ? A->n : 1;
-    mbedtls_mpi_core_gcd_modinv_odd(G->p, Ip, Ap, An, N->p, N->n, T);
+        G->s = 1;
+        if (I != NULL) {
+            I->s = 1;
+        }
 
-    G->s = 1;
-    if (I != NULL) {
-        I->s = 1;
-    }
-
-    if (G->n > N->n) {
-        memset(G->p + N->n, 0, ciL * (G->n - N->n));
-    }
-    if (I != NULL && I->n > N->n) {
-        memset(I->p + N->n, 0, ciL * (I->n - N->n));
+        if (G->n > N->n) {
+            memset(G->p + N->n, 0, ciL * (G->n - N->n));
+        }
+        if (I != NULL && I->n > N->n) {
+            memset(I->p + N->n, 0, ciL * (I->n - N->n));
+        }
     }
 
 cleanup:
@@ -1832,38 +1833,41 @@ int mbedtls_mpi_gcd(mbedtls_mpi *G, const mbedtls_mpi *A, const mbedtls_mpi *B)
     /* Make copies and take absolute values */
     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TA, A));
     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TB, B));
-    TA.s = TB.s = 1;
 
-    /* Make the two values the same (non-zero) number of limbs.
-     * This is needed to use mbedtls_mpi_core functions below. */
-    MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TA, TB.n != 0 ? TB.n : 1));
-    MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TB, TA.n)); // non-zero from above
+    {
+        TA.s = TB.s = 1;
 
-    /* Handle special cases (that don't happen in crypto usage) */
-    if (mbedtls_mpi_core_check_zero_ct(TA.p, TA.n) == MBEDTLS_CT_FALSE) {
-        MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TB)); // GCD(0, B) = abs(B)
-        goto cleanup;
+        /* Make the two values the same (non-zero) number of limbs.
+        * This is needed to use mbedtls_mpi_core functions below. */
+        MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TA, TB.n != 0 ? TB.n : 1));
+        MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TB, TA.n)); // non-zero from above
+
+        /* Handle special cases (that don't happen in crypto usage) */
+        if (mbedtls_mpi_core_check_zero_ct(TA.p, TA.n) == MBEDTLS_CT_FALSE) {
+            MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TB)); // GCD(0, B) = abs(B)
+            goto cleanup;
+        }
+        if (mbedtls_mpi_core_check_zero_ct(TB.p, TB.n) == MBEDTLS_CT_FALSE) {
+            MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TA)); // GCD(A, 0) = abs(A)
+            goto cleanup;
+        }
+
+        /* Make boths inputs odd by putting powers of 2 on the side */
+        const size_t za = mbedtls_mpi_lsb(&TA);
+        const size_t zb = mbedtls_mpi_lsb(&TB);
+        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TA, za));
+        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TB, zb));
+
+        /* Ensure A <= B: if B < A, swap them */
+        mbedtls_ct_condition_t swap = mbedtls_mpi_core_lt_ct(TB.p, TA.p, TA.n);
+        mbedtls_mpi_core_cond_swap(TA.p, TB.p, TA.n, swap);
+
+        MBEDTLS_MPI_CHK(mbedtls_mpi_gcd_modinv_odd(G, NULL, &TA, &TB));
+
+        /* Re-inject the power of 2 we had previously put aside */
+        size_t zg = za > zb ? zb : za; // zg = min(za, zb)
+        MBEDTLS_MPI_CHK(mbedtls_mpi_shift_l(G, zg));
     }
-    if (mbedtls_mpi_core_check_zero_ct(TB.p, TB.n) == MBEDTLS_CT_FALSE) {
-        MBEDTLS_MPI_CHK(mbedtls_mpi_copy(G, &TA)); // GCD(A, 0) = abs(A)
-        goto cleanup;
-    }
-
-    /* Make boths inputs odd by putting powers of 2 on the side */
-    const size_t za = mbedtls_mpi_lsb(&TA);
-    const size_t zb = mbedtls_mpi_lsb(&TB);
-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TA, za));
-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_r(&TB, zb));
-
-    /* Ensure A <= B: if B < A, swap them */
-    mbedtls_ct_condition_t swap = mbedtls_mpi_core_lt_ct(TB.p, TA.p, TA.n);
-    mbedtls_mpi_core_cond_swap(TA.p, TB.p, TA.n, swap);
-
-    MBEDTLS_MPI_CHK(mbedtls_mpi_gcd_modinv_odd(G, NULL, &TA, &TB));
-
-    /* Re-inject the power of 2 we had previously put aside */
-    size_t zg = za > zb ? zb : za; // zg = min(za, zb)
-    MBEDTLS_MPI_CHK(mbedtls_mpi_shift_l(G, zg));
 
 cleanup:
 
@@ -2014,20 +2018,21 @@ static int mbedtls_mpi_inv_mod_even(mbedtls_mpi *X,
 
     /* Bring A in the range [0, N). */
     MBEDTLS_MPI_CHK(mbedtls_mpi_mod_mpi(&AA, A, N));
+    {
+        /* We know A >= 0 but the next function wants A > 1 */
+        int cmp = mbedtls_mpi_cmp_int(&AA, 1);
+        if (cmp < 0) { // AA == 0
+            ret = MBEDTLS_ERR_MPI_NOT_ACCEPTABLE;
+            goto cleanup;
+        }
+        if (cmp == 0) { // AA = 1
+            MBEDTLS_MPI_CHK(mbedtls_mpi_lset(X, 1));
+            goto cleanup;
+        }
 
-    /* We know A >= 0 but the next function wants A > 1 */
-    int cmp = mbedtls_mpi_cmp_int(&AA, 1);
-    if (cmp < 0) { // AA == 0
-        ret = MBEDTLS_ERR_MPI_NOT_ACCEPTABLE;
-        goto cleanup;
+        /* Now we know 1 < A < N, N is even and AA is still odd */
+        MBEDTLS_MPI_CHK(mbedtls_mpi_inv_mod_even_in_range(X, &AA, N));
     }
-    if (cmp == 0) { // AA = 1
-        MBEDTLS_MPI_CHK(mbedtls_mpi_lset(X, 1));
-        goto cleanup;
-    }
-
-    /* Now we know 1 < A < N, N is even and AA is still odd */
-    MBEDTLS_MPI_CHK(mbedtls_mpi_inv_mod_even_in_range(X, &AA, N));
 
 cleanup:
     mbedtls_mpi_free(&AA);

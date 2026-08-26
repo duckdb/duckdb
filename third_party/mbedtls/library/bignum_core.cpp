@@ -18,7 +18,6 @@
 #include "mbedtls/platform.h"
 
 #include "bignum_core.h"
-#include "bignum_core_invasive.h"
 #include "bn_mul.h"
 #include "constant_time_internal.h"
 
