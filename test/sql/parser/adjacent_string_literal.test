@@ -91,10 +91,10 @@ statement error
 SELECT 'a'
 $tag$b$tag$;
 ----
-Parser Error: syntax error at or near "'b'"
+Parser Error: syntax error at or near "$tag$b$tag$"
 
 statement error
 SELECT $tag$a$tag$
 $other$b$other$;
 ----
-Parser Error: syntax error at or near "'b'"
+Parser Error: syntax error at or near "$other$b$other$"

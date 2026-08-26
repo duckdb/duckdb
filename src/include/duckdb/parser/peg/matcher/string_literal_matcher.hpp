@@ -23,12 +23,15 @@ public:
 
 		auto &token_text = token->text;
 		auto string_info = GetSpecialStringInfo(token_text);
+		const bool allows_continuation = IsSingleQuotedStringLiteral(*token, string_info);
 
 		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
-		while (IsStringLiteralContinuation(state)) {
-			Advance(state);
+		if (allows_continuation) {
+			while (IsStringLiteralContinuation(state)) {
+				Advance(state);
+			}
 		}
 		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
 		return MatchResultType::SUCCESS;
@@ -42,6 +45,7 @@ public:
 
 		auto start_offset = optional_idx(token->offset);
 		auto string_info = GetSpecialStringInfo(token->text);
+		const bool allows_continuation = IsSingleQuotedStringLiteral(*token, string_info);
 
 		if (!IsStringLiteral(*token, string_info)) {
 			return nullptr;
@@ -49,12 +53,14 @@ public:
 		string stripped_string = StripStringLiteral(*token, string_info);
 		idx_t end_offset = token->offset + token->length;
 		Advance(state);
-		while (IsStringLiteralContinuation(state)) {
-			token = state.token_iterator.Current();
-			auto continuation_info = GetSpecialStringInfo(token->text);
-			stripped_string += StripStringLiteral(*token, continuation_info);
-			end_offset = token->offset + token->length;
-			Advance(state);
+		if (allows_continuation) {
+			while (IsStringLiteralContinuation(state)) {
+				token = state.token_iterator.Current();
+				auto continuation_info = GetSpecialStringInfo(token->text);
+				stripped_string += StripStringLiteral(*token, continuation_info);
+				end_offset = token->offset + token->length;
+				Advance(state);
+			}
 		}
 		auto token_length = optional_idx(end_offset - start_offset.GetIndex());
 
@@ -74,6 +80,12 @@ public:
 
 private:
 	static bool IsStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
+		idx_t dollar_quote_delimiter_length;
+		return IsSingleQuotedStringLiteral(token, string_info) ||
+		       TryGetDollarQuoteDelimiterLength(token, dollar_quote_delimiter_length);
+	}
+
+	static bool IsSingleQuotedStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
 		if (string_info.prefix_len == 0) {
 			return false;
 		}
@@ -88,7 +100,28 @@ private:
 		return token.text.back() == '\'';
 	}
 
+	static bool TryGetDollarQuoteDelimiterLength(const MatcherToken &token, idx_t &delimiter_length) {
+		if (token.unterminated || token.text.empty() || token.text.front() != '$') {
+			return false;
+		}
+		auto delimiter_end = token.text.find('$', 1);
+		if (delimiter_end == string::npos) {
+			return false;
+		}
+		delimiter_length = delimiter_end + 1;
+		const idx_t minimum_literal_length = delimiter_length * 2;
+		if (token.text.size() < minimum_literal_length) {
+			return false;
+		}
+		const auto delimiter = token.text.substr(0, delimiter_length);
+		return StringUtil::EndsWith(token.text, delimiter);
+	}
+
 	static string StripStringLiteral(const MatcherToken &token, const SpecialStringInfo &string_info) {
+		idx_t delimiter_length;
+		if (TryGetDollarQuoteDelimiterLength(token, delimiter_length)) {
+			return token.text.substr(delimiter_length, token.text.length() - 2 * delimiter_length);
+		}
 		idx_t suffix_len = 1;
 		auto stripped_string =
 		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
@@ -118,7 +151,7 @@ private:
 		if (string_info.type != SpecialStringCharacter::STANDARD) {
 			return false;
 		}
-		return IsStringLiteral(*token, string_info);
+		return IsSingleQuotedStringLiteral(*token, string_info);
 	}
 
 	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
