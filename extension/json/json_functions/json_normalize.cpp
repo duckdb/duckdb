@@ -49,7 +49,7 @@ static void SortKeys(yyjson_mut_val *val, idx_t depth = 0) {
 		}
 
 		// Clear and rebuild in sorted order
-		// yyjson_mut_obj_clear(val);
+		yyjson_mut_obj_clear(val);
 		for (auto &pair : pairs) {
 			yyjson_mut_obj_add(val, pair.first, pair.second);
 		}
