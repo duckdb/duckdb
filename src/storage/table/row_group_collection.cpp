@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -1171,14 +1170,9 @@ private:
 class VacuumIndexRemapper {
 public:
 	VacuumIndexRemapper(const vector<shared_ptr<IndexEntry>> &entries, RowGroupCollection &collection)
-	    : table_types(collection.GetTypes()) {
+	    : index_entries(entries), table_types(collection.GetTypes()) {
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
-
-		index_handles.reserve(entries.size());
-		for (const auto &entry : entries) {
-			index_handles.push_back(entry->GetWriteHandle<BoundIndex>());
-		}
 		old_rowid_idx = mapped_column_ids.size();
 		new_rowid_idx = old_rowid_idx + 1;
 
@@ -1215,39 +1209,26 @@ public:
 		if (buffer->Count() == 0) {
 			return;
 		}
-		DataChunk scan_chunk;
-		buffer->InitializeScanChunk(scan_chunk);
-		DataChunk table_chunk;
-		table_chunk.InitializeEmpty(table_types);
+		for (const auto &entry : index_entries) {
+			// IndexEntry invokes this scan once to delete old rowids and once to append new rowids.
+			entry->RemapRowIds([&](const IndexRemapApply &apply) {
+				DataChunk scan_chunk;
+				buffer->InitializeScanChunk(scan_chunk);
+				DataChunk table_chunk;
+				table_chunk.InitializeEmpty(table_types);
 
-		// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
-		// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
-		auto reference_table_chunk = [&]() {
-			for (idx_t col_idx = 0; col_idx < mapped_column_ids.size(); col_idx++) {
-				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
-				table_chunk.data[col_id].Reference(scan_chunk.data[col_idx]);
-			}
-		};
-
-		for (auto &index : index_handles) {
-			// Delete old rowids first to avoid same-key rowid collisions within the task.
-			ColumnDataScanState scan_state;
-			buffer->InitializeScan(scan_state);
-			while (buffer->Scan(scan_state, scan_chunk)) {
-				reference_table_chunk();
-				index->Delete(table_chunk, scan_chunk.data[old_rowid_idx]);
-			}
-
-			// Remapping must not re-run uniqueness checks for already-validated rows.
-			buffer->InitializeScan(scan_state);
-			while (buffer->Scan(scan_state, scan_chunk)) {
-				reference_table_chunk();
-				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error = index->Append(table_chunk, scan_chunk.data[new_rowid_idx], append_info);
-				if (error.HasError()) {
-					error.Throw();
+				ColumnDataScanState scan_state;
+				buffer->InitializeScan(scan_state);
+				while (buffer->Scan(scan_state, scan_chunk)) {
+					// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
+					// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
+					for (idx_t col_idx = 0; col_idx < mapped_column_ids.size(); col_idx++) {
+						const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
+						table_chunk.data[col_id].Reference(scan_chunk.data[col_idx]);
+					}
+					apply(table_chunk, scan_chunk.data[old_rowid_idx], scan_chunk.data[new_rowid_idx]);
 				}
-			}
+			});
 		}
 	}
 
@@ -1281,8 +1262,8 @@ private:
 	}
 
 private:
-	//! Keep every physical index stable while this task remaps its row IDs.
-	vector<IndexWriteHandle<BoundIndex>> index_handles;
+	//! The stable index entries selected for row ID remapping.
+	vector<shared_ptr<IndexEntry>> index_entries;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;

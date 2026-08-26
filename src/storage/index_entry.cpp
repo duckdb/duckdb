@@ -425,6 +425,23 @@ void IndexEntry::Rebuild(const IndexRebuildScan &scan) {
 	bound_index.Verify();
 }
 
+void IndexEntry::RemapRowIds(const IndexRemapScan &scan) {
+	auto entry_lock = lock.GetExclusiveLock();
+	D_ASSERT(owned_index->IsBound());
+	auto &bound_index = owned_index->Cast<BoundIndex>();
+
+	// Delete old rowids first to avoid same-key rowid collisions within the task.
+	scan([&](DataChunk &chunk, Vector &old_row_ids, Vector &) { bound_index.Delete(chunk, old_row_ids); });
+	// Remapping must not re-run uniqueness checks for already-validated rows.
+	scan([&](DataChunk &chunk, Vector &, Vector &new_row_ids) {
+		IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+		auto error = bound_index.Append(chunk, new_row_ids, append_info);
+		if (error.HasError()) {
+			error.Throw();
+		}
+	});
+}
+
 void IndexEntry::VerifyBuffers() {
 	auto entry_lock = lock.GetExclusiveLock();
 	if (auto delta = deltas.Find(IndexDeltaType::DELETED_ROWS_IN_USE)) {

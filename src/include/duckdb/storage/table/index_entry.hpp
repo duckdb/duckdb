@@ -31,6 +31,8 @@ enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
 
 using IndexRebuildAppend = std::function<void(DataChunk &chunk, Vector &row_ids)>;
 using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, const IndexRebuildAppend &append)>;
+using IndexRemapApply = std::function<void(DataChunk &chunk, Vector &old_row_ids, Vector &new_row_ids)>;
+using IndexRemapScan = std::function<void(const IndexRemapApply &apply)>;
 
 //! Owns the optional indexes used to represent transaction and checkpoint deltas for an IndexEntry.
 class IndexDeltas {
@@ -151,6 +153,8 @@ public:
 	void Vacuum();
 	//! Rebuilds the bound physical index with chunks supplied by the scan callback.
 	void Rebuild(const IndexRebuildScan &scan);
+	//! Replaces old row IDs with new row IDs using chunks supplied by the scan callback.
+	void RemapRowIds(const IndexRemapScan &scan);
 	//! Verifies the buffers of the physical index and its delete delta.
 	void VerifyBuffers();
 	//! Returns a copy of the physical index's table storage metadata.
