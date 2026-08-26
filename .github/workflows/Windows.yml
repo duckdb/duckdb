@@ -33,6 +33,8 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
+      CC: clang-cl
+      CXX: clang-cl
     steps:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -52,8 +54,17 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        clang-cl --version
         python scripts/ci/retry.py -- python scripts/windows_ci.py
         python scripts/ci/retry.py -- make windows_release
+
+    - name: Verify architecture flags
+      shell: pwsh
+      run: |
+        $commands = Get-Content compile_commands.json -Raw
+        if (!$commands.Contains('-march=x86-64-v3') -or !$commands.Contains('-mtune=generic')) {
+          throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
+        }
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -185,6 +196,9 @@ jobs:
    runs-on: windows-2025-vs2026
    env:
      GEN: ninja
+     CC: clang-cl
+     CXX: clang-cl
+     EXTRA_CMAKE_VARIABLES: -DBUILD_UNITTESTS=FALSE -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
    steps:
      - uses: actions/checkout@v6
@@ -206,7 +220,16 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 EXTRA_CMAKE_VARIABLES=-DBUILD_UNITTESTS=FALSE windows_release
+         clang-cl --version
+         python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
+
+     - name: Verify architecture flags
+       shell: pwsh
+       run: |
+         $commands = Get-Content compile_commands.json -Raw
+         if (!$commands.Contains('-march=armv8-a') -or !$commands.Contains('-mtune=generic')) {
+           throw 'Windows ARM64 Release compile commands are missing the architecture flags'
+         }
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'

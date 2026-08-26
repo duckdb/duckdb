@@ -1,5 +1,6 @@
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -25,7 +26,7 @@ DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
-                                                   unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+                                                   unique_ptr<CachingFileHandle> handle, const FileOpenFlags &flags)
     : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)),
       caching_handle(std::move(handle)) {
 	D_ASSERT(!flags.OpenForWriting());
@@ -120,7 +121,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const string &path, Fi
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                           optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(path, flags, opener);
+		return OpenFileExtended(path, std::move(flags), opener);
 	}
 	throw NotImplementedException("CachingFileSystemWrapper: OpenFile is not implemented!");
 }
@@ -303,8 +304,8 @@ void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) 
 	underlying_file_system.RegisterSubSystem(std::move(sub_fs));
 }
 
-void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
-	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
+void CachingFileSystemWrapper::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
+	underlying_file_system.RegisterCompressionFilesystem(std::move(fs));
 }
 
 void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {

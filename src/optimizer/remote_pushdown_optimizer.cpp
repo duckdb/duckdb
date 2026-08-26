@@ -109,19 +109,42 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	}
 }
 
-optional_ptr<CatalogEntry> RemotePushdownOptimizer::LookupEntry(const Identifier &catalog_name,
-                                                                const EntryLookupInfo &lookup,
-                                                                const Identifier &schema_name) {
-	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-	return Catalog::GetEntry(binder.context,
-	                         EntryLookupInfo(lookup, QualifiedName(catalog_name, schema, lookup.GetEntryIdentifier())),
-	                         OnEntryNotFound::RETURN_NULL);
+void RemotePushdownOptimizer::ResolveQualification(const QualifiedName &name, Identifier &catalog_name,
+                                                   vector<Identifier> &schema_path) {
+	// BindTableName resolves the "x.name" catalog-or-schema ambiguity the same way the binder does, and returns
+	// [catalog, schema path..., name] - so a nested schema path survives instead of collapsing onto Catalog()
+	if (name.Path().empty()) {
+		return;
+	}
+	auto bound = Binder::BindTableName(binder.EntryRetriever(), name);
+	catalog_name = bound.Catalog();
+	bound.StripCatalog();
+	auto &path = bound.Path();
+	schema_path.assign(path.begin(), path.end() - 1);
 }
 
-bool RemotePushdownOptimizer::EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const Identifier &schema_name) {
+optional_ptr<CatalogEntry> RemotePushdownOptimizer::LookupEntry(const Identifier &catalog_name,
+                                                                const EntryLookupInfo &lookup,
+                                                                const vector<Identifier> &schema_path) {
+	vector<Identifier> qualification;
+	if (!catalog_name.empty()) {
+		qualification.push_back(catalog_name);
+	}
+	if (schema_path.empty()) {
+		qualification.emplace_back(DEFAULT_SCHEMA);
+	} else {
+		qualification.insert(qualification.end(), schema_path.begin(), schema_path.end());
+	}
+	return Catalog::GetEntry(
+	    binder.context, EntryLookupInfo(lookup, QualifiedName(std::move(qualification), lookup.GetEntryIdentifier())),
+	    OnEntryNotFound::RETURN_NULL);
+}
+
+bool RemotePushdownOptimizer::EntryExistsInLocalCatalog(const EntryLookupInfo &lookup,
+                                                        const vector<Identifier> &schema_path) {
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// if the name specifies a schema use it, otherwise use the search path schema
-		const auto &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
+		vector<Identifier> schema = schema_path.empty() ? vector<Identifier> {local_entry.GetSchema()} : schema_path;
 		if (LookupEntry(local_entry.GetCatalog(), lookup, schema)) {
 			return true;
 		}
@@ -611,9 +634,9 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &nod
 //===--------------------------------------------------------------------===//
 CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedName &name, DDLTarget target,
                                                                 CatalogType entry_type) {
-	Identifier catalog_name = name.Catalog();
-	Identifier schema_name = name.Schema();
-	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	Identifier catalog_name;
+	vector<Identifier> schema_path;
+	ResolveQualification(name, catalog_name, schema_path);
 	if (!catalog_name.empty()) {
 		return ResolveRemoteCatalog(catalog_name, RemoteCapability::EXECUTE_STATEMENT);
 	}
@@ -626,8 +649,8 @@ CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedN
 	if (target == DDLTarget::NEW_ENTRY) {
 		// the entry does not exist yet - it is created in the catalog Binder::SearchSchema would pick
 		auto &search_path = *ClientData::Get(binder.context).catalog_search_path;
-		auto resolved =
-		    schema_name.empty() ? search_path.GetDefault().GetCatalog() : search_path.GetDefaultCatalog(schema_name);
+		auto resolved = schema_path.empty() ? search_path.GetDefault().GetCatalog()
+		                                    : search_path.GetDefaultCatalog(schema_path.front());
 		if (resolved != remote_catalog.GetName()) {
 			return CatalogPushdownResult::Unknown();
 		}
@@ -640,7 +663,7 @@ CatalogPushdownResult RemotePushdownOptimizer::ResolveDDLTarget(const QualifiedN
 	}
 	// the entry must already exist - if any local catalog in the search path holds it, stay local
 	EntryLookupInfo entry_lookup(entry_type, QualifiedName(name.Name()));
-	if (EntryExistsInLocalCatalog(entry_lookup, schema_name)) {
+	if (EntryExistsInLocalCatalog(entry_lookup, schema_path)) {
 		return CatalogPushdownResult::Unknown();
 	}
 	return ResolveRemoteCatalog(remote_catalog.GetName(), RemoteCapability::EXECUTE_STATEMENT);
@@ -837,9 +860,9 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	Identifier catalog_name = func_expr.GetQualifiedName().Catalog();
-	Identifier schema_name = func_expr.GetQualifiedName().Schema();
-	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	Identifier catalog_name;
+	vector<Identifier> schema_path;
+	ResolveQualification(func_expr.GetQualifiedName(), catalog_name, schema_path);
 
 	// If the function has an explicit catalog prefix, check if it's remote
 	if (!catalog_name.empty()) {
@@ -859,11 +882,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
-		auto entry = Catalog::GetEntry(binder.context,
-		                               EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema,
-		                                                                          func_lookup.GetEntryIdentifier())),
-		                               OnEntryNotFound::RETURN_NULL);
+		vector<Identifier> schema = schema_path.empty() ? vector<Identifier> {local_entry.GetSchema()} : schema_path;
+		auto entry = LookupEntry(local_entry.GetCatalog(), func_lookup, schema);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
@@ -981,13 +1001,14 @@ bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPus
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
-	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	Identifier catalog_name = ref.GetQualifiedName().Catalog();
-	Identifier schema_name = ref.GetQualifiedName().Schema();
-	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	// Resolve the schema-as-catalog ambiguity using the binder's own resolution logic. This keeps the whole
+	// (possibly nested) schema path, so a reference like s1.child.t is not mistaken for catalog "s1"
+	Identifier catalog_name;
+	vector<Identifier> schema_path;
+	ResolveQualification(ref.GetQualifiedName(), catalog_name, schema_path);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
-	if (catalog_name.empty() && schema_name.empty()) {
+	if (catalog_name.empty() && schema_path.empty()) {
 		CatalogPushdownResult pushdown_result;
 		if (RefersToCTE(ref.Table(), pushdown_result)) {
 			if (pushdown_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
@@ -1006,7 +1027,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		// verify the table actually exists in the remote catalog - if it does not, fall back
 		// to the binder so it can report a proper error message
 		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    LookupEntry(result.catalog->GetName(), table_lookup, schema_name)) {
+		    LookupEntry(result.catalog->GetName(), table_lookup, schema_path)) {
 			return result;
 		}
 		// A local table always blocks pushdown of any query that contains it.
@@ -1020,7 +1041,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	FindRemoteCatalogsInSearchPath();
 
 	if (pushdown_state.remote_catalogs_in_search_path.size() != 1 ||
-	    EntryExistsInLocalCatalog(table_lookup, schema_name)) {
+	    EntryExistsInLocalCatalog(table_lookup, schema_path)) {
 		// Same as Case 1: a local table → UNKNOWN to prevent Merge from treating it as neutral.
 		TrackLocalTable(ref);
 		return CatalogPushdownResult::Unknown();
@@ -1029,7 +1050,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Not found in any local catalog - push to the single remote catalog in the search path,
 	// but only if the table actually exists there (otherwise fall back to the binder for a proper error)
 	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
-	if (!LookupEntry(remote_catalog.GetName(), table_lookup, schema_name)) {
+	if (!LookupEntry(remote_catalog.GetName(), table_lookup, schema_path)) {
 		TrackLocalTable(ref);
 		return CatalogPushdownResult::Unknown();
 	}
@@ -1060,11 +1081,10 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Subque
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr,
-                                                                         const Identifier &catalog_p,
-                                                                         const Identifier &schema_p) {
-	Identifier catalog_name = catalog_p;
-	Identifier schema_name = schema_p;
-	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+                                                                         const QualifiedName &name) {
+	Identifier catalog_name;
+	vector<Identifier> schema_path;
+	ResolveQualification(name, catalog_name, schema_path);
 	if (catalog_name.empty()) {
 		return CatalogPushdownResult::NoCatalogReference();
 	}
@@ -1075,7 +1095,7 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const P
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const FunctionExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName());
 	// look up the function once - this determines both whether it can be constant-folded and
 	// whether it is a macro in a local catalog (which cannot be evaluated remotely)
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.GetQualifiedName());
@@ -1117,13 +1137,13 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const WindowExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName());
 	return state;
 }
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const TypeExpression &type_expr) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(type_expr, type_expr.GetCatalog(), type_expr.GetSchema());
+	state.result = CheckCatalogQualification(type_expr, type_expr.GetQualifiedName());
 	return state;
 }
 
