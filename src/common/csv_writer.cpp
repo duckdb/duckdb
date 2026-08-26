@@ -80,7 +80,7 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &
                                          options.write_newline, GetWriteCommentChar(options)),
       file_writer(make_uniq<BufferedFileWriter>(fs, file_path,
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
-                                                    FileLockType::WRITE_LOCK | compression,
+                                                    FileLockType::WRITE_LOCK | std::move(compression),
                                                 context)),
       write_stream(*file_writer), should_initialize(true), shared(shared) {
 	if (!shared) {

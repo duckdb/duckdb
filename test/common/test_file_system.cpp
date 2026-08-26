@@ -1,9 +1,12 @@
 #include "catch.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -17,7 +20,9 @@
 
 using namespace duckdb;
 
-static void create_dummy_file(string fname) {
+namespace {
+
+void CreateDummyFile(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
 #ifdef _WIN32
@@ -40,6 +45,52 @@ static void create_dummy_file(string fname) {
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
 }
+
+// Fake compress file handle and filesystem implementation, which doesn't contain any (de)compression functionality but
+// just the interface compatibility.
+class FakeCompressFileHandle : public FileHandle {
+public:
+	FakeCompressFileHandle(FileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
+	    : FileHandle(internal_file_system, internal_file_handle_p->GetPath(), internal_file_handle_p->GetFlags()),
+	      internal_file_handle(std::move(internal_file_handle_p)) {
+	}
+
+	void Close() override {
+		internal_file_handle->Close();
+	}
+
+	duckdb::unique_ptr<FileHandle> internal_file_handle;
+};
+class FakeCompressFileSystem : public CompressedFileSystem {
+public:
+	duckdb::unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, duckdb::unique_ptr<FileHandle> handle,
+	                                                  bool write) override {
+		(void)context; // Suppress compilation warning.
+		(void)write;
+		return make_uniq<FakeCompressFileHandle>(*this, std::move(handle));
+	}
+
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType("fake_compress");
+	}
+	bool CanHandleFile(const string &fpath) override {
+		return StringUtil::EndsWith(fpath, ".compress");
+	}
+	duckdb::unique_ptr<StreamWrapper> CreateStream() override {
+		return nullptr;
+	}
+	idx_t InBufferSize() override {
+		return 0;
+	}
+	idx_t OutBufferSize() override {
+		return 0;
+	}
+	string GetName() const override {
+		return "FakeCompress";
+	}
+};
+
+} // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
@@ -75,7 +126,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
 	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -123,7 +174,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	auto fname_in_dir = fs->JoinPath(dname, fname);
 	auto fname_in_dir2 = fs->JoinPath(dname, fname2);
 
-	create_dummy_file(fname_in_dir);
+	CreateDummyFile(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->DirectoryExists(fname_in_dir));
 
@@ -222,9 +273,9 @@ TEST_CASE("Test RemoveFiles", "[file_system]") {
 	auto file2 = fs->JoinPath(dname, "file2.txt");
 	auto file3 = fs->JoinPath(dname, "file3.txt");
 	auto file4 = fs->JoinPath(dname, "file4.txt");
-	create_dummy_file(file1);
-	create_dummy_file(file2);
-	create_dummy_file(file3);
+	CreateDummyFile(file1);
+	CreateDummyFile(file2);
+	CreateDummyFile(file3);
 
 	REQUIRE(fs->FileExists(file1));
 	REQUIRE(fs->FileExists(file2));
@@ -1114,3 +1165,43 @@ TEST_CASE("Test long paths on Windows", "[file_system]") {
 	fs->RemoveDirectory(work_dir);
 }
 #endif // _WIN32
+
+TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
+	// Create a local file which pretends to be fake-compressed.
+	auto filepath = TestCreatePath("fake_compression_file.compress");
+	auto fs = FileSystem::CreateLocal();
+	{
+		const string payload = "CREATE_COMPRESSED_FILE";
+		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+		                    0);
+		write_handle->Sync();
+	}
+
+	VirtualFileSystem vfs;
+	vfs.RegisterCompressionFilesystem(make_uniq<FakeCompressFileSystem>());
+
+	// Auto-detection matches the fake compression filesystem based on the file name.
+	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
+	flags.SetCompression(FileCompressionType::AUTO_DETECT);
+	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+
+	// Downcast to make sure compressed file handle is created.
+	REQUIRE(file_handle != nullptr);
+	auto &compressed_file_handle = file_handle->Cast<FakeCompressFileHandle>();
+	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
+	file_handle.reset();
+
+	// Explicitly requesting the registered compression type works as well.
+	flags.SetCompression(FileCompressionType("fake_compress"));
+	file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+	REQUIRE(file_handle != nullptr);
+	REQUIRE(file_handle->Cast<FakeCompressFileHandle>().internal_file_handle != nullptr);
+	file_handle.reset();
+
+	// Explicitly requesting a compression type that has not been registered throws.
+	flags.SetCompression(FileCompressionType("nonexistent_compress"));
+	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
+
+	fs->RemoveFile(filepath);
+}

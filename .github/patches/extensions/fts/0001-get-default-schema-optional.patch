@@ -1,0 +1,22 @@
+diff --git a/src/fts_indexing.cpp b/src/fts_indexing.cpp
+index 581646b..c9305fd 100644
+--- a/src/fts_indexing.cpp
++++ b/src/fts_indexing.cpp
+@@ -27,9 +27,15 @@ static QualifiedName GetQualifiedName(ClientContext &context,
+     if (!qname.Catalog().empty()) {
+       schema_path.push_back(qname.Catalog());
+     }
+-    schema_path.push_back(
++    auto default_schema =
+         ClientData::Get(context).catalog_search_path->GetDefaultSchema(
+-            context, qname.Catalog()));
++            context, qname.Catalog());
++    if (!default_schema) {
++      throw CatalogException("cannot resolve '%s' - catalog '%s' has no "
++                             "default schema, qualify the name with a schema",
++                             qname_str, qname.Catalog().GetIdentifierName());
++    }
++    schema_path.push_back(*default_schema);
+     qname = qname.WithQualification(std::move(schema_path));
+   }
+   return qname;

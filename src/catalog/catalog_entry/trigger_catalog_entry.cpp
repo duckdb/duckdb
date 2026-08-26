@@ -15,6 +15,7 @@ TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
       referencing_new_table(info.referencing_new_table), referencing_old_table(info.referencing_old_table),
       trigger_action(info.trigger_action->Copy()) {
 	this->temporary = info.temporary;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
 }
