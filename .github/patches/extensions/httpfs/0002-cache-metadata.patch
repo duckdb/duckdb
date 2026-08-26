@@ -1,4 +1,4 @@
-commit f3020c0642e084d1e5000dce113d629790b56991
+commit 15368ff636efdf497fe192fe8aafe8c7fb851cfe
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -40,7 +40,7 @@ index 38a023d..a986791 100644
  	    url, request_headers, http_params,
  	    [&](const HTTPResponse &response) { return context.HandleResponse(response); },
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..7fc7087 100644
+index 2efd0fa..4a5e621 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -351,15 +351,18 @@ index 2efd0fa..7fc7087 100644
  	}
  }
  
-@@ -791,6 +1013,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +1013,10 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
-+	cache_valid_until = cache_entry.cache_valid_until;
++	{
++		annotated_lock_guard<annotated_mutex> guard(cache_policy_lock);
++		cache_valid_until = cache_entry.cache_valid_until;
++	}
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +1024,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +1027,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -367,7 +370,7 @@ index 2efd0fa..7fc7087 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1092,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1095,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
@@ -453,7 +456,7 @@ index 1c6e500..ab35bcd 100644
  		return true;
  	}
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
-index 6d19b18..3b0d066 100644
+index 6d19b18..2f0b4bf 100644
 --- a/src/include/http/httpfs.hpp
 +++ b/src/include/http/httpfs.hpp
 @@ -2,6 +2,7 @@
@@ -475,7 +478,14 @@ index 6d19b18..3b0d066 100644
  	void Close() override;
  
  protected:
-@@ -82,9 +87,11 @@ protected:
+@@ -76,15 +81,17 @@ protected:
+ 	void LoadFileInfo();
+ 	void InitializeLogger(FileOpener &opener);
+ 
+-	virtual void InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cache_entry);
++	virtual void InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cache_entry) DUCKDB_EXCLUDES(cache_policy_lock);
+ 	virtual HTTPMetadataCacheEntry GetCacheEntry() const;
+ 
  private:
  	void FinalizeReadConfig();
  	bool TryLoadFileInfoWithoutRequest();
@@ -490,23 +500,16 @@ index 6d19b18..3b0d066 100644
  	void InitializeRequestState(optional_ptr<FileOpener> opener);
  	bool TryInitializeRead(HTTPFileSystem &file_system, optional_ptr<HTTPMetadataCache> cache,
  	                       bool &should_write_cache);
-@@ -99,6 +106,10 @@ public:
- 	idx_t length;
- 	timestamp_t last_modified;
- 	string etag;
-+	//! Freshness deadline (inclusive) derived from HTTP caching headers (Cache-Control/Expires).
-+	//! Unset means no freshness information; positive/negative infinity mean always valid/invalid.
-+	//! Used to bound how long cached file data may be served.
-+	optional<timestamp_t> cache_valid_until;
- 	bool force_full_download;
- 	bool initialized = false;
- 	bool auto_fallback_to_full_file_download = true;
-@@ -123,11 +134,18 @@ private:
+@@ -123,11 +130,22 @@ private:
  	double tp_bandwidth_bps DUCKDB_GUARDED_BY(network_estimator_lock) = 0;
  	idx_t tp_sample_count DUCKDB_GUARDED_BY(network_estimator_lock) = 0;
  	static constexpr idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16;
 +
 +	mutable annotated_mutex cache_policy_lock;
++	//! Freshness deadline (inclusive) derived from HTTP caching headers (Cache-Control/Expires).
++	//! Unset means no freshness information; positive/negative infinity mean always valid/invalid.
++	//! Used to bound how long cached file data may be served.
++	optional<timestamp_t> cache_valid_until DUCKDB_GUARDED_BY(cache_policy_lock);
  };
  
  class HTTPFileSystem : public FileSystem {
