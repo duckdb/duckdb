@@ -97,8 +97,16 @@ public:
 					auto buf =
 					    ExternalFileCache::AllocateCacheBuffer(buffer_manager, caching_file_handle.GetPath(), to_read);
 					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
+					const bool share_block = !caching_file_handle.IsCacheReuseProhibited();
 
 					lk.lock();
+					if (!share_block) {
+						block->nr_bytes = to_read;
+						block->state = CacheBlockState::EMPTY;
+						result_pin = std::move(buf);
+						block->cv.notify_all();
+						return;
+					}
 					block->block_handle = buf.GetBlockHandle();
 					block->nr_bytes = to_read;
 					block->state = CacheBlockState::LOADED;
@@ -552,6 +560,11 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 		}
 	}
 	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
+}
+
+bool CachingFileHandle::IsCacheReuseProhibited() {
+	const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+	return validation_info.IsCacheReuseProhibited();
 }
 
 void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {
