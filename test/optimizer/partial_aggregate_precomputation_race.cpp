@@ -50,7 +50,8 @@ TEST_CASE("Test partial aggregate precomputation partition race reproduces PR 24
 	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS race_db (ROW_GROUP_SIZE 2048)"));
 	REQUIRE_NO_FAIL(conn.Query("CREATE TABLE race_db.t(key INTEGER)"));
 	REQUIRE_NO_FAIL(conn.Query("INSERT INTO race_db.t SELECT 1 FROM range(2048)"));
-	REQUIRE_NO_FAIL(conn.Query("INSERT INTO race_db.t SELECT CASE WHEN i % 2 = 0 THEN 5 ELSE 6 END FROM range(2048) r(i)"));
+	REQUIRE_NO_FAIL(
+	    conn.Query("INSERT INTO race_db.t SELECT CASE WHEN i % 2 = 0 THEN 5 ELSE 6 END FROM range(2048) r(i)"));
 	REQUIRE_NO_FAIL(conn.Query("INSERT INTO race_db.t SELECT 5 FROM range(2048)"));
 	REQUIRE_NO_FAIL(conn.Query("CHECKPOINT race_db"));
 	// commit the delete before the reader starts so the checkpoint below is
