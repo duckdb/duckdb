@@ -96,8 +96,12 @@ unique_ptr<Expression> NoopReplaceRemovalRule::Apply(LogicalOperator &op, vector
 		return nullptr;
 	}
 
-	auto needle = ExpressionExecutor::EvaluateScalar(GetContext(), needle_expr);
-	auto replacement = ExpressionExecutor::EvaluateScalar(GetContext(), replacement_expr);
+	Value needle;
+	Value replacement;
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), needle_expr, needle) ||
+	    !ExpressionExecutor::TryEvaluateScalar(GetContext(), replacement_expr, replacement)) {
+		return nullptr;
+	}
 	if (needle.IsNull() || replacement.IsNull() || needle.type().id() != LogicalTypeId::VARCHAR ||
 	    replacement.type().id() != LogicalTypeId::VARCHAR) {
 		return nullptr;
