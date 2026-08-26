@@ -456,7 +456,7 @@ index e653d9f..4136371 100644
  		}
  	}
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index 157bab2..0889d34 100644
+index 157bab2..59c60b0 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
 +++ b/src/hnsw/hnsw_optimize_scan.cpp
 @@ -1,21 +1,20 @@
@@ -521,17 +521,18 @@ index 157bab2..0889d34 100644
  			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
  			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
  			auto vector_elements = ArrayValue::GetChildren(matched_vector);
-@@ -144,7 +144,7 @@ public:
+@@ -144,7 +144,8 @@ public:
  				query_vector[i] = vector_elements[i].GetValue<float>();
  			}
  
 -			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, cast_index, top_n.limit, std::move(query_vector));
-+			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, top_n.limit, std::move(query_vector));
++			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, guard->GetIndexName(), top_n.limit,
++			                                                   std::move(query_vector));
  			break;
  		}
  
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index 79a5e6a..eb5e94a 100644
+index 79a5e6a..3ed0e14 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -1,18 +1,17 @@
@@ -607,16 +608,17 @@ index 79a5e6a..eb5e94a 100644
  			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
  
  			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
-@@ -173,7 +172,7 @@ public:
+@@ -173,7 +172,8 @@ public:
  			if (k_limit <= 0 || k_limit >= STANDARD_VECTOR_SIZE) {
  				continue;
  			}
 -			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, cast_index, k_limit, std::move(query_vector));
-+			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, k_limit, std::move(query_vector));
++			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, guard->GetIndexName(), k_limit,
++			                                                   std::move(query_vector));
  			break;
  		}
  
-@@ -190,8 +189,9 @@ public:
+@@ -190,8 +190,9 @@ public:
  		get.bind_data = std::move(bind_data);
  
  		// Replace the aggregate with a list() aggregate function ordered by the distance
@@ -695,7 +697,7 @@ index d8d2899..9a15cce 100644
  	unique_ptr<ExpressionMatcher> function_matcher;
  	unique_ptr<ExpressionMatcher> MakeFunctionMatcher() const;
 diff --git a/src/include/hnsw/hnsw_index_scan.hpp b/src/include/hnsw/hnsw_index_scan.hpp
-index 4139d6a..47b2e1f 100644
+index 4139d6a..07fed96 100644
 --- a/src/include/hnsw/hnsw_index_scan.hpp
 +++ b/src/include/hnsw/hnsw_index_scan.hpp
 @@ -6,20 +6,23 @@
@@ -711,10 +713,11 @@ index 4139d6a..47b2e1f 100644
  // This is created by the optimizer rule
  struct HNSWIndexScanBindData final : public TableScanBindData {
 -	explicit HNSWIndexScanBindData(TableCatalogEntry &table, Index &index, idx_t limit,
-+	explicit HNSWIndexScanBindData(TableCatalogEntry &table, shared_ptr<IndexEntry> index_entry, idx_t limit,
- 	                               unsafe_unique_array<float> query)
+-	                               unsafe_unique_array<float> query)
 -	    : TableScanBindData(table), index(index), limit(limit), query(std::move(query)) {
-+	    : TableScanBindData(table), index_name(index_entry->GetName()), index_entry(std::move(index_entry)), limit(limit),
++	explicit HNSWIndexScanBindData(TableCatalogEntry &table, shared_ptr<IndexEntry> index_entry,
++	                               Identifier index_name_p, idx_t limit, unsafe_unique_array<float> query)
++	    : TableScanBindData(table), index_name(std::move(index_name_p)), index_entry(std::move(index_entry)), limit(limit),
 +	      query(std::move(query)) {
  	}
  
