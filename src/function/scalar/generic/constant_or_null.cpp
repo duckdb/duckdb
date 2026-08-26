@@ -79,9 +79,17 @@ static unique_ptr<BaseStatistics> ConstantOrNullStatistics(ClientContext &, Func
 	auto result = StringStats::CreateEmpty(input.expr.GetReturnType());
 	StringStats::SetMin(result, string_t(""), StringStatsType::EXACT_STATS);
 	StringStats::SetMax(result, string_t(""), StringStatsType::EXACT_STATS);
-	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
-	if (input.child_stats.size() > 1 && input.child_stats[1].CanHaveNull()) {
+	auto &bind_data = input.bind_data->Cast<ConstantOrNullBindData>();
+	if (bind_data.value.IsNull()) {
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		return result.ToUnique();
+	}
+	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	for (idx_t i = 1; i < input.child_stats.size(); i++) {
+		if (input.child_stats[i].CanHaveNull()) {
+			result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			break;
+		}
 	}
 	return result.ToUnique();
 }
