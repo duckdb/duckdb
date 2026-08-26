@@ -1465,13 +1465,12 @@ bool Geometry::IsValidGeography(const string_t &wkb) {
 		// Empty geometry has no coordinates to validate.
 		return true;
 	}
-	if (extent.HasX() && (extent.x_min < -180.0 || extent.x_max > 180.0)) {
+	// A non-finite X or Y ordinate in a non-empty vertex (e.g. a NaN, which makes the axis unknown)
+	// is not a valid geography coordinate: the geodetic extent math relies on all values being finite.
+	if (!extent.HasX() || !extent.HasY()) {
 		return false;
 	}
-	if (extent.HasY() && (extent.y_min < -90.0 || extent.y_max > 90.0)) {
-		return false;
-	}
-	return true;
+	return extent.x_min >= -180.0 && extent.x_max <= 180.0 && extent.y_min >= -90.0 && extent.y_max <= 90.0;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

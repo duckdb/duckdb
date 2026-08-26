@@ -153,10 +153,24 @@ public:
 		return std::isfinite(m_min) && std::isfinite(m_max);
 	}
 
+	// NOTE: extents are *coordinate* (vertex) extents, matching the Parquet geospatial statistics
+	// definition: they bound the coordinate values of the geometries, not the region a geometry
+	// covers. Under spherical edge semantics a geography's coverage can exceed its coordinate extent
+	// (great-circle edges bulge poleward, and an interior-on-the-left polygon can cover more than a
+	// hemisphere while its vertices stay in a small band), so predicates that reason about interiors
+	// must not treat these extents as coverage bounds. The GeometryTypeSet in the stats records
+	// whether such (polygon) types are present.
+
 	// The `geodetic` flag enables antimeridian-aware longitude (X axis) math used by GEOGRAPHY:
 	// the X axis is treated as a circular [-180,180] degree axis where an arc may wrap (x_min > x_max),
 	// meaning the longitude range is [x_min, 180] u [-180, x_max]. The Y axis is never wrapped.
 	// When `geodetic` is false the behavior is exact min/max, identical to GEOMETRY.
+	//
+	// The antimeridian seam is the only point identity the geodetic math models: +180 and -180 are
+	// treated as the same longitude. The poles are NOT identified - at y = +/-90 every longitude is
+	// physically the same point, but e.g. POINT(0 90) and POINT(90 90) still have disjoint coordinate
+	// extents (consistent with the coordinate-extent contract above). A geometric predicate that
+	// understands pole identity must account for this itself for pole-touching data.
 
 	void Extend(const VertexXY &vertex, bool geodetic = false) {
 		ExtendX(vertex.x, geodetic);
@@ -188,11 +202,18 @@ public:
 		MergeAxis(m_min, m_max, other.m_min, other.m_max);
 
 		// Only the X axis is special-cased for geodetic merging, and only when both arcs are finite.
-		// A non-finite axis is "empty" or "unknown" and the plain min/max correctly propagates both.
+		// A non-finite axis is "empty" or "unknown" and MergeAxis correctly propagates both.
 		const bool both_finite =
 		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
 		if (geodetic && both_finite) {
-			LonArcMerge(x_min, x_max, other.x_min, other.x_max, x_min, x_max);
+			if (LonInRange(x_min) && LonInRange(x_max) && LonInRange(other.x_min) && LonInRange(other.x_max)) {
+				LonArcMerge(x_min, x_max, other.x_min, other.x_max, x_min, x_max);
+			} else {
+				// Out-of-contract longitudes (only possible for data that bypassed validation): the arc
+				// math is undefined for them, so degrade to unknown rather than risk an under-covering arc.
+				x_min = UNKNOWN_MIN;
+				x_max = UNKNOWN_MAX;
+			}
 		} else {
 			MergeAxis(x_min, x_max, other.x_min, other.x_max);
 		}
@@ -205,9 +226,16 @@ public:
 		const bool both_finite =
 		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
 		if (geodetic && both_finite) {
-			return LonArcIntersects(x_min, x_max, other.x_min, other.x_max);
+			if (!LonInRange(x_min) || !LonInRange(x_max) || !LonInRange(other.x_min) || !LonInRange(other.x_max)) {
+				// Out-of-contract longitudes: cannot decide, err on the side of intersecting.
+				return true;
+			}
+			// Widened by LON_EPSILON: a false "no intersection" here prunes rows, so round toward "intersects".
+			return LonArcContains(x_min, x_max, other.x_min, LON_EPSILON) ||
+			       LonArcContains(other.x_min, other.x_max, x_min, LON_EPSILON);
 		}
-		// Plain (and the non-finite empty/unknown cases): the inequalities handle +/- inf naturally.
+		// Plain (and the non-finite empty/unknown cases): the inequalities handle +/- inf and NaN
+		// conservatively (any NaN comparison is false, so NaN yields "intersects").
 		return !(x_min > other.x_max || x_max < other.x_min);
 	}
 
@@ -223,23 +251,32 @@ public:
 		const bool both_finite =
 		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
 		if (geodetic && both_finite) {
-			return LonArcContainsArc(x_min, x_max, other.x_min, other.x_max);
+			if (!LonInRange(x_min) || !LonInRange(x_max) || !LonInRange(other.x_min) || !LonInRange(other.x_max)) {
+				// Out-of-contract longitudes: cannot decide, err on the side of not containing.
+				return false;
+			}
+			// Narrowed by LON_EPSILON: a false "contains" can elide a filter entirely, so round toward
+			// "does not contain".
+			return LonArcContainsArc(x_min, x_max, other.x_min, other.x_max, -LON_EPSILON);
 		}
 		return x_min <= other.x_min && x_max >= other.x_max;
 	}
 
-	// Wrap a longitude in degrees into the canonical [-180, 180] range, keeping +180 as +180.
-	static double Norm180(double deg) {
-		double d = std::fmod(deg, 360.0);
-		if (d > 180.0) {
-			d -= 360.0;
-		} else if (d < -180.0) {
-			d += 360.0;
-		}
-		return d;
+private:
+	// The X axis of a geodetic extent is an eastward arc on the longitude circle: it covers the
+	// longitudes traveled going east from x_min to x_max, so x_min > x_max means the arc crosses
+	// the antimeridian. [-180, 180] is the canonical full-circle arc, and +180/-180 denote the same
+	// physical longitude. Arc endpoints are always actual input coordinates (or +/-180 for the full
+	// circle) and are never synthesized with arithmetic: a coordinate that went into an extent
+	// always compares as contained, exactly. Decision comparisons still round at ~1 ulp of 360
+	// degrees, so the public predicates additionally guard with LON_EPSILON in the safe direction.
+	static constexpr double LON_EPSILON = 1e-9; // ~0.1mm of longitude at the equator
+
+	// Is this longitude within the canonical [-180, 180] range the arc math requires?
+	static bool LonInRange(double x) {
+		return x >= -180.0 && x <= 180.0;
 	}
 
-private:
 	//! A NaN coordinate cannot be placed on the axis, so it makes the range of the axis unknown
 	static void ExtendAxis(double &min, double &max, double value) {
 		if (std::isnan(value)) {
@@ -261,63 +298,80 @@ private:
 		max = MaxValue(max, other_max);
 	}
 
-	// Eastward angular distance (degrees) from a to b, in [0, 360). Inputs in [-180, 180].
+	// Canonicalize the antimeridian seam: +180 and -180 are the same longitude.
+	static double LonCanon(double x) {
+		return x == 180.0 ? -180.0 : x;
+	}
+
+	// Eastward angular distance (degrees) from a to b, in [0, 360). Inputs finite, in [-180, 180].
 	static double LonEastDist(double a, double b) {
-		double d = b - a;
+		double d = LonCanon(b) - LonCanon(a);
 		if (d < 0.0) {
 			d += 360.0;
 		}
 		return d;
 	}
 
-	// Does the eastward arc [lo, hi] contain the longitude p? All inputs finite, in [-180, 180].
-	static bool LonArcContains(double lo, double hi, double p) {
-		return LonEastDist(lo, p) <= LonEastDist(lo, hi);
+	// Eastward width of the arc [lo, hi], in [0, 360]. Only the full circle [-180, 180] has width 360.
+	static double LonArcWidth(double lo, double hi) {
+		if (lo == -180.0 && hi == 180.0) {
+			return 360.0;
+		}
+		return LonEastDist(lo, hi);
 	}
 
-	// Do two eastward longitude arcs intersect? Two arcs on a circle overlap iff one contains the
-	// other's start point.
-	static bool LonArcIntersects(double also, double ahi, double blo, double bhi) {
-		return LonArcContains(also, ahi, blo) || LonArcContains(blo, bhi, also);
+	// Does the arc [lo, hi] contain the longitude p, with the given slack (may be negative)?
+	static bool LonArcContains(double lo, double hi, double p, double slack = 0.0) {
+		return LonEastDist(lo, p) <= LonArcWidth(lo, hi) + slack;
 	}
 
-	// Does the outer arc fully contain the inner arc?
-	static bool LonArcContainsArc(double olo, double ohi, double ilo, double ihi) {
-		const double ow = LonEastDist(olo, ohi);
+	// Does the outer arc fully contain the inner arc, with the given slack (may be negative)?
+	static bool LonArcContainsArc(double olo, double ohi, double ilo, double ihi, double slack = 0.0) {
+		const double ow = LonArcWidth(olo, ohi);
+		if (ow >= 360.0) {
+			return true;
+		}
 		const double off = LonEastDist(olo, ilo);
-		const double iw = LonEastDist(ilo, ihi);
-		return off <= ow && off + iw <= ow;
+		return off <= ow + slack && off + LonArcWidth(ilo, ihi) <= ow + slack;
 	}
 
-	// Merge two eastward arcs into the smallest covering arc, writing the result to out_lo/out_hi
-	// (which may alias the inputs). The minimal covering arc starts at one of the two input starts.
-	static void LonArcMerge(double also, double ahi, double blo, double bhi, double &out_lo, double &out_hi) {
-		const double aw = LonEastDist(also, ahi);
-		const double bw = LonEastDist(blo, bhi);
-		const double need_a = MaxValue(aw, LonEastDist(also, blo) + bw);
-		const double need_b = MaxValue(bw, LonEastDist(blo, also) + aw);
-		double start, width;
-		if (need_a <= need_b) {
-			start = also;
-			width = need_a;
-		} else {
-			start = blo;
-			width = need_b;
+	// Merge two arcs into a covering arc, writing the result to out_lo/out_hi (which may alias the
+	// inputs). The narrowest covering arc starts at one arc's start and ends at one arc's end: try
+	// those four candidates with their exact endpoint values and keep the narrowest one that covers
+	// both inputs. If none does (the arcs jointly cover the whole circle), the result is the full circle.
+	static void LonArcMerge(double alo, double ahi, double blo, double bhi, double &out_lo, double &out_hi) {
+		const double cand_lo[4] = {alo, alo, blo, blo};
+		const double cand_hi[4] = {ahi, bhi, ahi, bhi};
+		double best_lo = -180.0;
+		double best_hi = 180.0;
+		double best_width = 360.0;
+		for (idx_t i = 0; i < 4; i++) {
+			if (!LonArcContainsArc(cand_lo[i], cand_hi[i], alo, ahi) ||
+			    !LonArcContainsArc(cand_lo[i], cand_hi[i], blo, bhi)) {
+				continue;
+			}
+			const double width = LonArcWidth(cand_lo[i], cand_hi[i]);
+			if (width < best_width) {
+				best_width = width;
+				best_lo = cand_lo[i];
+				best_hi = cand_hi[i];
+			}
 		}
-		if (width >= 360.0) {
-			// Covers the whole circle - represent as a full, non-wrapped range.
-			out_lo = -180.0;
-			out_hi = 180.0;
-			return;
-		}
-		out_lo = start;
-		out_hi = Norm180(start + width);
+		out_lo = best_lo;
+		out_hi = best_hi;
 	}
 
 	// Extend the X (longitude) axis to include x. For geodetic this uses circular arc math.
 	void ExtendX(double x, bool geodetic) {
-		if (!geodetic || std::isnan(x)) {
+		if (!geodetic) {
 			ExtendAxis(x_min, x_max, x);
+			return;
+		}
+		if (std::isnan(x) || !LonInRange(x)) {
+			// A NaN or out-of-contract longitude (only possible for data that bypassed validation)
+			// makes the whole axis unknown.
+			x_min = UNKNOWN_MIN;
+			x_max = UNKNOWN_MAX;
 			return;
 		}
 		if (!std::isfinite(x_min) || !std::isfinite(x_max)) {

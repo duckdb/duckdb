@@ -263,18 +263,18 @@ public:
 
 class GeoStatisticsState final : public ColumnWriterStatistics {
 public:
-	explicit GeoStatisticsState(bool geodetic = false) : has_stats(false) {
+	explicit GeoStatisticsState(bool geodetic = false) : has_stats(false), geodetic(geodetic) {
 		geo_stats.SetEmpty();
-		// GEOGRAPHY uses antimeridian-aware (circular longitude) extent math.
-		geo_stats.geodetic = geodetic;
 	}
 
 	bool has_stats;
+	//! GEOGRAPHY uses antimeridian-aware (circular longitude) extent math.
+	bool geodetic;
 	GeometryStatsData geo_stats;
 
 public:
 	void Update(const string_t &val) {
-		geo_stats.Update(val);
+		geo_stats.Update(val, geodetic);
 		has_stats = true;
 	}
 	bool HasGeoStats() override {

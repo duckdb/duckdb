@@ -532,6 +532,25 @@ struct ArrowGeometry {
 
 	static void ArrowToDuck(ClientContext &, Vector &source, Vector &result, idx_t count) {
 		Geometry::FromBinary(source, result, count, true);
+
+		if (result.GetType().id() != LogicalTypeId::GEOGRAPHY) {
+			return;
+		}
+		// GEOGRAPHY coordinates must lie within the canonical ranges: the geodetic statistics math
+		// relies on it, so imported data is validated just like ST_GeogFromWKB.
+		UnifiedVectorFormat vdata;
+		result.ToUnifiedFormat(vdata);
+		const auto blobs = UnifiedVectorFormat::GetData<string_t>(vdata);
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			if (!Geometry::IsValidGeography(blobs[idx])) {
+				throw InvalidInputException("GEOGRAPHY import: coordinates are outside the canonical ranges "
+				                            "(longitude/X must be within [-180, 180], latitude/Y within [-90, 90])");
+			}
+		}
 	}
 
 	static void DuckToArrow(ClientContext &context, const Vector &source, Vector &result, idx_t count) {

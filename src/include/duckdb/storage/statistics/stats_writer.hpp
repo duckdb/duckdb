@@ -141,8 +141,6 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		ClearBase();
 		if (is_geometry) {
 			geometry_stats.SetEmpty();
-			// GEOGRAPHY uses antimeridian-aware (geodetic) extent math.
-			geometry_stats.geodetic = geodetic;
 		} else {
 			is_set = false;
 			min_size = 0;
@@ -157,7 +155,8 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	inline void Update(const string_t &value) {
 		SetHasValid();
 		if (is_geometry) {
-			geometry_stats.Update(value);
+			// GEOGRAPHY uses antimeridian-aware (geodetic) extent math.
+			geometry_stats.Update(value, geodetic);
 			return;
 		}
 		auto data = const_data_ptr_cast(value.GetData());
@@ -243,7 +242,7 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {
-			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
+			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats, geodetic);
 		} else {
 			StringStats::Merge(other, *this);
 		}

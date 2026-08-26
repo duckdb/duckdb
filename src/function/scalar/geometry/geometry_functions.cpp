@@ -451,8 +451,15 @@ static auto VertexExtractStats(ClientContext &context, FunctionStatisticsInput &
 	}
 
 	if (bind_data.vertex_index == 0 && extent.HasXY()) { // X
-		NumericStats::SetMin(new_stats, extent.x_min);
-		NumericStats::SetMax(new_stats, extent.x_max);
+		if (extent.x_min <= extent.x_max) {
+			NumericStats::SetMin(new_stats, extent.x_min);
+			NumericStats::SetMax(new_stats, extent.x_max);
+		} else {
+			// A wrapped (antimeridian-crossing) GEOGRAPHY extent covers [x_min, 180] u [-180, x_max]:
+			// as a plain numeric range that is all of [-180, 180].
+			NumericStats::SetMin(new_stats, -180.0);
+			NumericStats::SetMax(new_stats, 180.0);
+		}
 		return new_stats.ToUnique();
 	}
 	if (bind_data.vertex_index == 1 && extent.HasXY()) { // Y

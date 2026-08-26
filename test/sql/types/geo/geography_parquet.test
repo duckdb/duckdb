@@ -47,3 +47,46 @@ query I
 SELECT g && 'POINT(179 0)'::GEOGRAPHY FROM '{TEST_DIR}/geography_am.parquet';
 ----
 true
+
+# The wrapped bounding box is visible in the file metadata
+query IIII
+SELECT t.geo_bbox.xmin, t.geo_bbox.xmax, t.geo_bbox.ymin, t.geo_bbox.ymax
+FROM parquet_metadata('{TEST_DIR}/geography_am.parquet') t;
+----
+170.0	-170.0	0.0	0.0
+
+# Row-group pruning through the Parquet geospatial statistics stays sound: every stored coordinate
+# matches itself when probed through a fresh scan of the file.
+statement ok
+COPY (
+	SELECT printf('POINT(%.6f %.6f)',
+		CASE WHEN x > 180 THEN x - 360 ELSE x END,
+		-80.0 + (i // 64) * 2.5
+	)::GEOGRAPHY AS g
+	FROM (SELECT i, 178.0 + (i % 64) * 0.0625 AS x FROM range(4096) t(i))
+) TO '{TEST_DIR}/geography_grid.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 1000);
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(178.000000 -80.000000)'::GEOGRAPHY;
+----
+1
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(-178.062500 77.500000)'::GEOGRAPHY;
+----
+1
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(-180.000000 -80.000000)'::GEOGRAPHY;
+----
+1
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'POINT(0 0)'::GEOGRAPHY;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/geography_grid.parquet' WHERE g && 'LINESTRING(179 -90, -179 90)'::GEOGRAPHY;
+----
+2112

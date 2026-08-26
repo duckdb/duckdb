@@ -572,7 +572,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 
 				// xmin > xmax means the bounding box wraps across the antimeridian. This is only valid for
 				// GEOGRAPHY (whose extent math is antimeridian-aware); for GEOMETRY we ignore such a box.
-				if (is_geography || bbox.xmin <= bbox.xmax) {
+				// The geodetic arc math requires X within [-180, 180], so a file-provided GEOGRAPHY bbox
+				// outside that range (or NaN) is ignored rather than trusted.
+				const bool valid_x = is_geography ? bbox.xmin >= -180.0 && bbox.xmin <= 180.0 && bbox.xmax >= -180.0 &&
+				                                        bbox.xmax <= 180.0
+				                                  : bbox.xmin <= bbox.xmax;
+				if (valid_x) {
 					stats_bbox.x_min = bbox.xmin;
 					stats_bbox.x_max = bbox.xmax;
 				}

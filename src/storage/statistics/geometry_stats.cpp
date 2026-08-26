@@ -71,23 +71,24 @@ bool GeometryTypeSet::TryAdd(const string &type_name) {
 }
 
 BaseStatistics GeometryStats::CreateUnknown(LogicalType type) {
-	const bool geodetic = type.id() == LogicalTypeId::GEOGRAPHY;
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
 	auto &data = GetDataUnsafe(result);
 	data.SetUnknown();
-	data.geodetic = geodetic;
 	return result;
 }
 
 BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
-	const bool geodetic = type.id() == LogicalTypeId::GEOGRAPHY;
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
 	auto &data = GetDataUnsafe(result);
 	data.SetEmpty();
-	data.geodetic = geodetic;
 	return result;
+}
+
+//! Whether the antimeridian-aware (geodetic) extent math applies to statistics of this type
+static bool StatsAreGeodetic(const BaseStatistics &stats) {
+	return stats.GetType().id() == LogicalTypeId::GEOGRAPHY;
 }
 
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -127,8 +128,6 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 
 void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &data = GetDataUnsafe(base);
-	// The geodetic flag is derived from the column type, not serialized.
-	data.geodetic = base.GetType().id() == LogicalTypeId::GEOGRAPHY;
 
 	// Read old garbage string stats if present, but ignore it since it is not relevant to geometry stats
 	if (deserializer.CanDeserializeProperty(200, "min")) {
@@ -195,7 +194,7 @@ child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 
 void GeometryStats::Update(BaseStatistics &stats, const string_t &value) {
 	auto &data = GetDataUnsafe(stats);
-	data.Update(value);
+	data.Update(value, StatsAreGeodetic(stats));
 }
 
 void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -208,7 +207,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 
 	auto &target = GetDataUnsafe(stats);
 	auto &source = GetDataUnsafe(other);
-	target.Merge(source);
+	target.Merge(source, StatsAreGeodetic(stats));
 }
 
 void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
