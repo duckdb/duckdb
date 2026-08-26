@@ -199,7 +199,9 @@ jobs:
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
       extensions_test_selection: 'complete'
-      extra_extension_config: ${{ matrix.extension_config }}
+      extra_extension_config: |
+        set(DUCKDB_OPTIMIZATION_PROFILE EXTENSION)
+        ${{ matrix.extension_config }}
       runners: ${{ inputs.runners }}
 
   deploy-repository:

@@ -39,6 +39,7 @@ class FileOpener;
 class FileSystem;
 class Logger;
 class ClientContext;
+class CompressedFileSystem;
 class QueryContext;
 class MemoryMappedFile;
 struct MMapOptions;
@@ -168,7 +169,7 @@ public:
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
-	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                           optional_ptr<FileOpener> opener = nullptr);
 
 	//! Open a memory-mapped view of [path]. Throws if not supported by this filesystem.
@@ -290,7 +291,8 @@ public:
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
-	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
+	//! Register a compression filesystem (both built-in and provided by extensions), keyed by its compression type
+	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs);
 
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);

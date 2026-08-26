@@ -234,8 +234,6 @@ enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
 
-enum class FileCompressionType : uint8_t;
-
 enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
@@ -325,6 +323,8 @@ enum class LookupResultType : uint8_t;
 enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
+
+enum class MatchMode : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
@@ -931,9 +931,6 @@ template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
 
 template<>
-const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
-
-template<>
 const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
 
 template<>
@@ -1067,6 +1064,9 @@ const char* EnumUtil::ToChars<MacroType>(MacroType value);
 
 template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
+
+template<>
+const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
@@ -1823,9 +1823,6 @@ template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
-FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
-
-template<>
 FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
@@ -1959,6 +1956,9 @@ MacroType EnumUtil::FromString<MacroType>(const char *value);
 
 template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
+
+template<>
+MatchMode EnumUtil::FromString<MatchMode>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);

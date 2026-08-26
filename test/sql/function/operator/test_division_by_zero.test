@@ -1,0 +1,202 @@
+# name: test/sql/function/operator/test_division_by_zero.test
+# description: Test division by zero across numeric types
+# group: [operator]
+
+statement ok
+CREATE TABLE numbers(i INTEGER);
+
+statement ok
+INSERT INTO numbers VALUES (7), (0), (NULL), (2);
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
+
+query II
+SELECT 7::{type} // 2::{type}, 7::{type} % 2::{type}
+----
+3	1
+
+endloop
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL(4,1) DECIMAL(9,2) DECIMAL(18,3) DECIMAL(38,4)
+
+# constant division by zero
+statement error
+SELECT 7::{type} // 0::{type}
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT 7::{type} % 0::{type}
+----
+<REGEX>:.*Division by zero.*
+
+# division by a zero in a column
+statement error
+SELECT 7::{type} // i::{type} FROM numbers
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT 7::{type} % i::{type} FROM numbers
+----
+<REGEX>:.*Division by zero.*
+
+# division by a non-zero value still works
+query I
+SELECT 7::{type} % 2::{type}
+----
+1
+
+# TRY turns the error into NULL
+query II
+SELECT TRY(7::{type} // 0::{type}), TRY(7::{type} % 0::{type})
+----
+NULL	NULL
+
+endloop
+
+# aliases
+statement error
+SELECT divide(7, 0)
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT mod(7, 0)
+----
+<REGEX>:.*Division by zero.*
+
+# / is integer division with integer_division=true
+statement ok
+SET integer_division=true;
+
+statement error
+SELECT 7 / 0
+----
+<REGEX>:.*Division by zero.*
+
+statement ok
+SET integer_division=false;
+
+# floating point division follows IEEE 754 by default
+query III
+SELECT 7 / 0, 7.5::DOUBLE / 0, -7.5::FLOAT / 0
+----
+inf	inf	-inf
+
+query I
+SELECT isnan(7.5::DOUBLE % 0)
+----
+true
+
+# without IEEE semantics, floating point division by zero is an error too
+statement ok
+SET ieee_floating_point_ops=false;
+
+foreach type FLOAT DOUBLE
+
+statement error
+SELECT 7.5::{type} / 0::{type}
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT 7.5::{type} % 0::{type}
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT 7.5::{type} / i::{type} FROM numbers
+----
+<REGEX>:.*Division by zero.*
+
+query II
+SELECT 7.5::{type} / 2::{type}, 7.5::{type} % 2::{type}
+----
+3.75	1.5
+
+endloop
+
+statement ok
+SET ieee_floating_point_ops=true;
+
+# intervals
+statement error
+SELECT INTERVAL '1 day' / 0
+----
+<REGEX>:.*Division by zero.*
+
+statement error
+SELECT INTERVAL '1 day' / i FROM numbers
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT INTERVAL '1 day' / 2
+----
+12:00:00
+
+# null_on_division_by_zero restores the old behavior of returning NULL
+statement ok
+SET null_on_division_by_zero=true;
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL(4,1) DECIMAL(9,2) DECIMAL(18,3) DECIMAL(38,4)
+
+query II
+SELECT 7::{type} // 0::{type}, 7::{type} % 0::{type}
+----
+NULL	NULL
+
+query I
+SELECT 7::{type} % i::{type} FROM numbers ORDER BY i NULLS LAST
+----
+NULL
+1
+0
+NULL
+
+endloop
+
+query II
+SELECT divide(7, 0), mod(7, 0)
+----
+NULL	NULL
+
+query I
+SELECT INTERVAL '1 day' / 0
+----
+NULL
+
+# floating point still follows IEEE 754 unless disabled
+query I
+SELECT 7.5::DOUBLE / 0
+----
+inf
+
+statement ok
+SET ieee_floating_point_ops=false;
+
+foreach type FLOAT DOUBLE
+
+query II
+SELECT 7.5::{type} / 0::{type}, 7.5::{type} % 0::{type}
+----
+NULL	NULL
+
+query I
+SELECT 7::{type} / i::{type} FROM numbers ORDER BY i NULLS LAST
+----
+NULL
+3.5
+1.0
+NULL
+
+endloop
+
+statement ok
+SET null_on_division_by_zero=false;
+
+statement error
+SELECT 7 // 0
+----
+<REGEX>:.*Division by zero.*

@@ -37,7 +37,7 @@ Attempting to open a compressed file, but the compression type is not supported
 statement error
 COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
 ----
-Unrecognized file compression type "UNKNOWN"
+Attempting to open a compressed file, but the compression type is not supported (compression type "unknown")
 
 # zstd works once we load the parquet extension
 require parquet

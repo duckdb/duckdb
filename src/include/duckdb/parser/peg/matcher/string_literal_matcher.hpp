@@ -15,58 +15,48 @@ public:
 		name = "StringLiteral";
 	}
 
-	MatchResultType Match(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return MatchResultType::FAIL;
-		}
-
-		auto &token_text = token->text;
-		auto string_info = GetSpecialStringInfo(token_text);
-		const bool allows_continuation = IsSingleQuotedStringLiteral(*token, string_info);
-
-		if (!MatchStringLiteral(state, string_info)) {
-			return MatchResultType::FAIL;
-		}
-		if (allows_continuation) {
-			while (IsStringLiteralContinuation(state)) {
-				Advance(state);
-			}
-		}
-		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		auto token = state.token_iterator.Current();
-		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 
 		auto start_offset = optional_idx(token->offset);
 		auto string_info = GetSpecialStringInfo(token->text);
 		const bool allows_continuation = IsSingleQuotedStringLiteral(*token, string_info);
 
-		if (!IsStringLiteral(*token, string_info)) {
-			return nullptr;
+		if (!MatchStringLiteral(state, string_info)) {
+			return MatcherResult::Failure();
 		}
-		string stripped_string = StripStringLiteral(*token, string_info);
+
+		string stripped_string;
 		idx_t end_offset = token->offset + token->length;
-		Advance(state);
+		if (state.BuildParseResult()) {
+			stripped_string = StripStringLiteral(*token, string_info);
+		}
 		if (allows_continuation) {
 			while (IsStringLiteralContinuation(state)) {
 				token = state.token_iterator.Current();
-				auto continuation_info = GetSpecialStringInfo(token->text);
-				stripped_string += StripStringLiteral(*token, continuation_info);
+				if (state.BuildParseResult()) {
+					auto continuation_info = GetSpecialStringInfo(token->text);
+					stripped_string += StripStringLiteral(*token, continuation_info);
+				}
 				end_offset = token->offset + token->length;
 				Advance(state);
 			}
 		}
+		state.token_iterator.SetPreviousTokenType(TokenType::STRING_LITERAL);
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
+		}
+
 		auto token_length = optional_idx(end_offset - start_offset.GetIndex());
 
-		auto result = state.allocator.Allocate(
-		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset, token_length));
-		result->name = name;
+		auto result = state.AllocateParseResult<StringLiteralParseResult>(stripped_string, string_info.type,
+		                                                                  start_offset, token_length);
+		if (result.HasParseResult()) {
+			result.GetParseResult()->name = name;
+		}
 		return result;
 	}
 

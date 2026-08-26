@@ -12,38 +12,7 @@ public:
 	explicit RepeatMatcher(Matcher &element_p) : Matcher(TYPE), element(element_p) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		MatchState repeat_state(state);
-
-		// first we must match the element
-		auto child_match = element.Match(repeat_state);
-		if (child_match != MatchResultType::SUCCESS) {
-			// match did not succeed - propagate upwards
-			return child_match;
-		}
-		// we have matched (at least) once - so this is always a success
-		// now we can keep on repeating the matching (optionally)
-		while (true) {
-			// update the token index we propagate upwards
-			state.token_iterator.SetPosition(repeat_state.token_iterator);
-
-			auto current = repeat_state.token_iterator.Current();
-			bool at_autocomplete_cursor = current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
-			if (at_autocomplete_cursor) {
-				element.AddSuggestion(state);
-				return MatchResultType::SUCCESS;
-			}
-
-			// now match the element again
-			child_match = element.Match(repeat_state);
-			if (child_match != MatchResultType::SUCCESS) {
-				// if we did not succeed we are done matching
-				return MatchResultType::SUCCESS;
-			}
-		}
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		MatchState repeat_state(state);
 		vector<reference<ParseResult>> results;
 
@@ -54,11 +23,13 @@ public:
 
 		// First, we MUST match the element at least once.
 		auto first_result = element.MatchParseResult(repeat_state);
-		if (!first_result) {
+		if (!first_result.IsSuccess()) {
 			// The first match failed, so the whole repeat fails.
-			return nullptr;
+			return MatcherResult::Failure();
 		}
-		results.push_back(*first_result);
+		if (first_result.HasParseResult()) {
+			results.push_back(*first_result.GetParseResult());
+		}
 
 		// After the first success, the overall result is a success.
 		// Now, we continue matching the element as many times as possible.
@@ -68,19 +39,22 @@ public:
 
 			auto current = repeat_state.token_iterator.Current();
 			if (current && current->type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+				element.AddSuggestion(state);
 				break;
 			}
 
 			// Try to match the element again.
 			auto next_result = element.MatchParseResult(repeat_state);
-			if (!next_result) {
+			if (!next_result.IsSuccess()) {
 				break;
 			}
-			results.push_back(*next_result);
+			if (next_result.HasParseResult()) {
+				results.push_back(*next_result.GetParseResult());
+			}
 		}
 
 		// Return all collected results in a RepeatParseResult.
-		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results), start_offset));
+		return state.AllocateParseResult<RepeatParseResult>(std::move(results), start_offset);
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
