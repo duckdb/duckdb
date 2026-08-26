@@ -40,6 +40,9 @@ public:
 	string ToString() const override {
 		return matcher.GetName() + "?";
 	}
+	const Matcher &GetChildMatcher() const {
+		return matcher;
+	}
 
 private:
 	Matcher &matcher;
