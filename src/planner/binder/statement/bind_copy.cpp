@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
+#include "duckdb/common/index_vector.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -15,12 +16,14 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/query_node/copy_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
@@ -521,6 +524,21 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	return result;
 }
 
+static optional_ptr<unique_ptr<LogicalOperator>> FindCopySource(unique_ptr<LogicalOperator> &op,
+                                                                ColumnDataCollection &copy_source) {
+	if (op->type == LogicalOperatorType::LOGICAL_CHUNK_GET &&
+	    op->Cast<LogicalColumnDataGet>().collection.get() == &copy_source) {
+		return op;
+	}
+	for (auto &child : op->children) {
+		auto source = FindCopySource(child, copy_source);
+		if (source) {
+			return source;
+		}
+	}
+	return nullptr;
+}
+
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &function) {
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
@@ -532,43 +550,55 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	if (!function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
-	// COPY FROM a file
-	// generate an insert statement for the to-be-inserted table
-	InsertStatement insert;
-	auto &insert_node = *insert.node;
-	insert_node.qualified_name = stmt.info->GetQualifiedName();
-	insert_node.columns = stmt.info->select_list;
-
-	// bind the insert statement to the base table
-	auto insert_statement = Bind(insert);
-	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
-
-	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
 	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->GetQualifiedName());
-	physical_index_vector_t<idx_t> column_index_map;
+	IndexVector<idx_t, PhysicalIndex> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
 	vector<Identifier> expected_names;
 	BindInsertColumnList(table, stmt.info->select_list, false, named_column_map, expected_types, column_index_map);
-	D_ASSERT(expected_types == bound_insert.expected_types);
 	expected_names.reserve(named_column_map.size());
 	for (auto &column_index : named_column_map) {
 		expected_names.push_back(table.GetColumn(column_index).Name());
 	}
 
+	// COPY FROM a file
+	// generate an insert statement for the to-be-inserted table
+	InsertStatement insert;
+	auto &insert_node = *insert.node;
+	insert_node.qualified_name = stmt.info->GetQualifiedName();
+	insert_node.columns = expected_names;
+	ColumnDataCollection empty_collection(Allocator::DefaultAllocator(), expected_types);
+	auto empty_select = make_uniq<SelectStatement>();
+	auto empty_select_node = make_uniq<SelectNode>();
+	empty_select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto empty_table = make_uniq<ColumnDataRef>(empty_collection, expected_names);
+	empty_table->alias = "__copy_from";
+	empty_select_node->from_table = std::move(empty_table);
+	empty_select->node = std::move(empty_select_node);
+	insert_node.select_statement = std::move(empty_select);
+
+	// bind the insert statement to the base table
+	auto insert_statement = Bind(insert);
+	auto copy_source = FindCopySource(insert_statement.plan, empty_collection);
+	if (!copy_source) {
+		throw InternalException("Failed to find the source operator for COPY FROM");
+	}
+	D_ASSERT((*copy_source)->Cast<LogicalColumnDataGet>().chunk_types == expected_types);
+	auto source_bindings = (*copy_source)->GetColumnBindings();
+	D_ASSERT(!source_bindings.empty());
+
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, expected_types);
-	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 expected_types, expected_names);
+	auto get = make_uniq<LogicalGet>(source_bindings[0].table_index, std::move(copy_from_function),
+	                                 std::move(function_data), expected_types, expected_names);
 	for (idx_t i = 0; i < expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
-	auto root = ResolveInputProjection(bound_insert, column_index_map, std::move(get), expected_types);
-	insert_statement.plan->children.push_back(std::move(root));
+	*copy_source = std::move(get);
 	result.plan = std::move(insert_statement.plan);
 	return result;
 }

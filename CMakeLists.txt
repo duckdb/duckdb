@@ -617,6 +617,9 @@ option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 set(SMALLER_BINARY "" CACHE STRING "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance. Set to ON/1 to trim everything, or to a comma-separated list of feature or group names. Use 'list' to print the available names.")
 set(SMALLER_BINARY_EXCEPT "" CACHE STRING "Feature or group names to keep, subtracted from SMALLER_BINARY.")
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
+set(DUCKDB_OPTIMIZATION_PROFILE "CLI" CACHE STRING
+    "Release architecture profile: CLI, EXTENSION, or NONE")
+set_property(CACHE DUCKDB_OPTIMIZATION_PROFILE PROPERTY STRINGS CLI EXTENSION NONE)
 option(ENABLE_JEMALLOC "Enable jemalloc as the memory allocator (only on supported platforms)" TRUE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
@@ -1067,6 +1070,8 @@ endfunction()
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
+include(${PROJECT_SOURCE_DIR}/scripts/architecture_flags.cmake)
+
 # These compile definitions/paths are consumed by sources in src/ (e.g. extension_helper.cpp, allocator.cpp),
 # so they must be configured before add_subdirectory(src).
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
@@ -1147,6 +1152,8 @@ if(NOT CLANG_TIDY)
     endif()
   endif()
 endif()
+
+duckdb_apply_architecture_flags()
 
 
 if (NOT ${EXTENSION_CONFIG_BUILD})

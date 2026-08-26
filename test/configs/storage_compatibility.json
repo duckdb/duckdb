@@ -228,7 +228,9 @@
         "test/sql/trigger/create_trigger_parse.test",
         "test/sql/trigger/create_trigger_wal.test",
         "test/sql/trigger/drop_trigger.test",
-        "test/sql/trigger/drop_trigger_wal.test"
+        "test/sql/trigger/drop_trigger_wal.test",
+        "test/sql/trigger/trigger_dependency.test",
+        "test/sql/trigger/trigger_dependency_restart.test"
       ]
     },
     {

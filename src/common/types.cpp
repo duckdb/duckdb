@@ -155,8 +155,10 @@ PhysicalType LogicalType::GetInternalType() {
 		}
 		return EnumType::GetPhysicalType(*this);
 	}
-	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
+		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
+		return PhysicalType::UINT8;
+	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -1276,6 +1278,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 				bound_type.Serialize(serializer);
 				return;
 			}
+		} catch (const InternalException &) {
+			throw;
+		} catch (const OutOfMemoryException &) {
+			// binding allocates, and a failure to allocate is not a failure to bind: falling back here reports it
+			// as "Cannot serialize non-constant type parameter", which says nothing about what went wrong
+			throw;
+		} catch (const InterruptException &) {
+			throw;
 		} catch (...) {
 			// Ignore errors, just try to write as a USER type instead
 		}

@@ -53,13 +53,13 @@ ScalarFunctionSet JSONFunctions::GetKeysFunction() {
 	ScalarFunctionSet set("json_keys");
 	GetJSONKeysFunctionsInternal(set, LogicalType::VARCHAR);
 	GetJSONKeysFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
+	set.ApplyToFunctions([](ScalarFunction &func) {
 		const auto &sig = func.GetSignature();
 		if (sig.GetParameterCount() == 1 && sig.GetParameter(0).GetType().IsJSONType()) {
-			continue;
+			return;
 		}
 		func.SetFallible();
-	}
+	});
 	return set;
 }
 

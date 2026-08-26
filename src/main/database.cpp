@@ -80,6 +80,7 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
+	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
 }
 
@@ -306,6 +307,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	ExtensionHelper::RegisterLinkedExtensions(config);
 
 	create_api_v1 = CreateAPIv1Wrapper;
+	invoke_capi_v2 = InvokeCAPIV2Entrypoint;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
@@ -652,6 +654,13 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
+                                                   ext_init_c_api_v2_fun_t init_fun,
+                                                   optional_ptr<ClientContext> context, bool statically_linked) {
+	D_ASSERT(invoke_capi_v2);
+	invoke_capi_v2(*this, init_result, extension_name, init_fun, context, statically_linked);
 }
 
 LogManager &DatabaseInstance::GetLogManager() const {
