@@ -34,7 +34,11 @@ class BufferManager;
 
 //! File metadata used to determine whether cached file data is still valid.
 struct CacheValidationInfo {
-	bool IsExplicitlyStale() const;
+	//! Whether the backend explicitly prohibits reuse. Validators cannot make such an entry reusable.
+	bool IsCacheReuseProhibited() const;
+	//! Whether the freshness deadline has passed, including explicitly stale entries.
+	//! An ordinarily expired entry can still be revalidated using validators.
+	bool IsExpired() const;
 
 	//! Version tag (e.g., HTTP ETag). Empty if the storage backend does not provide one.
 	string version_tag;

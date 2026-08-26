@@ -14,8 +14,12 @@
 
 namespace duckdb {
 
-bool CacheValidationInfo::IsExplicitlyStale() const {
+bool CacheValidationInfo::IsCacheReuseProhibited() const {
 	return cache_valid_until && *cache_valid_until == timestamp_t::ninfinity();
+}
+
+bool CacheValidationInfo::IsExpired() const {
+	return cache_valid_until && Timestamp::GetCurrentTimestamp() > *cache_valid_until;
 }
 
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
@@ -268,7 +272,7 @@ bool ExternalFileCache::HasValidationMetadata(const CacheValidationInfo &info) {
 }
 
 bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached, const CacheValidationInfo &current) {
-	if (cached.IsExplicitlyStale() || current.IsExplicitlyStale()) {
+	if (cached.IsCacheReuseProhibited() || current.IsCacheReuseProhibited()) {
 		return false;
 	}
 	if (!validate) {

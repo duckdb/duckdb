@@ -219,8 +219,7 @@ bool CachingFileHandle::CanUseCache() {
 	auto current_cached_file = EnsureCachedFileCurrent();
 	if (!Validate()) {
 		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-		const auto &valid_until = current_cached_file->validation_info.cache_valid_until;
-		return !valid_until || Timestamp::GetCurrentTimestamp() <= *valid_until;
+		return !current_cached_file->validation_info.IsExpired();
 	}
 	bool has_validation_metadata;
 	{
@@ -229,11 +228,10 @@ bool CachingFileHandle::CanUseCache() {
 	}
 
 	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
-	const auto cache_valid_until = current_cached_file->validation_info.cache_valid_until;
-	if (!cache_valid_until) {
+	if (!current_cached_file->validation_info.cache_valid_until) {
 		return has_validation_metadata;
 	}
-	return Timestamp::GetCurrentTimestamp() <= *cache_valid_until;
+	return !current_cached_file->validation_info.IsExpired();
 }
 
 void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
@@ -305,8 +303,10 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
 		const bool first_access = (cached_file->validation_info.file_size == 0);
-		if (first_access || Validate()) {
+		const bool refresh_expired_cache = !Validate() && cached_file->validation_info.IsExpired();
+		if (first_access || Validate() || refresh_expired_cache) {
 			const bool cache_is_valid =
+			    !refresh_expired_cache &&
 			    ExternalFileCache::IsValid(Validate(), cached_file->validation_info, validation_info);
 			if (!cache_is_valid) {
 				annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
