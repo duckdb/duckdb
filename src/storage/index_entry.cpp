@@ -69,17 +69,17 @@ ErrorData IndexEntry::Append(DataChunk &chunk, Vector &row_ids, const shared_ptr
 		if (lookup_main_index) {
 			IndexAppendInfo lookup_append_info;
 			if (delete_index) {
-				delete_index->AddToDeleteIndexes(lookup_append_info);
+				lookup_append_info.delete_indexes.push_back(*delete_index);
 			}
 			if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
-				delta->AddToDeleteIndexes(lookup_append_info);
+				lookup_append_info.delete_indexes.push_back(*delta);
 			}
 			bound_index.VerifyAppend(chunk, lookup_append_info, optional_ptr<ConflictManager>());
 		}
 
 		IndexAppendInfo index_append_info(append_mode, nullptr);
 		if (delete_index) {
-			delete_index->AddToDeleteIndexes(index_append_info);
+			index_append_info.delete_indexes.push_back(*delete_index);
 		}
 		if (append_index) {
 			error = append_index->Append(chunk, row_ids, index_append_info);
@@ -347,11 +347,11 @@ void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataCh
 	if (delete_entry) {
 		delete_lock = delete_entry->lock.GetSharedLock();
 		D_ASSERT(delete_entry->owned_index->IsBound());
-		delete_entry->owned_index->Cast<BoundIndex>().AddToDeleteIndexes(index_append_info);
+		index_append_info.delete_indexes.push_back(delete_entry->owned_index->Cast<BoundIndex>());
 	}
 	if (!manager) {
 		if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
-			delta->AddToDeleteIndexes(index_append_info);
+			index_append_info.delete_indexes.push_back(*delta);
 		}
 	}
 	bound_index.VerifyAppend(chunk, index_append_info, manager);
@@ -368,10 +368,10 @@ void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, Da
 	if (delete_entry) {
 		delete_lock = delete_entry->lock.GetSharedLock();
 		D_ASSERT(delete_entry->owned_index->IsBound());
-		delete_entry->owned_index->Cast<BoundIndex>().AddToDeleteIndexes(index_append_info);
+		index_append_info.delete_indexes.push_back(delete_entry->owned_index->Cast<BoundIndex>());
 	}
 	if (auto delta = deltas.Find(IndexDeltaType::REMOVED_DATA_DURING_CHECKPOINT)) {
-		delta->AddToDeleteIndexes(index_append_info);
+		index_append_info.delete_indexes.push_back(*delta);
 	}
 
 	bound_index.VerifyConstraint(chunk, index_append_info, conflict_manager);

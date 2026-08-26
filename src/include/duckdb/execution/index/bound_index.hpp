@@ -106,9 +106,6 @@ public:
 	const vector<LogicalType> &GetLogicalTypes() const {
 		return logical_types;
 	}
-	void AddToDeleteIndexes(IndexAppendInfo &info) const {
-		info.delete_indexes.push_back(*this);
-	}
 
 public:
 	//! Obtains a lock on the index.
