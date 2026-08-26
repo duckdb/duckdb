@@ -3,6 +3,8 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -70,6 +72,22 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
+static unique_ptr<BaseStatistics> ConstantOrNullStatistics(ClientContext &, FunctionStatisticsInput &input) {
+	if (input.expr.GetReturnType().id() != LogicalTypeId::VARCHAR) {
+		return BaseStatistics::CreateUnknown(input.expr.GetReturnType()).ToUnique();
+	}
+	auto result = StringStats::CreateEmpty(input.expr.GetReturnType());
+	StringStats::SetMin(result, string_t(""));
+	StringStats::SetMax(result, string_t(""));
+	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	if (auto child = input.ChildStats(1)) {
+		if (child->CanHaveNull()) {
+			result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+	}
+	return result.ToUnique();
+}
+
 unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
@@ -100,6 +118,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {{"arg1", LogicalType::ANY}, {"arg2", LogicalType::ANY}},
 	                          LogicalType::ANY, ConstantOrNullFunction);
 	fun.SetBindCallback(ConstantOrNullBind);
+	fun.SetStatisticsCallback(ConstantOrNullStatistics);
 	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }

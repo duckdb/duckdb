@@ -35,7 +35,6 @@ static unique_ptr<Expression> RewriteZeroLength(BoundFunctionExpression &func) {
 		    children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
 		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
 		    children[2]->Cast<BoundConstantExpression>().GetValue().IsNull() ||
-		    children[1]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 1 ||
 		    children[2]->Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>() != 0) {
 			return nullptr;
 		}

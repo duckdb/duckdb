@@ -57,6 +57,11 @@ SELECT count(*) FROM db.prefixes WHERE substring(s, CAST(1 AS SMALLINT), CAST(0 
 ----
 6144
 
+query I
+SELECT count(*) FROM db.prefixes WHERE substring(s, 2, 0) IN ('');
+----
+6144
+
 # Queries that need column values must still scan every row group
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM db.prefixes WHERE left(s, 0) IN ('');
