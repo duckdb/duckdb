@@ -29,6 +29,7 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
 
 #include <type_traits>
 #include <cstring>
@@ -460,6 +461,47 @@ struct VariantBuilder {
 			throw InternalException("EmitPrimitiveNode: unhandled VariantLogicalType (%d)", static_cast<int>(type_id));
 		}
 	}
+
+	idx_t BeginObject(idx_t n) {
+		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::OBJECT));
+		byte_offsets.push_back(byte_offset);
+		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
+		if (!n) {
+			return DConstants::INVALID_INDEX;
+		}
+		VariantBuilderAppendVarint(blob, LocalChild());
+		auto block = child_value_ids.size();
+		child_value_ids.resize(block + n);
+		child_key_ids.resize(block + n);
+		return block;
+	}
+
+	idx_t BeginArray(idx_t n) {
+		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::ARRAY));
+		byte_offsets.push_back(byte_offset);
+		VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(n));
+		if (!n) {
+			return DConstants::INVALID_INDEX;
+		}
+		VariantBuilderAppendVarint(blob, LocalChild());
+		auto block = child_value_ids.size();
+		child_value_ids.resize(block + n);
+		child_key_ids.resize(block + n);
+		return block;
+	}
+
+	void AssignObjectChild(idx_t block, idx_t i, string_t key) {
+		child_value_ids[block + i] = LocalValue();
+		child_key_ids[block + i] = LocalKey();
+		key_slots.push_back(VariantBuilderGetOrCreateIndex(dictionary, key));
+	}
+
+	void AssignArrayChild(idx_t block, idx_t i) {
+		child_value_ids[block + i] = LocalValue();
+		child_key_ids[block + i] = VARIANT_INVALID_KEY;
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -479,33 +521,80 @@ auto CollectObjectChildren(const NODE &it) {
 
 //! Traverse a VariantNode-like cursor 'it' (any type exposing the node concept) into the builder.
 template <class NODE>
-void EmitIterator(const NODE &it, VariantBuilder &builder, idx_t depth = 0) {
-	if (depth >= VariantBuilder::MAX_RECURSION_DEPTH) {
-		throw InvalidInputException("VARIANT nesting exceeds maximum of %d", VariantBuilder::MAX_RECURSION_DEPTH);
-	}
-	if (it.IsNull() || it.IsMissing()) {
-		builder.EmitNull();
-		return;
-	}
+void EmitIterator(const NODE &root, VariantBuilder &builder) {
+	using EntryT = typename decltype(CollectObjectChildren(root))::value_type;
+	using ArrayIterT = decltype(std::declval<NODE>().GetArrayChildren());
 
-	auto type_id = it.GetTypeId();
-	switch (type_id) {
-	case VariantLogicalType::OBJECT: {
-		auto children = CollectObjectChildren(it);
-		builder.EmitObject(
-		    children.size(), [&](idx_t i) { return children[i].key; },
-		    [&](idx_t i) { EmitIterator(children[i].value, builder, depth + 1); });
-		break;
-	}
-	case VariantLogicalType::ARRAY: {
-		auto array = it.GetArrayChildren();
-		builder.EmitArray(
-		    array.size(), [&](idx_t i) { EmitIterator(array[i], builder, depth + 1); }, depth + 1);
-		break;
-	}
-	default:
-		builder.EmitPrimitiveNode(it, type_id);
-		break;
+	struct Frame {
+		bool is_object = false;
+		idx_t index = 0;
+		idx_t block = 0;
+		vector<EntryT> object_children;
+		unique_ptr<ArrayIterT> array_children;
+	};
+
+	vector<Frame> stack;
+
+	auto ProcessNode = [&](const NODE &node) {
+		if (node.IsNull() || node.IsMissing()) {
+			builder.EmitNull();
+			return;
+		}
+		auto type_id = node.GetTypeId();
+		switch (type_id) {
+		case VariantLogicalType::OBJECT: {
+			auto children = CollectObjectChildren(node);
+			auto n = children.size();
+			auto block = builder.BeginObject(n);
+			if (block != DConstants::INVALID_INDEX) {
+				Frame frame;
+				frame.is_object = true;
+				frame.block = block;
+				frame.object_children = std::move(children);
+				stack.push_back(std::move(frame));
+			}
+			break;
+		}
+		case VariantLogicalType::ARRAY: {
+			auto array_iter = node.GetArrayChildren();
+			auto n = array_iter.size();
+			auto block = builder.BeginArray(n);
+			if (block != DConstants::INVALID_INDEX) {
+				Frame frame;
+				frame.is_object = false;
+				frame.block = block;
+				frame.array_children = unique_ptr<ArrayIterT>(new ArrayIterT(std::move(array_iter)));
+				stack.push_back(std::move(frame));
+			}
+			break;
+		}
+		default:
+			builder.EmitPrimitiveNode(node, type_id);
+			break;
+		}
+	};
+
+	ProcessNode(root);
+
+	while (!stack.empty()) {
+		auto &frame = stack.back();
+		idx_t count = frame.is_object ? frame.object_children.size() : frame.array_children->size();
+		if (frame.index >= count) {
+			stack.pop_back();
+			continue;
+		}
+		idx_t i = frame.index++;
+		if (frame.is_object) {
+			auto &entry = frame.object_children[i];
+			builder.AssignObjectChild(frame.block, i, entry.key);
+			ProcessNode(entry.value);
+		} else {
+			builder.AssignArrayChild(frame.block, i);
+			ProcessNode((*frame.array_children)[i]);
+		}
+		// frame may be invalidated by ProcessNode's push_back reallocating `stack` —
+		// nothing below this line touches frame, and the loop re-fetches stack.back()
+		// fresh on the next iteration.
 	}
 }
 
