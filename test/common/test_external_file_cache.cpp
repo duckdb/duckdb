@@ -591,6 +591,7 @@ TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "
 	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE, 'B');
+	const string content_c(BLOCK_SIZE, 'C');
 	EFCTestFileGuard test_file("test_efc_no_validation_freshness.bin", content_a);
 
 	CachingFileSystem cfs(*fresh_fs, db_instance);
@@ -600,14 +601,35 @@ TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "
 	}
 
 	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	const auto expired_deadline = timestamp_t(0);
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
 		REQUIRE(cached_file->validation_info.cache_valid_until != nullopt);
-		// Assign a past timestamp to the freshness deadline so cache won't be used.
-		cached_file->validation_info.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+		cached_file->validation_info.cache_valid_until = expired_deadline;
 	}
 
 	WriteTestContent(test_file.GetPath(), content_b);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
+
+	// Validate cache metadata.
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		REQUIRE(cached_file->validation_info.cache_valid_until != nullopt);
+		REQUIRE(*cached_file->validation_info.cache_valid_until != expired_deadline);
+	}
+
+	// The refreshed metadata allows the current file contents to be cached again.
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+
+	// NO_VALIDATION reuses the refreshed cache while its new deadline is fresh.
+	WriteTestContent(test_file.GetPath(), content_c);
 	{
 		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
