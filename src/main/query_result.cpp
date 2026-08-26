@@ -7,7 +7,7 @@
 namespace duckdb {
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
-                                 vector<LogicalType> types_p, vector<string> names_p)
+                                 vector<LogicalType> types_p, vector<Identifier> names_p)
     : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
       names(std::move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
@@ -50,12 +50,36 @@ ErrorData &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
-idx_t BaseQueryResult::ColumnCount() {
+const ErrorData &BaseQueryResult::GetErrorObject() const {
+	return error;
+}
+
+idx_t BaseQueryResult::ColumnCount() const {
 	return types.size();
 }
 
+QueryResultType BaseQueryResult::GetResultType() const {
+	return type;
+}
+
+StatementType BaseQueryResult::GetStatementType() const {
+	return statement_type;
+}
+
+const StatementProperties &BaseQueryResult::GetStatementProperties() const {
+	return properties;
+}
+
+const vector<LogicalType> &BaseQueryResult::GetTypes() const {
+	return types;
+}
+
+const vector<Identifier> &BaseQueryResult::GetNames() const {
+	return names;
+}
+
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
+                         vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
       client_properties(std::move(client_properties_p)) {
 }
@@ -94,7 +118,8 @@ void QueryResult::DeduplicateColumns(vector<Identifier> &names) {
 	}
 }
 
-const string &QueryResult::ColumnName(idx_t index) const {
+const Identifier &QueryResult::ColumnName(idx_t index) const {
+	auto &names = GetNames();
 	D_ASSERT(index < names.size());
 	return names[index];
 }
@@ -116,20 +141,20 @@ unique_ptr<DataChunk> QueryResult::FetchRaw() {
 	return FetchInternal();
 }
 
-bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
+bool QueryResult::Equals(QueryResult &other, bool compare_names) { // LCOV_EXCL_START
 	// first compare the success state of the results
-	if (success != other.success) {
+	if (HasError() != other.HasError()) {
 		return false;
 	}
-	if (!success) {
-		return error == other.error;
+	if (HasError()) {
+		return GetErrorObject() == other.GetErrorObject();
 	}
 	// compare names
-	if (names != other.names) {
+	if (compare_names && GetNames() != other.GetNames()) {
 		return false;
 	}
 	// compare types
-	if (types != other.types) {
+	if (GetTypes() != other.GetTypes()) {
 		return false;
 	}
 	// now compare the actual values
@@ -179,11 +204,11 @@ void QueryResult::Print() {
 
 string QueryResult::HeaderToString() {
 	string result;
-	for (auto &name : names) {
+	for (auto &name : GetNames()) {
 		result += name + "\t";
 	}
 	result += "\n";
-	for (auto &type : types) {
+	for (auto &type : GetTypes()) {
 		result += type.ToString() + "\t";
 	}
 	result += "\n";

@@ -12,12 +12,15 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
 class CastFunctionSet;
+class BaseStatistics;
 struct FunctionLocalState;
+struct BoundCastInfo;
 
 //! Extra data that can be attached to a bind function of a cast, and is available during binding
 struct BindCastInfo {
@@ -82,7 +85,7 @@ struct CastParameters {
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
 	//! Query location (if any)
-	optional_idx query_location;
+	QueryLocation query_location;
 	//! In the case of a nested type, when facing a cast error, if we nullify the parent
 	bool nullify_parent = false;
 };
@@ -106,7 +109,28 @@ struct CastLocalStateParameters {
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalStateParameters &parameters);
 
+struct CastStatisticsInput {
+	DUCKDB_API CastStatisticsInput(BoundCastInfo &bound_cast_p, const LogicalType &source_type_p,
+	                               const LogicalType &target_type_p, const BaseStatistics &child_stats_p,
+	                               optional_ptr<ClientContext> context_p = nullptr);
+
+	//! Replace the execution function while preserving the callback for later propagation passes
+	DUCKDB_API void SetFunction(cast_function_t new_function);
+
+	const LogicalType &source_type;
+	const LogicalType &target_type;
+	const BaseStatistics &child_stats;
+	optional_ptr<ClientContext> context;
+
+private:
+	BoundCastInfo &bound_cast;
+};
+
+typedef unique_ptr<BaseStatistics> (*cast_statistics_t)(CastStatisticsInput &input);
+
 struct BoundCastInfo {
+	friend struct CastStatisticsInput;
+
 	DUCKDB_API
 	BoundCastInfo( // NOLINT: allow explicit cast from cast_function_t
 	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
@@ -133,14 +157,33 @@ public:
 		return function;
 	}
 	bool IsNopCast() const;
+	//! Whether this is the fallback cast used when no cast exists between the types
+	//! It throws for any non-NULL value, regardless of the types involved
+	bool IsNullCast() const;
+	bool Equals(const BoundCastInfo &other) const {
+		return function == other.function && statistics == other.statistics;
+	}
+	bool HasStatisticsCallback() const {
+		return statistics;
+	}
+	void SetStatisticsCallback(cast_statistics_t new_statistics) {
+		statistics = new_statistics;
+	}
+	DUCKDB_API unique_ptr<BaseStatistics> PropagateStatistics(const LogicalType &source_type,
+	                                                          const LogicalType &target_type,
+	                                                          const BaseStatistics &child_stats,
+	                                                          optional_ptr<ClientContext> context = nullptr);
+	//! Replace the execution function and clear the statistics callback
 	void SetFunction(cast_function_t new_function) {
 		function = new_function;
+		statistics = nullptr;
 	}
 
 private:
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
+	cast_statistics_t statistics = nullptr;
 };
 
 struct BindCastInput {
@@ -150,7 +193,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
-	optional_idx query_location;
+	QueryLocation query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);

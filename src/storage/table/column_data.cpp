@@ -33,7 +33,7 @@
 
 namespace duckdb {
 
-static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+bool ColumnData::IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &expr = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::IsDirectNullCheckFilter").expr;
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
 		return false;
@@ -45,6 +45,16 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 		return false;
 	}
 	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+FilterPropagateResult ColumnData::CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
+                                                       optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
+                                                       ColumnData &validity_column) {
+	if (!IsDirectNullCheckFilter(filter) || state.child_states.empty()) {
+		checked_segment = nullptr;
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return validity_column.CheckZonemap(state.child_states[0], filter, checked_segment);
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -420,7 +430,9 @@ void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_st
 	FinalizeAppend(finalize_state, state);
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                               optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	checked_segment = nullptr;
 	if (state.segment_checked) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -431,13 +443,13 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
 	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
 	state.segment_checked = !is_dynamic;
+	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+	                      ? state.child_states[0].current
+	                      : state.current;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		auto &segment_stats =
-		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().GetStatsMutable()
-		        : state.current->GetNode().GetStatsMutable();
+		auto &segment_stats = checked_segment->GetNode().GetStatsMutable();
 		auto context = state.context.GetClientContext();
 		prune_result =
 		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
@@ -445,12 +457,11 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	}
-	lock_guard<mutex> l(update_lock);
-	if (!updates) {
+	auto update_stats = GetUpdateStatistics();
+	if (!update_stats) {
 		// no updates - return original result
 		return prune_result;
 	}
-	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
 	auto context = state.context.GetClientContext();
 	FilterPropagateResult update_result =
@@ -578,15 +589,14 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, 0, nullptr);
+		AppendTransientSegment(l, state.transient, nullptr);
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
 	if (last_segment.GetSegmentType() == ColumnSegmentType::PERSISTENT ||
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
-		auto total_rows = segment->GetRowStart() + last_segment.count;
-		AppendTransientSegment(l, total_rows, last_segment);
+		AppendTransientSegment(l, state.transient, last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
@@ -621,7 +631,7 @@ void ColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count, append_segment);
+			AppendTransientSegment(l, state.transient, append_segment);
 			state.current = data.GetLastSegment(l);
 			state.current->GetNode().InitializeAppend(state);
 		}
@@ -746,14 +756,15 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
-void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment) {
+void ColumnData::AppendTransientSegment(SegmentLock &l, optional_ptr<SuballocationBlock> transient,
+                                        optional_ptr<ColumnSegment> prev_segment) {
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
+	const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 
 	idx_t segment_size;
 	if (!prev_segment || prev_segment->GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
-		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
 	} else {
 		segment_size = prev_segment->SegmentSize() * 2;
@@ -780,7 +791,12 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	allocation_size += segment_size;
 
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-	auto new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
+	unique_ptr<ColumnSegment> new_segment;
+	if (transient && segment_size < block_size && initial_bytes < segment_size) {
+		new_segment = transient->CreateTransientSegment(db, function, type, segment_size, block_manager);
+	} else {
+		new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
+	}
 	AppendSegment(l, std::move(new_segment));
 }
 

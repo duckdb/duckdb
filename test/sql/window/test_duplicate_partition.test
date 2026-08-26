@@ -1,0 +1,53 @@
+# name: test/sql/window/test_duplicate_partition.test
+# description: A duplicated PARTITION BY expression must not be treated as equivalent to a wider partitioning
+# group: [window]
+
+statement ok
+CREATE TABLE src(a INTEGER, b INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO src VALUES (1, 1, 10), (1, 2, 20);
+
+# PARTITION BY a, a groups both rows, PARTITION BY a, b keeps them apart
+query II
+SELECT
+	SUM(v) OVER (PARTITION BY a, a) AS w_aa,
+	SUM(v) OVER (PARTITION BY a, b) AS w_ab
+FROM src
+ORDER BY b;
+----
+30	10
+30	20
+
+# The same, with the wider partitioning defined first
+query II
+SELECT
+	SUM(v) OVER (PARTITION BY a, b) AS w_ab,
+	SUM(v) OVER (PARTITION BY a, a) AS w_aa
+FROM src
+ORDER BY b;
+----
+10	30
+20	30
+
+# A duplicated expression is equivalent to the deduplicated one
+query II
+SELECT
+	SUM(v) OVER (PARTITION BY a, a) AS w_aa,
+	SUM(v) OVER (PARTITION BY a) AS w_a
+FROM src
+ORDER BY b;
+----
+30	30
+30	30
+
+# Duplicates in both clauses, differing only in the second distinct expression
+query II
+SELECT
+	SUM(v) OVER (PARTITION BY a, a, b) AS w_aab,
+	SUM(v) OVER (PARTITION BY a, a, a) AS w_aaa
+FROM src
+ORDER BY b;
+----
+10	30
+20	30

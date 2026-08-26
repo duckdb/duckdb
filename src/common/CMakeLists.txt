@@ -58,6 +58,7 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   identifier.cpp
+  memory_safety.cpp
   hive_partitioning.cpp
   json_document.cpp
   pipe_file_system.cpp

@@ -9,6 +9,9 @@
 
 namespace duckdb {
 
+const FileOpenFlags AsyncFileWriter::DEFAULT_OPEN_FLAGS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE);
+
 class CopiedAsyncWriteBuffer : public AsyncWriteBuffer {
 public:
 	CopiedAsyncWriteBuffer(ClientContext &context, idx_t capacity_p)
@@ -48,7 +51,7 @@ static ClientContext &RequireClientContext(QueryContext context) {
 }
 
 AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const string &path_p,
-                                 FileOpenFlags open_flags)
+                                 const FileOpenFlags &open_flags)
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 
@@ -200,7 +203,7 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 		if (remaining_size > 0) {
 			auto remaining_offset = total_written;
 			total_written += remaining_size;
-			if (SupportsPositionalWrites()) {
+			if (GetWriteMode() != FileWriteMode::SEQUENTIAL) {
 				Write(buffer + copied_prefix, remaining_size, remaining_offset);
 			} else {
 				Write(buffer + copied_prefix, remaining_size);
@@ -261,8 +264,8 @@ void AsyncFileWriter::LeaveBatch() noexcept {
 	write_queue->LeaveBatch();
 }
 
-bool AsyncFileWriter::SupportsPositionalWrites() {
-	return handle->SupportsPositionalWrites();
+FileWriteMode AsyncFileWriter::GetWriteMode() {
+	return handle->GetWriteMode();
 }
 
 bool AsyncFileWriter::IsLocalFile() {

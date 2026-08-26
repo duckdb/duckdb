@@ -27,10 +27,13 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
@@ -193,7 +196,7 @@ void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, co
 	config.options.allowed_configs.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
-		config.AddAllowedConfig(val.GetValue<string>());
+		config.AddAllowedConfig(val.GetValue<Identifier>());
 	}
 }
 
@@ -1196,6 +1199,32 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Preserve Identifier Case
+//===----------------------------------------------------------------------===//
+void PreserveIdentifierCaseSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("preserve_identifier_case setting cannot be NULL");
+	}
+	// backwards compatibility with the 1.x boolean setting: accept anything that casts to BOOLEAN,
+	// mapping true to preserve_case and false to lowercase
+	auto boolean_value = input.DefaultTryCastAs(LogicalType::BOOLEAN);
+	if (boolean_value) {
+		input = Value(BooleanValue::Get(*boolean_value) ? "preserve_case" : "lowercase");
+		return;
+	}
+	auto parameter = StringValue::Get(input);
+	try {
+		EnumUtil::FromString<IdentifierCaseMode>(parameter);
+	} catch (NotImplementedException &) {
+		// the generated setter reports this as a NotImplementedException naming the C++ enum
+		throw InvalidInputException(
+		    "Unrecognized parameter for option preserve_identifier_case \"%s\", expected one of: "
+		    "preserve_case, lowercase, uppercase",
+		    parameter);
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Profile Output
 //===----------------------------------------------------------------------===//
 void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1647,5 +1676,18 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
+}
+
+void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("current_dialect setting cannot be NULL");
+	}
+	auto dialect_name = input.GetValue<string>();
+	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
+		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
+	}
+	if (info.db) {
+		info.db->GetParserCache().Invalidate();
+	}
 }
 } // namespace duckdb

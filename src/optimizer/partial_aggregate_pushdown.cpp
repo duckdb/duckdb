@@ -8,10 +8,13 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_extractor.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -374,8 +377,9 @@ static void BuildLowerGroupMap(LogicalAggregate &aggr, LogicalComparisonJoin &jo
 	                           info.side_bindings, info.lower_groups, info.lower_group_map, info.lower_group_types);
 }
 
-static bool PassesLowerGroupHeuristic(const PartialAggregatePushdownInfo &info) {
-	return info.lower_groups.size() <= info.join_key_count + PartialAggregatePushdownHeuristics::MAX_EXTRA_LOWER_GROUPS;
+static bool PassesLowerGroupHeuristic(const LogicalAggregate &aggr, const PartialAggregatePushdownInfo &info) {
+	return info.lower_groups.size() < aggr.groups.size() &&
+	       info.lower_groups.size() <= info.join_key_count + PartialAggregatePushdownHeuristics::MAX_EXTRA_LOWER_GROUPS;
 }
 
 static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &aggr, TableIndex lower_aggregate_index,
@@ -587,7 +591,9 @@ static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &con
 }
 
 struct DoubleEagerHeuristics {
-	static constexpr idx_t MIN_COLLAPSE = 2;
+	static constexpr idx_t MAX_SMALL_GROUP_COUNT = 2 * static_cast<idx_t>(STANDARD_VECTOR_SIZE);
+	static constexpr idx_t MIN_SMALL_COLLAPSE = 2;
+	static constexpr idx_t MIN_LARGE_COLLAPSE = 8;
 };
 
 static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effective_ndv) {
@@ -601,8 +607,10 @@ static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effecti
 	double ndv = MaxValue<double>(1.0, (c0 * c1) / cj);
 	ndv = MinValue<double>(ndv, MinValue<double>(c0, c1));
 	effective_ndv = MaxValue<idx_t>(static_cast<idx_t>(ndv), 1);
-	return c0 >= static_cast<double>(DoubleEagerHeuristics::MIN_COLLAPSE) * ndv &&
-	       c1 >= static_cast<double>(DoubleEagerHeuristics::MIN_COLLAPSE) * ndv;
+	const auto min_collapse = effective_ndv <= DoubleEagerHeuristics::MAX_SMALL_GROUP_COUNT
+	                              ? DoubleEagerHeuristics::MIN_SMALL_COLLAPSE
+	                              : DoubleEagerHeuristics::MIN_LARGE_COLLAPSE;
+	return c0 >= static_cast<double>(min_collapse) * ndv && c1 >= static_cast<double>(min_collapse) * ndv;
 }
 
 static bool DECanRepeatAggregateState(const BoundAggregateExpression &aggr) {
@@ -885,6 +893,152 @@ bool PartialAggregatePushdown::TryDoubleEagerPushdown(unique_ptr<LogicalOperator
 }
 
 //===--------------------------------------------------------------------===//
+// Key-Preserving Owner-Outer Count Pushdown
+//===--------------------------------------------------------------------===//
+
+bool PartialAggregatePushdown::TryOwnerOuterCountPushdown(unique_ptr<LogicalOperator> &op) {
+	LogicalAggregate *aggr_ptr;
+	LogicalComparisonJoin *join_ptr;
+	if (!GetPushdownOperators(*op, aggr_ptr, join_ptr)) {
+		return false;
+	}
+	auto &aggr = *aggr_ptr;
+	auto &join = *join_ptr;
+	if ((join.join_type != JoinType::LEFT && join.join_type != JoinType::RIGHT) || join.conditions.size() != 1 ||
+	    join.HasProjectionMap() || join.HasArbitraryConditions() || aggr.groups.size() != 1 ||
+	    aggr.expressions.size() != 1 || aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty() ||
+	    (!aggr.grouping_sets.empty() &&
+	     aggr.grouping_sets[0].find(ProjectionIndex(0)) == aggr.grouping_sets[0].end())) {
+		return false;
+	}
+	auto &condition = join.conditions[0];
+	if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+		return false;
+	}
+	PartialAggregatePushdownInfo info;
+	LogicalJoin::GetTableReferences(*join.children[0], info.side_bindings[0]);
+	LogicalJoin::GetTableReferences(*join.children[1], info.side_bindings[1]);
+	info.dimension_side = join.join_type == JoinType::LEFT ? 0 : 1;
+	info.aggregate_side = 1 - info.dimension_side;
+	unique_ptr<Expression> *aggregate_key_expr;
+	unique_ptr<Expression> *owner_key_expr;
+	if (!GetJoinSideExpressions(condition, info, aggregate_key_expr, owner_key_expr)) {
+		return false;
+	}
+	ColumnBinding owner_key;
+	ColumnBinding group_key;
+	if (!GetColumnBinding(**owner_key_expr, owner_key) || !GetColumnBinding(*aggr.groups[0], group_key) ||
+	    group_key != owner_key) {
+		return false;
+	}
+	ColumnBinding aggregate_key;
+	if (!GetColumnBinding(**aggregate_key_expr, aggregate_key)) {
+		return false;
+	}
+	auto &aggregate = aggr.expressions[0]->Cast<BoundAggregateExpression>();
+	auto &aggregate_name = aggregate.Function().GetName();
+	const bool count_star = aggregate_name == "count_star";
+	if ((!count_star && aggregate_name != "count") || aggregate.IsDistinct() || aggregate.GetFilter() ||
+	    aggregate.GetOrderBys() || (!count_star && aggregate.GetChildren().size() != 1) ||
+	    (count_star && !aggregate.GetChildren().empty()) || aggregate.IsVolatile() ||
+	    aggregate.StateExportMode() != AggregateStateExportMode::NONE) {
+		return false;
+	}
+	if (!count_star && !GetColumnBinding(*aggregate.GetChildren()[0], group_key)) {
+		return false;
+	}
+	if (!count_star && info.side_bindings[info.aggregate_side].find(group_key.table_index) ==
+	                       info.side_bindings[info.aggregate_side].end()) {
+		return false;
+	}
+	RelationStatsExtractor stats_extractor(optimizer.context);
+	auto aggregate_stats = stats_extractor.Extract(*join.children[info.aggregate_side]);
+	auto key_stats = aggregate_stats ? aggregate_stats->GetColumnStats(aggregate_key) : nullptr;
+	if (!aggregate_stats || !key_stats ||
+	    (key_stats->distinct_count.source != DistinctCountSource::EXACT &&
+	     key_stats->distinct_count.source != DistinctCountSource::HLL)) {
+		return false;
+	}
+	const auto aggregate_cardinality = aggregate_stats->cardinality;
+	const auto key_count = MinValue(key_stats->distinct_count.distinct_count, aggregate_cardinality);
+	if (aggregate_cardinality == 0 || key_count == 0 ||
+	    static_cast<double>(aggregate_cardinality) <
+	        static_cast<double>(PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO) *
+	            static_cast<double>(key_count) ||
+	    !join.children[info.dimension_side]->has_estimated_cardinality || !join.has_estimated_cardinality ||
+	    static_cast<double>(join.estimated_cardinality) <
+	        PartialAggregatePushdownHeuristics::MIN_JOIN_RETENTION * static_cast<double>(aggregate_cardinality)) {
+		return false;
+	}
+
+	auto lower_group_index = optimizer.binder.GenerateTableIndex();
+	auto lower_aggregate_index = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> lower_aggregates;
+	lower_aggregates.push_back(aggregate.Copy());
+	auto lower = make_uniq<LogicalAggregate>(lower_group_index, lower_aggregate_index, std::move(lower_aggregates));
+	lower->groups.push_back((*aggregate_key_expr)->Copy());
+	lower->children.push_back(std::move(join.children[info.aggregate_side]));
+	lower->ResolveOperatorTypes();
+	lower->SetEstimatedCardinality(key_count);
+
+	auto aggregate_key_type = (*aggregate_key_expr)->GetReturnType();
+	*aggregate_key_expr =
+	    make_uniq<BoundColumnRefExpression>(aggregate_key_type, ColumnBinding(lower_group_index, ProjectionIndex(0)));
+	join.children[info.aggregate_side] = std::move(lower);
+	join.ResolveOperatorTypes();
+	CopyCardinality(join, *join.children[info.dimension_side]);
+
+	auto count_type = aggregate.GetReturnType();
+	auto count_alias = aggregate.GetAlias();
+	auto count_ref =
+	    make_uniq<BoundColumnRefExpression>(count_type, ColumnBinding(lower_aggregate_index, ProjectionIndex(0)));
+	auto count_value = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, count_type);
+	count_value->GetChildrenMutable().push_back(std::move(count_ref));
+	count_value->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(count_star ? 1 : 0)));
+	vector<unique_ptr<Expression>> sum_children;
+	sum_children.push_back(std::move(count_value));
+	auto upper_sum = DEBindAggregate(optimizer.context, "sum", std::move(sum_children));
+	if (!upper_sum) {
+		return false;
+	}
+	upper_sum->SetAlias(count_alias);
+	vector<unique_ptr<Expression>> upper_aggregates;
+	upper_aggregates.push_back(std::move(upper_sum));
+	auto upper_group_index = optimizer.binder.GenerateTableIndex();
+	auto upper_aggregate_index = optimizer.binder.GenerateTableIndex();
+	auto upper = make_uniq<LogicalAggregate>(upper_group_index, upper_aggregate_index, std::move(upper_aggregates));
+	for (auto &group : aggr.groups) {
+		upper->groups.push_back(group->Copy());
+	}
+	upper->grouping_sets = aggr.grouping_sets;
+	upper->estimated_cardinality = aggr.estimated_cardinality;
+	upper->has_estimated_cardinality = aggr.has_estimated_cardinality;
+	upper->children.push_back(std::move(aggr.children[0]));
+	upper->ResolveOperatorTypes();
+
+	auto projection_index = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(
+	    make_uniq<BoundColumnRefExpression>(upper->types[0], ColumnBinding(upper_group_index, ProjectionIndex(0))));
+	auto sum_ref =
+	    make_uniq<BoundColumnRefExpression>(upper->types[1], ColumnBinding(upper_aggregate_index, ProjectionIndex(0)));
+	auto count_result = BoundCastExpression::AddCastToType(optimizer.context, std::move(sum_ref), count_type);
+	count_result->SetAlias(count_alias);
+	expressions.push_back(std::move(count_result));
+
+	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(expressions));
+	projection->children.push_back(std::move(upper));
+	projection->ResolveOperatorTypes();
+	CopyCardinality(*projection, aggr);
+	AddReplacement(replacement_map, ColumnBinding(aggr.group_index, ProjectionIndex(0)),
+	               ColumnBinding(projection_index, ProjectionIndex(0)));
+	AddReplacement(replacement_map, ColumnBinding(aggr.aggregate_index, ProjectionIndex(0)),
+	               ColumnBinding(projection_index, ProjectionIndex(1)));
+	op = std::move(projection);
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Projection Fusion And Entry Points
 //===--------------------------------------------------------------------===//
 
@@ -944,7 +1098,7 @@ bool PartialAggregatePushdown::FuseInterveningProjections(LogicalOperator &op) {
 void PartialAggregatePushdown::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 	FuseInterveningProjections(*op);
-	if (TryDoubleEagerPushdown(op) || TryPushdownAggregate(op)) {
+	if (TryDoubleEagerPushdown(op) || TryOwnerOuterCountPushdown(op) || TryPushdownAggregate(op)) {
 		// Revisit rewritten subtrees so nested aggregate-over-join shapes can be pushed too.
 		LogicalOperatorVisitor::VisitOperator(op);
 	}
@@ -975,7 +1129,7 @@ bool PartialAggregatePushdown::TryPushdownAggregate(unique_ptr<LogicalOperator> 
 	info.upper_group_index = optimizer.binder.GenerateTableIndex();
 	info.upper_aggregate_index = optimizer.binder.GenerateTableIndex();
 	BuildLowerGroupMap(*aggr, *join, info);
-	if (!PassesLowerGroupHeuristic(info)) {
+	if (!PassesLowerGroupHeuristic(*aggr, info)) {
 		return false;
 	}
 

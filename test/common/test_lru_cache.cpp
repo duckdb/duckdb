@@ -19,6 +19,29 @@ struct TestValue {
 	}
 };
 
+struct MoveOnlyKey {
+	explicit MoveOnlyKey(int value_p) : value(value_p) {
+	}
+	MoveOnlyKey(MoveOnlyKey &&) = default;
+	MoveOnlyKey &operator=(MoveOnlyKey &&) = default;
+	MoveOnlyKey(const MoveOnlyKey &) = delete;
+	MoveOnlyKey &operator=(const MoveOnlyKey &) = delete;
+
+	int value;
+};
+
+struct MoveOnlyKeyHash {
+	size_t operator()(const MoveOnlyKey &key) const {
+		return std::hash<int>()(key.value);
+	}
+};
+
+struct MoveOnlyKeyEqual {
+	bool operator()(const MoveOnlyKey &lhs, const MoveOnlyKey &rhs) const {
+		return lhs.value == rhs.value;
+	}
+};
+
 } // namespace
 
 TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
@@ -134,6 +157,31 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		REQUIRE(cache.Get("key3") != nullptr);
 		REQUIRE(cache.Get("key4") != nullptr);
 	}
+}
+
+TEST_CASE("LRU Cache Move-Only Key", "[lru_cache]") {
+	SharedLruCache<MoveOnlyKey, TestValue, DefaultPayload, MoveOnlyKeyHash, MoveOnlyKeyEqual> cache(2);
+
+	auto val1 = make_shared_ptr<TestValue>(1);
+	auto val2 = make_shared_ptr<TestValue>(2);
+	auto val3 = make_shared_ptr<TestValue>(3);
+	auto val4 = make_shared_ptr<TestValue>(4);
+
+	cache.Put(MoveOnlyKey(1), val1);
+	cache.Put(MoveOnlyKey(2), val2);
+
+	MoveOnlyKey key1(1);
+	REQUIRE(cache.Get(key1)->value == 1);
+
+	cache.Put(MoveOnlyKey(3), val3);
+
+	MoveOnlyKey key2(2);
+	REQUIRE(cache.Get(key2) == nullptr);
+	REQUIRE(cache.Get(key1)->value == 1);
+
+	cache.Put(MoveOnlyKey(1), val4);
+	REQUIRE(cache.Get(key1)->value == 4);
+	REQUIRE(cache.Size() == 2);
 }
 
 TEST_CASE("LRU Cache Unlimited Memory", "[lru_cache]") {

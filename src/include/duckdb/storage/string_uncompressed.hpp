@@ -95,8 +95,7 @@ public:
 
 	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, BaseStatistics &stats,
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
-		D_ASSERT(segment.GetBlockOffset() == 0);
-		auto handle_ptr = handle.GetDataMutable();
+		auto handle_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
 		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
@@ -126,7 +125,7 @@ public:
 				}
 				continue;
 			}
-			auto end = handle.GetDataMutable() + *dictionary_end;
+			auto end = handle_ptr + *dictionary_end;
 
 #ifdef DEBUG
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
@@ -202,7 +201,7 @@ public:
 		// we need to decrement the dictionary size by all of the strings we are erasing
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
-		auto handle_ptr = handle.GetDataMutable();
+		auto handle_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
 		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
 		uint32_t new_dictionary_size;
@@ -246,6 +245,15 @@ public:
 
 			auto str_ptr = char_ptr_cast(dict_pos);
 			return string_t(str_ptr, string_length);
+		} else if (string_length == 0) {
+			// NULL values are stored as a copy of the previous entry's dictionary offset (see
+			// StringAppendBase). When the previous entry is a big (overflow) string, its offset is
+			// negative, so the NULL inherits that negative offset even though it references no
+			// overflow data (its computed length is 0). Return an empty string here instead of
+			// following the marker into ReadOverflowString - otherwise every NULL that trails a big
+			// string re-reads and re-allocates the entire overflow string (O(num_nulls * big_size)
+			// memory, tagged OVERFLOW_STRINGS). The value is masked NULL by the caller regardless.
+			return string_t(char_ptr_cast(base_ptr), 0);
 		} else {
 			// read overflow string
 			block_id_t block_id;

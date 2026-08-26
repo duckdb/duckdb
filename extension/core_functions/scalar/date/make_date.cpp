@@ -152,10 +152,10 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
 	make_date.AddFunction(
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
-	for (auto &func : make_date.functions) {
+	make_date.ApplyToFunctions([](ScalarFunction &func) {
 		func.SetFallible();
 		func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
-	}
+	});
 	return make_date;
 }
 
@@ -174,10 +174,10 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
 
-	for (auto &func : operator_set.functions) {
+	operator_set.ApplyToFunctions([](ScalarFunction &func) {
 		func.SetFallible();
 		func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
-	}
+	});
 	return operator_set;
 }
 
@@ -185,6 +185,8 @@ ScalarFunctionSet MakeTimestampNsFun::GetFunctions() {
 	ScalarFunctionSet operator_set("make_timestamp_ns");
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_NS, ExecuteMakeTimestampNs<int64_t>));
+	// throws if the microseconds are out of range for a timestamp
+	operator_set.SetFallible();
 	operator_set.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return operator_set;
 }

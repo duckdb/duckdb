@@ -120,15 +120,14 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
-	          str.end());
+	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return !CharacterIsSpace(ch); }).base(), str.end());
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
-	str.erase(find_if(str.rbegin(), str.rend(),
-	                  [&chars_to_trim](char ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
-	              .base(),
-	          str.end());
+	str.erase(
+	    find_if(str.rbegin(), str.rend(), [&chars_to_trim](char ch) { return chars_to_trim.find(ch) == string::npos; })
+	        .base(),
+	    str.end());
 }
 
 void StringUtil::Trim(string &str) {
@@ -148,6 +147,15 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 		return false;
 	}
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+}
+
+idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
+	auto common_size = MinValue<idx_t>(left.size(), right.size());
+	idx_t prefix_size = 0;
+	while (prefix_size < common_size && left[prefix_size] == right[prefix_size]) {
+		prefix_size++;
+	}
+	return prefix_size;
 }
 
 string StringUtil::Repeat(const string &str, idx_t n) {
@@ -390,7 +398,8 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToUpper(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -437,7 +446,8 @@ uint64_t StringUtil::CIHash(const string &str) {
 uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
 	for (idx_t i = 0; i < size; i++) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
+		// convert through uint8_t so the hash is identical on platforms with signed and unsigned char
+		hash += static_cast<uint32_t>(static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(str[i]))));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -469,6 +479,13 @@ bool StringUtil::CIStartsWith(const string &str, const string &prefix) {
 		return false;
 	}
 	return CIEquals(str.c_str(), prefix.size(), prefix.c_str(), prefix.size());
+}
+
+bool StringUtil::CIEndsWith(const string &str, const string &suffix) {
+	if (suffix.size() > str.size()) {
+		return false;
+	}
+	return CIEquals(str.c_str() + str.size() - suffix.size(), suffix.size(), suffix.c_str(), suffix.size());
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
@@ -546,13 +563,36 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	if (from.empty()) {
 		throw InternalException("Invalid argument to StringUtil::Replace - empty FROM");
 	}
+	if (source.empty() || from == to) {
+		return source;
+	}
+
+	const auto from_length = from.length();
+	const auto to_length = to.length();
+
+	idx_t match_count = 0;
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
-		source.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like
-		                          // replacing 'x' with 'yx'
+		match_count++;
+		start_pos += from_length;
 	}
-	return source;
+	if (match_count == 0) {
+		return source;
+	}
+
+	string result;
+	result.reserve(source.length() - match_count * from_length + match_count * to_length);
+
+	idx_t last_pos = 0;
+	start_pos = 0;
+	while ((start_pos = source.find(from, start_pos)) != string::npos) {
+		result.append(source, last_pos, start_pos - last_pos);
+		result += to;
+		start_pos += from_length;
+		last_pos = start_pos;
+	}
+	result.append(source, last_pos, string::npos);
+	return result;
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {

@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.GetReturnType()),
-      state_size(aggr.function.GetStateSizeCallback()(aggr.function)), exclude_mode(wexpr.WindowExclude()) {
+      state_size(aggr.function.GetStateSize(aggr.GetFunctionData())), exclude_mode(wexpr.WindowExclude()) {
 	for (auto &child : wexpr.GetChildren()) {
 		arg_types.emplace_back(child->GetReturnType());
 	}
@@ -37,6 +37,39 @@ WindowAggregatorGlobalState::WindowAggregatorGlobalState(ClientContext &client, 
 	} else {
 		filter_mask.InitializeEmpty(group_count);
 	}
+}
+
+void WindowAggregatorGlobalState::BuildPartitionOffsets(const idx_t group_count, const ValidityMask &partition_mask) {
+	partition_offsets.clear();
+
+	// Locate the partition boundaries
+	if (partition_mask.CannotHaveNull()) {
+		partition_offsets.emplace_back(0);
+	} else {
+		idx_t entry_idx;
+		idx_t shift;
+		for (idx_t start = 0; start < group_count;) {
+			partition_mask.GetEntryIndex(start, entry_idx, shift);
+
+			//	If start is aligned with the start of a block,
+			//	and the block is blank, then skip forward one block.
+			const auto block = partition_mask.GetValidityEntry(entry_idx);
+			if (partition_mask.NoneValid(block) && !shift) {
+				start += ValidityMask::BITS_PER_VALUE;
+				continue;
+			}
+
+			// Loop over the block
+			for (; shift < ValidityMask::BITS_PER_VALUE && start < group_count; ++shift, ++start) {
+				if (partition_mask.RowIsValid(block, shift)) {
+					partition_offsets.emplace_back(start);
+				}
+			}
+		}
+	}
+
+	// Add final guard
+	partition_offsets.emplace_back(group_count);
 }
 
 unique_ptr<GlobalSinkState> WindowAggregator::GetGlobalState(ClientContext &context, idx_t group_count,

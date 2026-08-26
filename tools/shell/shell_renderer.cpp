@@ -320,9 +320,9 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 	column_names.reserve(nCol);
 	types.reserve(nCol);
 	for (idx_t c = 0; c < nCol; c++) {
-		column_names.push_back(result.names[c]);
-		types.push_back(result.types[c]);
-		type_names.push_back(GetTypeName(result.types[c]));
+		column_names.push_back(result.ColumnName(c).GetIdentifierName());
+		types.push_back(result.GetTypes()[c]);
+		type_names.push_back(GetTypeName(types.back()));
 	}
 }
 
@@ -1872,12 +1872,11 @@ string SanitizeLogMessage(const string &message) {
 
 } // namespace
 
-ShellLogStorage::ShellLogStorage(ShellState &state)
-    : shell_highlight(state), start_micros(duckdb::Timestamp::GetCurrentTimestamp().value) {
+ShellLogStorage::ShellLogStorage(ShellState &state) : shell_highlight(state), start_time(duckdb::TimePoint::Tick()) {
 	// Elapsed time on compact log lines is measured from here (CLI launch / db open)
 }
 
-void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
 	duckdb::lock_guard<duckdb::mutex> l(lock);
 
@@ -1926,7 +1925,7 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 	}
 
 	// Compact single-line form: "LEVEL:type   <elapsed>  <message>". Elapsed is measured from CLI
-	// launch (start_micros). No de-duplication - every logged statement is shown.
+	// launch. No de-duplication - every logged statement is shown.
 	// Colored prefix (the configurable LOG_* palette), then the rest plain
 	const string prefix = log_level + ":" + log_type;
 	shell_highlight.PrintText(prefix, PrintOutput::STDOUT, element_type);
@@ -1937,7 +1936,7 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 	} else {
 		rest += "  ";
 	}
-	rest += FormatElapsed(timestamp.value - start_micros);
+	rest += FormatElapsed(start_time.ElapsedMicros());
 	rest += "  ";
 	rest += SanitizeLogMessage(log_message);
 	rest += "\n";

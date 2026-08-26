@@ -49,11 +49,11 @@ public:
 	};
 
 	//! Default file-open behavior for creating a write-locked output file.
-	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	DUCKDB_API static const FileOpenFlags DEFAULT_OPEN_FLAGS;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
-	                           FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS);
+	                           const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS);
 	DUCKDB_API ~AsyncFileWriter() override;
 	using WriteStream::Write;
 
@@ -106,8 +106,8 @@ private:
 	//! Leave a registration batch without scheduling, blocking, or throwing.
 	void LeaveBatch() noexcept;
 
-	//! Return whether the file handle supports independent positional writes.
-	bool SupportsPositionalWrites() override;
+	//! Return the file handle's write ordering contract.
+	FileWriteMode GetWriteMode() override;
 	//! Return whether this writer targets a local file-like handle.
 	bool IsLocalFile() override;
 	//! Write bytes to the underlying file handle at the assigned logical stream offset.

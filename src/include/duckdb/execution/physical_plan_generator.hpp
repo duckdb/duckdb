@@ -22,6 +22,17 @@ namespace duckdb {
 class ClientContext;
 class ColumnDataCollection;
 class PipelineBroadcastExchange;
+class PhysicalRecursiveCTEStateScan;
+
+struct RecursiveCTEPlanningInfo {
+	bool using_key = false;
+	vector<idx_t> distinct_indices;
+	vector<idx_t> payload_indices;
+	vector<LogicalType> hash_key_types;
+	vector<LogicalType> aggregate_types;
+	vector<bool> key_requires_normalization;
+	vector<reference<PhysicalRecursiveCTEStateScan>> state_scans;
+};
 
 class PhysicalPlan {
 public:
@@ -79,8 +90,11 @@ public:
 	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
+	//! Physical planning information for recursive CTE state references.
+	unordered_map<TableIndex, RecursiveCTEPlanningInfo> recursive_cte_planning;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
+	unordered_map<TableIndex, OrderPreservationType> materialized_cte_orders;
 	//! The index for duplicate eliminated joins.
 	idx_t delim_index = 0;
 	//! Tracks whether we are planning the recursive member of a recursive CTE.
@@ -150,11 +164,13 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalExecute &op);
 	PhysicalOperator &CreatePlan(LogicalPragma &op);
 	PhysicalOperator &CreatePlan(LogicalSample &op);
+	PhysicalOperator &CreatePlan(LogicalSecureView &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
 	PhysicalOperator &CreatePlan(LogicalAlter &op);
 	PhysicalOperator &CreatePlan(LogicalAttach &op);
 	PhysicalOperator &CreatePlan(LogicalConnect &op);
+	PhysicalOperator &CreatePlan(LogicalExternalResource &op);
 	PhysicalOperator &CreatePlan(LogicalDetach &op);
 	PhysicalOperator &CreatePlan(LogicalDisconnect &op);
 	PhysicalOperator &CreatePlan(LogicalDrop &op);
@@ -178,13 +194,18 @@ protected:
 private:
 	ClientContext &context;
 	unique_ptr<PhysicalPlan> physical_plan;
+	reference_set_t<const PhysicalOperator> non_repeatable_operators;
 
 private:
+	PhysicalOperator &CreatePlanInternal(LogicalOperator &op);
 	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
 	unique_ptr<PhysicalPlan> PlanInternal(LogicalOperator &logical);
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
 	                                                PhysicalOperator &build);
+	optional_ptr<PhysicalOperator> PlanAsOfInequalityJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
+	                                                      PhysicalOperator &build, const idx_t lhs_cardinality,
+	                                                      const idx_t rhs_cardinality);
 };
 } // namespace duckdb

@@ -64,7 +64,6 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
@@ -72,12 +71,10 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 	string path;
 	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (arguments[1]->IsFoldable()) {
-		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		if (!path_val.IsNull()) {
-			constant = true;
-			path_type = CheckPath(path_val, path, len);
-		}
+	auto path_val = input.TryGetConstant(1);
+	if (path_val && !path_val->IsNull()) {
+		constant = true;
+		path_type = CheckPath(*path_val, path, len);
 	}
 	if (arguments[1]->GetReturnType().IsIntegral()) {
 		bound_function.GetArguments()[1] = LogicalType::BIGINT;
@@ -117,19 +114,11 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
 	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("List of paths must be constant");
-	}
 
 	vector<string> paths;
 	vector<idx_t> lens;
-	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto paths_val = input.GetConstant(1);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
@@ -178,6 +167,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetObjectFunction());
 	AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
 	functions.push_back(ScalarFunctionSet(GetJSONCopyToJSONFunction()));
+	functions.push_back(ScalarFunctionSet(GetJSONCopyToGeoJSONFunction()));
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
@@ -186,6 +176,8 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	// Structure/Transform
 	functions.push_back(GetStructureFunction());
+	functions.push_back(GetAsGeoJSONFunction());
+	functions.push_back(GetGeomFromGeoJSONFunction());
 	AddAliases({"json_transform", "from_json"}, GetTransformFunction(), functions);
 	AddAliases({"json_transform_strict", "from_json_strict"}, GetTransformStrictFunction(), functions);
 
@@ -245,7 +237,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
                                                         optional_ptr<ReplacementScanData> data) {
 	auto table_name = ReplacementScan::GetFullPath(input);
-	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
+	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson", "geojson", "geojsonl"})) {
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();

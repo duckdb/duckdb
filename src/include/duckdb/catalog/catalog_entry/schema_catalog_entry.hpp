@@ -57,6 +57,8 @@ public:
 
 	//! The full path of this schema (its parent chain outermost first, ending with this schema's own name)
 	vector<Identifier> GetSchemaPath() const;
+	//! The fully qualified name of an entry in this schema: [catalog, schema path..., entry_name]
+	QualifiedName GetQualifiedName(const Identifier &entry_name) const;
 
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
@@ -92,7 +94,7 @@ public:
 	//! Create a coordinate system within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                          CreateCoordinateSystemInfo &info) {
-		throw NotImplementedException("Coordinate systems are not supported in schema '%s'", name);
+		throw NotImplementedException("Coordinate systems are not supported in schema %s", name);
 	}
 
 	//! Create a enum within the given schema

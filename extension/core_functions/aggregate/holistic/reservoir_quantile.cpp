@@ -301,18 +301,12 @@ double CheckReservoirQuantile(const Value &quantile_val) {
 	return quantile;
 }
 
+//! Binds the quantile parameter and the sample size into the bind data. They stay part of the expression tree, and
+//! the aggregate is handed them along with the input - the update callbacks only consume the leading input argument
 unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() >= 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("RESERVOIR_QUANTILE can only take constant quantile parameters");
-	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	Value quantile_val = input.GetConstant(1);
 	vector<double> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckReservoirQuantile(quantile_val));
@@ -323,42 +317,28 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 	}
 
 	if (arguments.size() == 2) {
-		// remove the quantile argument so we can use the unary aggregate
-		if (function.GetArguments().size() == 2) {
-			Function::EraseArgument(function, arguments, arguments.size() - 1);
-		} else {
-			arguments.pop_back();
-		}
 		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192ULL);
 	}
-	if (!arguments[2]->IsFoldable()) {
-		throw BinderException("RESERVOIR_QUANTILE can only take constant sample size parameters");
-	}
-	Value sample_size_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-	if (sample_size_val.IsNull()) {
-		throw BinderException("Size of the RESERVOIR_QUANTILE sample cannot be NULL");
-	}
+	auto sample_size_val = input.GetNonNullConstant(2);
 	auto sample_size = sample_size_val.GetValue<int32_t>();
 
 	if (sample_size_val.IsNull() || sample_size <= 0) {
 		throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
 	}
 
-	// remove the quantile arguments so we can use the unary aggregate
-	if (function.GetArguments().size() == arguments.size()) {
-		Function::EraseArgument(function, arguments, arguments.size() - 1);
-		Function::EraseArgument(function, arguments, arguments.size() - 1);
-	} else {
-		arguments.pop_back();
-		arguments.pop_back();
-	}
 	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+	// the implementation is unary - restore the quantile arguments that ReplaceImplementation drops, they are only
+	// folded into the bind data below
+	auto declared_arguments = function.GetArguments();
 	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
+	for (idx_t i = function.GetArguments().size(); i < declared_arguments.size(); i++) {
+		function.GetArguments().push_back(declared_arguments[i]);
+	}
 	auto bind_data = BindReservoirQuantile(input);
 	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
@@ -372,7 +352,8 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetSignature().AddParameter(LogicalType::DOUBLE);
+	fun.GetSignature().GetParameter(0).SetName("x");
+	fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -382,8 +363,9 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
+	fun.GetSignature().GetParameter(0).SetName("x");
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-	fun.GetSignature().AddParameter(list_of_double);
+	fun.GetSignature().AddParameter("quantile", list_of_double);
 	return fun;
 }
 
@@ -392,14 +374,14 @@ void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type)
 	auto fun = GetReservoirQuantileAggregate(type.InternalType());
 	set.AddFunction(fun);
 
-	fun.GetSignature().AddParameter(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter("sample_size", LogicalType::INTEGER);
 	set.AddFunction(fun);
 
 	// List variants
 	fun = GetReservoirQuantileListAggregate(type);
 	set.AddFunction(fun);
 
-	fun.GetSignature().AddParameter(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter("sample_size", LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 
@@ -411,7 +393,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
-	fun.GetSignature().AddParameter(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter("sample_size", LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 

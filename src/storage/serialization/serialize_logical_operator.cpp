@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/operator/logical_external_resource.hpp"
 
 namespace duckdb {
 
@@ -124,6 +125,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		result = LogicalExternalResource::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::Deserialize(deserializer);
 		break;
@@ -168,6 +172,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		result = LogicalSample::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		result = LogicalSecureView::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(deserializer);
@@ -340,21 +347,6 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserialize
 	auto result = duckdb::unique_ptr<LogicalCTERef>(new LogicalCTERef(table_index, cte_index, std::move(chunk_types), std::move(bound_columns)));
 	deserializer.ReadDeletedProperty<CTEMaterialize>(204, "materialized_cte");
 	deserializer.ReadPropertyWithDefault<bool>(205, "is_recurring", result->is_recurring);
-	return std::move(result);
-}
-
-void LogicalColumnDataGet::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<TableIndex>(200, "table_index", table_index);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
-	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
-}
-
-unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &deserializer) {
-	auto table_index = deserializer.ReadPropertyWithDefault<TableIndex>(200, "table_index");
-	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "chunk_types");
-	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
-	auto result = duckdb::unique_ptr<LogicalColumnDataGet>(new LogicalColumnDataGet(table_index, std::move(chunk_types), std::move(collection)));
 	return std::move(result);
 }
 
@@ -602,6 +594,17 @@ unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(Deserializer &dese
 	return std::move(result);
 }
 
+void LogicalExternalResource::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WriteProperty<BoundExternalResource>(200, "data", data);
+}
+
+unique_ptr<LogicalOperator> LogicalExternalResource::Deserialize(Deserializer &deserializer) {
+	auto data = deserializer.ReadProperty<BoundExternalResource>(200, "data");
+	auto result = duckdb::unique_ptr<LogicalExternalResource>(new LogicalExternalResource(data));
+	return std::move(result);
+}
+
 void LogicalFilter::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
@@ -829,6 +832,17 @@ unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserialize
 	return std::move(result);
 }
 
+void LogicalSecureView::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
+}
+
+unique_ptr<LogicalOperator> LogicalSecureView::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalSecureView>(new LogicalSecureView());
+	deserializer.ReadPropertyWithDefault<string>(200, "view_name", result->view_name);
+	return std::move(result);
+}
+
 void LogicalSet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
@@ -911,6 +925,7 @@ void LogicalUpdate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
 	serializer.WritePropertyWithDefault<bool>(207, "capture_old_rows", capture_old_rows, false);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(208, "old_row_columns", old_row_columns);
+	serializer.WritePropertyWithDefault<RowIdHandling>(209, "row_id_handling", row_id_handling, RowIdHandling::ASSUME_UNIQUE);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -924,6 +939,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "capture_old_rows", result->capture_old_rows, false);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(208, "old_row_columns", result->old_row_columns);
+	deserializer.ReadPropertyWithExplicitDefault<RowIdHandling>(209, "row_id_handling", result->row_id_handling, RowIdHandling::ASSUME_UNIQUE);
 	return std::move(result);
 }
 

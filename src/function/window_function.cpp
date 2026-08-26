@@ -18,7 +18,14 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
 }
 
-BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_enum(base.window_enum) {
+BoundWindowFunction::BoundWindowFunction(const WindowFunction &base)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundWindowFunction(make_shared_ptr<WindowFunction>(base)) {
+}
+
+BoundWindowFunction::BoundWindowFunction(shared_ptr<const WindowFunction> base_p)
+    : window_enum(base_p->window_enum), definition(std::move(base_p)) {
+	auto &base = *definition;
 	name = base.name;
 	schema_name = base.GetSchemaName();
 	catalog_name = base.GetCatalogName();
@@ -41,6 +48,21 @@ bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {
 
 bool BoundWindowFunction::operator!=(const BoundWindowFunction &rhs) const {
 	return !(*this == rhs);
+}
+
+BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+                                                 vector<unique_ptr<Expression>> &arguments_p,
+                                                 const vector<Identifier> &argument_names_p, OptionalOrdering orders_p,
+                                                 OptionalOrdering arg_orders_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p), bound_function(bound_function_p),
+      orders(orders_p), arg_orders(arg_orders_p) {
+}
+
+BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+                                                 vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p,
+                                                 OptionalOrdering arg_orders_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
+      orders(orders_p), arg_orders(arg_orders_p) {
 }
 
 } // namespace duckdb

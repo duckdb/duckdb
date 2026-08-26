@@ -133,6 +133,14 @@ bool HTTPResponse::ShouldRetry() const {
 	}
 }
 
+bool HTTPUtil::IsIdempotent(RequestType type) {
+	return type != RequestType::POST_REQUEST;
+}
+
+bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &response) {
+	return response.ShouldRetry();
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
 	return SendRequest(request, client);
@@ -340,7 +348,7 @@ struct URISchemeDetectionResult {
 };
 
 bool IsValidSchemeChar(char c) {
-	return std::isalnum(c) || c == '+' || c == '.' || c == '-';
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '.' || c == '-';
 }
 
 //! See https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
@@ -355,7 +363,7 @@ URISchemeDetectionResult DetectURIScheme(const string &uri) {
 		return result;
 	}
 
-	if (!std::isalpha(uri[0])) {
+	if (!std::isalpha(static_cast<unsigned char>(uri[0]))) {
 		//! Scheme names consist of a sequence of characters beginning with a letter
 		result.lower_scheme = "";
 		result.scheme_type = URISchemeType::NONE;
@@ -448,7 +456,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		}
 
 		// Note: request errors will always be retried
-		bool should_retry = !response || response->ShouldRetry();
+		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
 			if (response_code >= 200 && response_code < 300) {

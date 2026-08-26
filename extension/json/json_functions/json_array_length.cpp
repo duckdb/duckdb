@@ -21,9 +21,10 @@ static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vec
 static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type}, LogicalType::UBIGINT, UnaryArrayLengthFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::UBIGINT, BinaryArrayLengthFunction,
-	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
+	set.AddFunction(ScalarFunction({{"json", input_type}, {"path", LogicalType::VARCHAR}}, LogicalType::UBIGINT,
+	                               BinaryArrayLengthFunction, JSONReadFunctionData::Bind, nullptr,
+	                               JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({{"json", input_type}, {"path", LogicalType::LIST(LogicalType::VARCHAR)}},
 	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 }
@@ -32,13 +33,13 @@ ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
-	for (auto &func : set.functions) {
+	set.ApplyToFunctions([](ScalarFunction &func) {
 		const auto &sig = func.GetSignature();
 		if (sig.GetParameterCount() == 1 && sig.GetParameter(0).GetType().IsJSONType()) {
-			continue;
+			return;
 		}
 		func.SetFallible();
-	}
+	});
 	return set;
 }
 

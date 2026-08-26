@@ -65,8 +65,8 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, identifier_set_
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
-			        macro_binding && macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
+			    if (child_colref.ColumnNames()[0].StartsWith(DummyBinding::DUMMY_NAME) && macro_binding &&
+			        macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
 				    throw ParameterNotResolvedException();
 			    }
 			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");
@@ -643,8 +643,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), pivot.pivot_enum));
 			auto type = type_entry.user_type;
 			if (type.id() != LogicalTypeId::ENUM) {
-				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
-				                      pivot.pivot_enum, type.ToString());
+				throw BinderException(ref, "Pivot must reference an ENUM type: %s is of type \"%s\"", pivot.pivot_enum,
+				                      type.ToString());
 			}
 			if (!type.IsComplete()) {
 				throw BinderException("ENUM type is incomplete");

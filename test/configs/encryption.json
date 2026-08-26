@@ -72,6 +72,7 @@
         "test/sql/trigger/trigger_after_update_referencing.test",
         "test/sql/trigger/trigger_after_update_old_new.test",
         "test/sql/trigger/trigger_after_update_old_new_wal.test",
+        "test/sql/trigger/trigger_update_from_multi_match.test",
         "test/sql/trigger/trigger_after_delete_referencing.test",
         "test/sql/trigger/trigger_referencing_validation.test",
         "test/sql/trigger/trigger_multiple_per_event.test",
@@ -95,6 +96,21 @@
       "reason": "test_all_types() require latest storage",
       "paths": [
         "test/fuzzer/duckfuzz/vector_type.test"
+      ]
+    },
+    {
+      "reason": "Encrypted persistent storage packs validity into one segment, so zonemap pruning cannot skip rows.",
+      "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test"
+      ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test"
       ]
     }
   ]

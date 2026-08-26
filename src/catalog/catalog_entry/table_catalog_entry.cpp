@@ -68,8 +68,7 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_
 		}
 		auto candidates =
 		    StringUtil::CandidatesErrorMessage(column_names, column_name.GetIdentifierName(), "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetIdentifierName(),
-		                      column_name, candidates);
+		throw BinderException("Table %s does not have a column with name %s\n%s", name, column_name, candidates);
 	}
 	return entry;
 }
@@ -97,12 +96,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() const {
 unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
 	// carry the full (possibly nested) schema path: [catalog, schema_path..., name]
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (auto &component : schema.GetSchemaPath()) {
-		path.push_back(component);
-	}
-	result->SetQualifiedName(QualifiedName(std::move(path), name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
 	result->dependencies = dependencies;
@@ -212,6 +206,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 
 string TableCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
+	create_info->StripCatalogQualification();
 	return create_info->ToString();
 }
 
@@ -393,6 +388,11 @@ optional_ptr<CatalogEntry> TableCatalogEntry::CreateTrigger(CatalogTransaction t
 void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
                                      const std::function<void(CatalogEntry &)> &callback) const {
 	// Default: no triggers (non-DuckDB tables do not support triggers)
+}
+
+optional_ptr<CatalogEntry> TableCatalogEntry::GetTrigger(CatalogTransaction transaction, const Identifier &name) const {
+	// Default: no triggers (non-DuckDB tables do not support triggers)
+	return nullptr;
 }
 
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,

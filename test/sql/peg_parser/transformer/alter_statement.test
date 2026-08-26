@@ -60,7 +60,7 @@ ALTER TABLE person ADD COLUMN c STRUCT(
     current_mood mood
 );
 ----
-Catalog Error: Column with name c already exists!
+Catalog Error: Column with name "c" already exists!
 
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
@@ -110,7 +110,7 @@ Catalog Error: Table with name tbl_alter_column does not exist!
 statement error
 ALTER VIEW new_database.s1.v1 RENAME TO v2;
 ----
-Binder Error: Catalog "new_database" does not exist!
+View with name "new_database.s1.v1" does not exist because schema "new_database.s1" does not exist.
 
 statement error
 ALTER TABLE t0 DROP COLUMN rowid;

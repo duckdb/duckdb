@@ -178,10 +178,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
-	for (auto &option : input.info.options) {
-		auto loption = StringUtil::Lower(option.first);
-		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
+	for (auto &[option_name, option_values] : input.info.options) {
+		bind_data->options.SetWriteOption(option_name, ConvertVectorToValue(option_values));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -190,19 +188,11 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	}
 	bind_data->Finalize();
 
-	switch (bind_data->options.compression) {
-	case FileCompressionType::GZIP:
-		if (!IsFileCompressed(input.file_extension, FileCompressionType::GZIP)) {
-			input.file_extension += CompressionExtensionFromType(FileCompressionType::GZIP);
+	auto &compression = bind_data->options.compression;
+	if (compression == FileCompressionType::GZIP || compression == FileCompressionType::ZSTD) {
+		if (!IsFileCompressed(input.file_extension, compression)) {
+			input.file_extension += CompressionExtensionFromType(compression);
 		}
-		break;
-	case FileCompressionType::ZSTD:
-		if (!IsFileCompressed(input.file_extension, FileCompressionType::ZSTD)) {
-			input.file_extension += CompressionExtensionFromType(FileCompressionType::ZSTD);
-		}
-		break;
-	default:
-		break;
 	}
 
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
@@ -276,7 +266,7 @@ public:
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
 	                   FileCompressionType compression, QueryContext context)
-	    : writer(options, fs, file_path, compression, context) {
+	    : writer(options, fs, file_path, std::move(compression), context) {
 	}
 
 	idx_t FileSize() {
@@ -414,8 +404,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
 	auto &original_types = collection->Types();
-	auto expressions =
-	    CreateCastExpressions(csv_data, context, StringsToIdentifiers(csv_data.options.name_list), original_types);
+	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
 	ExpressionExecutor executor(context, expressions);
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 

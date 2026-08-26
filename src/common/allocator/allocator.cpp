@@ -5,8 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 
 #include <cstdint>
 
@@ -125,14 +124,14 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 		                        size, MAXIMUM_ALLOC_SIZE);
 	}
 	auto result = allocate_function(private_data.get(), size);
+	if (!result) {
+		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
+	}
 #ifdef DEBUG
 	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->AllocateData(result, size);
 	}
 #endif
-	if (!result) {
-		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
-	}
 	return result;
 }
 
@@ -160,14 +159,14 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 		    MAXIMUM_ALLOC_SIZE);
 	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
+	if (!new_pointer) {
+		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
+	}
 #ifdef DEBUG
 	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 	}
 #endif
-	if (!new_pointer) {
-		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
-	}
 	return new_pointer;
 }
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
@@ -182,21 +181,20 @@ Allocator &Allocator::DefaultAllocator() {
 void Allocator::MallocTrim(idx_t pad) {
 #ifdef __GLIBC__
 	static constexpr int64_t TRIM_INTERVAL_MS = 100;
-	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
+	static atomic<int64_t> LAST_TRIM_TICK_MS {-TRIM_INTERVAL_MS};
 
-	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
-	auto current_ts = Timestamp::GetCurrentTimestamp();
-	auto current_timestamp_ms = Cast::Operation<timestamp_t, timestamp_ms_t>(current_ts).value;
+	int64_t last_trim_tick_ms = LAST_TRIM_TICK_MS.load();
+	auto current_tick_ms = TimePoint::GetTickMs();
 
-	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
+	if (current_tick_ms - last_trim_tick_ms < TRIM_INTERVAL_MS) {
 		return; // We trimmed less than TRIM_INTERVAL_MS ago
 	}
-	if (!LAST_TRIM_TIMESTAMP_MS.compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
-	                                                    std::memory_order_acquire, std::memory_order_relaxed)) {
-		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
+	if (!LAST_TRIM_TICK_MS.compare_exchange_strong(last_trim_tick_ms, current_tick_ms, std::memory_order_acquire,
+	                                               std::memory_order_relaxed)) {
+		return; // Another thread has updated LAST_TRIM_TICK_MS since we loaded it
 	}
 
-	// We successfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
+	// We successfully updated LAST_TRIM_TICK_MS, we can trim
 	malloc_trim(pad);
 #endif
 }

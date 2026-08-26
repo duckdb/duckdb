@@ -53,6 +53,7 @@ class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
 class LogicalUpdate;
+class CopyQueryNode;
 class LogicalVacuum;
 
 class ColumnList;
@@ -283,6 +284,13 @@ public:
 	//! left empty (the caller applies its own default), which lets it distinguish "no catalog given" from an explicit
 	//! catalog.
 	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog = true);
+	static QualifiedName ResolveCatalog(CatalogEntryRetriever &retriever, const QualifiedName &name,
+	                                    bool default_catalog = true);
+	//! Resolve the (possibly nested) name of a table into a name that can be looked up in the catalog. Unqualified
+	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
+	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
+	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -301,6 +309,8 @@ public:
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
+	//! Look up an entry using the qualification carried in the lookup info (which can be a nested schema path)
+	optional_ptr<CatalogEntry> GetCatalogEntry(const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
@@ -344,6 +354,9 @@ public:
 	                                         const Identifier &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
 	                                         const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
+	//! Look up a binding for a (possibly nested) table qualification
+	optional_ptr<Binding> GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
 	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
@@ -389,8 +402,6 @@ private:
 	shared_ptr<GlobalBinderState> global_binder_state;
 	//! Active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
-	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
 	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
@@ -456,6 +467,7 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(ExternalResourceStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -517,6 +529,7 @@ private:
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
+	BoundStatement BindNode(CopyQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -529,6 +542,8 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
+	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
@@ -565,7 +580,7 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
 	void BindCopyOptions(CopyInfo &info);
-	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
+	identifier_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
@@ -613,7 +628,8 @@ private:
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+	                                         bool default_schema_precedence = false);
 
 	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
@@ -622,8 +638,14 @@ private:
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const Identifier &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const Identifier &target_database_name);
 
-	BoundStatement BindShowQuery(ShowRef &ref);
-	BoundStatement BindShowTable(ShowRef &ref);
+	BoundStatement BindDescribeQuery(ShowRef &ref);
+	BoundStatement BindDescribeTable(ShowRef &ref);
+	//! Describes a ShowRef target: its query if it has one, otherwise the named table
+	BoundStatement BindDescribe(ShowRef &ref);
+	//! Binds the Postgres-style "SHOW name" (settings-first, with a deprecated table/query describe fallback)
+	BoundStatement BindShow(ShowRef &ref);
+	//! Binds "SHOW name" to the value of the setting "name", returns false if no such setting exists
+	bool TryBindShowSetting(ShowRef &ref, BoundStatement &result);
 	BoundStatement BindSummarize(ShowRef &ref);
 
 	void BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,

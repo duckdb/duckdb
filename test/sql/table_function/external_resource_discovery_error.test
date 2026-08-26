@@ -1,0 +1,63 @@
+# name: test/sql/table_function/external_resource_discovery_error.test
+# description: duckdb_external_resources(discover := true) surfaces a misconfigured list callback instead of dropping it
+# group: [table_function]
+
+# Discovery iterates every type with a list callback in registration order and aborts on the first that is
+# misconfigured. Each case below repairs its callback (CREATE OR REPLACE) once asserted, so it no longer
+# masks the next one.
+
+# Default (discover := false) never touches a callback, so it works throughout.
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+# 1. A list callback returning no `handle` column.
+statement ok
+CREATE MACRO nohandle_list(opts) AS TABLE SELECT 'ext-1' AS reference, 'running' AS state;
+
+statement ok
+CALL register_external_resource_type('nohandle@disc', kind := 'catalog', create_function := 'noop_create', list_function := 'nohandle_list');
+
+statement error
+SELECT * FROM duckdb_external_resources(discover := true);
+----
+<REGEX>:.*list callback "nohandle_list" did not return a "handle" column.*
+
+statement ok
+CREATE OR REPLACE MACRO nohandle_list(opts) AS TABLE SELECT MAP {'id': 'a'} AS handle;
+
+# 2. A list callback whose `handle` column is not a MAP.
+statement ok
+CREATE MACRO badtype_list(opts) AS TABLE SELECT 42 AS handle;
+
+statement ok
+CALL register_external_resource_type('badtype@disc', kind := 'catalog', create_function := 'noop_create', list_function := 'badtype_list');
+
+statement error
+SELECT * FROM duckdb_external_resources(discover := true);
+----
+<REGEX>:.*must return a MAP in its 'handle' column.*
+
+statement ok
+CREATE OR REPLACE MACRO badtype_list(opts) AS TABLE SELECT MAP {'id': 'b'} AS handle;
+
+# 3. A list callback whose function does not resolve (the name is only validated for shape at registration,
+# not existence).
+statement ok
+CALL register_external_resource_type('broken@disc', kind := 'catalog', create_function := 'noop_create', list_function := 'no_such_list_fn');
+
+statement error
+SELECT * FROM duckdb_external_resources(discover := true);
+----
+<REGEX>:.*list callback "no_such_list_fn" failed.*
+
+# With every callback repaired/resolvable, discovery succeeds again (broken@disc still unresolved, so define
+# it too first).
+statement ok
+CREATE MACRO no_such_list_fn(opts) AS TABLE SELECT MAP {'id': 'c'} AS handle;
+
+query I
+SELECT count(*) FROM duckdb_external_resources(discover := true);
+----
+3

@@ -5,8 +5,18 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
+      "paths": [
+        "test/optimizer/joins/required_cross_product_activation.test"
+      ]
+    },
+    {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
+        "test/sql/optimizer/nested_null_segment_pruning.test",
+        "test/sql/optimizer/struct_segment_pruning.test",
+        "test/sql/optimizer/map_extract_row_group_pruning.test",
+        "test/sql/copy/parquet/map_extract_row_group_pruning.test",
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
         "test/sql/types/geo/geometry_parquet_pushdown.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
@@ -67,6 +77,7 @@
     {
       "reason": "Recursive CTE relies on short-circuiting optimization.",
       "paths": [
+        "test/sql/cte/recursive_cte_limit.test",
         "test/sql/cte/test_recursive_cte_union.test",
         "test/sql/cte/test_recursive_cte_union_all.test",
         "test/sql/cte/test_recursive_cte_tutorial.test"
@@ -113,19 +124,10 @@
       ]
     },
     {
-      "reason": "FIXME: crash.",
-      "paths": [
-        "test/sql/join/asof/test_asof_join_filter_pushdown.test"
-        ]
-    },
-    {
       "reason": "FIXME: binding bug.",
       "paths": [
-        "test/sql/merge/merge_into_invalid_column_reference.test",
-        "test/sql/merge/merge_into_by_source.test",
-        "test/sql/subquery/scalar/test_complex_correlated_subquery.test",
         "test/sql/join/natural/natural_join.test"
-        ]
+      ]
     }
   ]
 }

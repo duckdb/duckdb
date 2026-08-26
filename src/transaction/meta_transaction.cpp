@@ -203,6 +203,7 @@ idx_t MetaTransaction::GetActiveQuery() {
 }
 
 void MetaTransaction::SetActiveQuery(transaction_t query_number) {
+	lock_guard<mutex> guard(lock);
 	active_query = query_number;
 	for (auto &entry : transactions) {
 		entry.second.transaction.active_query = query_number;
@@ -270,7 +271,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationT
 	}
 	if (&db != modified_database.get()) {
 		throw TransactionException(
-		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
+		    "Attempting to write to database %s in a transaction that has already modified database %s - a "
 		    "single transaction can only write to a single attached database.",
 		    db.GetName(), modified_database->GetName());
 	}
