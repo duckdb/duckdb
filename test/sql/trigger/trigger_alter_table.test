@@ -119,3 +119,28 @@ query I
 SELECT COUNT(*) FROM audit2;
 ----
 3
+
+# RENAME COLUMN must not corrupt a trigger that references another table in its
+# body — the trigger must still fire correctly after the rename.
+statement ok
+CREATE TABLE t3(a INT, b INT);
+
+statement ok
+CREATE TABLE dep_log(x INT);
+
+statement ok
+CREATE TRIGGER tr3 AFTER UPDATE OF b ON t3 INSERT INTO dep_log VALUES (1);
+
+statement ok
+ALTER TABLE t3 RENAME COLUMN b TO c;
+
+statement ok
+INSERT INTO t3 VALUES (0, 0);
+
+statement ok
+UPDATE t3 SET c = 1;
+
+query I
+SELECT COUNT(*) FROM dep_log;
+----
+1

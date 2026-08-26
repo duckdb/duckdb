@@ -515,8 +515,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			    }
 		    }
 	    });
+	// Use a copy of info without new_dependencies so AlterObject does not
+	// replace the trigger's own dependency edges with the table's dep list.
+	auto trigger_alter_info = info.Copy();
 	for (const auto &trigger_name : triggers_to_update) {
-		triggers->AlterEntry(txn, trigger_name, info);
+		triggers->AlterEntry(txn, trigger_name, *trigger_alter_info);
 	}
 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
