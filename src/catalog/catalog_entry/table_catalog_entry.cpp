@@ -390,6 +390,11 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 	// Default: no triggers (non-DuckDB tables do not support triggers)
 }
 
+optional_ptr<CatalogEntry> TableCatalogEntry::GetTrigger(CatalogTransaction transaction, const Identifier &name) const {
+	// Default: no triggers (non-DuckDB tables do not support triggers)
+	return nullptr;
+}
+
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
                                                                                     TriggerEventType event_type,
                                                                                     TriggerForEach for_each) const {

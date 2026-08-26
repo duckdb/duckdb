@@ -123,13 +123,11 @@ struct ModeStandard {
 		return RESULT_TYPE(input);
 	}
 
-	static void Destroy(T *mode) {
-	}
 	static bool IsEqual(const T &left, const T &right) {
 		return Equals::Operation(left, right);
 	}
 
-	static T *Update(T *mode, const T &key) {
+	static T *Update(T *mode, uint32_t &, const T &key, AggregateInputData &) {
 		if (!mode) {
 			mode = new T(key);
 		}
@@ -154,42 +152,37 @@ struct ModeString {
 		return StringVector::AddStringOrBlob(result, input);
 	}
 
-	static void Destroy(string_t *mode) {
-		if (mode && !mode->IsInlined()) {
-			delete[] mode->GetData();
-			mode->SetPointer(nullptr);
-		}
-	}
 	static bool IsEqual(const string_t &left, const string_t &right) {
 		return Equals::Operation(left, right);
 	}
 
-	static string_t *Update(string_t *mode, const string_t &key) {
+	static string_t *Update(string_t *mode, uint32_t &alloc_size, const string_t &key,
+	                        AggregateInputData &aggr_input_data) {
 		if (key.IsInlined()) {
-			Destroy(mode);
 			if (!mode) {
 				mode = new string_t(nullptr, 0);
 			}
 			*mode = key;
+			alloc_size = 0;
 			return mode;
 		}
 
 		// non-inlined string, need to allocate space for it somehow
-		const auto len = key.GetSize();
+		const auto len = UnsafeNumericCast<uint32_t>(key.GetSize());
 		char *ptr;
-		if (!mode || mode->GetSize() < len) {
-			// we cannot fit this into the current slot - destroy it and re-allocate
-			Destroy(mode);
+		if (mode && alloc_size >= len) {
+			// this fits into the current arena allocation - reuse it
+			ptr = mode->GetDataWriteable();
+		} else {
+			// round up so repeatedly growing keys don't churn through a new arena allocation every time
+			alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+			ptr = char_ptr_cast(aggr_input_data.allocator.Allocate(alloc_size));
 			if (!mode) {
 				mode = new string_t(nullptr, 0);
 			}
-			ptr = new char[len];
-		} else {
-			// this fits into the current slot - take over the pointer
-			ptr = mode->GetDataWriteable();
 		}
 		memcpy(ptr, key.GetData(), len);
-		*mode = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+		*mode = string_t(ptr, len);
 		return mode;
 	}
 };
@@ -204,6 +197,7 @@ struct ModeState {
 	SubFrames prevs;
 	Counts *frequency_map = nullptr;
 	KEY_TYPE *mode = nullptr;
+	uint32_t mode_alloc_size = 0;
 	size_t nonzero = 0;
 	bool valid = false;
 	size_t count = 0;
@@ -223,10 +217,7 @@ struct ModeState {
 		if (frequency_map) {
 			delete frequency_map;
 		}
-		if (mode) {
-			TYPE_OP::Destroy(mode);
-			delete mode;
-		}
+		delete mode;
 		if (scan) {
 			delete scan;
 		}
@@ -283,7 +274,7 @@ struct ModeState {
 		valid = false;
 	}
 
-	void ModeAdd(idx_t row) {
+	void ModeAdd(idx_t row, AggregateInputData &aggr_input_data) {
 		const auto &key = GetCell(row);
 		auto &attr = (*frequency_map)[key];
 		auto new_count = (attr.count += 1);
@@ -291,7 +282,7 @@ struct ModeState {
 		if (new_count > count) {
 			valid = true;
 			count = new_count;
-			Update(key);
+			Update(key, aggr_input_data);
 		} else if (new_count == count) {
 			// The key now ties the mode, so the tie must be broken by frame position
 			valid = false;
@@ -310,14 +301,14 @@ struct ModeState {
 		}
 	}
 
-	void Update(const KEY_TYPE &key) {
-		mode = TYPE_OP::Update(mode, key);
+	void Update(const KEY_TYPE &key, AggregateInputData &aggr_input_data) {
+		mode = TYPE_OP::Update(mode, mode_alloc_size, key, aggr_input_data);
 	}
 
 	//! Rescan the frequency map, breaking ties by the first tied value in the frames.
 	//! The per-value first_row is not tracked by ModeRm, so it cannot be used here.
 	template <class INCLUDED>
-	void ScanFrames(const SubFrames &frames, const INCLUDED &included) {
+	void ScanFrames(const SubFrames &frames, const INCLUDED &included, AggregateInputData &aggr_input_data) {
 		auto highest_frequency = frequency_map->begin();
 		size_t n_ties = 0;
 		for (auto i = frequency_map->begin(); i != frequency_map->end(); ++i) {
@@ -334,7 +325,7 @@ struct ModeState {
 		}
 		count = highest_frequency->second.count;
 		if (n_ties == 1) {
-			Update(highest_frequency->first);
+			Update(highest_frequency->first, aggr_input_data);
 			return;
 		}
 		for (const auto &frame : frames) {
@@ -345,7 +336,7 @@ struct ModeState {
 				const auto &key = GetCell(i);
 				const auto attr = frequency_map->find(key);
 				if (attr != frequency_map->end() && attr->second.count == count) {
-					Update(key);
+					Update(key, aggr_input_data);
 					return;
 				}
 			}
@@ -462,8 +453,10 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 	struct UpdateWindowState {
 		STATE &state;
 		ModeIncluded<STATE> &included;
+		AggregateInputData &aggr_input_data;
 
-		inline UpdateWindowState(STATE &state, ModeIncluded<STATE> &included) : state(state), included(included) {
+		inline UpdateWindowState(STATE &state, ModeIncluded<STATE> &included, AggregateInputData &aggr_input_data)
+		    : state(state), included(included), aggr_input_data(aggr_input_data) {
 		}
 
 		inline void Neither(idx_t begin, idx_t end) {
@@ -480,7 +473,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		inline void Right(idx_t begin, idx_t end) {
 			for (; begin < end; ++begin) {
 				if (included(begin)) {
-					state.ModeAdd(begin);
+					state.ModeAdd(begin, aggr_input_data);
 				}
 			}
 		}
@@ -508,7 +501,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		ModeIncluded<STATE> included(fmask, state);
 
 		using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
-		Updater updater(state, included);
+		Updater updater(state, included, aggr_input_data);
 
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
@@ -524,7 +517,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 				for (const auto &frame : frames) {
 					for (auto i = frame.start; i < frame.end; ++i) {
 						if (included(i)) {
-							state.ModeAdd(i);
+							state.ModeAdd(i, aggr_input_data);
 						}
 					}
 				}
@@ -533,7 +526,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 			}
 
 			if (!state.valid) {
-				state.ScanFrames(frames, included);
+				state.ScanFrames(frames, included, aggr_input_data);
 			}
 
 			if (state.valid) {

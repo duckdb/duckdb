@@ -20,7 +20,7 @@ public:
 
 public:
 	PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
-	                 PhysicalOperator &right);
+	                 PhysicalOperator &right, vector<column_t> lhs_partition_cols, vector<column_t> rhs_partition_cols);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
@@ -36,6 +36,11 @@ public:
 
 	// Projection mappings
 	vector<idx_t> right_projection_map;
+
+	//! The partitions over which the children are grouped (if any)
+	vector<OperatorPartitionInfo> partition_infos;
+	//! RequiredPartitionInfo doesn't get passed the global sink state...
+	mutable size_t child = 1;
 
 protected:
 	// CachingOperator Interface
@@ -64,6 +69,8 @@ public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

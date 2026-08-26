@@ -7844,7 +7844,9 @@ public:
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTableSubqueryInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static unique_ptr<TableRef> TransformTableSubquery(PEGTransformer &transformer, const optional<bool> &lateral,
+	static unique_ptr<TableRef> TransformTableSubquery(PEGTransformer &transformer,
+	                                                   const optional<Identifier> &table_alias_colon,
+	                                                   const optional<bool> &lateral,
 	                                                   unique_ptr<TableRef> subquery_reference,
 	                                                   const optional<TableAlias> &table_alias);
 	static unique_ptr<TransformResultValue> TransformBaseTableRefInternal(PEGTransformer &transformer,
@@ -7859,6 +7861,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformValuesRefInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformValuesRef(PEGTransformer &transformer,
+	                                               const optional<Identifier> &table_alias_colon,
 	                                               unique_ptr<SelectStatement> values_clause,
 	                                               const optional<TableAlias> &table_alias);
 	static unique_ptr<TransformResultValue> TransformParensTableRefInternal(PEGTransformer &transformer,

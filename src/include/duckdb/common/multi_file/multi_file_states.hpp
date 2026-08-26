@@ -17,12 +17,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parallel/scan_read_ahead.hpp"
 
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
-class MultiFileReadAhead;
-class ReadAheadJobCompletion;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -190,12 +189,30 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
-	unique_ptr<MultiFileReadAhead> read_ahead;
+	unique_ptr<ScanReadAhead> read_ahead;
+	//! Scan states of finished read-ahead jobs, recycled so learned scan state carries over
+	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 
 	optional_ptr<const PhysicalOperator> op;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
+	void PushState(unique_ptr<LocalTableFunctionState> state) {
+		lock_guard<mutex> guard(lock);
+		state_pool.push_back(std::move(state));
+	}
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<LocalTableFunctionState> TryPopState() {
+		lock_guard<mutex> guard(lock);
+		if (state_pool.empty()) {
+			return nullptr;
+		}
+		auto state = std::move(state_pool.back());
+		state_pool.pop_back();
+		return state;
 	}
 
 	bool CanRemoveColumns() const {
@@ -218,40 +235,26 @@ enum class MultiFileDecodeResult : uint8_t {
 	JOB_FINISHED      //! job is done
 };
 
-//! Outcome of acquiring the next scan job
-enum class MultiFileAcquireResult : uint8_t {
-	ACQUIRED,  //! a ready-to-decode job is now current
-	EXHAUSTED, //! the scan is exhausted, we have no more jobs
-	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
-};
-
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
-struct MultiFileScanJob {
+struct MultiFileScanJobState {
 	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
 	//! Per-file data for the reader
 	optional_ptr<MultiFileReaderData> reader_data;
-	//! The reader-specific scan state that ScheduleIO/Scan operate on
-	unique_ptr<LocalTableFunctionState> reader_scan_state;
-	//! Batch index of this job
-	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Completion state of the read-ahead I/O tasks for this job.
-	shared_ptr<ReadAheadJobCompletion> io_completion;
-	//! Total bytes of scheduled read-ahead I/O for this job
-	idx_t io_bytes = 0;
+	//! The scan state the job's I/O and decoding operate on, declared last so it is destroyed before the reader
+	unique_ptr<LocalTableFunctionState> scan_state;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
-	~MultiFileLocalState() override;
 
 public:
 	//! The job currently being scanned by this thread
-	MultiFileScanJob job;
+	unique_ptr<ScanReadAheadJobWrapper<MultiFileScanJobState>> job;
 	//! Job's state
 	MultiFileJobState job_state = MultiFileJobState::NONE;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema

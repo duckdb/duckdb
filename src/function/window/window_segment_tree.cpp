@@ -36,7 +36,8 @@ class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
 public:
 	using AtomicCounters = vector<std::atomic<idx_t>>;
 
-	WindowSegmentTreeGlobalState(ClientContext &context, const WindowSegmentTree &aggregator, idx_t group_count);
+	WindowSegmentTreeGlobalState(ClientContext &context, const WindowSegmentTree &aggregator, idx_t group_count,
+	                             const ValidityMask &partition_mask);
 
 	//! The owning aggregator
 	const WindowSegmentTree &tree;
@@ -187,7 +188,7 @@ WindowSegmentTreePart::~WindowSegmentTreePart() {
 
 unique_ptr<GlobalSinkState> WindowSegmentTree::GetGlobalState(ClientContext &context, idx_t group_count,
                                                               const ValidityMask &partition_mask) const {
-	return make_uniq<WindowSegmentTreeGlobalState>(context, *this, group_count);
+	return make_uniq<WindowSegmentTreeGlobalState>(context, *this, group_count, partition_mask);
 }
 
 unique_ptr<LocalSinkState> WindowSegmentTree::GetLocalState(ExecutionContext &context,
@@ -296,9 +297,12 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 }
 
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
-                                                           idx_t group_count)
+                                                           idx_t group_count, const ValidityMask &partition_mask)
     : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
 	D_ASSERT(!aggregator.wexpr.GetChildren().empty());
+
+	//	We need the partition offsets to avoid combining across partitions.
+	BuildPartitionOffsets(group_count, partition_mask);
 
 	// compute space required to store internal nodes of segment tree
 	levels_flat_start.push_back(0);
@@ -350,6 +354,16 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 	auto &filter_mask = gstate.filter_mask;
 	WindowSegmentTreePart gtstate(allocator, gastate.aggr, std::move(cursor), filter_mask);
 
+	//	Some aggregates (e.g., `MIN(x, n)`) allow "partition-constant" arguments (e.g., `n`)
+	//	and throw if you `Combine` across partitions. To avoid this, we only combine states
+	//	that do not contain a partition boundary and use the partition mask to exclude them.
+	//	The uncombined states will be empty, which is fine because they will never be used.
+	const auto &partition_offsets = gstate.partition_offsets;
+	idx_t combine_width = gstate.TREE_FANOUT;
+	idx_t combine_level = 0;
+	auto combine_begin = partition_offsets.rbegin();
+	std::greater<idx_t> combine_cmp;
+
 	auto &levels_flat_native = gstate.levels_flat_native;
 	const auto &levels_flat_start = gstate.levels_flat_start;
 	// iterate over the levels of the segment tree
@@ -378,13 +392,31 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 			continue;
 		}
 
+		//	Update the combine width to the current level.
+		for (; combine_level < level_current; ++combine_level) {
+			combine_width *= gstate.TREE_FANOUT;
+			combine_begin = partition_offsets.rbegin();
+		}
+
+		//	Check for crossing a partition boundary
+		//	Note that it is OK for a state to _start_ on a partition boundary
+		//	- it just shouldn't _contain_ one.
+		const idx_t combine_left = build_idx * combine_width;
+		const idx_t combine_right = MinValue(combine_left + combine_width, leaf_count);
+		combine_begin = std::lower_bound(partition_offsets.rbegin(), combine_begin, combine_left, combine_cmp);
+		auto combine_end = std::lower_bound(partition_offsets.rbegin(), combine_begin, combine_right - 1, combine_cmp);
+		const bool has_boundary = (combine_begin != combine_end);
+		combine_begin = combine_end;
+
 		// compute the aggregate for this entry in the segment tree
-		const idx_t pos = build_idx * gstate.TREE_FANOUT;
-		const idx_t levels_flat_offset = levels_flat_start[level_current] + build_idx;
-		auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
-		gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
-		                           state_ptr);
-		gtstate.FlushStates(level_current > 0);
+		if (!has_boundary) {
+			const idx_t pos = build_idx * gstate.TREE_FANOUT;
+			const idx_t levels_flat_offset = levels_flat_start[level_current] + build_idx;
+			auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
+			gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
+			                           state_ptr);
+			gtstate.FlushStates(level_current > 0);
+		}
 
 		//	If that was the last one, mark the level as complete.
 		const idx_t build_complete = ++(*gstate.build_completed).at(level_current);

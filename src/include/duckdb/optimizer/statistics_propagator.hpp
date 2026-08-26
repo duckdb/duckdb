@@ -37,10 +37,6 @@ public:
 		return std::move(statistics_map);
 	}
 
-	//! Whether or not we can propagate a cast between two types
-	static bool CanPropagateCast(const LogicalType &source, const LogicalType &target);
-	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
-	                                                   const LogicalType &target);
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
 	//! argument ranges (see ArgProperties). Returns nullptr when the bounds cannot be derived.
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
@@ -117,7 +113,6 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundAggregateExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateBetween(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundCaseExpression &expr, unique_ptr<Expression> &expr_ptr);
-	unique_ptr<BaseStatistics> PropagateCast(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConjunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> &expr_ptr);

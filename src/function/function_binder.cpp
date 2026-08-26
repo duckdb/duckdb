@@ -231,7 +231,7 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name,
 	idx_t lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> candidate_functions;
 	for (idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
-		auto &func = functions.functions[f_idx];
+		auto &func = *functions.functions[f_idx];
 		// check the arguments of the function
 		auto bind_cost = BindFunctionCost(func, arguments, named_arguments);
 		if (!bind_cost.IsValid()) {
@@ -256,13 +256,13 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name,
 		Identifier catalog_name;
 		Identifier schema_name;
 		for (auto &f : functions.functions) {
-			if (catalog_name.empty() && !f.GetCatalogName().empty()) {
-				catalog_name = f.GetCatalogName();
+			if (catalog_name.empty() && !f->GetCatalogName().empty()) {
+				catalog_name = f->GetCatalogName();
 			}
-			if (schema_name.empty() && !f.GetSchemaName().empty()) {
-				schema_name = f.GetSchemaName();
+			if (schema_name.empty() && !f->GetSchemaName().empty()) {
+				schema_name = f->GetSchemaName();
 			}
-			candidates.push_back(f.ToString());
+			candidates.push_back(f->ToString());
 		}
 		error = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, name, arguments,
 		                                                      named_arguments, candidates));
@@ -285,7 +285,7 @@ MultipleCandidateException(const Identifier &catalog_name, const Identifier &sch
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		const auto &f = functions.GetFunctionByOffset(conf);
-		candidate_str += "\t" + f.ToString() + "\n";
+		candidate_str += "\t" + f->ToString() + "\n";
 	}
 	error = ErrorData(
 	    ExceptionType::BINDER,
@@ -313,8 +313,8 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 				throw ParameterNotResolvedException();
 			}
 		}
-		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].GetCatalogName() : Identifier();
-		auto schema_name = functions.functions.size() > 0 ? functions.functions[0].GetSchemaName() : Identifier();
+		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0]->GetCatalogName() : Identifier();
+		auto schema_name = functions.functions.size() > 0 ? functions.functions[0]->GetSchemaName() : Identifier();
 		return MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions, arguments,
 		                                  named_arguments, error);
 	}
@@ -324,7 +324,7 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const Identifier &name, c
 template <class T>
 static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &functions) {
 	for (auto &func : functions.functions) {
-		if (func.GetProperties().GetCaptureArgumentAliases()) {
+		if (func->GetProperties().GetCaptureArgumentAliases()) {
 			return true;
 		}
 	}
@@ -417,7 +417,7 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFu
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
-	const auto &candidate_function = functions.GetFunctionByOffset(entry.GetIndex());
+	const auto &candidate_function = *functions.GetFunctionByOffset(entry.GetIndex());
 	// cast the input parameters
 	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto target_type = i < candidate_function.GetArguments().size() ? candidate_function.GetArguments()[i]
@@ -530,7 +530,7 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 			    function.GetName());
 		}
 		target_type.Verify();
-		// don't cast lambda children, they get removed before execution
+		// don't cast lambda children, their slot only ever holds a placeholder
 		if (children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}
@@ -578,7 +578,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	}
 
 	// found a matching function!
-	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto selected_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto &bound_function = *selected_function;
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
@@ -622,7 +623,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 			}
 		}
 	}
-	return BindScalarFunction(bound_function, std::move(regular_args), std::move(keyword_args), is_operator, binder);
+	return BindScalarFunction(std::move(selected_function), std::move(regular_args), std::move(keyword_args),
+	                          is_operator, binder);
 }
 
 static bool RequiresCollationPropagation(const LogicalType &type) {
@@ -1057,13 +1059,14 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, vecto
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &arguments,
+FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, arguments, named_arguments);
 
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
-	BoundScalarFunction bound_function(function);
+	BoundScalarFunction bound_function(std::move(function_p));
 
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
@@ -1100,17 +1103,31 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
+	return BindScalarFunction(std::move(function), std::move(children), {}, is_operator, binder);
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-	return BindScalarFunction(function, std::move(children), {}, is_operator, binder);
+	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), {}, is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
                                                           vector<unique_ptr<Expression>> children,
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
-	auto [bound_function, bind_info] = ResolveFunction(function, children, keyword_args);
+	return BindScalarFunction(make_shared_ptr<ScalarFunction>(function), std::move(children), std::move(keyword_args),
+	                          is_operator, binder);
+}
+
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
+                                                          vector<unique_ptr<Expression>> children,
+                                                          vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
+	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args);
 
 	unique_ptr<Expression> result;
 
@@ -1132,13 +1149,15 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 }
 
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
+FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
+                                vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, children, named_arguments);
 
 	// Make a BoundFunction out of the func
-	BoundAggregateFunction bound_function(function);
+	BoundAggregateFunction bound_function(std::move(function_p));
 
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
@@ -1168,18 +1187,35 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 	return {std::move(bound_function), std::move(bind_info)};
 }
 
+unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> function,
+                                                                           vector<unique_ptr<Expression>> children,
+                                                                           unique_ptr<Expression> filter,
+                                                                           AggregateType aggr_type) {
+	return BindAggregateFunction(std::move(function), std::move(children), {}, std::move(filter), aggr_type);
+}
+
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const AggregateFunction &function,
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
                                                                            AggregateType aggr_type) {
-	return BindAggregateFunction(function, std::move(children), {}, std::move(filter), aggr_type);
+	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children), {},
+	                             std::move(filter), aggr_type);
 }
 
 unique_ptr<BoundAggregateExpression>
 FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> children,
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
-	auto [bound_function, bind_info] = ResolveFunction(function, children, keyword_args);
+	return BindAggregateFunction(make_shared_ptr<AggregateFunction>(function), std::move(children),
+	                             std::move(keyword_args), std::move(filter), aggr_type);
+}
+
+unique_ptr<BoundAggregateExpression>
+FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> function,
+                                      vector<unique_ptr<Expression>> children,
+                                      vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
+                                      unique_ptr<Expression> filter, AggregateType aggr_type) {
+	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);
@@ -1197,24 +1233,25 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 	}
 
 	// found a matching function!
-	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
-	return BindAggregateFunction(bound_function, std::move(regular_args), std::move(keyword_args), std::move(filter),
-	                             aggr_type);
+	return BindAggregateFunction(std::move(bound_function), std::move(regular_args), std::move(keyword_args),
+	                             std::move(filter), aggr_type);
 }
 
 pair<BoundWindowFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
+FunctionBinder::ResolveFunction(shared_ptr<const WindowFunction> function_p, vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
+	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, children, named_arguments);
 
-	BoundWindowFunction bound_function(function);
+	BoundWindowFunction bound_function(std::move(function_p));
 
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
@@ -1244,10 +1281,10 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 }
 
 unique_ptr<BoundWindowExpression>
-FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
+FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function, vector<unique_ptr<Expression>> children,
                                    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                    vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
-	auto [bound_function, bind_info] = ResolveFunction(function, children, keyword_args, orders, arg_orders);
+	auto [bound_function, bind_info] = ResolveFunction(std::move(function), children, keyword_args, orders, arg_orders);
 	auto return_type = bound_function.GetReturnType();
 
 	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));
@@ -1257,12 +1294,30 @@ FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique
 	return result;
 }
 
+unique_ptr<BoundWindowExpression>
+FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
+                                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
+                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children), std::move(keyword_args),
+	                          orders, arg_orders);
+}
+
+unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(shared_ptr<const WindowFunction> function,
+                                                                     vector<unique_ptr<Expression>> children,
+                                                                     vector<OrderByNode> &orders,
+                                                                     vector<OrderByNode> &arg_orders) {
+	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
+	return BindWindowFunction(std::move(function), std::move(children), std::move(empty_keyword_args), orders,
+	                          arg_orders);
+}
+
 unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const WindowFunction &function,
                                                                      vector<unique_ptr<Expression>> children,
                                                                      vector<OrderByNode> &orders,
                                                                      vector<OrderByNode> &arg_orders) {
 	vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
-	return BindWindowFunction(function, std::move(children), std::move(empty_keyword_args), orders, arg_orders);
+	return BindWindowFunction(make_shared_ptr<WindowFunction>(function), std::move(children),
+	                          std::move(empty_keyword_args), orders, arg_orders);
 }
 
 unique_ptr<BoundWindowExpression>
@@ -1276,12 +1331,13 @@ FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
 	}
 
 	// found a matching function!
-	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// now that the overload is fixed, split the arguments into their final positional/named children
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
-	return BindWindowFunction(bound_function, std::move(regular_args), std::move(keyword_args), orders, arg_orders);
+	return BindWindowFunction(std::move(bound_function), std::move(regular_args), std::move(keyword_args), orders,
+	                          arg_orders);
 }
 
 } // namespace duckdb
