@@ -6,15 +6,45 @@ MatchStackFrame::MatchStackFrame(match_frame_index_t frame_index_p, const Matche
     : frame_index(frame_index_p), matcher(matcher_p), match_state(state_p) {
 }
 
+void MatchStackFrame::Execute(MatchStack &) {
+	SetResult(matcher.MatchParseResultInternal(match_state));
+}
+
 void MatchStackFrame::SetResult(const MatcherResult &result) {
-	result_ready = true;
-	success = result.IsSuccess();
+	D_ASSERT(result_state == MatchResultState::NONE);
+	result_state = result.IsSuccess() ? MatchResultState::SUCCESS : MatchResultState::FAILURE;
 	parse_result = result.GetParseResult();
 }
 
+bool MatchStackFrame::HasResult() const {
+	return result_state != MatchResultState::NONE;
+}
+
 MatcherResult MatchStackFrame::GetResult() const {
-	D_ASSERT(result_ready);
-	if (!result_ready || !success) {
+	D_ASSERT(HasResult());
+	if (result_state != MatchResultState::SUCCESS) {
+		return MatcherResult::Failure();
+	}
+	return MatcherResult::Success(parse_result);
+}
+
+void MatchStackFrame::SetChildResult(const MatcherResult &result) {
+	D_ASSERT(child_result_state == MatchResultState::NONE);
+	child_result_state = result.IsSuccess() ? MatchResultState::SUCCESS : MatchResultState::FAILURE;
+	child_parse_result = result.GetParseResult();
+}
+
+bool MatchStackFrame::HasChildResult() const {
+	return child_result_state != MatchResultState::NONE;
+}
+
+MatcherResult MatchStackFrame::TakeChildResult() {
+	D_ASSERT(HasChildResult());
+	auto result_state = child_result_state;
+	auto parse_result = child_parse_result;
+	child_result_state = MatchResultState::NONE;
+	child_parse_result = nullptr;
+	if (result_state != MatchResultState::SUCCESS) {
 		return MatcherResult::Failure();
 	}
 	return MatcherResult::Success(parse_result);
@@ -25,6 +55,13 @@ match_frame_index_t MatchStack::PushFrame(const Matcher &matcher, MatchState &st
 	frames.push_back(make_uniq<MatchStackFrame>(frame_index, matcher, state));
 	frame_stack.push_back(frame_index);
 	return frame_index;
+}
+
+void MatchStack::PushChildFrame(MatchStackFrame &parent, const Matcher &matcher, MatchState &state) {
+	D_ASSERT(!frame_stack.empty());
+	D_ASSERT(frame_stack.back() == parent.frame_index);
+	D_ASSERT(!parent.HasChildResult());
+	PushFrame(matcher, state);
 }
 
 MatchStackFrame &MatchStack::GetFrame(match_frame_index_t frame_index) {
@@ -51,7 +88,16 @@ void MatchStack::InitializeFrame(MatchStackFrame &frame) {
 		frame.store_packrat_result = true;
 		frame.max_token_index_before = state.GetMaxTokenIndex();
 	}
-	frame.SetResult(matcher.MatchParseResultInternal(state));
+}
+
+void MatchStack::ExecuteFrame(MatchStackFrame &frame) {
+	if (frame.state == MatchFrameState::INITIALIZE) {
+		InitializeFrame(frame);
+		frame.state = MatchFrameState::EXECUTE;
+	}
+	if (!frame.HasResult()) {
+		frame.Execute(*this);
+	}
 }
 
 MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
@@ -82,20 +128,21 @@ MatcherResult MatchStack::ExecuteInternal(const Matcher &matcher, MatchState &st
 	while (!frame_stack.empty()) {
 		auto frame_index = frame_stack.back();
 		auto &frame = GetFrame(frame_index);
-		switch (frame.state) {
-		case MatchFrameState::INITIALIZE:
-			frame.state = MatchFrameState::WAITING;
-			InitializeFrame(frame);
-			break;
-		case MatchFrameState::WAITING: {
-			auto result = FinalizeFrame(frame);
-			frame_stack.pop_back();
-			D_ASSERT(frame_stack.empty());
+		auto frame_count = frame_stack.size();
+		ExecuteFrame(frame);
+		if (!frame.HasResult()) {
+			D_ASSERT(frame_stack.size() > frame_count);
+			continue;
+		}
+		auto result = FinalizeFrame(frame);
+		frame_stack.pop_back();
+		D_ASSERT(frame_index + 1 == frames.size());
+		frames.pop_back();
+		if (frame_stack.empty()) {
 			return result;
 		}
-		default:
-			throw InternalException("Invalid matcher frame state");
-		}
+		auto &parent = GetFrame(frame_stack.back());
+		parent.SetChildResult(result);
 	}
 	throw InternalException("Matcher stack completed without a result");
 }
