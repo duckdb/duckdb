@@ -77,13 +77,11 @@ static unique_ptr<BaseStatistics> ConstantOrNullStatistics(ClientContext &, Func
 		return BaseStatistics::CreateUnknown(input.expr.GetReturnType()).ToUnique();
 	}
 	auto result = StringStats::CreateEmpty(input.expr.GetReturnType());
-	StringStats::SetMin(result, string_t(""));
-	StringStats::SetMax(result, string_t(""));
+	StringStats::SetMin(result, string_t(""), StringStatsType::EXACT_STATS);
+	StringStats::SetMax(result, string_t(""), StringStatsType::EXACT_STATS);
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
-	if (auto child = input.ChildStats(1)) {
-		if (child->CanHaveNull()) {
-			result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-		}
+	if (input.child_stats.size() > 1 && input.child_stats[1].CanHaveNull()) {
+		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result.ToUnique();
 }
