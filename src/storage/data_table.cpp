@@ -186,7 +186,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
 	// prevent any tuples from being added to the parent
-	lock_guard<mutex> lock(append_lock);
+	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -208,13 +208,24 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr, transaction);
-
-	// scan the original table, and fill the new column with the transformed value
-	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
-
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	// mark the parent altered before reading, so a concurrent modification conflicts instead of
+	// being dropped by the rewrite
+	auto previous_version = parent.version.load();
 	parent.version = DataTableVersion::ALTERED;
+	try {
+		// read at the commits seen so far, not at this transaction's older snapshot
+		auto &transaction_manager = DuckTransactionManager::Get(db);
+		TransactionData rewrite_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
+		row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr,
+		                                          rewrite_visibility);
+
+		// scan the original table, and fill the new column with the transformed value
+		local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
+	} catch (...) {
+		// nothing reached the catalog, so no undo entry will restore the parent
+		parent.version = previous_version;
+		throw;
+	}
 }
 
 vector<LogicalType> DataTable::GetTypes() {
