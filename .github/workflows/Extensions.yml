@@ -37,6 +37,9 @@ on:
       runner_provider:
         type: string
         required: true
+      image_version:
+        type: string
+        required: true
       save_cache:
         type: boolean
         required: false
@@ -59,6 +62,7 @@ jobs:
     with:
       duckdb_version: ${{ inputs.duckdb_commit }}
       ci_tools_version: group-matrix
+      image_version: ${{ inputs.image_version }}
       groups: |
         core:
           config: duckdb/.github/config/core.cmake
