@@ -1,0 +1,172 @@
+# name: test/issues/general/test_24209.test
+# description: UPDATE OF triggers follow renamed columns
+# group: [general]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t(i INT, j INT, z INT);
+
+statement ok
+CREATE TABLE audit(x INT);
+
+statement ok
+CREATE TRIGGER tr AFTER UPDATE OF j, z ON t FOR EACH STATEMENT INSERT INTO audit VALUES (1);
+
+statement ok
+INSERT INTO t VALUES (0, 0, 0);
+
+statement ok
+UPDATE t SET j = 1;
+
+statement ok
+ALTER TABLE t RENAME COLUMN j TO k;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+[k, z]
+
+statement ok
+UPDATE t SET k = 2;
+
+statement ok
+UPDATE t SET i = 3;
+
+statement ok
+UPDATE t SET z = 4;
+
+query I
+SELECT count(*) FROM audit;
+----
+3
+
+# Trigger metadata follows transaction rollback
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE t RENAME COLUMN k TO j;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+[j, z]
+
+statement ok
+ROLLBACK;
+
+query T
+SELECT columns FROM duckdb_triggers() WHERE trigger_name = 'tr';
+----
+[k, z]
+
+# Concurrent trigger creation and column rename conflict in either order
+statement ok
+CREATE TABLE tx_t(i INT, j INT);
+
+statement ok
+CREATE TABLE tx_audit(x INT);
+
+statement ok con2
+BEGIN;
+
+statement ok con2
+CREATE TRIGGER tx_tr AFTER UPDATE OF j ON tx_t INSERT INTO tx_audit VALUES (1);
+
+statement error con1
+ALTER TABLE tx_t RENAME COLUMN j TO k;
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con2
+ROLLBACK;
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE tx_t RENAME COLUMN j TO k;
+
+statement error con2
+CREATE TRIGGER tx_tr AFTER UPDATE OF j ON tx_t INSERT INTO tx_audit VALUES (1);
+----
+<REGEX>:.*write-write conflict.*
+
+statement ok con1
+ROLLBACK;
+
+# ALTER then CREATE in one transaction binds to the altered table version
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE tx_t RENAME COLUMN j TO k;
+
+statement ok
+CREATE TRIGGER tx_tr AFTER UPDATE OF k ON tx_t INSERT INTO tx_audit VALUES (1);
+
+statement ok
+COMMIT;
+
+statement ok
+INSERT INTO tx_t VALUES (0, 0);
+
+statement ok
+UPDATE tx_t SET k = 1;
+
+query I
+SELECT count(*) FROM tx_audit;
+----
+1
+
+# CREATE then ALTER in one transaction propagates the new trigger definition
+statement ok
+CREATE TABLE order_t(i INT, j INT);
+
+statement ok
+CREATE TABLE order_audit(x INT);
+
+statement ok
+BEGIN;
+
+statement ok
+CREATE TRIGGER order_tr AFTER UPDATE OF j ON order_t INSERT INTO order_audit VALUES (1);
+
+statement ok
+ALTER TABLE order_t RENAME COLUMN j TO k;
+
+statement ok
+COMMIT;
+
+statement ok
+INSERT INTO order_t VALUES (0, 0);
+
+statement ok
+UPDATE order_t SET k = 1;
+
+query I
+SELECT count(*) FROM order_audit;
+----
+1
+
+# A replacement against an old table snapshot must not escape a concurrent rename
+statement ok
+CREATE TABLE replace_t(i INT, j INT);
+
+statement ok
+CREATE TRIGGER replace_tr AFTER UPDATE OF i ON replace_t INSERT INTO tx_audit VALUES (2);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+ALTER TABLE replace_t RENAME COLUMN j TO k;
+
+statement error con2
+CREATE OR REPLACE TRIGGER replace_tr AFTER UPDATE OF j ON replace_t INSERT INTO tx_audit VALUES (2);
+----
+<REGEX>:.*create with "replace_tr".*table "replace_t" was altered by a concurrent transaction.*
+
+statement ok con1
+ROLLBACK;

@@ -48,11 +48,14 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	auto &parent = entry.Parent();
 
 	switch (parent.type) {
-	case CatalogType::TRIGGER_ENTRY:
-		// Triggers do not support ALTER — always a CREATE
+	case CatalogType::TRIGGER_ENTRY: {
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
-		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
+		auto &trigger = parent.Cast<TriggerCatalogEntry>();
+		if (!trigger.column_rename) {
+			log.WriteCreateTrigger(trigger);
+		}
 		break;
+	}
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
