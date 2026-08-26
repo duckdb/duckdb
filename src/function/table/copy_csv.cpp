@@ -265,7 +265,7 @@ public:
 static unique_ptr<AsyncFileWriter> OpenCSVFileWriter(ClientContext &context, const string &file_path,
                                                      FileCompressionType compression) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | compression;
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | std::move(compression);
 	if (!fs.FileExists(file_path) && !fs.IsPipe(file_path)) {
 		flags |= FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 	}
@@ -275,7 +275,7 @@ static unique_ptr<AsyncFileWriter> OpenCSVFileWriter(ClientContext &context, con
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, ClientContext &context, const string &file_path,
 	                   FileCompressionType compression_p)
-	    : file_writer(OpenCSVFileWriter(context, file_path, compression_p)), writer(options, *file_writer),
+	    : file_writer(OpenCSVFileWriter(context, file_path, std::move(compression_p))), writer(options, *file_writer),
 	      compression(file_writer->GetFileCompressionType()) {
 	}
 
