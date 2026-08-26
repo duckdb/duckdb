@@ -6,6 +6,7 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
@@ -174,6 +175,22 @@ static vector<unique_ptr<Expression>> PlanMergeRowIdReferences(LogicalMergeInto 
 	return result;
 }
 
+//! The operators of a regular INSERT/UPDATE read the values of a row in the types of the table - cast the values that
+//! the action generates, so that the catalog gets the same input that it gets for a regular INSERT/UPDATE
+static void CastActionExpressionsToColumnTypes(ClientContext &context, TableCatalogEntry &table,
+                                               vector<unique_ptr<Expression>> &expressions,
+                                               const vector<PhysicalIndex> &columns) {
+	auto &table_columns = table.GetColumns();
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		auto &target_type = columns.empty() ? table_columns.GetColumn(PhysicalIndex(i)).Type()
+		                                    : table_columns.GetColumn(columns[i]).Type();
+		if (expressions[i]->GetReturnType() == target_type) {
+			continue;
+		}
+		expressions[i] = BoundCastExpression::AddCastToType(context, std::move(expressions[i]), target_type);
+	}
+}
+
 static vector<unique_ptr<BoundConstraint>> CopyBoundConstraints(LogicalMergeInto &op) {
 	vector<unique_ptr<BoundConstraint>> result;
 	for (auto &constraint : op.bound_constraints) {
@@ -199,6 +216,7 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		// that layout so that we can plan the update exactly like a regular update
 		vector<unique_ptr<Expression>> select_list;
 		vector<unique_ptr<Expression>> update_expressions;
+		CastActionExpressionsToColumnTypes(context, op.table, action.expressions, action.columns);
 		for (auto &expr : action.expressions) {
 			update_expressions.push_back(
 			    make_uniq<BoundReferenceExpression>(expr->GetReturnType(), select_list.size()));
@@ -248,6 +266,7 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 			}
 			action.expressions = std::move(new_expressions);
 		}
+		CastActionExpressionsToColumnTypes(context, op.table, action.expressions, vector<PhysicalIndex>());
 		result->expressions = std::move(action.expressions);
 		auto &action_input = PlanMergeActionSource(planner, plan, condition, *result);
 
@@ -275,6 +294,22 @@ PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGen
 	if (op.return_chunk) {
 		throw NotImplementedException("RETURNING clause not yet supported for MERGE INTO for database type \"%s\"",
 		                              GetCatalogType());
+	}
+	auto multiple_modifications_error = GetMultipleMergeModificationsError();
+	if (!multiple_modifications_error.empty()) {
+		// the catalog can only apply a single UPDATE/DELETE to a row - verify that we have at most one
+		idx_t modification_count = 0;
+		for (auto &entry : op.actions) {
+			for (auto &action : entry.second) {
+				if (action->action_type == MergeActionType::MERGE_UPDATE ||
+				    action->action_type == MergeActionType::MERGE_DELETE) {
+					modification_count++;
+				}
+			}
+		}
+		if (modification_count > 1) {
+			throw NotImplementedException(multiple_modifications_error);
+		}
 	}
 	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 	idx_t append_count = 0;

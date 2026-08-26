@@ -505,15 +505,18 @@ index cc2897bf..00000000
 -
 -} // namespace duckdb
 diff --git a/src/include/catalog/rest/iceberg_catalog.hpp b/src/include/catalog/rest/iceberg_catalog.hpp
-index 6e1ab95e..7ddd7c04 100644
+index 6e1ab95e..4ab100a6 100644
 --- a/src/include/catalog/rest/iceberg_catalog.hpp
 +++ b/src/include/catalog/rest/iceberg_catalog.hpp
-@@ -147,8 +147,6 @@ public:
+@@ -147,8 +147,9 @@ public:
  	                             PhysicalOperator &plan) override;
  	PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
  	                             PhysicalOperator &plan) override;
 -	PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
 -	                                PhysicalOperator &plan) override;
++	string GetMultipleMergeModificationsError() const override {
++		return "MERGE INTO with Iceberg only supports a single UPDATE/DELETE action currently";
++	}
  	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
  	                                            unique_ptr<LogicalOperator> plan) override;
  	DatabaseSize GetDatabaseSize(ClientContext &context) override;

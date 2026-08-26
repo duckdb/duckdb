@@ -1,13 +1,16 @@
 diff --git a/src/include/storage/ducklake_catalog.hpp b/src/include/storage/ducklake_catalog.hpp
-index ce752724..3fe568d9 100644
+index ce752724..3d8977b0 100644
 --- a/src/include/storage/ducklake_catalog.hpp
 +++ b/src/include/storage/ducklake_catalog.hpp
-@@ -162,8 +162,6 @@ public:
+@@ -162,8 +162,9 @@ public:
  	                             PhysicalOperator &plan) override;
  	PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
  	                             PhysicalOperator &plan) override;
 -	PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
 -	                                PhysicalOperator &plan) override;
++	string GetMultipleMergeModificationsError() const override {
++		return "MERGE INTO with DuckLake only supports a single UPDATE/DELETE action currently";
++	}
  	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
  	                                            unique_ptr<LogicalOperator> plan) override;
  	unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,

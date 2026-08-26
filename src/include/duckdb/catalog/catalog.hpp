@@ -383,6 +383,11 @@ public:
 	virtual bool SupportsMultipleDMLCTEs() const {
 		return false;
 	}
+	//! Returns an error message if the catalog cannot apply multiple UPDATE/DELETE actions of a MERGE INTO to the
+	//! same table - catalogs that write a deletion file per data file can only apply one such action to a row
+	virtual string GetMultipleMergeModificationsError() const {
+		return string();
+	}
 	virtual bool IsEncrypted() const {
 		return false;
 	}
