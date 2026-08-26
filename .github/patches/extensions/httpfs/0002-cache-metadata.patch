@@ -1,4 +1,4 @@
-commit 0f5247d27ca6ff671366b4dbf6f1055d9d146f5e
+commit a4e4cc5e9d46cb108fdb48a64a1ab44a9dd4ff53
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -61,7 +61,7 @@ index 3b4f97c..29ea242 100644
  	active = false;
  	file->download_complete.notify_all();
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..3c97584 100644
+index 2efd0fa..7a0143b 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -111,7 +111,7 @@ index 2efd0fa..3c97584 100644
  	}
  }
  
-@@ -648,6 +669,182 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +669,187 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -271,7 +271,12 @@ index 2efd0fa..3c97584 100644
 +                                      timestamp_t response_time) {
 +	auto response_valid_until =
 +	    HTTPFileSystem::ComputeCacheValidUntil(response.headers, request_time, response_time);
-+	if (HasCacheControlDirective(response.headers, "no-store") || response.headers.HasHeader("Vary")) {
++	if (HasCacheControlDirective(response.headers, "no-store")) {
++		// no-store applies to this response, so only blocks populated by this read are retired.
++		response_valid_until = timestamp_t::ninfinity();
++	}
++	if (response.headers.HasHeader("Vary")) {
++		// TODO(hjiang): Include Vary-selected request headers in the cache key instead of disabling reuse.
 +		response_valid_until = timestamp_t::ninfinity();
 +	}
 +
@@ -294,7 +299,7 @@ index 2efd0fa..3c97584 100644
  struct HTTPFileInfoParser {
  public:
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
-@@ -701,8 +898,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
+@@ -701,8 +903,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
  	return false;
  }
  
@@ -307,7 +312,7 @@ index 2efd0fa..3c97584 100644
  	if (response->status == HTTPStatusCode::OK_200) {
  		return response;
  	}
-@@ -716,14 +916,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
+@@ -716,14 +921,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
  	}
  	if (flags.OpenForReading() && response->status != HTTPStatusCode::NotFound_404 &&
  	    response->status != HTTPStatusCode::MovedPermanently_301) {
@@ -327,7 +332,7 @@ index 2efd0fa..3c97584 100644
  	if (response->status == HTTPStatusCode::PartialContent_206 || response->status == HTTPStatusCode::Accepted_202 ||
  	    response->status == HTTPStatusCode::OK_200) {
  		return response;
-@@ -735,7 +938,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
+@@ -735,7 +943,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
  	throw hfs.GetHTTPError(*this, *response, RequestType::GET_REQUEST, path);
  }
  
@@ -336,7 +341,7 @@ index 2efd0fa..3c97584 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -750,6 +953,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +958,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -344,7 +349,7 @@ index 2efd0fa..3c97584 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -769,9 +973,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -769,9 +978,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -358,7 +363,7 @@ index 2efd0fa..3c97584 100644
  	}
  }
  
-@@ -791,6 +997,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +1002,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -366,7 +371,7 @@ index 2efd0fa..3c97584 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +1008,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +1013,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -374,7 +379,7 @@ index 2efd0fa..3c97584 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1076,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1081,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
