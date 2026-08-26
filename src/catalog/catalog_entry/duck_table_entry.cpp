@@ -1489,6 +1489,10 @@ void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,
 	triggers->Scan(transaction, callback);
 }
 
+optional_ptr<CatalogEntry> DuckTableEntry::GetTrigger(CatalogTransaction transaction, const Identifier &name) const {
+	return triggers->GetEntry(transaction, name);
+}
+
 void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback) {
 	triggers->Scan(callback);
 }

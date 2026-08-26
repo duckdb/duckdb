@@ -39,6 +39,10 @@ struct LambdaInvokeData final : public LambdaFunctionData {
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
 	}
 
+	unique_ptr<Expression> RecoverLambdaChild() const override {
+		return lambda_expr ? lambda_expr->Copy() : nullptr;
+	}
+
 	optional_ptr<const Expression> GetLambdaExpression() const override {
 		if (!lambda_expr) {
 			return nullptr;
@@ -67,14 +71,16 @@ struct LambdaInvokeState final : public FunctionLocalState {
 		}
 		auto &bound_lambda_expr = bdata.lambda_expr->Cast<BoundLambdaExpression>();
 		const auto parameter_count = bound_lambda_expr.ParameterCount();
-		D_ASSERT(parameter_count <= expr.GetChildren().size());
+		D_ASSERT(parameter_count < expr.GetChildren().size());
 
+		// children[0] is the lambda placeholder itself, the parameters follow it. The lambda body refers
+		// to its parameters in reverse order, so the input chunk lists them reversed
 		vector<LogicalType> input_types;
-		input_types.reserve(expr.GetChildren().size());
+		input_types.reserve(expr.GetChildren().size() - 1);
 		for (idx_t i = 0; i < parameter_count; i++) {
-			input_types.push_back(expr.GetChildren()[parameter_count - i - 1]->GetReturnType());
+			input_types.push_back(expr.GetChildren()[parameter_count - i]->GetReturnType());
 		}
-		for (idx_t i = parameter_count; i < expr.GetChildren().size(); i++) {
+		for (idx_t i = parameter_count + 1; i < expr.GetChildren().size(); i++) {
 			input_types.push_back(expr.GetChildren()[i]->GetReturnType());
 		}
 
@@ -86,10 +92,10 @@ struct LambdaInvokeState final : public FunctionLocalState {
 void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LambdaInvokeState>();
 	for (idx_t i = 0; i < lstate.parameter_count; i++) {
-		lstate.input_chunk.data[i].Reference(args.data[lstate.parameter_count - i - 1]);
+		lstate.input_chunk.data[i].Reference(args.data[lstate.parameter_count - i]);
 	}
-	for (idx_t i = lstate.parameter_count; i < args.ColumnCount(); i++) {
-		lstate.input_chunk.data[i].Reference(args.data[i]);
+	for (idx_t i = lstate.parameter_count + 1; i < args.ColumnCount(); i++) {
+		lstate.input_chunk.data[i - 1].Reference(args.data[i]);
 	}
 	lstate.input_chunk.SetChildCardinality(args.size());
 	lstate.executor->ExecuteExpression(lstate.input_chunk, result);
@@ -138,6 +144,8 @@ ScalarFunction InvokeFun::GetFunction() {
 	fun.SetInitStateCallback(LambdaInvokeState::Init);
 	fun.SetSerializeCallback(LambdaInvokeData::Serialize);
 	fun.SetDeserializeCallback(LambdaInvokeData::Deserialize);
+	// the lambda expression that is executed for every row can throw
+	fun.SetFallible();
 	return fun;
 }
 

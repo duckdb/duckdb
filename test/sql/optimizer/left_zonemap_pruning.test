@@ -1,0 +1,133 @@
+# name: test/sql/optimizer/left_zonemap_pruning.test
+# description: Prune row groups for left() with a constant length
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/left_zonemap_pruning.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 6144 rows -> 3 row groups of 2048 rows. The string increases with the row id.
+statement ok
+CREATE TABLE left_pruning AS
+SELECT i::INTEGER AS i, lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) = '0010';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 4) = '0010';
+----
+100
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) > '0050';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 4) > '0050';
+----
+1044
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) BETWEEN '0030' AND '0031';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 4) BETWEEN '0030' AND '0031';
+----
+200
+
+# A range crossing a row group boundary scans both row groups.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 4) BETWEEN '0020' AND '0021';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 4) BETWEEN '0020' AND '0021';
+----
+200
+
+# Lengths beyond the string preserve the bounds unchanged.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 20) > '005000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 20) > '005000';
+----
+1143
+
+# A negative length depends on the length of each row, so no bounds are derived.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, -2) = '0010';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, -2) = '0010';
+----
+100
+
+# Dynamic lengths do not propagate statistics.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, (i % 2) + 4) = '0010';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, (i % 2) + 4) = '0010';
+----
+50
+
+# A zero length always produces an empty string.
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) = '';
+----
+6144
+
+# The derived bounds for a zero length are exact ('' on both sides), so an impossible comparison prunes every row group.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 0) > '';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) > '';
+----
+0
+
+# An always-true comparison still has to scan every row group.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 0) <= '';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning WHERE left(s, 0) <= '';
+----
+6144
+
+# Prefixes are measured in characters rather than bytes.
+statement ok
+CREATE TABLE left_pruning_utf8 AS
+SELECT i::INTEGER AS i, '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(6144) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning_utf8 WHERE left(s, 5) BETWEEN '🦆0030' AND '🦆0031';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM left_pruning_utf8 WHERE left(s, 5) BETWEEN '🦆0030' AND '🦆0031';
+----
+200

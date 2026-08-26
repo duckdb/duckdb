@@ -530,7 +530,7 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 			    function.GetName());
 		}
 		target_type.Verify();
-		// don't cast lambda children, they get removed before execution
+		// don't cast lambda children, their slot only ever holds a placeholder
 		if (children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}

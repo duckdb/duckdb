@@ -121,11 +121,15 @@ private:
 	CatalogPushdownResult ResolveRemoteCatalog(const Identifier &catalog_name, RemoteCapability capability);
 	//! Give the resolved catalog the chance to veto pushing down this statement as a whole
 	CatalogPushdownResult VerifyStatementSupport(const SQLStatement &statement, CatalogPushdownResult target);
+	//! Resolve a (possibly nested) qualified name into the catalog it lives in and its schema path. This runs the
+	//! same catalog/schema ambiguity resolution the binder does, and - unlike Catalog()/Schema() - keeps every
+	//! level of a nested schema path. The catalog is empty when the name is not catalog-qualified
+	void ResolveQualification(const QualifiedName &name, Identifier &catalog_name, vector<Identifier> &schema_path);
 	//! Look an entry up in a catalog, defaulting to the main schema when the name carries no schema
 	optional_ptr<CatalogEntry> LookupEntry(const Identifier &catalog_name, const EntryLookupInfo &lookup,
-	                                       const Identifier &schema_name);
+	                                       const vector<Identifier> &schema_path);
 	//! Whether any non-remote catalog in the search path holds this entry
-	bool EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const Identifier &schema_name);
+	bool EntryExistsInLocalCatalog(const EntryLookupInfo &lookup, const vector<Identifier> &schema_path);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
@@ -163,8 +167,7 @@ private:
 	//! Rewrite a table function argument, keeping it positional if it was not written as name => value
 	CatalogPushdownResult RewriteTableFunctionArgument(unique_ptr<ParsedExpression> &arg);
 
-	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const Identifier &catalog_name,
-	                                                const Identifier &schema_name);
+	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const QualifiedName &name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection

@@ -1116,6 +1116,11 @@ static bool TransformFunctionInternal(const Vector &input, const idx_t count, Ve
 	auto docs = JSONCommon::AllocateArray<yyjson_doc *>(alc, count);
 	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, count);
 	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto read_flags = JSONCommon::READ_FLAG;
+	if (result.GetType().id() == LogicalTypeId::DECIMAL) {
+		read_flags &= ~YYJSON_READ_BIGNUM_AS_RAW;
+		read_flags |= YYJSON_READ_NUMBER_AS_RAW;
+	}
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
@@ -1123,7 +1128,7 @@ static bool TransformFunctionInternal(const Vector &input, const idx_t count, Ve
 			vals[i] = nullptr;
 			result_validity.SetInvalid(i);
 		} else {
-			docs[i] = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
+			docs[i] = JSONCommon::ReadDocument(inputs[idx], read_flags, alc);
 			vals[i] = docs[i]->root;
 		}
 	}
