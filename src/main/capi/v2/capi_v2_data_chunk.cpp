@@ -3,35 +3,115 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
+namespace duckdb {
+namespace capiv2 {
+
+static void CreateDataChunk(Allocator &allocator, const duckdb_v2_logical_type_handle *types, idx_t column_count,
+                            duckdb_v2_data_chunk_handle *out_chunk, const char *function_name) {
+	if (!out_chunk) {
+		throw InvalidInputException("null argument to %s", function_name);
+	}
+	*out_chunk = nullptr;
+	if (!types) {
+		throw InvalidInputException("null argument to %s", function_name);
+	}
+	vector<LogicalType> logical_types;
+	logical_types.reserve(column_count);
+	for (idx_t i = 0; i < column_count; i++) {
+		if (!types[i]) {
+			throw InvalidInputException("null logical type at index %llu", i);
+		}
+		const auto &ltype = *Convert(types[i]);
+		// ANY is a signature wildcard with no physical layout; a chunk allocates
+		// storage, so reject it (an ANY vector throws InternalException).
+		if (TypeVisitor::Contains(ltype, LogicalTypeId::ANY)) {
+			throw InvalidInputException("logical type at index %llu cannot be ANY", i);
+		}
+		logical_types.push_back(ltype);
+	}
+	auto chunk = make_uniq<CV2DataChunk>();
+	chunk->Initialize(allocator, logical_types);
+	*out_chunk = Convert(chunk.release());
+}
+
+static void CopyDataChunk(ClientContext &context, duckdb_v2_data_chunk_handle chunk,
+                          duckdb_v2_data_chunk_handle *out_chunk, const char *function_name) {
+	if (!out_chunk) {
+		throw InvalidInputException("null argument to %s", function_name);
+	}
+	*out_chunk = nullptr;
+	if (!chunk) {
+		throw InvalidInputException("null argument to %s", function_name);
+	}
+	auto &source = *Convert(chunk);
+	auto copy = make_uniq<CV2DataChunk>();
+	copy->Initialize(Allocator::Get(context), source.GetTypes(), MaxValue<idx_t>(source.size(), STANDARD_VECTOR_SIZE));
+	source.Copy(*copy);
+	copy->SetCardinalityUnsafe(source.size());
+	*out_chunk = Convert(copy.release());
+}
+
+} // namespace capiv2
+} // namespace duckdb
+
 using namespace duckdb::capiv2;
 
+// TODO: this should be removed.
 DUCKDB_V2_ERROR duckdb_v2_data_chunk_create(const duckdb_v2_logical_type_handle *types, idx_t column_count,
                                             duckdb_v2_data_chunk_handle *out_chunk, duckdb_v2_error_info_handle *err) {
 	return WithErrorHandler(err, [&]() {
-		if (!out_chunk) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_create");
+		CreateDataChunk(duckdb::Allocator::DefaultAllocator(), types, column_count, out_chunk,
+		                "duckdb_v2_data_chunk_create");
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_create_with_connection(duckdb_v2_connection_handle conn,
+                                                            const duckdb_v2_logical_type_handle *types,
+                                                            idx_t column_count, duckdb_v2_data_chunk_handle *out_chunk,
+                                                            duckdb_v2_error_info_handle *err) {
+	return WithErrorHandler(err, [&]() {
+		if (!conn) {
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_create_with_connection");
 		}
-		*out_chunk = nullptr;
-		if (!types) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_create");
+		CreateDataChunk(duckdb::Allocator::Get(*Convert(conn)->context), types, column_count, out_chunk,
+		                "duckdb_v2_data_chunk_create_with_connection");
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_create_with_context(duckdb_v2_context_handle context,
+                                                         const duckdb_v2_logical_type_handle *types, idx_t column_count,
+                                                         duckdb_v2_data_chunk_handle *out_chunk,
+                                                         duckdb_v2_error_info_handle *err) {
+	return WithErrorHandler(err, [&]() {
+		if (!context) {
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_create_with_context");
 		}
-		duckdb::vector<duckdb::LogicalType> logical_types;
-		logical_types.reserve(column_count);
-		for (idx_t i = 0; i < column_count; i++) {
-			if (!types[i]) {
-				throw duckdb::InvalidInputException("null logical type at index %llu", i);
-			}
-			const auto &ltype = *Convert(types[i]);
-			// ANY is a signature wildcard with no physical layout; a chunk allocates
-			// storage, so reject it (an ANY vector throws InternalException).
-			if (duckdb::TypeVisitor::Contains(ltype, duckdb::LogicalTypeId::ANY)) {
-				throw duckdb::InvalidInputException("logical type at index %llu cannot be ANY", i);
-			}
-			logical_types.push_back(ltype);
+		CreateDataChunk(duckdb::Allocator::Get(*Convert(context)), types, column_count, out_chunk,
+		                "duckdb_v2_data_chunk_create_with_context");
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy_with_connection(duckdb_v2_connection_handle conn,
+                                                          duckdb_v2_data_chunk_handle chunk,
+                                                          duckdb_v2_data_chunk_handle *out_chunk,
+                                                          duckdb_v2_error_info_handle *err) {
+	return WithErrorHandler(err, [&]() {
+		if (!conn) {
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_copy_with_connection");
 		}
-		auto chunk = duckdb::make_uniq<CV2DataChunk>();
-		chunk->Initialize(duckdb::Allocator::DefaultAllocator(), logical_types);
-		*out_chunk = Convert(chunk.release());
+		CopyDataChunk(*Convert(conn)->context, chunk, out_chunk, "duckdb_v2_data_chunk_copy_with_connection");
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy_with_context(duckdb_v2_context_handle context,
+                                                       duckdb_v2_data_chunk_handle chunk,
+                                                       duckdb_v2_data_chunk_handle *out_chunk,
+                                                       duckdb_v2_error_info_handle *err) {
+	return WithErrorHandler(err, [&]() {
+		if (!context) {
+			throw duckdb::InvalidInputException("null argument to duckdb_v2_data_chunk_copy_with_context");
+		}
+		CopyDataChunk(*Convert(context), chunk, out_chunk, "duckdb_v2_data_chunk_copy_with_context");
 	});
 }
 

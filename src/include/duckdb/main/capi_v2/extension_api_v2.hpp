@@ -16,6 +16,43 @@ typedef struct {
 	(const uint8_t *in_data, idx_t in_length, bool is_negative, uint8_t *out_data, idx_t out_capacity,
 	 idx_t *out_length, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_close)(duckdb_v2_database_handle *db);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_append)
+	(duckdb_v2_column_data_collection_handle collection, duckdb_v2_column_data_collection_append_state_handle state,
+	 duckdb_v2_data_chunk_handle chunk, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_append_state_create)
+	(duckdb_v2_column_data_collection_handle collection,
+	 duckdb_v2_column_data_collection_append_state_handle *out_state, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_append_state_destroy)
+	(duckdb_v2_column_data_collection_append_state_handle *state);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_combine)
+	(duckdb_v2_column_data_collection_handle target, duckdb_v2_column_data_collection_handle *source,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_create_with_connection)
+	(duckdb_v2_connection_handle conn, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
+	 duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_create_with_context)
+	(duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
+	 duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_column_data_collection_destroy)(duckdb_v2_column_data_collection_handle *collection);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_reset)
+	(duckdb_v2_column_data_collection_handle collection, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_row_count)
+	(duckdb_v2_column_data_collection_handle collection, idx_t *out_row_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_scan)
+	(duckdb_v2_column_data_collection_handle collection,
+	 duckdb_v2_column_data_collection_shared_scan_state_handle shared_state,
+	 duckdb_v2_column_data_collection_worker_scan_state_handle worker_state, duckdb_v2_data_chunk_handle out_chunk,
+	 bool *did_produce_chunk, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_shared_scan_state_create)
+	(duckdb_v2_column_data_collection_handle collection,
+	 duckdb_v2_column_data_collection_shared_scan_state_handle *out_state, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_shared_scan_state_destroy)
+	(duckdb_v2_column_data_collection_shared_scan_state_handle *state);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_worker_scan_state_create)
+	(duckdb_v2_column_data_collection_handle collection,
+	 duckdb_v2_column_data_collection_worker_scan_state_handle *out_state, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_worker_scan_state_destroy)
+	(duckdb_v2_column_data_collection_worker_scan_state_handle *state);
 	DUCKDB_V2_ERROR(*duckdb_v2_connect)
 	(duckdb_v2_database_handle db, duckdb_v2_connection_handle *out_conn, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_create_type_from_id)
@@ -63,9 +100,21 @@ typedef struct {
 	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_create_environment)
 	(duckdb_v2_environment_handle *out_env, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_copy_with_connection)
+	(duckdb_v2_connection_handle conn, duckdb_v2_data_chunk_handle chunk, duckdb_v2_data_chunk_handle *out_chunk,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_copy_with_context)
+	(duckdb_v2_context_handle context, duckdb_v2_data_chunk_handle chunk, duckdb_v2_data_chunk_handle *out_chunk,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_create)
 	(const duckdb_v2_logical_type_handle *types, idx_t column_count, duckdb_v2_data_chunk_handle *out_chunk,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_create_with_connection)
+	(duckdb_v2_connection_handle conn, const duckdb_v2_logical_type_handle *types, idx_t column_count,
+	 duckdb_v2_data_chunk_handle *out_chunk, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_create_with_context)
+	(duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types, idx_t column_count,
+	 duckdb_v2_data_chunk_handle *out_chunk, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_data_chunk_destroy)(duckdb_v2_data_chunk_handle *chunk);
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_size)
 	(duckdb_v2_data_chunk_handle chunk, idx_t *out_size, duckdb_v2_error_info_handle *err);
@@ -528,6 +577,26 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_bignum_decode = duckdb_v2_bignum_decode;
 	result.duckdb_v2_bignum_encode = duckdb_v2_bignum_encode;
 	result.duckdb_v2_close = duckdb_v2_close;
+	result.duckdb_v2_column_data_collection_append = duckdb_v2_column_data_collection_append;
+	result.duckdb_v2_column_data_collection_append_state_create = duckdb_v2_column_data_collection_append_state_create;
+	result.duckdb_v2_column_data_collection_append_state_destroy =
+	    duckdb_v2_column_data_collection_append_state_destroy;
+	result.duckdb_v2_column_data_collection_combine = duckdb_v2_column_data_collection_combine;
+	result.duckdb_v2_column_data_collection_create_with_connection =
+	    duckdb_v2_column_data_collection_create_with_connection;
+	result.duckdb_v2_column_data_collection_create_with_context = duckdb_v2_column_data_collection_create_with_context;
+	result.duckdb_v2_column_data_collection_destroy = duckdb_v2_column_data_collection_destroy;
+	result.duckdb_v2_column_data_collection_reset = duckdb_v2_column_data_collection_reset;
+	result.duckdb_v2_column_data_collection_row_count = duckdb_v2_column_data_collection_row_count;
+	result.duckdb_v2_column_data_collection_scan = duckdb_v2_column_data_collection_scan;
+	result.duckdb_v2_column_data_collection_shared_scan_state_create =
+	    duckdb_v2_column_data_collection_shared_scan_state_create;
+	result.duckdb_v2_column_data_collection_shared_scan_state_destroy =
+	    duckdb_v2_column_data_collection_shared_scan_state_destroy;
+	result.duckdb_v2_column_data_collection_worker_scan_state_create =
+	    duckdb_v2_column_data_collection_worker_scan_state_create;
+	result.duckdb_v2_column_data_collection_worker_scan_state_destroy =
+	    duckdb_v2_column_data_collection_worker_scan_state_destroy;
 	result.duckdb_v2_connect = duckdb_v2_connect;
 	result.duckdb_v2_connection_create_type_from_id = duckdb_v2_connection_create_type_from_id;
 	result.duckdb_v2_connection_create_type_from_name = duckdb_v2_connection_create_type_from_name;
@@ -544,7 +613,11 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_context_create_type_from_text = duckdb_v2_context_create_type_from_text;
 	result.duckdb_v2_context_create_type_with_alias = duckdb_v2_context_create_type_with_alias;
 	result.duckdb_v2_create_environment = duckdb_v2_create_environment;
+	result.duckdb_v2_data_chunk_copy_with_connection = duckdb_v2_data_chunk_copy_with_connection;
+	result.duckdb_v2_data_chunk_copy_with_context = duckdb_v2_data_chunk_copy_with_context;
 	result.duckdb_v2_data_chunk_create = duckdb_v2_data_chunk_create;
+	result.duckdb_v2_data_chunk_create_with_connection = duckdb_v2_data_chunk_create_with_connection;
+	result.duckdb_v2_data_chunk_create_with_context = duckdb_v2_data_chunk_create_with_context;
 	result.duckdb_v2_data_chunk_destroy = duckdb_v2_data_chunk_destroy;
 	result.duckdb_v2_data_chunk_get_size = duckdb_v2_data_chunk_get_size;
 	result.duckdb_v2_data_chunk_get_vector = duckdb_v2_data_chunk_get_vector;

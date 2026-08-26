@@ -61,6 +61,7 @@ class Value;
 class Vector;
 class Arena;
 class DataChunk;
+class ColumnDataCollection;
 class QueryResult;
 
 struct TypeParam;
@@ -134,16 +135,13 @@ private:
 };
 
 /// @internal
-/// Grants the .cpp access to the wrappers' private constructors and to `release`, without making either public.
+/// Grants the .cpp access to the wrappers' private constructors, without making them public. `Handle::release` is not
+/// reachable from here -- only the wrapper type itself befriends its `Handle` base, so calls where the C API takes
+/// ownership release from inside a member of the consuming wrapper.
 struct Factory {
 	template <class T, class... ARGS>
 	static auto Make(ARGS &&... args) -> T {
 		return T(std::forward<ARGS>(args)...);
-	}
-
-	template <class T>
-	static auto Release(T &t) -> void * {
-		return t.release();
 	}
 };
 
@@ -2000,6 +1998,15 @@ public:
 	/// @param types One type per column. Types containing ANY are rejected.
 	explicit DataChunk(const std::vector<LogicalType> &types);
 
+	/// Like `DataChunk(types)`, but the chunk's memory is allocated through the connection's database rather than the
+	/// default allocator, so it is accounted to that database.
+	/// @param conn The connection whose database supplies the chunk's memory.
+	/// @param types One type per column. Types containing ANY are rejected.
+	DataChunk(const Connection &conn, const std::vector<LogicalType> &types);
+
+	/// The `Context` flavor of the connection-scoped constructor, inside a callback.
+	DataChunk(const Context &ctx, const std::vector<LogicalType> &types);
+
 	DataChunk(DataChunk &&other) noexcept {
 		std::swap(impl, other.impl);
 		std::swap(owned, other.owned);
@@ -2023,9 +2030,143 @@ public:
 	/// @return A borrowed handle, valid for as long as this chunk is.
 	auto GetVector(idx_t index) const -> Vector;
 
+	/// A deep copy of this chunk, its memory allocated through the connection's database. The copy is flattened and
+	/// owns all its data, so it stays valid after this chunk -- or whatever backs it, such as a
+	/// `ColumnDataCollection` scan -- is gone.
+	/// @param conn The connection whose database supplies the copy's memory.
+	auto Copy(const Connection &conn) const -> DataChunk;
+
+	/// The `Context` flavor of `Copy`, inside a callback.
+	auto Copy(const Context &ctx) const -> DataChunk;
+
 private:
 	explicit DataChunk(void *impl, bool owned);
 	bool owned = false; // TODO: This should be fixed C++ side
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Column Data Collection
+//----------------------------------------------------------------------------------------------------------------------
+// A buffer-managed set of rows: append chunks in, scan them back out in order. DuckDB owns the memory and spills the
+// rows to disk when they outgrow it, so a collection can hold far more than memory allows. A collection must not be
+// scanned while it is being appended to, and must not be appended to concurrently: for parallel appends, fill one
+// collection per thread and `Combine` them at the end.
+
+/// An owned collection of rows, all sharing one set of column types fixed at construction.
+/// It must not outlive the `Connection` or `Context` it was created from.
+class ColumnDataCollection final : public detail::Handle<ColumnDataCollection> {
+	friend detail::Factory;
+
+public:
+	/// Opaque state for appending, from `CreateAppendState`. Only meaningful with the collection that created it, and
+	/// invalidated by `Reset`.
+	class AppendState final : public detail::Handle<AppendState> {
+		friend detail::Factory;
+
+	public:
+		AppendState(AppendState &&) noexcept = default;
+		AppendState &operator=(AppendState &&) noexcept = default;
+		~AppendState() override;
+
+	private:
+		explicit AppendState(void *impl);
+	};
+
+	/// Opaque state shared by every thread of one scan, from `CreateSharedScanState`: it coordinates which rows each
+	/// worker reads and tracks the scan's overall progress. Only meaningful with the collection that created it, and
+	/// invalidated by `Reset`.
+	class SharedScanState final : public detail::Handle<SharedScanState> {
+		friend detail::Factory;
+
+	public:
+		SharedScanState(SharedScanState &&) noexcept = default;
+		SharedScanState &operator=(SharedScanState &&) noexcept = default;
+		~SharedScanState() override;
+
+	private:
+		explicit SharedScanState(void *impl);
+	};
+
+	/// Opaque per-thread state of one scan, from `CreateWorkerScanState`. It also keeps the buffers backing the chunk
+	/// its thread most recently scanned alive: scans are zero-copy, so a scanned chunk's data is only valid until this
+	/// state's next `Scan` or its destruction.
+	class WorkerScanState final : public detail::Handle<WorkerScanState> {
+		friend detail::Factory;
+
+	public:
+		WorkerScanState(WorkerScanState &&) noexcept = default;
+		WorkerScanState &operator=(WorkerScanState &&) noexcept = default;
+		~WorkerScanState() override;
+
+	private:
+		explicit WorkerScanState(void *impl);
+	};
+
+	/// An empty collection, its memory managed by the connection's database.
+	/// @param conn The connection whose database supplies the collection's memory.
+	/// @param types One type per column, at least one; every chunk appended must match them exactly. Types containing
+	/// ANY are rejected.
+	ColumnDataCollection(const Connection &conn, const std::vector<LogicalType> &types);
+
+	/// The `Context` flavor, inside a callback.
+	ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types);
+
+	ColumnDataCollection(ColumnDataCollection &&) noexcept = default;
+	ColumnDataCollection &operator=(ColumnDataCollection &&) noexcept = default;
+
+	~ColumnDataCollection() override;
+
+	/// How many rows the collection holds.
+	auto GetRowCount() const -> idx_t;
+
+	/// Drops all rows and releases their memory, keeping the column types; the collection is immediately appendable
+	/// again. Outstanding append and scan states are invalidated: create new ones.
+	auto Reset() -> void;
+
+	/// Moves another collection's rows to the end of this one, consuming it. The source must have the same column
+	/// types, and both collections must come from the same database -- the rows keep their original buffers rather
+	/// than being copied.
+	/// @param source The collection to consume. Left untouched when the merge is refused.
+	/// @throws InvalidInputException When the column types differ, or when `source` is this collection.
+	auto Combine(ColumnDataCollection &&source) -> void;
+
+	/// Starts appending: the returned state carries the append's progress between `Append` calls.
+	auto CreateAppendState() -> AppendState;
+
+	/// Copies a chunk's rows to the end of the collection.
+	/// @param state The append state to append through.
+	/// @param chunk The rows to append. The chunk's column types must equal the collection's exactly, and the chunk is
+	/// only borrowed: it can be reused, refilled and appended again.
+	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
+	auto Append(AppendState &state, const DataChunk &chunk) -> void;
+
+	/// One-shot `Append`, creating and discarding an append state internally. Prefer keeping a state across calls when
+	/// appending more than once.
+	auto Append(const DataChunk &chunk) -> void;
+
+	/// Starts a scan over the collection's rows. One shared state per scan; each participating thread additionally
+	/// gets its own `CreateWorkerScanState`.
+	auto CreateSharedScanState() const -> SharedScanState;
+
+	/// Per-thread state for a scan started with `CreateSharedScanState`.
+	auto CreateWorkerScanState() const -> WorkerScanState;
+
+	/// Reads the next rows of the scan into a chunk. Threads sharing one `SharedScanState` each receive disjoint rows,
+	/// so together they scan the collection exactly once.
+	///
+	/// The scan is zero-copy where possible: the chunk's vectors may reference the collection's buffers, kept alive by
+	/// the worker state, so the chunk's data is only valid until that state's next `Scan` or its destruction.
+	/// Make a copy with `DataChunk::Copy` to keep the scanned data longer.
+	/// @param shared The scan's shared state.
+	/// @param worker This thread's worker state.
+	/// @param chunk The chunk to read into; its column types must equal the collection's exactly. Reset to empty once
+	/// the scan is exhausted.
+	/// @return Whether rows were produced; false once the scan is exhausted.
+	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
+	auto Scan(SharedScanState &shared, WorkerScanState &worker, DataChunk &chunk) const -> bool;
+
+private:
+	explicit ColumnDataCollection(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------

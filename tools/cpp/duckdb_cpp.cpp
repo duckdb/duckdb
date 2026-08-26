@@ -88,6 +88,22 @@ struct HandleTraits<DataChunk> {
 	using handle = duckdb_v2_data_chunk_handle;
 };
 template <>
+struct HandleTraits<ColumnDataCollection> {
+	using handle = duckdb_v2_column_data_collection_handle;
+};
+template <>
+struct HandleTraits<ColumnDataCollection::AppendState> {
+	using handle = duckdb_v2_column_data_collection_append_state_handle;
+};
+template <>
+struct HandleTraits<ColumnDataCollection::SharedScanState> {
+	using handle = duckdb_v2_column_data_collection_shared_scan_state_handle;
+};
+template <>
+struct HandleTraits<ColumnDataCollection::WorkerScanState> {
+	using handle = duckdb_v2_column_data_collection_worker_scan_state_handle;
+};
+template <>
 struct HandleTraits<QueryResult> {
 	using handle = duckdb_v2_result_handle;
 };
@@ -1802,17 +1818,43 @@ auto Vector::SetString(idx_t index, varchar_t value) -> void {
 //----------------------------------------------------------------------------------------------------------------------
 // Data Chunk
 //----------------------------------------------------------------------------------------------------------------------
-DataChunk::DataChunk(const std::vector<LogicalType> &types) {
-	// LogicalType is a Handle (with a vtable), so its storage is not layout-compatible with a raw
-	// duckdb_v2_logical_type_handle array. Extract the underlying handles into a contiguous buffer.
+namespace {
+// LogicalType is a Handle (with a vtable), so its storage is not layout-compatible with a raw
+// duckdb_v2_logical_type_handle array. Extract the underlying handles into a contiguous buffer.
+auto ExtractTypeHandles(const std::vector<LogicalType> &types) -> std::vector<duckdb_v2_logical_type_handle> {
 	std::vector<duckdb_v2_logical_type_handle> type_pointers;
 	type_pointers.reserve(types.size());
 	for (const auto &type : types) {
 		type_pointers.push_back(type.handle());
 	}
+	return type_pointers;
+}
+} // namespace
 
+DataChunk::DataChunk(const std::vector<LogicalType> &types) {
+	const auto type_pointers = ExtractTypeHandles(types);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
 	CheckedAPICall(duckdb_v2_data_chunk_create, type_pointers.data(), type_pointers.size(), &chunk);
+
+	impl = chunk;
+	owned = true;
+}
+
+DataChunk::DataChunk(const Connection &conn, const std::vector<LogicalType> &types) {
+	const auto type_pointers = ExtractTypeHandles(types);
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	CheckedAPICall(duckdb_v2_data_chunk_create_with_connection, conn.handle(), type_pointers.data(),
+	               type_pointers.size(), &chunk);
+
+	impl = chunk;
+	owned = true;
+}
+
+DataChunk::DataChunk(const Context &ctx, const std::vector<LogicalType> &types) {
+	const auto type_pointers = ExtractTypeHandles(types);
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	CheckedAPICall(duckdb_v2_data_chunk_create_with_context, ctx.handle(), type_pointers.data(), type_pointers.size(),
+	               &chunk);
 
 	impl = chunk;
 	owned = true;
@@ -1826,6 +1868,18 @@ DataChunk::~DataChunk() {
 		auto _h = handle();
 		duckdb_v2_data_chunk_destroy(&_h);
 	}
+}
+
+auto DataChunk::Copy(const Connection &conn) const -> DataChunk {
+	duckdb_v2_data_chunk_handle copy = nullptr;
+	CheckedAPICall(duckdb_v2_data_chunk_copy_with_connection, conn.handle(), handle(), &copy);
+	return detail::Factory::Make<DataChunk>(copy, true);
+}
+
+auto DataChunk::Copy(const Context &ctx) const -> DataChunk {
+	duckdb_v2_data_chunk_handle copy = nullptr;
+	CheckedAPICall(duckdb_v2_data_chunk_copy_with_context, ctx.handle(), handle(), &copy);
+	return detail::Factory::Make<DataChunk>(copy, true);
 }
 
 auto DataChunk::GetRowCount() const -> idx_t {
@@ -1844,6 +1898,110 @@ auto DataChunk::GetVector(idx_t index) const -> Vector {
 	duckdb_v2_vector_handle vector = nullptr;
 	CheckedAPICall(duckdb_v2_data_chunk_get_vector, handle(), index, &vector);
 	return detail::Factory::Make<Vector>(vector);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Column Data Collection
+//----------------------------------------------------------------------------------------------------------------------
+
+ColumnDataCollection::AppendState::AppendState(void *impl) : detail::Handle<AppendState>(impl) {
+}
+
+ColumnDataCollection::AppendState::~AppendState() {
+	auto _h = handle();
+	duckdb_v2_column_data_collection_append_state_destroy(&_h);
+}
+
+ColumnDataCollection::SharedScanState::SharedScanState(void *impl) : detail::Handle<SharedScanState>(impl) {
+}
+
+ColumnDataCollection::SharedScanState::~SharedScanState() {
+	auto _h = handle();
+	duckdb_v2_column_data_collection_shared_scan_state_destroy(&_h);
+}
+
+ColumnDataCollection::WorkerScanState::WorkerScanState(void *impl) : detail::Handle<WorkerScanState>(impl) {
+}
+
+ColumnDataCollection::WorkerScanState::~WorkerScanState() {
+	auto _h = handle();
+	duckdb_v2_column_data_collection_worker_scan_state_destroy(&_h);
+}
+
+ColumnDataCollection::ColumnDataCollection(const Connection &conn, const std::vector<LogicalType> &types) {
+	const auto type_pointers = ExtractTypeHandles(types);
+	duckdb_v2_column_data_collection_handle collection = nullptr;
+	CheckedAPICall(duckdb_v2_column_data_collection_create_with_connection, conn.handle(), type_pointers.data(),
+	               type_pointers.size(), &collection);
+	impl = collection;
+}
+
+ColumnDataCollection::ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types) {
+	const auto type_pointers = ExtractTypeHandles(types);
+	duckdb_v2_column_data_collection_handle collection = nullptr;
+	CheckedAPICall(duckdb_v2_column_data_collection_create_with_context, ctx.handle(), type_pointers.data(),
+	               type_pointers.size(), &collection);
+	impl = collection;
+}
+
+ColumnDataCollection::ColumnDataCollection(void *impl) : detail::Handle<ColumnDataCollection>(impl) {
+}
+
+ColumnDataCollection::~ColumnDataCollection() {
+	auto _h = handle();
+	duckdb_v2_column_data_collection_destroy(&_h);
+}
+
+auto ColumnDataCollection::GetRowCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_column_data_collection_row_count, handle(), &count);
+	return count;
+}
+
+auto ColumnDataCollection::Reset() -> void {
+	CheckedAPICall(duckdb_v2_column_data_collection_reset, handle());
+}
+
+auto ColumnDataCollection::Combine(ColumnDataCollection &&source) -> void {
+	auto source_handle = source.handle();
+	CheckedAPICall(duckdb_v2_column_data_collection_combine, handle(), &source_handle);
+	// The C API consumed the source; detach the wrapper so its destructor does not double-free. A refused merge threw
+	// above and leaves the source intact.
+	source.release();
+}
+
+auto ColumnDataCollection::CreateAppendState() -> AppendState {
+	duckdb_v2_column_data_collection_append_state_handle state = nullptr;
+	CheckedAPICall(duckdb_v2_column_data_collection_append_state_create, handle(), &state);
+	return detail::Factory::Make<AppendState>(state);
+}
+
+auto ColumnDataCollection::Append(AppendState &state, const DataChunk &chunk) -> void {
+	CheckedAPICall(duckdb_v2_column_data_collection_append, handle(), state.handle(), chunk.handle());
+}
+
+auto ColumnDataCollection::Append(const DataChunk &chunk) -> void {
+	auto state = CreateAppendState();
+	Append(state, chunk);
+}
+
+auto ColumnDataCollection::CreateSharedScanState() const -> SharedScanState {
+	duckdb_v2_column_data_collection_shared_scan_state_handle state = nullptr;
+	CheckedAPICall(duckdb_v2_column_data_collection_shared_scan_state_create, handle(), &state);
+	return detail::Factory::Make<SharedScanState>(state);
+}
+
+auto ColumnDataCollection::CreateWorkerScanState() const -> WorkerScanState {
+	duckdb_v2_column_data_collection_worker_scan_state_handle state = nullptr;
+	CheckedAPICall(duckdb_v2_column_data_collection_worker_scan_state_create, handle(), &state);
+	return detail::Factory::Make<WorkerScanState>(state);
+}
+
+auto ColumnDataCollection::Scan(SharedScanState &shared, WorkerScanState &worker, DataChunk &chunk) const -> bool {
+	bool did_produce = false;
+	CheckedAPICall(duckdb_v2_column_data_collection_scan, handle(), shared.handle(), worker.handle(), chunk.handle(),
+	               &did_produce);
+	return did_produce;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

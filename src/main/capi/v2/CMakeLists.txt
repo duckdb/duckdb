@@ -4,6 +4,7 @@ add_library_unity(
   capi_v2.cpp
   capi_v2_stubs.cpp
   capi_v2_arena.cpp
+  capi_v2_column_data_collection.cpp
   capi_v2_connection.cpp
   capi_v2_data_chunk.cpp
   capi_v2_database.cpp

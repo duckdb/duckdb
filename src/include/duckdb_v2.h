@@ -637,6 +637,333 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arena_allocate(duckdb_v2_arena_handle are
 /* --- Struct definitions for arena --- */
 
 /* ============================================================================
+ * MODULE: column_data_collection
+ * ============================================================================ */
+
+/* --- Enums for column_data_collection --- */
+
+/* --- Struct forward declarations for column_data_collection --- */
+
+/* --- Types for column_data_collection --- */
+
+/*!
+ * A column data collection represents a set of (buffer-managed) data chunks.
+ *
+ * You can append chunks to the collection iteratively, and then scan the collection back to retrieve the chunks in
+ * order. DuckDB will manage the memory for the chunks, and transparently offload chunks to disk if necessary. A
+ * collection shall not be scanned while it is being appended to, and vice versa. A collection shall not be appended to
+ * concurrently, but it can be scanned concurrently by multiple threads using a shared scan state and per-thread worker
+ * scan states. For concurrent appends, consider creating multiple collections and "combining" them into one collection
+ * at the end.
+ */
+typedef struct _duckdb_v2_column_data_collection {
+	void *internal_ptr;
+} * duckdb_v2_column_data_collection_handle;
+
+/*!
+ * Opaque state handle for shared state across multiple threads scanning a column data collection. This is used to
+ * coordinate work distribution, track global progress, or store any other state that needs to be shared across threads
+ * during the scan of the collection.
+ */
+typedef struct _duckdb_v2_column_data_collection_shared_scan_state {
+	void *internal_ptr;
+} * duckdb_v2_column_data_collection_shared_scan_state_handle;
+
+/*!
+ * Opaque state handle for local state while scanning a column data collection. This is used to track progress and any
+ * other state that needs to be maintained on a per-thread basis across calls while scanning the collection. It also
+ * keeps the buffers backing the most recently scanned chunk alive: chunks are scanned zero-copy, so a scanned chunk's
+ * data is only valid until the worker state's next scan call or its destruction.
+ */
+typedef struct _duckdb_v2_column_data_collection_worker_scan_state {
+	void *internal_ptr;
+} * duckdb_v2_column_data_collection_worker_scan_state_handle;
+
+/*!
+ * Opaque state handle for appending to a column data collection. This is used to track progress and any other state
+ * that needs to be maintained across calls while appending to the collection.
+ */
+typedef struct _duckdb_v2_column_data_collection_append_state {
+	void *internal_ptr;
+} * duckdb_v2_column_data_collection_append_state_handle;
+
+/* --- Constants for column_data_collection --- */
+
+/* --- Function pointer typedefs for column_data_collection --- */
+
+/* --- Functions for column_data_collection --- */
+
+/*!
+ * Creates an empty column data collection from a connection.
+ *
+ * Allocates a new, empty column data collection, drawing its buffer allocator from the connection's context. The
+ * collection starts with no chunks and is ready to have chunks appended to it. A collection must have at least one
+ * column; an empty types array is rejected with INVALID_INPUT.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection whose context supplies the collection's allocator.
+ * @param types_array Pointer to an array of logical_type handles, one per column. This defines the schema for the
+ * chunks that will be stored in the collection. All chunks appended to this collection must have vectors that conform
+ * to these types.
+ * @param types_count Number of elements in the types_array.
+ * @param out_collection Receives the new collection handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_connection(
+    duckdb_v2_connection_handle conn, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
+    duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates an empty column data collection from a context.
+ *
+ * Allocates a new, empty column data collection, drawing its buffer allocator from the context. Use this from inside a
+ * callback or extension where a context is already in hand. The collection starts with no chunks and is ready to have
+ * chunks appended to it. A collection must have at least one column; an empty types array is rejected with
+ * INVALID_INPUT.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context whose allocator will be used for the collection.
+ * @param types_array Pointer to an array of logical_type handles, one per column. This defines the schema for the
+ * chunks that will be stored in the collection. All chunks appended to this collection must have vectors that conform
+ * to these types.
+ * @param types_count Number of elements in the types_array.
+ * @param out_collection Receives the new collection handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_context(
+    duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
+    duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Drops all buffered rows, keeping the column types.
+ *
+ * Drops all buffered rows and releases their memory. The column types are unchanged and the collection is immediately
+ * appendable again. Outstanding append and scan states are invalidated; create new ones. Must not be called while a
+ * live result executes over the collection, because that result's scan borrows the collection's buffers.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to reset.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_reset(duckdb_v2_column_data_collection_handle collection,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a column data collection and all its chunks.
+ *
+ * Cleans up the collection and all resources associated with it, including all contained chunks. Sets the collection
+ * handle to NULL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_column_data_collection_destroy(duckdb_v2_column_data_collection_handle *collection);
+
+/*!
+ * Merges the source collection into the target collection, consuming the source in the process.
+ *
+ * Transfers all chunks from the source collection to the target collection. This destroys the source collection,
+ * setting the source handle to NULL. The two collections must have the same column types, and must have been created
+ * from the same context (or connections to the same database): the transferred chunks keep their original buffers, so
+ * combining collections from different databases would tie the target to a buffer manager it does not own.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param target The collection to merge into. After the call, this collection will contain all chunks from both
+ * collections.
+ * @param source The collection to merge from. This collection will be destroyed by this operation and its handle set to
+ * NULL.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_combine(duckdb_v2_column_data_collection_handle target,
+                                                                      duckdb_v2_column_data_collection_handle *source,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the total number of rows across all chunks in the collection.
+ *
+ * Sums the row counts of all chunks in the collection. This is the total number of rows represented by the collection,
+ * which may be more than the number of rows in any individual chunk.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to inspect.
+ * @param out_row_count Receives the total row count.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_row_count(
+    duckdb_v2_column_data_collection_handle collection, idx_t *out_row_count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Initializes an append state for the collection.
+ *
+ * Returns an append state handle that can be used to append chunks to the collection while maintaining any necessary
+ * state across calls.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to prepare for appending.
+ * @param out_state Receives the new append state handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_append_state_create(
+    duckdb_v2_column_data_collection_handle collection, duckdb_v2_column_data_collection_append_state_handle *out_state,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an append state handle.
+ *
+ * Cleans up any resources associated with the append state. After this call, the state handle must not be used again.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param state The append state to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_column_data_collection_append_state_destroy(duckdb_v2_column_data_collection_append_state_handle *state);
+
+/*!
+ * Appends a data chunk to the collection.
+ *
+ * Appends a copy of the given chunk to the end of the collection. The chunk's column count and types must equal the
+ * collection's exactly; a mismatch is rejected with INVALID_INPUT before anything is copied. Complex-typed vectors may
+ * be flattened in place by the copy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to append to.
+ * @param state The append state to use this append operation.
+ * @param chunk The chunk to append.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_append(
+    duckdb_v2_column_data_collection_handle collection, duckdb_v2_column_data_collection_append_state_handle state,
+    duckdb_v2_data_chunk_handle chunk, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Initializes a shared scan state for the collection.
+ *
+ * Returns a shared scan state handle that can be used by multiple threads to coordinate scanning of the collection.
+ * Caller owns the returned state and must destroy it via column_data_collection_shared_scan_state_destroy when done.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to prepare for shared scanning.
+ * @param out_state Receives the new shared scan state handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_shared_scan_state_create(
+    duckdb_v2_column_data_collection_handle collection,
+    duckdb_v2_column_data_collection_shared_scan_state_handle *out_state, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a shared scan state handle.
+ *
+ * Cleans up any resources associated with the shared scan state. After this call, the state handle must not be used
+ * again.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param state The shared scan state to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_shared_scan_state_destroy(
+    duckdb_v2_column_data_collection_shared_scan_state_handle *state);
+
+/*!
+ * Initializes a worker scan state for the collection.
+ *
+ * Returns a "local" scan state handle for a worker thread to use while scanning the collection. This allows each thread
+ * to maintain its own progress and any other necessary information across multiple scan calls, while still coordinating
+ * with other threads via the shared scan state.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to prepare for worker scanning.
+ * @param out_state Receives the new worker scan state handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_worker_scan_state_create(
+    duckdb_v2_column_data_collection_handle collection,
+    duckdb_v2_column_data_collection_worker_scan_state_handle *out_state, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys a worker scan state handle.
+ *
+ * Cleans up any resources associated with the worker scan state. After this call, the state handle must not be used
+ * again.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param state The worker scan state to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_worker_scan_state_destroy(
+    duckdb_v2_column_data_collection_worker_scan_state_handle *state);
+
+/*!
+ * Scans the collection to retrieve the next data chunk, using shared state for coordination across threads and
+ * worker-local state for individual progress tracking.
+ *
+ * Retrieves the next chunk of data from the collection based on the provided shared scan state and worker-local scan
+ * state. The output chunk's column count and types must equal the collection's exactly; a mismatch is rejected with
+ * INVALID_INPUT.
+ *
+ * The scan is zero-copy where possible: the output chunk's vectors may reference the collection's buffers, kept alive
+ * by the worker scan state. The chunk's data is therefore only valid until the next scan call with the same worker
+ * state, or until the worker state or the collection is destroyed, whichever comes first. Copy the data out (or append
+ * it to another collection) before continuing the scan if it must outlive that window.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param collection The collection to scan.
+ * @param shared_state The shared scan state to use for coordinating across threads.
+ * @param worker_state The worker-local scan state to use for this thread's scan operation.
+ * @param out_chunk The output chunk to write to.
+ * @param did_produce_chunk Receives true when a chunk was produced by this call, or false when the scan has completed
+ * (the chunk is then reset to empty).
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_scan(
+    duckdb_v2_column_data_collection_handle collection,
+    duckdb_v2_column_data_collection_shared_scan_state_handle shared_state,
+    duckdb_v2_column_data_collection_worker_scan_state_handle worker_state, duckdb_v2_data_chunk_handle out_chunk,
+    bool *did_produce_chunk, duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for column_data_collection --- */
+
+/* ============================================================================
  * MODULE: configuration
  * ============================================================================ */
 
@@ -883,6 +1210,98 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_create(const duckdb_v2_logical_type_handle *types, idx_t column_count,
                                                          duckdb_v2_data_chunk_handle *out_chunk,
                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates an empty data chunk with the given column types, drawing its allocator from the connection's context.
+ *
+ * Like data_chunk_create, but the chunk's vectors are allocated through the connection's context instead of the default
+ * allocator, so the memory is accounted to that database. Allocates one FLAT vector per element of the types array,
+ * each at default capacity. Every vector starts at size 0; set it with vector_set_size once the vector is populated.
+ * The chunk is caller-owned and must be destroyed via data_chunk_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection whose context supplies the chunk's allocator.
+ * @param types Pointer to an array of logical_type handles, one per column.
+ * @param column_count Number of elements in the types array.
+ * @param out_chunk Receives the new chunk handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_create_with_connection(duckdb_v2_connection_handle conn,
+                                                                         const duckdb_v2_logical_type_handle *types,
+                                                                         idx_t column_count,
+                                                                         duckdb_v2_data_chunk_handle *out_chunk,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates an empty data chunk with the given column types, drawing its allocator from a context.
+ *
+ * Like data_chunk_create, but the chunk's vectors are allocated through the given context instead of the default
+ * allocator, so the memory is accounted to that database. Use this from inside a callback or extension where a context
+ * is already in hand. Allocates one FLAT vector per element of the types array, each at default capacity. Every vector
+ * starts at size 0; set it with vector_set_size once the vector is populated. The chunk is caller-owned and must be
+ * destroyed via data_chunk_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context whose allocator will be used for the chunk.
+ * @param types Pointer to an array of logical_type handles, one per column.
+ * @param column_count Number of elements in the types array.
+ * @param out_chunk Receives the new chunk handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_create_with_context(duckdb_v2_context_handle context,
+                                                                      const duckdb_v2_logical_type_handle *types,
+                                                                      idx_t column_count,
+                                                                      duckdb_v2_data_chunk_handle *out_chunk,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a deep copy of a data chunk, drawing its allocator from the connection's context.
+ *
+ * Allocates a new chunk with the source chunk's column types and copies all rows into it. The copy is flattened and
+ * owns all its data, so it stays valid after the source chunk or whatever backs it (such as a column data collection
+ * scan state) is destroyed. The returned chunk is caller-owned and must be destroyed via data_chunk_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection whose context supplies the copy's allocator.
+ * @param chunk The chunk to copy. Left unchanged.
+ * @param out_chunk Receives the new chunk handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy_with_connection(duckdb_v2_connection_handle conn,
+                                                                       duckdb_v2_data_chunk_handle chunk,
+                                                                       duckdb_v2_data_chunk_handle *out_chunk,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates a deep copy of a data chunk, drawing its allocator from a context.
+ *
+ * Allocates a new chunk with the source chunk's column types and copies all rows into it. Use this from inside a
+ * callback or extension where a context is already in hand. The copy is flattened and owns all its data, so it stays
+ * valid after the source chunk or whatever backs it (such as a column data collection scan state) is destroyed. The
+ * returned chunk is caller-owned and must be destroyed via data_chunk_destroy.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context whose allocator will be used for the copy.
+ * @param chunk The chunk to copy. Left unchanged.
+ * @param out_chunk Receives the new chunk handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_copy_with_context(duckdb_v2_context_handle context,
+                                                                    duckdb_v2_data_chunk_handle chunk,
+                                                                    duckdb_v2_data_chunk_handle *out_chunk,
+                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys a data chunk handle.

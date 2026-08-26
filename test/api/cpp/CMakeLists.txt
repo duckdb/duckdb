@@ -9,6 +9,7 @@ include_directories(${CMAKE_SOURCE_DIR}/tools/cpp
 # relative #includes into a generated file, which cannot reach out of the tree.
 add_library(
   test_cpp_api OBJECT
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_column_data_collection.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_types_values.cpp

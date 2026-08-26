@@ -5,6 +5,7 @@ add_library_unity(
   test_capi_v2_basic.cpp
   test_capi_v2_arena.cpp
   test_capi_v2_bytes.cpp
+  test_capi_v2_column_data_collection.cpp
   test_capi_v2_data_chunk.cpp
   test_capi_v2_error_info.cpp
   test_capi_v2_logical_type.cpp
