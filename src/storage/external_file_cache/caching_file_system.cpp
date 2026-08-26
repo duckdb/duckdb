@@ -544,7 +544,7 @@ void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, i
 	auto handle = GetFileHandle();
 	const auto read_start = steady_clock::now();
 	handle->Read(context, buffer, nr_bytes, location);
-	auto cache_valid_until = caching_file_system.file_system.GetCacheValidUntil(*handle);
+	auto cache_valid_until = handle->file_system.GetCacheValidUntil(*handle);
 	if (cache_valid_until) {
 		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
 		if (file_handle == handle) {
