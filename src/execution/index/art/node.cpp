@@ -309,7 +309,7 @@ bool NodePtr::HasByte(const ART &art, const uint8_t byte) const {
 	}
 }
 
-	bool NodePtr::GetNextByte(const ART &art, uint8_t &byte) const {
+bool NodePtr::GetNextByte(const ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
