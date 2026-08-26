@@ -63,6 +63,12 @@ blacklist = [
     "SourceFinishNotificationState",
     "WatermarkState",
     "WriterWakeMode",
+    # Internal to the Variant binary encoding; ParquetVariantNode::Kind is a nested enum,
+    # which this script would emit unqualified.
+    "Kind",
+    "ParquetGroupKind",
+    "VariantBasicType",
+    "VariantPrimitiveType",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
