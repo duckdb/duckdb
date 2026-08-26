@@ -512,6 +512,24 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 	return true;
 }
 
+static bool CastVariantToSQLNull(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
+                                 idx_t offset, idx_t count, optional_idx row) {
+	for (idx_t i = 0; i < count; i++) {
+		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		if (conversion_data.variant.RowIsValid(row_index)) {
+			auto type_id = conversion_data.variant.GetTypeId(row_index, sel[i]);
+			if (type_id != VariantLogicalType::VARIANT_NULL) {
+				auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
+				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
+				                                           EnumUtil::ToString(type_id), value.ToString());
+				return false;
+			}
+		}
+		FlatVector::SetNull(result, offset + i, true);
+	}
+	return true;
+}
+
 //! * @param conversion_data The constant data relevant at all rows of the conversion
 //! * @param result The typed Vector to populate in this call
 //! * @param sel The selection of value indices to cast
@@ -593,6 +611,8 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 	} else {
 		EmptyConversionPayloadFromVariant empty_payload;
 		switch (target_type.id()) {
+		case LogicalTypeId::SQLNULL:
+			return CastVariantToSQLNull(conversion_data, result, sel, offset, count, row);
 		case LogicalTypeId::BOOLEAN:
 			return CastVariantToPrimitive<VariantBooleanConversion>(conversion_data, result, sel, offset, count, row,
 			                                                        empty_payload);
