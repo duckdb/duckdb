@@ -103,3 +103,36 @@ CREATE TRIGGER tr AFTER UPDATE OF j ON t INSERT INTO audit VALUES (1);
 
 statement ok con1
 ROLLBACK;
+
+# ---------------------------------------------------------------------------
+# Scenario D: RENAME and CREATE TRIGGER in the same transaction.
+# The trigger is bound after the rename, so it references the new column name.
+# The bind_txn must see changes already committed by this same transaction
+# (stamped with commit_id) — otherwise a false conflict fires.
+# After Scenario C's ROLLBACK the table is back to (i, j).
+# ---------------------------------------------------------------------------
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE t RENAME COLUMN j TO k;
+
+statement ok
+CREATE TRIGGER tr AFTER UPDATE OF k ON t INSERT INTO audit VALUES (1);
+
+statement ok
+COMMIT;
+
+statement ok
+DELETE FROM audit;
+
+statement ok
+UPDATE t SET k = 3;
+
+query I
+SELECT count(*) FROM audit;
+----
+1
+
+statement ok
+DROP TRIGGER tr ON t;

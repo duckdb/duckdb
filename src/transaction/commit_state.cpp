@@ -314,8 +314,10 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			auto &trig = new_entry.Cast<TriggerCatalogEntry>();
 			if (!trig.columns.empty()) {
 				auto &table_set = trig.schema.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::TABLE_ENTRY);
-				// Transaction view at bind time (what the trigger saw when it was created)
-				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, transaction.start_time);
+				// Transaction view at bind time (what the trigger saw when it was created).
+				// Use commit_id as the transaction_id so that earlier catalog changes in this
+				// same transaction (already stamped with commit_id) are visible here.
+				CatalogTransaction bind_txn(duck_catalog.GetDatabase(), commit_id, transaction.start_time);
 				// Transaction view at commit time (all changes committed before this commit)
 				CatalogTransaction commit_txn(duck_catalog.GetDatabase(), MAX_TRANSACTION_ID, commit_id + 1);
 
