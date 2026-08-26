@@ -284,6 +284,9 @@ TEST_CASE("Test padded LEB128 encoding", "[serialization]") {
 		}
 	}
 
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	return;
+#endif
 	data_t buffer[16] = {};
 	REQUIRE_THROWS(EncodingUtil::EncodePaddedLEB128<uint64_t>(buffer, 128, 1));
 	// Six bytes is more than the decoder accepts for a 32-bit value
@@ -476,6 +479,9 @@ TEST_CASE("Test an unpatched slot reads back as its placeholder", "[serializatio
 
 #ifdef DEBUG
 TEST_CASE("Test the generated writer rejects out of order fields", "[serialization]") {
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	return;
+#endif
 	Allocator allocator;
 	MemoryStream stream(allocator);
 	MessageSerializer serializer(stream);
