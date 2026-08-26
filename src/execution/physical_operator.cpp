@@ -196,6 +196,11 @@ SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, Operato
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalOperator::UpdateMinBatchIndex(ExecutionContext &context,
+                                                        OperatorSinkNextBatchInput &input) const {
+	return SinkNextBatchType::READY;
+}
+
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<LocalSinkState>();
 }

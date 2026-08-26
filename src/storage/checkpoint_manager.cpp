@@ -752,8 +752,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	}
 
 	// FIXME: icky downcast to get the underlying MetadataReader
-	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
-	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
+	DynamicCastCheck<BinaryDeserializer>(&deserializer);
+	auto &binary_deserializer = static_cast<BinaryDeserializer &>(deserializer);
+	DynamicCastCheck<MetadataReader>(&binary_deserializer.GetStream());
+	auto &reader = static_cast<MetadataReader &>(binary_deserializer.GetStream());
 
 	vector<MetaBlockPointer> read_pointers;
 	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer, read_pointers);

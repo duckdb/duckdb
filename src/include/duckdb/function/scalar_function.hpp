@@ -242,6 +242,9 @@ public: // Properties
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
 
+	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
+	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
+
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)
@@ -558,9 +561,27 @@ public:
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
+	explicit BoundScalarFunction(shared_ptr<const ScalarFunction> function);
 
 	bool operator==(const BoundScalarFunction &rhs) const;
 	bool operator!=(const BoundScalarFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function, e.g. statistics
+	//! propagation swapping in a specialized implementation. For a function bound from a ScalarFunctionSet this is
+	//! the set's own overload, so it compares equal by pointer across binds. Functions bound outside of a set are
+	//! copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const ScalarFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
+
+private:
+	shared_ptr<const ScalarFunction> definition;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

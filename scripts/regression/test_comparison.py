@@ -69,6 +69,12 @@ if expected_cache_state:
 expected_memory_limit = os.getenv("EXPECTED_MEMORY_LIMIT")
 if expected_memory_limit and f"--memory_limit={expected_memory_limit}" not in sys.argv:
     raise SystemExit(1)
+expected_benchmark_argument = os.getenv("EXPECTED_BENCHMARK_ARGUMENT")
+if expected_benchmark_argument:
+    argument_name, argument_value = expected_benchmark_argument.split("=", 1)
+    argument_index = sys.argv.index(f"--{argument_name}")
+    if sys.argv[argument_index + 1] != argument_value:
+        raise SystemExit(1)
 timing = float(os.environ["BENCHMARK_NEW_TIMING"] if label == "new" else os.environ["BENCHMARK_OLD_TIMING"])
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
@@ -87,6 +93,38 @@ values = [0.229, 0.235, 0.244, 0.255, 0.267] if label == "new" else [0.219, 0.22
 print("name\\trun\\ttiming", file=sys.stderr)
 for run in range(1, runs + 1):
     print(f"{sys.argv[1]}\\t{run}\\t{values[(run - 1) % len(values)]}", file=sys.stderr)
+"""
+
+    aligned_range_runner_source = """#!/usr/bin/env python3
+import os
+import sys
+
+label = os.path.basename(sys.argv[0])
+runs = int(sys.argv[sys.argv.index("--timed-runs") + 1])
+benchmark = sys.argv[1]
+with open(os.environ["BENCHMARK_ORDER_LOG"], "a", encoding="utf-8") as order_log:
+    order_log.write(f"{label}:{runs}\\n")
+values = {
+    "q26.benchmark": {
+        "old": [0.0805, 0.084, 0.0882, 0.095, 0.103],
+        "new": [0.0757, 0.082, 0.0859, 0.095, 0.104],
+    },
+    "q28.benchmark": {
+        "old": [0.397, 0.420, 0.436, 0.460, 0.499],
+        "new": [0.356, 0.390, 0.411, 0.440, 0.474],
+    },
+    "q23.benchmark": {
+        "old": [1.27, 1.40, 1.62, 1.80, 2.05],
+        "new": [1.23, 1.40, 1.52, 1.70, 1.82],
+    },
+    "q22.benchmark": {
+        "old": [0.718, 0.850, 0.967, 1.10, 1.37],
+        "new": [0.623, 0.700, 0.779, 0.900, 1.13],
+    },
+}[benchmark][label]
+print("name\\trun\\ttiming", file=sys.stderr)
+for run in range(1, runs + 1):
+    print(f"{benchmark}\\t{run}\\t{values[(run - 1) % len(values)]}", file=sys.stderr)
 """
 
     adaptive_early_stop_runner_source = """#!/usr/bin/env python3
@@ -165,6 +203,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         create_cache=False,
         expected_cache_state=None,
         expected_memory_limit=None,
+        expected_benchmark_argument=None,
         step_summary=False,
     ):
         with tempfile.TemporaryDirectory() as temp_directory:
@@ -195,6 +234,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
                 env["EXPECTED_BENCHMARK_CACHE_STATE"] = expected_cache_state
             if expected_memory_limit:
                 env["EXPECTED_MEMORY_LIMIT"] = expected_memory_limit
+            if expected_benchmark_argument:
+                env["EXPECTED_BENCHMARK_ARGUMENT"] = expected_benchmark_argument
             if ci:
                 env["CI"] = "true"
             if step_summary:
@@ -243,7 +284,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertIn("sampling: adaptive; 10 initial pairs, then 30–100 confirmation pairs outside ±2%", plain_output)
         self.assertIn("query regression: median change ≥ +10.0% (warning)", plain_output)
-        self.assertIn("CI failure: geomean change ≥ +10.0% or ≥ +50.0ms", plain_output)
+        self.assertIn("CI failure: geomean change ≥ +10.0% or ≥ +50.0 ms", plain_output)
         self.assertNotIn("confidence", plain_output.lower())
         self.assertNotIn("UNCERTAIN", plain_output)
         self.assertIn("UNCHANGED (±2%)\n1 benchmarks", plain_output)
@@ -264,7 +305,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(order, self.expected_order(40))
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertIn("confirm: fake.benchmark: 30 pairs", plain_output)
-        self.assertIn("10+30", plain_output)
+        self.assertRegex(plain_output, r"(?m)^fake .*\s40$")
+        self.assertNotIn("10+30", plain_output)
         self.assertIn("result: failed; geomean regression; no query regressions", plain_output)
 
     def test_adaptive_early_stop_after_ten_confirmation_samples(self):
@@ -295,7 +337,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertEqual(order, self.expected_order(15))
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
         self.assertIn("sampling: fixed; 15 samples per binary (--samples=12 rounded up)", plain_output)
-        self.assertIn("geomean: 1s -> 1s", plain_output)
+        self.assertIn("geomean: 1.0 s -> 1.0 s", plain_output)
         self.assertIn("(15 samples)", plain_output)
 
     def test_fixed_samples_can_early_stop(self):
@@ -312,10 +354,54 @@ print("not-a-valid-timing-row", file=sys.stderr)
         process, _, _ = self.run_regression_test(self.range_runner_source, extra_args=["--samples", "5"])
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
-        self.assertIn("benchmark  base median          PR median            delta median   runs", plain_output)
-        self.assertIn("fake       231ms [219ms…248ms]  244ms [229ms…267ms]  +13ms (+5.6%)", plain_output)
-        self.assertIn("231ms \033[90m[219ms…248ms]\033[0m", process.stdout)
-        self.assertIn("244ms \033[90m[229ms…267ms]\033[0m", process.stdout)
+        self.assertIn("benchmark  base median", plain_output)
+        self.assertIn(
+            "fake       231.0 ms [219.0 ms…248.0 ms]  244.0 ms [229.0 ms…267.0 ms]  +13.0 ms (+5.6%)",
+            plain_output,
+        )
+        self.assertIn("231.0 ms \033[90m[219.0 ms…248.0 ms]\033[0m", process.stdout)
+        self.assertIn("244.0 ms \033[90m[229.0 ms…267.0 ms]\033[0m", process.stdout)
+
+    def test_table_aligns_mixed_unit_ranges(self):
+        benchmarks = ["q26.benchmark", "q28.benchmark", "q23.benchmark", "q22.benchmark"]
+        process, _, _ = self.run_regression_test(
+            self.aligned_range_runner_source,
+            extra_args=["--samples", "5"],
+            benchmarks=benchmarks,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", process.stdout)
+        expected_ranges = {
+            "q26": "[ 80.5 ms…103.0 ms]",
+            "q28": "[397.0 ms…499.0 ms]",
+            "q23": "[  1.3 s …  2.0 s ]",
+            "q22": "[718.0 ms…  1.4 s ]",
+        }
+        rows = {}
+        for line in plain_output.splitlines():
+            name = line.split(maxsplit=1)[0] if line else ""
+            if name in expected_ranges:
+                rows[name] = line
+        self.assertEqual(set(rows), set(expected_ranges))
+        for name, expected_range in expected_ranges.items():
+            self.assertIn(expected_range, rows[name])
+        ellipsis_positions = {tuple(match.start() for match in re.finditer("…", row)) for row in rows.values()}
+        self.assertEqual(len(ellipsis_positions), 1)
+        range_decimal_positions = set()
+        for row in rows.values():
+            base_start = row.index("[")
+            base_ellipsis = row.index("…", base_start)
+            pr_start = row.index("[", base_ellipsis)
+            pr_ellipsis = row.index("…", pr_start)
+            range_decimal_positions.add(
+                (
+                    row.index(".", base_start),
+                    row.index(".", base_ellipsis),
+                    row.index(".", pr_start),
+                    row.index(".", pr_ellipsis),
+                )
+            )
+        self.assertEqual(len(range_decimal_positions), 1)
 
     def test_exact_ten_percent_query_regression_warns_but_suite_can_pass(self):
         benchmarks = ["q1.benchmark", "q2.benchmark", "q3.benchmark", "q4.benchmark", "q5.benchmark"]
@@ -333,6 +419,8 @@ print("not-a-valid-timing-row", file=sys.stderr)
         self.assertTrue(plain_output.rstrip().endswith("result: passed; 1 query regression"))
         self.assertIn("## Query Regressions", summary)
         self.assertIn("| Benchmark | Base median | PR median | Delta median | Runs |", summary)
+        self.assertIn("| `q1.benchmark` | `1.0 s [1.0 s…1.0 s]` | `1.1 s [1.1 s…1.1 s]`", summary)
+        self.assertIn("| `40` |", summary)
         self.assertNotIn("confidence", summary.lower())
 
     def test_geomean_relative_threshold_fails_ci(self):
@@ -345,7 +433,7 @@ print("not-a-valid-timing-row", file=sys.stderr)
         process, _, _ = self.run_regression_test(self.stable_runner_source, old_timing="1", new_timing="1.05", ci=True)
         self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
         self.assertIn("::error title=Geomean benchmark regression::", process.stdout)
-        self.assertIn("+50ms (+5.0%)", process.stdout)
+        self.assertIn("+50.0 ms (+5.0%)", process.stdout)
 
     def test_nofail_suppresses_only_geomean_gate(self):
         process, _, _ = self.run_regression_test(
@@ -369,15 +457,32 @@ print("not-a-valid-timing-row", file=sys.stderr)
                 self.assertIn("must be greater than zero", process.stderr)
                 self.assertEqual(order, [])
 
-    def test_benchmark_cache_and_memory_limit_options_are_preserved(self):
+    def test_benchmark_cache_memory_limit_and_custom_arguments_are_preserved(self):
         process, _, _ = self.run_regression_test(
             self.stable_runner_source,
-            extra_args=["--benchmark-cache=clear", "--memory-limit", "512MB"],
+            extra_args=[
+                "--benchmark-cache=clear",
+                "--memory-limit",
+                "512MB",
+                "--benchmark-argument",
+                "sf=10",
+            ],
             create_cache=True,
             expected_cache_state="absent",
             expected_memory_limit="512MB",
+            expected_benchmark_argument="sf=10",
         )
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
+    def test_invalid_benchmark_argument_is_rejected(self):
+        for argument in ("sf", "=10", "sf="):
+            with self.subTest(argument=argument):
+                process, order, _ = self.run_regression_test(
+                    self.stable_runner_source, extra_args=["--benchmark-argument", argument]
+                )
+                self.assertEqual(process.returncode, 2, process.stdout + process.stderr)
+                self.assertIn("must use NAME=VALUE", process.stderr)
+                self.assertEqual(order, [])
 
     def test_failure_details_precede_final_result(self):
         process, _, _ = self.run_regression_test(self.malformed_runner_source)

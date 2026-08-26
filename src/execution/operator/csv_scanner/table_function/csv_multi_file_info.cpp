@@ -21,7 +21,7 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 }
 
 bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                       BaseFileReaderOptions &options_p, vector<string> &expected_names,
+                                       BaseFileReaderOptions &options_p, vector<Identifier> &expected_names,
                                        vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.SetReadOption(key, ConvertVectorToValue(values), expected_names);
@@ -36,7 +36,7 @@ bool CSVMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key
 }
 
 void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
-                                        const vector<string> &expected_names,
+                                        const vector<Identifier> &expected_names,
                                         const vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	auto &csv_options = options.options;
@@ -44,7 +44,7 @@ void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOp
 	csv_options.sql_type_list = expected_types;
 	csv_options.columns_set = true;
 	for (idx_t i = 0; i < expected_types.size(); i++) {
-		csv_options.sql_types_per_column[Identifier(expected_names[i])] = i;
+		csv_options.sql_types_per_column[expected_names[i]] = i;
 	}
 }
 
@@ -182,7 +182,7 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 				                      "read_csv_auto or set read_csv(..., "
 				                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 			}
-			names = StringsToIdentifiers(options.name_list);
+			names = options.name_list;
 			return_types = options.sql_type_list;
 		}
 		if (return_types.size() != names.size()) {
@@ -231,7 +231,7 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 		}
 		for (auto &force_name : options.force_not_null_names) {
 			if (column_names.find(Identifier(force_name)) == column_names.end()) {
-				throw BinderException("force_not_null expected to find %s, but it was not found in the table",
+				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
 				                      force_name);
 			}
 		}

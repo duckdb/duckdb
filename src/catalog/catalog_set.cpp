@@ -144,10 +144,10 @@ void CatalogSet::CheckCatalogEntryInvariants(CatalogEntry &value, const Identifi
 			    name);
 		}
 		if (value.temporary && !catalog.IsTemporaryCatalog()) {
-			throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
+			throw InternalException("Attempting to create temporary entry %s in non-temporary catalog", name);
 		}
 		if (!value.temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
-			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
+			throw InvalidInputException("Cannot create non-temporary entry %s in temporary catalog", name);
 		}
 	}
 }
@@ -232,7 +232,7 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction trans
 		// Another transaction has already made an edit to this catalog entry, because of limitations in the Catalog we
 		// can't create an edit alongside this even if the other transaction might end up getting aborted. So we have to
 		// abort the transaction.
-		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry.name);
+		throw TransactionException("Catalog write-write conflict on alter with %s", catalog_entry.name);
 	}
 	// The entry is visible to our snapshot, check if it's deleted
 	if (catalog_entry.deleted) {
@@ -280,7 +280,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 		if (!existing_entry.deleted) {
 			// There exists an entry by this name that is not deleted
 			old.UndoAlter(context, alter_info);
-			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
+			throw CatalogException("Could not rename %s to %s: another entry with this name already exists!",
 			                       original_name, new_name);
 		}
 	}
@@ -315,7 +315,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		return false;
 	}
 	if (!alter_info.allow_internal && entry->internal) {
-		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot alter entry %s because it is an internal system entry", entry->name);
 	}
 
 	unique_ptr<CatalogEntry> value;
@@ -406,7 +406,7 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const Identifi
 		return false;
 	}
 	if (entry->internal && !allow_drop_internal) {
-		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot drop entry %s because it is an internal system entry", entry->name);
 	}
 	// check any dependencies of this object
 	D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
@@ -423,7 +423,7 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const Identif
 		return false;
 	}
 	if (entry->internal && !allow_drop_internal) {
-		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+		throw CatalogException("Cannot drop entry %s because it is an internal system entry", entry->name);
 	}
 
 	// create a new tombstone entry and replace the currently stored one

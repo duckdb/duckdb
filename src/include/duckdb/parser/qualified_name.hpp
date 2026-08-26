@@ -88,9 +88,19 @@ struct QualifiedName {
 			return;
 		}
 		path.erase(path.begin());
+		if (path.size() >= 2 && path[0].empty()) {
+			// the name was catalog-qualified without a schema - drop the empty schema placeholder as well
+			path.erase(path.begin());
+		}
 	}
-	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has.
+	//! An empty catalog strips the catalog qualification.
 	QualifiedName WithCatalog(Identifier catalog) const {
+		if (catalog.empty()) {
+			auto result = *this;
+			result.StripCatalog();
+			return result;
+		}
 		if (path.size() < 2) {
 			return QualifiedName(std::move(catalog), Identifier(), Name());
 		}

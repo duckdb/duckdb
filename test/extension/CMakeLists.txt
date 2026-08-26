@@ -60,6 +60,43 @@ build_loadable_extension_directory(
   ${PARAMETERS}
   loadable_extension_demo_alt.cpp)
 
+# A V2 C API extension, written against the stable C++ API. C_STRUCT_UNSTABLE
+# pins it to this exact DuckDB build, which is also what selects the V2
+# entrypoint at load time.
+build_loadable_extension_directory(
+  cpp_api_demo
+  "C_STRUCT_UNSTABLE"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  cpp_api_demo.cpp)
+target_compile_definitions(
+  cpp_api_demo_loadable_extension
+  PRIVATE DUCKDB_EXTENSION_NAME=cpp_api_demo DUCKDB_CPP_API_LOADABLE
+          DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+target_include_directories(cpp_api_demo_loadable_extension
+                           PRIVATE ${CMAKE_SOURCE_DIR}/tools/cpp)
+target_link_libraries(cpp_api_demo_loadable_extension duckdb_cpp_api_loadable)
+
+# Same, but its entrypoint throws: covers the error slot aborting a load.
+build_loadable_extension_directory(
+  cpp_api_demo_fail
+  "C_STRUCT_UNSTABLE"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  cpp_api_demo_fail.cpp)
+target_compile_definitions(
+  cpp_api_demo_fail_loadable_extension
+  PRIVATE DUCKDB_EXTENSION_NAME=cpp_api_demo_fail DUCKDB_CPP_API_LOADABLE
+          DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+target_include_directories(cpp_api_demo_fail_loadable_extension
+                           PRIVATE ${CMAKE_SOURCE_DIR}/tools/cpp)
+target_link_libraries(cpp_api_demo_fail_loadable_extension
+                      duckdb_cpp_api_loadable)
+
 if(NOT WIN32 AND NOT SUN)
   add_definitions(-DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
 

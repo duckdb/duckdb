@@ -1635,12 +1635,12 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
 static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type,
                                                                unique_ptr<Expression> input, const Value &constant,
                                                                const LogicalType &comparison_logical_type) {
-	auto constant_value = constant;
-	if (!constant_value.DefaultTryCastAs(comparison_logical_type)) {
+	auto constant_value = constant.DefaultTryCastAs(comparison_logical_type);
+	if (!constant_value) {
 		return nullptr;
 	}
 	return BoundComparisonExpression::Create(comparison_type, std::move(input),
-	                                         make_uniq<BoundConstantExpression>(std::move(constant_value)));
+	                                         make_uniq<BoundConstantExpression>(std::move(*constant_value)));
 }
 
 static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
@@ -1701,11 +1701,11 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 
 	value_set_t unique_ht_values;
 	for (idx_t k = 0; k < key_count; k++) {
-		auto value = build_vector.GetValue(k);
-		if (!value.DefaultTryCastAs(filter_input_type)) {
+		auto value = build_vector.GetValue(k).DefaultTryCastAs(filter_input_type);
+		if (!value) {
 			return false;
 		}
-		unique_ht_values.insert(std::move(value));
+		unique_ht_values.insert(std::move(*value));
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
@@ -1791,12 +1791,13 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 			// Cast to storage type, skip if fails
 			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
-				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+				auto cast_min = min_val.DefaultTryCastAs(pushdown_column.storage_type);
+				auto cast_max = max_val.DefaultTryCastAs(pushdown_column.storage_type);
+				if (!cast_min || !cast_max) {
 					continue;
 				}
-				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-					continue;
-				}
+				min_val = std::move(*cast_min);
+				max_val = std::move(*cast_max);
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {

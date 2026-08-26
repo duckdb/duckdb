@@ -510,11 +510,15 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 			optimize = false;
 		}
 	}
-	if (optimize && logical_plan->RequireOptimizer()) {
+	if (logical_plan->RequireOptimizer()) {
 		{
 			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
 			Optimizer optimizer(*logical_planner.binder, *this);
-			logical_plan = optimizer.Optimize(std::move(logical_plan));
+			if (optimize) {
+				logical_plan = optimizer.Optimize(std::move(logical_plan));
+			} else {
+				logical_plan = optimizer.LowerMandatoryAggregateRewrites(std::move(logical_plan));
+			}
 			D_ASSERT(logical_plan);
 		}
 #ifdef DEBUG
@@ -611,7 +615,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(
-			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
+			    "Cannot execute statement of type \"%s\" on database %s which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
 		meta_transaction.ModifyDatabase(*entry, it.second.modifications);
@@ -1566,7 +1570,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
+SettingLookupResult ClientContext::TryGetCurrentSetting(const Identifier &key, Value &result) const {
 	optional_ptr<const ConfigurationOption> option;
 	// try to get the setting index
 	auto &db_config = DBConfig::GetConfig(*this);
@@ -1595,7 +1599,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 
 ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
-	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
 	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);

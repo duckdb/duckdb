@@ -219,9 +219,11 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+		auto cast_value = dummy_value.DefaultTryCastAs(cast_type, &error_message);
+		if (!cast_value) {
 			return false;
 		}
+		value = std::move(*cast_value);
 		return true;
 	}
 	default:
@@ -366,7 +368,7 @@ string PivotRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += SQLIdentifier(groups[i].GetIdentifierName());
+			result += SQLIdentifier(groups[i]);
 		}
 	}
 	result += ")";

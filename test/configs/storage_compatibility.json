@@ -9,7 +9,8 @@
   ],
   "skip_error_messages": [
     "Aggregate state columns are not supported in storage versions prior to v2.0.0",
-    "TUPLE columns are not supported in storage versions prior to v2.0.0"
+    "TUPLE columns are not supported in storage versions prior to v2.0.0",
+    "CREATE SECURE VIEW is only supported for storage versions v2.0.0 and higher"
   ],
   "skip_compiled": "true",
   "skip_tests": [
@@ -148,6 +149,7 @@
         "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/parquet/variant/variant_legacy_encoding.test",
         "test/sql/types/variant/tpch_test.test",
+        "test/sql/optimizer/pushdown_extract_reapplied.test",
         "test/sql/storage/compression/default_storage_dict_fsst.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",
@@ -226,12 +228,15 @@
         "test/sql/trigger/create_trigger_parse.test",
         "test/sql/trigger/create_trigger_wal.test",
         "test/sql/trigger/drop_trigger.test",
-        "test/sql/trigger/drop_trigger_wal.test"
+        "test/sql/trigger/drop_trigger_wal.test",
+        "test/sql/trigger/trigger_dependency.test",
+        "test/sql/trigger/trigger_dependency_restart.test"
       ]
     },
     {
       "reason": "test_all_types() require latest storage",
       "paths": [
+        "test/fuzzer/sqlsmith/statistics_assertion_trigger.test",
         "test/sql/aggregate/aggregates/arg_min_max_all_types.test_slow",
         "test/sql/aggregate/aggregates/arg_min_max_n_all_types.test_slow",
         "test/sql/aggregate/aggregates/arg_min_max_nulls_last_all_types.test_slow",

@@ -89,10 +89,11 @@ static void PushSelectStatementInternalRemainder(TransformStack &stack, Transfor
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &result_modifiers_opt = list_pr.Child<OptionalParseResult>(2);
 	if (result_modifiers_opt.HasResult()) {
-		stack.PushFrame(result_modifiers_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("ResultModifiers"),
+		stack.PushFrame(result_modifiers_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(result_modifiers_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("SelectSetOpChain"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(1)),
 	                TransformFrameResultTarget(frame.frame_index, 1));
 }
 
@@ -104,7 +105,8 @@ void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTrans
 	auto &with_clause_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_clause_opt.HasResult()) {
 		frame.manual_state = 0;
-		stack.PushFrame(with_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WithClause"),
+		stack.PushFrame(with_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(with_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 0));
 		return;
 	}
@@ -291,7 +293,7 @@ static void RegisterWindowClause(PEGTransformer &transformer, const Identifier &
                                  WindowExpression &window_function) {
 	auto it = transformer.window_clauses.find(window_name);
 	if (it != transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
+		throw ParserException("window %s is already defined", window_name);
 	}
 	transformer.window_clauses[window_name] =
 	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
@@ -301,30 +303,35 @@ static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &sample_clause_opt = list_pr.Child<OptionalParseResult>(6);
 	if (sample_clause_opt.HasResult()) {
-		stack.PushFrame(sample_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("SampleClause"),
+		stack.PushFrame(sample_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(sample_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 6));
 	}
 	auto &qualify_clause_opt = list_pr.Child<OptionalParseResult>(5);
 	if (qualify_clause_opt.HasResult()) {
-		stack.PushFrame(qualify_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("QualifyClause"),
+		stack.PushFrame(qualify_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(qualify_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 5));
 	}
 	auto &having_clause_opt = list_pr.Child<OptionalParseResult>(3);
 	if (having_clause_opt.HasResult()) {
-		stack.PushFrame(having_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("HavingClause"),
+		stack.PushFrame(having_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(having_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 3));
 	}
 	auto &group_by_clause_opt = list_pr.Child<OptionalParseResult>(2);
 	if (group_by_clause_opt.HasResult()) {
-		stack.PushFrame(group_by_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("GroupByClause"),
+		stack.PushFrame(group_by_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(group_by_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
 	auto &where_clause_opt = list_pr.Child<OptionalParseResult>(1);
 	if (where_clause_opt.HasResult()) {
-		stack.PushFrame(where_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WhereClause"),
+		stack.PushFrame(where_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(where_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 1));
 	}
-	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("SelectFrom"),
+	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(0)),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -335,7 +342,8 @@ void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &tra
 	auto &window_clause_opt = list_pr.Child<OptionalParseResult>(4);
 	if (window_clause_opt.HasResult()) {
 		frame.manual_state = 0;
-		stack.PushFrame(window_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WindowClause"),
+		stack.PushFrame(window_clause_opt.GetResult(),
+		                PEGTransformerFactory::GetTrampolineOps(window_clause_opt.GetResult()),
 		                TransformFrameResultTarget(frame.frame_index, 4));
 		return;
 	}
@@ -480,11 +488,12 @@ void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transfo
 		auto repeat_children = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>().GetChildren();
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			stack.PushFrame(repeat_children[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("JoinOrPivot"),
+			stack.PushFrame(repeat_children[child_idx].get(),
+			                PEGTransformerFactory::GetTrampolineOps(repeat_children[child_idx].get()),
 			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
 		}
 	}
-	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("InnerTableRef"),
+	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(0)),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -714,8 +723,11 @@ static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type
 		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
 		auto literal_text = value.ToString();
 		int64_t count = 0;
-		if (value.type().IsIntegral() && value.DefaultTryCastAs(LogicalType::BIGINT)) {
-			count = value.GetValue<int64_t>();
+		if (value.type().IsIntegral()) {
+			auto bigint_value = value.DefaultTryCastAs(LogicalType::BIGINT);
+			if (bigint_value) {
+				count = bigint_value->GetValue<int64_t>();
+			}
 		}
 		if (count < 1) {
 			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
@@ -817,7 +829,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer
 	// resolve the join type name against the JoinType enum (case-insensitive); accept an optional `_join` suffix,
 	// so e.g. `mark` and `mark_join` are equivalent. EnumUtil::FromString throws on an unknown name.
 	auto type_name = col_label;
-	if (StringUtil::EndsWith(StringUtil::Lower(type_name), "_join")) {
+	if (StringUtil::CIEndsWith(type_name, "_join")) {
 		type_name = type_name.substr(0, type_name.size() - 5);
 	}
 	result->type = EnumUtil::FromString<JoinType>(type_name);
@@ -1155,7 +1167,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		auto it = result.map.find(cte_name);
 		if (it != result.map.end()) {
 			// can't have two CTEs with same name
-			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
+			throw ParserException("Duplicate CTE name %s", cte_name);
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
@@ -1169,7 +1181,8 @@ void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &trans
 	frame.ReserveChildSlots(with_statement_list.size());
 	for (idx_t i = with_statement_list.size(); i > 0; i--) {
 		auto child_idx = i - 1;
-		stack.PushFrame(with_statement_list[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("WithStatement"),
+		stack.PushFrame(with_statement_list[child_idx].get(),
+		                PEGTransformerFactory::GetTrampolineOps(with_statement_list[child_idx].get()),
 		                TransformFrameResultTarget(frame.frame_index, child_idx));
 	}
 }
@@ -1194,7 +1207,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampo
 		auto &cte_name = with_entry.first;
 		auto it = result.map.find(cte_name);
 		if (it != result.map.end()) {
-			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
+			throw ParserException("Duplicate CTE name %s", cte_name);
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
@@ -1283,7 +1296,7 @@ void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer 
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	transformer.in_window_definition = true;
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(2), PEGTransformerFactory::GetTrampolineOps("WindowFrameDefinition"),
+	stack.PushFrame(list_pr.GetChild(2), PEGTransformerFactory::GetTrampolineOps(list_pr.GetChild(2)),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -1483,9 +1496,16 @@ PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer,
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
+                                                                   const optional<Identifier> &table_alias_colon,
                                                                    const optional<bool> &lateral,
                                                                    unique_ptr<TableRef> subquery_reference,
                                                                    const optional<TableAlias> &table_alias) {
+	if (table_alias_colon && table_alias) {
+		throw ParserException("Table reference %s cannot have two aliases", subquery_reference->ToString());
+	}
+	if (table_alias_colon) {
+		subquery_reference->alias = *table_alias_colon;
+	}
 	if (table_alias) {
 		subquery_reference->alias = table_alias->name;
 		subquery_reference->column_name_alias = table_alias->column_name_alias;
@@ -1524,9 +1544,16 @@ Identifier PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &trans
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer,
+                                                               const optional<Identifier> &table_alias_colon,
                                                                unique_ptr<SelectStatement> values_clause,
                                                                const optional<TableAlias> &table_alias) {
+	if (table_alias_colon && table_alias) {
+		throw ParserException("Table reference cannot have two aliases");
+	}
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(values_clause));
+	if (table_alias_colon) {
+		subquery_ref->alias = *table_alias_colon;
+	}
 	if (table_alias) {
 		subquery_ref->alias = table_alias->name;
 		subquery_ref->column_name_alias = table_alias->column_name_alias;

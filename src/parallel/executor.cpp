@@ -83,6 +83,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	D_ASSERT(events.empty());
 
 	auto schedule = BuildPipelineSchedule(event_data.meta_pipelines);
+	if (schedule->HasCycle()) {
+		throw InternalException("Cyclic dependency in pipeline schedule");
+	}
 	events.reserve(schedule->stages.size());
 	for (auto &stage : schedule->stages) {
 		events.push_back(CreatePipelineScheduleEvent(stage, event_data.initial_schedule));
@@ -241,6 +244,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		PipelineBuildState state;
 		auto root_pipeline = make_shared_ptr<MetaPipeline>(*this, state, nullptr);
 		root_pipeline->Build(*physical_plan);
+
+		// Resolve graph-dependent input modes after every pipeline and dependency has been constructed.
+		vector<shared_ptr<MetaPipeline>> to_schedule;
+		root_pipeline->GetMetaPipelines(to_schedule, true, true);
+		state.ResolveExternalInputs(to_schedule);
+
 		profiler->Initialize(plan);
 		root_pipeline->Ready();
 
@@ -253,10 +262,6 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
-
-		// collect all meta-pipelines from the root pipeline
-		vector<shared_ptr<MetaPipeline>> to_schedule;
-		root_pipeline->GetMetaPipelines(to_schedule, true, true);
 
 		// number of 'PipelineCompleteEvent's is equal to the number of meta pipelines, so we have to set it here
 		total_pipelines = to_schedule.size();
@@ -283,9 +288,31 @@ void Executor::CancelTasks() {
 	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
+#ifndef DUCKDB_NO_THREADS
+	if (producer) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		shared_ptr<Task> task_from_producer;
+		while (true) {
+			{
+				annotated_unique_lock<annotated_mutex> lk(producer->producer_lock);
+				if (executor_tasks == 0) {
+					break;
+				}
+				if (!scheduler.GetTaskFromProducerLocked(*producer, task_from_producer)) {
+					// Nothing to execute on this thread: wait until a task completes or is enqueued
+					producer->producer_cv.wait(lk);
+					continue;
+				}
+			}
+			// Discard the dequeued task without executing it.
+			task_from_producer.reset();
+		}
+	}
+#else
 	while (executor_tasks > 0) {
 		WorkOnTasks();
 	}
+#endif
 	// Now safe to destroy pipelines, events and states — no tasks reference them
 	lock_guard<mutex> elock(executor_lock);
 	for (auto &rec_cte_ref : recursive_ctes) {
@@ -320,14 +347,16 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 
 void Executor::UnregisterTask() {
 #ifndef DUCKDB_NO_THREADS
+	lock_guard<mutex> l(executor_lock);
 	{
-		// Wake any thread blocked in `WaitForTask`.
-		// A finished task may have scheduled follow-up tasks or completed the query.
-		lock_guard<mutex> l(executor_lock);
-		task_reschedule.notify_all();
+		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+		executor_tasks--;
+		producer->producer_cv.notify_all();
 	}
-#endif
+	task_reschedule.notify_all();
+#else
 	executor_tasks--;
+#endif
 }
 
 void Executor::WaitForTask() {

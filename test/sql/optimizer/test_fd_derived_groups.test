@@ -115,11 +115,11 @@ logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
 
 # Multiple grouping sets: positional groups must not collapse. This can appear either as a
 # single aggregate with two positional groups, or as a grouping-sets rewrite with separate
-# singleton aggregate branches.
+# singleton aggregate branches. The singleton groups may be wrapped by compressed materialization.
 query II
 EXPLAIN (FORMAT JSON) SELECT x, x-1, count(*) FROM t GROUP BY GROUPING SETS ((x), (x-1));
 ----
-logical_opt	<REGEX>:.*("Groups":\s*\[\s*"[^"]*"\s*,\s*"|CTE.*UNION.*"Groups":\s*"x".*"Groups":\s*"\(x - 1\)").*
+logical_opt	<REGEX>:.*("Groups":\s*\[\s*"[^"]*"\s*,\s*"|CTE.*UNION.*"Groups":\s*"[^"]*x[^"]*".*"Groups":\s*"[^"]*\(x - 1\)[^"]*").*
 
 # No raw-column base: synthesising one would need an injectivity proof per derived.
 query II

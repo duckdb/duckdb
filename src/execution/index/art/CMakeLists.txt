@@ -11,6 +11,7 @@ add_library_unity(
   iterator.cpp
   leaf.cpp
   node.cpp
+  node_handle.cpp
   node256.cpp
   node256_leaf.cpp
   node48.cpp
