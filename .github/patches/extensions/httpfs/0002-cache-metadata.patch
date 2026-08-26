@@ -1,4 +1,4 @@
-commit 411e553539493c9a06331538568dade8569a5e7a
+commit 0595f1f40817a71b6ade02cf35256a7ce6cf5a0a
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -294,6 +294,50 @@ index 2efd0fa..021e262 100644
 +		if (should_write_cache && !cache_reuse_disabled) {
  			cache->Insert(path, GetCacheEntry());
  		}
+ 	}
+diff --git a/src/http/httpfs_curl_client.cpp b/src/http/httpfs_curl_client.cpp
+index 235547b..49fc2cc 100644
+--- a/src/http/httpfs_curl_client.cpp
++++ b/src/http/httpfs_curl_client.cpp
+@@ -77,7 +77,7 @@ static size_t RequestHeaderCallback(void *contents, size_t size, size_t nmemb, v
+ 			part2.erase(0, 1);
+ 		}
+ 
+-		header_collection.header_collection.back().Insert(part1, part2);
++		header_collection.header_collection.back().Append(part1, part2);
+ 	}
+ 	// TODO: log headers that don't follow the header format
+ 
+@@ -668,12 +668,15 @@ private:
+ 		response->url = request_info->url;
+ 		response->reason = HTTPUtil::GetStatusMessage(HTTPUtil::ToStatusCode(request_info->response_code));
+ 		if (!request_info->header_collection.empty()) {
+-			for (auto &header : request_info->header_collection.back()) {
++			auto &headers = request_info->header_collection.back();
++			for (auto &header : headers) {
+ 				// We should not return __RESPONSE_STATUS__ to the user. It's only there for debugging.
+ 				if (header.first == "__RESPONSE_STATUS__") {
+ 					continue;
+ 				}
+-				response->headers.Insert(header.first, header.second);
++				for (auto &value : headers.GetHeaderValues(header.first)) {
++					response->headers.Append(header.first, std::move(value));
++				}
+ 			}
+ 		}
+ 		// ResetRequestInfo();
+diff --git a/src/http/httpfs_httplib_client.cpp b/src/http/httpfs_httplib_client.cpp
+index 4dc2c9e..a3a1212 100644
+--- a/src/http/httpfs_httplib_client.cpp
++++ b/src/http/httpfs_httplib_client.cpp
+@@ -247,7 +247,7 @@ private:
+ 		result->body = response.body;
+ 		result->reason = response.reason;
+ 		for (auto &entry : response.headers) {
+-			result->headers.Insert(entry.first, entry.second);
++			result->headers.Append(entry.first, entry.second);
+ 		}
+ 		return result;
  	}
 diff --git a/src/include/http/http_metadata_cache.hpp b/src/include/http/http_metadata_cache.hpp
 index 1c6e500..ab35bcd 100644
