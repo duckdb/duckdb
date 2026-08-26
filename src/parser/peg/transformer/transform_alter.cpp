@@ -17,6 +17,10 @@ static bool IsSimpleDefaultValue(const ParsedExpression &val) {
 	if (constant.get().GetExpressionClass() == ExpressionClass::CAST) {
 		//! Check if the constant is wrapped in a cast
 		auto &cast = constant.get().Cast<CastExpression>();
+		if (cast.IsTryCast()) {
+			//! To be safe, lets not accept try-cast
+			return false;
+		}
 		constant = cast.Child();
 	}
 	return constant.get().GetExpressionClass() == ExpressionClass::CONSTANT;
