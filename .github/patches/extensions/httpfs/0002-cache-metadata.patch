@@ -111,7 +111,7 @@ index 2efd0fa..7a0143b 100644
  	}
  }
  
-@@ -648,6 +669,187 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +669,188 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -271,6 +271,7 @@ index 2efd0fa..7a0143b 100644
 +                                      timestamp_t response_time) {
 +	auto response_valid_until =
 +	    HTTPFileSystem::ComputeCacheValidUntil(response.headers, request_time, response_time);
++	// TODO(hjiang): Prevent shared reuse of private responses and authenticated requests without explicit permission.
 +	if (HasCacheControlDirective(response.headers, "no-store")) {
 +		// no-store applies to this response, so only blocks populated by this read are retired.
 +		response_valid_until = timestamp_t::ninfinity();
