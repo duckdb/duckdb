@@ -29,7 +29,7 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
-#include "reader/variant/parquet_variant_iterator.hpp"
+//#include "duckdb/extension/parquet/include/reader/variant/parquet_variant_iterator.hpp"
 
 #include <type_traits>
 #include <cstring>
