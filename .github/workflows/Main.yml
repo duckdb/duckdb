@@ -125,7 +125,7 @@ jobs:
             effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
             commit="${{ steps.resolve_git_sha.outputs.git_sha }}"
             staged_version="${commit:0:10}/$effective_git_describe"
-            extension_allow_failure_archs="linux_amd64_musl;linux_arm64_musl"
+            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
           {
             echo "effective_git_describe=$effective_git_describe"

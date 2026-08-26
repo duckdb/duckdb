@@ -65,6 +65,8 @@ public:
 		return true;
 	}
 
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;
+
 public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
