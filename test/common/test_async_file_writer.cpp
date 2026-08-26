@@ -72,6 +72,9 @@ public:
 	string GetName() const override {
 		return "FailingInitializeCompressedFileSystem";
 	}
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType("failing_initialize");
+	}
 
 	unique_ptr<StreamWrapper> CreateStream() override {
 		return make_uniq<FailingInitializeStreamWrapper>();

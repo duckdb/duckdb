@@ -49,11 +49,11 @@ public:
 	};
 
 	//! Default file-open behavior for creating a write-locked output file.
-	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	DUCKDB_API static const FileOpenFlags DEFAULT_OPEN_FLAGS;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
-	                           FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS);
+	                           const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS);
 	DUCKDB_API ~AsyncFileWriter() override;
 	using WriteStream::Write;
 
