@@ -5,7 +5,10 @@ import os
 import subprocess
 import sys
 
-from scripts.regression.local_extensions import extension_loading_args
+if __package__:
+    from .regression.local_extensions import extension_loading_args
+else:
+    from regression.local_extensions import extension_loading_args
 
 
 OLD_DB_NAME = "old.duckdb"

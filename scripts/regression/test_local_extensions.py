@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,33 @@ from scripts.regression.local_extensions import extension_loading_args
 
 
 class TestLocalExtensions(unittest.TestCase):
+    def test_plan_cost_runner_can_run_directly(self):
+        runner = Path(__file__).resolve().parents[1] / "plan_cost_runner.py"
+
+        completed = subprocess.run(
+            [sys.executable, str(runner), "--help"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_storage_size_runner_can_run_directly(self):
+        runner = Path(__file__).resolve().parents[1] / "regression_test_storage_size.py"
+
+        with tempfile.TemporaryDirectory() as temp_directory:
+            missing_executable = str(Path(temp_directory) / "duckdb")
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--old", missing_executable, "--new", missing_executable],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn("Failed to find old runner", completed.stdout)
+
     def test_uses_artifact_local_repository(self):
         with tempfile.TemporaryDirectory() as temp_directory:
             release_directory = Path(temp_directory) / "release's"

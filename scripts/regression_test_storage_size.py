@@ -3,7 +3,10 @@ import argparse
 import subprocess
 import tempfile
 
-from scripts.regression.local_extensions import extension_loading_args
+if __package__:
+    from .regression.local_extensions import extension_loading_args
+else:
+    from regression.local_extensions import extension_loading_args
 
 # the threshold at which we consider something a regression (percentage)
 regression_threshold_percentage = 0.05
