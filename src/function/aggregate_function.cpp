@@ -22,6 +22,7 @@ unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientCon
 	if (!result) {
 		return nullptr;
 	}
+	result->ResetAdditiveStatistics();
 	// the result is NULL when the aggregate sees no valid rows
 	result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return result;
