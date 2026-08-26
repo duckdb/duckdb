@@ -57,10 +57,10 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 }
 
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
-unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
+unique_ptr<HTTPResponse> TransformResponse(httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
 	auto result = make_uniq<HTTPResponse>(status_code);
-	if (res.error() == duckdb_httplib::Error::Success) {
+	if (res.error() == httplib::Error::Success) {
 		auto &response = res.value();
 		result->body = response.body;
 		result->reason = response.reason;
@@ -168,7 +168,7 @@ PostRequestInfo::~PostRequestInfo() = default;
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) : HTTPClient(proto_host_port) {
-		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
+		client = make_uniq<httplib::Client>(proto_host_port);
 		Initialize(http_params);
 	}
 	void Initialize(HTTPParams &http_params) override {
@@ -196,7 +196,7 @@ public:
 		} else {
 			return TransformResult(client->Get(
 			    info.path, headers,
-			    [&](const duckdb_httplib::Response &response) {
+			    [&](const httplib::Response &response) {
 				    auto http_response = TransformResponse(response);
 				    return info.response_handler(*http_response);
 			    },
@@ -225,18 +225,18 @@ public:
 		throw NotImplementedException("OPTIONS request not implemented");
 	}
 
-	unique_ptr<duckdb_httplib::Client> client;
+	unique_ptr<httplib::Client> client;
 
 private:
-	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
-		duckdb_httplib::Headers headers;
+	httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
+		httplib::Headers headers;
 		for (auto &entry : header_map) {
 			headers.insert(entry);
 		}
 		return headers;
 	}
 
-	unique_ptr<HTTPResponse> TransformResponse(const duckdb_httplib::Response &response) {
+	unique_ptr<HTTPResponse> TransformResponse(const httplib::Response &response) {
 		auto status_code = HTTPUtil::ToStatusCode(response.status);
 		auto result = make_uniq<HTTPResponse>(status_code);
 		result->body = response.body;
@@ -247,8 +247,8 @@ private:
 		return result;
 	}
 
-	unique_ptr<HTTPResponse> TransformResult(const duckdb_httplib::Result &res) {
-		if (res.error() == duckdb_httplib::Error::Success) {
+	unique_ptr<HTTPResponse> TransformResult(const httplib::Result &res) {
+		if (res.error() == httplib::Error::Success) {
 			auto &response = res.value();
 			return TransformResponse(response);
 		} else {
