@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
@@ -61,8 +62,14 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	}
 	const auto &path = *arguments[1];
 	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
-		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.GetReturnType().ToString());
+		// Accept any integer-ish literal by casting it to UINTEGER explicitly
+		if (path.GetReturnType().IsIntegral()) {
+			arguments[1] = BoundCastExpression::AddCastToType(input.GetClientContext(), std::move(arguments[1]), LogicalType::UINTEGER);
+		}
+		else {
+			throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
+								  path.GetReturnType().ToString());
+		}
 	}
 
 	auto constant_arg = input.GetNonNullConstant(1);
