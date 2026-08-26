@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
+#include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 
 namespace duckdb {
@@ -34,6 +35,47 @@ public:
 private:
 	const OptionalMatcher &optional_matcher;
 	MatchState child_state;
+	optional_idx start_offset;
+};
+
+class ChoiceMatchStackFrame : public MatchStackFrame {
+public:
+	ChoiceMatchStackFrame(match_frame_index_t frame_index, const ChoiceMatcher &matcher, MatchState &state)
+	    : MatchStackFrame(frame_index, matcher, state), choice_matcher(matcher) {
+		if (auto current = state.token_iterator.Current()) {
+			start_offset = optional_idx(current->offset);
+		}
+	}
+
+	void Execute(MatchStack &stack) override {
+		if (HasChildResult()) {
+			auto child_result = TakeChildResult();
+			D_ASSERT(child_state);
+			if (child_result.IsSuccess()) {
+				match_state.token_iterator.SetPosition(child_state->token_iterator);
+				if (!child_result.HasParseResult()) {
+					SetResult(MatcherResult::Success());
+					return;
+				}
+				SetResult(match_state.AllocateParseResult<ChoiceParseResult>(*child_result.GetParseResult(),
+				                                                             child_index, start_offset));
+				return;
+			}
+			child_index++;
+			child_state.reset();
+		}
+		if (child_index >= choice_matcher.matchers.size()) {
+			SetResult(MatcherResult::Failure());
+			return;
+		}
+		child_state = make_uniq<MatchState>(match_state);
+		stack.PushChildFrame(*this, choice_matcher.matchers[child_index].get(), *child_state);
+	}
+
+private:
+	const ChoiceMatcher &choice_matcher;
+	unique_ptr<MatchState> child_state;
+	idx_t child_index = 0;
 	optional_idx start_offset;
 };
 
@@ -89,10 +131,16 @@ MatcherResult MatchStackFrame::TakeChildResult() {
 
 match_frame_index_t MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
 	auto frame_index = frames.size();
-	if (matcher.Type() == MatcherType::OPTIONAL) {
+	switch (matcher.Type()) {
+	case MatcherType::OPTIONAL:
 		frames.push_back(make_uniq<OptionalMatchStackFrame>(frame_index, matcher.Cast<OptionalMatcher>(), state));
-	} else {
+		break;
+	case MatcherType::CHOICE:
+		frames.push_back(make_uniq<ChoiceMatchStackFrame>(frame_index, matcher.Cast<ChoiceMatcher>(), state));
+		break;
+	default:
 		frames.push_back(make_uniq<MatchStackFrame>(frame_index, matcher, state));
+		break;
 	}
 	frame_stack.push_back(frame_index);
 	return frame_index;
