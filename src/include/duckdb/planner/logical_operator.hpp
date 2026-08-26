@@ -23,9 +23,13 @@
 
 namespace duckdb {
 
+class ColumnBindingResolver;
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator {
+	friend class ColumnBindingResolver;
+
 public:
 	explicit LogicalOperator(LogicalOperatorType type);
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);

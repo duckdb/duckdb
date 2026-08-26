@@ -31,6 +31,11 @@ public:
 
 	virtual PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) = 0;
 
+	//! Opt into standard child/expression traversal with exact output type verification
+	virtual bool SupportsTypeVerification() const {
+		return false;
+	}
+
 	virtual void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings);
 	virtual string GetExtensionName() const;
 };

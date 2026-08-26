@@ -1,8 +1,12 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
@@ -12,7 +16,140 @@
 
 namespace duckdb {
 
-ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
+struct ColumnBindingVerificationState {
+	explicit ColumnBindingVerificationState(LogicalOperator &root) {
+		CompilerPath root_path;
+		IndexOperator(root, root_path);
+	}
+
+	reference_map_t<LogicalOperator, CompilerPath> operator_paths;
+	reference_map_t<Expression, CompilerPath> expression_paths;
+	vector<CompilerIssue> issues;
+
+	const CompilerPath &GetPath(LogicalOperator &op) const {
+		auto entry = operator_paths.find(reference<LogicalOperator>(op));
+		if (entry == operator_paths.end()) {
+			throw InternalException("Logical operator is missing from the compiler verification path index");
+		}
+		return entry->second;
+	}
+
+	const CompilerPath &GetPath(Expression &expr) const {
+		auto entry = expression_paths.find(reference<Expression>(expr));
+		if (entry == expression_paths.end()) {
+			throw InternalException("Expression is missing from the compiler verification path index");
+		}
+		return entry->second;
+	}
+
+	void AddInvalidBinding(BoundColumnRefExpression &expr, const vector<ColumnBinding> &bindings) {
+		CompilerIssue issue;
+		issue.code = CompilerIssueCode::INVALID_BINDING;
+		issue.path = GetPath(expr);
+		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
+		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
+		issue.message = StringUtil::Format("Failed to bind column reference %s [%d.%d] (bindings: %s)", expr.GetAlias(),
+		                                   expr.Binding().table_index.index, expr.Binding().column_index,
+		                                   LogicalOperator::ColumnBindingsToString(bindings));
+		issues.push_back(std::move(issue));
+	}
+
+	void AddTypeMismatch(BoundColumnRefExpression &expr, const LogicalType &expected_type) {
+		CompilerIssue issue;
+		issue.code = CompilerIssueCode::TYPE_MISMATCH;
+		issue.path = GetPath(expr);
+		issue.construct = CompilerConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
+		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
+		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
+		issue.message =
+		    StringUtil::Format("Failed to bind column reference %s [%d.%d]: inequal types (%s != %s)", expr.GetAlias(),
+		                       expr.Binding().table_index.index, expr.Binding().column_index,
+		                       expr.GetReturnType().ToString(), expected_type.ToString());
+		issues.push_back(std::move(issue));
+	}
+
+	void AddBindingTypeArityMismatch(BoundColumnRefExpression &expr, idx_t binding_count, idx_t type_count) {
+		CompilerIssue issue;
+		issue.code = CompilerIssueCode::INTERNAL_INVARIANT;
+		issue.path = GetPath(expr);
+		issue.construct = CompilerConstructIdentity::Expression(expr.GetExpressionClass());
+		issue.facts.emplace_back("invariant", Value("binding_type_arity"));
+		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
+		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
+		issue.message = StringUtil::Format(
+		    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)", expr.GetAlias(),
+		    expr.Binding().table_index.index, expr.Binding().column_index, binding_count, type_count);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddMalformedExtension(LogicalExtensionOperator &op, idx_t binding_count, idx_t type_count) {
+		auto extension_name = op.GetExtensionName();
+		CompilerIssue issue;
+		issue.code = CompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		issue.path = GetPath(op);
+		issue.construct = CompilerConstructIdentity::Extension(extension_name);
+		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
+		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
+		issue.message = StringUtil::Format("Extension operator %s returned %llu bindings and %llu types",
+		                                   extension_name, binding_count, type_count);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddDuplicateTableIndex(LogicalOperator &op, TableIndex table_index) {
+		CompilerIssue issue;
+		issue.code = CompilerIssueCode::INTERNAL_INVARIANT;
+		issue.path = GetPath(op);
+		issue.construct = CompilerConstructIdentity::LogicalOperator(op.type);
+		issue.facts.emplace_back("invariant", Value("duplicate_table_index"));
+		issue.facts.emplace_back("table_index", Value::UBIGINT(table_index.index));
+		issue.message = StringUtil::Format("Duplicate table index \"%lld\" found", table_index.index);
+		issues.push_back(std::move(issue));
+	}
+
+	void CanonicalizeIssues() {
+		std::stable_sort(issues.begin(), issues.end());
+		vector<CompilerIssue> unique_issues;
+		unique_issues.reserve(issues.size());
+		for (auto &issue : issues) {
+			if (std::find(unique_issues.begin(), unique_issues.end(), issue) == unique_issues.end()) {
+				unique_issues.push_back(std::move(issue));
+			}
+		}
+		issues = std::move(unique_issues);
+	}
+
+private:
+	void IndexExpression(Expression &expr, const CompilerPath &path) {
+		expression_paths.emplace(reference<Expression>(expr), path);
+		idx_t child_index = 0;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			auto child_path = path;
+			child_path.components.push_back({CompilerPathComponentType::EXPRESSION_CHILD, child_index++});
+			IndexExpression(child, child_path);
+		});
+	}
+
+	void IndexOperator(LogicalOperator &op, const CompilerPath &path) {
+		operator_paths.emplace(reference<LogicalOperator>(op), path);
+		idx_t expression_index = 0;
+		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
+			auto expression_path = path;
+			expression_path.components.push_back({CompilerPathComponentType::OPERATOR_EXPRESSION, expression_index++});
+			IndexExpression(**expression, expression_path);
+		});
+		for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+			auto child_path = path;
+			child_path.components.push_back({CompilerPathComponentType::OPERATOR_CHILD, child_index});
+			IndexOperator(*op.children[child_index], child_path);
+		}
+	}
+};
+
+ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only), verification_state(nullptr) {
+}
+
+ColumnBindingResolver::ColumnBindingResolver(ColumnBindingVerificationState &verification_state)
+    : verify_only(true), verification_state(verification_state) {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
@@ -183,6 +320,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		if (ext_op.SupportsTypeVerification()) {
+			VisitOperatorChildren(op);
+			VisitOperatorExpressions(op);
+			bindings = op.GetColumnBindings();
+			types = op.types;
+			return;
+		}
 		// Just to be very sure, we clear before and after resolving extension operator column bindings
 		// This skips checks, but makes sure we don't break any extension operators with type verification
 		types.clear();
@@ -221,12 +365,20 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 		if (expr.Binding() == bindings[i]) {
 			if (!types.empty()) {
 				if (bindings.size() != types.size()) {
+					if (verification_state) {
+						verification_state->AddBindingTypeArityMismatch(expr, bindings.size(), types.size());
+						return nullptr;
+					}
 					throw InternalException(
 					    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)",
 					    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index, bindings.size(),
 					    types.size());
 				}
 				if (expr.GetReturnType() != types[i]) {
+					if (verification_state) {
+						verification_state->AddTypeMismatch(expr, types[i]);
+						return nullptr;
+					}
 					throw InternalException("Failed to bind column reference %s [%d.%d]: inequal types (%s != %s)",
 					                        expr.GetAlias(), expr.Binding().table_index.index,
 					                        expr.Binding().column_index, expr.GetReturnType().ToString(),
@@ -240,6 +392,10 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.GetReturnType(), i);
 		}
 	}
+	if (verification_state) {
+		verification_state->AddInvalidBinding(expr, bindings);
+		return nullptr;
+	}
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
@@ -249,37 +405,70 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// LCOV_EXCL_STOP
 }
 
-unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
-	unordered_set<TableIndex> result;
-	for (auto &child : op.children) {
-		auto child_indexes = VerifyInternal(*child);
-		for (auto index : child_indexes) {
-			D_ASSERT(index.IsValid());
-			if (result.find(index) != result.end()) {
-				throw InternalException("Duplicate table index \"%lld\" found", index.index);
-			}
-			result.insert(index);
-		}
-	}
-	auto indexes = op.GetTableIndex();
-	for (auto index : indexes) {
-		D_ASSERT(index.IsValid());
-		if (result.find(index) != result.end()) {
-			throw InternalException("Duplicate table index \"%lld\" found", index.index);
-		}
-		result.insert(index);
-	}
-	return result;
-}
-
 void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) {
 	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
 		return;
 	}
-	op.ResolveOperatorTypes();
-	ColumnBindingResolver resolver(true);
+	auto result = VerifyAlways(op);
+	if (result.HasError()) {
+		throw InternalException("%s", result.GetIssues()[0].message);
+	}
+}
+
+bool ColumnBindingResolver::ResolveOperatorTypes(LogicalOperator &op,
+                                                 ColumnBindingVerificationState &verification_state) {
+	op.types.clear();
+	for (auto &child : op.children) {
+		if (!ResolveOperatorTypes(*child, verification_state)) {
+			return false;
+		}
+	}
+	op.ResolveTypes();
+	auto bindings = op.GetColumnBindings();
+	if (op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
+		auto &extension_op = op.Cast<LogicalExtensionOperator>();
+		if (extension_op.SupportsTypeVerification() && bindings.size() != op.types.size()) {
+			verification_state.AddMalformedExtension(extension_op, bindings.size(), op.types.size());
+			return false;
+		}
+	}
+	D_ASSERT(op.types.size() == bindings.size());
+	return true;
+}
+
+static void VerifyTableIndexes(LogicalOperator &op, ColumnBindingVerificationState &verification_state,
+                               unordered_map<TableIndex, CompilerPath> &seen_indexes) {
+	for (auto index : op.GetTableIndex()) {
+		D_ASSERT(index.IsValid());
+		if (seen_indexes.find(index) != seen_indexes.end()) {
+			verification_state.AddDuplicateTableIndex(op, index);
+		} else {
+			seen_indexes.emplace(index, verification_state.GetPath(op));
+		}
+	}
+	for (auto &child : op.children) {
+		VerifyTableIndexes(*child, verification_state, seen_indexes);
+	}
+}
+
+CompilerResult<VerificationSuccess> ColumnBindingResolver::VerifyAlways(LogicalOperator &op) {
+	ColumnBindingVerificationState verification_state(op);
+	if (!ResolveOperatorTypes(op, verification_state)) {
+		D_ASSERT(!verification_state.issues.empty());
+		verification_state.CanonicalizeIssues();
+		return CompilerResult<VerificationSuccess>::Failure(std::move(verification_state.issues));
+	}
+
+	ColumnBindingResolver resolver(verification_state);
 	resolver.VisitOperator(op);
-	VerifyInternal(op);
+
+	unordered_map<TableIndex, CompilerPath> seen_indexes;
+	VerifyTableIndexes(op, verification_state, seen_indexes);
+	if (!verification_state.issues.empty()) {
+		verification_state.CanonicalizeIssues();
+		return CompilerResult<VerificationSuccess>::Failure(std::move(verification_state.issues));
+	}
+	return CompilerResult<VerificationSuccess>::Success(VerificationSuccess());
 }
 
 } // namespace duckdb
