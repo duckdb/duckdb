@@ -453,20 +453,6 @@ static bool CanPushdownMultiColumnExpression(const Expression &expr, const vecto
 	return IsDirectNumericColumnComparison(expr, bindings) || IsColumnConstantOr(expr);
 }
 
-// Remove query-specific metadata so equivalent filters serialize identically for common-subplan matching.
-static void CanonicalizeMultiColumnFilterExpression(unique_ptr<Expression> &expr) {
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { CanonicalizeMultiColumnFilterExpression(child); });
-	if (BoundComparisonExpression::IsComparison(*expr)) {
-		auto &comparison = expr->Cast<BoundFunctionExpression>();
-		auto left = std::move(BoundComparisonExpression::LeftMutable(comparison));
-		auto right = std::move(BoundComparisonExpression::RightMutable(comparison));
-		expr = BoundComparisonExpression::Create(comparison.GetExpressionType(), std::move(left), std::move(right));
-	}
-	expr->ClearAlias();
-	expr->SetQueryLocation(optional_idx());
-}
-
 static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(LogicalGet &get, const Expression &expr,
                                                                          const vector<ColumnBinding> &bindings) {
 	vector<ColumnBinding> distinct_bindings;
@@ -501,7 +487,11 @@ static unique_ptr<ExpressionFilter> TryCreateMultiColumnExpressionFilter(Logical
 		    child =
 		        make_uniq<BoundReferenceExpression>(column_ref.GetAlias(), column_ref.GetReturnType(), entry->second);
 	    });
-	CanonicalizeMultiColumnFilterExpression(filter_expr);
+	// Remove query-specific metadata so equivalent filters serialize identically for common-subplan matching.
+	ExpressionIterator::EnumerateExpression(filter_expr, [](Expression &expr) {
+		expr.ClearAlias();
+		expr.SetQueryLocation(optional_idx());
+	});
 	return make_uniq<ExpressionFilter>(std::move(filter_expr), std::move(column_indexes));
 }
 
