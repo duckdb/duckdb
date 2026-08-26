@@ -192,8 +192,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		options.stored_database_path.reset();
 	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
-		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
-		                      info.name.GetIdentifierName());
+		throw BinderException("Attached database name %s cannot be used because it is a reserved name", info.name);
 	}
 	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
@@ -205,10 +204,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
-
-	if (default_database.empty()) {
-		default_database = attached_db->GetName();
-	}
 
 	//! Initialize the database.
 	if (options.is_main_database) {
@@ -265,16 +260,15 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found) {
 	if (GetDefaultDatabase(context) == name) {
-		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
+		throw BinderException("Cannot detach database %s because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
-		                      name.GetIdentifierName());
+		                      name);
 	}
 
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found",
-			                      name.GetIdentifierName());
+			throw BinderException("Failed to detach database with name %s: database not found", name);
 		}
 		return;
 	}
@@ -302,8 +296,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &old_name, const Identifier &new_name,
                                      OnEntryNotFound if_not_found) {
 	if (AttachedDatabase::NameIsReserved(new_name)) {
-		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name",
-		                      new_name.GetIdentifierName());
+		throw BinderException("Database name %s cannot be used because it is a reserved name", new_name);
 	}
 
 	shared_ptr<AttachedDatabase> attached_db;
@@ -312,26 +305,21 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		auto old_entry = databases.find(old_name);
 		if (old_entry == databases.end()) {
 			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw BinderException("Failed to rename database \"%s\": database not found",
-				                      old_name.GetIdentifierName());
+				throw BinderException("Failed to rename database %s: database not found", old_name);
 			}
 			return;
 		}
 
 		auto new_entry = databases.find(new_name);
 		if (new_entry != databases.end()) {
-			throw BinderException("Failed to rename database \"%s\" to \"%s\": database with new name already exists",
-			                      old_name.GetIdentifierName(), new_name.GetIdentifierName());
+			throw BinderException("Failed to rename database %s to %s: database with new name already exists", old_name,
+			                      new_name);
 		}
 
 		attached_db = old_entry->second;
 		databases.erase(old_entry);
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
-	}
-
-	if (old_name == default_database) {
-		default_database = new_name;
 	}
 }
 
@@ -345,9 +333,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &n
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
-		if (name == default_database) {
-			default_database = databases.empty() ? Identifier() : databases.begin()->first;
-		}
 	}
 	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
@@ -425,30 +410,26 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
 	if (IsInvalidCatalog(default_entry.GetCatalog())) {
-		auto &result = DatabaseManager::Get(context).default_database;
-		if (result.empty()) {
-			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
+		auto &manager = DatabaseManager::Get(context);
+		lock_guard<mutex> guard(manager.databases_lock);
+		if (manager.databases.empty()) {
+			auto modified_database = MetaTransaction::Get(context).ModifiedDatabase();
+			if (modified_database) {
+				return modified_database->GetName();
+			}
+			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no database attached");
 		}
-		return result;
+		// OIDs are assigned in attach order, so the oldest attached database is the default.
+		auto default_database = manager.databases.begin();
+		for (auto entry = manager.databases.begin(); entry != manager.databases.end(); entry++) {
+			if (entry->second->oid < default_database->second->oid) {
+				default_database = entry;
+			}
+		}
+		return default_database->first;
 	}
 	return default_entry.GetCatalog();
 }
-
-// LCOV_EXCL_START
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const Identifier &new_value) {
-	auto db_entry = GetDatabase(context, new_value);
-
-	if (!db_entry) {
-		throw InternalException("Database %s not found", new_value);
-	} else if (db_entry->IsTemporary()) {
-		throw InternalException("Cannot set the default database to a temporary database");
-	} else if (db_entry->IsSystem()) {
-		throw InternalException("Cannot set the default database to a system database");
-	}
-
-	default_database = new_value;
-}
-// LCOV_EXCL_STOP
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                    const optional_idx max_db_count) {

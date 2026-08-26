@@ -37,15 +37,14 @@ public:
 		return std::move(statistics_map);
 	}
 
-	//! Whether or not we can propagate a cast between two types
-	static bool CanPropagateCast(const LogicalType &source, const LogicalType &target);
-	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
-	                                                   const LogicalType &target);
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
 	//! argument ranges (see ArgProperties). Returns nullptr when the bounds cannot be derived.
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
 	                                                          const BoundFunctionExpression &func,
 	                                                          const vector<BaseStatistics> &child_stats);
+	//! Compare two sets of statistics and return whether the comparison is always true or false
+	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
+	                                                 ExpressionType comparison);
 
 private:
 	//! Propagate statistics through an operator
@@ -59,6 +58,7 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalPositionalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalSecureView &op, unique_ptr<LogicalOperator> &node_ptr);
 	void PropagateStatistics(LogicalComparisonJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	void PropagateStatistics(LogicalAnyJoin &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalSetOperation &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -72,9 +72,6 @@ private:
 
 	//! Return statistics from a constant value
 	unique_ptr<BaseStatistics> StatisticsFromValue(const Value &input);
-	//! Run a comparison with two sets of statistics, returns if the comparison will always returns true/false or not
-	FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison);
-
 	//! Update filter statistics from a filter with a constant
 	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
@@ -116,7 +113,6 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundAggregateExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateBetween(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundCaseExpression &expr, unique_ptr<Expression> &expr_ptr);
-	unique_ptr<BaseStatistics> PropagateCast(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConjunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> &expr_ptr);

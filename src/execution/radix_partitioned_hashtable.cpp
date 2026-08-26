@@ -565,6 +565,7 @@ void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lst
 		const auto new_capacity = MinValue(GroupedAggregateHashTable::GetCapacityForCount(hll_count),
 		                                   RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD);
 		lstate.local_sink_capacity = MaxValue(gstate.config.sink_capacity, new_capacity);
+		gstate.any_abandoned = true;
 		ht.Abandon();
 		ht.Resize(lstate.local_sink_capacity);
 	}
@@ -832,8 +833,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
 		// This only works because we never resize the HT
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
-		ht.Abandon();
 		gstate.any_abandoned = true;
+		ht.Abandon();
 	}
 
 	// Check if we need to repartition
@@ -843,6 +844,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 	if (repartitioned && ht.Count() != 0) {
 		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
+		gstate.any_abandoned = true;
 		ht.Abandon();
 		if (gstate.external) {
 			ht.Resize(lstate.local_sink_capacity);
@@ -858,8 +860,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 			gstate.config.SetRadixBitsToExternal();
 			ht.SetRadixBits(gstate.config.GetRadixBits());
 		}
-		ht.Abandon();
 		gstate.any_abandoned = true;
+		ht.Abandon();
 		if (!lstate.abandoned_data) {
 			lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
 			    BufferManager::GetBufferManager(context.client), gstate.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE,

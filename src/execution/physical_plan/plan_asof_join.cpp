@@ -290,6 +290,35 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	return proj;
 }
 
+static idx_t ValidateAsOfConditions(LogicalComparisonJoin &op, vector<idx_t> &equi_indexes) {
+	equi_indexes.clear();
+	auto asof_idx = op.conditions.size();
+	for (size_t c = 0; c < op.conditions.size(); ++c) {
+		auto &cond = op.conditions[c];
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		switch (cond.GetComparisonType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			equi_indexes.emplace_back(c);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+			D_ASSERT(asof_idx == op.conditions.size());
+			asof_idx = c;
+			break;
+		default:
+			throw InternalException("Invalid ASOF JOIN comparison");
+		}
+	}
+	D_ASSERT(asof_idx < op.conditions.size());
+
+	return asof_idx;
+}
+
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
 	// If we have a predicate and its a "simple" join, then we can just plan a regular join
 	switch (op.join_type) {
@@ -315,29 +344,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	//	Validate
 	vector<idx_t> equi_indexes;
-	auto asof_idx = op.conditions.size();
-	for (size_t c = 0; c < op.conditions.size(); ++c) {
-		auto &cond = op.conditions[c];
-		if (!cond.IsComparison()) {
-			continue;
-		}
-		switch (cond.GetComparisonType()) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			equi_indexes.emplace_back(c);
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_LESSTHAN:
-			D_ASSERT(asof_idx == op.conditions.size());
-			asof_idx = c;
-			break;
-		default:
-			throw InternalException("Invalid ASOF JOIN comparison");
-		}
-	}
-	D_ASSERT(asof_idx < op.conditions.size());
+	(void)ValidateAsOfConditions(op, equi_indexes);
 
 	// If there is a non-comparison predicate, we have to use NLJ.
 	const bool has_predicate = op.HasArbitraryConditions();
@@ -350,8 +357,39 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 				return *result;
 			}
 		}
-		return Make<PhysicalAsOfJoin>(op, left, right);
+
+		//	Check to see if we can leverage partitioning
+
+		//	TODO: HasSingleValuePartitions takes expressions instead of pointers.
+		//	Which is convenient for the other clients, but not for us...
+		vector<unique_ptr<Expression>> lhs_equalities;
+		vector<unique_ptr<Expression>> rhs_equalities;
+		for (auto equi_idx : equi_indexes) {
+			lhs_equalities.emplace_back(op.conditions[equi_idx].GetLHS().Copy());
+			rhs_equalities.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
+		}
+		vector<column_t> lhs_partition_cols;
+		vector<column_t> rhs_partition_cols;
+		if (!HasSingleValuePartitions(context, lhs_equalities, left, lhs_partition_cols) ||
+		    !HasSingleValuePartitions(context, rhs_equalities, right, rhs_partition_cols)) {
+			lhs_partition_cols.clear();
+			rhs_partition_cols.clear();
+		}
+
+		return Make<PhysicalAsOfJoin>(op, left, right, lhs_partition_cols, rhs_partition_cols);
 	}
+
+	return *PlanAsOfInequalityJoin(op, left, right, lhs_cardinality, rhs_cardinality);
+}
+
+optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfInequalityJoin(LogicalComparisonJoin &op,
+                                                                             PhysicalOperator &left,
+                                                                             PhysicalOperator &right,
+                                                                             const idx_t lhs_cardinality,
+                                                                             const idx_t rhs_cardinality) {
+	//	Caller already did this but it is cheap...
+	vector<idx_t> equi_indexes;
+	const auto asof_idx = ValidateAsOfConditions(op, equi_indexes);
 
 	//	Strip extra column from rhs projections
 	auto &right_projection_map = op.right_projection_map;

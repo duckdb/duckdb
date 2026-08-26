@@ -70,6 +70,7 @@ public:
 	virtual_column_map_t GetVirtualColumns() const override;
 
 	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	optional_ptr<CatalogEntry> GetTrigger(CatalogTransaction transaction, const Identifier &name) const override;
 	void ScanTriggers(CatalogTransaction transaction,
 	                  const std::function<void(CatalogEntry &)> &callback) const override;
 	//! Scan all triggers without a transaction (used by checkpoint writer)

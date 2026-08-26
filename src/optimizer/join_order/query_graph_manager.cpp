@@ -620,7 +620,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				throw InternalException("Could not orient operator occurrence %llu in reconstructed join tree",
 				                        descriptor->index);
 			}
-			if (!reconstructed_operators.insert(descriptor->index).second) {
+			if (descriptor->type != JoinOrderOperatorType::CROSS_PRODUCT &&
+			    !reconstructed_operators.insert(descriptor->index).second) {
 				throw InternalException("Operator occurrence %llu was reconstructed more than once", descriptor->index);
 			}
 

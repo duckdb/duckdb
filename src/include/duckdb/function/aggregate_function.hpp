@@ -334,6 +334,9 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	bool single_value_identity = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -375,6 +378,10 @@ public: // Properties
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
 	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
+
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
+	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -825,11 +832,27 @@ public:
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
 public:
 	explicit BoundAggregateFunction(const AggregateFunction &function);
+	explicit BoundAggregateFunction(shared_ptr<const AggregateFunction> function);
 
+	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by ReplaceImplementation and by later mutation of the bound
+	//! function, e.g. statistics propagation swapping in a specialized implementation. For a function bound from an
+	//! AggregateFunctionSet this is the set's own overload, so it compares equal by pointer across binds. Functions
+	//! bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const AggregateFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
@@ -843,6 +866,9 @@ public:
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
 	}
+
+private:
+	shared_ptr<const AggregateFunction> definition;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

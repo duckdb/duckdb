@@ -1,0 +1,80 @@
+# name: test/sql/optimizer/multiple_column_stats_pruning.test
+# description: Use row-group statistics for direct column comparisons
+# group: [optimizer]
+
+statement ok
+CREATE TABLE xy AS
+SELECT CASE WHEN range % 2 = 0 THEN NULL ELSE range END::BIGINT AS i, (range + 200000)::BIGINT AS j
+FROM range(400000);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE i > j;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE i >= j;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE i = j;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE j < i;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE j <= i;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+query I
+SELECT count(*) FROM xy WHERE i > j;
+----
+0
+
+# Multi-column filters survive common-subplan canonicalization alongside regular filters
+statement ok
+PRAGMA explain_output='optimized_only';
+
+query II
+EXPLAIN SELECT count(*) FROM xy WHERE i > j AND i >= 0
+UNION ALL
+SELECT count(*) FROM xy WHERE i > j AND i >= 0;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+statement ok
+PRAGMA explain_output='all';
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM xy WHERE i > j AND i >= 0
+UNION ALL
+SELECT count(*) FROM xy WHERE i > j AND i >= 0;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 4.*
+
+statement ok
+CREATE TABLE partially_matching AS
+SELECT range::BIGINT AS i, 200000::BIGINT AS j
+FROM range(400000);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM partially_matching WHERE i > j;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 4.*
+
+query I
+SELECT count(*) FROM partially_matching WHERE i > j;
+----
+199999

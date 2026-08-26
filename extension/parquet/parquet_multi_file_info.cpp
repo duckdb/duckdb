@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -317,7 +318,9 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 		file_path.emplace_back(path);
 	}
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
-	input.allow_empty = serialization.file_options.allow_empty;
+	// we are restoring an already bound file list rather than globbing user input - it is legitimately empty
+	// when filter pushdown pruned every file away, and rejecting that makes the plan impossible to deserialize
+	input.allow_empty = true;
 
 	auto multi_file_reader = MultiFileReader::Create(function);
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
@@ -531,8 +534,20 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		// no cached metadata - bail
 		return result;
 	}
+	const auto &parquet_options = parquet_data.GetParquetOptions();
+	string encryption_key_hash;
+	optional_ptr<const string> encryption_key_hash_ptr;
 	// first check if all caches are valid and there are no deletes
 	for (auto &cache : cached_metadata) {
+		if (cache.metadata->IsEncrypted() && parquet_options.encryption_config && !encryption_key_hash_ptr) {
+			auto hash_util = context.db->GetMbedTLSUtil(false);
+			encryption_key_hash =
+			    ParquetFileMetadataCache::CreateEncryptionKeyHash(*parquet_options.encryption_config, *hash_util);
+			encryption_key_hash_ptr = encryption_key_hash;
+		}
+		if (!cache.metadata->CanUseMetadataStatistics(parquet_options.encryption_config, encryption_key_hash_ptr)) {
+			return result;
+		}
 		if (cache.has_deletes) {
 			// we have deletes - don't return any partition stats
 			// FIXME: we could return with count approximate
@@ -563,6 +578,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
+	table_function.named_parameters["utf8_validation"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
@@ -585,7 +601,7 @@ unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(Client
 }
 
 bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
-                                           BaseFileReaderOptions &file_options, vector<string> &expected_names,
+                                           BaseFileReaderOptions &file_options, vector<Identifier> &expected_names,
                                            vector<LogicalType> &expected_types) {
 	auto &parquet_options = file_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
@@ -624,6 +640,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identif
 			throw BinderException("Parquet prefetch_strategy cannot be empty!");
 		}
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(values[0]));
+		return true;
+	}
+	if (key == "utf8_validation") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet utf8_validation cannot be empty!");
+		}
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(values[0]));
 		return true;
 	}
 	return false;
@@ -681,6 +704,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	}
 	if (key == "prefetch_strategy") {
 		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(val));
+		return true;
+	}
+	if (key == "utf8_validation") {
+		options.utf8_validation_option = StringColumnReader::GetUtf8ValidationOption(StringValue::Get(val));
 		return true;
 	}
 	return false;
