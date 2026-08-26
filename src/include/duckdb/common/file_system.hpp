@@ -45,6 +45,28 @@ class MemoryMappedFile;
 struct MMapOptions;
 class MultiFileList;
 
+enum class CreateDirectoryMode : uint8_t {
+	//! Create the target directory only; its parent directory must already exist.
+	SINGLE,
+	//! Create the target directory and any missing parent directories.
+	RECURSIVE
+};
+
+enum class RemoveDirectoryMode : uint8_t {
+	//! Remove the target only; return false if it is missing or non-empty and never remove its contents.
+	SINGLE,
+	//! Remove the target directory and all files and directories contained in it.
+	RECURSIVE
+};
+
+struct CreateDirectoryOptions {
+	CreateDirectoryMode mode = CreateDirectoryMode::SINGLE;
+};
+
+struct RemoveDirectoryOptions {
+	RemoveDirectoryMode mode = RemoveDirectoryMode::SINGLE;
+};
+
 enum class FileType {
 	//! Regular file
 	FILE_TYPE_REGULAR,
@@ -105,6 +127,8 @@ public:
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
+	//! Abandon an incomplete write without publishing any buffered or staged data.
+	DUCKDB_API void AbortWrite();
 	DUCKDB_API string ReadLine();
 	DUCKDB_API string ReadLine(QueryContext context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
@@ -211,10 +235,16 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Create one directory or a directory tree. Returns whether this call is known to have created the target.
+	DUCKDB_API virtual bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove an empty directory or a directory tree. Returns whether the target was removed.
+	DUCKDB_API virtual bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                                optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
@@ -229,7 +259,7 @@ public:
 	                                 optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
 	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Check if path is pipe
+	//! Check if path is a pipe or character device
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
@@ -239,6 +269,8 @@ public:
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
+	//! Abandon an incomplete write represented by this file handle.
+	DUCKDB_API virtual void AbortFileWrite(FileHandle &handle);
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory

@@ -1716,6 +1716,22 @@ void AsOfLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChunk 
 	}
 }
 
+ProgressData PhysicalAsOfJoin::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+	auto &gsource = gsource_p.Cast<AsOfGlobalSourceState>();
+	const auto count = gsource.total_tasks;
+
+	const auto returned = gsource.finished.load();
+
+	ProgressData res;
+	if (count) {
+		res.done = double(returned);
+		res.total = double(count);
+	} else {
+		res.SetInvalid();
+	}
+	return res;
+}
+
 SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                    OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();

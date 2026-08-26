@@ -16,6 +16,7 @@ set(TEST_API_OBJECTS
     test_aggregate_state_bind_data.cpp
     test_config.cpp
     test_connection_secrets.cpp
+    test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
