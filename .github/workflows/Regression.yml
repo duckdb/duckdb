@@ -75,7 +75,7 @@ jobs:
           FORCE_WARN_UNUSED: 1
           DISABLE_SANITIZER: 1
         with:
-          build: python3 scripts/ci/retry.py -- make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=$(git rev-parse HEAD) release
+          build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-release-build
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -124,7 +124,7 @@ jobs:
           FORCE_WARN_UNUSED: 1
           DISABLE_SANITIZER: 1
         with:
-          build: python3 scripts/ci/retry.py -- make CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=$(git rev-parse HEAD) release
+          build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
           upload-name: linux-base-build
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
