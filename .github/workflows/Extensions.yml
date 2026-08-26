@@ -62,18 +62,22 @@ jobs:
       groups: |
         core:
           config: duckdb/.github/config/core.cmake
+          extra_toolchains: unixodbc;parser_tools
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
         cloud:
           config: duckdb/.github/config/cloud.cmake
+          extra_toolchains: unixodbc;parser_tools
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
         search:
           config: duckdb/.github/config/search.cmake
+          extra_toolchains: unixodbc;parser_tools
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
         scanner:
           config: duckdb/.github/config/scanner.cmake
+          extra_toolchains: unixodbc;parser_tools
           opt_in_archs: '${{ inputs.opt_in_archs }}'
           toolchain: main
         rust:
