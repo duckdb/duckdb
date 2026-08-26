@@ -1,4 +1,4 @@
-commit 18f8cdfdafef98e9b6648287dd0b78fccb084117
+commit f3020c0642e084d1e5000dce113d629790b56991
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -39,29 +39,8 @@ index 38a023d..a986791 100644
  	GetRequestInfo get_request(
  	    url, request_headers, http_params,
  	    [&](const HTTPResponse &response) { return context.HandleResponse(response); },
-diff --git a/src/http/http_state.cpp b/src/http/http_state.cpp
-index 3b4f97c..29ea242 100644
---- a/src/http/http_state.cpp
-+++ b/src/http/http_state.cpp
-@@ -93,12 +93,14 @@ void CachedFileDownload::Reset() {
- 	size = 0;
- }
- 
--unique_ptr<CachedFileHandle> CachedFileDownload::Finalize() {
-+unique_ptr<CachedFileHandle> CachedFileDownload::Finalize(bool can_cache) {
- 	annotated_lock_guard<annotated_mutex> guard(file->lock);
- 	D_ASSERT(file->downloading);
- 	D_ASSERT(!file->cached_data);
- 	auto cached_data = make_shared_ptr<CachedFileData>(std::move(data), size);
--	file->cached_data = cached_data;
-+	if (can_cache) {
-+		file->cached_data = cached_data;
-+	}
- 	file->downloading = false;
- 	active = false;
- 	file->download_complete.notify_all();
 diff --git a/src/http/httpfs.cpp b/src/http/httpfs.cpp
-index 2efd0fa..07f66fc 100644
+index 2efd0fa..7fc7087 100644
 --- a/src/http/httpfs.cpp
 +++ b/src/http/httpfs.cpp
 @@ -8,9 +8,14 @@
@@ -102,16 +81,16 @@ index 2efd0fa..07f66fc 100644
  bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
  	try {
  		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
-@@ -633,7 +654,7 @@ unique_ptr<CachedFileHandle> HTTPFileSystem::FullDownload(HTTPFileHandle &hfh, c
+@@ -633,6 +654,8 @@ unique_ptr<CachedFileHandle> HTTPFileSystem::FullDownload(HTTPFileHandle &hfh, c
  		if (full_download_result->status != HTTPStatusCode::OK_200) {
  			throw GetHTTPError(hfh, *full_download_result, RequestType::GET_REQUEST, hfh.path);
  		}
--		return download->Finalize();
-+		return download->Finalize(hfh.CanReuseCachedData());
++		// Publish unconditionally: this buffer is query-scoped and shared only among identical requests,
++		// so HTTP cache policy (no-store/Vary/freshness) does not restrict it.
+ 		return download->Finalize();
  	}
  }
- 
-@@ -648,6 +669,196 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
+@@ -648,6 +671,196 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp
  	return true;
  }
  
@@ -308,7 +287,7 @@ index 2efd0fa..07f66fc 100644
  struct HTTPFileInfoParser {
  public:
  	static optional_idx TryParseContentRange(const HTTPHeaders &headers) {
-@@ -701,8 +912,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
+@@ -701,8 +914,11 @@ bool HTTPFileHandle::TryLoadFileInfoWithoutRequest() {
  	return false;
  }
  
@@ -321,7 +300,7 @@ index 2efd0fa..07f66fc 100644
  	if (response->status == HTTPStatusCode::OK_200) {
  		return response;
  	}
-@@ -716,14 +930,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
+@@ -716,14 +932,17 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RequestFileInfo(HTTPFileSystem &hfs) {
  	}
  	if (flags.OpenForReading() && response->status != HTTPStatusCode::NotFound_404 &&
  	    response->status != HTTPStatusCode::MovedPermanently_301) {
@@ -341,7 +320,7 @@ index 2efd0fa..07f66fc 100644
  	if (response->status == HTTPStatusCode::PartialContent_206 || response->status == HTTPStatusCode::Accepted_202 ||
  	    response->status == HTTPStatusCode::OK_200) {
  		return response;
-@@ -735,7 +952,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
+@@ -735,7 +954,7 @@ unique_ptr<HTTPResponse> HTTPFileHandle::RetryFileInfoWithRange(HTTPFileSystem &
  	throw hfs.GetHTTPError(*this, *response, RequestType::GET_REQUEST, path);
  }
  
@@ -350,7 +329,7 @@ index 2efd0fa..07f66fc 100644
  	length = 0;
  	auto content_size = HTTPFileInfoParser::TryParseContentRange(response.headers);
  	if (!content_size.IsValid()) {
-@@ -750,6 +967,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
+@@ -750,6 +969,7 @@ void HTTPFileHandle::ApplyFileInfo(const HTTPResponse &response) {
  	if (response.headers.HasHeader("ETag")) {
  		etag = response.headers.GetHeaderValue("ETag");
  	}
@@ -358,7 +337,7 @@ index 2efd0fa..07f66fc 100644
  	if (request_session->Capture().snapshot->Params().s3_version_id_pinning &&
  	    response.headers.HasHeader("x-amz-version-id")) {
  		SetVersionId(response.headers.GetHeaderValue("x-amz-version-id"));
-@@ -769,9 +987,11 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -769,9 +989,11 @@ void HTTPFileHandle::LoadFileInfo() {
  		return;
  	}
  	auto &hfs = file_system.Cast<HTTPFileSystem>();
@@ -372,7 +351,7 @@ index 2efd0fa..07f66fc 100644
  	}
  }
  
-@@ -791,6 +1011,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
+@@ -791,6 +1013,7 @@ void HTTPFileHandle::InitializeFromCacheEntry(const HTTPMetadataCacheEntry &cach
  	last_modified = cache_entry.last_modified;
  	length = cache_entry.length;
  	etag = cache_entry.etag;
@@ -380,7 +359,7 @@ index 2efd0fa..07f66fc 100644
  	SetVersionId(cache_entry.version_id);
  
  	// TODO: handle properties
-@@ -801,6 +1022,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
+@@ -801,6 +1024,7 @@ HTTPMetadataCacheEntry HTTPFileHandle::GetCacheEntry() const {
  	result.length = length;
  	result.last_modified = last_modified;
  	result.etag = etag;
@@ -388,7 +367,7 @@ index 2efd0fa..07f66fc 100644
  	result.version_id = GetVersionId();
  	// TODO: handle properties
  	return result;
-@@ -868,7 +1090,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
+@@ -868,7 +1092,7 @@ void HTTPFileHandle::InitializeFileInfo(HTTPFileSystem &hfs, optional_ptr<HTTPMe
  		if (should_full_download) {
  			length = hfs.FullDownload(*this, GetReadConfig(), should_write_cache)->GetSize();
  		}
@@ -473,19 +452,6 @@ index 1c6e500..ab35bcd 100644
  		ret_val = lookup->second;
  		return true;
  	}
-diff --git a/src/include/http/http_state.hpp b/src/include/http/http_state.hpp
-index 8738e94..ba9f40f 100644
---- a/src/include/http/http_state.hpp
-+++ b/src/include/http/http_state.hpp
-@@ -172,7 +172,7 @@ public:
- 	//! Reset bytes written by a prior request attempt
- 	void Reset();
- 	//! Indicate the file is fully downloaded and safe for parallel reading
--	unique_ptr<CachedFileHandle> Finalize();
-+	unique_ptr<CachedFileHandle> Finalize(bool can_cache);
- 
- private:
- 	void ReserveInternal(idx_t capacity);
 diff --git a/src/include/http/httpfs.hpp b/src/include/http/httpfs.hpp
 index 6d19b18..3b0d066 100644
 --- a/src/include/http/httpfs.hpp
