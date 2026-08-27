@@ -9,7 +9,6 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
