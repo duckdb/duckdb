@@ -217,7 +217,8 @@ static idx_t ValidityEntryCount(idx_t count) {
 	return count / ValidityMask::BITS_PER_VALUE + (count % ValidityMask::BITS_PER_VALUE != 0);
 }
 
-static const validity_t *ValidityScanData(const CompressionSegmentReader &reader, idx_t start, idx_t scan_count) {
+static unsafe_array_ptr<const validity_t> ValidityScanData(const CompressionSegmentReader &reader, idx_t start,
+                                                           idx_t scan_count) {
 	D_ASSERT(scan_count > 0);
 	auto entry_start = start / ValidityMask::BITS_PER_VALUE;
 	auto entry_end = (start + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
@@ -234,10 +235,11 @@ unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, Colum
 // Scan base data
 //===--------------------------------------------------------------------===//
 
-void ValidityUncompressed::UnalignedScan(const validity_t *input, idx_t input_size, idx_t input_start,
+void ValidityUncompressed::UnalignedScan(unsafe_array_ptr<const validity_t> input, idx_t input_size, idx_t input_start,
                                          ValidityMask &result_mask, idx_t result_offset, idx_t scan_count) {
 	D_ASSERT(input_start < input_size);
-	auto input_data = input;
+	D_ASSERT(scan_count <= input_size - input_start);
+	D_ASSERT(ValidityEntryCount(input_size) <= input.size());
 
 #ifdef DEBUG
 	// save boundary entries to verify we don't corrupt surrounding bits later.
@@ -267,7 +269,7 @@ void ValidityUncompressed::UnalignedScan(const validity_t *input, idx_t input_si
 	// the bitwise ops we use below don't work if the vector size is too small
 	for (idx_t i = 0; i < scan_count; i++) {
 		idx_t source_idx = input_start + i;
-		if (!ValidityMask::RowIsValid(input_data[source_idx / ValidityMask::BITS_PER_VALUE],
+		if (!ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
 		                              source_idx % ValidityMask::BITS_PER_VALUE)) {
 			if (result_mask.CannotHaveNull()) {
 				result_mask.Initialize();
@@ -323,7 +325,7 @@ void ValidityUncompressed::UnalignedScan(const validity_t *input, idx_t input_si
 	// now start the bit games
 	idx_t pos = 0;
 	while (pos < scan_count) {
-		validity_t input_mask = input_data[input_entry];
+		validity_t input_mask = input[input_entry];
 		idx_t bits_left = scan_count - pos;
 
 		// these are bits left within the current entries (possibly extra than what we need).
@@ -423,7 +425,7 @@ void ValidityUncompressed::UnalignedScan(const validity_t *input, idx_t input_si
 	for (idx_t i = 0; i < scan_count; i++) {
 		bool original_valid = debug_original_result.RowIsValid(i);
 		idx_t source_idx = input_start + i;
-		bool input_valid = ValidityMask::RowIsValid(input_data[source_idx / ValidityMask::BITS_PER_VALUE],
+		bool input_valid = ValidityMask::RowIsValid(input[source_idx / ValidityMask::BITS_PER_VALUE],
 		                                            source_idx % ValidityMask::BITS_PER_VALUE);
 		bool result_valid = result_mask.RowIsValid(result_offset + i);
 		D_ASSERT(result_valid == (original_valid && input_valid));
@@ -449,8 +451,8 @@ void ValidityUncompressed::UnalignedScan(const validity_t *input, idx_t input_si
 #endif
 }
 
-void ValidityUncompressed::AlignedScan(const validity_t *input, idx_t input_start, ValidityMask &result_mask,
-                                       idx_t scan_count) {
+void ValidityUncompressed::AlignedScan(unsafe_array_ptr<const validity_t> input, idx_t input_start,
+                                       ValidityMask &result_mask, idx_t scan_count) {
 	D_ASSERT(input_start % ValidityMask::BITS_PER_VALUE == 0);
 
 	// aligned scan: no need to do anything fancy
@@ -459,6 +461,8 @@ void ValidityUncompressed::AlignedScan(const validity_t *input, idx_t input_star
 	auto result_data = result_mask.GetData();
 	idx_t start_offset = input_start / ValidityMask::BITS_PER_VALUE;
 	idx_t entry_scan_count = ValidityEntryCount(scan_count);
+	D_ASSERT(start_offset <= input.size());
+	D_ASSERT(entry_scan_count <= input.size() - start_offset);
 	for (idx_t i = 0; i < entry_scan_count; i++) {
 		auto input_entry = input[start_offset + i];
 		if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {

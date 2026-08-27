@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -594,7 +595,7 @@ private:
 
 struct BitsetContainerScanState : public ContainerScanState {
 public:
-	BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset);
+	BitsetContainerScanState(idx_t container_index, idx_t container_size, validity_t *bitset);
 
 public:
 	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override;
@@ -602,7 +603,7 @@ public:
 	void Verify() const override;
 
 public:
-	validity_t *bitset;
+	unsafe_array_ptr<const validity_t> bitset;
 };
 
 struct RoaringScanState : public SegmentScanState {
