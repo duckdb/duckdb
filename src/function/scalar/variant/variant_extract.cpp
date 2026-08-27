@@ -61,22 +61,17 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
 	const auto &path = *arguments[1];
-	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
-		// Accept any integer-ish literal by casting it to UINTEGER explicitly
-		if (path.GetReturnType().IsIntegral()) {
-			arguments[1] = BoundCastExpression::AddCastToType(input.GetClientContext(), std::move(arguments[1]), LogicalType::UINTEGER);
-		}
-		else {
-			throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-								  path.GetReturnType().ToString());
-		}
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER &&
+	    !path.GetReturnType().IsIntegral()) {
+		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
+		                      path.GetReturnType().ToString());
 	}
 
 	auto constant_arg = input.GetNonNullConstant(1);
 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<string>());
-	} else if (constant_arg.type().id() == LogicalTypeId::UINTEGER) {
+	} else if (constant_arg.type().IsIntegral()) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<uint32_t>());
 	} else {
 		throw InternalException("Constant-folded argument was not of type UINTEGER or VARCHAR");
