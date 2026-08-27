@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
 #include <exception>
@@ -262,6 +263,28 @@ struct PostRequestInfo : public BaseRequest {
 	bool send_post_as_get_request = false;
 };
 
+//! Whether the caller of a request can be handed a result that is not ready yet
+enum class HTTPExecutionMode : uint8_t {
+	//! The caller needs the response before the call returns
+	BLOCKING,
+	//! The caller can take PENDING and be resumed once the completion fires
+	DEFERRABLE
+};
+
+//! Whether a request completed before returning, or will complete later
+enum class HTTPRequestState : uint8_t {
+	//! The completion has already been invoked
+	COMPLETED,
+	//! The completion will be invoked later, only ever returned for DEFERRABLE
+	PENDING
+};
+
+//! Invoked exactly once when a request completes, unless the call that started it threw.
+//! [error] is set when the request failed after it was handed off. Note that for a GET carrying a
+//! content_handler the body has already been streamed through it, so [response] carries the status
+//! and headers rather than the payload.
+using HTTPResponseCallback = std::function<void(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error)>;
+
 class HTTPClient {
 public:
 	HTTPClient() = default;
@@ -279,6 +302,15 @@ public:
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
+
+	//! Perform [request], delivering the result through [on_complete] rather than returning it.
+	//! Returns PENDING only when [mode] is DEFERRABLE and the request was handed off; BLOCKING always
+	//! returns COMPLETED. One entry point covers every verb because Request already dispatches on the
+	//! request type, so a backend that is only asynchronous for some verbs can defer the rest here.
+	//! The default performs the existing synchronous request, so a backend without an asynchronous
+	//! transport needs no change.
+	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode,
+	                                         HTTPResponseCallback on_complete);
 
 	const string &GetBaseUrl() const {
 		return base_url;
@@ -364,6 +396,11 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
+	//! SendRequest, delivering the result through [on_complete] instead of returning it.
+	//! The default delegates to SendRequest above, so an implementation that only overrides that one
+	//! keeps working unchanged and stays in charge of its own retry and logging.
+	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
+	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides

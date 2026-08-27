@@ -163,6 +163,20 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 	return response.ShouldRetry();
 }
 
+HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) {
+	// default: this client has no asynchronous transport, so the request is already done when it returns
+	on_complete(Request(request), nullptr);
+	return HTTPRequestState::COMPLETED;
+}
+
+HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &client, HTTPExecutionMode mode,
+                                HTTPResponseCallback on_complete) {
+	// default: go through SendRequest, so an implementation that overrides only that one keeps its
+	// retry, timing and logging behaviour
+	on_complete(SendRequest(request, client), nullptr);
+	return HTTPRequestState::COMPLETED;
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
 	return SendRequest(request, client);
