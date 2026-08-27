@@ -2,6 +2,7 @@ add_library_unity(
   test_optimizer
   OBJECT
   aggregate_rewrite.cpp
+  bound_expression_sql_export.cpp
   build_probe_side_optimizer.cpp
   column_binding_rewrite.cpp
   common_subplan_nonserializable.cpp
