@@ -551,7 +551,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
 	auto row_index = NumericCast<idx_t>(row_id);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "validity segment");
 	auto entry_offset = row_index / ValidityMask::BITS_PER_VALUE * sizeof(validity_t);
 	auto entry = reader.Get<validity_t>(entry_offset);

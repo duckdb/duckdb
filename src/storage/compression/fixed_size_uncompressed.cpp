@@ -193,7 +193,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
                        idx_t result_idx) {
 	auto row_index = NumericCast<idx_t>(row_id);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "fixed-size segment");
 
 	// first fetch the data from the base table
