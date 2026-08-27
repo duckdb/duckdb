@@ -96,6 +96,31 @@ TEST_CASE("Grammar choices support cursor placement", "[api][grammar_extension]"
 	REQUIRE(choices == vector<string> {"first", "second", "third", "last"});
 }
 
+TEST_CASE("Grammar choices can be replaced", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'second' / 'last'");
+	grammar.ReplaceChoice("CursorRule", "'replacement'", [](const PEGExpression &expression) {
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "second";
+	});
+
+	auto rule = grammar.GetRule("CursorRule");
+	REQUIRE(rule);
+	REQUIRE(rule->recipe.expression.type == PEGExpression::Type::CHOICE);
+	REQUIRE(rule->recipe.expression.children.size() == 3);
+	REQUIRE(rule->recipe.expression.children[0].text.GetString() == "first");
+	REQUIRE(rule->recipe.expression.children[1].text.GetString() == "replacement");
+	REQUIRE(rule->recipe.expression.children[2].text.GetString() == "last");
+
+	REQUIRE_THROWS(grammar.ReplaceChoice("CursorRule", "'replacement'", [](const PEGExpression &expression) {
+		return expression.type == PEGExpression::Type::LITERAL && expression.text.GetString() == "missing";
+	}));
+
+	auto non_choice_grammar = ParsedGrammar::Parse("NonChoiceRule <- 'only'");
+	REQUIRE_THROWS(
+	    non_choice_grammar.ReplaceChoice("NonChoiceRule", "'replacement'", [](const PEGExpression &expression) {
+		    return expression.type == PEGExpression::Type::LITERAL;
+	    }));
+}
+
 TEST_CASE("Grammar choices can be removed", "[api][grammar_extension]") {
 	auto grammar = ParsedGrammar::Parse("CursorRule <- 'first' / 'second' / 'last'");
 	grammar.RemoveChoice("CursorRule", [](const PEGExpression &expression) {
