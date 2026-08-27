@@ -1,5 +1,7 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
+#include "duckdb/parallel/task_scheduler.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
@@ -289,15 +291,19 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 			to_be_loaded.insert(make_pair(handle->BlockId(), handle));
 		}
 	}
-	// each run is read with a single pread into one intermediate buffer, cap its size
+	// each run is read with a single pread into one staging buffer, one can be in flight per I/O thread
 	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
+	auto &scheduler = TaskScheduler::GetScheduler(db);
+	const idx_t async_threads = scheduler.NumberOfAsyncThreads();
+	const idx_t io_threads = MaxValue<idx_t>(async_threads > 0 ? async_threads : scheduler.NumberOfThreads(), 1);
+	const idx_t max_run_size = MinValue<idx_t>(MAX_PREFETCH_RUN_SIZE, GetMaxMemory() / (8 * io_threads));
 	vector<PrefetchRun> plan;
 	for (auto &entry : to_be_loaded) {
 		bool new_run = plan.empty() ||
 		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
 		if (!new_run) {
 			auto run_size = (plan.back().handles.size() + 1) * entry.second->GetBlockAllocSize();
-			new_run = run_size > MAX_PREFETCH_RUN_SIZE;
+			new_run = run_size > max_run_size;
 		}
 		if (new_run) {
 			// the block is not adjacent to the previous block or the run is full, start a new run

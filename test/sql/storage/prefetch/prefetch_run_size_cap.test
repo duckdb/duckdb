@@ -51,3 +51,28 @@ true
 
 statement ok
 CALL truncate_duckdb_logs()
+
+# a memory limit below the run cap shrinks the runs, so the staging buffers of the I/O threads fit in memory
+statement ok
+SET memory_limit='48MB'
+
+query I
+SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+query I
+SELECT max(task_count) > 4 FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+true
+
+statement ok
+SET read_ahead_depth=-1
+
+query I
+SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()

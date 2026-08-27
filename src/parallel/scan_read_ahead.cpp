@@ -111,7 +111,7 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, optional
 		return nullptr;
 	}
 	if (configured_depth < 0 && auto_depth.IsValid()) {
-		return make_uniq<ScanReadAhead>(context, auto_depth.GetIndex(), nullptr);
+		return make_uniq<ScanReadAhead>(context, auto_depth.GetIndex(), make_uniq<ManagedAsyncMemoryGovernor>(context));
 	}
 	if (configured_depth < 0) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
