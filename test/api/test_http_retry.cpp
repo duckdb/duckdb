@@ -176,3 +176,105 @@ TEST_CASE("HTTP retry policy throws for a non-try request", "[api]") {
 	auto attempt = ResponseAttempt(HTTPStatusCode::InternalServerError_500);
 	REQUIRE_THROWS(state.Finalize(fixture.request, attempt));
 }
+
+namespace {
+
+//! The verb boilerplate both test clients need, none of which is what is under test
+class StubClient : public HTTPClient {
+public:
+	void Initialize(HTTPParams &) override {
+	}
+	unique_ptr<HTTPResponse> Get(GetRequestInfo &) override {
+		auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+		response->success = true;
+		return response;
+	}
+	unique_ptr<HTTPResponse> Put(PutRequestInfo &) override {
+		throw NotImplementedException("PUT");
+	}
+	unique_ptr<HTTPResponse> Head(HeadRequestInfo &) override {
+		throw NotImplementedException("HEAD");
+	}
+	unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &) override {
+		throw NotImplementedException("DELETE");
+	}
+	unique_ptr<HTTPResponse> Post(PostRequestInfo &) override {
+		throw NotImplementedException("POST");
+	}
+	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &) override {
+		throw NotImplementedException("OPTIONS");
+	}
+
+};
+
+//! A client with no asynchronous transport, i.e. every backend that exists today. It does not
+//! override Send, so it inherits the synchronous default.
+class SynchronousClient : public StubClient {};
+
+//! A client that can hand a request off instead of answering it, so a test can exercise both modes
+class DeferringClient : public StubClient {
+public:
+	HTTPRequestState Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) override {
+		if (mode == HTTPExecutionMode::BLOCKING) {
+			return HTTPClient::Send(request, mode, std::move(on_complete));
+		}
+		pending = std::move(on_complete);
+		return HTTPRequestState::PENDING;
+	}
+
+	//! Deliver the deferred response, standing in for a transport completing out of band
+	void Complete() {
+		auto response = make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
+		response->success = true;
+		auto callback = std::move(pending);
+		pending = nullptr;
+		callback(std::move(response), nullptr);
+	}
+
+private:
+	HTTPResponseCallback pending;
+};
+
+} // namespace
+
+TEST_CASE("HTTP client without an async transport completes inline", "[api]") {
+	RetryFixture fixture;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, fixture.params, nullptr, nullptr);
+	SynchronousClient client;
+
+	idx_t completions = 0;
+	auto state = client.Send(request, HTTPExecutionMode::DEFERRABLE,
+	                         [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+		                         completions++;
+		                         REQUIRE(response);
+		                         REQUIRE(!error);
+	                         });
+	// the default inherits the synchronous path, so even DEFERRABLE finishes before returning
+	REQUIRE(state == HTTPRequestState::COMPLETED);
+	REQUIRE(completions == 1);
+}
+
+TEST_CASE("HTTP client defers a request only when the caller allows it", "[api]") {
+	RetryFixture fixture;
+	HTTPHeaders headers;
+	GetRequestInfo request("http://example.com/file", headers, fixture.params, nullptr, nullptr);
+	DeferringClient client;
+
+	idx_t completions = 0;
+	auto on_complete = [&](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+		completions++;
+		REQUIRE(response);
+		REQUIRE(!error);
+	};
+
+	// BLOCKING must never be handed a result that is not ready
+	REQUIRE(client.Send(request, HTTPExecutionMode::BLOCKING, on_complete) == HTTPRequestState::COMPLETED);
+	REQUIRE(completions == 1);
+
+	// DEFERRABLE lets it hand the request off, and the completion arrives later
+	REQUIRE(client.Send(request, HTTPExecutionMode::DEFERRABLE, on_complete) == HTTPRequestState::PENDING);
+	REQUIRE(completions == 1);
+	client.Complete();
+	REQUIRE(completions == 2);
+}
