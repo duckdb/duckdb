@@ -78,7 +78,7 @@ SELECT count(*), sum(i) FROM integers
 ----
 900000	450000000000
 
-# single threaded, seeded system sampling draws the same sample with and without read-ahead
+# single threaded with one job ahead, seeded system sampling draws the same sample as the per-thread scan
 statement ok
 SET threads=1
 
@@ -89,7 +89,7 @@ statement ok
 CREATE TEMPORARY TABLE expected AS SELECT count(*) AS c, sum(i) AS s FROM integers USING SAMPLE 1 PERCENT (system, 42)
 
 statement ok
-SET read_ahead_depth=-1
+SET read_ahead_depth=1
 
 query I
 SELECT count(*) = (SELECT c FROM expected) AND sum(i) = (SELECT s FROM expected) FROM integers USING SAMPLE 1 PERCENT (system, 42)

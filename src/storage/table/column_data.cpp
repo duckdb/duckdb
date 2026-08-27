@@ -446,16 +446,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 	                      ? state.child_states[0].current
 	                      : state.current;
-	FilterPropagateResult prune_result;
-	{
-		lock_guard<mutex> l(stats_lock);
-		auto &segment_stats = checked_segment->GetNode().GetStatsMutable();
-		auto context = state.context.GetClientContext();
-		prune_result =
-		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
-		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
+	auto prune_result = CheckSegmentStatistics(state.context.GetClientContext(), *checked_segment, expr_filter);
+	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto update_stats = GetUpdateStatistics();
 	if (!update_stats) {
@@ -472,10 +465,18 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
+                                                         SegmentNode<ColumnSegment> &segment,
+                                                         ExpressionFilter &expr_filter) {
+	lock_guard<mutex> l(stats_lock);
+	auto &segment_stats = segment.GetNode().GetStatsMutable();
+	return context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
+}
+
 idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row,
                                  TableFilter &filter) {
-	if (!data.GetRootSegment()) {
-		// virtual columns and columns that keep their data in child columns have no segment zonemaps
+	if (!data.GetRootSegment() || IsDirectNullCheckFilter(filter)) {
+		// columns without segments of their own have no zonemaps, null checks are judged on the validity child
 		return end_row;
 	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::ZonemapScanEnd");
@@ -496,13 +497,7 @@ idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t star
 			break;
 		}
 		const idx_t segment_end = MinValue<idx_t>(segment_start + segment->GetNode().count, end_row);
-		FilterPropagateResult prune_result;
-		{
-			lock_guard<mutex> l(stats_lock);
-			auto &segment_stats = segment->GetNode().GetStatsMutable();
-			prune_result = context ? expr_filter.CheckStatistics(*context, segment_stats)
-			                       : expr_filter.CheckStatistics(segment_stats);
-		}
+		const auto prune_result = CheckSegmentStatistics(context, *segment, expr_filter);
 		const bool straddles_vector = segment_end < end_row && segment_end % STANDARD_VECTOR_SIZE != 0;
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE || straddles_vector) {
 			scan_end = AlignValue<idx_t, STANDARD_VECTOR_SIZE>(segment_end);

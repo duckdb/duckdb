@@ -103,7 +103,7 @@ ScanReadAhead::~ScanReadAhead() {
 	executor->CancelAndDrain();
 }
 
-unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, optional_idx auto_depth) {
+unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context) {
 	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
 		return nullptr;
@@ -111,9 +111,6 @@ unique_ptr<ScanReadAhead> ScanReadAhead::Create(ClientContext &context, optional
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	if (configured_depth == 0) {
 		return nullptr;
-	}
-	if (configured_depth < 0 && auto_depth.IsValid()) {
-		return make_uniq<ScanReadAhead>(context, auto_depth.GetIndex(), make_uniq<ManagedAsyncMemoryGovernor>(context));
 	}
 	if (configured_depth < 0) {
 		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead

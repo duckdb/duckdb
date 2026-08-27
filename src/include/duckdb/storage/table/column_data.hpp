@@ -22,6 +22,7 @@
 
 namespace duckdb {
 class ColumnData;
+class ExpressionFilter;
 class ColumnSegment;
 class DatabaseInstance;
 class PartialBlockManager;
@@ -261,6 +262,9 @@ protected:
 	idx_t GetVectorCount(idx_t vector_index) const;
 
 	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	//! Checks the filter against the statistics of one segment
+	FilterPropagateResult CheckSegmentStatistics(optional_ptr<ClientContext> context,
+	                                             SegmentNode<ColumnSegment> &segment, ExpressionFilter &expr_filter);
 	FilterPropagateResult CheckValidityZonemap(ColumnScanState &state, TableFilter &filter,
 	                                           optional_ptr<SegmentNode<ColumnSegment>> &checked_segment,
 	                                           ColumnData &validity_column);

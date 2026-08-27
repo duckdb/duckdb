@@ -291,19 +291,25 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 			to_be_loaded.insert(make_pair(handle->BlockId(), handle));
 		}
 	}
+	vector<PrefetchRun> plan;
+	if (to_be_loaded.empty()) {
+		return plan;
+	}
 	// each run is read with a single pread into one staging buffer, one can be in flight per I/O thread
 	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
+	static constexpr idx_t MIN_PREFETCH_RUN_BLOCKS = 4;
 	auto &scheduler = TaskScheduler::GetScheduler(db);
 	const idx_t async_threads = scheduler.NumberOfAsyncThreads();
 	const idx_t io_threads = MaxValue<idx_t>(async_threads > 0 ? async_threads : scheduler.NumberOfThreads(), 1);
-	const idx_t max_run_size = MinValue<idx_t>(MAX_PREFETCH_RUN_SIZE, GetMaxMemory() / (8 * io_threads));
-	vector<PrefetchRun> plan;
+	const idx_t block_size = to_be_loaded.begin()->second->GetBlockAllocSize();
+	const idx_t max_run_size =
+	    MaxValue<idx_t>(MinValue<idx_t>(MAX_PREFETCH_RUN_SIZE, GetMaxMemory() / (8 * io_threads)),
+	                    MIN_PREFETCH_RUN_BLOCKS * block_size);
 	for (auto it = to_be_loaded.begin(); it != to_be_loaded.end(); ++it) {
 		auto &entry = *it;
 		bool new_run = plan.empty() ||
 		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
 		if (!new_run) {
-			const auto block_size = entry.second->GetBlockAllocSize();
 			const auto run_size = plan.back().handles.size() * block_size;
 			auto next = std::next(it);
 			// a lone trailing block is not worth a run of its own, let a run within the cap grow by it instead

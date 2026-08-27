@@ -14,7 +14,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
@@ -136,7 +135,7 @@ public:
 
 	//! Create the read-ahead driver from the read_ahead_depth setting, returns null when read-ahead is disabled.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
-	static unique_ptr<ScanReadAhead> Create(ClientContext &context, optional_idx auto_depth = optional_idx());
+	static unique_ptr<ScanReadAhead> Create(ClientContext &context);
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.

@@ -33,7 +33,6 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
@@ -59,8 +58,7 @@ static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context
 	if (!storage.GetTableIOManager().GetBlockManagerForRowData().Prefetch()) {
 		return nullptr;
 	}
-	// automatic mode follows the number of threads, jobs hold buffer pool memory rather than a reservation
-	return ScanReadAhead::Create(context, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	return ScanReadAhead::Create(context);
 }
 
 struct TableScanLocalState : public LocalTableFunctionState {

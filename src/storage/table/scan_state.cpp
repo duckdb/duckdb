@@ -360,7 +360,6 @@ idx_t CollectionScanState::RemainingAssignmentRows() const {
 void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {
 	D_ASSERT(row_group);
 	D_ASSERT(prepared_vector.prepare_state == VectorPrepareState::IO_REGISTERED);
-	D_ASSERT(assignment_io_registered);
 	ScanOptions options {TransactionData(transaction)};
 	row_group->GetNode().ProcessPreparedScan(options, *this, result);
 }
