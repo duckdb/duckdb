@@ -27,6 +27,10 @@ on:
         type: string
         required: false
         default: ''
+      allow_failure_archs:
+        type: string
+        required: false
+        default: ''
       runners:
         type: string
         required: true
@@ -188,13 +192,16 @@ jobs:
       ci_tools_version: main
       exclude_archs: ${{ matrix.exclude_archs }}
       opt_in_archs: ${{ matrix.opt_in_archs }}
+      allow_failure_archs: ${{ inputs.allow_failure_archs }}
       extra_toolchains: ${{ matrix.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests }}
       save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
       extensions_test_selection: 'complete'
-      extra_extension_config: ${{ matrix.extension_config }}
+      extra_extension_config: |
+        set(DUCKDB_OPTIMIZATION_PROFILE EXTENSION)
+        ${{ matrix.extension_config }}
       runners: ${{ inputs.runners }}
 
   deploy-repository:

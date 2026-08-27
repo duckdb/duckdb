@@ -7,7 +7,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 namespace duckdb {
 
@@ -150,7 +150,7 @@ unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &st
 		D_ASSERT(child_stats.type == child_type);
 		if (index.GetType() != child_type) {
 			//! FIXME: support try_cast
-			return StatisticsPropagator::TryPropagateCast(child_stats, child_type, index.GetType());
+			return CastStatistics::TryPropagate(child_stats, child_type, index.GetType());
 		} else {
 			return child_stats.ToUnique();
 		}

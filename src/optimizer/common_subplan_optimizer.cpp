@@ -270,13 +270,26 @@ private:
 					}
 				}
 
+				auto register_filter_index = [&](ProjectionIndex filter_index) {
+					D_ASSERT(filter_index.GetIndex() < column_ids.size());
+					const auto canonical_index = ProjectionIndex(column_ids[filter_index.GetIndex()].GetPrimaryIndex());
+					auto entry = restore_original_table_filter_index.emplace(canonical_index, filter_index);
+					return entry.second || entry.first->second == filter_index;
+				};
 				for (auto &entry : get.table_filters) {
-					D_ASSERT(entry.GetIndex().GetIndex() < column_ids.size());
-					const auto canonical_index =
-					    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
-					if (!restore_original_table_filter_index.emplace(canonical_index, entry.GetIndex()).second) {
+					if (!register_filter_index(entry.GetIndex())) {
 						restore_original_table_filter_index.clear();
 						return false;
+					}
+				}
+				for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+					const auto &expression_filter =
+					    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex");
+					for (const auto &column_index : expression_filter.column_indexes) {
+						if (!register_filter_index(column_index)) {
+							restore_original_table_filter_index.clear();
+							return false;
+						}
 					}
 				}
 				if (!restore_original_table_filter_index.empty()) {
@@ -285,6 +298,15 @@ private:
 						const auto canonical_index =
 						    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
 						remapped_filters.PushFilter(canonical_index, entry.TakeFilter());
+					}
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
+							column_index = ProjectionIndex(column_ids[column_index.GetIndex()].GetPrimaryIndex());
+						}
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}
@@ -314,6 +336,15 @@ private:
 					for (auto &entry : get.table_filters) {
 						remapped_filters.PushFilter(restore_original_table_filter_index.at(entry.GetIndex()),
 						                            entry.TakeFilter());
+					}
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
+							column_index = restore_original_table_filter_index.at(column_index);
+						}
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}

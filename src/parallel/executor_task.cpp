@@ -21,6 +21,8 @@ ExecutorTask::~ExecutorTask() {
 	if (thread_context) {
 		executor.Flush(*thread_context);
 	}
+	thread_context.reset();
+	event.reset();
 	executor.UnregisterTask();
 }
 

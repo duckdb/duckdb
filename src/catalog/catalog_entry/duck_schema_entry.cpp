@@ -63,7 +63,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
 		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
-			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
+			throw CatalogException("Could not drop the table because this table is main key table of the table %s",
 			                       fk.info.table);
 		}
 	}
@@ -287,7 +287,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	info.dependencies.AddDependency(table);
+	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+	info.dependencies.AddDependency(table, DependencyDependentFlags());
 
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog

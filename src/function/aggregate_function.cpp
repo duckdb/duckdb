@@ -52,7 +52,7 @@ void AggregateFinalizeInputData::InitializeLocalState() {
 
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
-	       distinct_dependent == rhs.distinct_dependent;
+	       distinct_dependent == rhs.distinct_dependent && single_value_identity == rhs.single_value_identity;
 }
 bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &rhs) const {
 	return !(*this == rhs);
@@ -84,7 +84,14 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
-BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
+BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function)
+    // the function does not come from a function set - copy it into a definition of its own
+    : BoundAggregateFunction(make_shared_ptr<AggregateFunction>(function)) {
+}
+
+BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
+    : definition(std::move(function_p)) {
+	auto &function = *definition;
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();

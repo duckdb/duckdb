@@ -7,8 +7,52 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from scripts.regression.benchmark import BenchmarkRunner, EXTENSION_DIRECTORY_ENV, find_extension_directory
 from scripts.regression.comparison import benchmark_measurement, confirmation_run_count, sampling_batch_sizes
+
+
+class TestBenchmarkRunner(unittest.TestCase):
+    def test_finds_artifact_local_extension_directory(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            extension_directory = release_directory / "repository" / "v1.4.0" / "linux_amd64"
+            extension_directory.mkdir(parents=True)
+            (extension_directory / "fts.duckdb_extension").touch()
+
+            self.assertEqual(find_extension_directory(str(runner_path)), str(extension_directory.resolve()))
+
+    def test_rejects_multiple_artifact_extension_directories(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            for platform in ["linux_amd64", "linux_arm64"]:
+                extension_directory = release_directory / "repository" / "v1.4.0" / platform
+                extension_directory.mkdir(parents=True)
+                (extension_directory / "fts.duckdb_extension").touch()
+
+            with self.assertRaisesRegex(ValueError, "multiple extension directories"):
+                find_extension_directory(str(runner_path))
+
+    def test_passes_artifact_extension_directory_to_runner(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            release_directory = Path(temp_directory) / "release"
+            runner_path = release_directory / "benchmark" / "benchmark_runner"
+            extension_directory = release_directory / "repository" / "v1.4.0" / "linux_amd64"
+            extension_directory.mkdir(parents=True)
+            (extension_directory / "fts.duckdb_extension").touch()
+            completed_process = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr="name\trun\ttiming\nquery\t1\t1.0\n"
+            )
+
+            with patch("scripts.regression.benchmark.subprocess.run", return_value=completed_process) as run:
+                timings, error = BenchmarkRunner(str(runner_path), "current").run("query.benchmark", 1)
+
+            self.assertEqual(timings, [1.0])
+            self.assertIsNone(error)
+            self.assertEqual(run.call_args.kwargs["env"][EXTENSION_DIRECTORY_ENV], str(extension_directory.resolve()))
 
 
 class TestBenchmarkComparison(unittest.TestCase):

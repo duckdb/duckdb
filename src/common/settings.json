@@ -226,7 +226,7 @@
     },
     {
         "name": "checkpoint_on_detach",
-        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED requests a checkpoint, but the checkpoint does not occur if another connection still references the database. DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
         "type": "ENUM<CheckpointOnDetach>",
         "default_scope": "local",
         "default_value": "DEFAULT"
@@ -534,13 +534,6 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
-    },
-    {
-        "name": "deprecated_using_key_syntax",
-        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<DeprecatedUsingKeySyntax>",
-        "default_scope": "local",
-        "default_value": "DEFAULT"
     },
     {
         "name": "dialect_compatibility_mode",
@@ -1085,6 +1078,13 @@
         "default_value": "5"
     },
     {
+        "name": "null_on_division_by_zero",
+        "description": "Return NULL instead of throwing an error when dividing by zero.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "old_implicit_casting",
         "description": "Allow implicit casting to/from VARCHAR",
         "type": "BOOLEAN",
@@ -1183,10 +1183,13 @@
     },
     {
         "name": "preserve_identifier_case",
-        "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
-        "type": "BOOLEAN",
+        "description": "How to fold non-quoted identifiers: 'preserve_case' keeps the case as written, 'lowercase' lowercases them, 'uppercase' uppercases them",
+        "type": "ENUM<IdentifierCaseMode>",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "preserve_case",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "preserve_insertion_order",
@@ -1294,6 +1297,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "show_behavior",
+        "description": "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), 'table' (always a table), or 'setting' (always a setting)",
+        "type": "ENUM<ShowBehaviorType>",
+        "default_scope": "global",
+        "default_value": "AUTO"
     },
     {
         "name": "standard_vector_size",

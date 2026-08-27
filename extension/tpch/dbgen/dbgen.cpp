@@ -792,8 +792,8 @@ static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string
 
 		if (column.Name() != Identifier(T::Columns[i])) {
 			throw InvalidInputException(
-			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found \"%s\"",
-			    table_name, T::Columns[i], (unsigned long long)i, column.Name().GetIdentifierName());
+			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found %s",
+			    table_name, T::Columns[i], (unsigned long long)i, column.Name());
 		}
 
 		if (column.Type() != T::Types[i]) {

@@ -1,0 +1,13 @@
+# name: test/sql/copy/async_file_character_device.test
+# description: test async COPY to character devices
+# group: [copy]
+
+require notwindows
+
+require parquet
+
+statement ok
+COPY (SELECT 42) TO '/dev/null' (FORMAT CSV);
+
+statement ok
+COPY (SELECT 42) TO '/dev/null' (FORMAT PARQUET);
