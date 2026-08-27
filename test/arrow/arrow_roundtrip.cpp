@@ -1106,16 +1106,29 @@ TEST_CASE("Test Arrow VARIANT export layouts and schema flags", "[arrow]") {
 		Connection con(db);
 		auto result = con.Query("SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(4) t(i)");
 		REQUIRE(!result->HasError());
-		auto chunk = result->Fetch();
-		ArrowArray array;
-		con.context->RunFunctionInTransaction([&]() {
-			auto properties = con.context->GetClientProperties();
-			auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*con.context, result->GetTypes());
-			ArrowConverter::ToArrowArray(*chunk, &array, properties, extension_types);
-		});
-		auto &col = *array.children[0];
-		REQUIRE(col.null_count == 2);
-		REQUIRE(col.children[0]->null_count == 0);
-		array.release(&array);
+		// Accumulate over EVERY chunk: at STANDARD_VECTOR_SIZE=2 these four rows arrive in two chunks, so a
+		// single Fetch() would see one NULL rather than two.
+		int64_t total_rows = 0;
+		int64_t total_nulls = 0;
+		while (auto chunk = result->Fetch()) {
+			if (chunk->size() == 0) {
+				break;
+			}
+			ArrowArray array;
+			con.context->RunFunctionInTransaction([&]() {
+				auto properties = con.context->GetClientProperties();
+				auto extension_types = ArrowTypeExtensionData::GetExtensionTypes(*con.context, result->GetTypes());
+				ArrowConverter::ToArrowArray(*chunk, &array, properties, extension_types);
+			});
+			auto &col = *array.children[0];
+			// The invariant under test: the non-nullable metadata child never carries a NULL, whatever the
+			// parent's validity is.
+			REQUIRE(col.children[0]->null_count == 0);
+			total_rows += col.length;
+			total_nulls += col.null_count;
+			array.release(&array);
+		}
+		REQUIRE(total_rows == 4);
+		REQUIRE(total_nulls == 2);
 	}
 }
