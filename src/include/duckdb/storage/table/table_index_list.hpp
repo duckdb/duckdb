@@ -11,14 +11,9 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/storage/table/index_entry.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/storage/storage_lock.hpp"
-
-#include <functional>
-#include <memory>
 
 namespace duckdb {
 
@@ -35,16 +30,6 @@ struct IndexStorageInfo;
 struct DataTableInfo;
 template <class T>
 class TableIndexIterationHelper;
-
-template <class T>
-struct TableIndexIterationResult {
-	using type = T &;
-};
-
-template <>
-struct TableIndexIterationResult<shared_ptr<IndexEntry>> {
-	using type = shared_ptr<IndexEntry>;
-};
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
@@ -190,15 +175,13 @@ private:
 	public:
 		explicit TableIndexIterator(optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries);
 
-		using result_type = typename TableIndexIterationResult<T>::type;
-
 		optional_ptr<const vector<shared_ptr<IndexEntry>>> index_entries;
 		optional_idx index;
 
 	public:
 		TableIndexIterator &operator++();
 		bool operator!=(const TableIndexIterator &other) const;
-		result_type operator*() const;
+		T operator*() const;
 	};
 
 public:
