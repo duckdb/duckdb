@@ -18,15 +18,17 @@ namespace duckdb {
 
 struct ColumnBindingVerificationState {
 	explicit ColumnBindingVerificationState(LogicalOperator &root) {
-		CompilerPath root_path;
+		LogicalPlanCompilerPath root_path;
 		IndexOperator(root, root_path);
 	}
 
-	reference_map_t<LogicalOperator, CompilerPath> operator_paths;
-	reference_map_t<Expression, CompilerPath> expression_paths;
-	vector<CompilerIssue> issues;
+	reference_map_t<LogicalOperator, LogicalPlanCompilerPath> operator_paths;
+	reference_map_t<Expression, LogicalPlanCompilerPath> expression_paths;
+	reference_set_t<LogicalOperator> resolved_inputs;
+	reference_set_t<LogicalOperator> resolved_outputs;
+	vector<LogicalPlanCompilerIssue> issues;
 
-	const CompilerPath &GetPath(LogicalOperator &op) const {
+	const LogicalPlanCompilerPath &GetPath(LogicalOperator &op) const {
 		auto entry = operator_paths.find(reference<LogicalOperator>(op));
 		if (entry == operator_paths.end()) {
 			throw InternalException("Logical operator is missing from the compiler verification path index");
@@ -34,7 +36,7 @@ struct ColumnBindingVerificationState {
 		return entry->second;
 	}
 
-	const CompilerPath &GetPath(Expression &expr) const {
+	const LogicalPlanCompilerPath &GetPath(Expression &expr) const {
 		auto entry = expression_paths.find(reference<Expression>(expr));
 		if (entry == expression_paths.end()) {
 			throw InternalException("Expression is missing from the compiler verification path index");
@@ -43,8 +45,8 @@ struct ColumnBindingVerificationState {
 	}
 
 	void AddInvalidBinding(BoundColumnRefExpression &expr, const vector<ColumnBinding> &bindings) {
-		CompilerIssue issue;
-		issue.code = CompilerIssueCode::INVALID_BINDING;
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INVALID_BINDING;
 		issue.path = GetPath(expr);
 		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
 		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
@@ -55,10 +57,11 @@ struct ColumnBindingVerificationState {
 	}
 
 	void AddTypeMismatch(BoundColumnRefExpression &expr, const LogicalType &expected_type) {
-		CompilerIssue issue;
-		issue.code = CompilerIssueCode::TYPE_MISMATCH;
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::TYPE_MISMATCH;
 		issue.path = GetPath(expr);
-		issue.construct = CompilerConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
+		issue.construct =
+		    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
 		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
 		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
 		issue.message =
@@ -69,10 +72,10 @@ struct ColumnBindingVerificationState {
 	}
 
 	void AddBindingTypeArityMismatch(BoundColumnRefExpression &expr, idx_t binding_count, idx_t type_count) {
-		CompilerIssue issue;
-		issue.code = CompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(expr);
-		issue.construct = CompilerConstructIdentity::Expression(expr.GetExpressionClass());
+		issue.construct = LogicalPlanCompilerConstructIdentity::Expression(expr.GetExpressionClass());
 		issue.facts.emplace_back("invariant", Value("binding_type_arity"));
 		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
 		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
@@ -82,64 +85,86 @@ struct ColumnBindingVerificationState {
 		issues.push_back(std::move(issue));
 	}
 
-	void AddMalformedExtension(LogicalExtensionOperator &op, idx_t binding_count, idx_t type_count) {
-		auto extension_name = op.GetExtensionName();
-		CompilerIssue issue;
-		issue.code = CompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+	void AddMalformedExtensionArity(LogicalExtensionOperator &op, const string &identifier, idx_t binding_count,
+	                                idx_t type_count) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
 		issue.path = GetPath(op);
-		issue.construct = CompilerConstructIdentity::Extension(extension_name);
+		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
 		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
 		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
-		issue.message = StringUtil::Format("Extension operator %s returned %llu bindings and %llu types",
-		                                   extension_name, binding_count, type_count);
+		issue.message = StringUtil::Format("Logical extension operator returned %llu bindings and %llu types",
+		                                   binding_count, type_count);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddMalformedExtensionType(LogicalExtensionOperator &op, const string &identifier, idx_t type_index) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		issue.path = GetPath(op);
+		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.facts.emplace_back("invalid_type_index", Value::UBIGINT(type_index));
+		issue.message =
+		    StringUtil::Format("Logical extension operator returned an invalid type at index %llu", type_index);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddMalformedExtensionBinding(LogicalExtensionOperator &op, const string &identifier, idx_t binding_index,
+	                                  const ColumnBinding &binding) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		issue.path = GetPath(op);
+		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.facts.emplace_back("invalid_binding_index", Value::UBIGINT(binding_index));
+		issue.facts.emplace_back("table_index_valid", Value::BOOLEAN(binding.table_index.IsValid()));
+		issue.facts.emplace_back("column_index_valid", Value::BOOLEAN(binding.column_index.IsValid()));
+		issue.message =
+		    StringUtil::Format("Logical extension operator returned an invalid binding at index %llu", binding_index);
 		issues.push_back(std::move(issue));
 	}
 
 	void AddDuplicateTableIndex(LogicalOperator &op, TableIndex table_index) {
-		CompilerIssue issue;
-		issue.code = CompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(op);
-		issue.construct = CompilerConstructIdentity::LogicalOperator(op.type);
+		issue.construct = LogicalPlanCompilerConstructIdentity::LogicalOperator(op.type);
 		issue.facts.emplace_back("invariant", Value("duplicate_table_index"));
 		issue.facts.emplace_back("table_index", Value::UBIGINT(table_index.index));
 		issue.message = StringUtil::Format("Duplicate table index \"%lld\" found", table_index.index);
 		issues.push_back(std::move(issue));
 	}
 
-	void CanonicalizeIssues() {
-		std::stable_sort(issues.begin(), issues.end());
-		vector<CompilerIssue> unique_issues;
-		unique_issues.reserve(issues.size());
-		for (auto &issue : issues) {
-			if (std::find(unique_issues.begin(), unique_issues.end(), issue) == unique_issues.end()) {
-				unique_issues.push_back(std::move(issue));
-			}
-		}
-		issues = std::move(unique_issues);
+	bool HasResolvedInputs(LogicalOperator &op) const {
+		return resolved_inputs.find(reference<LogicalOperator>(op)) != resolved_inputs.end();
+	}
+
+	bool HasResolvedOutputs(LogicalOperator &op) const {
+		return resolved_outputs.find(reference<LogicalOperator>(op)) != resolved_outputs.end();
 	}
 
 private:
-	void IndexExpression(Expression &expr, const CompilerPath &path) {
+	void IndexExpression(Expression &expr, const LogicalPlanCompilerPath &path) {
 		expression_paths.emplace(reference<Expression>(expr), path);
 		idx_t child_index = 0;
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
 			auto child_path = path;
-			child_path.components.push_back({CompilerPathComponentType::EXPRESSION_CHILD, child_index++});
+			child_path.components.push_back({LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, child_index++});
 			IndexExpression(child, child_path);
 		});
 	}
 
-	void IndexOperator(LogicalOperator &op, const CompilerPath &path) {
+	void IndexOperator(LogicalOperator &op, const LogicalPlanCompilerPath &path) {
 		operator_paths.emplace(reference<LogicalOperator>(op), path);
 		idx_t expression_index = 0;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
 			auto expression_path = path;
-			expression_path.components.push_back({CompilerPathComponentType::OPERATOR_EXPRESSION, expression_index++});
+			expression_path.components.push_back(
+			    {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, expression_index++});
 			IndexExpression(**expression, expression_path);
 		});
 		for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
 			auto child_path = path;
-			child_path.components.push_back({CompilerPathComponentType::OPERATOR_CHILD, child_index});
+			child_path.components.push_back({LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, child_index});
 			IndexOperator(*op.children[child_index], child_path);
 		}
 	}
@@ -320,7 +345,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
-		if (ext_op.SupportsTypeVerification()) {
+		if (ext_op.SupportsTypeBindingVerification()) {
+			bindings.clear();
+			types.clear();
 			VisitOperatorChildren(op);
 			VisitOperatorExpressions(op);
 			bindings = op.GetColumnBindings();
@@ -409,35 +436,84 @@ void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) 
 	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
 		return;
 	}
-	auto result = VerifyAlways(op);
+	string first_error;
+	auto result = VerifyAlwaysInternal(op, first_error);
 	if (result.HasError()) {
-		throw InternalException("%s", result.GetIssues()[0].message);
+		throw InternalException("%s", first_error);
 	}
 }
 
 bool ColumnBindingResolver::ResolveOperatorTypes(LogicalOperator &op,
                                                  ColumnBindingVerificationState &verification_state) {
 	op.types.clear();
+	bool children_resolved = true;
 	for (auto &child : op.children) {
 		if (!ResolveOperatorTypes(*child, verification_state)) {
-			return false;
+			children_resolved = false;
 		}
 	}
+	if (!children_resolved) {
+		return false;
+	}
+	verification_state.resolved_inputs.insert(reference<LogicalOperator>(op));
 	op.ResolveTypes();
 	auto bindings = op.GetColumnBindings();
 	if (op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 		auto &extension_op = op.Cast<LogicalExtensionOperator>();
-		if (extension_op.SupportsTypeVerification() && bindings.size() != op.types.size()) {
-			verification_state.AddMalformedExtension(extension_op, bindings.size(), op.types.size());
-			return false;
+		if (extension_op.SupportsTypeBindingVerification()) {
+			auto &identifier = extension_op.GetTypeBindingVerificationIdentifier();
+			if (identifier.empty()) {
+				throw InternalException("An extension operator that supports type-binding verification must provide a "
+				                        "verification identifier");
+			}
+			bool output_valid = true;
+			if (bindings.size() != op.types.size()) {
+				verification_state.AddMalformedExtensionArity(extension_op, identifier, bindings.size(),
+				                                              op.types.size());
+				output_valid = false;
+			}
+			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
+				auto &binding = bindings[binding_index];
+				if (!binding.table_index.IsValid() || !binding.column_index.IsValid()) {
+					verification_state.AddMalformedExtensionBinding(extension_op, identifier, binding_index, binding);
+					output_valid = false;
+				}
+			}
+			for (idx_t type_index = 0; type_index < op.types.size(); type_index++) {
+				if (!op.types[type_index].IsComplete()) {
+					verification_state.AddMalformedExtensionType(extension_op, identifier, type_index);
+					output_valid = false;
+				}
+			}
+			if (!output_valid) {
+				return false;
+			}
 		}
 	}
 	D_ASSERT(op.types.size() == bindings.size());
+	verification_state.resolved_outputs.insert(reference<LogicalOperator>(op));
 	return true;
 }
 
+void ColumnBindingResolver::VerifyColumnBindings(LogicalOperator &op,
+                                                 ColumnBindingVerificationState &verification_state) {
+	if (verification_state.HasResolvedOutputs(op) ||
+	    (verification_state.HasResolvedInputs(op) && op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR &&
+	     op.Cast<LogicalExtensionOperator>().SupportsTypeBindingVerification())) {
+		ColumnBindingResolver resolver(verification_state);
+		resolver.VisitOperator(op);
+		return;
+	}
+	for (auto &child : op.children) {
+		VerifyColumnBindings(*child, verification_state);
+	}
+}
+
 static void VerifyTableIndexes(LogicalOperator &op, ColumnBindingVerificationState &verification_state,
-                               unordered_map<TableIndex, CompilerPath> &seen_indexes) {
+                               unordered_map<TableIndex, LogicalPlanCompilerPath> &seen_indexes) {
+	for (auto &child : op.children) {
+		VerifyTableIndexes(*child, verification_state, seen_indexes);
+	}
 	for (auto index : op.GetTableIndex()) {
 		D_ASSERT(index.IsValid());
 		if (seen_indexes.find(index) != seen_indexes.end()) {
@@ -446,29 +522,27 @@ static void VerifyTableIndexes(LogicalOperator &op, ColumnBindingVerificationSta
 			seen_indexes.emplace(index, verification_state.GetPath(op));
 		}
 	}
-	for (auto &child : op.children) {
-		VerifyTableIndexes(*child, verification_state, seen_indexes);
-	}
 }
 
-CompilerResult<VerificationSuccess> ColumnBindingResolver::VerifyAlways(LogicalOperator &op) {
+LogicalPlanCompilerResult<LogicalPlanVerificationSuccess> ColumnBindingResolver::VerifyAlways(LogicalOperator &op) {
+	return VerifyAlwaysInternal(op, nullptr);
+}
+
+LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>
+ColumnBindingResolver::VerifyAlwaysInternal(LogicalOperator &op, optional_ptr<string> first_error) {
 	ColumnBindingVerificationState verification_state(op);
-	if (!ResolveOperatorTypes(op, verification_state)) {
-		D_ASSERT(!verification_state.issues.empty());
-		verification_state.CanonicalizeIssues();
-		return CompilerResult<VerificationSuccess>::Failure(std::move(verification_state.issues));
-	}
+	ResolveOperatorTypes(op, verification_state);
+	VerifyColumnBindings(op, verification_state);
 
-	ColumnBindingResolver resolver(verification_state);
-	resolver.VisitOperator(op);
-
-	unordered_map<TableIndex, CompilerPath> seen_indexes;
+	unordered_map<TableIndex, LogicalPlanCompilerPath> seen_indexes;
 	VerifyTableIndexes(op, verification_state, seen_indexes);
 	if (!verification_state.issues.empty()) {
-		verification_state.CanonicalizeIssues();
-		return CompilerResult<VerificationSuccess>::Failure(std::move(verification_state.issues));
+		if (first_error) {
+			*first_error = verification_state.issues[0].message;
+		}
+		return LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure(std::move(verification_state.issues));
 	}
-	return CompilerResult<VerificationSuccess>::Success(VerificationSuccess());
+	return LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Success(LogicalPlanVerificationSuccess());
 }
 
 } // namespace duckdb

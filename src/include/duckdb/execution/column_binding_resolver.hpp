@@ -10,7 +10,7 @@
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/compiler_result.hpp"
+#include "duckdb/planner/logical_plan_compiler_result.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -26,7 +26,7 @@ public:
 
 	void VisitOperator(LogicalOperator &op) override;
 	static void Verify(ClientContext &context, LogicalOperator &op);
-	DUCKDB_API static CompilerResult<VerificationSuccess> VerifyAlways(LogicalOperator &op);
+	DUCKDB_API static LogicalPlanCompilerResult<LogicalPlanVerificationSuccess> VerifyAlways(LogicalOperator &op);
 
 protected:
 	vector<ColumnBinding> bindings;
@@ -37,5 +37,8 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	explicit ColumnBindingResolver(ColumnBindingVerificationState &verification_state);
 	static bool ResolveOperatorTypes(LogicalOperator &op, ColumnBindingVerificationState &verification_state);
+	static void VerifyColumnBindings(LogicalOperator &op, ColumnBindingVerificationState &verification_state);
+	static LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>
+	VerifyAlwaysInternal(LogicalOperator &op, optional_ptr<string> first_error);
 };
 } // namespace duckdb

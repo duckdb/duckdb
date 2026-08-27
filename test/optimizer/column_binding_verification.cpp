@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -30,8 +31,12 @@ public:
 		return table_indexes;
 	}
 
-	bool SupportsTypeVerification() const override {
+	bool SupportsTypeBindingVerification() const override {
 		return verify_types;
+	}
+
+	const string &GetTypeBindingVerificationIdentifier() const noexcept override {
+		return name;
 	}
 
 	string GetExtensionName() const override {
@@ -53,6 +58,41 @@ private:
 	vector<ColumnBinding> bindings;
 	vector<LogicalType> resolved_types;
 	vector<TableIndex> table_indexes;
+};
+
+class UnnamedVerificationExtensionOperator : public LogicalExtensionOperator {
+public:
+	UnnamedVerificationExtensionOperator(string identifier_p, vector<ColumnBinding> bindings_p,
+	                                     vector<LogicalType> resolved_types_p)
+	    : identifier(std::move(identifier_p)), bindings(std::move(bindings_p)),
+	      resolved_types(std::move(resolved_types_p)) {
+	}
+
+	vector<ColumnBinding> GetColumnBindings() override {
+		return bindings;
+	}
+
+	bool SupportsTypeBindingVerification() const override {
+		return true;
+	}
+
+	const string &GetTypeBindingVerificationIdentifier() const noexcept override {
+		return identifier;
+	}
+
+	PhysicalOperator &CreatePlan(ClientContext &, PhysicalPlanGenerator &) override {
+		throw NotImplementedException("Synthetic verification operator cannot create a physical plan");
+	}
+
+protected:
+	void ResolveTypes() override {
+		types = resolved_types;
+	}
+
+private:
+	string identifier;
+	vector<ColumnBinding> bindings;
+	vector<LogicalType> resolved_types;
 };
 
 static unique_ptr<VerificationExtensionOperator> TypedLeaf(TableIndex table_index, LogicalType type,
@@ -77,7 +117,28 @@ static unique_ptr<LogicalProjection> ReferenceProjection(TableIndex table_index,
 	return result;
 }
 
-static const Value &GetFact(const CompilerIssue &issue, const string &name) {
+static unique_ptr<VerificationExtensionOperator> ExpressionLeaf(TableIndex table_index, ColumnBinding binding,
+                                                                const string &alias) {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(make_uniq<BoundColumnRefExpression>(Identifier(alias), LogicalType::INTEGER, binding));
+	auto output_binding = ColumnBinding(table_index, ProjectionIndex(0));
+	return make_uniq<VerificationExtensionOperator>(
+	    "typed_verification_expression_leaf", true, vector<ColumnBinding> {output_binding},
+	    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {table_index}, std::move(expressions));
+}
+
+static unique_ptr<VerificationExtensionOperator> MalformedLeaf(TableIndex table_index) {
+	return make_uniq<VerificationExtensionOperator>(
+	    "typed_verification_malformed_leaf", true,
+	    vector<ColumnBinding> {ColumnBinding(table_index, ProjectionIndex(0)),
+	                           ColumnBinding(table_index, ProjectionIndex(1))},
+	    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {table_index});
+}
+
+static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex child_index, TableIndex invalid_index,
+                                                                    const string &alias);
+
+static const Value &GetFact(const LogicalPlanCompilerIssue &issue, const string &name) {
 	for (auto &fact : issue.facts) {
 		if (fact.first == name) {
 			return fact.second;
@@ -140,10 +201,11 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.code == CompilerIssueCode::INVALID_BINDING);
-		REQUIRE(issue.path == CompilerPath {CompilerPathRoot::LOGICAL_PLAN,
-		                                    {{CompilerPathComponentType::OPERATOR_CHILD, 0},
-		                                     {CompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
+		REQUIRE(issue.code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
+		REQUIRE(issue.path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
 		REQUIRE(GetFact(issue, "table_index") == Value::UBIGINT(400));
 		REQUIRE(GetFact(issue, "column_index") == Value::UBIGINT(3));
 	}
@@ -157,10 +219,11 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.code == CompilerIssueCode::TYPE_MISMATCH);
+		REQUIRE(issue.code == LogicalPlanCompilerIssueCode::TYPE_MISMATCH);
 		REQUIRE(issue.path ==
-		        CompilerPath {CompilerPathRoot::LOGICAL_PLAN, {{CompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
-		REQUIRE(issue.construct->type == CompilerConstructType::BINDING_TYPE_MISMATCH);
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
+		REQUIRE(issue.construct->type == LogicalPlanCompilerConstructType::BINDING_TYPE_MISMATCH);
 		REQUIRE(issue.construct->type_mismatch->expected_type == LogicalType::INTEGER);
 		REQUIRE(issue.construct->type_mismatch->actual_type == LogicalType::VARCHAR);
 	}
@@ -182,10 +245,49 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		auto result = ColumnBindingResolver::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
-		REQUIRE(result.GetIssues()[0].path == CompilerPath {CompilerPathRoot::LOGICAL_PLAN,
-		                                                    {{CompilerPathComponentType::OPERATOR_CHILD, 0},
-		                                                     {CompilerPathComponentType::OPERATOR_EXPRESSION, 0},
-		                                                     {CompilerPathComponentType::EXPRESSION_CHILD, 0}}});
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0},
+		                                  {LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, 0}}});
+	}
+}
+
+TEST_CASE("Compiler verification isolates extension leaf input scope", "[compiler_verification]") {
+	auto left_index = TableIndex(57);
+	auto right_index = TableIndex(58);
+	auto sibling_binding = ColumnBinding(left_index, ProjectionIndex(0));
+
+	SECTION("root binary operator") {
+		auto plan = make_uniq<LogicalCrossProduct>(TypedLeaf(left_index, LogicalType::INTEGER),
+		                                           ExpressionLeaf(right_index, sibling_binding, "sibling_reference"));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
+	}
+
+	SECTION("nested binary operator") {
+		auto cross_product =
+		    make_uniq<LogicalCrossProduct>(TypedLeaf(left_index, LogicalType::INTEGER),
+		                                   ExpressionLeaf(right_index, sibling_binding, "nested_sibling_reference"));
+		auto plan = ReferenceProjection(TableIndex(59), ColumnBinding(right_index, ProjectionIndex(0)),
+		                                LogicalType::INTEGER, std::move(cross_product));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
 	}
 }
 
@@ -204,9 +306,9 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.code == CompilerIssueCode::MALFORMED_EXTENSION_RESULT);
-		REQUIRE(issue.path ==
-		        CompilerPath {CompilerPathRoot::LOGICAL_PLAN, {{CompilerPathComponentType::OPERATOR_CHILD, 0}}});
+		REQUIRE(issue.code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(issue.path == LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                               {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}});
 		REQUIRE(issue.construct->identifier == "typed_verification_malformed");
 		REQUIRE(GetFact(issue, "binding_count") == Value::UBIGINT(2));
 		REQUIRE(GetFact(issue, "type_count") == Value::UBIGINT(1));
@@ -221,11 +323,26 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
-		REQUIRE(issue.code == CompilerIssueCode::INTERNAL_INVARIANT);
-		REQUIRE(issue.path ==
-		        CompilerPath {CompilerPathRoot::LOGICAL_PLAN, {{CompilerPathComponentType::OPERATOR_CHILD, 1}}});
+		REQUIRE(issue.code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
+		REQUIRE(issue.path == LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                               {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1}}});
 		REQUIRE(GetFact(issue, "invariant") == Value("duplicate_table_index"));
 		REQUIRE(GetFact(issue, "table_index") == Value::UBIGINT(70));
+	}
+
+	SECTION("parent duplicate table index") {
+		auto duplicate_index = TableIndex(71);
+		auto binding = ColumnBinding(duplicate_index, ProjectionIndex(0));
+		auto plan = make_uniq<VerificationExtensionOperator>(
+		    "typed_verification_parent_index", true, vector<ColumnBinding> {binding},
+		    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {duplicate_index});
+		plan->children.push_back(TypedLeaf(duplicate_index, LogicalType::INTEGER));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
+		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
 	}
 
 	SECTION("duplicate issues are suppressed") {
@@ -239,7 +356,177 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		auto result = ColumnBindingResolver::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
-		REQUIRE(result.GetIssues()[0].path == CompilerPath {});
+		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
+	}
+
+	SECTION("invalid root output type") {
+		auto plan = TypedLeaf(TableIndex(76), LogicalType::INVALID);
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
+		REQUIRE(GetFact(result.GetIssues()[0], "invalid_type_index") == Value::UBIGINT(0));
+	}
+
+	SECTION("arity and invalid output type") {
+		auto table_index = TableIndex(761);
+		auto plan = make_uniq<VerificationExtensionOperator>(
+		    "typed_verification_malformed_type", true,
+		    vector<ColumnBinding> {ColumnBinding(table_index, ProjectionIndex(0)),
+		                           ColumnBinding(table_index, ProjectionIndex(1))},
+		    vector<LogicalType> {LogicalType::INVALID}, vector<TableIndex> {table_index});
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 2);
+		REQUIRE(GetFact(result.GetIssues()[0], "binding_count") == Value::UBIGINT(2));
+		REQUIRE(GetFact(result.GetIssues()[1], "invalid_type_index") == Value::UBIGINT(0));
+	}
+
+	SECTION("invalid child output type") {
+		auto child_index = TableIndex(77);
+		auto plan = ReferenceProjection(TableIndex(78), ColumnBinding(child_index, ProjectionIndex(0)),
+		                                LogicalType::INTEGER, TypedLeaf(child_index, LogicalType::INVALID));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}});
+	}
+
+	SECTION("invalid root output table index") {
+		auto binding = ColumnBinding(TableIndex(), ProjectionIndex(0));
+		auto plan = make_uniq<VerificationExtensionOperator>("typed_verification_invalid_table_index", true,
+		                                                     vector<ColumnBinding> {binding},
+		                                                     vector<LogicalType> {LogicalType::INTEGER});
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
+		REQUIRE(GetFact(result.GetIssues()[0], "invalid_binding_index") == Value::UBIGINT(0));
+		REQUIRE(GetFact(result.GetIssues()[0], "table_index_valid") == Value::BOOLEAN(false));
+		REQUIRE(GetFact(result.GetIssues()[0], "column_index_valid") == Value::BOOLEAN(true));
+	}
+
+	SECTION("invalid parent-consumed output table index") {
+		auto binding = ColumnBinding(TableIndex(), ProjectionIndex(0));
+		auto child = make_uniq<VerificationExtensionOperator>("typed_verification_invalid_table_index", true,
+		                                                      vector<ColumnBinding> {binding},
+		                                                      vector<LogicalType> {LogicalType::INTEGER});
+		auto plan = ReferenceProjection(TableIndex(781), binding, LogicalType::INTEGER, std::move(child));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}});
+	}
+
+	SECTION("invalid root output column index") {
+		auto binding = ColumnBinding(TableIndex(782), ProjectionIndex());
+		auto plan = make_uniq<VerificationExtensionOperator>("typed_verification_invalid_column_index", true,
+		                                                     vector<ColumnBinding> {binding},
+		                                                     vector<LogicalType> {LogicalType::INTEGER});
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
+		REQUIRE(GetFact(result.GetIssues()[0], "invalid_binding_index") == Value::UBIGINT(0));
+		REQUIRE(GetFact(result.GetIssues()[0], "table_index_valid") == Value::BOOLEAN(true));
+		REQUIRE(GetFact(result.GetIssues()[0], "column_index_valid") == Value::BOOLEAN(false));
+	}
+
+	SECTION("invalid parent-consumed output column index") {
+		auto binding = ColumnBinding(TableIndex(783), ProjectionIndex());
+		auto child = make_uniq<VerificationExtensionOperator>("typed_verification_invalid_column_index", true,
+		                                                      vector<ColumnBinding> {binding},
+		                                                      vector<LogicalType> {LogicalType::INTEGER});
+		auto plan = ReferenceProjection(TableIndex(784), binding, LogicalType::INTEGER, std::move(child));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}});
+	}
+
+	SECTION("unnamed malformed extension") {
+		auto table_index = TableIndex(79);
+		auto plan = make_uniq<UnnamedVerificationExtensionOperator>(
+		    "non_serializable_verification_extension",
+		    vector<ColumnBinding> {ColumnBinding(table_index, ProjectionIndex(0)),
+		                           ColumnBinding(table_index, ProjectionIndex(1))},
+		    vector<LogicalType> {LogicalType::INTEGER});
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[0].construct->identifier == "non_serializable_verification_extension");
+	}
+
+	SECTION("malformed extensions retain distinct identities") {
+		auto first = make_uniq<VerificationExtensionOperator>(
+		    "first_malformed_extension", true,
+		    vector<ColumnBinding> {ColumnBinding(TableIndex(791), ProjectionIndex(0))}, vector<LogicalType> {});
+		auto second = make_uniq<VerificationExtensionOperator>(
+		    "second_malformed_extension", true,
+		    vector<ColumnBinding> {ColumnBinding(TableIndex(792), ProjectionIndex(0))}, vector<LogicalType> {});
+
+		auto first_result = ColumnBindingResolver::VerifyAlways(*first);
+		auto second_result = ColumnBindingResolver::VerifyAlways(*second);
+		REQUIRE(first_result.IsValid());
+		REQUIRE(second_result.IsValid());
+		REQUIRE(first_result.GetIssues().size() == 1);
+		REQUIRE(second_result.GetIssues().size() == 1);
+		REQUIRE(first_result.GetIssues()[0].construct->identifier == "first_malformed_extension");
+		REQUIRE(second_result.GetIssues()[0].construct->identifier == "second_malformed_extension");
+		REQUIRE_FALSE(first_result.GetIssues()[0] == second_result.GetIssues()[0]);
+	}
+
+	SECTION("independent malformed children") {
+		auto plan = make_uniq<LogicalCrossProduct>(MalformedLeaf(TableIndex(180)), MalformedLeaf(TableIndex(181)));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 2);
+		REQUIRE(result.GetIssues()[0].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}});
+		REQUIRE(result.GetIssues()[1].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1}}});
+	}
+
+	SECTION("malformed binding and duplicate defects") {
+		auto duplicate_index = TableIndex(182);
+		auto plan = make_uniq<LogicalCrossProduct>(
+		    MalformedLeaf(duplicate_index),
+		    ExpressionLeaf(duplicate_index, ColumnBinding(TableIndex(999), ProjectionIndex(0)), "invalid_binding"));
+
+		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 3);
+		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
+		REQUIRE(result.GetIssues()[1].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
+		REQUIRE(result.GetIssues()[2].code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
+		REQUIRE(result.GetIssues()[2].path ==
+		        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+		                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1},
+		                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
 	}
 }
 
@@ -270,6 +557,29 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	auto legacy_result = ColumnBindingResolver::VerifyAlways(*legacy_plan);
 	REQUIRE(legacy_result.IsValid());
 	REQUIRE(legacy_result.IsSuccess());
+
+	auto identifier_index = TableIndex(901);
+	auto unidentified_opt_in = make_uniq<VerificationExtensionOperator>(
+	    "", true, vector<ColumnBinding> {ColumnBinding(identifier_index, ProjectionIndex(0))},
+	    vector<LogicalType> {LogicalType::INTEGER});
+	REQUIRE_THROWS_AS(ColumnBindingResolver::VerifyAlways(*unidentified_opt_in), InternalException);
+	auto unidentified_legacy = make_uniq<VerificationExtensionOperator>(
+	    "", false, vector<ColumnBinding> {ColumnBinding(identifier_index, ProjectionIndex(0))},
+	    vector<LogicalType> {LogicalType::INTEGER});
+	auto unidentified_legacy_result = ColumnBindingResolver::VerifyAlways(*unidentified_legacy);
+	REQUIRE(unidentified_legacy_result.IsValid());
+	REQUIRE(unidentified_legacy_result.IsSuccess());
+
+	auto child_failure = InvalidPassThrough(TableIndex(92), TableIndex(920), "legacy_child_first");
+	auto mixed_failure = ReferenceProjection(TableIndex(93), ColumnBinding(TableIndex(930), ProjectionIndex(0)),
+	                                         LogicalType::INTEGER, std::move(child_failure), "canonical_parent_first");
+	try {
+		ColumnBindingResolver::Verify(*connection.context, *mixed_failure);
+		FAIL("Expected enabled verification to reject invalid bindings");
+	} catch (InternalException &exception) {
+		REQUIRE(StringUtil::Contains(exception.what(), "legacy_child_first"));
+		REQUIRE_FALSE(StringUtil::Contains(exception.what(), "canonical_parent_first"));
+	}
 }
 
 static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex child_index, TableIndex invalid_index,
@@ -300,12 +610,14 @@ TEST_CASE("Compiler verification results have deterministic structural identity"
 	REQUIRE(second.IsValid());
 	REQUIRE(first.GetIssues().size() == 2);
 	REQUIRE(first.GetIssues() == second.GetIssues());
-	REQUIRE(first.GetIssues()[0].path == CompilerPath {CompilerPathRoot::LOGICAL_PLAN,
-	                                                   {{CompilerPathComponentType::OPERATOR_CHILD, 0},
-	                                                    {CompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
-	REQUIRE(first.GetIssues()[1].path == CompilerPath {CompilerPathRoot::LOGICAL_PLAN,
-	                                                   {{CompilerPathComponentType::OPERATOR_CHILD, 1},
-	                                                    {CompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
+	REQUIRE(first.GetIssues()[0].path ==
+	        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+	                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
+	                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
+	REQUIRE(first.GetIssues()[1].path ==
+	        LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+	                                 {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 1},
+	                                  {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0}}});
 	REQUIRE(first.GetIssues()[0].message != second.GetIssues()[0].message);
 
 	auto message_only_change = first.GetIssues()[0];
@@ -314,45 +626,110 @@ TEST_CASE("Compiler verification results have deterministic structural identity"
 }
 
 TEST_CASE("Compiler result records enforce their structural contract", "[compiler_verification]") {
-	CompilerPath full_plan_path {CompilerPathRoot::LOGICAL_PLAN,
-	                             {{CompilerPathComponentType::OPERATOR_CHILD, 0},
-	                              {CompilerPathComponentType::OPERATOR_EXPRESSION, 1},
-	                              {CompilerPathComponentType::EXPRESSION_CHILD, 2}}};
+	LogicalPlanCompilerPath full_plan_path {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+	                                        {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
+	                                         {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 1},
+	                                         {LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, 2}}};
 	REQUIRE(full_plan_path.IsValid());
-	REQUIRE(CompilerPath {CompilerPathRoot::STANDALONE_EXPRESSION, {{CompilerPathComponentType::EXPRESSION_CHILD, 0}}}
+	REQUIRE(LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION,
+	                                 {{LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, 0}}}
 	            .IsValid());
-	REQUIRE_FALSE(CompilerPath {
-	    CompilerPathRoot::LOGICAL_PLAN,
-	    {{CompilerPathComponentType::OPERATOR_EXPRESSION, 0}, {CompilerPathComponentType::OPERATOR_CHILD, 0}}}
+	REQUIRE_FALSE(LogicalPlanCompilerPath {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
+	                                       {{LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 0},
+	                                        {LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0}}}
 	                  .IsValid());
 
-	CompilerIssue malformed_extension;
-	malformed_extension.code = CompilerIssueCode::MALFORMED_EXTENSION_RESULT;
-	malformed_extension.construct = CompilerConstructIdentity::Extension("synthetic_extension");
+	LogicalPlanCompilerIssue malformed_extension;
+	malformed_extension.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+	malformed_extension.construct = LogicalPlanCompilerConstructIdentity::Extension("synthetic_extension");
 	REQUIRE(malformed_extension.IsValid());
 
-	CompilerIssue unsupported_extension;
-	unsupported_extension.code = CompilerIssueCode::UNSUPPORTED_EXTENSION;
-	unsupported_extension.construct = CompilerConstructIdentity::Extension("synthetic_extension");
+	LogicalPlanCompilerIssue unsupported_extension;
+	unsupported_extension.code = LogicalPlanCompilerIssueCode::UNSUPPORTED_EXTENSION;
+	unsupported_extension.construct = LogicalPlanCompilerConstructIdentity::Extension("synthetic_extension");
 	REQUIRE_FALSE(unsupported_extension.IsValid());
 	unsupported_extension.path = full_plan_path;
 	REQUIRE(unsupported_extension.IsValid());
 
-	CompilerIssue invalid_type_mismatch;
-	invalid_type_mismatch.code = CompilerIssueCode::TYPE_MISMATCH;
+	LogicalPlanCompilerIssue invalid_type_mismatch;
+	invalid_type_mismatch.code = LogicalPlanCompilerIssueCode::TYPE_MISMATCH;
 	invalid_type_mismatch.path = full_plan_path;
-	invalid_type_mismatch.construct = CompilerConstructIdentity::Expression(ExpressionClass::BOUND_COLUMN_REF);
+	invalid_type_mismatch.construct =
+	    LogicalPlanCompilerConstructIdentity::Expression(ExpressionClass::BOUND_COLUMN_REF);
 	REQUIRE_FALSE(invalid_type_mismatch.IsValid());
 	invalid_type_mismatch.construct =
-	    CompilerConstructIdentity::BindingTypeMismatch(LogicalType::INTEGER, LogicalType::VARCHAR);
+	    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(LogicalType::INTEGER, LogicalType::VARCHAR);
 	REQUIRE(invalid_type_mismatch.IsValid());
-	invalid_type_mismatch.code = static_cast<CompilerIssueCode>(255);
+	invalid_type_mismatch.code = static_cast<LogicalPlanCompilerIssueCode>(255);
 	REQUIRE_FALSE(invalid_type_mismatch.IsValid());
-	invalid_type_mismatch.code = CompilerIssueCode::TYPE_MISMATCH;
-	invalid_type_mismatch.phase = static_cast<CompilerPhase>(255);
+	invalid_type_mismatch.code = LogicalPlanCompilerIssueCode::TYPE_MISMATCH;
+	invalid_type_mismatch.phase = static_cast<LogicalPlanCompilerPhase>(255);
 	REQUIRE_FALSE(invalid_type_mismatch.IsValid());
-	invalid_type_mismatch.phase = CompilerPhase::VERIFY;
+	invalid_type_mismatch.phase = LogicalPlanCompilerPhase::VERIFY;
 
-	REQUIRE_FALSE(CompilerResult<VerificationSuccess>::Failure({}).IsValid());
-	REQUIRE(CompilerResult<VerificationSuccess>::Failure({invalid_type_mismatch}).IsValid());
+	auto incomplete_mismatch =
+	    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(LogicalType::ANY, LogicalType::INTEGER);
+	REQUIRE_FALSE(incomplete_mismatch.IsValid());
+	auto incomplete_actual_mismatch =
+	    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(LogicalType::INTEGER, LogicalType::ANY);
+	REQUIRE_FALSE(incomplete_actual_mismatch.IsValid());
+	REQUIRE_FALSE(LogicalPlanCompilerConstructIdentity::LogicalTypeValue(LogicalType::ANY).IsValid());
+	REQUIRE_FALSE(LogicalPlanCompilerConstructIdentity::LogicalTypeValue(LogicalType::TEMPLATE("T")).IsValid());
+	auto incomplete_nested_type =
+	    LogicalPlanCompilerConstructIdentity::LogicalTypeValue(LogicalType::LIST(LogicalType::ANY));
+	REQUIRE_FALSE(incomplete_nested_type.IsValid());
+	LogicalPlanCompilerFunctionIdentity incomplete_argument_function;
+	incomplete_argument_function.name = "incomplete_argument";
+	incomplete_argument_function.arguments = {LogicalType::TEMPLATE("T")};
+	incomplete_argument_function.return_type = LogicalType::INTEGER;
+	REQUIRE_FALSE(incomplete_argument_function.IsValid());
+	LogicalPlanCompilerFunctionIdentity incomplete_return_function;
+	incomplete_return_function.name = "incomplete_return";
+	incomplete_return_function.arguments = {LogicalType::INTEGER};
+	incomplete_return_function.return_type = LogicalType::ANY;
+	REQUIRE_FALSE(incomplete_return_function.IsValid());
+
+	REQUIRE_FALSE(LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({}).IsValid());
+	REQUIRE(LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({invalid_type_mismatch}).IsValid());
+
+	LogicalPlanCompilerIssue filter_issue;
+	filter_issue.path = full_plan_path;
+	filter_issue.construct = LogicalPlanCompilerConstructIdentity::LogicalOperator(LogicalOperatorType::LOGICAL_FILTER);
+	filter_issue.facts = {{"z_fact", Value::INTEGER(2)}, {"a_fact", Value::INTEGER(1)}};
+	filter_issue.message = "filter message";
+	LogicalPlanCompilerIssue projection_issue;
+	projection_issue.path = full_plan_path;
+	projection_issue.construct =
+	    LogicalPlanCompilerConstructIdentity::LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION);
+	projection_issue.facts = {{"a_fact", Value::INTEGER(2)}};
+	projection_issue.message = "projection message";
+	auto other_filter_issue = filter_issue;
+	other_filter_issue.facts = {{"a_fact", Value::INTEGER(1)}, {"z_fact", Value::INTEGER(3)}};
+	other_filter_issue.message = "other filter message";
+	auto duplicate_filter_issue = filter_issue;
+	duplicate_filter_issue.message = "different filter message";
+	auto null_fact_issue = projection_issue;
+	null_fact_issue.facts = {{"nullable_fact", Value(LogicalType::INTEGER)}};
+	null_fact_issue.message = "null fact message";
+	auto duplicate_null_fact_issue = null_fact_issue;
+	duplicate_null_fact_issue.message = "different null fact message";
+	auto pointer_fact_issue = projection_issue;
+	pointer_fact_issue.facts = {{"pointer_fact", Value::POINTER(42)}};
+	REQUIRE_FALSE(LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({pointer_fact_issue}).IsValid());
+
+	auto forward = LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure(
+	    {filter_issue, null_fact_issue, projection_issue, other_filter_issue, duplicate_filter_issue,
+	     duplicate_null_fact_issue});
+	auto reverse = LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure(
+	    {duplicate_null_fact_issue, other_filter_issue, projection_issue, filter_issue});
+	REQUIRE(forward.IsValid());
+	REQUIRE(reverse.IsValid());
+	REQUIRE(forward.GetIssues() == reverse.GetIssues());
+	REQUIRE(forward.GetIssues().size() == 4);
+	for (auto &issue : forward.GetIssues()) {
+		REQUIRE(std::is_sorted(issue.facts.begin(), issue.facts.end(),
+		                       [](const pair<string, Value> &left, const pair<string, Value> &right) {
+			                       return left.first < right.first;
+		                       }));
+	}
 }
