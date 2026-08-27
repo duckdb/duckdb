@@ -1,0 +1,45 @@
+# name: test/sql/storage/wal/group_commit_optimistic_replay.test_slow
+# description: Group commit: commits that optimistically write row-group data sync blocks before the WAL and replay correctly
+# group: [wal]
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_optimistic_replay.db' AS gc
+
+statement ok
+CREATE TABLE gc.big(i BIGINT)
+
+# each thread bulk-inserts > row_group_size (122880) rows in one transaction, triggering optimistic
+# row-group writes; group commit defers the data-block fsync to the sync leader, which must persist the
+# blocks before the WAL flush marker that references them. disjoint ranges => deterministic total.
+concurrentloop threadid 0 3
+
+statement ok
+INSERT INTO gc.big SELECT * FROM range({threadid} * 200000, ({threadid} + 1) * 200000)
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM gc.big
+----
+600000	179999700000
+
+# reopen: optimistically written blocks and their WAL references must be intact after replay
+statement ok
+DETACH gc
+
+statement ok
+ATTACH '{TEST_DIR}/group_commit_optimistic_replay.db' AS gc
+
+query II
+SELECT COUNT(*), SUM(i) FROM gc.big
+----
+600000	179999700000
+
+statement ok
+DETACH gc
