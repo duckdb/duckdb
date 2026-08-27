@@ -234,19 +234,19 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 // Source
 //===--------------------------------------------------------------------===//
 enum class IEJoinSourceStage : uint8_t {
-	INIT,
-	SINK_L1,
-	FINALIZE_L1,
-	MATERIALIZE_L1,
-	EXTRACT_LI,
-	SINK_L2,
-	FINALIZE_L2,
-	MATERIALIZE_L2,
-	EXTRACT_P,
-	INNER,
-	OUTER,
-	ANTI,
-	DONE
+	INIT = 0,
+	SINK_L1 = 1,
+	FINALIZE_L1 = 2,
+	MATERIALIZE_L1 = 3,
+	EXTRACT_LI = 4,
+	SINK_L2 = 5,
+	FINALIZE_L2 = 6,
+	MATERIALIZE_L2 = 7,
+	EXTRACT_P = 8,
+	INNER = 9,
+	OUTER = 10,
+	ANTI = 11,
+	DONE = 12
 };
 
 struct IEJoinSourceTask {
@@ -320,9 +320,9 @@ public:
 	//! The processing stage
 	atomic<IEJoinSourceStage> stage;
 	//! The the number of tasks per stage.
-	vector<idx_t> stage_tasks;
-	//! The the first task in the stage.
-	vector<idx_t> stage_begin;
+	array<idx_t, static_cast<uint8_t>(IEJoinSourceStage::DONE) + 1> stage_tasks;
+	//! The the first task in the stage, all values are initialized to 0.
+	array<idx_t, static_cast<uint8_t>(IEJoinSourceStage::DONE) + 1> stage_begin = {};
 	//! The next task to process
 	idx_t next_task = 0;
 	//! The total number of tasks
@@ -334,7 +334,7 @@ public:
 	//! Stop producing tasks
 	atomic<bool> stopped;
 	//! The number of completed tasks for each stage
-	array<atomic<idx_t>, static_cast<size_t>(IEJoinSourceStage::DONE)> completed;
+	array<atomic<idx_t>, static_cast<size_t>(IEJoinSourceStage::DONE) + 1> completed;
 
 	//! L1
 	unique_ptr<SortedTable> l1;
@@ -1738,62 +1738,63 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 
 void IEJoinGlobalSourceState::Initialize() {
 	//	INIT
-	stage_tasks.emplace_back(0);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::INIT)] = 0;
 
 	//	SINK_L1
 	idx_t l1_tasks = 0;
 	if (per_thread) {
 		l1_tasks = BinValue<idx_t>(left_blocks + right_blocks, per_thread);
 	}
-	stage_tasks.emplace_back(l1_tasks);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::SINK_L1)] = l1_tasks;
 
 	//	FINALIZE_L1
-	stage_tasks.emplace_back(1);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::FINALIZE_L1)] = 1;
 
 	//	MATERIALIZE_L1
-	stage_tasks.emplace_back(MaxValue<idx_t>(l1_tasks, 1));
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::MATERIALIZE_L1)] = MaxValue<idx_t>(l1_tasks, 1);
 
 	//	EXTRACT_LI
-	stage_tasks.emplace_back(1);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::EXTRACT_LI)] = 1;
 
 	//	SINK_L2
 	idx_t l2_tasks = 0;
 	if (per_thread) {
 		l2_tasks = BinValue<idx_t>(l2_blocks, per_thread);
 	}
-	stage_tasks.emplace_back(l2_tasks);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::SINK_L2)] = l2_tasks;
 
 	//	FINALIZE_L2
-	stage_tasks.emplace_back(1);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::FINALIZE_L2)] = 1;
 
 	//	MATERIALIZE_L2
-	stage_tasks.emplace_back(MaxValue<idx_t>(l2_tasks, 1));
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::MATERIALIZE_L2)] = MaxValue<idx_t>(l2_tasks, 1);
 
 	//	EXTRACT_P
-	stage_tasks.emplace_back(1);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::EXTRACT_P)] = 1;
 
 	//	INNER
-	stage_tasks.emplace_back(l2_tasks);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::INNER)] = l2_tasks;
 
 	//	OUTER
-	stage_tasks.emplace_back(left_outers + right_outers);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::OUTER)] = left_outers + right_outers;
 
 	//	ANTI
+	idx_t anti_tasks = 0;
 	if (op.join_type == JoinType::ANTI || op.join_type == JoinType::MARK) {
 		auto &left_table = *gsink.tables[0];
 		const auto null_block = (left_table.count - left_table.has_null) / STANDARD_VECTOR_SIZE;
-		stage_tasks.emplace_back(left_blocks - null_block);
-	} else {
-		stage_tasks.emplace_back(0);
+		anti_tasks = left_blocks - null_block;
 	}
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::ANTI)] = anti_tasks;
 
 	//	DONE
-	stage_tasks.emplace_back(0);
+	stage_tasks[static_cast<uint8_t>(IEJoinSourceStage::DONE)] = 0;
 
 	//	Accumulate task counts so we can find boundaries reliably
 	idx_t begin = 0;
-	for (const auto &stage_task : stage_tasks) {
-		stage_begin.emplace_back(begin);
+	for (idx_t i = 0; i < stage_tasks.size(); i++) {
+		auto &stage_task = stage_tasks[i];
+		stage_begin[i] = begin;
 		begin += stage_task;
 	}
 
@@ -1829,7 +1830,7 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 
 idx_t IEJoinGlobalSourceState::MaxThreads() {
 	// We can't leverage any more threads than tasks.
-	return *max_element(stage_tasks.begin(), stage_tasks.end());
+	return *std::max_element(stage_tasks.begin(), stage_tasks.end());
 }
 
 void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
