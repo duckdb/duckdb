@@ -107,7 +107,7 @@ public:
 		states.pop_back();
 		return state;
 	}
-	//! Take every pooled state, leaving the pool empty
+	//! Take every pooled state
 	vector<unique_ptr<STATE>> TakeAll() {
 		lock_guard<mutex> guard(lock);
 		return std::move(states);

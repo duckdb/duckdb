@@ -313,7 +313,7 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
-	//! Prepares the next eligible vector, collecting its I/O tasks, or the remaining assignment's when asked to
+	//! Prepares the next eligible vector, collecting its I/O tasks, or the remaining assignment's when registering it
 	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks,
 	                   bool register_assignment = false);
 	//! Rows of the assignment left to scan from the current vector onwards
