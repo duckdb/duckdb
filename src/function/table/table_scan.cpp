@@ -501,9 +501,12 @@ public:
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output);
 			} else if (read_ahead) {
-				if (ScanWithReadAhead(context, data_p, l_state, output)) {
-					return;
+				if (!ScanWithReadAhead(context, data_p, l_state, output) &&
+				    data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+					// every assignment went to a read-ahead job, the thread's own scan state never claims one
+					data_p.async_result = AsyncResultType::FINISHED;
 				}
+				return;
 			} else {
 				switch (ScanPersistentStorage(context, data_p, l_state, l_state.scan_state, output)) {
 				case PersistentScanResult::YIELD:

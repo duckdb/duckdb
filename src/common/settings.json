@@ -1245,7 +1245,7 @@
     },
     {
         "name": "read_ahead_depth",
-        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "description": "Number of scan jobs prefetched ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
         "type": "BIGINT",
         "default_scope": "global",
         "default_value": "-1",
