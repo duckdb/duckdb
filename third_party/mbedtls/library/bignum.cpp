@@ -1786,12 +1786,13 @@ int mbedtls_mpi_gcd_modinv_odd(mbedtls_mpi *G,
         MBEDTLS_MPI_CHK(mbedtls_mpi_grow(I, N->n));
     }
 
-    T = (mbedtls_mpi_uint* ) mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
-    if (T == NULL) {
-        ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
-        goto cleanup;
-    }
     {
+        T = (mbedtls_mpi_uint *) mbedtls_calloc(sizeof(mbedtls_mpi_uint) * N->n, T_factor);
+        if (T == NULL) {
+            ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
+            goto cleanup;
+        }
+
         mbedtls_mpi_uint *Ip = I != NULL ? I->p : NULL;
         /* If A is 0 (null), then A->p would be null, and A->n would be 0,
         * which would be an issue if A->p and A->n were passed to
@@ -1833,10 +1834,8 @@ int mbedtls_mpi_gcd(mbedtls_mpi *G, const mbedtls_mpi *A, const mbedtls_mpi *B)
     /* Make copies and take absolute values */
     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TA, A));
     MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&TB, B));
-
+    TA.s = TB.s = 1;
     {
-        TA.s = TB.s = 1;
-
         /* Make the two values the same (non-zero) number of limbs.
         * This is needed to use mbedtls_mpi_core functions below. */
         MBEDTLS_MPI_CHK(mbedtls_mpi_grow(&TA, TB.n != 0 ? TB.n : 1));
@@ -1868,7 +1867,6 @@ int mbedtls_mpi_gcd(mbedtls_mpi *G, const mbedtls_mpi *A, const mbedtls_mpi *B)
         size_t zg = za > zb ? zb : za; // zg = min(za, zb)
         MBEDTLS_MPI_CHK(mbedtls_mpi_shift_l(G, zg));
     }
-
 cleanup:
 
     mbedtls_mpi_free(&TA); mbedtls_mpi_free(&TB);
@@ -2018,6 +2016,7 @@ static int mbedtls_mpi_inv_mod_even(mbedtls_mpi *X,
 
     /* Bring A in the range [0, N). */
     MBEDTLS_MPI_CHK(mbedtls_mpi_mod_mpi(&AA, A, N));
+
     {
         /* We know A >= 0 but the next function wants A > 1 */
         int cmp = mbedtls_mpi_cmp_int(&AA, 1);

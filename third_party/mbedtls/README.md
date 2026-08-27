@@ -3,6 +3,7 @@ In order to bump mbedtls, we can run the helper script to download a new version
 ```
 python inline_mbedtls.py
 ```
+This will also update `mbedtls_config.h`. Revert this file to the original content.
 
 We then need to make it work in C++. We have a diff available that fixes these issues for the current version. It is possible / likely this does not map 1-1 to the new version, so rejects might need to be handled.
 

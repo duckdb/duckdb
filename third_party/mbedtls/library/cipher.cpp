@@ -846,8 +846,8 @@ static void add_pkcs_padding(unsigned char *output, size_t output_len,
  */
 MBEDTLS_STATIC_TESTABLE int mbedtls_get_pkcs_padding(unsigned char *input,
                                                      size_t input_len,
-                                                     size_t *data_len
-                                                     )
+                                                     size_t *data_len,
+                                                     size_t *invalid_padding)
 {
     size_t i, pad_idx;
     unsigned char padding_len;
@@ -873,6 +873,7 @@ MBEDTLS_STATIC_TESTABLE int mbedtls_get_pkcs_padding(unsigned char *input,
     /* If the padding is invalid, set the output length to 0 */
     *data_len = mbedtls_ct_if(bad, 0, input_len - padding_len);
 
+    *invalid_padding = mbedtls_ct_size_if_else_0(bad, SIZE_MAX);
     return 0;
 }
 #endif /* MBEDTLS_CIPHER_PADDING_PKCS7 */
@@ -1009,13 +1010,14 @@ static int get_zeros_padding(unsigned char *input, size_t input_len,
  * but a trivial get_padding function
  */
 static int get_no_padding(unsigned char *input, size_t input_len,
-                          size_t *data_len)
+                          size_t *data_len, size_t *invalid_padding)
 {
     if (NULL == input || NULL == data_len) {
         return MBEDTLS_ERR_CIPHER_BAD_INPUT_DATA;
     }
 
     *data_len = input_len;
+    *invalid_padding = 0;
     return 0;
 }
 #endif /* MBEDTLS_CIPHER_MODE_WITH_PADDING */
@@ -1115,7 +1117,7 @@ int mbedtls_cipher_finish_padded(mbedtls_cipher_context_t *ctx,
         /* Set output size for decryption */
         if (MBEDTLS_DECRYPT == ctx->operation) {
             return ctx->get_padding(output, mbedtls_cipher_get_block_size(ctx),
-                                    olen);
+                                    olen, invalid_padding);
         }
 
         /* Set output size for encryption */
