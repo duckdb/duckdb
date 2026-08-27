@@ -1,0 +1,15 @@
+# Extensions built by the Linux release and regression jobs.
+duckdb_extension_load(icu)
+duckdb_extension_load(tpch DONT_LINK)
+duckdb_extension_load(tpcds DONT_LINK)
+include("${EXTENSION_CONFIG_BASE_DIR}/fts.cmake")
+duckdb_extension_load(json)
+include("${EXTENSION_CONFIG_BASE_DIR}/inet.cmake")
+set(DUCKDB_EXTENSION_INET_SHOULD_LINK FALSE)
+duckdb_extension_load(parquet)
+duckdb_extension_load(autocomplete)
+# test_utils is temporarily disabled.
+# include("${EXTENSION_CONFIG_BASE_DIR}/test-utils.cmake")
+# set(DUCKDB_EXTENSION_TEST_UTILS_SHOULD_LINK FALSE)
+include("${EXTENSION_CONFIG_BASE_DIR}/httpfs.cmake")
+set(DUCKDB_EXTENSION_HTTPFS_SHOULD_LINK FALSE)
