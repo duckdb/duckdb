@@ -2,6 +2,8 @@
 # description: A large contiguous assignment splits into size-capped prefetch runs instead of one giant read
 # group: [prefetch]
 
+require vector_size 2048
+
 statement ok
 ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (ROW_GROUP_SIZE 8388608)
 
