@@ -880,8 +880,7 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	});
 	{
 		annotated_unique_lock<annotated_mutex> guard(reader_b_lock);
-		reader_b_started.wait(guard,
-		                      [&]() DUCKDB_REQUIRES(reader_b_lock) { return reader_b_is_started; });
+		reader_b_started.wait(guard, [&]() DUCKDB_REQUIRES(reader_b_lock) { return reader_b_is_started; });
 	}
 	policy_fs->ReleaseReads();
 
