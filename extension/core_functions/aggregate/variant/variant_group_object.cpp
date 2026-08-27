@@ -1,5 +1,4 @@
 #include "core_functions/aggregate/variant_functions.hpp"
-#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -13,6 +12,7 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/list_aggregate.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 namespace duckdb {
 
@@ -69,7 +69,7 @@ void VariantObjUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_
 class VariantObjSource {
 public:
 	VariantObjSource(const VectorIterator<VariantObjAggState *> &states, const ListSegmentFunctions &functions,
-	                 Allocator &allocator)
+	                 ArenaAllocator &allocator)
 	    : allocator(allocator), states(states), functions(functions) {
 	}
 
@@ -113,7 +113,8 @@ public:
 
 private:
 	optional<string> HasDuplicateKeys(const Vector &keys) {
-		PrimitiveDictionary<string_t> seen_keys(allocator, MaxValue(keys.size(), idx_t(1)), 1);
+		allocator.AlignNext();
+		PrimitiveDictionary<string_t> seen_keys(allocator.GetAllocator(), MaxValue(keys.size(), idx_t(1)), 1);
 		auto key_iterator = keys.Values<string_t>();
 
 		for (const auto &entry : key_iterator) {
@@ -131,7 +132,7 @@ private:
 	}
 
 private:
-	Allocator &allocator;
+	ArenaAllocator &allocator;
 	const VectorIterator<VariantObjAggState *> &states;
 	const ListSegmentFunctions &functions;
 };
@@ -145,7 +146,7 @@ void VariantObjFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &r
 	const auto states = vec.Values<VariantObjAggState *>();
 	Vector tmp(LogicalType::VARIANT(), count);
 
-	VariantObjSource source(states, functions, data.allocator.GetAllocator());
+	VariantObjSource source(states, functions, data.allocator);
 	BuildVariant(source, count, tmp);
 
 	VectorOperations::Copy(tmp, result, count, 0, offset);
