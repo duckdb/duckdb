@@ -200,11 +200,14 @@ public:
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
+	//! Executed before `-serve`/`-connect` when the user has no secret of their own, so that both work
+	//! without any configuration
+	string default_secret_command = "CREATE SECRET (TYPE quack, TOKEN 'quack')";
 	//! The command to execute when `-serve` is passed in
-	string serve_command = "CALL quack_serve('quack:{host|localhost}:{port|9494}', token='{token|quack}')";
+	string serve_command = "CALL quack_serve({serve_secret|})";
 	//! The command to execute when `-connect` is passed in
-	string connect_command = "CONNECT 'quack:{host|localhost}:{port|9494}' (TOKEN '{token|quack}')";
-	//! Parameters (e.g. host/port/token) used to expand placeholders in the serve/connect commands
+	string connect_command = "CONNECT 'quack:'{connect_secret|}";
+	//! Parameters used to expand placeholders in the serve/connect commands
 	unordered_map<string, string> command_parameters;
 	//! Whether the shell was launched as a client using `-connect` - Ctrl-D then exits instead of disconnecting
 	bool started_as_client = false;

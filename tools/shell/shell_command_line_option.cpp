@@ -4,6 +4,9 @@
 
 namespace duckdb_shell {
 
+//! Secret type holding the credentials that `-serve` and `-connect` use
+static constexpr const char *SERVER_SECRET_TYPE = "quack";
+
 // FIXME: should be moved out of a define
 #define SEP_Unit   "\x1F"
 #define SEP_Record "\x1E"
@@ -96,8 +99,12 @@ MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
 
 bool ShellState::ExpandCommandParameters(const string &command, string &result) {
 	result.clear();
+	bool in_string_literal = false;
 	for (idx_t pos = 0; pos < command.size(); pos++) {
 		if (command[pos] != '{') {
+			if (command[pos] == '\'') {
+				in_string_literal = !in_string_literal;
+			}
 			result += command[pos];
 			continue;
 		}
@@ -115,7 +122,7 @@ bool ShellState::ExpandCommandParameters(const string &command, string &result) 
 		auto parameter = placeholder.substr(0, separator);
 		auto entry = command_parameters.find(parameter);
 		if (entry != command_parameters.end()) {
-			result += entry->second;
+			result += in_string_literal ? StringUtil::Replace(entry->second, "'", "''") : entry->second;
 			continue;
 		}
 		if (separator == string::npos) {
@@ -131,8 +138,30 @@ bool ShellState::ExpandCommandParameters(const string &command, string &result) 
 	return true;
 }
 
+//! Create the secret that `-serve` and `-connect` fall back on, so that both work out of the box.
+//! Only when the user has no secret of their own: quack resolves those by itself, and a fall-back
+//! secret would shadow them - `CREATE SECRET IF NOT EXISTS` does not help there, as it only considers
+//! secrets in the same (temporary) storage and would still shadow a persistent one.
+static void CreateDefaultServerSecret(ShellState &state) {
+	if (!state.conn || state.default_secret_command.empty()) {
+		return;
+	}
+	auto existing = state.conn->Query(
+	    StringUtil::Format("SELECT count(*) FROM duckdb_secrets() WHERE type = %s", SQLString(SERVER_SECRET_TYPE)));
+	if (!existing || existing->HasError() || existing->RowCount() != 1) {
+		return;
+	}
+	if (existing->GetValue(0, 0).GetValue<int64_t>() != 0) {
+		return;
+	}
+	// errors are ignored on purpose - if the secret type is unavailable, the command we are about to run
+	// reports that in a way that actually helps
+	state.conn->Query(state.default_secret_command);
+}
+
 //! Expand and run one of the configurable commands (e.g. the serve/connect command)
 static MetadataResult RunConfiguredCommand(ShellState &state, const string &command) {
+	CreateDefaultServerSecret(state);
 	string expanded_command;
 	if (!state.ExpandCommandParameters(command, expanded_command)) {
 		ShellState::Exit(1);
@@ -156,32 +185,11 @@ MetadataResult ConnectToServer(ShellState &state, const vector<string> &args) {
 	return RunConfiguredCommand(state, state.connect_command);
 }
 
-MetadataResult SetHostParameter(ShellState &state, const vector<string> &args) {
-	state.command_parameters["host"] = args[1];
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetTokenParameter(ShellState &state, const vector<string> &args) {
-	state.command_parameters["token"] = args[1];
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetPortParameter(ShellState &state, const vector<string> &args) {
-	auto &port = args[1];
-	bool is_number = !port.empty();
-	for (auto c : port) {
-		if (c < '0' || c > '9') {
-			is_number = false;
-			break;
-		}
-	}
-	if (!is_number) {
-		state.PrintF(PrintOutput::STDERR, "%s: Error: invalid argument (%s) for '-port': expected a port number\n",
-		             state.program_name, port.c_str());
-		ShellState::Exit(1);
-		return MetadataResult::EXIT;
-	}
-	state.command_parameters["port"] = port;
+MetadataResult SetSecretName(ShellState &state, const vector<string> &args) {
+	// quack resolves the credentials - and the endpoint - from the secret itself, so we only pass the name
+	auto name = StringUtil::Replace(args[1], "'", "''");
+	state.command_parameters["serve_secret"] = StringUtil::Format("secret='%s'", name);
+	state.command_parameters["connect_secret"] = StringUtil::Format(" (SECRET '%s')", name);
 	return MetadataResult::SUCCESS;
 }
 
@@ -321,7 +329,6 @@ static const CommandLineOption command_line_options[] = {
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
     {"h", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
     {"help", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
-    {"host", 1, "HOST", SetHostParameter, nullptr, "host used by -serve and -connect. Default: 'localhost'"},
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
@@ -337,17 +344,16 @@ static const CommandLineOption command_line_options[] = {
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
     {"nullvalue", 1, "TEXT", nullptr, ShellState::SetNullValue, "set text string for NULL values. Default 'NULL'"},
-    {"port", 1, "PORT", SetPortParameter, nullptr, "port used by -serve and -connect. Default: '9494'"},
     {"quote", 0, "", nullptr, ToggleOutputMode<RenderMode::QUOTE>, "set output mode to 'quote'"},
     {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
     {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"safe", 0, "", ShellState::EnableSafeMode, nullptr, "enable safe-mode"},
+    {"secret", 1, "NAME", SetSecretName, nullptr, "name of the secret -serve and -connect take their credentials from"},
     {"separator", 1, "SEP", nullptr, ShellState::SetSeparator, "set output column separator. Default: '|'"},
     {"serve", 0, "", nullptr, LaunchServer, "launches a server for this database (configurable with .serve_command)"},
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
-    {"token", 1, "TOKEN", SetTokenParameter, nullptr, "token used by -serve and -connect"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
