@@ -298,12 +298,17 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 	const idx_t io_threads = MaxValue<idx_t>(async_threads > 0 ? async_threads : scheduler.NumberOfThreads(), 1);
 	const idx_t max_run_size = MinValue<idx_t>(MAX_PREFETCH_RUN_SIZE, GetMaxMemory() / (8 * io_threads));
 	vector<PrefetchRun> plan;
-	for (auto &entry : to_be_loaded) {
+	for (auto it = to_be_loaded.begin(); it != to_be_loaded.end(); ++it) {
+		auto &entry = *it;
 		bool new_run = plan.empty() ||
 		               plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first;
 		if (!new_run) {
-			auto run_size = (plan.back().handles.size() + 1) * entry.second->GetBlockAllocSize();
-			new_run = run_size > max_run_size;
+			const auto block_size = entry.second->GetBlockAllocSize();
+			const auto run_size = plan.back().handles.size() * block_size;
+			auto next = std::next(it);
+			// a lone trailing block is not worth a run of its own, let a run within the cap grow by it instead
+			const bool last_of_region = next == to_be_loaded.end() || next->first != entry.first + 1;
+			new_run = run_size + block_size > max_run_size && !(last_of_region && run_size <= max_run_size);
 		}
 		if (new_run) {
 			// the block is not adjacent to the previous block or the run is full, start a new run

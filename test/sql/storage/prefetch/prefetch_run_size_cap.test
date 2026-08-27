@@ -4,10 +4,15 @@
 
 require vector_size 2048
 
+require block_size 262144
+
 statement ok
 ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (ROW_GROUP_SIZE 8388608)
 
-# a single 8M row double column makes one row group hold ~64MB of contiguous blocks
+# a single uncompressed 8M row double column makes one row group hold 257 contiguous blocks, ~64MB
+statement ok
+SET force_compression='uncompressed'
+
 statement ok
 CREATE TABLE cap_db.t AS SELECT random() AS d FROM range(8388608)
 
@@ -39,11 +44,11 @@ SELECT sum(d) > 0 FROM cap_db.t
 ----
 true
 
-# the ~64MB assignment must split into multiple capped runs, one task each
+# the 257 blocks split into two 32MB runs, the last block joins the second run rather than becoming a run of its own
 query I
-SELECT max(task_count) BETWEEN 2 AND 4 FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
+SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
 ----
-true
+2
 
 statement ok
 CALL truncate_duckdb_logs()
