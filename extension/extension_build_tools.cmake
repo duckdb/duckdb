@@ -156,19 +156,19 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         # TODO strip all symbols except the capi init
     elseif (EXTENSION_STATIC_BUILD)
         if (WIN32)
-            target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
+            target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
         elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             if (APPLE)
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
                 # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
                 set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
             elseif (ZOS)
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
             else()
                 # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
             endif()
         else()
             message(FATAL_ERROR, "EXTENSION static build is only intended for Linux and Windows on MVSC")

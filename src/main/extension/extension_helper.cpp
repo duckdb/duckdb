@@ -90,6 +90,31 @@
 
 namespace duckdb {
 
+static ExtensionHelper::register_linked_extensions_t register_linked_extensions = nullptr;
+static ExtensionHelper::loaded_extension_test_paths_t loaded_extension_test_paths = nullptr;
+
+void ExtensionHelper::SetLinkedExtensionHooks(register_linked_extensions_t register_extensions,
+                                              loaded_extension_test_paths_t loaded_test_paths) {
+	D_ASSERT(!register_linked_extensions);
+	D_ASSERT(!loaded_extension_test_paths);
+	register_linked_extensions = register_extensions;
+	loaded_extension_test_paths = loaded_test_paths;
+}
+
+void ExtensionHelper::RegisterLinkedExtensions(DBConfig &config) {
+	if (!config.linked_extensions.empty() || !register_linked_extensions) {
+		return;
+	}
+	register_linked_extensions(config);
+}
+
+vector<string> ExtensionHelper::LoadedExtensionTestPaths() {
+	if (!loaded_extension_test_paths) {
+		return {};
+	}
+	return loaded_extension_test_paths();
+}
+
 //! Loads an extension that was linked into the binary, via the registry the config carries. This is
 //! deliberately not generated code: an extension with its own copy of DuckDB links no generated
 //! loader, so a compile-time list would be invisible to it, while the config is data it can read.
