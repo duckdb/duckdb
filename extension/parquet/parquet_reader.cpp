@@ -1287,16 +1287,29 @@ static void VerifyParquetSchemaDefinitionType(const LogicalType &definition_type
 }
 
 static void VerifyParquetSchemaChildType(const ParquetColumnDefinition &column, const ParquetColumnDefinition &child,
-                                         const string &expected_name, const LogicalType &expected_type,
-                                         bool verify_name) {
-	if (verify_name && child.name != expected_name) {
-		throw BinderException("Parquet schema column \"%s\" expects child %s to be named \"%s\", not \"%s\"",
-		                      column.name, column.type.ToString(), expected_name, child.name);
+                                         const string &expected_name, const LogicalType &expected_type) {
+	auto &column_name = column.name;
+
+	const bool name_equivalent = child.name == expected_name;
+	const bool type_equivalent = child.type == expected_type;
+	if (name_equivalent && type_equivalent) {
+		return;
 	}
-	if (child.type != expected_type) {
-		throw BinderException("Parquet schema column \"%s\" expects child \"%s\" to have type %s, not %s", column.name,
-		                      child.name, expected_type.ToString(), child.type.ToString());
+	string error;
+	if (!name_equivalent) {
+		error = StringUtil::Format("name \"%s\" (got \"%s\")", expected_name, child.name);
 	}
+	if (!type_equivalent) {
+		const bool name_mentioned = !error.empty();
+		if (name_mentioned) {
+			error += " and ";
+		} else {
+			error += StringUtil::Format("name \"%s\" to have ", expected_name);
+		}
+		error += StringUtil::Format("type \"%s\" (got \"%s\")", expected_type.ToString(), child.type.ToString());
+	}
+
+	throw BinderException("Parquet schema column \"%s\" expects a child with %s", column_name, error);
 }
 
 static void VerifyParquetSchemaChildren(const ParquetColumnDefinition &column) {
@@ -1325,16 +1338,16 @@ static void VerifyParquetSchemaChildren(const ParquetColumnDefinition &column) {
 		auto &expected_children = StructType::GetChildTypes(column.type);
 		for (idx_t i = 0; i < expected_children.size(); i++) {
 			VerifyParquetSchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
-			                             expected_children[i].second, true);
+			                             expected_children[i].second);
 		}
 		break;
 	}
 	case LogicalTypeId::LIST:
-		VerifyParquetSchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type), true);
+		VerifyParquetSchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type));
 		break;
 	case LogicalTypeId::MAP:
-		VerifyParquetSchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type), true);
-		VerifyParquetSchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type), true);
+		VerifyParquetSchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type));
+		VerifyParquetSchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type));
 		break;
 	default:
 		throw InternalException("Unexpected Parquet schema type with children");

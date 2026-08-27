@@ -582,7 +582,7 @@ SELECT * FROM read_parquet(
 	}
 )
 ----
-Binder Error: Parquet schema column "s" expects child STRUCT(expected BIGINT) to be named "expected", not "different"
+Binder Error: Parquet schema column "s" expects a child with name "expected" (got "different")
 
 statement error
 SELECT * FROM read_parquet(
@@ -599,7 +599,7 @@ SELECT * FROM read_parquet(
 	}
 )
 ----
-Binder Error: Parquet schema column "s" expects child "expected" to have type BIGINT, not VARCHAR
+Binder Error: Parquet schema column "s" expects a child with name "expected" to have type "BIGINT" (got "VARCHAR")
 
 statement error
 SELECT * FROM read_parquet(
@@ -616,7 +616,7 @@ SELECT * FROM read_parquet(
 	}
 )
 ----
-Binder Error: Parquet schema column "l" expects child STRUCT(y BIGINT)[] to be named "element", not "item"
+Binder Error: Parquet schema column "l" expects a child with name "element" (got "item")
 
 query I
 SELECT * FROM read_parquet(
