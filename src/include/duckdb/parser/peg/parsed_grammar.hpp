@@ -55,6 +55,8 @@ public:
 	DUCKDB_API void PrependChoice(const string &rule_name, const string &choice,
 	                              const grammar_cursor_function_t &find_cursor = nullptr);
 	DUCKDB_API void RemoveChoice(const string &rule_name, const grammar_cursor_function_t &find_cursor);
+	DUCKDB_API void ReplaceChoice(const string &rule_name, const string &choice,
+	                              const grammar_cursor_function_t &find_cursor);
 	DUCKDB_API void ReplaceRule(const string &rule_definition, grammar_transform_function_t transform = nullptr);
 	DUCKDB_API void SetTransform(const string &rule_name, grammar_transform_function_t transform);
 	DUCKDB_API void AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory);
