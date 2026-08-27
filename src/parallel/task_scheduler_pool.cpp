@@ -63,6 +63,10 @@ idx_t TaskSchedulerPool::NumberOfThreads() {
 	return current_thread_count.load();
 }
 
+idx_t TaskSchedulerPool::RequestedThreadCount() {
+	return requested_thread_count.load();
+}
+
 void TaskSchedulerPool::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
 	if (n == 0) {

@@ -33,6 +33,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -215,6 +216,9 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 }
 
 ClientContext::~ClientContext() {
+	if (config.streaming_execution_mode == StreamingExecutionMode::ASYNC) {
+		TaskScheduler::GetScheduler(*db).UnregisterAsyncStreamingConnection();
+	}
 	if (Exception::UncaughtException()) {
 		return;
 	}
@@ -340,6 +344,11 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
+	{
+		lock_guard<mutex> guard(notifier_lock);
+		active_result_notifier.reset();
+		has_result_notifier.store(false, std::memory_order_release);
+	}
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
@@ -405,6 +414,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	// Relaunch the threads if a SET THREADS command was issued
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
+
+	if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
+		// Record the streaming buffer peak while the profiler is still running
+		auto &stream_result = static_cast<StreamQueryResult &>(*result);
+		if (stream_result.HasBufferedData()) {
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(stream_result.GetBufferedData().PeakBufferedBytes());
+		}
+	}
 
 	optional_ptr<ErrorData> passed_error = nullptr;
 	if (result && result->HasError()) {
@@ -653,16 +670,32 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
+	// The connection-local setting applies only to streaming results. A materialized
+	// result on an async connection simply runs sync. The mode is read here, at
+	// submission, once per query. The setting and the task scheduler maintain the
+	// invariant that async connections have a DuckDB-managed worker thread.
+	const auto async_result = stream_result && client_config.streaming_execution_mode == StreamingExecutionMode::ASYNC;
 	if (!stream_result && client_config.get_result_collector) {
 		get_collector = client_config.get_result_collector;
 	}
 	statement_data.output_type =
 	    stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	statement_data.memory_type = parameters.query_parameters.memory_type;
+	statement_data.execution_mode = async_result ? StreamingExecutionMode::ASYNC : StreamingExecutionMode::SYNC;
 
 	// Get the result collector and initialize the executor.
 	auto collector = get_collector(*this, statement_data);
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	if (async_result && client_config.notify_callback) {
+		// The connection's notifier is set before execution starts, so no notification can
+		// be missed. The buffered collector picks it up when it creates the result buffer.
+		auto notifier = make_shared_ptr<QueryResultNotifier>();
+		notifier->Set(client_config.notify_callback);
+		executor.SetResultNotifier(notifier);
+		lock_guard<mutex> guard(notifier_lock);
+		active_result_notifier = std::move(notifier);
+		has_result_notifier.store(true, std::memory_order_release);
+	}
 	executor.Initialize(std::move(collector));
 
 	auto types = executor.GetTypes();
@@ -678,6 +711,10 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
 	active_query->executor->WaitForTask();
+}
+
+void ClientContext::WaitForProgress(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForProgress();
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
@@ -742,6 +779,10 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+	// Also covers a notifier set by a query whose creation failed before it could run
+	lock_guard<mutex> guard(notifier_lock);
+	active_result_notifier.reset();
+	has_result_notifier.store(false, std::memory_order_release);
 }
 
 StatementIterator ClientContext::IterateStatements(const string &query) {
@@ -1164,6 +1205,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			PendingQueryParameters parameters;
 			parameters.query_parameters = query_parameters;
 			if (!is_last_overall) {
+				// Only the final result can stream (and thus be consumed asynchronously)
 				parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 			}
 			auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
@@ -1308,6 +1350,24 @@ unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContext
 void ClientContext::Interrupt() {
 	ClientInterruptState expected = ClientInterruptState::NOT_INTERRUPTED;
 	interrupt_state.compare_exchange_strong(expected, ClientInterruptState::INTERRUPTED);
+	// Wake a waiting async stream consumer. Interrupt runs in signal handlers (the shell's
+	// Ctrl-C), so it must never block and must not allocate or free. It only tries the
+	// lock, and it notifies through the raw pointer while holding the lock, so no
+	// shared_ptr is copied and no destructor can run here. A contended lock means the
+	// query is being registered or torn down, so no consumer is waiting and skipping is
+	// safe. TryNotify only tries its own lock and calls the user callback, which the
+	// contract requires to be async-signal-safe.
+	if (has_result_notifier.load(std::memory_order_acquire) && notifier_lock.try_lock()) {
+		if (active_result_notifier) {
+			active_result_notifier->TryNotify();
+		}
+		notifier_lock.unlock();
+	}
+}
+
+shared_ptr<QueryResultNotifier> ClientContext::GetActiveResultNotifier() {
+	lock_guard<mutex> guard(notifier_lock);
+	return active_result_notifier;
 }
 
 bool ClientContext::IsInterrupted() const {

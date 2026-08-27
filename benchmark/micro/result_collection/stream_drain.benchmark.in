@@ -1,0 +1,22 @@
+# name: benchmark/micro/result_collection/stream_drain.benchmark.in
+# description: Template for the streaming result drain benchmarks
+# group: [result_collection]
+
+name stream_${mode}_${drain}
+group micro
+subgroup result_collection
+
+resultmode streaming ${mode} ${drain}
+
+argument buffer_size 1000000b
+
+cache stream_drain_data.duckdb
+
+init
+set streaming_buffer_size='${buffer_size}';
+
+load
+create table tbl as select 'this is a reasonably long string ' || i as a from range(25000000) t(i);
+
+run
+select * from tbl;

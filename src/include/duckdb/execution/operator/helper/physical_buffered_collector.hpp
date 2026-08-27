@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 
 namespace duckdb {
 
@@ -17,6 +18,8 @@ public:
 	PhysicalBufferedCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, bool parallel);
 
 	bool parallel;
+	//! Whether the result buffer is kept filled by background workers (see StreamingExecutionMode)
+	bool async;
 
 public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;

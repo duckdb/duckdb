@@ -317,7 +317,39 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
 	}
 #endif
+	lock_guard<mutex> guard(async_streaming_lock);
+	if (total_threads == external_threads && async_streaming_connections > 0) {
+		throw InvalidInputException(
+		    "Cannot change the thread configuration: %llu connection(s) have streaming_execution_mode set to "
+		    "'async', which requires at least one DuckDB-managed worker thread. Increase 'threads' or lower "
+		    "'external_threads'",
+		    async_streaming_connections);
+	}
 	SetThreadsInternal(TaskSchedulerType::REGULAR, total_threads - external_threads);
+}
+
+void TaskScheduler::RegisterAsyncStreamingConnection() {
+#ifdef DUCKDB_NO_THREADS
+	throw NotImplementedException("streaming_execution_mode = 'async' requires a threaded build of DuckDB");
+#else
+	lock_guard<mutex> guard(async_streaming_lock);
+	// The requested count is the committed intent, updated atomically with the guard in
+	// SetThreads. It assumes RelaunchThreads can launch the requested workers. When the
+	// OS refuses every thread, RelaunchThreads gives up silently and an async query can
+	// still stall. That pre-existing weakness needs OS thread exhaustion to hit.
+	if (GetPool(TaskSchedulerType::REGULAR).RequestedThreadCount() == 0) {
+		throw InvalidInputException(
+		    "streaming_execution_mode = 'async' requires at least one DuckDB-managed worker thread, because "
+		    "background workers produce the result. Increase 'threads' or lower 'external_threads'");
+	}
+	async_streaming_connections++;
+#endif
+}
+
+void TaskScheduler::UnregisterAsyncStreamingConnection() {
+	lock_guard<mutex> guard(async_streaming_lock);
+	D_ASSERT(async_streaming_connections > 0);
+	async_streaming_connections--;
 }
 
 void TaskScheduler::SetAsyncThreads(idx_t n) {

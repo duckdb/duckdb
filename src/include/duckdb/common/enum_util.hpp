@@ -540,6 +540,8 @@ enum class StrTimeSpecifier : uint8_t;
 
 enum class StreamExecutionResult : uint8_t;
 
+enum class StreamingExecutionMode : uint8_t;
+
 enum class SubqueryType : uint8_t;
 
 enum class SuggestionState : uint8_t;
@@ -1390,6 +1392,9 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
 
 template<>
 const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<StreamingExecutionMode>(StreamingExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
@@ -2285,6 +2290,9 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
 
 template<>
 StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
+
+template<>
+StreamingExecutionMode EnumUtil::FromString<StreamingExecutionMode>(const char *value);
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);

@@ -1547,6 +1547,18 @@ struct MaxMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxStreamingBufferSizeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "max_streaming_buffer_size";
+	static constexpr const char *Description =
+	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap "
+	    "plus at most one chunk: an oversized chunk is only admitted into an empty queue";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxTempDirectorySizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";
@@ -1953,11 +1965,13 @@ struct StorageCompatibilityVersionSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct StreamingBufferSizeSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "streaming_buffer_size";
+struct StreamingExecutionModeSetting {
+	using RETURN_TYPE = StreamingExecutionMode;
+	static constexpr const char *Name = "streaming_execution_mode";
 	static constexpr const char *Description =
-	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
+	    "Execution mode for streaming query results (SYNC or ASYNC). In SYNC mode fetching drives execution on the "
+	    "calling thread. In ASYNC mode background workers produce the result and fetching never runs engine work. "
+	    "Ignored for non-streaming results";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

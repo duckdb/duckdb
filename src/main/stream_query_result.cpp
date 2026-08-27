@@ -14,12 +14,17 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
                   std::move(names), std::move(client_properties)),
       buffered_data(std::move(data)) {
 	context = buffered_data->GetContext();
+	// A notify callback passed at execution time already set a notifier on the buffer
+	result_notifier = buffered_data->GetResultNotifier();
 }
 
 StreamQueryResult::StreamQueryResult(ErrorData error) : QueryResult(QueryResultType::STREAM_RESULT, std::move(error)) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
+	if (result_notifier) {
+		result_notifier->Clear();
+	}
 }
 
 string StreamQueryResult::ToString() {
@@ -53,9 +58,76 @@ StreamExecutionResult StreamQueryResult::ExecuteTask() {
 	return ExecuteTaskInternal(*lock);
 }
 
+void StreamQueryResult::HandleFetchFailure(ClientContextLock &lock, ErrorData error) {
+	bool invalidate_query = true;
+	if (!context->ErrorInvalidatesTransaction(error.Type())) {
+		// standard exceptions do not invalidate the current transaction
+		invalidate_query = false;
+	} else if (Exception::InvalidatesDatabase(error.Type())) {
+		// fatal exceptions invalidate the entire database
+		auto &db_instance = DatabaseInstance::GetDatabase(*context);
+		ValidChecker::Invalidate(db_instance, error.RawMessage());
+	}
+	context->ProcessError(error, context->GetCurrentQuery());
+	SetError(std::move(error));
+	context->CleanupInternal(lock, this, invalidate_query);
+}
+
+StreamExecutionResult StreamQueryResult::TryFetchChunk(unique_ptr<DataChunk> &out_chunk) {
+	out_chunk.reset();
+	if (!context) {
+		// The stream already closed. Keep reporting the terminal state
+		return HasError() ? StreamExecutionResult::EXECUTION_ERROR : StreamExecutionResult::EXECUTION_FINISHED;
+	}
+	if (!buffered_data || !buffered_data->IsAsync()) {
+		throw InvalidInputException(
+		    "TryFetchChunk can only be used on a streaming result executed with StreamingExecutionMode::ASYNC");
+	}
+	StreamExecutionResult execution_result;
+	{
+		auto lock = LockContext();
+		CheckExecutableInternal(*lock);
+		try {
+			execution_result = ExecuteTaskInternal(*lock);
+			if (execution_result == StreamExecutionResult::CHUNK_READY ||
+			    execution_result == StreamExecutionResult::EXECUTION_FINISHED) {
+				out_chunk = buffered_data->Scan();
+				if (out_chunk && out_chunk->ColumnCount() != 0 && out_chunk->size() != 0) {
+					return StreamExecutionResult::CHUNK_READY;
+				}
+				// The buffer is drained and execution is done. This is the end of the stream
+				buffered_data->AssertNoBlockedSinks();
+				out_chunk.reset();
+				context->CleanupInternal(*lock, this);
+				// Cleanup can fail on an autocommit commit. It sets the error without throwing
+				execution_result =
+				    HasError() ? StreamExecutionResult::EXECUTION_ERROR : StreamExecutionResult::EXECUTION_FINISHED;
+			}
+		} catch (std::exception &ex) {
+			HandleFetchFailure(*lock, ErrorData(ex));
+			execution_result = StreamExecutionResult::EXECUTION_ERROR;
+		} catch (...) { // LCOV_EXCL_START
+			SetError(ErrorData("Unhandled exception in TryFetchChunk"));
+			context->CleanupInternal(*lock, this, true);
+			execution_result = StreamExecutionResult::EXECUTION_ERROR;
+		} // LCOV_EXCL_STOP
+	}
+	if (execution_result == StreamExecutionResult::EXECUTION_FINISHED ||
+	    execution_result == StreamExecutionResult::EXECUTION_ERROR ||
+	    execution_result == StreamExecutionResult::EXECUTION_CANCELLED) {
+		Close();
+	}
+	return execution_result;
+}
+
 void StreamQueryResult::WaitForTask() {
 	auto lock = LockContext();
 	buffered_data->UnblockSinks();
+	if (buffered_data->IsAsync()) {
+		// Wake when a chunk is appended, instead of on the executor's task cadence
+		buffered_data->WaitForChunk(*context, *lock, *this);
+		return;
+	}
 	context->WaitForTask(*lock, *this);
 }
 
@@ -70,7 +142,6 @@ static bool ExecutionErrorOccurred(StreamExecutionResult result) {
 }
 
 unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lock) {
-	bool invalidate_query = true;
 	unique_ptr<DataChunk> chunk;
 	try {
 		// fetch the chunk and return it
@@ -85,21 +156,11 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 		}
 		return chunk;
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		if (!Exception::InvalidatesTransaction(error.Type())) {
-			// standard exceptions do not invalidate the current transaction
-			invalidate_query = false;
-		} else if (Exception::InvalidatesDatabase(error.Type())) {
-			// fatal exceptions invalidate the entire database
-			auto &db_instance = DatabaseInstance::GetDatabase(*context);
-			ValidChecker::Invalidate(db_instance, error.RawMessage());
-		}
-		context->ProcessError(error, context->GetCurrentQuery());
-		SetError(std::move(error));
+		HandleFetchFailure(lock, ErrorData(ex));
 	} catch (...) { // LCOV_EXCL_START
 		SetError(ErrorData("Unhandled exception in FetchInternal"));
+		context->CleanupInternal(lock, this, true);
 	} // LCOV_EXCL_STOP
-	context->CleanupInternal(lock, this, invalidate_query);
 	return nullptr;
 }
 
@@ -111,6 +172,9 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
 		chunk = FetchNextInternal(*lock);
 	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+		if (!HasError()) {
+			buffered_data->AssertNoBlockedSinks();
+		}
 		Close();
 		return nullptr;
 	}
@@ -192,6 +256,9 @@ bool StreamQueryResult::IsOpen() {
 }
 
 void StreamQueryResult::Close() {
+	if (result_notifier) {
+		result_notifier->Clear();
+	}
 	buffered_data->Close();
 	if (context) {
 		auto lock = LockContext();

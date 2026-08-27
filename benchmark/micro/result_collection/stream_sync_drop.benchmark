@@ -1,0 +1,7 @@
+# name: benchmark/micro/result_collection/stream_sync_drop.benchmark
+# description: Sync streaming result: blocking Fetch drives execution, chunks dropped
+# group: [result_collection]
+
+template benchmark/micro/result_collection/stream_drain.benchmark.in
+mode=sync
+drain=drop

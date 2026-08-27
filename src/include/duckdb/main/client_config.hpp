@@ -16,6 +16,7 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/profiling_coverage.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 #include "duckdb/main/user_settings.hpp"
 
 namespace duckdb {
@@ -60,7 +61,11 @@ struct ClientConfig {
 	bool use_replacement_scans = true;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
-	idx_t streaming_buffer_size = 1000000;
+	idx_t max_streaming_buffer_size = 1000000;
+	//! Execution mode for streaming query results. Read once per query at submission.
+	//! Ignored for non-streaming results. Set through the setting, never directly:
+	//! the setting registers async connections with the task scheduler.
+	StreamingExecutionMode streaming_execution_mode = StreamingExecutionMode::SYNC;
 
 	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
 	//! memory limit.
@@ -81,6 +86,10 @@ struct ClientConfig {
 
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
+	//! Called whenever an async streaming result's observable state may have changed.
+	//! Used by every ASYNC query on this connection. Ignored for SYNC queries.
+	//! Set on the query before execution starts. Callback rules: see QueryResultNotifier.
+	std::function<void()> notify_callback = nullptr;
 
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;

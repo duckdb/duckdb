@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 #include "duckdb/common/queue.hpp"
 
 namespace duckdb {
@@ -19,6 +20,8 @@ public:
 
 public:
 	idx_t current_batch = 0;
+	//! The parked chunk is deposited by restart selection. The re-entered Sink must not append it again
+	bool chunk_deposited = false;
 };
 
 class PhysicalBufferedBatchCollector : public PhysicalResultCollector {
@@ -53,6 +56,10 @@ public:
 	bool IsStreaming() const override {
 		return true;
 	}
+
+private:
+	//! Whether background workers keep the buffer filled (see StreamingExecutionMode)
+	bool async;
 };
 
 } // namespace duckdb

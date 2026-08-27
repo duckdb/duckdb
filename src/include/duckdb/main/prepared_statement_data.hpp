@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -48,6 +49,8 @@ public:
 	QueryResultOutputType output_type;
 	//! Whether we are creating a buffer-managed result or not
 	QueryResultMemoryType memory_type;
+	//! Whether the result is produced by background workers or driven by the consumer
+	StreamingExecutionMode execution_mode = StreamingExecutionMode::SYNC;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);

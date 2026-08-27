@@ -197,6 +197,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxExecutionTimeSetting),
     DUCKDB_SETTING(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
+    DUCKDB_LOCAL(MaxStreamingBufferSizeSetting),
     DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
@@ -234,7 +235,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(StandardVectorSizeSetting),
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
-    DUCKDB_LOCAL(StreamingBufferSizeSetting),
+    DUCKDB_LOCAL(StreamingExecutionModeSetting),
     DUCKDB_SETTING_CALLBACK(TableFunctionIdentifierConversionSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
@@ -255,10 +256,11 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 30),
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 130),
                                                      DUCKDB_SETTING_ALIAS("null_order", 62),
-                                                     DUCKDB_SETTING_ALIAS("profile_output", 154),
-                                                     DUCKDB_SETTING_ALIAS("user", 174),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 155),
+                                                     DUCKDB_SETTING_ALIAS("streaming_buffer_size", 131),
+                                                     DUCKDB_SETTING_ALIAS("user", 175),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 172),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 173),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

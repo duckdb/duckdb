@@ -7,6 +7,8 @@
 #pragma once
 
 #include "benchmark.hpp"
+#include "duckdb/common/query_parameters.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 #include "duckdb/main/query_result.hpp"
 
 #include <unordered_map>
@@ -16,6 +18,7 @@
 namespace duckdb {
 struct BenchmarkFileReader;
 class MaterializedQueryResult;
+class StreamQueryResult;
 struct InterpretedBenchmarkState;
 
 const string DEFAULT_DB_PATH = "duckdb_benchmark_db.db";
@@ -83,6 +86,8 @@ private:
 	BenchmarkQuery ReadQueryFromReader(BenchmarkFileReader &reader, const string &sql, const string &header);
 
 	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
+	//! Consume a streaming result according to the configured drain mode
+	unique_ptr<MaterializedQueryResult> DrainStream(InterpretedBenchmarkState &state, StreamQueryResult &stream);
 
 	void ProcessFile(const string &path);
 	void AddExtension(const string &extension, bool load_only);
@@ -118,6 +123,9 @@ private:
 	bool in_memory = true;
 	string storage_version;
 	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
+	StreamingExecutionMode execution_mode = StreamingExecutionMode::SYNC;
+	//! Discard fetched chunks instead of materializing them into the benchmark result
+	bool discard_stream_result = false;
 	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
 };

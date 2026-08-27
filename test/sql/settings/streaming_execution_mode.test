@@ -1,0 +1,72 @@
+# name: test/sql/settings/streaming_execution_mode.test
+# description: The streaming_execution_mode setting: values, scope, and the worker-thread guard
+# group: [settings]
+
+query I
+SELECT current_setting('streaming_execution_mode')
+----
+sync
+
+statement ok
+SET streaming_execution_mode='async'
+
+query I
+SELECT current_setting('streaming_execution_mode')
+----
+async
+
+# Values are case-insensitive
+statement ok
+SET streaming_execution_mode='ASYNC'
+
+statement ok
+RESET streaming_execution_mode
+
+query I
+SELECT current_setting('streaming_execution_mode')
+----
+sync
+
+statement error
+SET streaming_execution_mode='turbo'
+----
+<REGEX>:.*unrecognized value.*
+
+# The setting is connection-local
+statement error
+SET GLOBAL streaming_execution_mode='async'
+----
+<REGEX>:.*cannot be set globally.*
+
+# Another connection's setting stays sync
+statement ok con1
+SET streaming_execution_mode='async'
+
+query I con2
+SELECT current_setting('streaming_execution_mode')
+----
+sync
+
+# No connection can remove the last managed worker while an async connection exists
+statement error con2
+SET threads=1
+----
+<REGEX>:.*async.*worker thread.*
+
+statement ok con1
+RESET streaming_execution_mode
+
+statement ok con2
+SET threads=1
+
+# Async needs a managed worker, so it is refused on a single-threaded instance
+statement error con1
+SET streaming_execution_mode='async'
+----
+<REGEX>:.*worker thread.*
+
+statement ok con2
+SET threads=4
+
+statement ok con1
+SET streaming_execution_mode='async'

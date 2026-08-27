@@ -14,6 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_notifier.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -21,6 +22,7 @@
 #include <condition_variable>
 
 namespace duckdb {
+class BufferedData;
 class ClientContext;
 class DataChunk;
 class PhysicalOperator;
@@ -57,6 +59,14 @@ public:
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
+	//! Bounded wait for background progress. Ignores the producer queue, for async
+	//! result consumers that never run tasks.
+	void WaitForProgress();
+
+private:
+	void WaitForTaskInternal(bool consider_producer_queue);
+
+public:
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
 	void Reset();
@@ -89,9 +99,7 @@ public:
 	//! Returns the progress of the pipelines
 	idx_t GetPipelinesProgress(ProgressData &progress);
 
-	void CompletePipeline() {
-		completed_pipelines++;
-	}
+	void CompletePipeline();
 	ProducerToken &GetToken() {
 		return *producer;
 	}
@@ -115,6 +123,14 @@ public:
 	}
 	void UnregisterTask();
 
+	//! Notify an async stream consumer that execution reached a terminal state
+	void NotifyResultTerminal();
+	//! Publish the streaming result buffer for ResultIsObservable. Called by the
+	//! buffered collectors when their global sink state is created
+	void SetStreamingBufferedData(BufferedData &buffer);
+	//! Set the notifier called when execution finishes or errors (async streaming results)
+	void SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p);
+
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;
 	}
@@ -126,6 +142,8 @@ public:
 private:
 	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
 	bool ResultCollectorIsBlocked();
+	//! Whether the streaming result already holds a consumable chunk
+	bool ResultIsObservable();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
@@ -185,6 +203,19 @@ private:
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;
+	//! Leaf lock for the notifier slot. PushError can run while a thread holds
+	//! executor_lock during event scheduling, so the slot must not share that lock.
+	annotated_mutex result_notifier_lock;
+	//! Called when execution finishes, errors, or is cancelled (may be null)
+	shared_ptr<QueryResultNotifier> result_notifier DUCKDB_GUARDED_BY(result_notifier_lock);
+	//! The running query's streaming result buffer, or null when the query has none.
+	//! The buffered result collector stores it here when it creates its global sink
+	//! state. That happens in a task on a worker thread, so the pointer is atomic:
+	//! reading the sink state itself from another thread would race with its creation.
+	//! The pointer cannot dangle. The sink state owns the buffer, it is only torn down
+	//! by Reset or by a new Initialize, and both hold the client context lock, just
+	//! like every reader (all reads happen inside ExecuteTask).
+	atomic<BufferedData *> streaming_buffered_data {nullptr};
 
 	//! Total time blocked while waiting on tasks. In ticks. One tick corresponds to WAIT_TIME.
 	atomic<idx_t> blocked_thread_time;

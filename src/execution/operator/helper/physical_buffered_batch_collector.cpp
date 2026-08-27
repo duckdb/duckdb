@@ -1,16 +1,18 @@
 #include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
 
+#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 
 namespace duckdb {
 
 PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
-    : PhysicalResultCollector(physical_plan, data) {
+    : PhysicalResultCollector(physical_plan, data), async(data.execution_mode == StreamingExecutionMode::ASYNC) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -35,19 +37,16 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
+	if (lstate.chunk_deposited) {
+		lstate.chunk_deposited = false;
+		return SinkResultType::NEED_MORE_INPUT;
+	}
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
-	if (buffered_data.ShouldBlockBatch(batch)) {
-		auto callback_state = input.interrupt_state;
-		buffered_data.BlockSink(callback_state, batch);
+	if (buffered_data.AppendOrBlock(chunk, batch, input.interrupt_state)) {
+		lstate.chunk_deposited = true;
 		return SinkResultType::BLOCKED;
 	}
-
-	// FIXME: if we want to make this more accurate, we should grab a reservation on the buffer space
-	// while we're unlocked some other thread could also append, causing us to potentially cross our buffer size
-
-	buffered_data.Append(chunk, batch);
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -101,7 +100,17 @@ unique_ptr<LocalSinkState> PhysicalBufferedBatchCollector::GetLocalSinkState(Exe
 unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedBatchCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared_ptr<BatchedBufferedData>(context);
+	if (async) {
+		state->buffered_data = make_shared_ptr<BatchedBufferedDataAsync>(context);
+		// A notify callback passed at execution time is set before this buffer exists
+		auto notifier = context.GetActiveResultNotifier();
+		if (notifier) {
+			state->buffered_data->SetResultNotifier(std::move(notifier));
+		}
+	} else {
+		state->buffered_data = make_shared_ptr<BatchedBufferedDataSync>(context);
+	}
+	Executor::Get(context).SetStreamingBufferedData(*state->buffered_data);
 	return std::move(state);
 }
 

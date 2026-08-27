@@ -58,6 +58,8 @@ public:
 private:
 	shared_ptr<ClientContext> context;
 	bool allow_stream_result;
+	//! Whether the result executes async. The consumer thread then never runs tasks
+	bool async;
 
 private:
 	void CheckExecutableInternal(ClientContextLock &lock);

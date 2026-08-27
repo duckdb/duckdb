@@ -1050,6 +1050,16 @@
         ]
     },
     {
+        "name": "max_streaming_buffer_size",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap plus at most one chunk: an oversized chunk is only admitted into an empty queue",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "streaming_buffer_size"
+        ]
+    },
+    {
         "name": "max_temp_directory_size",
         "description": "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
         "type": "VARCHAR",
@@ -1331,9 +1341,9 @@
         "custom_implementation": true
     },
     {
-        "name": "streaming_buffer_size",
-        "description": "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
-        "type": "VARCHAR",
+        "name": "streaming_execution_mode",
+        "description": "Execution mode for streaming query results (SYNC or ASYNC). In SYNC mode fetching drives execution on the calling thread. In ASYNC mode background workers produce the result and fetching never runs engine work. Ignored for non-streaming results",
+        "type": "ENUM<StreamingExecutionMode>",
         "scope": "local",
         "custom_implementation": true
     },

@@ -75,6 +75,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/enums/stream_execution_result.hpp"
+#include "duckdb/common/enums/streaming_execution_mode.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
@@ -6012,6 +6013,24 @@ const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value
 template<>
 StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value) {
 	return static_cast<StreamExecutionResult>(StringUtil::StringToEnum(GetStreamExecutionResultValues(), 7, "StreamExecutionResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStreamingExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StreamingExecutionMode::SYNC), "SYNC" },
+		{ static_cast<uint32_t>(StreamingExecutionMode::ASYNC), "ASYNC" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StreamingExecutionMode>(StreamingExecutionMode value) {
+	return StringUtil::EnumToString(GetStreamingExecutionModeValues(), 2, "StreamingExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+StreamingExecutionMode EnumUtil::FromString<StreamingExecutionMode>(const char *value) {
+	return static_cast<StreamingExecutionMode>(StringUtil::StringToEnum(GetStreamingExecutionModeValues(), 2, "StreamingExecutionMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSubqueryTypeValues() {

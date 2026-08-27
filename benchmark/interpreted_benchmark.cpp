@@ -2,11 +2,17 @@
 
 #include "benchmark_runner.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
@@ -234,11 +240,31 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				ThrowResultModeError(reader);
 			}
 			if (splits[1] == "streaming") {
-				if (splits.size() != 2) {
-					throw std::runtime_error(
-					    reader.FormatException("resultmode 'streaming' does not accept a parameter"));
-				}
 				result_type = QueryResultType::STREAM_RESULT;
+				bool mode_set = false;
+				bool drain_set = false;
+				for (idx_t i = 2; i < splits.size(); i++) {
+					if (splits[i] == "sync" || splits[i] == "async") {
+						if (mode_set) {
+							throw std::runtime_error(
+							    reader.FormatException("resultmode 'streaming' got more than one execution mode"));
+						}
+						mode_set = true;
+						execution_mode =
+						    splits[i] == "sync" ? StreamingExecutionMode::SYNC : StreamingExecutionMode::ASYNC;
+					} else if (splits[i] == "materialize" || splits[i] == "drop") {
+						if (drain_set) {
+							throw std::runtime_error(
+							    reader.FormatException("resultmode 'streaming' got more than one drain mode"));
+						}
+						drain_set = true;
+						discard_stream_result = splits[i] == "drop";
+					} else {
+						throw std::runtime_error(
+						    reader.FormatException("resultmode 'streaming' only accepts 'sync', 'async', "
+						                           "'materialize' and 'drop' as parameters"));
+					}
+				}
 			} else if (splits[1] == "arrow") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
 				if (splits.size() == 3) {
@@ -607,6 +633,12 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		return Initialize(config);
 	}
 
+	if (execution_mode == StreamingExecutionMode::ASYNC) {
+		auto mode_result = state->con.Query("SET streaming_execution_mode='async'");
+		if (mode_result->HasError()) {
+			mode_result->ThrowError();
+		}
+	}
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
 	} else if (config.profile_info == BenchmarkProfileInfo::DETAILED) {
@@ -659,21 +691,43 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 
 	auto &config = ClientConfig::GetConfig(*context);
 	auto result_collector_setting = PrepareResultCollector(config, *this);
-	const bool use_streaming = result_type == QueryResultType::STREAM_RESULT;
-	auto temp_result = context->Query(run_query, use_streaming);
+	QueryParameters parameters(result_type == QueryResultType::STREAM_RESULT);
+	auto temp_result = context->Query(run_query, parameters);
+	if (temp_result->HasError()) {
+		// report the query error instead of failing the result type check below
+		state.result = make_uniq<MaterializedQueryResult>(temp_result->GetErrorObject());
+		return;
+	}
 	if (temp_result->GetResultType() != result_type) {
 		throw InternalException("Query did not produce the right result type, expected %s but got %s",
 		                        EnumUtil::ToString(result_type), EnumUtil::ToString(temp_result->GetResultType()));
 	}
 	if (temp_result->GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_query = temp_result->Cast<StreamQueryResult>();
-		state.result = stream_query.Materialize();
+		state.result = DrainStream(state, stream_query);
 	} else if (temp_result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		/* no-op, this is only used to test the overhead of the result collector */
 		state.result = nullptr;
 	} else {
 		state.result = unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(temp_result));
 	}
+}
+
+unique_ptr<MaterializedQueryResult> InterpretedBenchmark::DrainStream(InterpretedBenchmarkState &state,
+                                                                      StreamQueryResult &stream) {
+	if (!discard_stream_result) {
+		return stream.Materialize();
+	}
+	while (true) {
+		auto chunk = stream.Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+	}
+	if (stream.HasError()) {
+		return make_uniq<MaterializedQueryResult>(stream.GetErrorObject());
+	}
+	return nullptr;
 }
 
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {

@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
@@ -236,6 +237,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 	{
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = &plan;
+		streaming_buffered_data.store(nullptr, std::memory_order_relaxed);
 
 		this->profiler = ClientData::Get(context).profiler;
 		this->producer = scheduler.CreateProducer();
@@ -278,12 +280,23 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 void Executor::CancelTasks() {
 	task.reset();
 	reference_map_t<Task, shared_ptr<Task>> to_destroy;
+	shared_ptr<QueryResultNotifier> notifier;
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
 		to_destroy = std::move(to_be_rescheduled_tasks);
 		to_be_rescheduled_tasks.clear();
+	}
+	{
+		annotated_lock_guard<annotated_mutex> l(result_notifier_lock);
+		notifier = std::move(result_notifier);
+	}
+	if (notifier) {
+		// Workers can still fire notifications while the query is torn down. The buffered
+		// data holds its own notifier reference, so resetting ours is not enough.
+		// Clear silences every copy.
+		notifier->Clear();
 	}
 	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
@@ -345,23 +358,68 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 	task_reschedule.notify_one();
 }
 
+void Executor::SetResultNotifier(shared_ptr<QueryResultNotifier> result_notifier_p) {
+	annotated_lock_guard<annotated_mutex> l(result_notifier_lock);
+	result_notifier = std::move(result_notifier_p);
+}
+
 void Executor::UnregisterTask() {
 #ifndef DUCKDB_NO_THREADS
-	lock_guard<mutex> l(executor_lock);
 	{
-		const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
-		executor_tasks--;
-		producer->producer_cv.notify_all();
+		lock_guard<mutex> l(executor_lock);
+		{
+			const annotated_lock_guard<annotated_mutex> producer_lock(producer->producer_lock);
+			executor_tasks--;
+			producer->producer_cv.notify_all();
+		}
+		task_reschedule.notify_all();
 	}
-	task_reschedule.notify_all();
 #else
 	executor_tasks--;
 #endif
 }
 
+void Executor::CompletePipeline() {
+	auto completed = ++completed_pipelines;
+	// The last completion flips ExecutionIsFinished, the transition an async consumer
+	// waits for. This runs on the thread that finished the pipeline, never on an async
+	// consumer path. The notify must not hang off task destruction: the last task
+	// reference can die on a consumer thread that restarted a blocked sink.
+	if (completed >= total_pipelines) {
+		NotifyResultTerminal();
+	}
+}
+
+void Executor::NotifyResultTerminal() {
+	shared_ptr<QueryResultNotifier> notifier;
+	{
+		annotated_lock_guard<annotated_mutex> l(result_notifier_lock);
+		notifier = result_notifier;
+	}
+	if (notifier) {
+		// Notify outside the lock. The callback must never run under an engine lock.
+		// A throwing callback (a contract violation) must not tear down the caller.
+		try {
+			notifier->Notify();
+		} catch (...) { // LCOV_EXCL_LINE
+		}
+	}
+}
+
 void Executor::WaitForTask() {
+	WaitForTaskInternal(true);
+}
+
+void Executor::WaitForProgress() {
+	// An async caller never runs tasks, so an available producer task is no reason
+	// to skip the wait
+	WaitForTaskInternal(false);
+}
+
+void Executor::WaitForTaskInternal(bool consider_producer_queue) {
 #ifndef DUCKDB_NO_THREADS
-	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
+	// WAIT_TIME is in milliseconds
+	static constexpr std::chrono::microseconds WAIT_INTERVAL = std::chrono::microseconds(WAIT_TIME * 1000);
 	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = TimePoint::Tick();
@@ -372,20 +430,22 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
-		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		// A chunk is buffered. The caller's next step will observe it
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
-		// A task is available for the calling thread, the next step will make progress without waiting
-		blocked_thread_time += blocked_micros;
-		return;
+	if (consider_producer_queue) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		if (scheduler.GetTaskCountForProducer(*producer) > 0) {
+			// A task is available for the calling thread, the next step will make progress without waiting
+			blocked_thread_time += blocked_micros;
+			return;
+		}
 	}
-	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
-	// Wait (bounded), but wake up on task completion or reschedule.
-	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
-	task_reschedule.wait_for(l, WAIT_TIME_MS);
+	// Nothing this caller can advance itself. Wait with a bound, and wake up on task
+	// completion or reschedule.
+	blocked_thread_time += blocked_micros + WAIT_INTERVAL.count();
+	task_reschedule.wait_for(l, WAIT_INTERVAL);
 #endif
 }
 
@@ -405,6 +465,17 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 			break;
 		}
 	}
+}
+
+void Executor::SetStreamingBufferedData(BufferedData &buffer) {
+	streaming_buffered_data.store(&buffer, std::memory_order_release);
+}
+
+bool Executor::ResultIsObservable() {
+	// Acquire pairs with the release in SetStreamingBufferedData, so the buffer is
+	// fully constructed here. The member comment explains why it cannot dangle.
+	auto buffer = streaming_buffered_data.load(std::memory_order_acquire);
+	return buffer && buffer->HasObservableChunk();
 }
 
 bool Executor::ResultCollectorIsBlocked() {
@@ -431,6 +502,9 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
 	auto &task_ref = *task_p;
 	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
+	// A task blocking can turn ResultCollectorIsBlocked() true. Wake waiting async
+	// consumers, or they sleep a full WAIT_TIME despite a result chunk being observable
+	task_reschedule.notify_all();
 }
 
 bool Executor::ExecutionIsFinished() {
@@ -459,6 +533,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		}
 
 		if (!current_task && !HasError()) {
+			// An async observer can consume as soon as a chunk is observable, before
+			// any producer blocks. Checked outside executor_lock: the buffer takes its
+			// own lock, and the two must not nest.
+			if (dry_run && ResultIsObservable()) {
+				return PendingExecutionResult::RESULT_READY;
+			}
 			// there are no tasks to be scheduled and there are tasks blocked
 			lock_guard<mutex> l(executor_lock);
 			if (to_be_rescheduled_tasks.empty()) {
@@ -522,6 +602,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
+	streaming_buffered_data.store(nullptr, std::memory_order_relaxed);
 	cancelled = false;
 	root_executor.reset();
 	root_pipelines.clear();
@@ -569,6 +650,8 @@ void Executor::PushError(ErrorData exception) {
 		pipeline->FinishSourceAndPreventBlocking(context);
 		pipeline->PreventSinkBlocking();
 	}
+	// An error flips ExecutionIsFinished. Wake an async consumer waiting for that.
+	NotifyResultTerminal();
 }
 
 bool Executor::HasError() {

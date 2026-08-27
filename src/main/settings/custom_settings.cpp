@@ -1484,19 +1484,53 @@ Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
 //===----------------------------------------------------------------------===//
 // Streaming Buffer Size
 //===----------------------------------------------------------------------===//
-void StreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
+void MaxStreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
 }
 
-void StreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
+void MaxStreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.SetDefaultStreamingBufferSize();
 }
 
-Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
+Value MaxStreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
+	return Value(StringUtil::BytesToHumanReadableString(config.max_streaming_buffer_size));
+}
+
+//===----------------------------------------------------------------------===//
+// Streaming Execution Mode
+//===----------------------------------------------------------------------===//
+static void SetStreamingExecutionMode(ClientContext &context, StreamingExecutionMode mode) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (mode == config.streaming_execution_mode) {
+		return;
+	}
+	// The scheduler refuses async when no managed worker exists, and refuses thread
+	// changes that would remove the last managed worker while async connections exist.
+	// Pair on the old value, so only a registered connection ever unregisters.
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	if (config.streaming_execution_mode == StreamingExecutionMode::ASYNC) {
+		scheduler.UnregisterAsyncStreamingConnection();
+	} else if (mode == StreamingExecutionMode::ASYNC) {
+		scheduler.RegisterAsyncStreamingConnection();
+	}
+	config.streaming_execution_mode = mode;
+}
+
+void StreamingExecutionModeSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto mode = EnumUtil::FromString<StreamingExecutionMode>(StringUtil::Upper(input.ToString()));
+	SetStreamingExecutionMode(context, mode);
+}
+
+void StreamingExecutionModeSetting::ResetLocal(ClientContext &context) {
+	SetStreamingExecutionMode(context, ClientConfig().streaming_execution_mode);
+}
+
+Value StreamingExecutionModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.streaming_execution_mode)));
 }
 
 //===----------------------------------------------------------------------===//

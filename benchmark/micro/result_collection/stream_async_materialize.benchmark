@@ -1,0 +1,7 @@
+# name: benchmark/micro/result_collection/stream_async_materialize.benchmark
+# description: Async streaming result: blocking Fetch parks on a condition variable, chunks materialized
+# group: [result_collection]
+
+template benchmark/micro/result_collection/stream_drain.benchmark.in
+mode=async
+drain=materialize

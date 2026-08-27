@@ -10,11 +10,12 @@ PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, Prep
                                        vector<LogicalType> types_p, bool allow_stream_result)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties,
                       std::move(types_p), statement.names),
-      context(std::move(context_p)), allow_stream_result(allow_stream_result) {
+      context(std::move(context_p)), allow_stream_result(allow_stream_result),
+      async(statement.execution_mode == StreamingExecutionMode::ASYNC) {
 }
 
 PendingQueryResult::PendingQueryResult(ErrorData error)
-    : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)) {
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)), allow_stream_result(false), async(false) {
 }
 
 PendingQueryResult::~PendingQueryResult() {
@@ -47,6 +48,12 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 
 void PendingQueryResult::WaitForTask() {
 	auto lock = LockContext();
+	if (async) {
+		// An async caller never runs tasks, so wait for worker progress. WaitForTask
+		// returns immediately whenever the producer queue is non-empty.
+		context->WaitForProgress(*lock, *this);
+		return;
+	}
 	context->WaitForTask(*lock, *this);
 }
 
@@ -67,7 +74,9 @@ bool PendingQueryResult::AllowStreamResult() const {
 
 PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	return context->ExecuteTaskInternal(lock, *this, false);
+	// An async query never runs tasks on the consumer thread. The notify callback
+	// could otherwise run on this thread's stack under the context lock
+	return context->ExecuteTaskInternal(lock, *this, async);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
@@ -75,7 +84,19 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 
 	PendingExecutionResult execution_result;
 	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock))) {
-		if (execution_result == PendingExecutionResult::BLOCKED) {
+		if (async) {
+			CheckExecutableInternal(lock);
+			if (context->IsInterrupted()) {
+				// Observing without running tasks cannot surface interrupts. The executing
+				// call throws on its interrupt guard before fetching any task, and its catch
+				// converts the interrupt into an error result exactly like the sync path.
+				execution_result = context->ExecuteTaskInternal(lock, *this, false);
+				break;
+			}
+			// An async consumer makes no progress itself, so wait for the workers here.
+			// WaitForTask would return immediately whenever the producer queue is non-empty.
+			context->WaitForProgress(lock, *this);
+		} else if (execution_result == PendingExecutionResult::BLOCKED) {
 			CheckExecutableInternal(lock);
 			context->WaitForTask(lock, *this);
 		}

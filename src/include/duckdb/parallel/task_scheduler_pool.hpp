@@ -29,6 +29,8 @@ public:
 public:
 	void SetThreads(idx_t n);
 	idx_t NumberOfThreads();
+	//! The thread count the next relaunch will establish
+	idx_t RequestedThreadCount();
 	void RelaunchThreads(TaskScheduler &scheduler, bool destroy);
 	void Signal(idx_t n);
 #ifndef DUCKDB_NO_THREADS

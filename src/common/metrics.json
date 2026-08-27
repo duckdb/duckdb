@@ -51,6 +51,11 @@
 			"description": "Peak memory usage of the buffer manager",
 			"unit": "bytes"
 		},
+		"peak_streaming_buffer_size": {
+			"metric_type": "uint64",
+			"description": "Peak number of bytes buffered by a streaming query result",
+			"unit": "bytes"
+		},
 		"peak_temp_dir_size": {
 			"metric_type": "uint64",
 			"description": "Peak size of the temporary directory",

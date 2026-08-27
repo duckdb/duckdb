@@ -76,6 +76,12 @@ public:
 	void SetAsyncThreads(idx_t n);
 	void RelaunchThreads();
 
+	//! Register a connection with streaming_execution_mode = 'async'. Throws when no
+	//! DuckDB-managed worker thread exists. While registered connections exist,
+	//! SetThreads refuses changes that would leave no managed worker.
+	DUCKDB_API void RegisterAsyncStreamingConnection();
+	DUCKDB_API void UnregisterAsyncStreamingConnection();
+
 	//! Yield to other threads
 	static void YieldThread();
 	//! Get the number of the CPU on which the calling thread is currently executing.
@@ -101,6 +107,10 @@ private:
 	DatabaseInstance &db;
 	//! Lock for modifying the thread count
 	mutex thread_lock;
+	//! Serializes SetThreads against async streaming connection registration
+	mutex async_streaming_lock;
+	//! The number of connections with streaming_execution_mode = 'async'
+	idx_t async_streaming_connections = 0;
 	//! The thread pools
 	array<unique_ptr<TaskSchedulerPool>, TASK_SCHEDULER_TYPE_COUNT> pools;
 	//! The task queues
