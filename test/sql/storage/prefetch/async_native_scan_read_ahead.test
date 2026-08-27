@@ -79,3 +79,27 @@ SELECT count(*), sum(i) FROM integers
 
 statement ok
 CALL truncate_duckdb_logs()
+
+# single threaded, seeded system sampling draws the same sample with and without read-ahead
+statement ok
+SET threads=1
+
+statement ok
+SET read_ahead_depth=0
+
+statement ok
+CREATE TEMPORARY TABLE expected AS SELECT count(*) AS c, sum(i) AS s FROM integers USING SAMPLE 1 PERCENT (system, 42)
+
+statement ok
+SET read_ahead_depth=-1
+
+query I
+SELECT count(*) = (SELECT c FROM expected) AND sum(i) = (SELECT s FROM expected) FROM integers USING SAMPLE 1 PERCENT (system, 42)
+----
+true
+
+# rerunning returns the same sample again
+query I
+SELECT count(*) = (SELECT c FROM expected) AND sum(i) = (SELECT s FROM expected) FROM integers USING SAMPLE 1 PERCENT (system, 42)
+----
+true

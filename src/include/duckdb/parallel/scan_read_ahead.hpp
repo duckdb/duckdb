@@ -14,6 +14,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/async_memory_governor.hpp"
@@ -89,6 +90,35 @@ struct ScanReadAheadJobWrapper final : public ScanReadAheadJob, public JOB_STATE
 	}
 };
 
+//! Pool of scan states handed back by finished jobs, recycled so learned scan state carries over to later jobs
+template <class STATE>
+class ScanStatePool {
+public:
+	void Push(unique_ptr<STATE> state) {
+		lock_guard<mutex> guard(lock);
+		states.push_back(std::move(state));
+	}
+	//! Pop a recycled state, returns null when none is available
+	unique_ptr<STATE> TryPop() {
+		lock_guard<mutex> guard(lock);
+		if (states.empty()) {
+			return nullptr;
+		}
+		auto state = std::move(states.back());
+		states.pop_back();
+		return state;
+	}
+	//! Take every pooled state, leaving the pool empty
+	vector<unique_ptr<STATE>> TakeAll() {
+		lock_guard<mutex> guard(lock);
+		return std::move(states);
+	}
+
+private:
+	mutex lock;
+	vector<unique_ptr<STATE>> states;
+};
+
 //! Outcome of ScanReadAhead::AcquireJob
 enum class ScanReadAheadAcquire : uint8_t {
 	ACQUIRED,  //! a job with settled I/O is now held
@@ -106,7 +136,7 @@ public:
 
 	//! Create the read-ahead driver from the read_ahead_depth setting, returns null when read-ahead is disabled.
 	//! -1 means automatic mode, unlimited depth with the backlog bounded by a temp-memory reservation.
-	static unique_ptr<ScanReadAhead> Create(ClientContext &context);
+	static unique_ptr<ScanReadAhead> Create(ClientContext &context, optional_idx auto_depth = optional_idx());
 
 public:
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.

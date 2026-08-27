@@ -795,7 +795,7 @@ public:
 	           vector<unique_ptr<AsyncTask>> &io_tasks) {
 		auto job = make_uniq<ScanReadAheadJobWrapper<MultiFileScanJobState>>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		job->scan_state = gstate.TryPopState();
+		job->scan_state = gstate.state_pool.TryPop();
 		if (!job->scan_state) {
 			job->scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 		}
@@ -847,11 +847,11 @@ public:
 		    claimed);
 		if (acquired == ScanReadAheadAcquire::EXHAUSTED) {
 			// finish scan states left in the recycle pool so per-file accounting completes
+			auto pooled_states = gstate.state_pool.TakeAll();
 			unique_lock<mutex> parallel_lock(gstate.lock);
-			for (auto &state : gstate.state_pool) {
+			for (auto &state : pooled_states) {
 				bind_data.interface->FinishReading(context, *gstate.global_state, *state);
 			}
-			gstate.state_pool.clear();
 			return acquired;
 		}
 		lstate.job =
@@ -893,7 +893,7 @@ public:
 			case MultiFileDecodeResult::JOB_FINISHED: {
 				if (gstate.read_ahead) {
 					// hand the scan state back so learned reader state carries over to jobs created later
-					gstate.PushState(std::move(data.job->scan_state));
+					gstate.state_pool.Push(std::move(data.job->scan_state));
 				}
 				data.job_state = MultiFileJobState::NONE;
 				// emit any trailing chunk, then loop to acquire the next job

@@ -867,12 +867,13 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		return true;
 	}
 	while (true) {
-		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
+		const idx_t remaining_rows = state.RemainingAssignmentRows();
+		if (remaining_rows == 0) {
 			// exceeded the amount of rows to scan
 			return false;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining_rows);
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
 		auto &sample_sel = prepared.sample_sel;

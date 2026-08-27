@@ -73,6 +73,10 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
+idx_t TableScanState::RowsScanned() const {
+	return table_state.rows_scanned + local_state.rows_scanned;
+}
+
 ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
                        TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
@@ -330,7 +334,12 @@ vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
 	D_ASSERT(!assignment_io_registered);
 	assignment_io_registered = true;
 	// register the entire remaining assignment
-	return row_group->GetNode().CollectScanIOTasks(*this, max_row_group_row - vector_index * STANDARD_VECTOR_SIZE);
+	return row_group->GetNode().CollectScanIOTasks(*this, RemainingAssignmentRows());
+}
+
+idx_t CollectionScanState::RemainingAssignmentRows() const {
+	const idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
+	return current_row < max_row_group_row ? max_row_group_row - current_row : 0;
 }
 
 void CollectionScanState::ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result) {

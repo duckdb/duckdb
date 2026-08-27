@@ -315,6 +315,8 @@ public:
 	bool PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks);
 	//! Registers the remaining assignment's scan I/O, returning the async tasks that execute it
 	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
+	//! Rows of the assignment left to scan from the current vector onwards
+	idx_t RemainingAssignmentRows() const;
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
 
@@ -377,6 +379,8 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 
 	ScanSamplingInfo &GetSamplingInfo();
+	//! Rows scanned from persistent and transaction-local storage
+	idx_t RowsScanned() const;
 
 private:
 	//! The column identifiers of the scan

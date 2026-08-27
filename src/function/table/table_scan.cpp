@@ -47,8 +47,6 @@ namespace duckdb {
 
 //! A pre-claimed scan assignment whose I/O is scheduled on the async pool ahead of decoding
 struct TableScanJobState {
-	//! The number of rows in the assignment
-	idx_t rows = 0;
 	//! The scan state the job's I/O and decoding operate on
 	unique_ptr<TableScanState> scan_state;
 };
@@ -59,18 +57,8 @@ static unique_ptr<ScanReadAhead> CreateTableScanReadAhead(ClientContext &context
 	if (!storage.GetTableIOManager().GetBlockManagerForRowData().Prefetch()) {
 		return nullptr;
 	}
-	if (TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
-		// read-ahead schedules its I/O on the async pool, without async threads there is nothing to gain
-		return nullptr;
-	}
-	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == 0) {
-		return nullptr;
-	}
 	// automatic mode follows the number of threads, jobs hold buffer pool memory rather than a reservation
-	const idx_t depth = configured_depth > 0 ? NumericCast<idx_t>(configured_depth)
-	                                         : TaskScheduler::GetScheduler(context).NumberOfThreads();
-	return make_uniq<ScanReadAhead>(context, depth, nullptr);
+	return ScanReadAhead::Create(context, TaskScheduler::GetScheduler(context).NumberOfThreads());
 }
 
 struct TableScanLocalState : public LocalTableFunctionState {
@@ -84,7 +72,6 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! Rows scanned by finished read-ahead jobs, folded in when their scan state is recycled
 	idx_t job_rows_scanned = 0;
 
-	idx_t rows_in_current_row_group = 0;
 	idx_t row_groups_scanned = 0;
 };
 
@@ -329,12 +316,11 @@ private:
 	vector<StorageIndex> storage_ids;
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
-	//! Guards assignment claims, keeping job batch indexes dense in claim order, and the state pool
+	//! Guards assignment claims, keeping job batch indexes dense in claim order
 	mutex read_ahead_lock;
 	//! Batch index assigned to the next produced job
 	idx_t next_job_index = 0;
-	//! Scan states of finished read-ahead jobs, recycled so learned scan state carries over
-	vector<unique_ptr<TableScanState>> state_pool;
+	ScanStatePool<TableScanState> state_pool;
 
 public:
 	//! Retains the scan initialization info shared by all scan states of this scan
@@ -364,15 +350,21 @@ public:
 		InitializeScanState(context.client, l_state->scan_state);
 
 		if (!read_ahead) {
-			l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
-			if (l_state->rows_in_current_row_group > 0) {
-				l_state->row_groups_scanned++;
-			}
+			ClaimAssignment(context.client, *l_state);
 		}
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
 		return std::move(l_state);
+	}
+
+	//! Claims the next assignment into the thread's own scan state, returns false when none are left
+	bool ClaimAssignment(ClientContext &context, TableScanLocalState &l_state) {
+		if (storage.NextParallelScan(context, state, l_state.scan_state) == 0) {
+			return false;
+		}
+		l_state.row_groups_scanned++;
+		return true;
 	}
 
 	//! How TableScanFunc's loop proceeds after a persistent scan iteration
@@ -392,13 +384,14 @@ public:
 
 	//! Prepares the next vector, schedules its I/O and decodes it, draining local storage when exhausted
 	PersistentScanResult ScanPersistentStorage(ClientContext &context, TableFunctionInput &data_p,
-	                                           TableScanLocalState &l_state, DataChunk &output) {
+	                                           TableScanLocalState &l_state, TableScanState &scan_state,
+	                                           DataChunk &output) {
 		// persistent storage phase, prepare the next vector and schedule its I/O before decoding
-		auto &table_state = l_state.scan_state.table_state;
+		auto &table_state = scan_state.table_state;
 		vector<unique_ptr<AsyncTask>> io_tasks;
 		if (!table_state.PrepareScanIO(tx, io_tasks)) {
 			// we are done, scan drains any claimed local storage rows
-			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, l_state.scan_state); });
+			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, scan_state); });
 			return PersistentScanResult::EXHAUSTED;
 		}
 		auto io_result = AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
@@ -415,28 +408,11 @@ public:
 		return PersistentScanResult::NEXT_VECTOR;
 	}
 
-	//! Push a finished job's scan state, so learned scan state carries over to jobs created later
-	void PushState(unique_ptr<TableScanState> scan_state) {
-		lock_guard<mutex> guard(read_ahead_lock);
-		state_pool.push_back(std::move(scan_state));
-	}
-
-	//! Pop a recycled scan state, returns null when none is available
-	unique_ptr<TableScanState> TryPopState() {
-		lock_guard<mutex> guard(read_ahead_lock);
-		if (state_pool.empty()) {
-			return nullptr;
-		}
-		auto scan_state = std::move(state_pool.back());
-		state_pool.pop_back();
-		return scan_state;
-	}
-
 	//! Claims the next assignment as a job and registers its I/O, returns null when there are no more assignments
 	unique_ptr<TableScanJob> ProduceJob(ClientContext &context, vector<unique_ptr<AsyncTask>> &io_tasks) {
 		auto job = make_uniq<TableScanJob>();
 		// jobs recycle finished scan states, create a fresh one when none was available
-		job->scan_state = TryPopState();
+		job->scan_state = state_pool.TryPop();
 		if (!job->scan_state) {
 			job->scan_state = make_uniq<TableScanState>();
 			InitializeScanState(context, *job->scan_state);
@@ -444,14 +420,13 @@ public:
 		{
 			// claim and index under one lock, queue admission needs batch indexes dense in claim order
 			lock_guard<mutex> guard(read_ahead_lock);
-			job->rows = storage.NextParallelScan(context, state, *job->scan_state);
-			if (job->rows == 0) {
+			if (storage.NextParallelScan(context, state, *job->scan_state) == 0) {
 				return nullptr;
 			}
 			job->batch_index = next_job_index++;
 		}
 		auto &table_state = job->scan_state->table_state;
-		if (table_state.row_group && table_state.vector_index * STANDARD_VECTOR_SIZE < table_state.max_row_group_row) {
+		if (table_state.row_group && table_state.RemainingAssignmentRows() > 0) {
 			io_tasks = table_state.RegisterAssignmentIO();
 		}
 		return job;
@@ -475,38 +450,29 @@ public:
 					return false;
 				}
 				l_state.job = unique_ptr_cast<ScanReadAheadJob, TableScanJob>(std::move(claimed));
-				l_state.rows_in_current_row_group = l_state.job->rows;
-				if (l_state.job->scan_state->table_state.row_group) {
-					l_state.row_groups_scanned++;
-				}
+				l_state.row_groups_scanned++;
 				if (acquired == ScanReadAheadAcquire::PARKED) {
 					return true;
 				}
 			}
 			auto &job_scan = *l_state.job->scan_state;
-			vector<unique_ptr<AsyncTask>> io_tasks;
-			if (job_scan.table_state.row_group && job_scan.table_state.PrepareScanIO(tx, io_tasks)) {
-				// the job's I/O was registered when it was produced
-				D_ASSERT(io_tasks.empty());
-				EmitChunk(l_state, output,
-				          [&](DataChunk &chunk) { job_scan.table_state.ProcessPreparedScan(tx, chunk); });
-				if (output.size() > 0) {
-					return true;
-				}
-				// the prepared vector was filtered out entirely, go to the next vector
-				context.InterruptCheck();
+			// the job's I/O was registered when it was produced, so no I/O is scheduled here
+			switch (ScanPersistentStorage(context, data_p, l_state, job_scan, output)) {
+			case PersistentScanResult::YIELD:
+				return true;
+			case PersistentScanResult::NEXT_VECTOR:
 				continue;
+			case PersistentScanResult::EXHAUSTED:
+				break;
 			}
-			// the persistent rows are exhausted, Scan drains any claimed local storage rows
-			EmitChunk(l_state, output, [&](DataChunk &chunk) { storage.Scan(tx, chunk, job_scan); });
 			if (output.size() > 0) {
 				return true;
 			}
 			// the job is exhausted, fold its scan counters into this thread and recycle its state
-			l_state.job_rows_scanned += job_scan.table_state.rows_scanned + job_scan.local_state.rows_scanned;
+			l_state.job_rows_scanned += job_scan.RowsScanned();
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;
-			PushState(std::move(l_state.job->scan_state));
+			state_pool.Push(std::move(l_state.job->scan_state));
 			l_state.job.reset();
 			context.InterruptCheck();
 		}
@@ -533,7 +499,7 @@ public:
 					return;
 				}
 			} else {
-				switch (ScanPersistentStorage(context, data_p, l_state, output)) {
+				switch (ScanPersistentStorage(context, data_p, l_state, l_state.scan_state, output)) {
 				case PersistentScanResult::YIELD:
 					return;
 				case PersistentScanResult::NEXT_VECTOR:
@@ -546,21 +512,13 @@ public:
 				return;
 			}
 
-			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
-			if (l_state.rows_in_current_row_group > 0) {
-				l_state.row_groups_scanned++;
-			}
-
+			const bool claimed = ClaimAssignment(context, l_state);
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
-				if (l_state.rows_in_current_row_group == 0) {
-					data_p.async_result = AsyncResultType::FINISHED;
-				} else {
-					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
-				}
+				data_p.async_result = claimed ? AsyncResultType::HAVE_MORE_OUTPUT : AsyncResultType::FINISHED;
 				return;
 			}
-			if (l_state.rows_in_current_row_group == 0) {
+			if (!claimed) {
 				return;
 			}
 
@@ -602,11 +560,9 @@ public:
 
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
 		const auto &l_state = state.Cast<TableScanLocalState>();
-		auto result = l_state.scan_state.table_state.rows_scanned + l_state.scan_state.local_state.rows_scanned;
-		result += l_state.job_rows_scanned;
-		if (l_state.job && l_state.job->scan_state) {
-			result +=
-			    l_state.job->scan_state->table_state.rows_scanned + l_state.job->scan_state->local_state.rows_scanned;
+		auto result = l_state.scan_state.RowsScanned() + l_state.job_rows_scanned;
+		if (l_state.job) {
+			result += l_state.job->scan_state->RowsScanned();
 		}
 		return result;
 	}
