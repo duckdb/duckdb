@@ -1,9 +1,9 @@
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 
-#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -80,7 +80,12 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 	D_ASSERT(new_block_size > 0);
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
-	map<idx_t, pair<BufferHandle, idx_t>> pinned;
+	struct PinnedBlock {
+		BufferHandle handle;
+		idx_t buffer_offset;
+		idx_t nr_bytes;
+	};
+	map<idx_t, PinnedBlock> pinned;
 	for (auto &block_entry : cached_file.blocks) {
 		const idx_t old_idx = block_entry.first;
 		auto &block = *block_entry.second;
@@ -95,7 +100,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 		}
 		auto pin = buffer_manager.Pin(block.block_handle);
 		if (pin.IsValid()) {
-			pinned.emplace(old_idx, make_pair(std::move(pin), block.nr_bytes));
+			pinned.emplace(old_idx, PinnedBlock {std::move(pin), block.buffer_offset, block.nr_bytes});
 		}
 	}
 
@@ -116,7 +121,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 		idx_t expected_idx = it->first;
 		auto run_end = it;
 		while (run_end != pinned.end() && run_end->first == expected_idx) {
-			run_byte_end = run_end->first * old_block_size + run_end->second.second;
+			run_byte_end = run_end->first * old_block_size + run_end->second.nr_bytes;
 			expected_idx++;
 			++run_end;
 		}
@@ -143,22 +148,24 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 				auto &old_entry = pinned.at(oi);
 				const idx_t oi_file_start = oi * old_block_size;
 				const idx_t copy_start = MaxValue(new_start, oi_file_start);
-				const idx_t copy_end = MinValue(new_end, oi_file_start + old_entry.second);
+				const idx_t copy_end = MinValue(new_end, oi_file_start + old_entry.nr_bytes);
 				if (copy_start >= copy_end) {
 					continue;
 				}
 				memcpy(buf.GetDataMutable() + (copy_start - new_start),
-				       old_entry.first.Ptr() + (copy_start - oi_file_start), copy_end - copy_start);
+				       old_entry.handle.Ptr() + old_entry.buffer_offset + (copy_start - oi_file_start),
+				       copy_end - copy_start);
 			}
 
 			auto new_block = make_shared_ptr<CacheBlock>();
 			{
 				const annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
 				new_block->block_handle = buf.GetBlockHandle();
+				new_block->buffer_offset = 0;
 				new_block->nr_bytes = new_size;
 				new_block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
-				new_block->checksum = Checksum(buf.Ptr(), new_size);
+				new_block->checksum = Hash(const_char_ptr_cast(buf.Ptr()), new_size);
 #endif
 			}
 			new_blocks[new_idx] = std::move(new_block);

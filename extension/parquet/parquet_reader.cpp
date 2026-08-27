@@ -210,6 +210,14 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftMemoryProtocol(const_data_ptr_t buffer,
+                                                                                         idx_t buffer_size) {
+	using duckdb_apache::thrift::transport::TMemoryBuffer;
+	auto transport = duckdb_base_std::make_shared<TMemoryBuffer>(
+	    const_cast<data_ptr_t>(buffer), NumericCast<uint32_t>(buffer_size), TMemoryBuffer::OBSERVE);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<TMemoryBuffer>>(std::move(transport));
+}
+
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
 	Value disable_prefetch = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
@@ -265,66 +273,109 @@ static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
              shared_ptr<EncryptionUtil> &encryption_util, optional_idx footer_size) {
-	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
-	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
-	auto file_size = transport.GetSize();
-	if (file_size < 12) {
-		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
-	}
+	static constexpr idx_t ESTIMATED_FOOTER_RATIO = 1000; // Estimate 1/1000th of the file to be footer
+	static constexpr idx_t MIN_PREFETCH_SIZE = 16384;     // Prefetch at least this many bytes
+	static constexpr idx_t MAX_PREFETCH_SIZE = 262144;    // Prefetch/read at most this many bytes
 
+	unique_ptr<duckdb_apache::thrift::protocol::TProtocol> file_proto;
+	FileBufferHandleGroup suffix_buffer;
+	idx_t file_size = 0;
 	bool footer_encrypted;
 	uint32_t footer_len;
-	// footer size is not provided - read it from the back
-	if (!footer_size.IsValid()) {
-		// We have to do two reads here:
-		// 1. The 8 bytes from the back to check if it's a Parquet file and the footer size
-		// 2. The footer (after getting the size)
-		// For local reads this doesn't matter much, but for remote reads this means two round trips,
-		// which is especially bad for small Parquet files where the read cost is mostly round trips.
-		// So, we prefetch more, to hopefully save a round trip.
-		static constexpr idx_t ESTIMATED_FOOTER_RATIO = 1000; // Estimate 1/1000th of the file to be footer
-		static constexpr idx_t MIN_PREFETCH_SIZE = 16384;     // Prefetch at least this many bytes
-		static constexpr idx_t MAX_PREFETCH_SIZE = 262144;    // Prefetch at most this many bytes
-		idx_t prefetch_size = 8;
-		if (ShouldAndCanPrefetch(context, file_handle)) {
-			prefetch_size = ClampValue(file_size / ESTIMATED_FOOTER_RATIO, MIN_PREFETCH_SIZE, MAX_PREFETCH_SIZE);
-			prefetch_size = MinValue(NextPowerOfTwo(prefetch_size), file_size);
+	bool suffix_read = false;
+
+	if (!footer_size.IsValid() && file_handle.IsRemoteFile()) {
+		SuffixReadResult suffix_result;
+		if (file_handle.TryReadSuffix(MAX_PREFETCH_SIZE, suffix_buffer, suffix_result)) {
+			if (suffix_result.bytes_read > MAX_PREFETCH_SIZE || suffix_result.start_offset > suffix_result.file_size ||
+			    suffix_result.bytes_read != suffix_result.file_size - suffix_result.start_offset) {
+				throw IOException("Filesystem returned an invalid suffix range for file '%s'", file_handle.GetPath());
+			}
+			file_size = suffix_result.file_size;
+			if (file_size < 12) {
+				throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
+			}
+			if (suffix_result.bytes_read < 8) {
+				throw IOException("Filesystem returned an incomplete suffix for file '%s'", file_handle.GetPath());
+			}
+			auto suffix_ptr = suffix_buffer.Ptr();
+			ParseParquetFooter(suffix_ptr + suffix_result.bytes_read - 8, file_handle.GetPath(), file_size,
+			                   encryption_config, footer_len, footer_encrypted);
+			suffix_read = true;
+
+			const idx_t total_footer_len = footer_len + 8;
+			if (total_footer_len <= suffix_result.bytes_read) {
+				auto metadata_ptr = suffix_ptr + suffix_result.bytes_read - total_footer_len;
+				file_proto = CreateThriftMemoryProtocol(metadata_ptr, footer_len);
+			}
+		}
+	}
+
+	if (!file_proto) {
+		file_proto = CreateThriftFileProtocol(context, file_handle, false);
+		auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
+		if (!suffix_read) {
+			file_size = transport.GetSize();
+		}
+		if (file_size < 12) {
+			throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
 		}
 
-		ResizeableBuffer buf;
-		buf.resize(allocator, 8);
-		buf.zero();
+		// footer size is not provided and the optional suffix read was unavailable - read it from the back
+		if (!footer_size.IsValid() && !suffix_read) {
+			// We have to do two reads here:
+			// 1. The 8 bytes from the back to check if it's a Parquet file and the footer size
+			// 2. The footer (after getting the size)
+			// For local reads this doesn't matter much, but for remote reads this means two round trips,
+			// which is especially bad for small Parquet files where the read cost is mostly round trips.
+			// So, we prefetch more, to hopefully save a round trip.
+			idx_t prefetch_size = 8;
+			if (ShouldAndCanPrefetch(context, file_handle)) {
+				prefetch_size = ClampValue(file_size / ESTIMATED_FOOTER_RATIO, MIN_PREFETCH_SIZE, MAX_PREFETCH_SIZE);
+				prefetch_size = MinValue(NextPowerOfTwo(prefetch_size), file_size);
+			}
 
-		transport.Prefetch(file_size - prefetch_size, prefetch_size);
-		transport.SetLocation(file_size - 8);
-		transport.read(buf.ptr, 8);
+			ResizeableBuffer buf;
+			buf.resize(allocator, 8);
+			buf.zero();
 
-		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+			transport.Prefetch(file_size - prefetch_size, prefetch_size);
+			transport.SetLocation(file_size - 8);
+			transport.read(buf.ptr, 8);
 
-		auto metadata_pos = file_size - (footer_len + 8);
-		transport.SetLocation(metadata_pos);
-		if (footer_len > prefetch_size - 8) {
+			ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len,
+			                   footer_encrypted);
+
+			auto metadata_pos = file_size - (footer_len + 8);
+			transport.SetLocation(metadata_pos);
+			if (footer_len > prefetch_size - 8) {
+				transport.Prefetch(metadata_pos, footer_len);
+			}
+		} else if (suffix_read) {
+			auto metadata_pos = file_size - (footer_len + 8);
+			transport.SetLocation(metadata_pos);
 			transport.Prefetch(metadata_pos, footer_len);
-		}
-	} else {
-		footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
-		if (footer_len == 0 || file_size < 12 + footer_len) {
-			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
-		}
+		} else {
+			footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
+			if (footer_len == 0 || file_size < 12 + footer_len) {
+				throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
+			}
 
-		idx_t total_footer_len = footer_len + 8;
-		auto metadata_pos = file_size - total_footer_len;
-		transport.SetLocation(metadata_pos);
-		transport.Prefetch(metadata_pos, total_footer_len);
+			idx_t total_footer_len = footer_len + 8;
+			auto metadata_pos = file_size - total_footer_len;
+			transport.SetLocation(metadata_pos);
+			transport.Prefetch(metadata_pos, total_footer_len);
 
-		auto read_head = transport.GetReadHead(metadata_pos);
-		auto data_ptr = read_head->buffer_ptr;
+			auto read_head = transport.GetReadHead(metadata_pos);
+			auto data_ptr = read_head->buffer_ptr;
 
-		uint32_t read_footer_len;
-		ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config, read_footer_len,
-		                   footer_encrypted);
-		if (read_footer_len != footer_len) {
-			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
+			uint32_t read_footer_len;
+			ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config,
+			                   read_footer_len, footer_encrypted);
+			if (read_footer_len != footer_len) {
+				throw InvalidInputException(
+				    "Parquet footer length stored in file is not equal to footer length provided");
+			}
 		}
 	}
 
@@ -1277,12 +1328,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)),
       projection_expressions(std::move(projection_expressions_p)) {
-	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
-	if (!file_handle->CanSeek()) {
-		throw NotImplementedException(
-		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
-		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
-	}
 	// read the extended file open info (if any)
 	optional_idx footer_size;
 	if (file.extended_info) {
@@ -1296,6 +1341,20 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		if (footer_entry != open_options.end()) {
 			footer_size = UBigIntValue::Get(footer_entry->second);
 		}
+	}
+	if (!metadata_p && !footer_size.IsValid() && FileSystem::IsRemoteFile(file.path)) {
+		auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		if (file.extended_info) {
+			*extended_info = *file.extended_info;
+		}
+		extended_info->options["defer_file_info"] = Value::BOOLEAN(true);
+		file.extended_info = std::move(extended_info);
+	}
+	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
+	if (!file_handle->CanSeek()) {
+		throw NotImplementedException(
+		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
+		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
 
 	// If metadata cached is disabled

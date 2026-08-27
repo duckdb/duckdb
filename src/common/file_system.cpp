@@ -463,6 +463,10 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Read is not implemented!", GetName());
 }
 
+bool FileSystem::TryReadSuffix(FileHandle &handle, data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) {
+	return false;
+}
+
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
 }
@@ -803,6 +807,10 @@ int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	}
 
 	return bytes_read;
+}
+
+bool FileHandle::TryReadSuffix(data_ptr_t buffer, idx_t buffer_len, SuffixReadResult &result) {
+	return file_system.TryReadSuffix(*this, buffer, buffer_len, result);
 }
 
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {

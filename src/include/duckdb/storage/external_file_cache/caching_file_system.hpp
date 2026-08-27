@@ -28,6 +28,7 @@ class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
 struct NetworkThroughputEstimate;
+struct SuffixReadResult;
 class QueryContext;
 class CachingFileSystem;
 
@@ -69,6 +70,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
+	//! Try to read a suffix into an owned buffer-manager allocation.
+	DUCKDB_API bool TryReadSuffix(idx_t max_bytes, FileBufferHandleGroup &data, SuffixReadResult &result);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -89,6 +92,12 @@ private:
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
+	//! Populate this handle and the shared cache entry with metadata from the underlying handle.
+	void InitializeFileMetadata(const shared_ptr<FileHandle> &handle);
+	void EnsureFileMetadata();
+	//! Cache the aligned final block contained in a successful suffix read, adopting the buffer when provided.
+	void TryCacheSuffixBlock(optional_ptr<BufferHandle> owned_suffix, const_data_ptr_t suffix_data,
+	                         const SuffixReadResult &suffix_result, idx_t block_size);
 
 private:
 	QueryContext context;
@@ -115,6 +124,8 @@ private:
 	//! Last modified time and version tag (if FileHandle is opened)
 	timestamp_t last_modified;
 	string version_tag;
+	bool defer_file_info = false;
+	atomic<bool> file_metadata_initialized {false};
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
