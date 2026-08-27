@@ -1,6 +1,6 @@
 # name: test/issues/general/issue_25015.test
 # description: Issue #25015: CREATE TABLE IF NOT EXISTS must not add foreign key metadata
-# group: [issues]
+# group: [general]
 
 statement ok
 CREATE TABLE parent(i INTEGER PRIMARY KEY);
