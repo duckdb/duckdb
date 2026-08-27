@@ -116,7 +116,7 @@ string HTTPUtil::GetName() const {
 
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
-		// always retry on request errors
+		// request errors are eligible for retry
 		return true;
 	}
 	switch (status) {
@@ -455,7 +455,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			}
 		}
 
-		// Note: request errors will always be retried
+		// Request errors and caught exceptions are eligible for retry without a response status
 		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
@@ -486,7 +486,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
 #endif
 		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries = params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+		const idx_t max_tries =
+		    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
 		if (tries <= max_tries) {
 			if (tries > 1 || throttled) {
 #ifndef DUCKDB_NO_THREADS
