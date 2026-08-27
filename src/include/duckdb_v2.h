@@ -2072,14 +2072,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_vector_type(duckdb_v2_vector_h
 /*!
  * Returns the vector's logical type.
  *
- * The returned type is borrowed and valid until the owning chunk is destroyed. It is the same type that was passed to
- * vector_reference, or the type that was set on creation.
+ * The returned logical type is the same type that was passed to vector_reference, or the type that was set on creation.
+ * It is caller-owned; destroy it via logical_type_destroy.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param vector The vector.
- * @param out_type Receives the borrowed logical type handle.
+ * @param out_type Receives the caller-owned logical type handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */

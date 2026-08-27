@@ -190,8 +190,8 @@ functions:
     description: |
       Returns the vector's logical type.
 
-      The returned type is borrowed and valid until the owning chunk is
-      destroyed. It is the same type that was passed to vector_reference, or the type that was set on creation.
+      The returned logical type is the same type that was passed to vector_reference, or the type that was set on creation.
+      It is caller-owned; destroy it via logical_type_destroy.
     role: getter
     belongs_to: vector
     parameters:
@@ -202,7 +202,7 @@ functions:
         type: logical_type
         indirection: 1
         kind: OUT_BORROW
-        description: Receives the borrowed logical type handle.
+        description: Receives the caller-owned logical type handle.
       err:
         type: error_info
         indirection: 1
