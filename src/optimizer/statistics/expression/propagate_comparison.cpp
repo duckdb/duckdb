@@ -15,11 +15,11 @@ static Value GetStringStatsMin(const BaseStatistics &stats) {
 static Value GetStringStatsMax(const BaseStatistics &stats) {
 	auto max = StringStats::Max(stats);
 	if (StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS) {
-		return Value::BLOB_RAW(std::move(max));
+		return Value::BLOB_RAW(max);
 	}
 	// A truncated max stores a prefix. Use the next prefix as its upper bound.
 	if (StringUtil::FindNextPrefix(max)) {
-		return Value::BLOB_RAW(std::move(max));
+		return Value::BLOB_RAW(max);
 	}
 	return Value();
 }
