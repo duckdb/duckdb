@@ -62,8 +62,8 @@ struct DuckDBExtensionLoadState {
 	//! The init result from initializing the extension
 	ExtensionInitResult &init_result;
 
-	//! This is the duckdb_database struct that will be passed to the extension during initialization. Note that the
-	//! extension does not need to free it.
+	//! The borrowed duckdb_database passed to the extension during initialization. Replaced on each GetDatabase call
+	//! and destroyed when the entrypoint returns; the extension must not retain or free it.
 	unique_ptr<DatabaseWrapper> database_data;
 
 	//! The function pointer struct passed to the extension. The extension is expected to copy this struct during
