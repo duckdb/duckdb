@@ -47,6 +47,8 @@ namespace duckdb {
 
 //! A pre-claimed scan assignment whose I/O is scheduled on the async pool ahead of decoding
 struct TableScanJobState {
+	//! Rows of the assignment, counted as scanned by the progress once a thread decodes the job
+	idx_t rows = 0;
 	//! The scan state the job's I/O and decoding operate on
 	unique_ptr<TableScanState> scan_state;
 };
@@ -320,6 +322,8 @@ private:
 	//! Batch index assigned to the next produced job
 	idx_t next_job_index = 0;
 	ScanStatePool<TableScanState> state_pool;
+	//! Rows claimed by read-ahead jobs that no thread is decoding yet
+	atomic<idx_t> queued_rows {0};
 
 public:
 	//! Retains the scan initialization info shared by all scan states of this scan
@@ -418,10 +422,12 @@ public:
 		}
 		{
 			lock_guard<mutex> guard(read_ahead_lock);
-			if (storage.NextParallelScan(context, state, *job->scan_state) == 0) {
+			job->rows = storage.NextParallelScan(context, state, *job->scan_state);
+			if (job->rows == 0) {
 				return nullptr;
 			}
 			job->batch_index = next_job_index++;
+			queued_rows += job->rows;
 		}
 		auto &table_state = job->scan_state->table_state;
 		if (table_state.row_group && table_state.RemainingAssignmentRows() > 0) {
@@ -448,6 +454,7 @@ public:
 				}
 				l_state.job = unique_ptr_cast<ScanReadAheadJob, TableScanJob>(std::move(claimed));
 				l_state.row_groups_scanned++;
+				queued_rows -= l_state.job->rows;
 				if (acquired == ScanReadAheadAcquire::PARKED) {
 					return true;
 				}
@@ -532,6 +539,8 @@ public:
 
 		idx_t scanned_rows = state.scan_state.processed_rows;
 		scanned_rows += state.local_state.processed_rows;
+		// claimed assignments count once a thread decodes them, like they do without read-ahead
+		scanned_rows -= MinValue<idx_t>(scanned_rows, queued_rows.load());
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
 			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,

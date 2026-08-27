@@ -35,6 +35,7 @@ set(TEST_API_OBJECTS
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
     test_read_ahead_abandon.cpp
+    test_read_ahead_progress.cpp
     test_row_id_deduplicator.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
