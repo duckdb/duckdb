@@ -303,7 +303,6 @@ public:
 
 public:
 	ParallelTableScanState state;
-	//! Read-ahead driver
 	unique_ptr<ScanReadAhead> read_ahead;
 
 private:
@@ -418,7 +417,6 @@ public:
 			InitializeScanState(context, *job->scan_state);
 		}
 		{
-			// claim and index under one lock, queue admission needs batch indexes dense in claim order
 			lock_guard<mutex> guard(read_ahead_lock);
 			if (storage.NextParallelScan(context, state, *job->scan_state) == 0) {
 				return nullptr;
@@ -432,8 +430,7 @@ public:
 		return job;
 	}
 
-	//! Decodes read-ahead jobs, returns true when the caller must yield (parked or output produced),
-	//! false when every assignment has been consumed
+	//! Decodes read-ahead jobs, returns true when the caller must yield, false once every assignment is consumed
 	bool ScanWithReadAhead(ClientContext &context, TableFunctionInput &data_p, TableScanLocalState &l_state,
 	                       DataChunk &output) {
 		while (true) {

@@ -21,6 +21,7 @@ DETACH cap_db
 statement ok
 ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (READ_ONLY)
 
+# a single thread keeps the whole row group in one assignment, more threads would split it below the cap
 statement ok
 SET threads=1
 

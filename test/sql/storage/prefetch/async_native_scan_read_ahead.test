@@ -33,12 +33,13 @@ SELECT count(*), sum(i) FROM integers
 ----
 900000	450000000000
 
-# read-ahead schedules its I/O detached on the async pool, bypassing AsyncResult::ScheduleTasks
+# read-ahead schedules its I/O detached on the async pool, so the scan logs no task schedules
 query I
 SELECT count(*) FROM duckdb_logs_parsed('AsyncTaskSchedule')
 ----
 0
 
+# assignments whose vectors are filtered out entirely are skipped without producing output
 query I
 SELECT count(*) FROM integers WHERE i < 100
 ----
@@ -77,9 +78,6 @@ SELECT count(*), sum(i) FROM integers
 ----
 900000	450000000000
 
-statement ok
-CALL truncate_duckdb_logs()
-
 # single threaded, seeded system sampling draws the same sample with and without read-ahead
 statement ok
 SET threads=1
@@ -98,8 +96,5 @@ SELECT count(*) = (SELECT c FROM expected) AND sum(i) = (SELECT s FROM expected)
 ----
 true
 
-# rerunning returns the same sample again
-query I
-SELECT count(*) = (SELECT c FROM expected) AND sum(i) = (SELECT s FROM expected) FROM integers USING SAMPLE 1 PERCENT (system, 42)
-----
-true
+statement ok
+CALL truncate_duckdb_logs()

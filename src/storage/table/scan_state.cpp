@@ -333,7 +333,6 @@ vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
 	D_ASSERT(row_group);
 	D_ASSERT(!assignment_io_registered);
 	assignment_io_registered = true;
-	// register the entire remaining assignment
 	return row_group->GetNode().CollectScanIOTasks(*this, RemainingAssignmentRows());
 }
 
