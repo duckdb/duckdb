@@ -10,6 +10,7 @@
 #include "duckdb/storage/object_cache.hpp"
 
 #include <chrono>
+#include <condition_variable>
 
 namespace duckdb {
 
@@ -42,15 +43,42 @@ public:
 class BlockingCachePolicyFileSystem : public CachePolicyFileSystem {
 public:
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		read_count++;
-		while (block_reads) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		{
+			annotated_unique_lock<annotated_mutex> guard(lock);
+			read_count++;
+			read_started.notify_all();
+			read_released.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return !block_reads; });
 		}
 		CachePolicyFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
-	atomic<bool> block_reads {false};
-	atomic<idx_t> read_count {0};
+	void BlockReads() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_reads = true;
+	}
+
+	void WaitForReadCount(idx_t count) {
+		annotated_unique_lock<annotated_mutex> guard(lock);
+		read_started.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return read_count >= count; });
+	}
+
+	void ReleaseReads() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_reads = false;
+		read_released.notify_all();
+	}
+
+	idx_t GetReadCount() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return read_count;
+	}
+
+private:
+	annotated_mutex lock;
+	std::condition_variable read_started DUCKDB_GUARDED_BY(lock);
+	std::condition_variable read_released DUCKDB_GUARDED_BY(lock);
+	bool block_reads DUCKDB_GUARDED_BY(lock) = false;
+	idx_t read_count DUCKDB_GUARDED_BY(lock) = 0;
 };
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
@@ -831,26 +859,38 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 
 	// Content responses prohibit reuse, and hang until released.
 	policy_fs->cache_valid_until = timestamp_t::ninfinity();
-	policy_fs->block_reads = true;
+	policy_fs->BlockReads();
 
 	string result_a;
 	string result_b;
 	std::thread reader_a([&]() { result_a = ReadFull(*handle_a, block_size); });
 	// Once reader A's fetch is in flight, the block is LOADING, so reader B waits on it.
-	while (policy_fs->read_count == 0) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	policy_fs->WaitForReadCount(1);
+
+	annotated_mutex reader_b_lock;
+	std::condition_variable reader_b_started DUCKDB_GUARDED_BY(reader_b_lock);
+	bool reader_b_is_started DUCKDB_GUARDED_BY(reader_b_lock) = false;
+	std::thread reader_b([&]() {
+		{
+			annotated_lock_guard<annotated_mutex> guard(reader_b_lock);
+			reader_b_is_started = true;
+			reader_b_started.notify_one();
+		}
+		result_b = ReadFull(*handle_b, block_size);
+	});
+	{
+		annotated_unique_lock<annotated_mutex> guard(reader_b_lock);
+		reader_b_started.wait(guard,
+		                      [&]() DUCKDB_REQUIRES(reader_b_lock) { return reader_b_is_started; });
 	}
-	std::thread reader_b([&]() { result_b = ReadFull(*handle_b, block_size); });
-	// Give reader B time to start waiting on the LOADING block before releasing reader A's fetch.
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	policy_fs->block_reads = false;
+	policy_fs->ReleaseReads();
 
 	reader_a.join();
 	reader_b.join();
 	REQUIRE(result_a == content);
 	REQUIRE(result_b == content);
 	// Reader B must not consume reader A's response: each reader issues its own request.
-	REQUIRE(policy_fs->read_count == 2);
+	REQUIRE(policy_fs->GetReadCount() == 2);
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
