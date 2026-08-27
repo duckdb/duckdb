@@ -28,10 +28,6 @@ SET threads=1
 statement ok
 SET async_threads=4
 
-# the per-thread path schedules its I/O through AsyncResult, which logs one event per assignment
-statement ok
-SET read_ahead_depth=0
-
 statement ok
 SET storage_block_prefetch='debug_force_always'
 
@@ -45,7 +41,7 @@ true
 
 # the ~64MB assignment must split into multiple capped runs, one task each
 query I
-SELECT max(task_count) BETWEEN 2 AND 4 FROM duckdb_logs_parsed('AsyncTaskSchedule')
+SELECT max(task_count) BETWEEN 2 AND 4 FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
 ----
 true
 
@@ -56,21 +52,19 @@ CALL truncate_duckdb_logs()
 statement ok
 SET memory_limit='48MB'
 
-query I
-SELECT sum(d) > 0 FROM cap_db.t
-----
-true
-
-query I
-SELECT max(task_count) > 4 FROM duckdb_logs_parsed('AsyncTaskSchedule')
-----
-true
+statement ok
+DETACH cap_db
 
 statement ok
-SET read_ahead_depth=-1
+ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (READ_ONLY)
 
 query I
 SELECT sum(d) > 0 FROM cap_db.t
+----
+true
+
+query I
+SELECT max(task_count) > 4 FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
 ----
 true
 

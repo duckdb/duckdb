@@ -194,6 +194,7 @@ private:
 	void ReleaseSlot();
 
 private:
+	ClientContext &context;
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
 	//! Async memory governor

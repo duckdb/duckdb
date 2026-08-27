@@ -324,7 +324,8 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 	}
 	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
 	if (!assignment_io_registered) {
-		tasks = RegisterAssignmentIO();
+		// read-ahead jobs registered their whole assignment when produced, otherwise collect the vector's I/O
+		tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
 	}
 	return true;
 }

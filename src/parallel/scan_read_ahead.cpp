@@ -2,6 +2,8 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -91,7 +93,7 @@ ScanReadAheadJob::~ScanReadAheadJob() = default;
 
 ScanReadAhead::ScanReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                              unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
-    : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
+    : context(context), read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_shared_ptr<TaskExecutor>(context, TaskSchedulerType::ASYNC);
@@ -239,7 +241,10 @@ void ScanReadAhead::PushJob(unique_ptr<ScanReadAheadJob> job, vector<unique_ptr<
 	}
 	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
 	pending_io_bytes += job->io_bytes;
-	// schedule the reads detached on the async pool right away
+	// schedule the reads detached on the async pool right away, logged under their own label
+	if (!read_tasks.empty()) {
+		DUCKDB_LOG(context, AsyncTaskScheduleLogType, "READ_AHEAD", read_tasks.size());
+	}
 	for (auto &task : read_tasks) {
 		executor->ScheduleTask(std::move(task));
 	}
