@@ -672,8 +672,8 @@ struct ArrowVariant {
 		// than patching buffers shared with the transform's output.
 		static constexpr const char MINIMAL_METADATA[] = "\x01\x00\x00";
 		static constexpr const char VARIANT_NULL_VALUE[] = "\x00";
-		transformed_entries[0].Flatten(count);
-		transformed_entries[1].Flatten(count);
+		transformed_entries[0].Flatten();
+		transformed_entries[1].Flatten();
 		auto src_metadata = FlatVector::GetData<string_t>(transformed_entries[0]);
 		auto src_value = FlatVector::GetData<string_t>(transformed_entries[1]);
 		auto &metadata_entry = result_entries[0];
