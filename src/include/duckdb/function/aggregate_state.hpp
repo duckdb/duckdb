@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
+class LogicalAggregate;
 class BoundAggregateFunction;
 struct AggregateObject;
 
@@ -154,15 +155,15 @@ struct AggregateFinalizeData {
 
 struct AggregateStatisticsInput {
 	AggregateStatisticsInput(optional_ptr<FunctionData> bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         optional_ptr<NodeStatistics> node_stats_p, bool groups_are_non_empty_p = false)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p),
-	      groups_are_non_empty(groups_are_non_empty_p) {
+	                         optional_ptr<NodeStatistics> node_stats_p,
+	                         optional_ptr<LogicalAggregate> aggregate_p = nullptr)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p), aggregate(aggregate_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
 	optional_ptr<NodeStatistics> node_stats;
-	bool groups_are_non_empty;
+	optional_ptr<LogicalAggregate> aggregate;
 };
 
 } // namespace duckdb

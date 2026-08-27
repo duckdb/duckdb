@@ -5,6 +5,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
 
@@ -304,8 +305,20 @@ AggregateFunction CountFunctionBase::GetFunction() {
 unique_ptr<BaseStatistics> CountStarPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
 	auto stats = make_uniq<BaseStatistics>(NumericStats::CreateUnknown(LogicalType::BIGINT));
+	bool groups_are_non_empty = false;
+	if (input.aggregate) {
+		auto &aggregate = *input.aggregate;
+		bool has_empty_grouping_set = false;
+		for (const auto &grouping_set : aggregate.grouping_sets) {
+			if (grouping_set.empty()) {
+				has_empty_grouping_set = true;
+				break;
+			}
+		}
+		groups_are_non_empty = !aggregate.groups.empty() && !has_empty_grouping_set;
+	}
 
-	NumericStats::SetMin(*stats, Value::BIGINT(input.groups_are_non_empty && !expr.GetFilter() ? 1 : 0));
+	NumericStats::SetMin(*stats, Value::BIGINT(groups_are_non_empty && !expr.GetFilter() ? 1 : 0));
 	NumericStats::SetMax(*stats, Value::BIGINT(NumericLimits<int64_t>::Maximum()));
 	stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	return stats;
