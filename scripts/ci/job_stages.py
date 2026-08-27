@@ -17,7 +17,6 @@ COMMON_JOBS = [
     "linux-release",
     "linux-release-tests",
     "linux-release-cli",
-    "linux-musl-release-cli",
     "swift",
     "windows",
     "no-string-inline",

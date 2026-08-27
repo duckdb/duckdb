@@ -151,6 +151,17 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(context, op);
 }
 
+// RemoveUnusedColumns renumbers bindings, so RemapProjectionMap can match a stale binding to a
+// different column rather than dropping it
+static void ClearProjectionMaps(LogicalOperator &op) {
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		if (auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index)) {
+			projection_map->clear();
+		}
+		ClearProjectionMaps(*op.children[child_index]);
+	}
+}
+
 static bool ContainsDML(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -434,12 +445,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	// DML CTEs can invalidate the table statistics captured during planning.
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	bool propagated_statistics = false;
+	bool removed_aggregate_children = false;
 	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
 			propagated_statistics = true;
+			removed_aggregate_children = propagator.HasRemovedAggregateChildren();
 		});
 	}
 	if (propagated_statistics) {
@@ -449,6 +462,7 @@ void Optimizer::RunBuiltInOptimizers() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
 			statistics_map = propagator.GetStatisticsMap();
+			removed_aggregate_children |= propagator.HasRemovedAggregateChildren();
 		}
 	}
 
@@ -463,6 +477,15 @@ void Optimizer::RunBuiltInOptimizers() {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.VisitOperator(*plan);
 	});
+
+	// COUNT(x) becomes COUNT(*) during statistics propagation, leaving unreferenced columns in the scan
+	if (removed_aggregate_children) {
+		RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+			ClearProjectionMaps(*plan);
+			RemoveUnusedColumns unused(*this);
+			unused.VisitOperator(plan);
+		});
+	}
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
