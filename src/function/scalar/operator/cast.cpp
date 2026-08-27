@@ -232,6 +232,10 @@ bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().try_cast;
 }
 
+bool BoundCastExpression::IsDefaultCast(const BoundFunctionExpression &cast_expr) {
+	return cast_expr.BindInfo()->Cast<CastFunctionData>().is_default_cast;
+}
+
 const BoundCastInfo &BoundCastExpression::GetBoundCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().bound_cast;
 }
