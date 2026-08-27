@@ -1,10 +1,15 @@
 #include "duckdb/common/opener_file_system.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
+
+void OpenerFileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
+	GetFileSystem().RegisterCompressionFilesystem(std::move(fs));
+}
 
 unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                              const MMapOptions &options,
