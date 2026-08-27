@@ -814,6 +814,13 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
+	try {
+		Storage::VerifyBlockAllocSize(header.block_alloc_size);
+	} catch (const InvalidInputException &) {
+		throw DataCorruptionException("Corrupt database file: invalid block allocation size %llu",
+		                              header.block_alloc_size);
+	}
+
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
