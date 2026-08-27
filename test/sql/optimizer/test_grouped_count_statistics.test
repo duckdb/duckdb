@@ -2,6 +2,7 @@
 # description: Test statistics propagation for grouped count_star
 # group: [optimizer]
 
+statement ok
 SET preserve_insertion_order = false;
 
 # A grouped count(*) is always at least 1, so this must become Empty Result
