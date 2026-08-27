@@ -75,6 +75,8 @@ enum class RequestType : uint8_t {
 	OPTIONS_REQUEST
 };
 
+enum class HTTPRetryMode : uint8_t { DEFAULT, DISABLED };
+
 struct HTTPHeaders {
 	using header_map_t = case_insensitive_map_t<string>;
 
@@ -158,6 +160,8 @@ struct BaseRequest {
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
+	//! Whether core retry handling may replay this request
+	HTTPRetryMode retry_mode = HTTPRetryMode::DEFAULT;
 	// System clock start timestamp
 	timestamp_t request_system_start;
 	// Monotonic clock start and end timestamp

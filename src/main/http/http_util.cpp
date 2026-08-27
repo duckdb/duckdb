@@ -486,7 +486,9 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
 #endif
 		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries = params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+		const idx_t max_tries = request.retry_mode == HTTPRetryMode::DISABLED
+		                            ? 0
+		                            : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
 		if (tries <= max_tries) {
 			if (tries > 1 || throttled) {
 #ifndef DUCKDB_NO_THREADS

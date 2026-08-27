@@ -2799,6 +2799,24 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 	return static_cast<HLLStorageType>(StringUtil::StringToEnum(GetHLLStorageTypeValues(), 2, "HLLStorageType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetHTTPRetryModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPRetryMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(HTTPRetryMode::DISABLED), "DISABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPRetryMode>(HTTPRetryMode value) {
+	return StringUtil::EnumToString(GetHTTPRetryModeValues(), 2, "HTTPRetryMode", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPRetryMode EnumUtil::FromString<HTTPRetryMode>(const char *value) {
+	return static_cast<HTTPRetryMode>(StringUtil::StringToEnum(GetHTTPRetryModeValues(), 2, "HTTPRetryMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(HTTPStatusCode::INVALID), "INVALID" },
