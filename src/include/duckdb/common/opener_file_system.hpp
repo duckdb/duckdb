@@ -88,15 +88,29 @@ public:
 		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+	}
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener) override {
+		if (options.mode == CreateDirectoryMode::RECURSIVE) {
+			return FileSystem::CreateDirectoryExtended(directory, options, opener);
+		}
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().CreateDirectory(directory, GetOpener());
+		return GetFileSystem().CreateDirectoryExtended(directory, options, GetOpener());
+	}
+	void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override {
+		CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                             optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().RemoveDirectory(directory, GetOpener());
+		return GetFileSystem().RemoveDirectoryExtended(directory, options, GetOpener());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
@@ -119,8 +133,14 @@ public:
 	void CreateDirectory(const string &directory) {
 		CreateDirectory(directory, nullptr);
 	}
+	bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options) {
+		return CreateDirectoryExtended(directory, options, nullptr);
+	}
 	void RemoveDirectory(const string &directory) {
 		RemoveDirectory(directory, nullptr);
+	}
+	bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options) {
+		return RemoveDirectoryExtended(directory, options, nullptr);
 	}
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);
@@ -197,9 +217,7 @@ public:
 		GetFileSystem().RegisterSubSystem(std::move(sub_fs));
 	}
 
-	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
-		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
-	}
+	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
 
 	void UnregisterSubSystem(const string &name) override {
 		GetFileSystem().UnregisterSubSystem(name);

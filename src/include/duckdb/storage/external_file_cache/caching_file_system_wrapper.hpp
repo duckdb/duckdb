@@ -28,7 +28,7 @@ class CachingFileHandleWrapper : public FileHandle {
 
 public:
 	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
-	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
+	                                    unique_ptr<CachingFileHandle> handle, const FileOpenFlags &flags);
 
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 
@@ -78,8 +78,12 @@ public:
 
 	DUCKDB_API bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	DUCKDB_API bool CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+	                                        optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	DUCKDB_API bool RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+	                                        optional_ptr<FileOpener> opener = nullptr) override;
 
 	DUCKDB_API bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	                          FileOpener *opener = nullptr) override;
@@ -98,7 +102,7 @@ public:
 	DUCKDB_API vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	DUCKDB_API void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override;
-	DUCKDB_API void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
+	DUCKDB_API void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
 	DUCKDB_API void UnregisterSubSystem(const string &name) override;
 	DUCKDB_API unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 	DUCKDB_API vector<string> ListSubSystems() override;
