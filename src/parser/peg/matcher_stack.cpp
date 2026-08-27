@@ -248,6 +248,7 @@ MatcherResult MatchStackFrame::TakeChildResult() {
 }
 
 void MatchStack::PushFrame(const Matcher &matcher, MatchState &state) {
+	state.rule = matcher.GetRule();
 	auto frame_index = frames.size();
 	switch (matcher.Type()) {
 	case MatcherType::OPTIONAL:
@@ -317,12 +318,6 @@ MatcherResult MatchStack::FinalizeFrame(MatchStackFrame &frame) {
 		cache_entry.max_token_index_seen = MaxValue(frame.max_token_index_before, state.GetMaxTokenIndex());
 		cache_entry.result = result.GetParseResult();
 		state.packrat_cache->Store(matcher, frame.token_index_before, std::move(cache_entry));
-	}
-	auto rule = matcher.GetRule();
-	if (result.HasParseResult() && rule) {
-		auto parse_result = result.GetParseResult();
-		parse_result->SetRule(*rule);
-		parse_result->name = rule->name;
 	}
 	return result;
 }

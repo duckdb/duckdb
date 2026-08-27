@@ -19,6 +19,7 @@
 namespace duckdb {
 
 MatcherResult Matcher::MatchParseResult(MatchState &state) const {
+	state.rule = rule;
 	if (state.use_heap_based_parser) {
 		MatchStack stack;
 		return stack.Execute(*this, state);
@@ -45,11 +46,6 @@ MatcherResult Matcher::MatchParseResult(MatchState &state) const {
 			cache_entry.result = result.GetParseResult();
 			state.packrat_cache->Store(*this, token_index, std::move(cache_entry));
 		}
-	}
-	if (result.HasParseResult() && rule) {
-		auto parse_result = result.GetParseResult();
-		parse_result->SetRule(*rule);
-		parse_result->name = rule->name;
 	}
 	return result;
 }

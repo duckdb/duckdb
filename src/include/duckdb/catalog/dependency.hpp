@@ -52,7 +52,7 @@ protected:
 	void Merge(uint8_t other) {
 		value |= other;
 	}
-	uint8_t Value() {
+	uint8_t Value() const {
 		return value;
 	}
 
@@ -95,6 +95,13 @@ struct DependencyDependentFlags : public DependencyFlags {
 private:
 	static constexpr uint8_t BLOCKING = 0;
 	static constexpr uint8_t OWNED_BY = 1;
+	static constexpr uint8_t ALTER_BLOCKING = 2;
+
+public:
+	DependencyDependentFlags() = default;
+	explicit DependencyDependentFlags(uint8_t raw_value) {
+		Merge(raw_value);
+	}
 
 public:
 	DependencyDependentFlags &Apply(DependencyDependentFlags other) {
@@ -109,6 +116,10 @@ public:
 	bool IsOwnedBy() const {
 		return IsSet<OWNED_BY>();
 	}
+	//! Whether this dependency should block ALTER of the entry it depends on (independent of whether it blocks DROP)
+	bool IsAlterBlocking() const {
+		return IsSet<ALTER_BLOCKING>();
+	}
 
 public:
 	DependencyDependentFlags &SetBlocking() {
@@ -118,6 +129,15 @@ public:
 	DependencyDependentFlags &SetOwnedBy() {
 		Set<OWNED_BY>();
 		return *this;
+	}
+	DependencyDependentFlags &SetAlterBlocking() {
+		Set<ALTER_BLOCKING>();
+		return *this;
+	}
+
+public:
+	uint8_t RawValue() const {
+		return Value();
 	}
 
 public:
@@ -132,8 +152,16 @@ public:
 		if (IsOwnedBy()) {
 			result += "OWNED BY";
 		}
+		result += " | ";
+		if (IsAlterBlocking()) {
+			result += "ALTER BLOCKING";
+		}
 		return result;
 	}
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static DependencyDependentFlags Deserialize(Deserializer &deserializer);
 };
 
 struct CatalogEntryInfo {
@@ -143,6 +171,8 @@ public:
 	//! is the path of the *containing* schemas - for a schema entry it is the parent chain (not including itself).
 	vector<Identifier> schema_path;
 	Identifier name;
+	//! The table that owns this entry, for entries that are not unique within their schema (triggers)
+	Identifier table;
 
 public:
 	bool operator==(const CatalogEntryInfo &other) const {
@@ -153,6 +183,9 @@ public:
 			return false;
 		}
 		if (other.name != name) {
+			return false;
+		}
+		if (other.table != table) {
 			return false;
 		}
 		return true;

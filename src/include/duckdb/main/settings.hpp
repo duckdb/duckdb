@@ -1589,6 +1589,16 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct NullOnDivisionByZeroSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "null_on_division_by_zero";
+	static constexpr const char *Description = "Return NULL instead of throwing an error when dividing by zero.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct OldImplicitCastingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "old_implicit_casting";

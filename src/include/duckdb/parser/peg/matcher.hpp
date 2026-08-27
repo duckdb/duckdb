@@ -155,7 +155,8 @@ struct MatchState {
 	MatchState(MatchState &state)
 	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
 	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
-	      packrat_cache(state.packrat_cache), mode(state.mode), use_heap_based_parser(state.use_heap_based_parser) {
+	      packrat_cache(state.packrat_cache), mode(state.mode), use_heap_based_parser(state.use_heap_based_parser),
+	      rule(state.rule) {
 	}
 
 	TokenIterator token_iterator;
@@ -167,6 +168,7 @@ struct MatchState {
 	ParserPackratCache *packrat_cache;
 	MatchMode mode;
 	bool use_heap_based_parser;
+	optional_ptr<const CompiledGrammarRule> rule;
 
 	bool BuildParseResult() const {
 		return mode == MatchMode::BUILD_PARSE_RESULT;
@@ -316,7 +318,12 @@ MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	return MatcherResult::Success(allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...)));
+	auto result = allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	if (rule) {
+		result->SetRule(*rule);
+		result->name = rule->name;
+	}
+	return MatcherResult::Success(result);
 }
 
 } // namespace duckdb

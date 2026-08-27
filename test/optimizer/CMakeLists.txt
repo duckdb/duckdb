@@ -9,6 +9,7 @@ add_library_unity(
   join_order_conflict_detector.cpp
   relation_statistics.cpp
   remove_unused_columns.cpp
+  unchecked_cast.cpp
   union_alls.cpp)
 
 set(UNITTEST_OBJECT_FILES
