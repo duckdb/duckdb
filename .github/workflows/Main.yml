@@ -293,8 +293,6 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang
-      CXX: clang++
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -576,8 +574,6 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang
-      CXX: clang++
       GEN: ninja
 
     steps:
@@ -1077,8 +1073,6 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      CC: clang
-      CXX: clang++
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1204,8 +1198,6 @@ jobs:
     container:
       image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang
-      CXX: clang++
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
