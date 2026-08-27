@@ -37,7 +37,6 @@
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -173,6 +172,7 @@
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -2445,26 +2445,6 @@ const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value) {
 template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value) {
 	return static_cast<FileBufferType>(StringUtil::StringToEnum(GetFileBufferTypeValues(), 4, "FileBufferType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetFileCompressionTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(FileCompressionType::AUTO_DETECT), "AUTO_DETECT" },
-		{ static_cast<uint32_t>(FileCompressionType::UNCOMPRESSED), "UNCOMPRESSED" },
-		{ static_cast<uint32_t>(FileCompressionType::GZIP), "GZIP" },
-		{ static_cast<uint32_t>(FileCompressionType::ZSTD), "ZSTD" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value) {
-	return StringUtil::EnumToString(GetFileCompressionTypeValues(), 4, "FileCompressionType", static_cast<uint32_t>(value));
-}
-
-template<>
-FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value) {
-	return static_cast<FileCompressionType>(StringUtil::StringToEnum(GetFileCompressionTypeValues(), 4, "FileCompressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileExpandResultValues() {
@@ -5770,6 +5750,24 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 34, "StatementType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStatisticsPropagationModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StatisticsPropagationMode::FILTER_SIMPLIFICATION), "FILTER_SIMPLIFICATION" },
+		{ static_cast<uint32_t>(StatisticsPropagationMode::FULL), "FULL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value) {
+	return StringUtil::EnumToString(GetStatisticsPropagationModeValues(), 2, "StatisticsPropagationMode", static_cast<uint32_t>(value));
+}
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value) {
+	return static_cast<StatisticsPropagationMode>(StringUtil::StringToEnum(GetStatisticsPropagationModeValues(), 2, "StatisticsPropagationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatisticsTypeValues() {

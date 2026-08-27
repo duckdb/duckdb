@@ -1,0 +1,60 @@
+# name: benchmark/micro/join/asof_join_hive.benchmark
+# description: AsOf Join with hive partitioning
+# group: [join]
+
+name AsOf Join Hive Partitioning
+group join
+
+argument trades 631_442
+argument quotes 26_888_064
+argument tradesyms 597
+argument quotesyms 608
+
+load
+PRAGMA debug_asof_iejoin=False;
+SET VARIABLE datadate='2026-04-01'::DATE;
+CREATE TYPE symbols AS ENUM ('IEMG', 'IJR', 'IONQ.WS', 'IWMI', 'IAI', 'IGM', 'IGLD', 'IBTQ', 'IQV', 'IOYY', 'ISBA', 'IBTL', 'IEP', 'IBX', 'IWP', 'IMCV', 'ICL', 'IXJ', 'IBHK', 'IQDF', 'IBGB', 'ITDG', 'IDEF', 'ISRG', 'IPCX.R', 'INN', 'IBIK', 'INFQ.WS', 'IDE', 'INCR', 'IBGM', 'IRM', 'IROC', 'IBIT', 'ICF', 'IG', 'IJS', 'INTU', 'IR', 'IVV', 'IWO', 'IEF', 'IGE', 'IMTG', 'ICLN', 'IFF', 'IMPP.P', 'IMRA', 'IMRX', 'IREZ', 'IBTG', 'IFLR', 'ISBG', 'ISCB', 'IXC', 'ICUI', 'IREG', 'ISOU', 'IBGA', 'IAC', 'IDEQ', 'IPGP', 'IONL', 'IBDW', 'IPOS', 'IBGL', 'IMAR', 'IDT', 'IPX', 'IDOG', 'INSW', 'IOCT', 'ION', 'IDLV', 'INVZ', 'IFV', 'IT', 'ITOT', 'IVVB', 'IYW', 'IHDG', 'IMTB', 'INAC.R', 'IBDY', 'IFBD', 'IESC', 'IVF', 'IBTH', 'IBDX', 'IAK', 'IVVW', 'ICCM', 'IOSP', 'ICVT', 'ISCG', 'IMMP', 'IOT', 'IBHL', 'IBIG', 'ICOI', 'IVRS', 'IVSI', 'IGOV', 'IAUX.WS', 'ICOW', 'INGR', 'IPI', 'IIGD', 'IIIV', 'IZM', 'IBCB', 'INSG', 'ISHG', 'INVN', 'IGHG', 'IWC', 'INVH', 'IRT', 'IREX', 'IVOO', 'INDV', 'ITDE', 'ISTR', 'IFLN', 'IOVA', 'ILLU.U', 'IOR', 'ICRC', 'ILDR', 'INTG', 'IEUS', 'INDH', 'ISPR', 'ICON', 'IVSS', 'IVT', 'IYJ', 'IBP', 'IPEX', 'IALT', 'IAPR', 'IIM', 'IIPR', 'IBDT', 'INCY', 'IXHL', 'INMD', 'IBIJ', 'INFO', 'IHT', 'INCO', 'INVA', 'ITHA', 'IVOL', 'IWF', 'IYE', 'IYR', 'INAC', 'IHAK', 'IPAC', 'IQRA', 'IQST', 'ILCV', 'IBTO', 'INEQ', 'ITT', 'ICPY', 'IMFL', 'IBIC', 'IBID', 'IOTR', 'IVOV', 'IBII', 'INFQ', 'IDA', 'IPOD.U', 'IBG', 'IDNA', 'IBTP', 'IBND', 'IBO', 'IAU', 'IUSG', 'IWD', 'IJUL', 'INBX', 'IYF', 'IAUM', 'IAGG', 'ITP', 'IPAR', 'ISPY', 'IDGT', 'IP', 'ICPI', 'ISPC', 'IDMO', 'IRAB.U', 'INTA', 'INKM', 'IYZ', 'IQM', 'IBIL', 'IBIM', 'IPST', 'ILTB', 'IMA', 'INSE', 'IBOC', 'INTZ', 'IBMU', 'IGA', 'IONS', 'IYH', 'INBK.Z', 'IFED', 'IGLB', 'ITRI', 'IDVY', 'INFL', 'IBIO', 'IFRA', 'IBTM', 'IRON', 'IEX', 'IBIE', 'ITAN', 'ITDI', 'IBRN', 'INGN', 'INHD', 'IPCX.U', 'IVR.PRC', 'IART', 'IMCG', 'IPOD', 'IPOD.W', 'IVA', 'IBHF', 'INUV', 'IBDU', 'IEFA', 'IGV', 'INTC', 'IONR', 'INAB', 'IONZ', 'IEV', 'IRE', 'IDVZ', 'IBTK', 'IAUG', 'IONX', 'INOD', 'IAUX', 'ICR.PRA', 'ICU', 'IETH', 'INDI', 'IBIF', 'IGR', 'ISVL', 'ISMD', 'IMOM', 'IDUB', 'INCM', 'IGEB', 'IRIX', 'INDZ', 'ITWO', 'INR', 'IGIC', 'INM', 'IAG', 'IGBH', 'IGIB', 'IVZ', 'IWM', 'IWML', 'IEUR', 'INAC.U', 'INBK', 'INFU', 'IYC', 'IMRN', 'ITDC', 'IQSM', 'IQSU', 'IBTI', 'IMNM', 'IWLG', 'IRS', 'IOO', 'IDU', 'ISCV', 'IWFL', 'ICG', 'INDB', 'IQMM', 'IQDG', 'IBGC', 'IACO.U', 'IAE', 'IAF', 'IBAC.R', 'IWMY', 'IBDS', 'INSM', 'ISRA', 'INN.PRF', 'IRTC', 'IDAI', 'IHY', 'ILAG', 'IMVT', 'IRHO.U', 'IRMD', 'IBEX', 'IEDI', 'IBMO', 'IBMS', 'IBMV', 'IMMX', 'ISD', 'IGD', 'IHI', 'IMTM', 'IPO', 'IMTE', 'ITW', 'IBLC', 'IJAN', 'INDQ', 'ITDD', 'IDXX', 'IGF', 'IGGY', 'ILCB', 'IQSZ', 'IBN', 'IGSB', 'ICCC', 'INO', 'IH', 'IMDX', 'IRD', 'IYRI', 'INDL', 'IVVD', 'IBAT', 'IMAY', 'IPEX.R', 'IND', 'IMOS', 'INN.PRE', 'IRVH', 'IPW', 'IMST', 'INRO', 'ICLO', 'IDEV', 'INBS', 'IWN', 'IVE', 'IBRX', 'IMPP', 'IEZ', 'ISTB', 'IBTA', 'IFLO', 'IWS', 'IWDL', 'IDHQ', 'IRS.WS', 'IVDA', 'ICE', 'IDYA', 'ICUC.W', 'INTL', 'IMF', 'ILF', 'IQI', 'ISWN', 'INCE', 'IGME', 'IYG', 'IPB', 'IPEX.U', 'IWMW', 'IIIN', 'IINN', 'IBD', 'INMU', 'IRHO', 'IMSR.W', 'IQ', 'IBMP', 'IJH', 'IREN', 'IUSV', 'IJUN', 'IWY', 'ILCG', 'IDV', 'IJJ', 'IPAV', 'ISSB', 'ISSC', 'IFS', 'IRET', 'ILMN', 'INTM', 'ICHR', 'IBHI', 'IPAY', 'IBGK', 'IVSX', 'IBOT', 'IPCX', 'IPDN', 'IHS', 'INV', 'ITGR', 'INEO', 'IMCR', 'ISCF', 'INQQ', 'IEAG.U', 'ICMB', 'ISHP', 'INKT', 'IGAC.U', 'IMO', 'IVW', 'IXN', 'IYK', 'IKT', 'IQLT', 'IVES', 'ITB', 'INDO', 'IBUF', 'IBTJ', 'IRWD', 'IDYN', 'ILPT', 'ICFI', 'IMKT.A', 'IMMR', 'IBHJ', 'IGPT', 'INTT', 'IQDY', 'IRAB', 'IHE', 'IPKW', 'IPM', 'IGRO', 'ITDH', 'ITEQ', 'IPHA', 'ITDF', 'IVR', 'IBCP', 'IXG', 'IYT', 'IRTR', 'IBDV', 'INVG', 'ITM', 'ITOC', 'ITOL', 'IBCA', 'IMTX', 'IRHO.R', 'IBFR', 'IXP', 'IEAG.R', 'ICLR', 'INVZ.W', 'IBB', 'IGAC', 'IGAC.R', 'IGCB', 'IGI', 'IVLU', 'IWR', 'ING', 'IAT', 'IHD', 'IJK', 'IONQ', 'IEO', 'IFEB', 'INDS', 'IWL', 'IBUY', 'IDVO', 'IDX', 'IQSI', 'IFGL', 'IFN', 'INDA', 'IQQQ', 'IUSB', 'IFRX', 'IVVM', 'ITA', 'IVDA.W', 'IOPP', 'IYLD', 'IBHH', 'IBM', 'ICOP', 'ISUL', 'IBAC', 'IHF', 'IMAX', 'INGM', 'IZRL', 'IDEC', 'INVE', 'IMVP', 'IVAL', 'IDN', 'IBMQ', 'IBMR', 'IWFG', 'INLX', 'INVX', 'IETC', 'INFY', 'IWX', 'IJT', 'IWV', 'INTF', 'IRDM', 'ITDB', 'ITRG', 'IBTR', 'IMNN', 'IAUI', 'ICAP', 'ILIT', 'ILOW', 'INNV', 'INOV', 'ICSH', 'INTJ', 'IBHM', 'IEI', 'IYY', 'IMCC', 'ITDJ', 'III', 'IZEA', 'IBIH', 'IDCC', 'ITHA.U', 'ITHA.W', 'ITIC', 'IBBQ', 'ILS', 'IBDZ', 'IDRV', 'INDY', 'IDR', 'IOBT', 'IEAG', 'IBMT', 'ISEP', 'INLF', 'INMB', 'IE', 'IGC', 'IMXI', 'IWB', 'IBKR', 'IMSR', 'INDP', 'IVOG', 'IXUS', 'IYM', 'IX', 'INTW', 'ITUB', 'IGTR', 'ITRN', 'INTR', 'IUS', 'INDE', 'ISMF', 'INTS', 'IQHI', 'IRAB.WS', 'IHG', 'IMCB', 'IPFX.U', 'IINN.W', 'IIPR.PRA', 'IBDR', 'INSP', 'IHRT', 'IIF', 'IMUX', 'IPSC', 'IBHG', 'IPWR');
+SET VARIABLE symbol_range=enum_range(NULL::symbols);
+SELECT SETSEED(0.8675309);
+CREATE TABLE trade AS 
+	SELECT 
+		i AS tid,
+		getvariable('symbol_range')[1 + floor(random() * ${tradesyms})::INTEGER]::symbols AS sym,
+		getvariable('datadate') + INTERVAL 9 HOURS + INTERVAL (floor(random() * (7 * 60 * 60 + 30 * 60) * 1000)::INTEGER) MILLISECONDS AS time,
+		(i % 625)::FLOAT AS price,
+		i % 7984977 AS size,
+		CASE WHEN i%2 THEN 'N' ELSE '' END AS stop,
+		(i % 74)::VARCHAR AS cond,
+		CHR(65 + (i % 26)::INTEGER) AS ex,
+	FROM range(${trades}) t(i);
+COPY trade TO '${BENCHMARK_DIR}/trade' (FORMAT parquet, PARTITION_BY (sym), OVERWRITE);
+DROP TABLE trade;
+CREATE VIEW trade AS FROM '${BENCHMARK_DIR}/trade/*/*.parquet';
+CREATE TABLE quote AS 
+	SELECT 
+		i AS qid,
+		getvariable('symbol_range')[1 + floor(random() * ${quotesyms})::INTEGER]::symbols AS sym,
+		getvariable('datadate') + INTERVAL 9 HOURS + INTERVAL (floor(random() * (7 * 60 * 60 + 30 * 60) * 1000)::INTEGER) MILLISECONDS AS time,
+		(i % 621)::FLOAT AS bid,
+		(i % 84633)::FLOAT AS ask,
+		i % 478500 AS bsize,
+		i % 812500 AS asize,
+		substr('CRLYO', i % 5, 1) AS cond,
+	FROM range(${quotes}) t(i);
+COPY quote TO '${BENCHMARK_DIR}/quote' (FORMAT parquet, PARTITION_BY (sym), OVERWRITE);
+DROP TABLE quote;
+CREATE VIEW quote AS FROM '${BENCHMARK_DIR}/quote/*/*.parquet'
+
+run
+SELECT t.sym, t.time, t.price, t.size, t.stop, t.cond, t.ex
+FROM (
+    SELECT sym, time, price, size, stop, cond, ex, tid
+    FROM trade
+    WHERE time BETWEEN getvariable('datadate') + INTERVAL '16 hours 20 minutes'
+                   AND getvariable('datadate') + INTERVAL '16 hours 30 minutes'
+) t
+ASOF LEFT JOIN (
+    SELECT sym, time, bid, ask, bsize, asize, cond
+    FROM quote
+) q USING (sym, time)
+ORDER BY tid;

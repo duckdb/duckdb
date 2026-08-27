@@ -234,8 +234,6 @@ enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
 
-enum class FileCompressionType : uint8_t;
-
 enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
@@ -525,6 +523,8 @@ enum class StateMemoryOwnership : uint8_t;
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
+
+enum class StatisticsPropagationMode : uint8_t;
 
 enum class StatisticsType : uint8_t;
 
@@ -931,9 +931,6 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
-
-template<>
-const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
 
 template<>
 const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
@@ -1369,6 +1366,9 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value);
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value);
 
 template<>
 const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
@@ -1828,9 +1828,6 @@ template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
-FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
-
-template<>
 FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
@@ -2264,6 +2261,9 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value);
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value);
 
 template<>
 StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);

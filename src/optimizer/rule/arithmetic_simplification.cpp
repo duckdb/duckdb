@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -61,7 +62,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			if (constant.GetValue() == 1) {
 				// divide by 1, replace with non-constant child
 				return std::move(root.GetChildrenMutable()[1 - constant_child]);
-			} else if (constant.GetValue() == 0) {
+			} else if (constant.GetValue() == 0 && Settings::Get<NullOnDivisionByZeroSetting>(rewriter.context)) {
 				// divide by 0, replace with NULL
 				return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 			}
