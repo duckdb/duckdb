@@ -431,10 +431,8 @@ public:
 			queued_rows += job->rows;
 		}
 		job->scan_state->InitializeColumnScans();
-		auto &table_state = job->scan_state->table_state;
-		if (table_state.row_group && table_state.RemainingAssignmentRows() > 0) {
-			io_tasks = table_state.RegisterAssignmentIO();
-		}
+		// preparing the first vector skips the leading vectors the zonemaps or sampling reject before registering I/O
+		job->scan_state->table_state.PrepareScanIO(tx, io_tasks, true);
 		return job;
 	}
 

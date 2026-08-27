@@ -306,7 +306,8 @@ bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_p
 	return false;
 }
 
-bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks) {
+bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<unique_ptr<AsyncTask>> &tasks,
+                                        bool register_assignment) {
 	if (!row_group) {
 		return false;
 	}
@@ -323,7 +324,9 @@ bool CollectionScanState::PrepareScanIO(DuckTransaction &transaction, vector<uni
 		return true;
 	}
 	prepared_vector.prepare_state = VectorPrepareState::IO_REGISTERED;
-	if (!assignment_io_registered) {
+	if (register_assignment) {
+		tasks = RegisterAssignmentIO();
+	} else if (!assignment_io_registered) {
 		// read-ahead jobs registered their whole assignment when produced, otherwise collect the vector's I/O
 		tasks = current_row_group.CollectScanIOTasks(*this, prepared_vector.max_count);
 	}
@@ -334,7 +337,8 @@ vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
 	D_ASSERT(row_group);
 	D_ASSERT(!assignment_io_registered);
 	assignment_io_registered = true;
-	return row_group->GetNode().CollectScanIOTasks(*this, RemainingAssignmentRows());
+	auto &current_row_group = row_group->GetNode();
+	return current_row_group.CollectScanIOTasks(*this, current_row_group.PrefetchRowCount(*this));
 }
 
 void CollectionScanState::InitializeColumnScans() {

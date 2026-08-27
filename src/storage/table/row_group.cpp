@@ -871,6 +871,20 @@ vector<unique_ptr<AsyncTask>> RowGroup::CollectScanIOTasks(CollectionScanState &
 	return GetBlockManager().buffer_manager.CreatePrefetchTasks(state.context, prefetch_state.blocks);
 }
 
+idx_t RowGroup::PrefetchRowCount(CollectionScanState &state) {
+	const idx_t start_row = state.vector_index * STANDARD_VECTOR_SIZE;
+	idx_t end_row = state.max_row_group_row;
+	auto context = state.context.GetClientContext();
+	for (auto &entry : state.GetFilterInfo().GetFilterList()) {
+		if (entry.IsAlwaysTrue() || entry.table_column_index.IsPushdownExtract()) {
+			continue;
+		}
+		auto &column_data = GetColumn(entry.table_column_index);
+		end_row = MinValue<idx_t>(end_row, column_data.ZonemapScanEnd(context, start_row, end_row, entry.filter));
+	}
+	return end_row > start_row ? end_row - start_row : 0;
+}
+
 bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 	auto &prepared = state.prepared_vector;
 	if (prepared.prepare_state != VectorPrepareState::NONE) {

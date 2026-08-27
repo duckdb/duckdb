@@ -164,6 +164,8 @@ public:
 	void PrefetchScanIO(CollectionScanState &state, idx_t row_count) const;
 	//! Collects the async I/O tasks required to scan the next row_count rows, without performing any I/O
 	vector<unique_ptr<AsyncTask>> CollectScanIOTasks(CollectionScanState &state, idx_t row_count) const;
+	//! Rows of the remaining assignment worth prefetching, trailing vectors the zonemaps reject are left out
+	idx_t PrefetchRowCount(CollectionScanState &state);
 	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
 	bool PrepareScan(ScanOptions options, CollectionScanState &state);
 	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished

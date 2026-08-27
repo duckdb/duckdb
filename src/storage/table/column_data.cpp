@@ -472,6 +472,45 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row,
+                                 TableFilter &filter) {
+	if (!data.GetRootSegment()) {
+		// virtual columns and columns that keep their data in child columns have no segment zonemaps
+		return end_row;
+	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::ZonemapScanEnd");
+	auto update_stats = GetUpdateStatistics();
+	if (update_stats) {
+		auto update_result =
+		    context ? expr_filter.CheckStatistics(*context, *update_stats) : expr_filter.CheckStatistics(*update_stats);
+		if (update_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			// updated rows can pass the filter anywhere in the column
+			return end_row;
+		}
+	}
+	// a vector is only skipped when it lies entirely inside a rejected segment
+	idx_t scan_end = start_row;
+	for (auto segment = data.GetSegment(start_row); segment; segment = data.GetNextSegment(*segment)) {
+		const idx_t segment_start = segment->GetRowStart();
+		if (segment_start >= end_row) {
+			break;
+		}
+		const idx_t segment_end = MinValue<idx_t>(segment_start + segment->GetNode().count, end_row);
+		FilterPropagateResult prune_result;
+		{
+			lock_guard<mutex> l(stats_lock);
+			auto &segment_stats = segment->GetNode().GetStatsMutable();
+			prune_result = context ? expr_filter.CheckStatistics(*context, segment_stats)
+			                       : expr_filter.CheckStatistics(segment_stats);
+		}
+		const bool straddles_vector = segment_end < end_row && segment_end % STANDARD_VECTOR_SIZE != 0;
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE || straddles_vector) {
+			scan_end = AlignValue<idx_t, STANDARD_VECTOR_SIZE>(segment_end);
+		}
+	}
+	return MinValue<idx_t>(scan_end, end_row);
+}
+
 FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
                                                TableFilter &filter) {
 	if (!stats) {
