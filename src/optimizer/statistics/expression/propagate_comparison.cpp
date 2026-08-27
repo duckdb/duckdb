@@ -3,26 +3,23 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
-static Value TryGetStringStatsMin(const BaseStatistics &stats) {
-	if (stats.GetType().id() == LogicalTypeId::VARCHAR) {
-		return StringStats::TryGetValidMin(stats);
-	}
-	if (stats.GetType().id() == LogicalTypeId::BLOB && StringStats::GetMinType(stats) == StringStatsType::EXACT_STATS) {
-		return Value::BLOB_RAW(StringStats::Min(stats));
-	}
-	return Value();
+static Value GetStringStatsMin(const BaseStatistics &stats) {
+	return Value::BLOB_RAW(StringStats::Min(stats));
 }
 
-static Value TryGetStringStatsMax(const BaseStatistics &stats) {
-	if (stats.GetType().id() == LogicalTypeId::VARCHAR) {
-		return StringStats::TryGetValidMax(stats);
+static Value GetStringStatsMax(const BaseStatistics &stats) {
+	auto max = StringStats::Max(stats);
+	if (StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS) {
+		return Value::BLOB_RAW(std::move(max));
 	}
-	if (stats.GetType().id() == LogicalTypeId::BLOB && StringStats::GetMaxType(stats) == StringStatsType::EXACT_STATS) {
-		return Value::BLOB_RAW(StringStats::Max(stats));
+	// A truncated max stores a prefix. Use the next prefix as its upper bound.
+	if (StringUtil::FindNextPrefix(max)) {
+		return Value::BLOB_RAW(std::move(max));
 	}
 	return Value();
 }
@@ -89,16 +86,16 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 		Value rmin;
 		Value rmax;
 		if (StringStats::HasMin(lstats)) {
-			lmin = TryGetStringStatsMin(lstats);
+			lmin = GetStringStatsMin(lstats);
 		}
 		if (StringStats::HasMax(lstats)) {
-			lmax = TryGetStringStatsMax(lstats);
+			lmax = GetStringStatsMax(lstats);
 		}
 		if (StringStats::HasMin(rstats)) {
-			rmin = TryGetStringStatsMin(rstats);
+			rmin = GetStringStatsMin(rstats);
 		}
 		if (StringStats::HasMax(rstats)) {
-			rmax = TryGetStringStatsMax(rstats);
+			rmax = GetStringStatsMax(rstats);
 		}
 		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null);

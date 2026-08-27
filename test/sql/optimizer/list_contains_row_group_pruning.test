@@ -94,6 +94,11 @@ CREATE TABLE long_string_lists AS
 SELECT [repeat('a', 20) || lpad(i::VARCHAR, 4, '0')] AS l
 FROM range(6144) tbl(i);
 
+query I
+SELECT count(*) FROM long_string_lists WHERE list_contains(l, repeat('a', 20) || '3000');
+----
+1
+
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM long_string_lists
 WHERE list_contains(l, repeat('a', 20) || '9999');
@@ -102,5 +107,17 @@ analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
 
 query I
 SELECT count(*) FROM long_string_lists WHERE list_contains(l, repeat('a', 20) || '9999');
+----
+0
+
+# The next-prefix upper bound can overlap a needle that is larger than the actual max
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM long_string_lists
+WHERE list_contains(l, repeat('a', 19) || 'b');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM long_string_lists WHERE list_contains(l, repeat('a', 19) || 'b');
 ----
 0
