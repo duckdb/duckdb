@@ -1,0 +1,43 @@
+# name: test/sql/delete/masked_vector_further_delete.test
+# description: Deleting alive rows in a masked vector decompresses it and stays correct
+# group: [delete]
+
+statement ok
+CREATE TABLE t AS SELECT i FROM range(4096) t(i)
+
+statement ok
+CHECKPOINT
+
+# partial delete both vectors, then checkpoint -> MASKED
+statement ok
+DELETE FROM t WHERE i % 2 = 0
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM t
+----
+2048
+
+# delete more alive rows: forces DecompressDeleteMask (MASKED -> ARRAY)
+query I
+DELETE FROM t WHERE i % 4 = 1
+----
+1024
+
+query II
+SELECT COUNT(*), MIN(i) FROM t
+----
+1024	3
+
+# already-deleted rows are filtered by the scan before delete - no conflict, zero rows affected
+query I
+DELETE FROM t WHERE i % 2 = 0
+----
+0
+
+query I
+SELECT COUNT(*) FROM t
+----
+1024

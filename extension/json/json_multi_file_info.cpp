@@ -35,23 +35,22 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 	return std::move(reader_options);
 }
 
-bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value, MultiFileOptions &,
-                                    BaseFileReaderOptions &options_p) {
+bool JSONMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
+                                    MultiFileOptions &, BaseFileReaderOptions &options_p) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
 	if (value.IsNull()) {
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
-	auto loption = StringUtil::Lower(key);
-	if (loption == "ignore_errors") {
+	if (key == "ignore_errors") {
 		options.ignore_errors = BooleanValue::Get(value);
 		return true;
 	}
-	if (loption == "maximum_object_size") {
+	if (key == "maximum_object_size") {
 		options.maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(value), options.maximum_object_size);
 		return true;
 	}
-	if (loption == "format") {
+	if (key == "format") {
 		auto arg = StringUtil::Lower(StringValue::Get(value));
 		static const auto FORMAT_OPTIONS =
 		    case_insensitive_map_t<JSONFormat> {{"auto", JSONFormat::AUTO_DETECT},
@@ -70,11 +69,11 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		options.format = lookup->second;
 		return true;
 	}
-	if (loption == "compression") {
-		options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(value)));
+	if (key == "compression") {
+		options.compression = FileCompressionType(StringValue::Get(value));
 		return true;
 	}
-	if (loption == "columns") {
+	if (key == "columns") {
 		auto &child_type = value.type();
 		if (child_type.id() != LogicalTypeId::STRUCT) {
 			throw BinderException("read_json \"columns\" parameter requires a struct as input.");
@@ -99,11 +98,15 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "auto_detect") {
+	if (key == "auto_detect") {
 		options.auto_detect = BooleanValue::Get(value);
 		return true;
 	}
-	if (loption == "sample_size") {
+	if (key == "geojson") {
+		options.geojson = BooleanValue::Get(value);
+		return true;
+	}
+	if (key == "sample_size") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.sample_size = NumericLimits<idx_t>::Maximum();
@@ -115,7 +118,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "maximum_depth") {
+	if (key == "maximum_depth") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.max_depth = NumericLimits<idx_t>::Maximum();
@@ -124,7 +127,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "field_appearance_threshold") {
+	if (key == "field_appearance_threshold") {
 		auto arg = DoubleValue::Get(value);
 		if (arg < 0 || arg > 1) {
 			throw BinderException("read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
@@ -132,7 +135,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		options.field_appearance_threshold = arg;
 		return true;
 	}
-	if (loption == "map_inference_threshold") {
+	if (key == "map_inference_threshold") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.map_inference_threshold = NumericLimits<idx_t>::Maximum();
@@ -144,7 +147,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "dateformat" || loption == "date_format") {
+	if (key == "dateformat" || key == "date_format") {
 		auto format_string = StringValue::Get(value);
 		if (StringUtil::Lower(format_string) == "iso") {
 			format_string = "%Y-%m-%d";
@@ -158,7 +161,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "timestampformat" || loption == "timestamp_format") {
+	if (key == "timestampformat" || key == "timestamp_format") {
 		auto format_string = StringValue::Get(value);
 		if (StringUtil::Lower(format_string) == "iso") {
 			format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
@@ -172,7 +175,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "records") {
+	if (key == "records") {
 		auto arg = StringValue::Get(value);
 		if (arg == "auto") {
 			options.record_type = JSONRecordType::AUTO_DETECT;
@@ -185,7 +188,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "maximum_sample_files") {
+	if (key == "maximum_sample_files") {
 		auto arg = BigIntValue::Get(value);
 		if (arg == -1) {
 			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
@@ -197,37 +200,36 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		}
 		return true;
 	}
-	if (loption == "convert_strings_to_integers") {
+	if (key == "convert_strings_to_integers") {
 		options.convert_strings_to_integers = BooleanValue::Get(value);
 		return true;
 	}
 	return false;
 }
 
-static void JSONCheckSingleParameter(const string &key, const vector<Value> &values) {
+static void JSONCheckSingleParameter(const Identifier &key, const vector<Value> &values) {
 	if (values.size() == 1) {
 		return;
 	}
 	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", key);
 }
 
-bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
+bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+                                        BaseFileReaderOptions &options_p, vector<Identifier> &expected_names,
                                         vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
-	const auto &loption = StringUtil::Lower(key);
-	if (loption == "dateformat" || loption == "date_format") {
+	if (key == "dateformat" || key == "date_format") {
 		JSONCheckSingleParameter(key, values);
 		options.date_format = StringValue::Get(values.back());
 		return true;
 	}
-	if (loption == "timestampformat" || loption == "timestamp_format") {
+	if (key == "timestampformat" || key == "timestamp_format") {
 		JSONCheckSingleParameter(key, values);
 		options.timestamp_format = StringValue::Get(values.back());
 		return true;
 	}
-	if (loption == "auto_detect") {
+	if (key == "auto_detect") {
 		if (values.empty()) {
 			options.auto_detect = true;
 		} else {
@@ -239,13 +241,21 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		}
 		return true;
 	}
-	if (loption == "compression") {
-		JSONCheckSingleParameter(key, values);
-		options.compression =
-		    EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(values.back())));
+	if (key == "geojson") {
+		if (values.empty()) {
+			options.geojson = true;
+		} else {
+			JSONCheckSingleParameter(key, values);
+			options.geojson = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+		}
 		return true;
 	}
-	if (loption == "array") {
+	if (key == "compression") {
+		JSONCheckSingleParameter(key, values);
+		options.compression = FileCompressionType(StringValue::Get(values.back()));
+		return true;
+	}
+	if (key == "array") {
 		if (values.empty()) {
 			options.format = JSONFormat::ARRAY;
 		} else {
@@ -275,7 +285,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 
 	auto &options = json_data.options;
-	names = StringsToIdentifiers(options.name_list);
+	names = options.name_list;
 	return_types = options.sql_type_list;
 	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
 		// More than one specified column implies records
@@ -298,6 +308,19 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
 			                      "parameter when \"records\" is set to 'false'.");
 		}
+	}
+
+	// Reading GeoJSON is opt-in, but a .geojson / .geojsonl file name is opt-in enough
+	if (!options.geojson.has_value()) {
+		const auto first_file = bind_data.file_list->GetFirstFile().path;
+		options.geojson =
+		    StringUtil::CIEndsWith(first_file, ".geojson") || StringUtil::CIEndsWith(first_file, ".geojsonl");
+	}
+	// COPY ... FROM hardcodes RECORDS because it takes its columns from the target table. For GeoJSON we still
+	// need to know whether those columns live in a Feature's "properties", so let the structure decide.
+	if (options.geojson.value() && !options.auto_detect && !options.name_list.empty() &&
+	    options.record_type == JSONRecordType::RECORDS) {
+		options.record_type = JSONRecordType::AUTO_DETECT;
 	}
 
 	json_data.InitializeFormats();
@@ -361,7 +384,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 }
 
 void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
-                                         const vector<string> &expected_names,
+                                         const vector<Identifier> &expected_names,
                                          const vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
@@ -405,6 +428,9 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 		gstate.names.push_back(json_data.key_names[col_id]);
 		gstate.column_ids.push_back(col_idx);
 		gstate.column_indices.push_back(column_index);
+		if (!json_data.feature_columns.empty()) {
+			gstate.feature_columns.push_back(json_data.feature_columns[col_id]);
+		}
 	}
 	if (gstate.names.size() < json_data.key_names.size() || bind_data.file_options.union_by_name) {
 		// If we are auto-detecting, but don't need all columns present in the file,
@@ -465,6 +491,46 @@ bool JSONReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionSt
 	return lstate.TryInitializeScan(gstate, *this);
 }
 
+//! GeoJSON Features are read as two groups of columns: those taken from the Feature itself, and those taken from
+//! its "properties" object
+static bool TransformGeoJSONFeatures(yyjson_val *values[], yyjson_alc *alc, const idx_t count,
+                                     JSONScanGlobalState &gstate, const vector<Vector *> &result_vectors,
+                                     JSONTransformOptions &transform_options) {
+	D_ASSERT(gstate.feature_columns.size() == gstate.names.size());
+
+	// Group the columns by where they read from, using the JSON key rather than the (deduplicated) column name.
+	// A Feature member and a property of the same name are separate columns, so this cannot be done by name.
+	vector<string> feature_names, property_names;
+	vector<Vector *> feature_vectors, property_vectors;
+	vector<ColumnIndex> feature_indices, property_indices;
+	for (idx_t i = 0; i < gstate.feature_columns.size(); i++) {
+		const auto &feature_column = gstate.feature_columns[i];
+		const auto from_properties = feature_column.from_properties;
+		(from_properties ? property_names : feature_names).push_back(feature_column.key);
+		(from_properties ? property_vectors : feature_vectors).push_back(result_vectors[i]);
+		if (!gstate.column_indices.empty()) {
+			(from_properties ? property_indices : feature_indices).push_back(gstate.column_indices[i]);
+		}
+	}
+
+	// "type", "properties" and "bbox" are consumed by the unnesting, so unknown keys are expected in both groups
+	bool success = true;
+	if (!feature_names.empty()) {
+		success = JSONTransform::TransformObject(values, alc, count, feature_names, feature_vectors, transform_options,
+		                                         feature_indices, false);
+	}
+	if (success && !property_names.empty()) {
+		vector<yyjson_val *> property_values(count);
+		for (idx_t i = 0; i < count; i++) {
+			auto &val = values[i];
+			property_values[i] = val && unsafe_yyjson_is_obj(val) ? yyjson_obj_get(val, "properties") : nullptr;
+		}
+		success = JSONTransform::TransformObject(property_values.data(), alc, count, property_names, property_vectors,
+		                                         transform_options, property_indices, false);
+	}
+	return success;
+}
+
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
                       JSONScanLocalState &lstate, DataChunk &output) {
 	auto &scan_state = lstate.GetScanState();
@@ -487,6 +553,9 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
 			                                         result_vectors, lstate.transform_options, gstate.column_indices,
 			                                         lstate.transform_options.error_unknown_key);
+		} else if (gstate.json_data.options.record_type == JSONRecordType::FEATURES) {
+			success = TransformGeoJSONFeatures(values, scan_state.allocator.GetYYAlc(), count, gstate, result_vectors,
+			                                   lstate.transform_options);
 		} else {
 			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
 			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
@@ -538,9 +607,9 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
                              LocalTableFunctionState &local_state, DataChunk &output) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif
@@ -558,7 +627,7 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
-	return AsyncResult(output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED);
+	return AsyncResult::FromChunk(output);
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

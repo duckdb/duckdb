@@ -50,6 +50,8 @@ const char* EnumUtil::ToChars<JSONRecordType>(JSONRecordType value) {
 		return "RECORDS";
 	case JSONRecordType::VALUES:
 		return "VALUES";
+	case JSONRecordType::FEATURES:
+		return "FEATURES";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value of type JSONRecordType: '%d' not implemented", value));
 	}
@@ -65,6 +67,9 @@ JSONRecordType EnumUtil::FromString<JSONRecordType>(const char *value) {
 	}
     if (StringUtil::Equals(value, "VALUES")) {
 		return JSONRecordType::VALUES;
+	}
+    if (StringUtil::Equals(value, "FEATURES")) {
+		return JSONRecordType::FEATURES;
 	}
    throw NotImplementedException(StringUtil::Format("Enum value of type JSONRecordType: '%s' not implemented", value));
 }

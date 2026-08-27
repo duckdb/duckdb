@@ -205,6 +205,11 @@ public:
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
 };
 
+//! Functions that can throw runtime errors must be marked as fallible using SetFallible(), since many parts of the
+//! system rely on this (e.g. dictionary expression caching, filter pushdown, TRY)
+//! Rethrows an execution error thrown by a function that is not marked as fallible as an internal error
+[[noreturn]] DUCKDB_API void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex);
+
 template <class IMPL>
 class BaseScalarFunction {
 	friend IMPL; // Only allow the derived class to access the protected members of this class.
@@ -236,6 +241,9 @@ public: // Properties
 
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+
+	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
+	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
@@ -303,6 +311,33 @@ public: // Callbacks
 	}
 	// clang-format on
 
+public: // Execution
+	//! Execute the function, verifying that functions that are not marked as fallible do not throw execution errors
+	void Execute(DataChunk &args, ExpressionState &state, Vector &result) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			callbacks.function(args, state, result);
+			return;
+		}
+		try {
+			callbacks.function(args, state, result);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
+
+	//! Execute the select callback of the function, verifying that non-fallible functions do not throw
+	idx_t Select(DataChunk &args, ExpressionState &state, const SelectionVector *sel, SelectionVector *true_sel,
+	             SelectionVector *false_sel) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		}
+		try {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
+
 public:
 	bool HasExtraFunctionInfo() const {
 		return function_info != nullptr;
@@ -320,6 +355,11 @@ public:
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {
 		return function_info;
+	}
+
+private:
+	const Identifier &Name() const {
+		return static_cast<const IMPL &>(*this).GetName();
 	}
 
 protected:
@@ -521,9 +561,27 @@ public:
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
+	explicit BoundScalarFunction(shared_ptr<const ScalarFunction> function);
 
 	bool operator==(const BoundScalarFunction &rhs) const;
 	bool operator!=(const BoundScalarFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function, e.g. statistics
+	//! propagation swapping in a specialized implementation. For a function bound from a ScalarFunctionSet this is
+	//! the set's own overload, so it compares equal by pointer across binds. Functions bound outside of a set are
+	//! copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const ScalarFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
+
+private:
+	shared_ptr<const ScalarFunction> definition;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

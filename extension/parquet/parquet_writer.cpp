@@ -16,6 +16,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -40,6 +41,7 @@
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_statistics.hpp"
 #include "thrift/TBase.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/protocol/TProtocol.h"
@@ -458,6 +460,8 @@ struct ColumnStatsUnifier {
 	bool all_nulls_set = true;
 	bool min_is_set = false;
 	bool max_is_set = false;
+	bool min_is_exact = true;
+	bool max_is_exact = true;
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
 	bool has_nan = false;
@@ -504,8 +508,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
                              const vector<pair<string, string>> &kv_metadata)
     : context(context), options(std::move(options_p)) {
 	// initialize the file writer
-	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(),
-	                                    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(), options.open_flags);
 
 	if (options.encryption_config) {
 		// Get the encryption util
@@ -535,6 +538,21 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
+	}
+
+	if (options.enable_bloom_filters) {
+		for (const auto &type : options.sql_types) {
+			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
+				continue;
+			}
+			duckdb_parquet::KeyValue kv;
+			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
+			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
+			// Readers require this capability before probing the additional normalized hashes.
+			file_meta_data.key_value_metadata.push_back(std::move(kv));
+			file_meta_data.__isset.key_value_metadata = true;
+			break;
+		}
 	}
 
 	InitializeColumnWriters();
@@ -1201,8 +1219,16 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 			// if we have NaN values we have not written the min/max to the Parquet file
 			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
 			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact && writer_stats->MinIsExact();
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact && writer_stats->MaxIsExact();
 		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact &&
+			                              column.meta_data.statistics.__isset.is_min_value_exact &&
+			                              column.meta_data.statistics.is_min_value_exact;
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact &&
+			                              column.meta_data.statistics.__isset.is_max_value_exact &&
+			                              column.meta_data.statistics.is_max_value_exact;
 		} else {
 			stats_unifier->all_min_max_set = false;
 		}
@@ -1233,9 +1259,11 @@ void ParquetWriter::GatherWrittenStatistics() {
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
 			if (stats_unifier->min_is_set) {
 				column_stats["min"] = min_value;
+				column_stats["min_is_exact"] = Value::BOOLEAN(stats_unifier->min_is_exact);
 			}
 			if (stats_unifier->max_is_set) {
 				column_stats["max"] = max_value;
+				column_stats["max_is_exact"] = Value::BOOLEAN(stats_unifier->max_is_exact);
 			}
 		}
 		if (!stats_unifier->variant_type.empty()) {

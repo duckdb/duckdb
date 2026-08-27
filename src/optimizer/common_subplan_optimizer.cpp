@@ -270,13 +270,26 @@ private:
 					}
 				}
 
+				auto register_filter_index = [&](ProjectionIndex filter_index) {
+					D_ASSERT(filter_index.GetIndex() < column_ids.size());
+					const auto canonical_index = ProjectionIndex(column_ids[filter_index.GetIndex()].GetPrimaryIndex());
+					auto entry = restore_original_table_filter_index.emplace(canonical_index, filter_index);
+					return entry.second || entry.first->second == filter_index;
+				};
 				for (auto &entry : get.table_filters) {
-					D_ASSERT(entry.GetIndex().GetIndex() < column_ids.size());
-					const auto canonical_index =
-					    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
-					if (!restore_original_table_filter_index.emplace(canonical_index, entry.GetIndex()).second) {
+					if (!register_filter_index(entry.GetIndex())) {
 						restore_original_table_filter_index.clear();
 						return false;
+					}
+				}
+				for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+					const auto &expression_filter =
+					    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex");
+					for (const auto &column_index : expression_filter.column_indexes) {
+						if (!register_filter_index(column_index)) {
+							restore_original_table_filter_index.clear();
+							return false;
+						}
 					}
 				}
 				if (!restore_original_table_filter_index.empty()) {
@@ -285,6 +298,15 @@ private:
 						const auto canonical_index =
 						    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
 						remapped_filters.PushFilter(canonical_index, entry.TakeFilter());
+					}
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
+							column_index = ProjectionIndex(column_ids[column_index.GetIndex()].GetPrimaryIndex());
+						}
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}
@@ -314,6 +336,15 @@ private:
 					for (auto &entry : get.table_filters) {
 						remapped_filters.PushFilter(restore_original_table_filter_index.at(entry.GetIndex()),
 						                            entry.TakeFilter());
+					}
+					for (const auto &filter : get.table_filters.GetMultiColumnFilters()) {
+						auto remapped_filter =
+						    ExpressionFilter::GetExpressionFilter(*filter, "CommonSubplanOptimizer::ConvertTableIndex")
+						        .Copy();
+						for (auto &column_index : remapped_filter->column_indexes) {
+							column_index = restore_original_table_filter_index.at(column_index);
+						}
+						remapped_filters.PushMultiColumnFilter(std::move(remapped_filter));
 					}
 					get.table_filters = std::move(remapped_filters);
 				}
@@ -568,7 +599,6 @@ private:
 		case LogicalOperatorType::LOGICAL_TOP_N:
 		case LogicalOperatorType::LOGICAL_DISTINCT:
 		case LogicalOperatorType::LOGICAL_PIVOT:
-		case LogicalOperatorType::LOGICAL_GET:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -580,6 +610,18 @@ private:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			return true;
+		case LogicalOperatorType::LOGICAL_GET: {
+			auto &get = op.Cast<LogicalGet>();
+			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty() &&
+			    get.named_parameters.empty()) {
+				// Without serialization callbacks, the serialized form carries only the call parameters
+				// (see LogicalGet::Serialize). A parameter-less scan - e.g., one created through an
+				// attached catalog - keeps its identity solely in the bind data, so equal serialized
+				// bytes cannot prove that two scans read the same table.
+				return false;
+			}
+			return true;
+		}
 		case LogicalOperatorType::LOGICAL_CHUNK_GET:
 			// Avoid serializing massive amounts of data (this is here because of the "Test TPCH arrow roundtrip" test)
 			return op.Cast<LogicalColumnDataGet>().collection->Count() < 1000;

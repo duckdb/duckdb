@@ -20,15 +20,15 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 	return make_uniq<CSVFileReaderOptions>();
 }
 
-bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-                                       BaseFileReaderOptions &options_p, vector<string> &expected_names,
+bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
+                                       BaseFileReaderOptions &options_p, vector<Identifier> &expected_names,
                                        vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
-	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
+	options.options.SetReadOption(key, ConvertVectorToValue(values), expected_names);
 	return true;
 }
 
-bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool CSVMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                    MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.ParseOption(context, key, val);
@@ -36,7 +36,7 @@ bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, co
 }
 
 void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
-                                        const vector<string> &expected_names,
+                                        const vector<Identifier> &expected_names,
                                         const vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	auto &csv_options = options.options;
@@ -44,7 +44,7 @@ void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOp
 	csv_options.sql_type_list = expected_types;
 	csv_options.columns_set = true;
 	for (idx_t i = 0; i < expected_types.size(); i++) {
-		csv_options.sql_types_per_column[Identifier(expected_names[i])] = i;
+		csv_options.sql_types_per_column[expected_names[i]] = i;
 	}
 }
 
@@ -182,7 +182,7 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 				                      "read_csv_auto or set read_csv(..., "
 				                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 			}
-			names = StringsToIdentifiers(options.name_list);
+			names = options.name_list;
 			return_types = options.sql_type_list;
 		}
 		if (return_types.size() != names.size()) {
@@ -410,20 +410,16 @@ AsyncResult CSVFileScan::ScheduleIO(ClientContext &context, GlobalTableFunctionS
                                     LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	D_ASSERT(lstate.claim_state == CSVLocalState::ClaimState::PENDING);
-	auto io_tasks = CollectClaimIOTasks(lstate);
-	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-	}
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(CollectClaimIOTasks(lstate), TaskSchedulerType::ASYNC);
 }
 
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif
@@ -442,8 +438,7 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 		io_tasks.push_back(BufferLoadTask(csv_reader.buffer_manager, csv_reader.PendingBufferIdx()));
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
-	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
-	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	return AsyncResult::FromChunk(chunk);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

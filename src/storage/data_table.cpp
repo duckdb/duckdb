@@ -9,6 +9,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
@@ -63,8 +64,7 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) 
 			return result;
 		}
 	}
-	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found",
-	                        name.GetIdentifierName());
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name %s not found", name);
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p,
@@ -186,7 +186,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
 	// prevent any tuples from being added to the parent
-	lock_guard<mutex> lock(append_lock);
+	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -208,13 +208,24 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr, transaction);
-
-	// scan the original table, and fill the new column with the transformed value
-	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
-
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	// mark the parent altered before reading, so a concurrent modification conflicts instead of
+	// being dropped by the rewrite
+	auto previous_version = parent.version.load();
 	parent.version = DataTableVersion::ALTERED;
+	try {
+		// read at the commits seen so far, not at this transaction's older snapshot
+		auto &transaction_manager = DuckTransactionManager::Get(db);
+		TransactionData rewrite_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
+		row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr,
+		                                          rewrite_visibility);
+
+		// scan the original table, and fill the new column with the transformed value
+		local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
+	} catch (...) {
+		// nothing reached the catalog, so no undo entry will restore the parent
+		parent.version = previous_version;
+		throw;
+	}
 }
 
 vector<LogicalType> DataTable::GetTypes() {
@@ -423,7 +434,7 @@ void DataTable::RebuildIndexes() {
 
 			auto error = bound_index.Append(table_chunk, row_ids);
 			if (error.HasError()) {
-				throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index.GetIndexName(),
+				throw InternalException("Failed to rebuild index %s after vacuum: %s", bound_index.GetIndexName(),
 				                        error.Message());
 			}
 		}
@@ -590,7 +601,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vect
 		return;
 	}
 
-	throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
+	throw ConstraintException("NOT NULL constraint failed: %s.%s", SQLIdentifier(table.name), SQLIdentifier(col_name));
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
@@ -606,8 +617,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 		throw;
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                          col.Type().ToString(), col.GeneratedExpression().ToString(), error.RawMessage());
+		throw ConstraintException("Incorrect value for generated column '%s %s AS (%s)' : %s",
+		                          SQLIdentifier(col.Name()), col.Type().ToString(),
+		                          col.GeneratedExpression().ToString(), error.RawMessage());
 	}
 }
 
@@ -688,9 +700,12 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		dst_keys_ptr = bound_foreign_key.info.fk_keys;
 	}
 
-	// Get the column types in their physical order.
+	// Get the column types in their physical order. A foreign key always references a table in the same (possibly
+	// nested) schema, so we qualify it with this table's schema path.
+	auto schema_path = info->GetSchemaPath();
+	schema_path.insert(schema_path.begin(), db.GetName());
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(db.GetName(), bound_foreign_key.info.schema, bound_foreign_key.info.table));
+	    context, QualifiedName(std::move(schema_path), bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());

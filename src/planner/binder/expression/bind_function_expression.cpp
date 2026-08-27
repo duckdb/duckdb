@@ -262,7 +262,7 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
-			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
+			                      "Function %s is a table function but it was used as a scalar function. This "
 			                      "function has to be called in a FROM clause (similar to a table).",
 			                      function.FunctionName());
 		}
@@ -285,7 +285,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		break;
 	default:
 		if (function.Distinct() || function.Filter() || !function.OrderBy()->orders.empty()) {
-			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+			throw InvalidInputException("Function %s is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 			                            "applicable to window and aggregate functions.",
 			                            function.FunctionName(), CatalogTypeToString(func.type));
 		}
@@ -373,7 +373,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
-	auto &scalar_function = func.functions.functions.front();
+	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
 	if (!bind_lambda_function) {
 		return BindResult("This scalar function does not support lambdas!");
@@ -501,10 +501,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 
-	// remove the lambda expression from the children
-	auto lambda = std::move(bound_function_expr.GetChildrenMutable()[lambda_expr_idx]);
-	bound_function_expr.GetChildrenMutable().erase_at(lambda_expr_idx);
-	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
+	// the lambda expression stays in the children, so that the argument positions do not shift.
+	// it has no runtime value - the expression executor fills its slot with a constant placeholder
+	auto &bound_lambda = bound_function_expr.GetChildrenMutable()[lambda_expr_idx]->Cast<BoundLambdaExpression>();
 
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
@@ -531,6 +530,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	for (auto &capture : bound_lambda.CapturesMutable()) {
 		bound_function_expr.GetChildrenMutable().push_back(std::move(capture));
 	}
+	// the lambda stays in the children, so it must not hold on to the moved-from capture slots
+	bound_lambda.CapturesMutable().clear();
 
 	return BindResult(std::move(result));
 }

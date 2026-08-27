@@ -73,19 +73,16 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
 		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"",
+				throw CatalogException("Trigger with name %s does not exist on table %s",
 				                       info->GetQualifiedName().Name(), base_table_ref.Table());
 			}
 		}
 		break;
 	}
 	default: {
-		// for a nested target the path is [catalog, schema_path..., name] and .Catalog() is empty, so read the catalog
-		// from the leading component; otherwise use .Catalog() (which may be empty -> the default catalog, e.g. for an
-		// unresolved DROP ... IF EXISTS of a missing entry)
-		auto &qname = info->GetQualifiedName();
-		auto &catalog_name = qname.Path().size() > 3 ? qname.Path().front() : qname.Catalog();
-		auto &catalog = Catalog::GetCatalog(context.client, catalog_name);
+		// the catalog may be empty -> the default catalog (e.g. for an unresolved DROP ... IF EXISTS of a missing
+		// entry)
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

@@ -565,8 +565,10 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
 
 			// find out whether the expression contains a subquery, it can't be copied if so
-			auto &bound_expr_ref = *bound_expr;
-			bool contains_subquery = bound_expr_ref.HasSubquery();
+			bool contains_subquery = bound_expr->HasSubquery();
+			// the group and the first(x) aggregate below are separate expression trees, so we need our own
+			// copy - it must be made before pushing the collation, which can replace the expression
+			unique_ptr<Expression> uncollated_expr = contains_subquery ? nullptr : bound_expr->Copy();
 
 			// push a potential collation, if necessary
 			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
@@ -574,10 +576,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 
-				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.GetReturnType());
+				auto first_fun = FirstFunctionGetter::GetFunction(uncollated_expr->GetReturnType());
 				vector<unique_ptr<Expression>> first_children;
-				// FIXME: would be better to just refer to this expression, but for now we copy
-				first_children.push_back(bound_expr_ref.Copy());
+				first_children.push_back(std::move(uncollated_expr));
 
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
@@ -733,15 +734,14 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 			if (!bound_columns.empty()) {
 				string error;
-				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+				error = "column %s must appear in the GROUP BY clause or must be part of an aggregate function.";
 				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 					error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
 					         "GROUP BY this entry explicitly.";
 					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name);
 				} else {
-					error +=
-					    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
-					    "is not important.";
+					error += "\nEither add it to the GROUP BY list, or use ANY_VALUE(%s) if the exact value of %s "
+					         "is not important.";
 					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
 					                      bound_columns[0].name, bound_columns[0].name);
 				}

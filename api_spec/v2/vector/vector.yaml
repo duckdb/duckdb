@@ -1,0 +1,861 @@
+module: vector
+#
+# Read-side vector access.
+#
+# Every vector exposes one untyped read view, through vector_get_view:
+#
+#   typedef struct {
+#       const void           *data;
+#       const uint64_t       *validity;
+#       const sel_t          *sel;
+#       idx_t                 count;
+#   } vector_view;
+#
+# Iteration is uniform across FLAT / CONSTANT / DICTIONARY:
+#
+#   for (idx_t i = 0; i < view.count; i++) {
+#       idx_t idx = view.sel ? view.sel[i] : i;
+#       bool valid = !view.validity ||
+#                    (view.validity[idx >> 6] & ((uint64_t)1 << (idx & 63)));
+#       if (!valid) continue;
+#       /* read via the appropriately-typed cast of view.data */
+#   }
+#
+# view.data semantics by kind; the caller dispatches on the logical type. The
+# storage units for the temporal kinds — DATE in days since 1970-01-01, TIME /
+# TIMESTAMP / TIMESTAMP_MS / TIMESTAMP_NS and their variants as signed offsets
+# from the epoch in their named unit — are the ones DuckDB uses throughout, and
+# the logical type module carries the full table.
+#
+#   - primitives (BOOL, INT*, UINT*, FLOAT, DOUBLE, DATE, TIME*, TIMESTAMP*)
+#     → typed leaf array (cast to const T *)
+#   - HUGEINT / UUID / DECIMAL128 → cast to const hugeint_t *
+#     (decimal width and scale via logical_type_get_param; UUID stores the
+#     128-bit value in hugeint layout)
+#   - UHUGEINT → const uhugeint_t *
+#   - INTERVAL → const interval_t * (months, days, micros)
+#   - DECIMAL16/32/64 → typed leaf array (i16/i32/i64); width and scale via
+#     logical_type_get_param. The storage tier follows from the width, and the
+#     mapping is contract: width <= 4 int16, <= 9 int32, <= 18 int64, <= 38
+#     int128 (boundaries inclusive).
+#   - ENUM (u8/u16/u32) → typed leaf array of dictionary indices; resolve them
+#     via logical_type_get_param, which yields one owned VARCHAR value per
+#     entry, so read the dictionary once rather than per row. The storage tier
+#     follows from the dictionary size, and the mapping is contract: size <=
+#     255 uint8, <= 65535 uint16, else uint32 (boundaries inclusive; an empty
+#     dictionary is uint8).
+#   - VARCHAR / BLOB / BIT / BIGNUM → const bytes *, typed through the
+#     varchar_t / blob_t / bit_t / bignum_t aliases. bytes is a transparent
+#     union (see common.yaml): read its fields directly and stride arr[row].
+#     VARCHAR and BLOB carry no wire encoding, so the field read is the whole
+#     read. BIT and BIGNUM do: BIT is a trivial client-side split (byte 0 is
+#     the padding count, bytes 1.. the data), while BIGNUM's bytes are opaque
+#     storage, fed to bignum_decode and produced by bignum_encode. Both codecs
+#     fill a caller-supplied buffer, so nothing needs freeing.
+#   - LIST / MAP → const list_entry * (per-row {offset, length})
+#   - ARRAY / STRUCT / UNION → unspecified, typically NULL; the parent vector
+#     carries no per-row leaf data. Descend into the children via the generic
+#     structural accessors below.
+#
+# The selection vector contract:
+#   - FLAT       → view.sel == NULL (identity)
+#   - CONSTANT   → view.sel non-null, the zero singleton
+#   - DICTIONARY → view.sel non-null, the dictionary's own sel
+#
+# Row resolution is the inline expression `sel ? sel[i] : i`; the `sel == NULL`
+# identity convention is part of the V2 contract. Validity follows sel, not the
+# loop counter, so index the validity mask with the sel-resolved row, as in the
+# iteration example above.
+#
+# Nested-kind navigation is uniform, via two generic accessors:
+#
+#   vector_get_child_count(vec, &out_count, err)
+#   vector_get_child(vec, index, &out_child, err)
+#
+# Per-kind index convention:
+#   LIST    → 1 child:  [0] = elements
+#   MAP     → 2 children: [0] = keys, [1] = values
+#               (V2 hides MAP's internal LIST<STRUCT(K,V)>)
+#   ARRAY   → 1 child:  [0] = elements
+#   STRUCT / TUPLE → N children: [i] = field i
+#   UNION   → N+1 children: [0] = tag, [1..N] = members
+#             Note the divergence from value_get_child, which on a UNION value
+#             returns [0] = tag and [1] = the ACTIVE member only, for a child
+#             count of 2: a union value holds one member, a union vector holds
+#             all of them.
+#   others  → 0
+#
+# The "how many fields / how many members" questions are answered by
+# logical_type_get_param_count, not by a vector-side accessor.
+#
+# Writing NULLs into nested vectors is bound by DuckDB's nested NULL invariant:
+# when a STRUCT or ARRAY row is NULL, every descendant element under that row
+# must be NULL too. LIST rows are exempt, since their consumers gate on the
+# list's own validity. DuckDB relies on the invariant and reads child elements
+# whenever the child mask marks them valid, so a vector that violates it causes
+# undefined behavior once it is handed back. vector_set_null is the write path
+# that maintains the invariant; raw mask writes through
+# vector_flat_get_validity_mutable mark only the addressed vector's rows and
+# leave descendants untouched.
+#
+# The view constructor rejects FSST / SEQUENCE / SHREDDED vectors, which report
+# kind VECTOR_TYPE_OTHER. Call vector_flatten first.
+#
+# Layout typedefs:
+#   hugeint_t / uhugeint_t / interval_t / list_entry are plain structs with
+#   visible fields, read directly. bytes (declared in common.yaml) is a
+#   transparent 16-byte union, likewise read directly: dispatch inline vs
+#   pointer on the BYTES_INLINE_LENGTH cutoff, and stride arr[row]. The four
+#   kind aliases — varchar_t / blob_t / bit_t / bignum_t — are semantic-marker
+#   typedefs of bytes.
+
+structs:
+  vector_view:
+    fields:
+      - {name: data, type: void, pointer: 1, const: true}
+      - {name: validity, type: u64, pointer: 1, const: true}
+      - {name: sel, type: sel, pointer: 1, const: true}
+      - {name: count, type: idx}
+  list_entry:
+    fields:
+      - {name: offset, type: idx}
+      - {name: length, type: idx}
+  hugeint_t:
+    fields:
+      - {name: lower, type: u64}
+      - {name: upper, type: i64}
+  uhugeint_t:
+    fields:
+      - {name: lower, type: u64}
+      - {name: upper, type: u64}
+  interval_t:
+    fields:
+      - {name: months, type: i32}
+      - {name: days, type: i32}
+      - {name: micros, type: i64}
+enums:
+  VECTOR_TYPE:
+    description: |
+      Internal representation of a vector, with FSST / SEQUENCE / SHREDDED
+      collapsed into OTHER: the view getter rejects those and requires an
+      explicit vector_flatten first. OTHER is the 0-value, so a
+      zero-initialized out-param reads as "unspecified, needs flatten" rather
+      than silently looking like FLAT.
+    values:
+      VECTOR_TYPE_OTHER:
+        value: 0
+        description: Default for zero-init. Covers FSST / SEQUENCE / SHREDDED — call vector_flatten first.
+      VECTOR_TYPE_FLAT:
+        value: 1
+        description: Standard per-row storage.
+      VECTOR_TYPE_CONSTANT:
+        value: 2
+        description: A single value applies to every row in the vector.
+      VECTOR_TYPE_DICTIONARY:
+        value: 3
+        description: Data + selection vector indirection into another vector.
+functions:
+  # -----------------------------------------------------------------------
+  # Vector-level introspection
+  # -----------------------------------------------------------------------
+  vector_get_vector_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the internal representation kind: flat, constant, or dictionary.
+
+      Reports VECTOR_TYPE_OTHER for FSST / SEQUENCE / SHREDDED vectors, which
+      must be passed through vector_flatten before vector_get_view will read
+      them.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      out_type:
+        type: VECTOR_TYPE
+        indirection: 1
+        kind: OUT
+        description: Receives the representation kind.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # The view-getter
+  # -----------------------------------------------------------------------
+  vector_get_view:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Reads a vector as a unified view of data, validity, selection, and count.
+
+      Populates out_view with borrowed pointers, valid until the owning chunk
+      is destroyed. view.data addresses the vector's elements, to be cast to
+      the layout its logical type implies: a typed leaf array for the
+      primitives, hugeint_t / uhugeint_t / interval_t for those kinds, bytes
+      for VARCHAR / BLOB / BIT / BIGNUM, list_entry for LIST and MAP, and
+      nothing at all for ARRAY / STRUCT / UNION, whose data lives in their
+      children.
+
+      DECIMAL and ENUM are typed leaf arrays too, over a storage tier that
+      follows from the type; both mappings are contract. A DECIMAL of width <=
+      4 stores int16, <= 9 int32, <= 18 int64, and <= 38 int128, boundaries
+      inclusive, with the width and scale available from
+      logical_type_get_param. An ENUM stores its dictionary indices as uint8
+      for a dictionary of at most 255 entries, uint16 for at most 65535, and
+      uint32 beyond that, boundaries inclusive and an empty dictionary uint8;
+      logical_type_get_param resolves an index to its entry.
+
+      Rejects VECTOR_TYPE_OTHER; call vector_flatten first.
+
+      Reading a DICTIONARY vector has one side effect: the dictionary's
+      underlying child is flattened in place if it is not already FLAT. The
+      parent vector stays DICTIONARY, and only the child's storage shape
+      changes, but any pointer previously borrowed into that child — from an
+      earlier vector_get_view on a vector aliasing the same buffer, say — is
+      invalidated. This is the only mutation vector_get_view performs; compare
+      vector_flatten, which materializes the whole vector to FLAT.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to read.
+      out_view:
+        type: vector_view
+        indirection: 1
+        kind: OUT
+        description: Receives the view. Its pointers are borrowed and valid until the owning chunk is destroyed.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Generic vector size
+  # -----------------------------------------------------------------------
+  vector_get_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the number of elements in the vector.
+
+      The size is the number of logical elements the vector represents, which
+      for a nested kind can differ from the size of its children. An ARRAY
+      vector of size 10 whose array size is 3, for instance, has 10 logical
+      elements while its single child vector has 30.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      out_size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of elements.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_set_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets the number of elements in the vector.
+
+      The counterpart of vector_get_size: it declares how many logical elements
+      the vector now holds, and does not allocate or initialize anything.
+    role: setter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      size:
+        type: idx
+        description: The new number of logical elements.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Single-cell value bridge
+  # -----------------------------------------------------------------------
+  vector_get_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Reads one cell of a vector as an owned value.
+
+      The total fallback reader. It reads any logical row of any vector
+      representation without flattening — FLAT, CONSTANT, DICTIONARY, and the
+      compressed kinds the view getter rejects — and covers every type kind,
+      including those with no committed view layout (today VARIANT and
+      GEOMETRY), where it is the only way to reach a cell.
+
+      Each call allocates one owned value, which makes this a single-cell
+      bridge rather than a per-row loop primitive; use vector_get_view on hot
+      paths. The row index is logical and bounds-checked against
+      vector_get_size. The returned value is caller-owned; destroy it via
+      value_destroy.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to read from.
+      row:
+        type: idx
+        description: The logical row index, in [0, vector_get_size).
+      out_value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the owned cell value.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_set_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Writes one cell of a FLAT vector from a value.
+
+      The total fallback writer. It covers every type kind, including those
+      with no committed view layout (today VARIANT and GEOMETRY), where it is
+      the only way to write a cell. The value is borrowed and copied in, then
+      cast to the vector's type through the non-strict default cast; a cast
+      failure surfaces from the call. A NULL value clears the row's validity.
+
+      Requires a FLAT vector: constant, dictionary, and compressed
+      representations are not row-addressable, so call vector_flatten first.
+      Each call performs one value write, which makes this a single-cell bridge
+      rather than a per-row loop primitive; use the typed mutable-data paths on
+      hot paths. The row index is logical and bounds-checked against
+      vector_get_size.
+    role: setter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to write to.
+      row:
+        type: idx
+        description: The logical row index, in [0, vector_get_size).
+      value:
+        type: value
+        description: The borrowed value to write. Copied in; cast to the vector's type.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Mutable Access
+  # -----------------------------------------------------------------------
+  vector_get_data_mutable:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns a mutable pointer to the data of a FLAT or CONSTANT vector.
+
+      Any other representation returns ERROR_INPUT_INVALID. The pointer is
+      valid until the owning chunk is destroyed, and the vector's storage shape
+      must not change — through a flatten, say — while it is in use.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      out_data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives a mutable pointer to the data.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Vector type setup
+  # -----------------------------------------------------------------------
+  vector_flatten:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Forces a vector into FLAT representation, in place.
+
+      A no-op for a vector that is already FLAT. For a CONSTANT, DICTIONARY,
+      FSST, SEQUENCE, or SHREDDED vector it materializes the per-row data and
+      switches the representation to FLAT. Call it before vector_get_view if
+      you would rather not handle CONSTANT and DICTIONARY semantics in the
+      view; it is required for any vector reporting VECTOR_TYPE_OTHER.
+    role: method
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to flatten.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_reference:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Repoints a vector at another vector's data and type, without copying.
+
+      `vector` takes on the storage and logical type of `source`: no data
+      moves, and the two alias the same buffers until one of them is reset or
+      re-referenced. Works for any type, nested included. The source's data
+      must outlive every read of `vector`. Use it to hand an
+      already-materialized vector — a chunk column produced by
+      arrow_array_to_data_chunk, say — straight to an output vector without a
+      per-row copy.
+    role: method
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to repoint at the source's data.
+      source:
+        type: vector
+        description: The vector whose data and logical type to reference.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_make_constant:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Turns the vector into a CONSTANT vector holding the given value.
+
+      Afterwards the vector holds a single element that applies to every
+      logical row; write it through vector_get_data_mutable, which returns a
+      pointer to that one element. For a STRUCT vector the change propagates to
+      every child. The value's logical type must equal the vector's; a mismatch
+      returns ERROR_INPUT_INVALID.
+    role: method
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to make constant.
+      value:
+        type: value
+        description: The value every row takes. Its logical type must equal the vector's.
+      count:
+        type: idx
+        description: The number of elements in the vector.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_make_sequence:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets a vector to a SEQUENCE representation.
+
+      Afterwards the vector represents the arithmetic sequence start,
+      start+increment, start+2*increment, ... over count elements. No data
+      pointer is involved; the three parameters describe the sequence
+      completely.
+    role: method
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to turn into a sequence.
+      start:
+        type: i64
+        description: The first value of the sequence.
+      increment:
+        type: i64
+        description: The step between consecutive values.
+      count:
+        type: idx
+        description: The number of elements in the sequence.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Validity (mutable)
+  # -----------------------------------------------------------------------
+  vector_set_null:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets one row of a FLAT vector to NULL, nested children included.
+
+      Clears the row's validity and broadcasts the NULL recursively to every
+      descendant element under that row — STRUCT fields, and ARRAY elements
+      strided by the array size — maintaining DuckDB's nested NULL invariant:
+      when a STRUCT or ARRAY row is NULL, every descendant element under it
+      must be NULL too. LIST children are left untouched, since their consumers
+      gate on the list's own validity. Which kinds propagate is normative
+      DuckDB behavior that evolves with the type system, which makes this the
+      total NULL write path: equivalent to vector_set_value with a NULL value,
+      without the per-call value allocation.
+
+      Requires a FLAT vector: constant, dictionary, and compressed
+      representations are not row-addressable, so call vector_flatten first.
+      The row index is logical and bounds-checked against vector_get_size.
+    role: setter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector to write to.
+      row:
+        type: idx
+        description: The logical row index, in [0, vector_get_size).
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_flat_get_validity_mutable:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns a mutable pointer to the validity mask of a FLAT vector.
+
+      Allocates the mask on first use, so the returned pointer is always
+      non-null. Each uint64_t word covers 64 rows: bit N of word W is row
+      W*64+N. A set bit means valid; a cleared bit means NULL.
+
+      A raw mask write marks only this vector's rows. Clearing a STRUCT or
+      ARRAY parent bit leaves the descendant elements untouched, which violates
+      DuckDB's nested NULL invariant — a NULL STRUCT or ARRAY row requires NULL
+      descendants — so set nested rows NULL through vector_set_null instead.
+      When writing nested masks raw anyway, invalidate the child masks up front
+      and mark elements valid as the values are written.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      out_validity:
+        type: u64
+        indirection: 2
+        kind: OUT
+        description: Receives a mutable pointer to the validity mask.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_constant_set_valid:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Sets the validity of a CONSTANT vector.
+
+      A constant vector holds a single element, so one flag decides whether
+      every row reads as the value or as NULL.
+    role: setter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The constant vector.
+      validity:
+        type: bool
+        description: True to mark the vector's single element valid, false to mark it NULL.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # String writing
+  #
+  # vector_get_arena borrows the arena; the writes themselves live in the
+  # arena module, which documents the two-step write and lifetime.
+  # -----------------------------------------------------------------------
+  vector_get_arena:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows a string-backed vector's arena for writing.
+
+      Allocates the arena on first use. Valid for VARCHAR, BLOB, BIT, and
+      BIGNUM vectors, and returns ERROR_INPUT_INVALID for anything else. This
+      call is the single string-ness check, which is why arena_allocate itself
+      performs none. The arena is borrowed — never destroy it — and stays valid
+      until the vector is flattened, reallocated, or destroyed.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The string-backed vector whose arena to borrow.
+      out_arena:
+        type: arena
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed arena handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Generic structural accessors for nested kinds
+  #
+  # Per-kind index convention, repeated from the top of this file:
+  #   LIST    → 1 child:  [0] = elements
+  #   MAP     → 2 children: [0] = keys, [1] = values
+  #   ARRAY   → 1 child:  [0] = elements
+  #   STRUCT / TUPLE → N children: [i] = field i
+  #   UNION   → N+1 children: [0] = tag, [1..N] = members
+  #             (value_get_child diverges: [0] = tag, [1] = active member)
+  #   others  → 0
+  #
+  # The child vector returned by vector_get_child is borrowed and lives as long
+  # as the owning chunk. Its element count is NOT reported here.
+  # -----------------------------------------------------------------------
+  vector_get_child_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the number of child vectors a nested vector exposes.
+
+      1 for LIST and ARRAY; 2 for MAP, the keys and the values; the field count
+      for STRUCT; member_count + 1 for UNION, the tag plus the members; and 0
+      for any non-nested kind. vector_get_child documents what each index
+      addresses.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The vector.
+      out_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of child vectors.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  vector_get_child:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows a child vector by index.
+
+      What each index addresses, by kind: LIST and ARRAY expose [0] = the
+      elements; MAP [0] = keys and [1] = values, hiding its internal
+      LIST<STRUCT(K, V)>; STRUCT and TUPLE [i] = field i; and UNION [0] = the
+      tag with [1..N] = the members. Note that value_get_child diverges on
+      UNION, exposing only the active member.
+
+      The returned child is borrowed and lives as long as the owning chunk.
+      Returns ERROR_INPUT_INVALID if the vector has no children, or if the
+      index is out of range.
+    role: getter
+    belongs_to: vector
+    parameters:
+      vector:
+        type: vector
+        description: The nested vector to descend into.
+      index:
+        type: idx
+        description: The child index, in [0, vector_get_child_count).
+      out_child:
+        type: vector
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed child vector.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # String-backed kind decoders
+  #
+  # Only BIT and BIGNUM carry a wire encoding on top of the transparent bytes
+  # payload; VARCHAR and BLOB reads are direct field reads. BIT is a committed,
+  # trivial split — byte 0 is the padding-bit count, bytes 1.. are the data —
+  # so it is decoded client-side with no C entry point. BIGNUM needs a codec
+  # pair: its storage keeps negatives bit-inverted behind a header, so the
+  # magnitude bytes do not exist contiguously and have to be materialized.
+  # Both directions write into a caller-supplied buffer rather than
+  # allocating, so the API hands back no memory the caller has to free.
+  #
+  # The two codecs take plain (data, length) byte ranges rather than a handle,
+  # which makes them the single BIGNUM codec for both values and vectors, in
+  # both directions. To read: resolve a vector's bignum payload the same way
+  # as VARCHAR or BLOB, dispatching inline vs pointer on the transparent bytes
+  # type, or read a BIGNUM value's storage with value_get_blob, then decode.
+  # To write: encode the magnitude, then write the BIGNUM vector exactly like
+  # a VARCHAR or BLOB one — size the buffer, allocate it out of the vector's
+  # arena, encode into it, and assemble the bytes payload.
+  # -----------------------------------------------------------------------
+  bignum_decode:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Decodes BIGNUM storage bytes into a caller-supplied magnitude buffer + sign flag.
+
+      in_data and in_length are the value's raw storage bytes, exactly as they
+      sit in a vector's bignum payload or as value_get_blob reports them for a
+      BIGNUM value. Those bytes are opaque: the storage encoding is not a
+      committed part of this API, and this function is the only thing that
+      interprets them.
+
+      Writes the big-endian magnitude bytes into out_data and the sign flag
+      into out_is_negative; reconstruct the integer as (-1)**out_is_negative *
+      unsigned_big_endian(out_data[0..out_length]). Materializing the bytes is
+      unavoidable, since a negative bignum stores its magnitude bit-inverted,
+      but the buffer belongs to the caller: this function never allocates and
+      hands back nothing to free.
+
+      Pass out_data = NULL to size the buffer without decoding. out_length then
+      receives the exact number of magnitude bytes and out_is_negative the
+      sign, and out_capacity is ignored. The size comes straight out of the
+      storage header, so the query is O(1) and exact — a size call followed by
+      a decode call never needs a retry loop.
+
+      With out_data != NULL, out_capacity must be at least out_length bytes, or
+      the call returns ERROR_INPUT_OBJECT_SIZE with out_length set to the
+      required size and out_data left untouched. On success exactly out_length
+      bytes are written, and the rest of the buffer is not modified.
+
+      Returns ERROR_INPUT_INVALID if in_data is NULL, or if in_length is too
+      short to hold a bignum header.
+    parameters:
+      in_data:
+        type: u8
+        indirection: 1
+        const: true
+        description: The value's raw BIGNUM storage bytes.
+        kind: IN
+      in_length:
+        type: idx
+        description: Size of in_data in bytes.
+      out_data:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: Caller-owned buffer receiving the magnitude bytes, or NULL to only report the required size in out_length.
+      out_capacity:
+        type: idx
+        description: Bytes available in out_data. Ignored when out_data is NULL.
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the magnitude size in bytes, written on success and on ERROR_INPUT_OBJECT_SIZE.
+      out_is_negative:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives true if the value is negative, false otherwise.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  bignum_encode:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Encodes a magnitude + sign flag into BIGNUM storage bytes.
+
+      The inverse of bignum_decode. in_data and in_length are the big-endian
+      magnitude bytes and is_negative the sign; out_data receives the raw
+      storage bytes for that integer, in the form a BIGNUM vector payload
+      expects. Those bytes are opaque: the storage encoding is not a committed
+      part of this API.
+
+      Pass out_data = NULL to size the buffer without encoding. out_length then
+      receives the exact number of storage bytes, and out_capacity is ignored.
+      The size is a fixed function of in_length, so the query is O(1) and
+      exact.
+
+      With out_data != NULL, out_capacity must be at least out_length bytes, or
+      the call returns ERROR_INPUT_OBJECT_SIZE with out_length set to the
+      required size and out_data left untouched. On success exactly out_length
+      bytes are written, and the rest of the buffer is not modified.
+
+      The magnitude must be canonical, matching what bignum_decode produces:
+      in_length >= 1 with no leading zero bytes, so the value zero is the
+      single byte 0x00 with is_negative = false. A NULL in_data, an in_length
+      of 0, a leading zero byte, or a negative zero returns
+      ERROR_INPUT_INVALID; a magnitude beyond the maximum bignum width returns
+      ERROR_INPUT_OUT_OF_RANGE.
+    parameters:
+      in_data:
+        type: u8
+        indirection: 1
+        const: true
+        description: Big-endian magnitude bytes, with no leading zero bytes.
+        kind: IN
+      in_length:
+        type: idx
+        description: Size of in_data in bytes. Must be >= 1.
+      is_negative:
+        type: bool
+        description: True to encode a negative value.
+      out_data:
+        type: u8
+        indirection: 1
+        kind: OUT
+        description: Caller-owned buffer receiving the storage bytes, or NULL to only report the required size in out_length.
+      out_capacity:
+        type: idx
+        description: Bytes available in out_data. Ignored when out_data is NULL.
+      out_length:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the storage size in bytes — written on success and on ERROR_INPUT_OBJECT_SIZE.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

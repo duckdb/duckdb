@@ -129,6 +129,10 @@ enum class PhysicalOperatorType : uint8_t {
 	// Secret
 	// -----------------------------
 	CREATE_SECRET,
+
+	// Physical-only recursive CTE specialization. Keep appended to preserve existing enum values.
+	RECURSIVE_KEY_JOIN,
+	SECURE_VIEW,
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

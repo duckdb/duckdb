@@ -18,6 +18,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_secure_view.hpp"
 
 namespace duckdb {
 
@@ -108,8 +109,8 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 		view_search_path.emplace_back(catalog_name, schema_name);
 	}
 	auto default_schema = catalog.GetDefaultSchema();
-	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog_name, Identifier(default_schema));
+	if (default_schema && schema_name.empty() && schema_name != *default_schema) {
+		view_search_path.emplace_back(catalog_name, *default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
 	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);
@@ -221,9 +222,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
 			throw BinderException(error_context,
-			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
-			                      ref.Table().GetIdentifierName());
+			                      ref.Table());
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
@@ -323,8 +324,13 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 		// update the view binding with the bound view information
 		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
-		bind_context.AddView(bound_child.plan->GetRootIndex(), subquery.alias, subquery, bound_child,
-		                     view_catalog_entry);
+		auto root_index = bound_child.plan->GetRootIndex();
+		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
+			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view
+			bound_child.plan =
+			    make_uniq<LogicalSecureView>(view_catalog_entry.name.GetIdentifierName(), std::move(bound_child.plan));
+		}
+		bind_context.AddView(root_index, subquery.alias, subquery, bound_child, view_catalog_entry);
 		return bound_child;
 	}
 	default:

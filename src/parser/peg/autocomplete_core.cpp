@@ -1,9 +1,9 @@
 #include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 
 namespace duckdb {
 
@@ -161,10 +161,11 @@ bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<U
 	return true;
 }
 
-class AutoCompleteTokenizer : public BaseTokenizer {
+class AutoCompleteTokenizerBehavior : public TokenizerBehavior {
 public:
-	AutoCompleteTokenizer(const string &sql, MatchState &state)
-	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	AutoCompleteTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens,
+	                              vector<MatcherSuggestion> &suggestions_p)
+	    : TokenizerBehavior(sql, tokens), suggestions(suggestions_p) {
 		last_pos = 0;
 	}
 
@@ -172,8 +173,8 @@ public:
 		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
-	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
-		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
+	void OnLastToken(const Tokenizer &, TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (Tokenizer::TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
 		if (StringUtil::StartsWith(last_word_p, "'")) {
@@ -196,31 +197,31 @@ public:
 vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatalogProvider &provider, const string &sql,
                                                                AutoCompleteParameters &parameters) {
 	// tokenize the input
+	auto compiled_grammar = provider.GetCompiledGrammar();
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	AutoCompleteTokenizer tokenizer(sql_ref, state);
-	tokenizer.TokenizeInput();
-	if (!tokenizer.CanAutocomplete()) {
+	AutoCompleteTokenizerBehavior behavior(sql_ref, tokens, suggestions);
+	if (!compiled_grammar->GetTokenizer().TokenizeInput(behavior)) {
 		return {};
 	}
-	if (state.suggestions.empty()) {
+	if (suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto peg_matcher = provider.GetPEGMatcher();
-		peg_matcher->ProgramMatcher().Match(state);
+		TokenIterator token_iterator(tokens);
+		MatchState state(token_iterator, suggestions, parse_allocator, max_token_index, MatchMode::RECOGNIZE_ONLY);
+		compiled_grammar->ProgramMatcher().MatchParseResult(state);
 	}
-	if (state.suggestions.empty()) {
+	if (suggestions.empty()) {
 		return {};
 	}
 	vector<AutoCompleteCandidate> available_suggestions;
 	for (auto &suggestion : suggestions) {
-		idx_t suggestion_pos = tokenizer.last_pos;
+		idx_t suggestion_pos = behavior.last_pos;
 		// run the suggestions
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
@@ -247,7 +248,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 			break;
 		case SuggestionState::SUGGEST_FILE_NAME:
 			if (parameters.max_file_suggestion_count > 0) {
-				new_suggestions = provider.SuggestFileName(tokenizer.last_word, suggestion_pos);
+				new_suggestions = provider.SuggestFileName(behavior.last_word, suggestion_pos);
 				parameters.suggestion_contains_files = true;
 			}
 			break;
@@ -274,7 +275,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	return ComputeSuggestions(available_suggestions, tokenizer.last_word, parameters);
+	return ComputeSuggestions(available_suggestions, behavior.last_word, parameters);
 }
 
 } // namespace duckdb

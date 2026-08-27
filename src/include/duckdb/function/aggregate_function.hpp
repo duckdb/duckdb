@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -20,6 +21,9 @@ namespace duckdb {
 class BufferManager;
 class InterruptState;
 class BoundAggregateFunction;
+struct AggregateRewriteInput;
+struct AggregateRewritePlan;
+struct AggregateRewriteCostInput;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -128,6 +132,22 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deseri
 
 typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
 
+//! Replaces an aggregate with another expression in the same aggregate operator.
+typedef unique_ptr<Expression> (*aggregate_direct_rewrite_t)(AggregateRewriteInput &input);
+//! Creates an owned logical plan rewrite for a bound aggregate.
+typedef unique_ptr<AggregateRewritePlan> (*aggregate_rewrite_t)(AggregateRewriteInput &input);
+//! Decides whether a cost-based logical rewrite should be applied.
+typedef bool (*aggregate_rewrite_cost_t)(AggregateRewriteCostInput &input);
+
+enum class AggregateRewritePolicy : uint8_t {
+	//! Required lowering for aggregates whose native state is not suitable for ordinary grouped execution.
+	MANDATORY,
+	//! An optional rewrite that is always applied when its optimizer strategy is enabled.
+	UNCONDITIONAL,
+	//! An optional rewrite selected using propagated input statistics.
+	COST_BASED
+};
+
 //! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
 //! dest_buffer (state i at offset i * layout.total_state_size).
 struct AggregateImportInputData {
@@ -230,6 +250,27 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
+	bool HasDirectRewriteCallback() const { return direct_rewrite != nullptr; }
+	aggregate_direct_rewrite_t GetDirectRewriteCallback() const { return direct_rewrite; }
+	void SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) { direct_rewrite = callback; }
+
+	bool HasRewriteCallback() const { return rewrite != nullptr; }
+	aggregate_rewrite_t GetRewriteCallback() const { return rewrite; }
+	AggregateRewritePolicy GetRewritePolicy() const { return rewrite_policy; }
+	OptimizerType GetRewriteOptimizerType() const { return rewrite_optimizer_type; }
+	aggregate_rewrite_cost_t GetRewriteCostCallback() const { return rewrite_cost; }
+	void SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) {
+		D_ASSERT(callback);
+		D_ASSERT((policy == AggregateRewritePolicy::MANDATORY) == (optimizer_type == OptimizerType::INVALID));
+		D_ASSERT((policy == AggregateRewritePolicy::COST_BASED) == (cost != nullptr));
+		rewrite = callback;
+		rewrite_policy = policy;
+		rewrite_optimizer_type = optimizer_type;
+		rewrite_cost = cost;
+	}
+
 public:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size = nullptr;
@@ -265,6 +306,15 @@ public:
 
 	aggregate_deserialize_t deserialize = nullptr;
 
+	//! Optional expression rewrite that remains inside the original aggregate operator.
+	aggregate_direct_rewrite_t direct_rewrite = nullptr;
+
+	//! Optional logical-plan rewrite for aggregates represented by multiple aggregate stages.
+	aggregate_rewrite_t rewrite = nullptr;
+	AggregateRewritePolicy rewrite_policy = AggregateRewritePolicy::UNCONDITIONAL;
+	OptimizerType rewrite_optimizer_type = OptimizerType::INVALID;
+	aggregate_rewrite_cost_t rewrite_cost = nullptr;
+
 	aggregate_get_state_type_t get_state_type = nullptr;
 
 	//! Explicit state export/import callbacks for states a static field layout cannot describe (e.g. a hash map).
@@ -283,6 +333,9 @@ public:
 
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	bool single_value_identity = false;
 
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
@@ -325,6 +378,10 @@ public: // Properties
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
 	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
+
+	//! Whether a single input row finalizes to that input's first argument unchanged
+	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
+	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -389,6 +446,21 @@ public: // Callbacks
 	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
+
+	auto HasDirectRewriteCallback() const -> bool { return callbacks.direct_rewrite != nullptr; }
+	auto GetDirectRewriteCallback() const -> aggregate_direct_rewrite_t { return callbacks.direct_rewrite; }
+	auto SetDirectRewriteCallback(aggregate_direct_rewrite_t callback) -> void { callbacks.direct_rewrite = callback; }
+
+	auto HasRewriteCallback() const -> bool { return callbacks.rewrite != nullptr; }
+	auto GetRewriteCallback() const -> aggregate_rewrite_t { return callbacks.rewrite; }
+	auto GetRewritePolicy() const -> AggregateRewritePolicy { return callbacks.rewrite_policy; }
+	auto GetRewriteOptimizerType() const -> OptimizerType { return callbacks.rewrite_optimizer_type; }
+	auto GetRewriteCostCallback() const -> aggregate_rewrite_cost_t { return callbacks.rewrite_cost; }
+	auto SetRewriteCallback(aggregate_rewrite_t callback, AggregateRewritePolicy policy,
+	                        OptimizerType optimizer_type = OptimizerType::INVALID,
+	                        aggregate_rewrite_cost_t cost = nullptr) -> void {
+		callbacks.SetRewriteCallback(callback, policy, optimizer_type, cost);
+	}
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
@@ -695,31 +767,34 @@ public:
 		AggregateExecutor::NullaryClustUpdate<STATE, OP>(aggr_input_data, clustered, count);
 	}
 
+	//! Update callbacks consume their leading arguments. They can be handed more: a bind may fold trailing
+	//! arguments into its bind data (e.g. the separator of string_agg), and those stay part of the argument list and
+	//! are still evaluated into the payload - they are simply not read here.
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               Vector &states, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, aggr_input_data, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                        idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
-		D_ASSERT(input_count == 1);
+		D_ASSERT(input_count >= 1);
 		AggregateExecutor::ExecuteUnaryClustered<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                Vector &states, idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], states,
 		                                                            count);
 	}
@@ -727,7 +802,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
-		D_ASSERT(input_count == 2);
+		D_ASSERT(input_count >= 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(aggr_input_data, inputs[0], inputs[1], state, count);
 	}
 
@@ -757,11 +832,27 @@ public:
 class BoundAggregateFunction : public BaseAggregateFunction, public BoundSimpleFunction {
 public:
 	explicit BoundAggregateFunction(const AggregateFunction &function);
+	explicit BoundAggregateFunction(shared_ptr<const AggregateFunction> function);
 
+	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by ReplaceImplementation and by later mutation of the bound
+	//! function, e.g. statistics propagation swapping in a specialized implementation. For a function bound from an
+	//! AggregateFunctionSet this is the set's own overload, so it compares equal by pointer across binds. Functions
+	//! bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const AggregateFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
@@ -775,6 +866,9 @@ public:
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
 	}
+
+private:
+	shared_ptr<const AggregateFunction> definition;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

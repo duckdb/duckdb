@@ -23,6 +23,7 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 class LogicalColumnDataGet;
+class LogicalRecursiveCTE;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -83,6 +84,8 @@ public:
 	bool everything_referenced = true;
 };
 
+enum class RemoveUnusedColumnsMode : uint8_t { APPLY, ANALYZE };
+
 class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
@@ -142,9 +145,12 @@ private:
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
+	bool allow_missing_cte_references = false;
+	RemoveUnusedColumnsMode mode = RemoveUnusedColumnsMode::APPLY;
 
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
+	column_binding_map_t<vector<ColumnBinding>> projection_map_replacements;
 
 private:
 	template <class T>
@@ -153,6 +159,15 @@ private:
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
+	void GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
+	                                 const unordered_set<ProjectionIndex> &required_columns,
+	                                 unordered_set<ProjectionIndex> &recursive_dependencies);
+	bool ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec, unordered_set<ProjectionIndex> &required_columns);
+	void ApplyRecursiveProjections(LogicalRecursiveCTE &rec, const unordered_set<ProjectionIndex> &required_columns);
+	vector<ReplacementBinding> RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+	                                                         const unordered_set<ProjectionIndex> &required_columns);
+	bool TryPruneRecursiveCTE(LogicalRecursiveCTE &rec);
+	void VisitPrunableChildren(LogicalOperator &op);
 	void WritePushdownExtractColumns(
 	    ReferencedColumn &col,
 	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>
@@ -170,6 +185,7 @@ public:
 private:
 	const TableIndex cte_index;
 	const unordered_set<ProjectionIndex> &referenced_columns;
+	column_binding_map_t<vector<ColumnBinding>> projection_map_replacements;
 
 public:
 	vector<ReplacementBinding> binding_replacements;

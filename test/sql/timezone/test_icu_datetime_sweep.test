@@ -1,0 +1,206 @@
+# name: test/sql/timezone/test_icu_datetime_sweep.test
+# description: A broad sweep over every time zone and every calendar system
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+# every zone at a spread of instants
+query II
+WITH instants(ts) AS (VALUES
+  ('1700-06-15 12:00:00+00'::TIMESTAMPTZ), ('1850-01-01 00:00:00+00'), ('1900-06-15 12:00:00+00'),
+  ('1918-03-31 12:00:00+00'), ('1942-06-15 12:00:00+00'), ('1970-01-01 00:00:00+00'),
+  ('1985-07-01 12:00:00+00'), ('2000-01-01 00:00:00+00'), ('2011-12-30 12:00:00+00'),
+  ('2020-03-29 01:30:00+00'), ('2024-06-15 12:00:00+00'), ('2038-01-19 03:14:07+00'),
+  ('2100-11-07 12:00:00+00'), ('2400-01-01 00:00:00+00'))
+SELECT count(*), sum(hash(strftime(timezone(name, ts), '%Y-%m-%d %H:%M:%S')))
+FROM pg_timezone_names(), instants
+----
+8932	81024087823237057670989
+
+# every zone, naive to instant, which resolves ambiguous local times
+query II
+WITH locals(ts) AS (VALUES
+  ('1900-01-01 00:00:00'::TIMESTAMP), ('1970-01-01 00:00:00'), ('2020-03-29 02:30:00'),
+  ('2020-10-25 02:30:00'), ('2024-06-15 12:00:00'), ('2100-01-01 00:00:00'))
+SELECT count(*), sum(hash(timezone(name, ts)::VARCHAR))
+FROM pg_timezone_names(), locals
+----
+3828	34949690000555504075861
+
+# the zone list
+query III
+SELECT count(*), sum(hash(name)), sum(hash(abbrev)) FROM pg_timezone_names()
+----
+638	5737240465157071780492	5817868775566532731132
+
+# every calendar over two centuries
+query I
+SELECT name FROM icu_calendar_names() ORDER BY 1
+----
+buddhist
+chinese
+coptic
+dangi
+ethiopic
+ethiopic-amete-alem
+gregorian
+hebrew
+indian
+islamic
+islamic-civil
+islamic-rgsa
+islamic-tbla
+islamic-umalqura
+iso8601
+japanese
+persian
+roc
+
+# every calendar over two centuries
+statement ok
+SET Calendar='gregorian'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61079909010724569366867
+
+statement ok
+SET Calendar='buddhist'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61079909010724569366867
+
+statement ok
+SET Calendar='roc'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61079909010724569366867
+
+statement ok
+SET Calendar='iso8601'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61079909010724569366867
+
+statement ok
+SET Calendar='coptic'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	60948903795603447145377
+
+statement ok
+SET Calendar='ethiopic'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61235793047582644006420
+
+statement ok
+SET Calendar='ethiopic-amete-alem'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	62222378378935803844555
+
+statement ok
+SET Calendar='persian'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61533528049101997481225
+
+statement ok
+SET Calendar='indian'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	60957006754424010006592
+
+statement ok
+SET Calendar='islamic'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61837974483399250722893
+
+statement ok
+SET Calendar='islamic-civil'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61098332677860066086814
+
+statement ok
+SET Calendar='islamic-rgsa'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61837974483399250722893
+
+statement ok
+SET Calendar='islamic-tbla'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61609832933013523049434
+
+statement ok
+SET Calendar='islamic-umalqura'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61266968639849312114961
+
+statement ok
+SET Calendar='hebrew'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61289697989697994061148
+
+statement ok
+SET Calendar='japanese'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	61079909010724569366867
+
+statement ok
+SET Calendar='chinese'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	60862461237295463618690
+
+statement ok
+SET Calendar='dangi'
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2100-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 11 DAY) t(ts)
+----
+6641	60824899218399484854879
+

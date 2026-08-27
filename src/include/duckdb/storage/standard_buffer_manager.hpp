@@ -75,6 +75,8 @@ public:
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
 
 	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) final;
+	vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	                                                  vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -166,8 +168,16 @@ protected:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
 
-	void BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles,
-	               const map<block_id_t, idx_t> &load_map, block_id_t first_block, block_id_t last_block);
+	//! A run of handles with adjacent block ids starting at first_block
+	struct PrefetchRun {
+		block_id_t first_block;
+		vector<shared_ptr<BlockHandle>> handles;
+	};
+	//! Computes the contiguous runs of blocks that still need to be loaded, without performing any I/O
+	vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
+	//! Synchronously executes every run in the plan through BatchRead
+	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
+	void BatchRead(QueryContext context, PrefetchRun &run);
 
 	bool EncryptTemporaryFiles();
 

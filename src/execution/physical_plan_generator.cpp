@@ -6,7 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
@@ -72,6 +73,15 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
+	const auto repeatable = ClassifyLogicalOperatorRepeatability(op) == LogicalOperatorRepeatability::REPEATABLE;
+	auto &result = CreatePlanInternal(op);
+	if (!repeatable) {
+		non_repeatable_operators.insert(result);
+	}
+	return result;
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreatePlanInternal(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return CreatePlan(op.Cast<LogicalGet>());
@@ -188,6 +198,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalPivot>());
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
+	case LogicalOperatorType::LOGICAL_SECURE_VIEW:
+		return CreatePlan(op.Cast<LogicalSecureView>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return CreatePlan(op.Cast<LogicalUpdateExtensions>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
