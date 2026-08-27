@@ -760,7 +760,9 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	REQUIRE(ColumnBindingResolver::VerifyAlways(*invalid_plan).HasError());
 
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_column_bindings=true"));
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	REQUIRE_THROWS_AS(ColumnBindingResolver::Verify(*connection.context, *invalid_plan), InternalException);
+#endif
 
 	auto valid_plan = ReferenceProjection(TableIndex(82), ColumnBinding(child_index, ProjectionIndex(0)),
 	                                      LogicalType::INTEGER, TypedLeaf(child_index, LogicalType::INTEGER));
@@ -791,6 +793,7 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	REQUIRE(unidentified_legacy_result.IsValid());
 	REQUIRE(unidentified_legacy_result.IsSuccess());
 
+#ifndef DUCKDB_CRASH_ON_ASSERT
 	auto child_failure = InvalidPassThrough(TableIndex(92), TableIndex(920), "legacy_child_first");
 	auto mixed_failure = ReferenceProjection(TableIndex(93), ColumnBinding(TableIndex(930), ProjectionIndex(0)),
 	                                         LogicalType::INTEGER, std::move(child_failure), "canonical_parent_first");
@@ -801,6 +804,7 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 		REQUIRE(StringUtil::Contains(exception.what(), "legacy_child_first"));
 		REQUIRE_FALSE(StringUtil::Contains(exception.what(), "canonical_parent_first"));
 	}
+#endif
 }
 
 static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex child_index, TableIndex invalid_index,
