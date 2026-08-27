@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/time_point.hpp"
+#include <exception>
 #include <functional>
 
 namespace duckdb {
@@ -286,6 +287,43 @@ public:
 private:
 	//! The base URL (scheme + host + port) this client was created for
 	const string base_url;
+};
+
+//! What should happen after one attempt of an HTTP request
+enum class HTTPRetryDecision : uint8_t {
+	//! The response is final and should be returned to the caller
+	FINISHED,
+	//! The request should be attempted again, after the delay the policy reported
+	RETRY,
+	//! The retries are exhausted, the caller must produce the failure
+	FAILED
+};
+
+//! The outcome of one attempt of an HTTP request, whether it produced a response or threw
+struct HTTPAttempt {
+	//! The response, null when the attempt threw
+	unique_ptr<HTTPResponse> response;
+	//! The exception the attempt threw, if any
+	std::exception_ptr caught_e = nullptr;
+	string exception_error;
+	//! Status and Retry-After recovered from an HTTPException, used for throttle detection
+	string caught_status;
+	string caught_retry_after;
+};
+
+//! The retry policy of one HTTP request, carried across its attempts.
+//! It does no waiting of its own: a synchronous caller sleeps for the delay it reports, an
+//! asynchronous one schedules the next attempt after it, so both share this one policy.
+class HTTPRetryState {
+public:
+	//! Record one attempt and decide what happens next. [delay_ms] is only set for RETRY.
+	DUCKDB_API HTTPRetryDecision OnAttempt(const BaseRequest &request, HTTPAttempt &attempt, uint64_t &delay_ms);
+	//! Produce the outcome of a FAILED decision: a failed response when the request asked for one, else it throws
+	DUCKDB_API unique_ptr<HTTPResponse> Finalize(const BaseRequest &request, HTTPAttempt &attempt);
+
+private:
+	//! Attempts made so far
+	idx_t tries = 0;
 };
 
 class HTTPUtil {

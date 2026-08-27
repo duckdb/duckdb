@@ -440,133 +440,160 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	}
 }
 
+namespace {
+
+//! Perform one attempt, capturing whatever it produced - a response, or an exception plus the status
+//! and Retry-After that the handlers folded into it
+HTTPAttempt RunOneAttempt(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request) {
+	HTTPAttempt attempt;
+	try {
+		attempt.response = on_request();
+		if (attempt.response) {
+			attempt.response->url = request.url;
+		}
+	} catch (IOException &e) {
+		attempt.exception_error = e.what();
+		attempt.caught_e = std::current_exception();
+	} catch (HTTPException &e) {
+		attempt.exception_error = e.what();
+		attempt.caught_e = std::current_exception();
+		// handlers turn error statuses into exceptions; recover the status for throttle detection
+		ErrorData error_data(e);
+		auto entry = error_data.ExtraInfo().find("status_code");
+		if (entry != error_data.ExtraInfo().end()) {
+			attempt.caught_status = entry->second;
+		}
+		auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
+		if (retry_entry != error_data.ExtraInfo().end()) {
+			attempt.caught_retry_after = retry_entry->second;
+		}
+	}
+	return attempt;
+}
+
+} // namespace
+
+HTTPRetryDecision HTTPRetryState::OnAttempt(const BaseRequest &request, HTTPAttempt &attempt, uint64_t &delay_ms) {
+	auto &params = request.params;
+	auto &response = attempt.response;
+	delay_ms = 0;
+
+	// Request errors and caught exceptions are eligible for retry without a response status
+	bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
+	if (!should_retry) {
+		auto response_code = static_cast<uint16_t>(response->status);
+		if (response_code >= 200 && response_code < 300) {
+			response->success = true;
+			return HTTPRetryDecision::FINISHED;
+		}
+		switch (response->status) {
+		case HTTPStatusCode::NotModified_304:
+			response->success = true;
+			break;
+		default:
+			response->success = false;
+			break;
+		}
+		return HTTPRetryDecision::FINISHED;
+	}
+
+	tries += 1;
+	// throttle responses get extra, capped, jittered backoff so bursts degrade instead of failing queries
+	const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
+	                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
+	                       attempt.caught_status == "429" || attempt.caught_status == "503";
+#ifndef DUCKDB_NO_THREADS
+	static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
+#else
+	// without threads we cannot sleep between retries, so do not add zero-delay retries
+	static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
+#endif
+	static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
+	const idx_t max_tries =
+	    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+	if (tries > max_tries) {
+		return HTTPRetryDecision::FAILED;
+	}
+	if (tries > 1 || throttled) {
+		const auto backoff_exp = static_cast<double>(throttled ? tries - 1 : tries - 2);
+		const auto backoff_ms = (double)params.retry_wait_ms * pow(params.retry_backoff, backoff_exp);
+		// cap in the double domain to avoid overflow in the cast
+		uint64_t sleep_amount = (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
+		if (throttled) {
+			sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
+			string retry_after = attempt.caught_retry_after;
+			if (response && response->headers.HasHeader("Retry-After")) {
+				retry_after = response->headers.GetHeaderValue("Retry-After");
+			}
+			if (!retry_after.empty()) {
+				// honor a numeric Retry-After (seconds), capped like the backoff
+				uint64_t retry_after_s = 0;
+				if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
+					retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
+					sleep_amount = MaxValue<uint64_t>(sleep_amount, retry_after_s * 1000);
+				}
+			}
+			// subtractive jitter ([base/2, base]) de-synchronizes retry bursts while honoring the cap
+			RandomEngine random;
+			sleep_amount -= random.NextRandomInteger64() % (sleep_amount / 2 + 1);
+		}
+		delay_ms = sleep_amount;
+	}
+	return HTTPRetryDecision::RETRY;
+}
+
+unique_ptr<HTTPResponse> HTTPRetryState::Finalize(const BaseRequest &request, HTTPAttempt &attempt) {
+	auto &response = attempt.response;
+	if (request.try_request) {
+		// try request - return the failure
+		if (!response) {
+			response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+			string error = "Unknown error";
+			if (!attempt.exception_error.empty()) {
+				error = std::move(attempt.exception_error);
+			}
+			response->request_error = std::move(error);
+		}
+		response->success = false;
+		return std::move(response);
+	}
+	auto method = EnumUtil::ToString(request.type);
+	if (attempt.caught_e) {
+		std::rethrow_exception(attempt.caught_e);
+	} else if (response && !response->HasRequestError()) {
+		throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
+		                    static_cast<int>(response->status), method, request.url);
+	} else {
+		string error = response ? response->GetError() : "Unknown error";
+		throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
+	}
+}
+
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
 duckdb::unique_ptr<HTTPResponse>
 HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request,
                               const BaseRequest &request, const std::function<void(void)> &retry_cb) {
-	auto &params = request.params;
-	idx_t tries = 0;
+	HTTPRetryState retry_state;
 	while (true) {
-		std::exception_ptr caught_e = nullptr;
-		unique_ptr<HTTPResponse> response;
-		string exception_error;
-		string caught_status;
-		string caught_retry_after;
-
-		try {
-			response = on_request();
-			if (response) {
-				response->url = request.url;
-			}
-		} catch (IOException &e) {
-			exception_error = e.what();
-			caught_e = std::current_exception();
-		} catch (HTTPException &e) {
-			exception_error = e.what();
-			caught_e = std::current_exception();
-			// handlers turn error statuses into exceptions; recover the status for throttle detection
-			ErrorData error_data(e);
-			auto entry = error_data.ExtraInfo().find("status_code");
-			if (entry != error_data.ExtraInfo().end()) {
-				caught_status = entry->second;
-			}
-			auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
-			if (retry_entry != error_data.ExtraInfo().end()) {
-				caught_retry_after = retry_entry->second;
-			}
-		}
-
-		// Request errors and caught exceptions are eligible for retry without a response status
-		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
-		if (!should_retry) {
-			auto response_code = static_cast<uint16_t>(response->status);
-			if (response_code >= 200 && response_code < 300) {
-				response->success = true;
-				return response;
-			}
-			switch (response->status) {
-			case HTTPStatusCode::NotModified_304:
-				response->success = true;
-				break;
-			default:
-				response->success = false;
-				break;
-			}
-			return response;
-		}
-
-		tries += 1;
-		// throttle responses get extra, capped, jittered backoff so bursts degrade instead of failing queries
-		const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
-		                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
-		                       caught_status == "429" || caught_status == "503";
+		auto attempt = RunOneAttempt(on_request, request);
+		uint64_t delay_ms = 0;
+		switch (retry_state.OnAttempt(request, attempt, delay_ms)) {
+		case HTTPRetryDecision::FINISHED:
+			return std::move(attempt.response);
+		case HTTPRetryDecision::FAILED:
+			return retry_state.Finalize(request, attempt);
+		case HTTPRetryDecision::RETRY:
+			// the only step an asynchronous driver replaces: it schedules the next attempt instead of waiting here
+			if (delay_ms > 0) {
 #ifndef DUCKDB_NO_THREADS
-		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
-#else
-		// without threads we cannot sleep between retries, so do not add zero-delay retries
-		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
-#endif
-		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
-		const idx_t max_tries =
-		    !HTTPUtil::IsIdempotent(request.type) ? 0 : params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
-		if (tries <= max_tries) {
-			if (tries > 1 || throttled) {
-#ifndef DUCKDB_NO_THREADS
-				const auto backoff_exp = static_cast<double>(throttled ? tries - 1 : tries - 2);
-				const auto backoff_ms = (double)params.retry_wait_ms * pow(params.retry_backoff, backoff_exp);
-				// cap in the double domain to avoid overflow in the cast
-				uint64_t sleep_amount =
-				    (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
-				if (throttled) {
-					sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
-					string retry_after = caught_retry_after;
-					if (response && response->headers.HasHeader("Retry-After")) {
-						retry_after = response->headers.GetHeaderValue("Retry-After");
-					}
-					if (!retry_after.empty()) {
-						// honor a numeric Retry-After (seconds), capped like the backoff
-						uint64_t retry_after_s = 0;
-						if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
-							retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
-							sleep_amount = MaxValue<uint64_t>(sleep_amount, retry_after_s * 1000);
-						}
-					}
-					// subtractive jitter ([base/2, base]) de-synchronizes retry bursts while honoring the cap
-					RandomEngine random;
-					sleep_amount -= random.NextRandomInteger64() % (sleep_amount / 2 + 1);
-				}
-				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
+				std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
 #endif
 			}
 			if (retry_cb) {
 				retry_cb();
 			}
-		} else {
-			// failed and we cannot retry
-			if (request.try_request) {
-				// try request - return the failure
-				if (!response) {
-					response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-					string error = "Unknown error";
-					if (!exception_error.empty()) {
-						error = std::move(exception_error);
-					}
-					response->request_error = std::move(error);
-				}
-				response->success = false;
-				return response;
-			}
-			auto method = EnumUtil::ToString(request.type);
-			if (caught_e) {
-				std::rethrow_exception(caught_e);
-			} else if (response && !response->HasRequestError()) {
-				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    static_cast<int>(response->status), method, request.url);
-			} else {
-				string error = response ? response->GetError() : "Unknown error";
-				throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
-			}
+			break;
 		}
 	}
 }
