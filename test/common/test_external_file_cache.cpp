@@ -868,8 +868,8 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	policy_fs->WaitForReadCount(1);
 
 	annotated_mutex reader_b_lock;
-	std::condition_variable reader_b_started DUCKDB_GUARDED_BY(reader_b_lock);
-	bool reader_b_is_started DUCKDB_GUARDED_BY(reader_b_lock) = false;
+	std::condition_variable reader_b_started;
+	bool reader_b_is_started = false;
 	std::thread reader_b([&]() {
 		{
 			annotated_lock_guard<annotated_mutex> guard(reader_b_lock);
