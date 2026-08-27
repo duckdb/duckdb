@@ -79,7 +79,6 @@ private:
 	bool IsValid() const;
 	const IndexEntry &GetEntry() const;
 
-	//! Declared before lock so the lock is released before the entry can be destroyed.
 	shared_ptr<IndexEntry> entry;
 	unique_ptr<StorageLockKey> lock;
 };
@@ -101,7 +100,6 @@ private:
 	bool IsValid() const;
 	IndexEntry &GetMutableEntry();
 
-	//! Declared before lock so the lock is released before the entry can be destroyed.
 	shared_ptr<IndexEntry> entry;
 	unique_ptr<StorageLockKey> lock;
 };
