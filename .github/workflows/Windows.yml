@@ -62,7 +62,7 @@ jobs:
       shell: pwsh
       run: |
         $commands = Get-Content compile_commands.json -Raw
-        if (!$commands.Contains('-march=x86-64-v3') -or !$commands.Contains('-mtune=generic')) {
+        if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
           throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
         }
 

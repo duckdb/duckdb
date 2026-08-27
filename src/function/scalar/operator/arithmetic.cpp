@@ -1111,12 +1111,22 @@ interval_t DivideOperator::Operation(interval_t left, double right) {
 
 namespace {
 
+[[noreturn]] void ThrowDivisionByZero(const Expression &expr) {
+	throw InvalidInputException("Division by zero in expression %s. Use TRY(...) to return NULL for this expression, "
+	                            "or SET null_on_division_by_zero=true to return NULL for all divisions by zero.",
+	                            expr.ToString());
+}
+
+template <bool NULL_ON_ZERO>
 struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
 			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
 		} else if (right == 0) {
+			if (!NULL_ON_ZERO) {
+				ThrowDivisionByZero(fun.get());
+			}
 			mask.SetInvalid(idx);
 			return left;
 		} else {
@@ -1125,14 +1135,18 @@ struct BinaryNumericDivideWrapper {
 	}
 
 	static bool AddsNulls() {
-		return true;
+		return NULL_ON_ZERO;
 	}
 };
 
-struct BinaryZeroIsNullWrapper {
+template <bool NULL_ON_ZERO>
+struct BinaryZeroCheckWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (right == 0) {
+			if (!NULL_ON_ZERO) {
+				ThrowDivisionByZero(fun.get());
+			}
 			mask.SetInvalid(idx);
 			return left;
 		} else {
@@ -1141,16 +1155,20 @@ struct BinaryZeroIsNullWrapper {
 	}
 
 	static bool AddsNulls() {
-		return true;
+		return NULL_ON_ZERO;
 	}
 };
 
+template <bool NULL_ON_ZERO>
 struct BinaryNumericDivideHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
 			throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
 		} else if (right == 0) {
+			if (!NULL_ON_ZERO) {
+				ThrowDivisionByZero(fun.get());
+			}
 			mask.SetInvalid(idx);
 			return left;
 		} else {
@@ -1159,45 +1177,79 @@ struct BinaryNumericDivideHugeintWrapper {
 	}
 
 	static bool AddsNulls() {
-		return true;
+		return NULL_ON_ZERO;
 	}
 };
 
-template <class TA, class TB, class TC, class OP, class ZWRAPPER = BinaryZeroIsNullWrapper>
-void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result);
+template <class TA, class TB, class TC, class OP, class ZWRAPPER>
+void BinaryScalarFunctionZeroCheck(DataChunk &input, ExpressionState &state, Vector &result) {
+	BinaryExecutor::ExecuteWithWrapper<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result, input.size(),
+	                                                             reference<const Expression>(state.expr));
+}
+
+template <class OP, bool NULL_ON_ZERO>
+scalar_function_t GetBinaryFunctionZeroCheck(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT8:
+		return BinaryScalarFunctionZeroCheck<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT16:
+		return BinaryScalarFunctionZeroCheck<int16_t, int16_t, int16_t, OP, BinaryNumericDivideWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT32:
+		return BinaryScalarFunctionZeroCheck<int32_t, int32_t, int32_t, OP, BinaryNumericDivideWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT64:
+		return BinaryScalarFunctionZeroCheck<int64_t, int64_t, int64_t, OP, BinaryNumericDivideWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT8:
+		return BinaryScalarFunctionZeroCheck<uint8_t, uint8_t, uint8_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT16:
+		return BinaryScalarFunctionZeroCheck<uint16_t, uint16_t, uint16_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT32:
+		return BinaryScalarFunctionZeroCheck<uint32_t, uint32_t, uint32_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT64:
+		return BinaryScalarFunctionZeroCheck<uint64_t, uint64_t, uint64_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT128:
+		return BinaryScalarFunctionZeroCheck<hugeint_t, hugeint_t, hugeint_t, OP,
+		                                     BinaryNumericDivideHugeintWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT128:
+		return BinaryScalarFunctionZeroCheck<uhugeint_t, uhugeint_t, uhugeint_t, OP,
+		                                     BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::FLOAT:
+		return BinaryScalarFunctionZeroCheck<float, float, float, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::DOUBLE:
+		return BinaryScalarFunctionZeroCheck<double, double, double, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetBinaryFunctionZeroCheck");
+	}
 }
 
 template <class OP>
-scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT8:
-		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper>;
-	case PhysicalType::INT16:
-		return BinaryScalarFunctionIgnoreZero<int16_t, int16_t, int16_t, OP, BinaryNumericDivideWrapper>;
-	case PhysicalType::INT32:
-		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP, BinaryNumericDivideWrapper>;
-	case PhysicalType::INT64:
-		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP, BinaryNumericDivideWrapper>;
-	case PhysicalType::UINT8:
-		return BinaryScalarFunctionIgnoreZero<uint8_t, uint8_t, uint8_t, OP>;
-	case PhysicalType::UINT16:
-		return BinaryScalarFunctionIgnoreZero<uint16_t, uint16_t, uint16_t, OP>;
-	case PhysicalType::UINT32:
-		return BinaryScalarFunctionIgnoreZero<uint32_t, uint32_t, uint32_t, OP>;
-	case PhysicalType::UINT64:
-		return BinaryScalarFunctionIgnoreZero<uint64_t, uint64_t, uint64_t, OP>;
-	case PhysicalType::INT128:
-		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryNumericDivideHugeintWrapper>;
-	case PhysicalType::UINT128:
-		return BinaryScalarFunctionIgnoreZero<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
-	case PhysicalType::FLOAT:
-		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
-	case PhysicalType::DOUBLE:
-		return BinaryScalarFunctionIgnoreZero<double, double, double, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
+scalar_function_t GetBinaryFunctionZeroCheck(PhysicalType type, bool null_on_zero) {
+	if (null_on_zero) {
+		return GetBinaryFunctionZeroCheck<OP, true>(type);
 	}
+	return GetBinaryFunctionZeroCheck<OP, false>(type);
+}
+
+template <class OP>
+unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+	bound_function.SetFunctionCallback(
+	    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
+	return nullptr;
+}
+
+unique_ptr<FunctionData> BindIntervalDivide(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	if (Settings::Get<NullOnDivisionByZeroSetting>(context)) {
+		bound_function.SetFunctionCallback(BinaryScalarFunctionZeroCheck<interval_t, double, interval_t, DivideOperator,
+		                                                                 BinaryZeroCheckWrapper<true>>);
+	} else {
+		bound_function.SetFunctionCallback(BinaryScalarFunctionZeroCheck<interval_t, double, interval_t, DivideOperator,
+		                                                                 BinaryZeroCheckWrapper<false>>);
+	}
+	return nullptr;
 }
 
 template <class OP>
@@ -1208,8 +1260,9 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
+		auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
 		bound_function.SetFunctionCallback(
-		    GetBinaryFunctionIgnoreZero<OP>(bound_function.GetReturnType().InternalType()));
+		    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	}
 	return nullptr;
 }
@@ -1250,8 +1303,9 @@ struct DividePropagateStatistics {
 	}
 };
 
-// When propagation fails the divisor range may contain zero, and division by zero produces NULLs that the inputs do not
-// have: return no statistics instead of the validity-only statistics that PropagateNumericStats falls back to.
+// When propagation fails the divisor range may contain zero, and division by zero either raises or (with
+// null_on_division_by_zero) produces NULLs that the inputs do not have: return no statistics instead of the
+// validity-only statistics that PropagateNumericStats falls back to.
 unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto stats = PropagateNumericStats<TryDivideOperator, DividePropagateStatistics, DivideOperator>(context, input);
 	if (stats && !NumericStats::HasMinMax(*stats)) {
@@ -1269,9 +1323,8 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                     BindBinaryFloatingPoint<DivideOperator>,
 	                                     PropagateFloatingStats<DividePropagateStatistics, DivideOperator>));
-	fp_divide.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                   BinaryScalarFunctionIgnoreZero<interval_t, double, interval_t, DivideOperator>));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL, nullptr,
+	                                     BindIntervalDivide));
 	fp_divide.SetFallible();
 	return fp_divide;
 }
@@ -1282,12 +1335,10 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else if (TypeIsIntegral(type.InternalType())) {
-			full_divide.AddFunction(ScalarFunction({type, type}, type,
-			                                       GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType()),
-			                                       nullptr, PropagateIntegerDivideStats));
+			full_divide.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<DivideOperator>,
+			                                       PropagateIntegerDivideStats));
 		} else {
-			full_divide.AddFunction(
-			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
+			full_divide.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<DivideOperator>));
 		}
 	}
 	full_divide.SetFallible();
@@ -1310,7 +1361,8 @@ static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 	}
 	auto &result_type = bound_function.GetReturnType();
-	bound_function.SetFunctionCallback(GetBinaryFunctionIgnoreZero<OP>(result_type.InternalType()));
+	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(input.GetClientContext());
+	bound_function.SetFunctionCallback(GetBinaryFunctionZeroCheck<OP>(result_type.InternalType(), null_on_zero));
 	return std::move(bind_data);
 }
 
@@ -1342,8 +1394,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else {
-			modulo.AddFunction(
-			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
+			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>));
 		}
 	}
 	modulo.SetFallible();

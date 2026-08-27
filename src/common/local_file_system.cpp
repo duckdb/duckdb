@@ -204,7 +204,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags, optional_ptr<DatabaseInstance> db)
-	    : FileHandle(file_system, std::move(path), flags), fd(fd), db(db) {
+	    : FileHandle(file_system, std::move(path), std::move(flags)), fd(fd), db(db) {
 	}
 	~UnixFileHandle() override {
 		UnixFileHandle::Close();
@@ -915,7 +915,7 @@ private:
 
 UnixMemoryMappedFile::UnixMemoryMappedFile(string path_p, FileOpenFlags flags_p, int fd_p, data_ptr_t data_p,
                                            idx_t size_p)
-    : MemoryMappedFile(std::move(path_p), flags_p, data_p, size_p), fd(fd_p) {
+    : MemoryMappedFile(std::move(path_p), std::move(flags_p), data_p, size_p), fd(fd_p) {
 }
 
 UnixMemoryMappedFile::~UnixMemoryMappedFile() {

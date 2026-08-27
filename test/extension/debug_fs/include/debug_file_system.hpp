@@ -74,7 +74,7 @@ public:
 	string PathSeparator(const string &path) override;
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override;
-	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
+	void RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) override;
 	void UnregisterSubSystem(const string &name) override;
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 	void SetDisabledFileSystems(const vector<string> &names) override;

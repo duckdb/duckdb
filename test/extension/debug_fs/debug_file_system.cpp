@@ -1,3 +1,4 @@
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "debug_file_system.hpp"
@@ -270,8 +271,8 @@ void DebugFileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	inner_fs->RegisterSubSystem(std::move(sub_fs));
 }
 
-void DebugFileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
-	inner_fs->RegisterSubSystem(compression_type, std::move(fs));
+void DebugFileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
+	inner_fs->RegisterCompressionFilesystem(std::move(fs));
 }
 
 void DebugFileSystem::UnregisterSubSystem(const string &name) {
