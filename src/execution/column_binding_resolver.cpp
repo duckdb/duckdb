@@ -477,14 +477,9 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index, bindings.size(),
 					    types.size());
 				}
-				if (!types[i].IsComplete() || !expr.GetReturnType().IsComplete()) {
-					if (verification_state) {
-						verification_state->AddIncompleteBindingType(expr, types[i]);
-						return nullptr;
-					}
-					throw InternalException(
-					    "Failed to bind column reference %s: expected and actual types must be complete",
-					    expr.GetAlias());
+				if (verification_state && (!types[i].IsComplete() || !expr.GetReturnType().IsComplete())) {
+					verification_state->AddIncompleteBindingType(expr, types[i]);
+					return nullptr;
 				}
 				if (expr.GetReturnType() != types[i]) {
 					if (verification_state) {

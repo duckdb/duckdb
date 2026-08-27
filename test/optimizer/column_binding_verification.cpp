@@ -809,6 +809,32 @@ static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex c
 	                             alias);
 }
 
+TEST_CASE("Normal column binding resolution preserves matching incomplete types", "[compiler_verification]") {
+	auto ResolveMatchingType = [](LogicalType type) {
+		auto child_index = TableIndex(939);
+		auto child = make_uniq<IncompleteTypeLeaf>(child_index, type);
+		auto plan = ReferenceProjection(TableIndex(940), ColumnBinding(child_index, ProjectionIndex(0)), type,
+		                                std::move(child));
+		plan->ResolveOperatorTypes();
+		REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF);
+
+		ColumnBindingResolver resolver;
+		REQUIRE_NOTHROW(resolver.VisitOperator(*plan));
+		REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_REF);
+		REQUIRE(plan->expressions[0]->GetReturnType() == type);
+	};
+
+	SECTION("ANY") {
+		ResolveMatchingType(LogicalType::ANY);
+	}
+	SECTION("TEMPLATE") {
+		ResolveMatchingType(LogicalType::TEMPLATE("T"));
+	}
+	SECTION("nested incomplete type") {
+		ResolveMatchingType(LogicalType::LIST(LogicalType::ANY));
+	}
+}
+
 TEST_CASE("Compiler verification structures incomplete expression types", "[compiler_verification]") {
 	auto VerifyIncompleteType = [](LogicalType expression_type, const string &alias) {
 		auto child_index = TableIndex(940);
