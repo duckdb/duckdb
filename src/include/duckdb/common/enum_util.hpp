@@ -316,6 +316,16 @@ enum class LogicalOperatorRepeatability : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
+enum class LogicalPlanCompilerConstructType : uint8_t;
+
+enum class LogicalPlanCompilerIssueCode : uint8_t;
+
+enum class LogicalPlanCompilerPathComponentType : uint8_t;
+
+enum class LogicalPlanCompilerPathRoot : uint8_t;
+
+enum class LogicalPlanCompilerPhase : uint8_t;
+
 enum class LogicalTypeId : uint8_t;
 
 enum class LookupResultType : uint8_t;
@@ -1052,6 +1062,21 @@ const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepea
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerConstructType>(LogicalPlanCompilerConstructType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerIssueCode>(LogicalPlanCompilerIssueCode value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPathComponentType>(LogicalPlanCompilerPathComponentType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPathRoot>(LogicalPlanCompilerPathRoot value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPhase>(LogicalPlanCompilerPhase value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
@@ -1944,6 +1969,21 @@ LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
+
+template<>
+LogicalPlanCompilerConstructType EnumUtil::FromString<LogicalPlanCompilerConstructType>(const char *value);
+
+template<>
+LogicalPlanCompilerIssueCode EnumUtil::FromString<LogicalPlanCompilerIssueCode>(const char *value);
+
+template<>
+LogicalPlanCompilerPathComponentType EnumUtil::FromString<LogicalPlanCompilerPathComponentType>(const char *value);
+
+template<>
+LogicalPlanCompilerPathRoot EnumUtil::FromString<LogicalPlanCompilerPathRoot>(const char *value);
+
+template<>
+LogicalPlanCompilerPhase EnumUtil::FromString<LogicalPlanCompilerPhase>(const char *value);
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);

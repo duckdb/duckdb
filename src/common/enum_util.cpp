@@ -216,6 +216,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
+#include "duckdb/planner/logical_plan_compiler_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -3398,6 +3399,112 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
 	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 68, "LogicalOperatorType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanCompilerConstructTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::LOGICAL_OPERATOR), "LOGICAL_OPERATOR" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::EXPRESSION), "EXPRESSION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::SOURCE_FUNCTION), "SOURCE_FUNCTION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::LOGICAL_TYPE), "LOGICAL_TYPE" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::BINDING_TYPE_MISMATCH), "BINDING_TYPE_MISMATCH" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::EXTENSION), "EXTENSION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerConstructType::EXPORT_FEATURE), "EXPORT_FEATURE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerConstructType>(LogicalPlanCompilerConstructType value) {
+	return StringUtil::EnumToString(GetLogicalPlanCompilerConstructTypeValues(), 8, "LogicalPlanCompilerConstructType", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanCompilerConstructType EnumUtil::FromString<LogicalPlanCompilerConstructType>(const char *value) {
+	return static_cast<LogicalPlanCompilerConstructType>(StringUtil::StringToEnum(GetLogicalPlanCompilerConstructTypeValues(), 8, "LogicalPlanCompilerConstructType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanCompilerIssueCodeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::INVALID_BINDING), "INVALID_BINDING" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::TYPE_MISMATCH), "TYPE_MISMATCH" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_OPERATOR), "UNSUPPORTED_OPERATOR" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPRESSION), "UNSUPPORTED_EXPRESSION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION), "UNSUPPORTED_FUNCTION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_EXTENSION), "UNSUPPORTED_EXTENSION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT), "MALFORMED_EXTENSION_RESULT" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE), "UNSUPPORTED_EXPORT_FEATURE" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT), "INTERNAL_INVARIANT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerIssueCode>(LogicalPlanCompilerIssueCode value) {
+	return StringUtil::EnumToString(GetLogicalPlanCompilerIssueCodeValues(), 10, "LogicalPlanCompilerIssueCode", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanCompilerIssueCode EnumUtil::FromString<LogicalPlanCompilerIssueCode>(const char *value) {
+	return static_cast<LogicalPlanCompilerIssueCode>(StringUtil::StringToEnum(GetLogicalPlanCompilerIssueCodeValues(), 10, "LogicalPlanCompilerIssueCode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanCompilerPathComponentTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanCompilerPathComponentType::OPERATOR_CHILD), "OPERATOR_CHILD" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION), "OPERATOR_EXPRESSION" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD), "EXPRESSION_CHILD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPathComponentType>(LogicalPlanCompilerPathComponentType value) {
+	return StringUtil::EnumToString(GetLogicalPlanCompilerPathComponentTypeValues(), 3, "LogicalPlanCompilerPathComponentType", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanCompilerPathComponentType EnumUtil::FromString<LogicalPlanCompilerPathComponentType>(const char *value) {
+	return static_cast<LogicalPlanCompilerPathComponentType>(StringUtil::StringToEnum(GetLogicalPlanCompilerPathComponentTypeValues(), 3, "LogicalPlanCompilerPathComponentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanCompilerPathRootValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanCompilerPathRoot::LOGICAL_PLAN), "LOGICAL_PLAN" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION), "STANDALONE_EXPRESSION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPathRoot>(LogicalPlanCompilerPathRoot value) {
+	return StringUtil::EnumToString(GetLogicalPlanCompilerPathRootValues(), 2, "LogicalPlanCompilerPathRoot", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanCompilerPathRoot EnumUtil::FromString<LogicalPlanCompilerPathRoot>(const char *value) {
+	return static_cast<LogicalPlanCompilerPathRoot>(StringUtil::StringToEnum(GetLogicalPlanCompilerPathRootValues(), 2, "LogicalPlanCompilerPathRoot", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanCompilerPhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanCompilerPhase::VERIFY), "VERIFY" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerPhase::EXPRESSION_EXPORT), "EXPRESSION_EXPORT" },
+		{ static_cast<uint32_t>(LogicalPlanCompilerPhase::PLAN_EXPORT), "PLAN_EXPORT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanCompilerPhase>(LogicalPlanCompilerPhase value) {
+	return StringUtil::EnumToString(GetLogicalPlanCompilerPhaseValues(), 3, "LogicalPlanCompilerPhase", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanCompilerPhase EnumUtil::FromString<LogicalPlanCompilerPhase>(const char *value) {
+	return static_cast<LogicalPlanCompilerPhase>(StringUtil::StringToEnum(GetLogicalPlanCompilerPhaseValues(), 3, "LogicalPlanCompilerPhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
