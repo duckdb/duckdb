@@ -38,6 +38,21 @@ public:
 	idx_t stats_count = 0;
 };
 
+//! File system whose positional reads can be held back, to control the timing of in-flight block fetches.
+class BlockingCachePolicyFileSystem : public CachePolicyFileSystem {
+public:
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		read_count++;
+		while (block_reads) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		CachePolicyFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	atomic<bool> block_reads {false};
+	atomic<idx_t> read_count {0};
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -798,6 +813,45 @@ TEST_CASE("Expired freshness deadline is not served from cache", "[external_file
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
 	}
+}
+
+TEST_CASE("Waiter on a loading block refetches when the response prohibits sharing", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &cache = db.instance->GetExternalFileCache();
+	auto policy_fs = make_uniq<BlockingCachePolicyFileSystem>();
+
+	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content(block_size, 'A');
+	EFCTestFileGuard test_file("test_efc_loading_waiter.bin", content);
+	CachingFileSystem cfs(*policy_fs, *db.instance);
+
+	// Open both handles while the policy still allows sharing.
+	auto handle_a = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle_b = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	// Content responses prohibit reuse, and hang until released.
+	policy_fs->cache_valid_until = timestamp_t::ninfinity();
+	policy_fs->block_reads = true;
+
+	string result_a;
+	string result_b;
+	std::thread reader_a([&]() { result_a = ReadFull(*handle_a, block_size); });
+	// Once reader A's fetch is in flight, the block is LOADING, so reader B waits on it.
+	while (policy_fs->read_count == 0) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	std::thread reader_b([&]() { result_b = ReadFull(*handle_b, block_size); });
+	// Give reader B time to start waiting on the LOADING block before releasing reader A's fetch.
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	policy_fs->block_reads = false;
+
+	reader_a.join();
+	reader_b.join();
+	REQUIRE(result_a == content);
+	REQUIRE(result_b == content);
+	// Reader B must not consume reader A's response: each reader issues its own request.
+	REQUIRE(policy_fs->read_count == 2);
+	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
 TEST_CASE("Content response can prohibit cache reuse", "[external_file_cache]") {

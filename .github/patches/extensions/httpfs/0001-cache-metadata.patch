@@ -1,4 +1,4 @@
-commit 2b442a9d07071b45699667c080527faa92c95782
+commit a25824e34450b334fe246f4c12958deea416254b
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Tue Aug 4 02:50:57 2026 -0700
 
@@ -518,6 +518,51 @@ index 1764acc..d6615b1 100644
  	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
  	void Seek(FileHandle &handle, idx_t location) override;
  	idx_t SeekPosition(FileHandle &handle) override;
+diff --git a/src/include/s3/s3_auth.hpp b/src/include/s3/s3_auth.hpp
+index 0238d2c..779c242 100644
+--- a/src/include/s3/s3_auth.hpp
++++ b/src/include/s3/s3_auth.hpp
+@@ -13,7 +13,8 @@ public:
+ 	explicit S3KeyValueReader(const KeyValueSecretReader &reader);
+ 
+ 	template <class TYPE>
+-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, TYPE &result) {
++	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
++	                                             TYPE &result) {
+ 		Value temp_result;
+ 		auto setting_scope = reader.TryGetSecretKeyOrSetting(secret_key, setting_name, temp_result);
+ 		if (!temp_result.IsNull() && !(setting_scope && setting_scope.GetScope() == SettingScope::GLOBAL &&
+@@ -24,7 +25,7 @@ public:
+ 	}
+ 
+ 	template <class TYPE>
+-	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
++	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, TYPE &value_out) {
+ 		return reader.TryGetSecretKey(secret_key, value_out);
+ 	}
+ 
+@@ -70,7 +71,7 @@ struct AWSEnvironmentCredentialsProvider {
+ 
+ 	DBConfig &config;
+ 
+-	void SetExtensionOptionValue(string key, const char *env_var);
++	void SetExtensionOptionValue(const Identifier &key, const char *env_var);
+ 	void SetAll();
+ };
+ 
+diff --git a/src/s3/s3_auth.cpp b/src/s3/s3_auth.cpp
+index bfcb219..eaab4bd 100644
+--- a/src/s3/s3_auth.cpp
++++ b/src/s3/s3_auth.cpp
+@@ -6,7 +6,7 @@
+ 
+ namespace duckdb {
+ 
+-void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
++void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(const Identifier &key, const char *env_var_name) {
+ 	const auto env_value = std::getenv(env_var_name);
+ 	if (env_value) {
+ 		if (StringUtil::Lower(env_value) == "false") {
 diff --git a/test/sql/metadata_stats.test b/test/sql/metadata_stats.test
 index dfe7a26..27cb0a6 100644
 --- a/test/sql/metadata_stats.test
