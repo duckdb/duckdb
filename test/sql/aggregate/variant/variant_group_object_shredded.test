@@ -2,6 +2,8 @@
 # description: Test variant_group_object with shredded VARIANT inputs
 # group: [variant]
 
+load {TEST_DIR}/variant_group_object_shredded.db readwrite v1.5.0
+
 statement ok
 SET variant_minimum_shredding_size = 0;
 
@@ -9,13 +11,10 @@ statement ok
 SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER)';
 
 statement ok
-ATTACH '{TEMP_DIR}/variant_group_object_shredded.db' AS persisted;
+CREATE TABLE shredded_values(id INTEGER, k VARCHAR, v VARIANT);
 
 statement ok
-CREATE TABLE persisted.shredded_values(id INTEGER, k VARCHAR, v VARIANT);
-
-statement ok
-INSERT INTO persisted.shredded_values VALUES
+INSERT INTO shredded_values VALUES
     (1, 'first', {'a': 1, 'b': 2}::VARIANT),
     (2, 'second', {'a': 3}::VARIANT),
     (3, 'null_root', NULL::VARIANT),
@@ -27,7 +26,7 @@ CHECKPOINT;
 restart
 
 query I
-SELECT DISTINCT vector_type(v) FROM persisted.shredded_values;
+SELECT DISTINCT vector_type(v) FROM shredded_values;
 ----
 SHREDDED_VECTOR
 
@@ -38,6 +37,6 @@ SELECT variant_comparator(variant_group_object(k, v)) = variant_comparator({
     'null_root': NULL,
     'scalar': 42
 }::VARIANT)
-FROM persisted.shredded_values;
+FROM shredded_values;
 ----
 true
