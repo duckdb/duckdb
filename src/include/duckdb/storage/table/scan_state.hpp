@@ -291,6 +291,8 @@ public:
 	PreparedScanVector prepared_vector;
 	//! Whether scan I/O for the current row group assignment has been registered
 	bool assignment_io_registered = false;
+	//! Whether the column scans of the current assignment still have to be initialized
+	bool column_scans_pending = false;
 
 	RandomEngine random;
 
@@ -317,6 +319,8 @@ public:
 	vector<unique_ptr<AsyncTask>> RegisterAssignmentIO();
 	//! Rows of the assignment left to scan from the current vector onwards
 	idx_t RemainingAssignmentRows() const;
+	//! Initializes the column scans a claim deferred
+	void InitializeColumnScans();
 	//! Processes the vector prepared by PrepareScanIO
 	void ProcessPreparedScan(DuckTransaction &transaction, DataChunk &result);
 
@@ -379,6 +383,8 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 
 	ScanSamplingInfo &GetSamplingInfo();
+	//! Initializes the column scans a claim deferred, for whichever collection holds the assignment
+	void InitializeColumnScans();
 	//! Rows scanned from persistent and transaction-local storage
 	idx_t RowsScanned() const;
 

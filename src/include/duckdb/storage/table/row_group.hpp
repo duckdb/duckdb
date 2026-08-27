@@ -148,7 +148,10 @@ public:
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
-	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
+	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+	                              bool initialize_columns = true);
+	//! Initializes the column scans of the assignment set up by InitializeScanWithOffset
+	void InitializeColumnScans(CollectionScanState &state);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start);

@@ -337,6 +337,17 @@ vector<unique_ptr<AsyncTask>> CollectionScanState::RegisterAssignmentIO() {
 	return row_group->GetNode().CollectScanIOTasks(*this, RemainingAssignmentRows());
 }
 
+void CollectionScanState::InitializeColumnScans() {
+	if (column_scans_pending) {
+		row_group->GetNode().InitializeColumnScans(*this);
+	}
+}
+
+void TableScanState::InitializeColumnScans() {
+	table_state.InitializeColumnScans();
+	local_state.InitializeColumnScans();
+}
+
 idx_t CollectionScanState::RemainingAssignmentRows() const {
 	const idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
 	return current_row < max_row_group_row ? max_row_group_row - current_row : 0;

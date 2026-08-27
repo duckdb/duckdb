@@ -421,14 +421,16 @@ public:
 			InitializeScanState(context, *job->scan_state);
 		}
 		{
+			// only the claim and its index need the lock, the per-column setup runs outside it
 			lock_guard<mutex> guard(read_ahead_lock);
-			job->rows = storage.NextParallelScan(context, state, *job->scan_state);
+			job->rows = storage.NextParallelScan(context, state, *job->scan_state, false);
 			if (job->rows == 0) {
 				return nullptr;
 			}
 			job->batch_index = next_job_index++;
 			queued_rows += job->rows;
 		}
+		job->scan_state->InitializeColumnScans();
 		auto &table_state = job->scan_state->table_state;
 		if (table_state.row_group && table_state.RemainingAssignmentRows() > 0) {
 			io_tasks = table_state.RegisterAssignmentIO();

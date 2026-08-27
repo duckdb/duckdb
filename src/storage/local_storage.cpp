@@ -428,12 +428,12 @@ OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
 }
 
 bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-                                    CollectionScanState &scan_state) {
+                                    CollectionScanState &scan_state, bool initialize_columns) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
 		return false;
 	}
-	return storage->GetCollection().NextParallelScan(context, state, scan_state);
+	return storage->GetCollection().NextParallelScan(context, state, scan_state, initialize_columns);
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry) {

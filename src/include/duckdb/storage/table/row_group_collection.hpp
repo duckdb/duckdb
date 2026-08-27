@@ -102,9 +102,11 @@ public:
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
 	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-	                                     idx_t vector_index, idx_t max_row);
+	                                     idx_t vector_index, idx_t max_row, bool initialize_columns = true);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
+	//! Claims the next assignment, the column scans are set up right away unless initialize_columns is false
+	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state,
+	                      bool initialize_columns = true);
 
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction);
 	RowGroupIterationHelper Chunks(DuckTransaction &transaction, const vector<StorageIndex> &column_ids);

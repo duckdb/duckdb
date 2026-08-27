@@ -342,14 +342,14 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 
 bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-                                                  idx_t vector_index, idx_t max_row) {
+                                                  idx_t vector_index, idx_t max_row, bool initialize_columns) {
 	state.max_row = max_row;
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
 	}
-	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
+	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index, initialize_columns);
 }
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
@@ -363,7 +363,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 }
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                          CollectionScanState &scan_state) {
+                                          CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
@@ -417,8 +417,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		D_ASSERT(row_group);
 
 		// initialize the scan for this row group
-		bool need_to_scan =
-		    InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index, max_row);
+		bool need_to_scan = InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index,
+		                                             max_row, initialize_columns);
 		if (!need_to_scan) {
 			// skip this row group
 			continue;

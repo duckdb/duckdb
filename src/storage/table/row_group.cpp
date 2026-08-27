@@ -405,18 +405,28 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	return true;
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset,
+                                        bool initialize_columns) {
 	if (!InitializeScanInternal(state, node, vector_offset)) {
 		return false;
 	}
+	state.column_scans_pending = true;
+	if (initialize_columns) {
+		InitializeColumnScans(state);
+	}
+	return true;
+}
+
+void RowGroup::InitializeColumnScans(CollectionScanState &state) {
+	D_ASSERT(state.column_scans_pending);
 	const auto &column_ids = state.GetColumnIds();
-	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
+	auto row_number = state.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &column_data = GetColumn(column_ids[i]);
 		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
-	return true;
+	state.column_scans_pending = false;
 }
 
 bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {

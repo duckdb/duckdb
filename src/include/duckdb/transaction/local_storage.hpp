@@ -159,7 +159,7 @@ public:
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-	                      CollectionScanState &scan_state);
+	                      CollectionScanState &scan_state, bool initialize_columns = true);
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
