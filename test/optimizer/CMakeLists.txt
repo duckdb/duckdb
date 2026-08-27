@@ -1,5 +1,5 @@
 add_library_unity(test_optimizer OBJECT filter_pushdown_alias.cpp
-                  union_alls.cpp)
+                  system_catalog_filter_pushdown.cpp union_alls.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_optimizer>
