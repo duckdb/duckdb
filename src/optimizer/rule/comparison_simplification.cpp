@@ -225,4 +225,29 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	return nullptr;
 }
 
+SelfComparisonSimplificationRule::SelfComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	op->matchers.push_back(make_uniq<ExpressionMatcher>());
+	op->matchers.push_back(make_uniq<ExpressionMatcher>());
+	root = std::move(op);
+}
+
+unique_ptr<Expression> SelfComparisonSimplificationRule::Apply(LogicalOperator &op,
+                                                               vector<reference<Expression>> &bindings,
+                                                               bool &changes_made, bool is_root) {
+	auto &expr = bindings[0].get();
+	auto &left = bindings[1].get();
+	auto &right = bindings[2].get();
+	if (left.IsVolatile() || right.IsVolatile()) {
+		return nullptr;
+	}
+	if (!left.Equals(right)) {
+		return nullptr;
+	}
+	auto &comp = expr.Cast<BoundFunctionExpression>();
+	return ExpressionRewriter::ConstantOrNull(std::move(BoundComparisonExpression::LeftMutable(comp)),
+	                                          Value::BOOLEAN(true));
+}
+
 } // namespace duckdb
