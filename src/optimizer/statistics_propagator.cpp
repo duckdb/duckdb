@@ -25,8 +25,9 @@
 
 namespace duckdb {
 
-StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p)
-    : optimizer(optimizer_p), context(optimizer.context), root(&root_p) {
+StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p, LogicalOperator &root_p,
+                                           StatisticsPropagationMode mode_p)
+    : optimizer(optimizer_p), context(optimizer.context), mode(mode_p), root(&root_p) {
 	root->ResolveOperatorTypes();
 }
 
@@ -98,7 +99,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		result = PropagateChildren(node, node_ptr);
 	}
 
-	if (!optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
+	if (mode == StatisticsPropagationMode::FULL &&
+	    !optimizer.OptimizerDisabled(OptimizerType::COMPRESSED_MATERIALIZATION)) {
 		// compress data based on statistics for materializing operators
 		CompressedMaterialization compressed_materialization(optimizer, *root, statistics_map);
 		compressed_materialization.Compress(node_ptr);

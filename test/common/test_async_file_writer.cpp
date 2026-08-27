@@ -1,8 +1,13 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "test_helpers.hpp"
@@ -45,6 +50,45 @@ public:
 
 namespace {
 
+class FailingInitializeStreamWrapper : public StreamWrapper {
+public:
+	void Initialize(QueryContext, CompressedFile &, bool) override {
+		throw IOException("Injected compressed stream initialization failure");
+	}
+
+	bool Read(StreamData &) override {
+		return true;
+	}
+
+	void Write(CompressedFile &, StreamData &, data_ptr_t, int64_t) override {
+	}
+
+	void Close() override {
+	}
+};
+
+class FailingInitializeCompressedFileSystem : public CompressedFileSystem {
+public:
+	string GetName() const override {
+		return "FailingInitializeCompressedFileSystem";
+	}
+	FileCompressionType GetCompressionType() override {
+		return FileCompressionType("failing_initialize");
+	}
+
+	unique_ptr<StreamWrapper> CreateStream() override {
+		return make_uniq<FailingInitializeStreamWrapper>();
+	}
+
+	idx_t InBufferSize() override {
+		return 64;
+	}
+
+	idx_t OutBufferSize() override {
+		return 64;
+	}
+};
+
 class TrackingWriteFileSystem : public LocalFileSystem {
 public:
 	explicit TrackingWriteFileSystem(bool local_file_p = true) : local_file(local_file_p) {
@@ -82,6 +126,25 @@ public:
 		LocalFileSystem::Write(handle, buffer, nr_bytes, location);
 	}
 
+	FileWriteMode GetWriteMode(FileHandle &handle) override {
+		if (fail_get_write_mode) {
+			throw IOException("Injected write mode failure");
+		}
+		return LocalFileSystem::GetWriteMode(handle);
+	}
+
+	void AbortFileWrite(FileHandle &handle) override {
+		abort_count++;
+		LocalFileSystem::AbortFileWrite(handle);
+		if (fail_abort) {
+			throw IOException("Injected abort failure");
+		}
+	}
+
+	idx_t AbortCount() const {
+		return abort_count.load();
+	}
+
 protected:
 	void RecordWrite(int64_t nr_bytes, idx_t location) {
 		lock_guard<mutex> guard(lock);
@@ -94,9 +157,104 @@ public:
 	vector<idx_t> write_sizes;
 	vector<idx_t> write_offsets;
 	bool fail_writes = false;
+	bool fail_get_write_mode = false;
+	bool fail_abort = false;
 
 private:
 	bool local_file;
+	atomic<idx_t> abort_count {0};
+};
+
+class PublishingFileHandle : public FileHandle {
+public:
+	PublishingFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, atomic<idx_t> &publish_count_p,
+	                     bool &fail_close_after_publish_p)
+	    : FileHandle(fs, path, flags), publish_count(publish_count_p),
+	      fail_close_after_publish(fail_close_after_publish_p) {
+	}
+
+	void Close() override {
+		if (finished) {
+			return;
+		}
+		finished = true;
+		publish_count++;
+		if (fail_close_after_publish) {
+			throw IOException("Injected ambiguous publish failure");
+		}
+	}
+
+	void Abort() {
+		finished = true;
+	}
+
+private:
+	atomic<idx_t> &publish_count;
+	bool &fail_close_after_publish;
+	bool finished = false;
+};
+
+class PublishingWriteFileSystem : public LocalFileSystem {
+public:
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> = nullptr) override {
+		return make_uniq<PublishingFileHandle>(*this, path, flags, publish_count, fail_close_after_publish);
+	}
+
+	bool IsLocalFileSystem() const override {
+		return false;
+	}
+
+	bool OnDiskFile(FileHandle &) override {
+		return false;
+	}
+
+	FileWriteMode GetWriteMode(FileHandle &) override {
+		return FileWriteMode::SEQUENTIAL;
+	}
+
+	int64_t Write(FileHandle &, void *, int64_t nr_bytes) override {
+		if (fail_writes) {
+			throw IOException("Injected publishing write failure");
+		}
+		written_bytes += UnsafeNumericCast<idx_t>(nr_bytes);
+		return nr_bytes;
+	}
+
+	void Write(FileHandle &, void *, int64_t nr_bytes, idx_t) override {
+		if (fail_writes) {
+			throw IOException("Injected publishing write failure");
+		}
+		written_bytes += UnsafeNumericCast<idx_t>(nr_bytes);
+	}
+
+	void AbortFileWrite(FileHandle &handle) override {
+		abort_count++;
+		handle.Cast<PublishingFileHandle>().Abort();
+	}
+
+	atomic<idx_t> publish_count {0};
+	atomic<idx_t> abort_count {0};
+	atomic<idx_t> written_bytes {0};
+	bool fail_writes = false;
+	bool fail_close_after_publish = false;
+};
+
+class PartialSequentialWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		if (return_negative) {
+			return -1;
+		}
+		return TrackingWriteFileSystem::Write(handle, buffer, MinValue<int64_t>(nr_bytes, 2));
+	}
+
+	FileWriteMode GetWriteMode(FileHandle &) override {
+		return FileWriteMode::SEQUENTIAL;
+	}
+
+public:
+	bool return_negative = false;
 };
 
 class BlockingWriteFileSystem : public TrackingWriteFileSystem {
@@ -883,6 +1041,63 @@ TEST_CASE("AsyncFileWriter requires a client context", "[async_file_writer]") {
 
 	REQUIRE_THROWS_AS(AsyncFileWriter(QueryContext(), fs, path), InvalidInputException);
 	REQUIRE(!fs.FileExists(path));
+}
+
+TEST_CASE("CSVWriter applies backpressure on automatic async flushes", "[async_file_writer][csv_writer]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(con->Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con->Query("SET async_threads=1"));
+
+	AsyncThreadBlocker async_thread_blocker(*con->context, 1);
+	REQUIRE(async_thread_blocker.WaitForStarted());
+
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
+	auto path = TestCreatePath("csv_writer_async_backpressure.tmp");
+	fs.TryRemoveFile(path);
+
+	AsyncFileWriter file_writer(*con->context, fs, path);
+	CSVReaderOptions options;
+	options.force_quote.push_back(false);
+	CSVWriter writer(options, file_writer);
+	CSVWriterState local_state(*con->context, writer.writer_options.flush_size);
+	string data(writer.writer_options.flush_size, 'x');
+	DataChunk input;
+	input.Initialize(Allocator::Get(*con->context), {LogicalType::VARCHAR});
+	input.SetChildCardinality(1);
+	input.data[0].SetValue(0, Value(data));
+	auto &scheduler = TaskScheduler::GetScheduler(*con->context);
+	const auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+	const auto max_pending_bytes = ManagedAsyncMemoryConfig::MAX_PENDING_BYTES_PER_THREAD * regular_threads;
+	const auto write_count = (max_pending_bytes + 2 * AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET) / data.size() + 1;
+
+	atomic<bool> write_finished {false};
+	std::exception_ptr write_error;
+	std::thread write_thread([&]() {
+		try {
+			for (idx_t write_idx = 0; write_idx < write_count; write_idx++) {
+				writer.WriteChunk(input, local_state);
+			}
+		} catch (...) {
+			write_error = std::current_exception();
+		}
+		write_finished = true;
+	});
+
+	auto entered_backend = fs.WaitForBlockedWrites(1);
+	auto finished_before_release = write_finished.load();
+	fs.ReleaseWrites();
+	async_thread_blocker.Release();
+	write_thread.join();
+
+	REQUIRE(entered_backend);
+	REQUIRE(!finished_before_release);
+	if (write_error) {
+		std::rethrow_exception(write_error);
+	}
+	file_writer.Close();
+	REQUIRE(file_writer.GetTotalWritten() == writer.BytesWritten());
+	fs.RemoveFile(path);
 }
 
 TEST_CASE("AsyncFileWriter batches write registration before scheduling", "[async_file_writer]") {
@@ -1691,4 +1906,232 @@ TEST_CASE("AsyncFileWriter close discards unscheduled writes after async write e
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
 	}
+}
+
+TEST_CASE("AsyncFileWriter publishes only on successful explicit close", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_explicit_close.tmp");
+	fs.TryRemoveFile(path);
+
+	{
+		auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+		AsyncFileWriter writer(*con->context, fs, path, flags);
+		writer.WriteData(const_data_ptr_cast("published"), 9);
+		writer.Close();
+	}
+
+	REQUIRE(fs.AbortCount() == 0);
+	REQUIRE(ReadFile(path) == "published");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter exclusive creation preserves existing files", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_exclusive_existing.tmp");
+	fs.TryRemoveFile(path);
+	{
+		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		string contents = "existing";
+		handle->Write(data_ptr_cast(contents.data()), contents.size());
+		handle->Close();
+	}
+
+	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+	REQUIRE_THROWS(AsyncFileWriter(*con->context, fs, path, flags));
+	REQUIRE(ReadFile(path) == "existing");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter destruction preserves non-exclusive paths and removes exclusive paths",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto existing_path = TestCreatePath("async_file_writer_preserved_abort.tmp");
+	auto exclusive_path = TestCreatePath("async_file_writer_exclusive_abort.tmp");
+	fs.TryRemoveFile(existing_path);
+	fs.TryRemoveFile(exclusive_path);
+	{
+		auto handle = fs.OpenFile(existing_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		handle->Close();
+	}
+
+	{
+		AsyncFileWriter writer(*con->context, fs, existing_path);
+		writer.WriteData(const_data_ptr_cast("pending"), 7);
+	}
+	REQUIRE(fs.FileExists(existing_path));
+
+	{
+		auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+		AsyncFileWriter writer(*con->context, fs, exclusive_path, flags);
+		writer.WriteData(const_data_ptr_cast("pending"), 7);
+	}
+	REQUIRE(!fs.FileExists(exclusive_path));
+	REQUIRE(fs.AbortCount() == 2);
+	fs.RemoveFile(existing_path);
+}
+
+TEST_CASE("AsyncFileWriter preserves ambiguous publications", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	PublishingWriteFileSystem fs;
+	fs.fail_close_after_publish = true;
+
+	{
+		AsyncFileWriter writer(*con->context, fs, "ambiguous-publication");
+		writer.WriteData(const_data_ptr_cast("published"), 9);
+		auto error = CaptureException([&]() { writer.Close(); });
+		REQUIRE(error.find("Injected ambiguous publish failure") != string::npos);
+	}
+
+	REQUIRE(fs.written_bytes == 9);
+	REQUIRE(fs.publish_count == 1);
+	REQUIRE(fs.abort_count == 0);
+}
+
+TEST_CASE("AsyncFileWriter preserves the first write error over abort cleanup", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	fs.fail_writes = true;
+	fs.fail_abort = true;
+	auto path = TestCreatePath("async_file_writer_primary_error.tmp");
+	fs.TryRemoveFile(path);
+	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+	AsyncFileWriter writer(*con->context, fs, path, flags);
+	auto payload = string(2 * AsyncWriteConfig::COPIED_BUFFER_CAPACITY, 'x');
+
+	auto write_error =
+	    CaptureException([&]() { writer.WriteData(make_uniq<StringAsyncWriteBuffer>(std::move(payload))); });
+	auto close_error = CaptureException([&]() { writer.Close(); });
+	REQUIRE(write_error.find("Injected async write failure") != string::npos);
+	REQUIRE(close_error.find("Injected async write failure") != string::npos);
+	REQUIRE(close_error.find("Injected abort failure") == string::npos);
+	REQUIRE(fs.AbortCount() == 1);
+	REQUIRE(!fs.FileExists(path));
+}
+
+TEST_CASE("AsyncFileWriter construction aborts an acquired handle", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	fs.fail_get_write_mode = true;
+	fs.fail_abort = true;
+	auto path = TestCreatePath("async_file_writer_constructor_abort.tmp");
+	fs.TryRemoveFile(path);
+	auto flags = AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+
+	auto error = CaptureException([&]() { AsyncFileWriter writer(*con->context, fs, path, flags); });
+	REQUIRE(error.find("Injected write mode failure") != string::npos);
+	REQUIRE(error.find("Injected abort failure") == string::npos);
+	REQUIRE(fs.AbortCount() == 1);
+	REQUIRE(!fs.FileExists(path));
+}
+
+TEST_CASE("AsyncFileWriter completes and accounts partial sequential writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	PartialSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_partial_sequential.tmp");
+	fs.TryRemoveFile(path);
+	auto initial_bytes_written = QueryProfiler::Get(*con->context).GetBytesWritten();
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
+	writer.Close();
+
+	REQUIRE(fs.write_sizes == vector<idx_t> {2, 2, 2});
+	REQUIRE(QueryProfiler::Get(*con->context).GetBytesWritten() - initial_bytes_written == 6);
+	REQUIRE(ReadFile(path) == "abcdef");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter rejects negative sequential writes without accounting", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	PartialSequentialWriteFileSystem fs;
+	fs.return_negative = true;
+	auto path = TestCreatePath("async_file_writer_negative_sequential.tmp");
+	fs.TryRemoveFile(path);
+	auto initial_bytes_written = QueryProfiler::Get(*con->context).GetBytesWritten();
+
+	{
+		AsyncFileWriter writer(*con->context, fs, path);
+		writer.WriteData(const_data_ptr_cast("abcdef"), 6);
+		auto error = CaptureException([&]() { writer.Close(); });
+		REQUIRE(error.find("Failed to write to file") != string::npos);
+		REQUIRE(QueryProfiler::Get(*con->context).GetBytesWritten() == initial_bytes_written);
+	}
+	fs.TryRemoveFile(path);
+}
+
+TEST_CASE("Compressed initialization failure aborts the acquired child", "[async_file_writer]") {
+	TrackingWriteFileSystem child_fs;
+	FailingInitializeCompressedFileSystem compressed_fs;
+	auto path = TestCreatePath("compressed_file_initialize_abort.tmp");
+	child_fs.TryRemoveFile(path);
+
+	{
+		auto child = child_fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+		                                         FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
+		auto file = make_uniq<CompressedFile>(compressed_fs, std::move(child), path);
+		REQUIRE_THROWS(file->Initialize(QueryContext(), true));
+	}
+
+	REQUIRE(child_fs.AbortCount() == 1);
+	REQUIRE(!child_fs.FileExists(path));
+}
+
+TEST_CASE("Compressed AsyncFileWriter abort removes an exclusively created output", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	auto &fs = FileSystem::GetFileSystem(*con->context);
+	auto path = TestCreatePath("async_file_writer_compressed_abort.gz");
+	fs.TryRemoveFile(path);
+
+	{
+		auto flags =
+		    AsyncFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE | FileCompressionType::GZIP;
+		AsyncFileWriter writer(*con->context, fs, path, flags);
+		writer.WriteData(const_data_ptr_cast("pending"), 7);
+	}
+
+	REQUIRE(!fs.FileExists(path));
+}
+
+TEST_CASE("AsyncFileWriter abort drains an accepted active write", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	BlockingWriteFileSystem fs(FileWriteMode::POSITIONAL, false);
+	auto path = TestCreatePath("async_file_writer_running_abort.tmp");
+	fs.TryRemoveFile(path);
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET, 'a')));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+
+	atomic<bool> abort_finished {false};
+	std::exception_ptr abort_error;
+	std::thread abort_thread([&]() {
+		try {
+			writer.AbortWrite();
+		} catch (...) {
+			abort_error = std::current_exception();
+		}
+		abort_finished = true;
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(!abort_finished.load());
+
+	fs.ReleaseWrites();
+	abort_thread.join();
+	REQUIRE(abort_error == nullptr);
+	REQUIRE(abort_finished.load());
+	REQUIRE(fs.AbortCount() == 1);
+	REQUIRE(fs.write_sizes.size() == 1);
+	fs.RemoveFile(path);
 }

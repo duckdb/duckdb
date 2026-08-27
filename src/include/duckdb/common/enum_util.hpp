@@ -524,6 +524,8 @@ enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
 
+enum class StatisticsPropagationMode : uint8_t;
+
 enum class StatisticsType : uint8_t;
 
 enum class StatsInfo : uint8_t;
@@ -1364,6 +1366,9 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value);
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value);
 
 template<>
 const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
@@ -2256,6 +2261,9 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value);
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value);
 
 template<>
 StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);

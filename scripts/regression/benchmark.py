@@ -2,11 +2,13 @@ import csv
 import os
 import subprocess
 from io import StringIO
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 
 DEFAULT_PROCESS_TIMEOUT = 600
 DISABLED_RUNNER_TIMEOUT = 3600
+EXTENSION_DIRECTORY_ENV = "DUCKDB_BENCHMARK_EXTENSION_DIRECTORY"
 
 STDERR_HEADER = '''====================================================
 ==============         STDERR          =============
@@ -17,6 +19,20 @@ STDOUT_HEADER = '''====================================================
 ==============         STDOUT          =============
 ====================================================
 '''
+
+
+def find_extension_directory(runner_path: str) -> Optional[str]:
+    release_directory = Path(runner_path).resolve().parent.parent
+    repository_directory = release_directory / "repository"
+    extension_directories = sorted(
+        {extension_path.parent for extension_path in repository_directory.glob("*/*/*.duckdb_extension")}
+    )
+    if not extension_directories:
+        return None
+    if len(extension_directories) != 1:
+        directories = ", ".join(str(path) for path in extension_directories)
+        raise ValueError(f"Found multiple extension directories for {runner_path}: {directories}")
+    return str(extension_directories[0])
 
 
 class BenchmarkRunner:
@@ -37,6 +53,7 @@ class BenchmarkRunner:
         self.verbose = verbose
         self.disable_timeout = disable_timeout
         self.benchmark_arguments = benchmark_arguments or []
+        self.extension_directory = find_extension_directory(path)
 
     def run(self, benchmark: str, timed_runs: int) -> Tuple[Optional[List[float]], Optional[str]]:
         arguments = [self.path, benchmark]
@@ -51,9 +68,13 @@ class BenchmarkRunner:
         arguments.extend(["--timed-runs", str(timed_runs)])
 
         process_timeout = DISABLED_RUNNER_TIMEOUT if self.disable_timeout else DEFAULT_PROCESS_TIMEOUT
+        process_environment = os.environ.copy()
+        if self.extension_directory:
+            process_environment[EXTENSION_DIRECTORY_ENV] = self.extension_directory
         try:
             process = subprocess.run(
                 arguments,
+                env=process_environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=process_timeout,
