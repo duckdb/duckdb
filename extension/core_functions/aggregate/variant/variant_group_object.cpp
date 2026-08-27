@@ -70,7 +70,7 @@ class VariantObjSource {
 public:
 	VariantObjSource(const VectorIterator<VariantObjAggState *> &states, const ListSegmentFunctions &functions,
 	                 Allocator &allocator)
-	    : states(states), functions(functions), allocator(allocator) {
+	    : allocator(allocator), states(states), functions(functions) {
 	}
 
 	// Invoked for each aggregate group in the result
