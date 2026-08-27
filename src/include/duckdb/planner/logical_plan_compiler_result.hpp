@@ -134,6 +134,11 @@ public:
 
 	static LogicalPlanCompilerResult Failure(vector<LogicalPlanCompilerIssue> issues) {
 		for (auto &issue : issues) {
+			if (!issue.IsValid()) {
+				return LogicalPlanCompilerResult(optional<T>(), std::move(issues));
+			}
+		}
+		for (auto &issue : issues) {
 			issue.Normalize();
 		}
 		std::sort(issues.begin(), issues.end());

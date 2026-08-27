@@ -48,11 +48,10 @@ struct ColumnBindingVerificationState {
 		LogicalPlanCompilerIssue issue;
 		issue.code = LogicalPlanCompilerIssueCode::INVALID_BINDING;
 		issue.path = GetPath(expr);
-		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
-		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
-		issue.message = StringUtil::Format("Failed to bind column reference %s [%d.%d] (bindings: %s)", expr.GetAlias(),
-		                                   expr.Binding().table_index.index, expr.Binding().column_index,
-		                                   LogicalOperator::ColumnBindingsToString(bindings));
+		AddBindingFacts(issue, expr.Binding());
+		issue.message = StringUtil::Format(
+		    "Failed to bind column reference %s [table=%llu, column=%llu] against %llu bindings", expr.GetAlias(),
+		    expr.Binding().table_index.index, expr.Binding().column_index.GetIndexUnsafe(), bindings.size());
 		issues.push_back(std::move(issue));
 	}
 
@@ -62,12 +61,26 @@ struct ColumnBindingVerificationState {
 		issue.path = GetPath(expr);
 		issue.construct =
 		    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
-		issue.facts.emplace_back("table_index", Value::UBIGINT(expr.Binding().table_index.index));
-		issue.facts.emplace_back("column_index", Value::UBIGINT(expr.Binding().column_index.GetIndex()));
-		issue.message =
-		    StringUtil::Format("Failed to bind column reference %s [%d.%d]: inequal types (%s != %s)", expr.GetAlias(),
-		                       expr.Binding().table_index.index, expr.Binding().column_index,
-		                       expr.GetReturnType().ToString(), expected_type.ToString());
+		AddBindingFacts(issue, expr.Binding());
+		issue.message = StringUtil::Format(
+		    "Failed to bind column reference %s [table=%llu, column=%llu]: inequal types (%s != %s)", expr.GetAlias(),
+		    expr.Binding().table_index.index, expr.Binding().column_index.GetIndexUnsafe(),
+		    expr.GetReturnType().ToString(), expected_type.ToString());
+		issues.push_back(std::move(issue));
+	}
+
+	void AddIncompleteBindingType(BoundColumnRefExpression &expr, const LogicalType &expected_type) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		issue.path = GetPath(expr);
+		issue.construct = LogicalPlanCompilerConstructIdentity::Expression(expr.GetExpressionClass());
+		issue.facts.emplace_back("invariant", Value("incomplete_binding_type"));
+		issue.facts.emplace_back("expected_type_complete", Value::BOOLEAN(expected_type.IsComplete()));
+		issue.facts.emplace_back("actual_type_complete", Value::BOOLEAN(expr.GetReturnType().IsComplete()));
+		AddBindingFacts(issue, expr.Binding());
+		issue.message = StringUtil::Format(
+		    "Failed to bind column reference %s [table=%llu, column=%llu]: expected and actual types must be complete",
+		    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index.GetIndexUnsafe());
 		issues.push_back(std::move(issue));
 	}
 
@@ -79,9 +92,11 @@ struct ColumnBindingVerificationState {
 		issue.facts.emplace_back("invariant", Value("binding_type_arity"));
 		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
 		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
+		AddBindingFacts(issue, expr.Binding());
 		issue.message = StringUtil::Format(
-		    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)", expr.GetAlias(),
-		    expr.Binding().table_index.index, expr.Binding().column_index, binding_count, type_count);
+		    "Failed to bind column reference %s [table=%llu, column=%llu]: inequal num bindings/types (%llu != %llu)",
+		    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index.GetIndexUnsafe(),
+		    binding_count, type_count);
 		issues.push_back(std::move(issue));
 	}
 
@@ -123,14 +138,57 @@ struct ColumnBindingVerificationState {
 		issues.push_back(std::move(issue));
 	}
 
-	void AddDuplicateTableIndex(LogicalOperator &op, TableIndex table_index) {
+	void AddDuplicateExtensionBinding(LogicalExtensionOperator &op, const string &identifier, idx_t first_index,
+	                                  idx_t duplicate_index, const ColumnBinding &binding, bool types_available,
+	                                  bool types_equal) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		issue.path = GetPath(op);
+		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.facts.emplace_back("first_binding_index", Value::UBIGINT(first_index));
+		issue.facts.emplace_back("duplicate_binding_index", Value::UBIGINT(duplicate_index));
+		issue.facts.emplace_back("table_index", Value::UBIGINT(binding.table_index.index));
+		issue.facts.emplace_back("column_index", Value::UBIGINT(binding.column_index.GetIndexUnsafe()));
+		issue.facts.emplace_back("types_available", Value::BOOLEAN(types_available));
+		issue.facts.emplace_back("types_equal", Value::BOOLEAN(types_equal));
+		issue.message = StringUtil::Format(
+		    "Logical extension operator returned duplicate binding [table=%llu, column=%llu] at indexes %llu and %llu",
+		    binding.table_index.index, binding.column_index.GetIndexUnsafe(), first_index, duplicate_index);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddMissingExtensionIdentifier(LogicalExtensionOperator &op) {
 		LogicalPlanCompilerIssue issue;
 		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(op);
 		issue.construct = LogicalPlanCompilerConstructIdentity::LogicalOperator(op.type);
+		issue.facts.emplace_back("invariant", Value("missing_type_binding_verification_identifier"));
+		issue.message = "An extension operator that supports type-binding verification must provide a verification "
+		                "identifier";
+		issues.push_back(std::move(issue));
+	}
+
+	void AddDuplicateTableIndex(LogicalOperator &op, TableIndex table_index) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		issue.path = GetPath(op);
+		issue.construct = GetOperatorConstruct(op);
 		issue.facts.emplace_back("invariant", Value("duplicate_table_index"));
 		issue.facts.emplace_back("table_index", Value::UBIGINT(table_index.index));
 		issue.message = StringUtil::Format("Duplicate table index \"%lld\" found", table_index.index);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddInvalidTableIndex(LogicalOperator &op, idx_t table_index_ordinal, TableIndex table_index) {
+		LogicalPlanCompilerIssue issue;
+		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		issue.path = GetPath(op);
+		issue.construct = GetOperatorConstruct(op);
+		issue.facts.emplace_back("invariant", Value("invalid_table_index"));
+		issue.facts.emplace_back("table_index_ordinal", Value::UBIGINT(table_index_ordinal));
+		issue.facts.emplace_back("table_index", Value::UBIGINT(table_index.index));
+		issue.facts.emplace_back("table_index_valid", Value::BOOLEAN(false));
+		issue.message = StringUtil::Format("Invalid table index at ownership ordinal %llu", table_index_ordinal);
 		issues.push_back(std::move(issue));
 	}
 
@@ -143,6 +201,24 @@ struct ColumnBindingVerificationState {
 	}
 
 private:
+	static void AddBindingFacts(LogicalPlanCompilerIssue &issue, const ColumnBinding &binding) {
+		issue.facts.emplace_back("table_index", Value::UBIGINT(binding.table_index.index));
+		issue.facts.emplace_back("column_index", Value::UBIGINT(binding.column_index.GetIndexUnsafe()));
+		issue.facts.emplace_back("table_index_valid", Value::BOOLEAN(binding.table_index.IsValid()));
+		issue.facts.emplace_back("column_index_valid", Value::BOOLEAN(binding.column_index.IsValid()));
+	}
+
+	static LogicalPlanCompilerConstructIdentity GetOperatorConstruct(LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
+			auto &extension_op = op.Cast<LogicalExtensionOperator>();
+			auto &identifier = extension_op.GetTypeBindingVerificationIdentifier();
+			if (!identifier.empty()) {
+				return LogicalPlanCompilerConstructIdentity::Extension(identifier);
+			}
+		}
+		return LogicalPlanCompilerConstructIdentity::LogicalOperator(op.type);
+	}
+
 	void IndexExpression(Expression &expr, const LogicalPlanCompilerPath &path) {
 		expression_paths.emplace(reference<Expression>(expr), path);
 		idx_t child_index = 0;
@@ -401,6 +477,15 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index, bindings.size(),
 					    types.size());
 				}
+				if (!types[i].IsComplete() || !expr.GetReturnType().IsComplete()) {
+					if (verification_state) {
+						verification_state->AddIncompleteBindingType(expr, types[i]);
+						return nullptr;
+					}
+					throw InternalException(
+					    "Failed to bind column reference %s: expected and actual types must be complete",
+					    expr.GetAlias());
+				}
 				if (expr.GetReturnType() != types[i]) {
 					if (verification_state) {
 						verification_state->AddTypeMismatch(expr, types[i]);
@@ -463,8 +548,8 @@ bool ColumnBindingResolver::ResolveOperatorTypes(LogicalOperator &op,
 		if (extension_op.SupportsTypeBindingVerification()) {
 			auto &identifier = extension_op.GetTypeBindingVerificationIdentifier();
 			if (identifier.empty()) {
-				throw InternalException("An extension operator that supports type-binding verification must provide a "
-				                        "verification identifier");
+				verification_state.AddMissingExtensionIdentifier(extension_op);
+				return false;
 			}
 			bool output_valid = true;
 			if (bindings.size() != op.types.size()) {
@@ -472,11 +557,24 @@ bool ColumnBindingResolver::ResolveOperatorTypes(LogicalOperator &op,
 				                                              op.types.size());
 				output_valid = false;
 			}
+			column_binding_map_t<idx_t> binding_indexes;
 			for (idx_t binding_index = 0; binding_index < bindings.size(); binding_index++) {
 				auto &binding = bindings[binding_index];
 				if (!binding.table_index.IsValid() || !binding.column_index.IsValid()) {
 					verification_state.AddMalformedExtensionBinding(extension_op, identifier, binding_index, binding);
 					output_valid = false;
+					continue;
+				}
+				auto entry = binding_indexes.find(binding);
+				if (entry != binding_indexes.end()) {
+					auto first_index = entry->second;
+					auto types_available = first_index < op.types.size() && binding_index < op.types.size();
+					auto types_equal = types_available && op.types[first_index] == op.types[binding_index];
+					verification_state.AddDuplicateExtensionBinding(
+					    extension_op, identifier, first_index, binding_index, binding, types_available, types_equal);
+					output_valid = false;
+				} else {
+					binding_indexes.emplace(binding, binding_index);
 				}
 			}
 			for (idx_t type_index = 0; type_index < op.types.size(); type_index++) {
@@ -514,8 +612,13 @@ static void VerifyTableIndexes(LogicalOperator &op, ColumnBindingVerificationSta
 	for (auto &child : op.children) {
 		VerifyTableIndexes(*child, verification_state, seen_indexes);
 	}
-	for (auto index : op.GetTableIndex()) {
-		D_ASSERT(index.IsValid());
+	auto table_indexes = op.GetTableIndex();
+	for (idx_t table_index_ordinal = 0; table_index_ordinal < table_indexes.size(); table_index_ordinal++) {
+		auto index = table_indexes[table_index_ordinal];
+		if (!index.IsValid()) {
+			verification_state.AddInvalidTableIndex(op, table_index_ordinal, index);
+			continue;
+		}
 		if (seen_indexes.find(index) != seen_indexes.end()) {
 			verification_state.AddDuplicateTableIndex(op, index);
 		} else {
