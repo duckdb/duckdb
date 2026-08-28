@@ -92,6 +92,8 @@ enum class AsyncResultType : uint8_t;
 
 enum class AsyncResultsExecutionMode : uint8_t;
 
+enum class AsyncTaskExecutionResult : uint8_t;
+
 enum class BaseColumnPrunerMode : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -734,6 +736,9 @@ const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value);
 
 template<>
 const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value);
+
+template<>
+const char* EnumUtil::ToChars<AsyncTaskExecutionResult>(AsyncTaskExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<BaseColumnPrunerMode>(BaseColumnPrunerMode value);
@@ -1653,6 +1658,9 @@ AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value);
 
 template<>
 AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value);
+
+template<>
+AsyncTaskExecutionResult EnumUtil::FromString<AsyncTaskExecutionResult>(const char *value);
 
 template<>
 BaseColumnPrunerMode EnumUtil::FromString<BaseColumnPrunerMode>(const char *value);
