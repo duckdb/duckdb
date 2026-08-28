@@ -90,6 +90,9 @@ public:
 	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 private:
+	static PrefixHandle NewInternal(ART &art, SlotHandle &slot, const_data_ptr_t data, const uint8_t count,
+	                                const idx_t offset);
+
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
 	                                              const uint8_t byte);
 

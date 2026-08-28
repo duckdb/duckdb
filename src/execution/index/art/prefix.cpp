@@ -67,23 +67,30 @@ void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, cons
 	}
 }
 
+PrefixHandle PrefixHandle::NewInternal(ART &art, SlotHandle &slot, const_data_ptr_t data, const uint8_t count,
+                                       const idx_t offset) {
+	slot.Ref() = NodePtr::GetAllocator(art, PREFIX).New();
+	slot.Ref().SetMetadata(static_cast<uint8_t>(PREFIX));
+
+	PrefixHandle prefix(NodeHandle(art, slot.Ref()));
+	prefix.SetCount(art, count);
+	if (data) {
+		D_ASSERT(count);
+		memcpy(prefix.Data(), data + offset, count);
+	}
+	prefix.Child(art).Clear();
+	return prefix;
+}
+
 void PrefixHandle::New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-
-		slot.Ref() = NodePtr::GetAllocator(art, PREFIX).New();
-		slot.Ref().SetMetadata(static_cast<uint8_t>(PREFIX));
-
-		PrefixHandle prefix(NodeHandle(art, slot.Ref()));
-		prefix.SetCount(art, this_count);
-		memcpy(prefix.Data(), key.data + offset + depth, this_count);
+		auto prefix = NewInternal(art, slot, key.data, this_count, offset + depth);
 
 		auto &child = prefix.Child(art);
-		child.Clear();
-
 		auto pin = std::move(prefix).TakeHandle();
 		slot.Rebind(child, std::move(pin));
 
