@@ -178,8 +178,8 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 		buffered_chunks.pop();
 
 		if (chunk) {
-			auto allocation_size = chunk->GetDataSize();
-			buffered_count -= allocation_size;
+			auto chunk_data_size = chunk->GetDataSize();
+			buffered_count -= chunk_data_size;
 		}
 		// The pop restarts blocked producers below the low-water mark
 		if (buffered_count < LowWaterMark(BufferSize())) {
@@ -196,20 +196,20 @@ bool SimpleBufferedData::AppendOrBlock(const DataChunk &to_append, const Interru
 	auto chunk = make_uniq<DataChunk>();
 	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
 	to_append.Copy(*chunk, 0);
-	auto allocation_size = chunk->GetDataSize();
+	auto chunk_data_size = chunk->GetDataSize();
 
 	shared_ptr<QueryResultNotifier> notifier;
 	bool was_empty;
 	{
 		annotated_unique_lock<annotated_mutex> lock(glock);
 		// The buffer admits a chunk that fits, and always one chunk when empty
-		if (buffered_count > 0 && buffered_count + allocation_size > BufferSize()) {
+		if (buffered_count > 0 && buffered_count + chunk_data_size > BufferSize()) {
 			// Park holding the finished copy. Restart selection deposits it at wake time
-			blocked_sinks.push(BlockedSink {blocked_sink, allocation_size, std::move(chunk)});
+			blocked_sinks.push(BlockedSink {blocked_sink, chunk_data_size, std::move(chunk)});
 			return true;
 		}
 		was_empty = buffered_chunks.empty();
-		buffered_count += allocation_size;
+		buffered_count += chunk_data_size;
 		buffered_chunks.push(std::move(chunk));
 		peak_buffered_bytes = MaxValue<idx_t>(peak_buffered_bytes, buffered_count);
 		if (was_empty) {
