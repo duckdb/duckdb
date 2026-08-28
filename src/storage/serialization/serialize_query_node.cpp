@@ -189,7 +189,7 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) 
 
 void SelectNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "select_list", select_list);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "select_list", GetSelectListForSerialization(serializer));
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "from_table", from_table);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "where_clause", where_clause);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "group_expressions", groups.group_expressions);

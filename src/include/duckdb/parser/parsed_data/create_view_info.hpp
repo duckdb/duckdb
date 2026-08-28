@@ -64,7 +64,6 @@ private:
 	CreateViewInfo(vector<Identifier> names, vector<Value> comments, identifier_map_t<Value> column_comments);
 
 	vector<Value> GetColumnCommentsList() const;
-	unique_ptr<SelectStatement> GetQueryForSerialization(Serializer &serializer) const;
 };
 
 } // namespace duckdb
