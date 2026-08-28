@@ -1124,7 +1124,9 @@ FunctionBinder::ResolveScalarFunction(shared_ptr<const ScalarFunction> function_
 	CastToFunctionArguments(bound_function, arguments);
 	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
 		bound_function.RestoreFunctionExpressionIdentity();
-		bound_function.RestoreRebindableDefinition();
+		if (!function.HasBindCallback()) {
+			bound_function.RestoreRebindableDefinition();
+		}
 	}
 
 	return {std::move(bound_function), std::move(bind_info)};
@@ -1225,7 +1227,8 @@ FunctionBinder::ResolveAggregateFunction(shared_ptr<const AggregateFunction> fun
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
-	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
+	if (catalog_definition && bound_function.GetDefinition() == catalog_definition &&
+	    !function.GetCallbacks().HasBindCallback()) {
 		bound_function.RestoreRebindableDefinition();
 	}
 

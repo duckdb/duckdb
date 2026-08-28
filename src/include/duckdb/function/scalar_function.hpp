@@ -666,7 +666,7 @@ private:
 		function_expression_type = definition ? definition->function_expression_type : ExpressionType::INVALID;
 	}
 	void RestoreRebindableDefinition() {
-		definition_is_rebindable = definition != nullptr;
+		definition_is_rebindable = definition && !definition->HasBindCallback();
 	}
 	void InvalidateRebindableDefinition() {
 		definition_is_rebindable = false;

@@ -916,7 +916,11 @@ public:
 
 private:
 	void RestoreRebindableDefinition() {
-		RestoreDefinitionRebindability();
+		if (definition && !definition->GetCallbacks().HasBindCallback()) {
+			RestoreDefinitionRebindability();
+		} else {
+			InvalidateDefinitionRebindability();
+		}
 	}
 	void InvalidateRebindableDefinition() {
 		InvalidateDefinitionRebindability();
