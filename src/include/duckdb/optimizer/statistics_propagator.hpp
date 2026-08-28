@@ -51,11 +51,7 @@ public:
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
 	                                                          const BoundFunctionExpression &func,
 	                                                          const vector<BaseStatistics> &child_stats);
-	//! Check what a comparison between two sets of statistics can evaluate to, for the purpose of pruning data.
-	static FilterPropagateResult CheckComparisonPruning(const BaseStatistics &left, const BaseStatistics &right,
-	                                                    ExpressionType comparison);
-	//! Compare two sets of statistics and return whether the comparison is always true or false.
-	//! Only folds comparisons for which rewriting the expression in the plan is always safe.
+	//! Compare two sets of statistics and return whether the comparison is always true or false
 	static FilterPropagateResult PropagateComparison(const BaseStatistics &left, const BaseStatistics &right,
 	                                                 ExpressionType comparison);
 

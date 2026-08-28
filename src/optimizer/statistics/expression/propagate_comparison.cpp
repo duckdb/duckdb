@@ -34,9 +34,7 @@ static bool RangesAreEqualConstants(const Value &lmin, const Value &lmax, const 
 }
 
 static FilterPropagateResult PropagateValueComparison(const Value &lmin, const Value &lmax, const Value &rmin,
-                                                      const Value &rmax, ExpressionType comparison, bool left_has_null,
-                                                      bool right_has_null) {
-	const bool has_null = left_has_null || right_has_null;
+                                                      const Value &rmax, ExpressionType comparison, bool has_null) {
 	const auto always_true =
 	    has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	const auto always_false =
@@ -53,24 +51,6 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 		}
 		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
 			return always_true;
-		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
-			return has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
-		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
-			return left_has_null && right_has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE
-			                                       : FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
-			return has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
-			return left_has_null && right_has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE
-			                                       : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
@@ -110,9 +90,9 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::CheckComparisonPruning(const BaseStatistics &lstats,
-                                                                   const BaseStatistics &rstats,
-                                                                   ExpressionType comparison) {
+FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
+                                                                const BaseStatistics &rstats,
+                                                                ExpressionType comparison) {
 	if (lstats.GetStatsType() == StatisticsType::STRING_STATS &&
 	    rstats.GetStatsType() == StatisticsType::STRING_STATS) {
 		if (lstats.GetType() != rstats.GetType()) {
@@ -134,7 +114,8 @@ FilterPropagateResult StatisticsPropagator::CheckComparisonPruning(const BaseSta
 		if (StringStats::HasMax(rstats)) {
 			rmax = GetStringStatsMax(rstats);
 		}
-		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, lstats.CanHaveNull(), rstats.CanHaveNull());
+		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
+		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null);
 	}
 
 	switch (lstats.GetType().InternalType()) {
@@ -159,23 +140,9 @@ FilterPropagateResult StatisticsPropagator::CheckComparisonPruning(const BaseSta
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 	return PropagateValueComparison(NumericStats::Min(lstats), NumericStats::Max(lstats), NumericStats::Min(rstats),
-	                                NumericStats::Max(rstats), comparison, lstats.CanHaveNull(), rstats.CanHaveNull());
-}
-
-FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
-                                                                const BaseStatistics &rstats,
-                                                                ExpressionType comparison) {
-	switch (comparison) {
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		// subquery decorrelation builds delim joins around IS NOT DISTINCT FROM conditions, and the Deliminator relies
-		// on finding these conditions in the plan - folding them breaks those plans they are still used to prune data
-		// at scan time
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	default:
-		return CheckComparisonPruning(lstats, rstats, comparison);
-	}
+	                                NumericStats::Max(rstats), comparison, has_null);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFunctionExpression &expr,

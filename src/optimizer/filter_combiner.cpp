@@ -412,8 +412,6 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		const auto comparison_type = comparison.GetExpressionType();
 		const bool supported_comparison = comparison_type == ExpressionType::COMPARE_EQUAL ||
 		                                  comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
-		                                  comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ||
-		                                  comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
 		                                  comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 		                                  comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
