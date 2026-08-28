@@ -1,0 +1,227 @@
+diff --git a/data/boundaries/straddle_cp932_1k.csv b/data/boundaries/straddle_cp932_1k.csv
+new file mode 100644
+index 0000000..50250b9
+--- /dev/null
++++ b/data/boundaries/straddle_cp932_1k.csv
+@@ -0,0 +1,93 @@
++key,value
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++z,pppppppppp巗tail
+diff --git a/data/boundaries/straddle_gb18030_1k.csv b/data/boundaries/straddle_gb18030_1k.csv
+new file mode 100644
+index 0000000..fec2ed4
+--- /dev/null
++++ b/data/boundaries/straddle_gb18030_1k.csv
+@@ -0,0 +1,93 @@
++key,value
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++x,aaaaaaaa
++z,ppppppppp¡tail
+diff --git a/test/sql/decode_straddle.test b/test/sql/decode_straddle.test
+new file mode 100644
+index 0000000..488f276
+--- /dev/null
++++ b/test/sql/decode_straddle.test
+@@ -0,0 +1,23 @@
++# name: test/sql/decode_straddle.test
++# description: A multi-byte character straddling the encoded-buffer boundary must survive (duckdb/duckdb#20598)
++# group: [sql]
++
++require encodings
++
++# Each file places one multi-byte character across the end of the first 1024-byte encoded buffer
++
++query I
++SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_cp932_1k.csv', header=true, all_varchar=true, encoding='ibm-943_P15A-2003', buffer_size=1024) WHERE key='z'
++----
++ppp甯倀ail
++
++query I
++SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_gb18030_1k.csv', header=true, all_varchar=true, encoding='gb18030', buffer_size=1024) WHERE key='z'
++----
++ppp隆tail
++
++# Control: the same file decodes correctly when the character does not straddle a buffer boundary
++query I
++SELECT right(value, 8) FROM read_csv('data/boundaries/straddle_cp932_1k.csv', header=true, all_varchar=true, encoding='ibm-943_P15A-2003', buffer_size=4096) WHERE key='z'
++----
++ppp甯倀ail
