@@ -153,6 +153,13 @@ void UpdateInfo::Verify() {
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
+// forward declarations: the windowed merge primitives are defined further down (with the committed-range path)
+// but are used by the sub-batch dispatch in UpdateMergeValidity / UpdateMergeFetch below.
+static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset,
+                                         ValidityMask &result_mask);
+template <class T>
+static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, idx_t result_offset, T *result_data);
+
 static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
 	auto tuples = current.GetTuples();
 	auto info_data = current.GetData<bool>();
@@ -162,10 +169,17 @@ static void MergeValidityInfo(UpdateInfo &current, ValidityMask &result_mask) {
 }
 
 static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
-                                Vector &result) {
+                                Vector &result, idx_t start, idx_t end, idx_t result_offset) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
-	                                  [&](UpdateInfo &current) { MergeValidityInfo(current, result_mask); });
+	// full-vector fast path: window covers the whole vector and maps 1:1 onto result, so no per-tuple rebasing.
+	if (start == 0 && result_offset == 0 && end >= STANDARD_VECTOR_SIZE) {
+		UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+		                                  [&](UpdateInfo &current) { MergeValidityInfo(current, result_mask); });
+	} else {
+		UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
+			MergeUpdateInfoRangeValidity(current, start, end, result_offset, result_mask);
+		});
+	}
 }
 
 template <class T>
@@ -185,10 +199,18 @@ static void MergeUpdateInfo(UpdateInfo &current, T *result_data) {
 }
 
 template <class T>
-static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, Vector &result) {
+static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, Vector &result,
+                             idx_t start, idx_t end, idx_t result_offset) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
-	                                  [&](UpdateInfo &current) { MergeUpdateInfo<T>(current, result_data); });
+	// full-vector fast path: window covers the whole vector and maps 1:1 onto result, so no per-tuple rebasing.
+	if (start == 0 && result_offset == 0 && end >= STANDARD_VECTOR_SIZE) {
+		UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+		                                  [&](UpdateInfo &current) { MergeUpdateInfo<T>(current, result_data); });
+	} else {
+		UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
+			MergeUpdateInfoRange<T>(current, start, end, result_offset, result_data);
+		});
+	}
 }
 
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type) {
@@ -239,7 +261,8 @@ UndoBufferPointer UpdateSegment::GetUpdateNode(StorageLockKey &, idx_t vector_id
 	return root->info[vector_idx];
 }
 
-void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
+void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result,
+                                 idx_t sub_vector_offset, idx_t count) {
 	auto lock_handle = lock.GetSharedLock();
 	auto node = GetUpdateNode(*lock_handle, vector_index);
 	if (!node.IsSet()) {
@@ -248,7 +271,10 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	// FIXME: normalify if this is not the case... need to pass in count?
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
-	fetch_update_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), result);
+	// window the merge to the sub-batch [sub_vector_offset, sub_vector_offset + count) of this vector,
+	// rebasing onto result positions [0, count). full-vector scans pass offset 0 and take the fast path.
+	fetch_update_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), result,
+	                      sub_vector_offset, sub_vector_offset + count, 0);
 }
 
 UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {

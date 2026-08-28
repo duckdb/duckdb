@@ -1,0 +1,1060 @@
+# name: test/sql/storage/scan_batch_size_distributions.test
+# description: Every batch ScanSizePredictor sizes stays within the byte budget, over many distributions
+# group: [storage]
+
+# The invariant checked per distribution is scan_count * worst_bpr <= target_bytes, read off the
+# per-batch TRACE log. For fixed-width columns and for VARCHAR/BLOB (where StringStats supplies
+# MaxStringLength) worst_bpr is a true upper bound on the row width, so this also bounds the bytes
+# actually materialized. Batches of a single row are exempt: one row is always scanned, even when
+# that row alone exceeds the budget.
+#
+# TC21 covers the types where worst_bpr is NOT a true bound and the budget therefore does not hold.
+#
+# duckdb_logs is session-wide, so every TC truncates it before enabling logging. Without that each
+# assertion would also re-check every earlier TC's batches, and a failure could not be attributed to
+# the TC that reported it.
+#
+# Queries always materialize the column under test (SUM(LENGTH(v)), not COUNT(*)) -- a projected-away
+# column is never scanned, so the predictor would not see the distribution the TC is about.
+
+require noforcestorage
+
+# predictor only engages (and logs) when a full 2048-row vector exceeds the byte budget
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+load {TEST_DIR}/scan_batch_size_distributions.db
+
+statement ok
+PRAGMA threads=1
+
+# ============================================================
+# TC1: Uniform large blobs (250KB each)
+# 2048 rows x 250KB = 512MB total. Target=1MB → ~4 rows/batch.
+# StringStats bounds the row width at 16 + 250000, so the batch size is
+# exact here: uniform lengths mean the bound is also the actual width.
+# ============================================================
+
+statement ok
+CREATE TABLE t_large_blob AS SELECT i, repeat('X', 250000) as data FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(data)) FROM t_large_blob
+----
+512000000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC2: Pure fixed-size columns (INTEGER x 5)
+# 5 x INT32 = 20 bytes/row (fixed). Target=64KB → ~3276 rows/batch.
+# No variable-length columns, so the bound is the exact row width.
+# ============================================================
+
+statement ok
+CREATE TABLE t_fixed AS SELECT i, i*2 as b, i*3 as c, i*4 as d, i*5 as e FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=65536
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(i + b + c + d + e) FROM t_fixed
+----
+749925000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC3: Budget wider than a full vector leaves the batch size alone
+# MaxStringLength is 59, so worst_bpr = 16 + 59 = 75. Target=256KB admits 3495 rows, more than a
+# 2048-row vector, so the bound never binds: 10000 rows = 5 vectors = 5 batches, none clamped.
+# This is the contrast case for every other TC, where the bound does shrink the batch.
+# ============================================================
+
+statement ok
+CREATE TABLE t_short_str AS SELECT i, repeat('x', (i % 50) + 10) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+# SUM(LENGTH(v)) rather than COUNT(*): the latter projects the VARCHAR away, so the predictor would
+# never see the column this TC is about.
+query I
+SELECT SUM(LENGTH(v)) FROM t_short_str
+----
+345000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT = 5
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT = 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC4: Highly variable string lengths (100 vs 100000)
+# Alternating 100-byte and 100KB strings. MaxStringLength=100000 applies
+# row-group-wide, so worst_bpr = 16 + 100000 and Target=512KB → ~5 rows/batch.
+# The bound is conservative for the short rows, which is the point: a batch
+# landing entirely on the long ones still fits the budget.
+# ============================================================
+
+statement ok
+CREATE TABLE t_variable AS SELECT i, CASE WHEN i % 2 = 0 THEN repeat('S', 100) ELSE repeat('L', 100000) END as v FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_variable
+----
+102502400
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC5: Multi-column mixed types (BIGINT + VARCHAR + DECIMAL)
+# The bound sums all three columns: 8 (BIGINT) + 16 + 500 (VARCHAR) + 16 (DECIMAL/INT128) = 540.
+# Target=1MB admits 1941 rows, just under a full vector, so the bound shrinks the leading batch of
+# every vector and leaves a small remainder batch behind it.
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi AS SELECT i, repeat('m', 500) as v, i * 1.5 as d FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+# Touch all three columns so the predictor sizes off the full row width.
+query I
+SELECT SUM(i) + SUM(LENGTH(v)) + SUM(d)::BIGINT FROM t_multi
+----
+33743750
+
+statement ok
+set enable_logging=false
+
+# More batches than vectors (5000 rows = 3 vectors) and the bound actually bound at least once.
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 3
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT > 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC6: Cross row-group (200K rows, forces re-initialization)
+# 200K rows spans 2 row groups (default 122880 rows each), so the predictor is re-initialized from
+# the second group's stats mid-scan. 16 + 500 = 516 bytes/row, target=1MB admits 2032 rows, just
+# under a full vector -> ~98 vectors turn into ~196 batches.
+# ============================================================
+
+statement ok
+CREATE TABLE t_cross_rg AS SELECT i, repeat('r', 500) as v FROM range(0, 200000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_cross_rg
+----
+100000000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 10 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC7: Disabled mode — no log output at all
+# scan_target_size_bytes=0 takes the full-vector Scan() path and never invokes the predictor. Uses
+# the same materializing query as TC2, so the absence of logs is attributable to the setting rather
+# than to the columns being projected away.
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=0
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(i + b + c + d + e) FROM t_fixed
+----
+749925000
+
+statement ok
+set enable_logging=false
+
+# Neither the per-scan summary nor the per-batch lines should exist
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' predictor logs' END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor')
+----
+OK
+
+# ============================================================
+# TC8: Multiple fixed-size types (INT + BIGINT + DOUBLE)
+# INT(4) + BIGINT(8) + DOUBLE(8) = 20 bytes/row.
+# Target=16384 → ~819 rows/batch → sub-batching triggers.
+# All columns are fixed-size: the bound is the exact row width.
+# ============================================================
+
+statement ok
+CREATE TABLE t_all_fixed AS SELECT i as col_int, i::BIGINT * 1000 as col_bigint, i * 2.5 as col_double FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=16384
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(col_int) + SUM(col_bigint) + SUM(col_double::BIGINT) FROM t_all_fixed
+----
+50169985000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC9: VARCHAR tiny strings (1-5 bytes)
+# Avg string length ≈ 3 bytes. INT(4) + VARCHAR(3) = ~7 bytes/row.
+# Target=4096 → ~585 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg, so prediction is accurate.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_tiny AS SELECT i, repeat('a', (i % 5) + 1) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=4096
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_tiny
+----
+30000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC10: VARCHAR medium strings (100-500 bytes)
+# Avg string length ≈ 300 bytes. INT(4) + VARCHAR(300) = ~304 bytes/row.
+# Target=131072 → ~431 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_medium AS SELECT i, repeat('m', (i % 400) + 100) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_medium
+----
+2995000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC11: VARCHAR large uniform strings (5000 bytes each)
+# INT(4) + VARCHAR(5000) = ~5004 bytes/row.
+# Target=524288 → ~104 rows/batch → sub-batching triggers.
+# Uniform length means TotalStringLength gives exact avg and
+# per-batch variance is zero. Prediction is exact.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_large AS SELECT i, repeat('L', 5000) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_large
+----
+25000000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC12: VARCHAR very large strings (50K-51K bytes)
+# Avg string length ≈ 50512 bytes. INT(4) + VARCHAR(50512) = ~50516 bytes/row.
+# Target=1048576 → ~20 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_vlarge AS SELECT i, repeat('V', (i % 200000) + 50000) as v FROM range(0, 1024) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_vlarge
+----
+51723776
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC13: VARCHAR linearly increasing lengths (0 to 2000 bytes)
+# Rows stored in insertion order, so batch content drifts from the shortest
+# strings to the longest. MaxStringLength=2000 bounds all of them alike:
+# worst_bpr = 4 + 16 + 2000 and Target=131072 → ~65 rows/batch throughout.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_linear AS SELECT i, repeat('g', i % 2001) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_linear
+----
+4499503
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC14: VARCHAR bimodal distribution (10 bytes vs 5000 bytes, 90%/10%)
+# 90% of rows have 10-byte strings, 10% have 5000-byte strings.
+# Avg = 0.9*10 + 0.1*5000 = 509 bytes. INT(4) + VARCHAR(509) = ~513 bytes/row.
+# Target=131072 → ~255 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg so initial prediction is accurate,
+# but per-batch variance is high due to clustering.
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_bimodal AS SELECT i, CASE WHEN i % 10 = 0 THEN repeat('B', 5000) ELSE repeat('s', 10) END as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_bimodal
+----
+2545000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC15: BLOB type (stored as VARCHAR internally)
+# 2048 rows x 1000-byte blobs. Avg = 1000 bytes. INT(4) + BLOB(1000) = ~1004 bytes/row.
+# Target=131072 → ~130 rows/batch → sub-batching triggers.
+# BLOB uses VARCHAR physical type, TotalStringLength stats apply.
+# ============================================================
+
+statement ok
+CREATE TABLE t_blob AS SELECT i, repeat('\xAB', 1000)::BLOB as v FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(octet_length(v)) FROM t_blob
+----
+2048000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC16: Multiple VARCHAR columns with different fixed lengths
+# col_a: tiny (5 bytes), col_b: medium (300 bytes), col_c: large (3000 bytes)
+# Avg = INT(4) + VARCHAR(5) + VARCHAR(300) + VARCHAR(3000) = 3309 bytes/row.
+# Target=524288 → ~158 rows/batch → sub-batching triggers.
+# Uniform per-column lengths mean prediction is exact.
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi_varchar AS SELECT i, repeat('t', 5) as col_a, repeat('m', 300) as col_b, repeat('L', 3000) as col_c FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(col_a) + LENGTH(col_b) + LENGTH(col_c)) FROM t_multi_varchar
+----
+16525000
+
+statement ok
+set enable_logging=false
+
+# Every batch stays within the byte budget recorded on its own log line.
+query I
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'FAIL: ' || COUNT(*) || ' batches over budget' END
+FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+  AND message.split('scan_count=')[2]::BIGINT > 1
+  AND message.split('scan_count=')[2]::BIGINT
+      * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE
+      > message.split('target_bytes=')[2].split(' ')[1]::BIGINT
+----
+OK
+
+# ============================================================
+# TC17: Filter path sub-batches at the same granularity as the no-filter path
+# ColumnData::Filter/Select scan the full (sub-)batch first, then narrow. So the
+# physical rows-per-batch is driven purely by the byte budget, independent of
+# filter selectivity. Run the same table with and without a (non-selective)
+# WHERE clause and assert both scans emit the SAME total_batches.
+# 512 rows x 250KB blob, target=1MB -> ~4 rows/batch -> ~128 batches either way.
+# The WHERE i>=1 matches all-but-one row but still scans every physical row.
+# ============================================================
+
+statement ok
+CREATE TABLE t_filter_gran AS SELECT i, repeat('X', 250000) AS blob FROM range(0, 512) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_filter_gran
+----
+128000000
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_filter_gran WHERE i >= 1
+----
+127750000
+
+statement ok
+set enable_logging=false
+
+# The two most recent predictor logs (filter + no-filter) must share total_batches.
+query I
+SELECT CASE WHEN COUNT(DISTINCT tb) = 1 THEN 'OK' ELSE 'FAIL: batch counts differ' END
+FROM (
+    SELECT message.split('total_batches=')[2].split(' ')[1]::BIGINT AS tb
+    FROM duckdb_logs
+    WHERE message.starts_with('ScanSizePredictor:')
+    ORDER BY timestamp DESC LIMIT 2
+)
+----
+OK
+
+# Sanity: both scans actually sub-batched (total_batches > 1, not a single full vector).
+query I
+SELECT CASE WHEN MIN(tb) > 1 THEN 'OK' ELSE 'FAIL: not sub-batched' END
+FROM (
+    SELECT message.split('total_batches=')[2].split(' ')[1]::BIGINT AS tb
+    FROM duckdb_logs
+    WHERE message.starts_with('ScanSizePredictor:')
+    ORDER BY timestamp DESC LIMIT 2
+)
+----
+OK
+
+# ============================================================
+# TC18: Budget smaller than a single row degrades to 1 row/batch
+# PredictBatchSize computes safe_count = target_bytes / worst_bpr. When the
+# budget is smaller than one row, integer division yields 0 and the result is
+# clamped by MaxValue<idx_t>(1, ...) to 1. So every batch scans exactly one row
+# and total_batches equals the row count.
+# 100 rows x 10KB blob, target=1 byte -> 1 row/batch -> total_batches = 100.
+# ============================================================
+
+statement ok
+CREATE TABLE t_tiny_budget AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 100) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_tiny_budget
+----
+1000000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT = 100 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC19: Delete engages the predictor — sub-batch adapts to deletes
+# A deleted row makes count != max_count (complex scan path), but the
+# per-batch valid_sel window still byte-budgets the physical scan, so the
+# predictor engages just like the no-delete baseline.
+# ============================================================
+
+statement ok
+CREATE TABLE t_pred_delete AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 4096) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_delete
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# baseline sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# delete at least one row in every vector -> complex path, but sub-batch still engages
+statement ok
+DELETE FROM t_pred_delete WHERE i % 500 = 0
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_delete
+----
+40870000
+
+statement ok
+set enable_logging=false
+
+# delete path still sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC20: Pending updates still engage the predictor — sub-batch adapts via windowed merge
+# checkpoint_threshold is raised so the UPDATE stays pending (a checkpoint
+# would merge it and clear HasUpdates()). FetchUpdates is windowed per sub-batch,
+# so the update column is byte-budgeted like any other and the predictor engages.
+# ============================================================
+
+statement ok
+CREATE TABLE t_pred_update AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 4096) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_update
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# baseline sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+statement ok
+SET checkpoint_threshold='10GB'
+
+statement ok
+UPDATE t_pred_update SET blob = repeat('Y', 10000) WHERE i < 10
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_update
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# windowed-merge path sub-batches at the same granularity as the baseline above
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC21: Known limitation — nested types get no real bound.
+# WorstCaseBytesPerRow only computes a true per-row upper bound for fixed-width physical types and for
+# VARCHAR (via StringStats::MaxStringLength). Everything else falls back to DEFAULT_BYTES_PER_ROW=256,
+# because DuckDB's statistics carry no list length / cardinality from which a per-row width could be
+# derived. So for these columns 256 is a guess, not a bound, and the byte budget does not hold:
+#   INTEGER[2000]           ~= 16 (list_entry_t) + 2000 * 4     = 8016 bytes/row, 31x the assumed 256
+#   STRUCT(INTEGER, V(5000)) ~= 4 + 16 + 5000                   = 5020 bytes/row, 20x
+# At target=1MB the fallback admits a whole 2048-row vector (256 * 2048 = 512KB < 1MB), so nothing is
+# clamped and each vector still materializes ~16MB / ~10MB. These assertions pin that limitation; if
+# WorstCaseBytesPerRow ever learns to recurse into nested stats they should be updated deliberately.
+#
+# Note a struct is only unbounded when the whole struct is projected. Projecting a single field pushes a
+# child StorageIndex down, and GetStatistics then returns that child's stats -- a VARCHAR field gets the
+# real 16 + MaxStringLength bound, as the second half of this TC shows.
+# ============================================================
+
+statement ok
+CREATE TABLE t_nested_list AS SELECT range(0, 2000)::INTEGER[] AS l FROM range(0, 2048) tbl(i)
+
+statement ok
+CREATE TABLE t_nested_struct AS SELECT {'a': i::INTEGER, 'b': repeat('x', 5000)} AS s FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LEN(l)) FROM t_nested_list
+----
+4096000
+
+statement ok
+set enable_logging=false
+
+# LIST falls back to 256 and never clamps, even though a vector holds ~16MB
+query I
+SELECT CASE
+    WHEN message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE = 256.0
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT = 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+# cast to VARCHAR so the whole struct is materialized rather than a single field
+query I
+SELECT MAX(LENGTH(s::VARCHAR)) FROM t_nested_struct
+----
+5018
+
+statement ok
+set enable_logging=false
+
+# a fully-projected STRUCT falls back the same way
+query I
+SELECT CASE
+    WHEN message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE = 256.0
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT = 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+# projecting only the VARCHAR field pushes a child StorageIndex down -> real bound of 16 + 5000
+query I
+SELECT SUM(LENGTH(s.b)) FROM t_nested_struct
+----
+10240000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE = 5016.0
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT > 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC22: All-empty VARCHAR — the one shape whose batch size changed when the
+# EMA feedback was removed in favour of the worst-case bound alone.
+#
+# The old predictor computed an average string length of 0 here, hit its "no width known" branch and
+# returned the full vector. worst_bpr is 16 (the string_t slot) whether or not the string is empty, so
+# such a table is now budgeted like any other. The difference is only observable below 16 * 2048 = 32768
+# bytes; at any larger target a whole vector still fits and the two agree exactly.
+#
+# Empty strings occupy nothing beyond the slot, so this is a tightening with no memory benefit -- it is
+# asserted to document the change, not because the smaller batches are desirable.
+# ============================================================
+
+statement ok
+CREATE TABLE t_all_empty AS SELECT '' AS v FROM range(0, 4096) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1024
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query II
+SELECT SUM(LENGTH(v)), COUNT(*) FROM t_all_empty
+----
+0	4096
+
+statement ok
+set enable_logging=false
+
+# 1024 / 16 = 64 rows per batch, and 4096 rows divide evenly into 64 such batches
+query I
+SELECT CASE
+    WHEN message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE = 16.0
+     AND message.split('total_batches=')[2].split(' ')[1]::BIGINT = 64 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# every batch is exactly the budgeted 64 rows
+query I
+SELECT CASE
+    WHEN MIN(message.split('scan_count=')[2]::BIGINT) = 64
+     AND MAX(message.split('scan_count=')[2]::BIGINT) = 64 THEN 'OK'
+    ELSE 'FAIL: min=' || MIN(message.split('scan_count=')[2]::BIGINT)
+             || ' max=' || MAX(message.split('scan_count=')[2]::BIGINT)
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# a target above 16 * 2048 admits the whole vector again: 2 vectors -> 2 batches, none clamped
+statement ok
+SET scan_target_size_bytes=65536
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_all_empty
+----
+0
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT = 2
+     AND message.split('safe_clamped_batches=')[2].split(' ')[1]::BIGINT = 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK

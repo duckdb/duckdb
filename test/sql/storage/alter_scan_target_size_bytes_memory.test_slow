@@ -1,0 +1,187 @@
+# name: test/sql/storage/alter_scan_target_size_bytes_memory.test_slow
+# description: ALTER COLUMN full-table scans (SET NOT NULL, SET DATA TYPE) stay within a scan_target_size_bytes byte budget
+# group: [storage]
+
+# Both ALTER COLUMN variants scan the whole table outside the table-function scan path, so neither was
+# covered by scan_target_size_bytes_memory.test_slow:
+#   SET NOT NULL   -> RowGroupCollection::VerifyNewConstraint
+#   SET DATA TYPE  -> RowGroupCollection::AlterType
+# Both used to run unbudgeted and materialized a full 2048-row vector of the scanned column at once.
+#
+# Blob width matters for *which* memory the scan consumes. Values >= the block size (262144 bytes) are
+# stored as overflow strings; reading each one pins a buffer-manager block, so a full-vector read of
+# 2048 x 300KB values holds ~600MB of *tracked* memory at once and genuinely fails to pin under a 300MB
+# memory_limit. Narrower values instead copy into the vector's own untracked string heap and never trip
+# the limit. Storage must also stay uncompressed: a compressed column is decompressed into that same
+# untracked heap, so memory_limit could not observe it.
+#
+# The budget is set GLOBAL rather than session-local so that the checkpoint write side is bounded too --
+# SET DATA TYPE rewrites the column, and the following checkpoint would otherwise be the thing that OOMs.
+
+require noforcestorage
+
+# a full 2048-row vector of 300KB values is only large enough to trip the limit at this vector size
+require vector_size 2048
+
+# multi-hundred-MB blob tables exceed the 32-bit address space
+require 64bit
+
+# ============================================================
+# TC1: SET NOT NULL -> VerifyNewConstraint
+# ============================================================
+
+load {TEST_DIR}/alter_not_null_budget.db
+
+statement ok
+SET memory_limit='20GB';
+
+# threads=1 so the CTAS lays rows out in id order -> one deterministic full vector
+statement ok
+SET threads=1;
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+# 2048 rows x 300KB, per-row-distinct (unique 10-digit prefix) so the values cannot be dictionary-deduplicated
+statement ok
+CREATE TABLE t AS SELECT i AS id, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990)) AS b FROM range(2048) tbl(i);
+
+# get the data into the file so the verification scan pins blocks rather than reading a WAL replay
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+SET threads=1;
+
+# --- negative guard: no byte budget -> full 2048-row vector -> cannot pin under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+SET max_temp_directory_size='0B';
+
+statement error
+ALTER TABLE t ALTER COLUMN b SET NOT NULL;
+----
+Out of Memory
+
+# a plain OOM rolls the ALTER back without invalidating the database, so the limit can be lifted in place
+statement ok
+SET memory_limit='20GB';
+
+# the constraint was not added: NULLs are still accepted
+statement ok
+INSERT INTO t VALUES (9999, NULL);
+
+statement ok
+DELETE FROM t WHERE id = 9999;
+
+# --- positive: 16MB budget -> sub-batches of ~54 rows -> peak well under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+ALTER TABLE t ALTER COLUMN b SET NOT NULL;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2048	614400000
+
+# the constraint really is in force now
+statement error
+INSERT INTO t VALUES (9999, NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+# ============================================================
+# TC2: SET DATA TYPE -> AlterType
+#
+# This TC cannot use max_temp_directory_size='0B': unlike the read-only verification above, SET DATA TYPE
+# writes the recast column, and under a 300MB limit the buffer manager must offload those blocks. The
+# negative guard stays deterministic anyway -- its failure mode is *pinning* 2048 live overflow blocks
+# simultaneously, which eviction cannot help with.
+# ============================================================
+
+load {TEST_DIR}/alter_type_budget.db
+
+statement ok
+SET memory_limit='20GB';
+
+statement ok
+SET threads=1;
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+CREATE TABLE t AS SELECT i AS id, CONCAT(lpad(i::VARCHAR, 10, '0'), repeat('x', 299990)) AS b FROM range(2048) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+SET threads=1;
+
+# --- negative guard: no byte budget -> full 2048-row cast vector -> cannot pin under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement error
+ALTER TABLE t ALTER COLUMN b SET DATA TYPE BLOB;
+----
+Out of Memory
+
+statement ok
+SET memory_limit='20GB';
+
+# the type change was rolled back
+query I
+SELECT column_type FROM (DESCRIBE t) WHERE column_name = 'b';
+----
+VARCHAR
+
+# --- positive: 16MB budget -> sub-batches of ~54 rows -> peak well under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+ALTER TABLE t ALTER COLUMN b SET DATA TYPE BLOB;
+
+statement ok
+SET memory_limit='20GB';
+
+query I
+SELECT column_type FROM (DESCRIBE t) WHERE column_name = 'b';
+----
+BLOB
+
+query II
+SELECT count(*), sum(octet_length(b)) FROM t;
+----
+2048	614400000
+
+# the recast values landed at the right offsets: every row still carries its own id prefix
+query I
+SELECT count(*) FROM t WHERE b = CONCAT(lpad(id::VARCHAR, 10, '0'), repeat('x', 299990))::BLOB;
+----
+2048

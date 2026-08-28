@@ -73,7 +73,7 @@ public:
 			for (idx_t i = 1; i < collection_indexes.size(); i++) {
 				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
 				TableScanState scan_state;
-				scan_state.Initialize(column_ids);
+				scan_state.Initialize(collection.collection->GetDatabase(), column_ids);
 				collection.collection->InitializeScan(context, scan_state.local_state, column_ids, nullptr);
 
 				while (true) {

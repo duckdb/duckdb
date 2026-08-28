@@ -1268,6 +1268,13 @@
         "default_value": "true"
     },
     {
+        "name": "scan_target_size_bytes",
+        "description": "Target maximum size in bytes for each large-column read sub-batch, applied to query scans as well as checkpoint, commit (WAL write), and rollback reads. When set, these reads use byte-budgeted sub-batches instead of materializing a full 2048-row vector at once, bounding peak memory. GLOBAL_LOCAL: the global value covers background/shutdown/commit paths that run without a session; a local value overrides it for the current session's query scans. 0 = disabled (read full vectors).",
+        "type": "UBIGINT",
+        "scope": "global_local",
+        "custom_implementation": true
+    },
+    {
         "name": "scheduler_process_partial",
         "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
         "type": "BOOLEAN",

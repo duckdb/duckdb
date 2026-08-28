@@ -8,6 +8,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
@@ -460,7 +461,7 @@ RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGrou
 
 		// initialize the scan
 		state = make_uniq<TableScanState>();
-		state->Initialize(column_ids, nullptr);
+		state->Initialize(collection->GetDatabase(), column_ids, nullptr);
 		collection->InitializeScan(QueryContext(), state->local_state, column_ids, nullptr);
 		// scan the first chunk
 		this->operator++();
@@ -1542,7 +1543,7 @@ public:
 		RowGroup::InitializeAppend(initial_append_row_group, append_state.row_group_append_state);
 
 		TableScanState scan_state;
-		scan_state.Initialize(column_ids);
+		scan_state.Initialize(checkpoint_state.writer.GetDatabase(), column_ids);
 		scan_state.table_state.Initialize(QueryContext(), types);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
@@ -2456,7 +2457,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;
-	scan_state.Initialize(bound_columns);
+	scan_state.Initialize(GetDatabase(), bound_columns, context);
 	scan_state.table_state.Initialize(context, GetTypes());
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + next_row_id.load();
 
@@ -2497,7 +2498,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
 	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
-	state.Initialize(column_ids, nullptr);
+	state.Initialize(GetDatabase(), column_ids, context.GetClientContext());
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
 	InitializeCreateIndexScan(state);

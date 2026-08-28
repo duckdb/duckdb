@@ -1,0 +1,81 @@
+# name: test/sql/storage/self_update_corruption.test
+# description: scan_target_size_bytes must not corrupt scans of columns that carry updates
+# group: [storage]
+
+# TC1: a self-referential UPDATE whose source scan reads the column it writes (updates appear mid-vector)
+# TC2: a struct column with pre-existing pending updates that the shallow update guard fails to detect
+
+require noforcestorage
+
+# batch sizes and vector-boundary re-entry are expressed in terms of a 2048-row vector
+require vector_size 2048
+
+load {TEST_DIR}/self_update_corruption.db
+
+statement ok
+PRAGMA threads=1
+
+# Keep the UPDATE pending in memory (no checkpoint merge) so HasUpdates() is true at scan time
+statement ok
+SET checkpoint_threshold='10GB'
+
+# One full vector (2048 rows), ~210 bytes/row. Row width chosen so a sub-batch is >64 rows,
+# which is required to bypass the caching operator (CACHE_THRESHOLD=64) that would otherwise
+# hide the mid-vector re-entry.
+statement ok
+CREATE TABLE t AS SELECT i AS id, concat('v', i, '-', repeat('x', 200)) AS s FROM range(2048) tbl(i)
+
+# ---- reference: feature OFF updates every row correctly ----
+statement ok
+SET scan_target_size_bytes=0
+
+statement ok
+UPDATE t SET s = concat(s, '!')
+
+query I
+SELECT count(*) FROM t WHERE s = concat('v', id, '-', repeat('x', 200), '!')
+----
+2048
+
+# ---- feature ON: same self-referential UPDATE, sub-batched source scan ----
+statement ok
+CREATE TABLE t2 AS SELECT i AS id, concat('v', i, '-', repeat('x', 200)) AS s FROM range(2048) tbl(i)
+
+# ~300 rows/batch -> a single vector is split across ~7 Scan calls.
+# After the first sub-batch is consumed by the update sink, the column now HasUpdates(),
+# and the resumed scan re-enters mid-vector where FetchUpdates() merges vector-relative
+# offsets [0,k) onto batch-relative rows [offset,offset+k) -> misaligned, wrong data.
+statement ok
+SET scan_target_size_bytes=65536
+
+statement ok
+UPDATE t2 SET s = concat(s, '!')
+
+# Every row must still equal 'v'||id||'-'||(200 x's)||'!'. On the buggy build only ~590 do.
+query I
+SELECT count(*) FROM t2 WHERE s = concat('v', id, '-', repeat('x', 200), '!')
+----
+2048
+
+# ============================================================
+# TC2: struct column with pending updates + sub-batch scan
+# The update guard checks the top-level column's own update pointer, but a struct's updates live in its
+# child columns, so the guard misses them and the vector is (correctly) sub-batched. The merge must window
+# each child's updates to the batch; on the buggy build this returned only ~256 of 2048 rows correctly.
+# ============================================================
+
+statement ok
+CREATE TABLE t_struct AS SELECT i AS id, struct_pack(a := i, b := repeat('y', 200)) AS st FROM range(2048) tbl(i)
+
+# pending (uncheckpointed) update on every row -> child columns carry the update overlay
+statement ok
+UPDATE t_struct SET st = struct_pack(a := id + 10000, b := repeat('z', 200))
+
+statement ok
+SET scan_target_size_bytes=4096
+
+query I
+SELECT count(*) FROM t_struct WHERE st.a = id + 10000 AND st.b = repeat('z', 200)
+----
+2048
+

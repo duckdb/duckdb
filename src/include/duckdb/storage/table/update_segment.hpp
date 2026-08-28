@@ -37,7 +37,11 @@ public:
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
 
-	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
+	//! Merge transactional updates into result. Only the sub-batch [sub_vector_offset, sub_vector_offset + count)
+	//! of the vector is merged, rebased onto result positions [0, count). For a full-vector scan pass
+	//! sub_vector_offset = 0 and count = STANDARD_VECTOR_SIZE.
+	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t sub_vector_offset,
+	                  idx_t count);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update,
@@ -74,8 +78,10 @@ public:
 	typedef void (*merge_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
 	                                        UnifiedVectorFormat &update, row_t *ids, idx_t count,
 	                                        const SelectionVector &sel, idx_t row_group_start);
+	//! start/end: source tuple window [start, end) within the vector to merge.
+	//! result_offset: base position in result that source tuple `start` maps to.
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
-	                                        Vector &result);
+	                                        Vector &result, idx_t start, idx_t end, idx_t result_offset);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_range_function_t)(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
 	                                                 Vector &result);

@@ -153,9 +153,10 @@ public:
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state,
+	                    idx_t scan_count);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t count);
+	                    SelectionVector &sel, idx_t count, idx_t scan_count);
 
 	//! Skip the scan forward by "count" rows
 	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
@@ -248,8 +249,10 @@ protected:
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
 	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
+	//! Merge updates into the scanned result. scan_count is the number of rows physically scanned into result;
+	//! sub_vector_offset is this sub-batch's offset within the current vector (0 for a full-vector scan).
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
-	                  UpdateScanType update_type);
+	                  idx_t sub_vector_offset, UpdateScanType update_type);
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
 	void UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
 	                    Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,

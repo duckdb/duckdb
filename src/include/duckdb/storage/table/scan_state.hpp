@@ -39,6 +39,8 @@ class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
 class TableFilter;
+class ClientContext;
+class DatabaseInstance;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 struct ScanSamplingInfo;
@@ -263,6 +265,125 @@ struct PreparedScanVector {
 	void Reset();
 };
 
+//! Batch size predictor for sub-vector scanning.
+//!
+//! Goal: given a byte budget (scan_target_size_bytes), decide how many rows to scan per batch so that the
+//! materialized chunk never exceeds the budget — no matter where in the row group the batch lands.
+//!
+//! The batch size is derived purely from the worst-case row width computed from row group statistics
+//! (lazily, on the first PredictBatchSize call). `initialized` is cleared at each row group boundary so
+//! the next call re-computes it, since string length distributions vary across row groups.
+struct ScanSizePredictor {
+	//! Fallback per-row estimate for columns with no usable statistics and for variable-size types whose
+	//! width cannot be bounded (LIST/MAP have no length statistic). Only an estimate, not a real bound.
+	static constexpr double DEFAULT_BYTES_PER_ROW = 256.0;
+
+	//! Worst-case per-row byte bound from row group statistics: fixed column widths + per-VARCHAR
+	//! (string_t slot + MaxStringLength). Every row's string is <= MaxStringLength by definition, so a
+	//! batch of target_bytes / worst_case_bytes_per_row rows can never exceed the budget — even if it
+	//! lands entirely on the largest blobs. Computed at cold start; 0 = not computed (no bound applied).
+	double worst_case_bytes_per_row = 0;
+	bool initialized = false;
+
+	//! Diagnostic counters — accumulated across batches within a scan
+	idx_t total_batches = 0;
+	//! Batches where the byte bound was tighter than the rows remaining in the vector, i.e. the batch was
+	//! actually shrunk below a full (remaining) vector read.
+	idx_t total_safe_clamped_batches = 0;
+	//! Rows that fit the budget at the worst-case width on the most recent call, for per-batch TRACE
+	//! logging at the scan call site. The returned scan_count is min(this, max_rows).
+	idx_t last_safe_rows = 0;
+
+	//! Invalidate the cold-start estimate so the next PredictBatchSize re-computes it (e.g. at a row group
+	//! boundary). Diagnostic counters accumulate across the whole scan and are intentionally left untouched.
+	void Reset() {
+		initialized = false;
+	}
+
+	//! Predict batch size for a multi-column scan, clamped to [1, max_rows].
+	//! Lazily computes the worst-case per-row width from row group statistics on the first call.
+	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
+	                       RowGroup &row_group);
+	//! Single-column variant for the checkpoint read path (one ColumnData, possibly nested, scanned into a
+	//! single Vector). Cold-starts from the column's own statistics instead of a row group.
+	idx_t PredictBatchSizeSingle(idx_t target_bytes, idx_t max_rows, const LogicalType &type,
+	                             optional_ptr<BaseStatistics> stats);
+
+	//! Emit the accumulated diagnostic counters as a single TRACE line at scan completion. No-op if no batch ran.
+	void LogStats(ClientContext &context) const;
+	//! Emit the detail of the most recent PredictBatchSize call (byte bound vs final scan_count) as a TRACE
+	//! line. No-op when context is not a valid session (e.g. checkpoint / WAL paths).
+	void LogBatch(optional_ptr<ClientContext> context, idx_t target_bytes, idx_t max_rows, idx_t scan_count) const;
+
+private:
+	//! Rows that fit target_bytes at the worst-case row width, clamped to [1, max_rows]. Shared by both
+	//! predict entry points so they are provably bounded by the same formula.
+	idx_t ApplyBudget(idx_t target_bytes, idx_t max_rows);
+};
+
+//! Tracks progress within a single vector during sub-batch scanning.
+//! A standard 2048-row vector is split into multiple smaller batches,
+//! each sized by ScanSizePredictor to stay within the byte budget.
+struct SubVectorScanState {
+public:
+	//! Rows of the current vector not yet consumed by prior batches
+	idx_t RemainingRows() const {
+		return vector_max_count - offset;
+	}
+
+	void Reset() {
+		offset = 0;
+		vector_max_count = 0;
+		valid_count = 0;
+		valid_sel_cursor = 0;
+	}
+
+	//! Start scanning a fresh vector: record its total/surviving row count and rewind to the start
+	void BeginVector(idx_t max_count, idx_t valid_count_p) {
+		offset = 0;
+		vector_max_count = max_count;
+		valid_count = valid_count_p;
+		valid_sel_cursor = 0;
+	}
+
+	//! Advance past the batch just scanned; returns true once the whole vector has been consumed
+	bool Advance(idx_t scan_count) {
+		offset += scan_count;
+		return offset >= vector_max_count;
+	}
+
+	bool InProgress() const {
+		return offset > 0 && offset < vector_max_count;
+	}
+
+	//! Window a vector-wide valid selection to the current batch [offset, offset + scan_count) and rebase the
+	//! surviving absolute positions to [0, scan_count) so they index into the batch-sized result. Advances
+	//! valid_sel_cursor past the consumed entries and returns the number of survivors in this batch.
+	idx_t WindowValidSelection(const SelectionVector &valid_sel, idx_t scan_count, SelectionVector &batch_sel) {
+		idx_t batch_end = offset + scan_count;
+		idx_t survivors = 0;
+		while (valid_sel_cursor < valid_count && valid_sel.get_index(valid_sel_cursor) < batch_end) {
+			idx_t abs_pos = valid_sel.get_index(valid_sel_cursor++);
+			batch_sel.set_index(survivors++, abs_pos - offset);
+		}
+		return survivors;
+	}
+
+	static bool IsActive(idx_t scan_target_size_bytes) {
+		return scan_target_size_bytes > 0;
+	}
+
+private:
+	//! Current row offset within the vector (0..vector_max_count)
+	idx_t offset = 0;
+	//! Total scannable rows in the current vector (STANDARD_VECTOR_SIZE for a full vector, less for the tail)
+	idx_t vector_max_count = 0;
+	//! Surviving (non-deleted) rows in the current vector; equals vector_max_count when there are no deletes
+	idx_t valid_count = 0;
+	//! Entries of valid_sel already consumed by prior batches of the current vector (delete sub-batch cursor)
+	idx_t valid_sel_cursor = 0;
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -297,6 +418,11 @@ public:
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+
+	//! Sub-vector scan state for controlling per-batch row count
+	SubVectorScanState sub_vector_state;
+	//! Predictor for adaptive sub-vector batch sizing
+	ScanSizePredictor size_predictor;
 
 public:
 	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
@@ -334,6 +460,8 @@ struct ScanSamplingInfo {
 struct TableScanOptions {
 	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
+	//! Target maximum size in bytes for each scan result chunk. 0 = disabled.
+	idx_t scan_target_size_bytes = 0;
 };
 
 class CheckpointLock {
@@ -364,6 +492,13 @@ public:
 	ScanSamplingInfo sampling_info;
 
 public:
+	//! Takes db so that the scan byte budget (scan_target_size_bytes) can be decided here for every scan entry
+	//! point, including those that run without a ClientContext. In-tree scans should always use this overload.
+	void Initialize(DatabaseInstance &db, vector<StorageIndex> column_ids,
+	                optional_ptr<ClientContext> context = nullptr, optional_ptr<TableFilterSet> table_filters = nullptr,
+	                optional_ptr<SampleOptions> table_sampling = nullptr, idx_t estimated_table_row_count = 0);
+	//! Only honours a session-local scan_target_size_bytes: without db there is no global default to fall back on.
+	//! Kept for out-of-tree callers; in-tree scans should use the overload above.
 	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
 	                optional_ptr<TableFilterSet> table_filters = nullptr,
 	                optional_ptr<SampleOptions> table_sampling = nullptr, idx_t estimated_table_row_count = 0);
@@ -373,6 +508,11 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 
 	ScanSamplingInfo &GetSamplingInfo();
+
+private:
+	void InitializeInternal(optional_ptr<DatabaseInstance> db, vector<StorageIndex> column_ids,
+	                        optional_ptr<ClientContext> context, optional_ptr<TableFilterSet> table_filters,
+	                        optional_ptr<SampleOptions> table_sampling, idx_t estimated_table_row_count);
 
 private:
 	//! The column identifiers of the scan

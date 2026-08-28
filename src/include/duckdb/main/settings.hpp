@@ -1862,6 +1862,23 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ScanTargetSizeBytesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "scan_target_size_bytes";
+	static constexpr const char *Description =
+	    "Target maximum size in bytes for each large-column read sub-batch, applied to query scans as well as "
+	    "checkpoint, commit (WAL write), and rollback reads. When set, these reads use byte-budgeted sub-batches "
+	    "instead of materializing a full 2048-row vector at once, bounding peak memory. GLOBAL_LOCAL: the global value "
+	    "covers background/shutdown/commit paths that run without a session; a local value overrides it for the "
+	    "current session's query scans. 0 = disabled (read full vectors).";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct SchedulerProcessPartialSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scheduler_process_partial";
