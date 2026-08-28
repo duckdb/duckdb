@@ -1,0 +1,41 @@
+# name: test/sql/types/interval/interval_invert_overflow.test
+# description: Interval negation of extreme values should error instead of overflowing
+# group: [interval]
+
+# Issue #25085: DATE/TIMESTAMP subtraction negates the interval without bounds checking
+
+statement error
+SELECT DATE '2000-01-01' - INTERVAL '-2147483648 months';
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+statement error
+SELECT DATE '2000-01-01' - INTERVAL '-2147483648 days';
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+statement error
+SELECT TIMESTAMP '2000-01-01 00:00:00' - INTERVAL '-2147483648 months';
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+statement error
+SELECT TIMESTAMP '2000-01-01 00:00:00' - INTERVAL '-2147483648 days';
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+statement error
+SELECT TIMESTAMP '2000-01-01 00:00:00' - (INTERVAL (-9223372036854775808) MICROSECONDS);
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+statement error
+SELECT time_bucket(INTERVAL '1 month', TIMESTAMP '2000-01-01 00:00:00', INTERVAL '-2147483648 months');
+----
+<REGEX>:Out of Range Error:.*negat.*
+
+# negating in-range negative values still works
+query I
+SELECT DATE '2000-01-01' - INTERVAL '-5 days';
+----
+2000-01-06 00:00:00

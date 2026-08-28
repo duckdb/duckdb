@@ -546,6 +546,10 @@ interval_t Interval::FromMicro(int64_t delta_us) {
 }
 
 interval_t Interval::Invert(interval_t interval) {
+	if (interval.months == NumericLimits<int32_t>::Minimum() || interval.days == NumericLimits<int32_t>::Minimum() ||
+	    interval.micros == NumericLimits<int64_t>::Minimum()) {
+		throw OutOfRangeException("Interval value is out of range for negation");
+	}
 	interval.days = -interval.days;
 	interval.micros = -interval.micros;
 	interval.months = -interval.months;
