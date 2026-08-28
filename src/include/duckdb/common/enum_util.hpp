@@ -272,6 +272,12 @@ enum class GroupByExpressionInfoType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class HTTPExecutionMode : uint8_t;
+
+enum class HTTPRequestState : uint8_t;
+
+enum class HTTPRetryDecision : uint8_t;
+
 enum class HTTPStatusCode : uint16_t;
 
 enum class IdentifierCaseMode : uint8_t;
@@ -992,6 +998,15 @@ const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoTy
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPExecutionMode>(HTTPExecutionMode value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPRequestState>(HTTPRequestState value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPRetryDecision>(HTTPRetryDecision value);
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
@@ -1893,6 +1908,15 @@ GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const 
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
+
+template<>
+HTTPExecutionMode EnumUtil::FromString<HTTPExecutionMode>(const char *value);
+
+template<>
+HTTPRequestState EnumUtil::FromString<HTTPRequestState>(const char *value);
+
+template<>
+HTTPRetryDecision EnumUtil::FromString<HTTPRetryDecision>(const char *value);
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);

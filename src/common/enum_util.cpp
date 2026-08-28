@@ -2837,6 +2837,61 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 	return static_cast<HLLStorageType>(StringUtil::StringToEnum(GetHLLStorageTypeValues(), 2, "HLLStorageType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetHTTPExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPExecutionMode::BLOCKING), "BLOCKING" },
+		{ static_cast<uint32_t>(HTTPExecutionMode::DEFERRABLE), "DEFERRABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPExecutionMode>(HTTPExecutionMode value) {
+	return StringUtil::EnumToString(GetHTTPExecutionModeValues(), 2, "HTTPExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPExecutionMode EnumUtil::FromString<HTTPExecutionMode>(const char *value) {
+	return static_cast<HTTPExecutionMode>(StringUtil::StringToEnum(GetHTTPExecutionModeValues(), 2, "HTTPExecutionMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetHTTPRequestStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPRequestState::COMPLETED), "COMPLETED" },
+		{ static_cast<uint32_t>(HTTPRequestState::PENDING), "PENDING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPRequestState>(HTTPRequestState value) {
+	return StringUtil::EnumToString(GetHTTPRequestStateValues(), 2, "HTTPRequestState", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPRequestState EnumUtil::FromString<HTTPRequestState>(const char *value) {
+	return static_cast<HTTPRequestState>(StringUtil::StringToEnum(GetHTTPRequestStateValues(), 2, "HTTPRequestState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetHTTPRetryDecisionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPRetryDecision::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(HTTPRetryDecision::RETRY), "RETRY" },
+		{ static_cast<uint32_t>(HTTPRetryDecision::FAILED), "FAILED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPRetryDecision>(HTTPRetryDecision value) {
+	return StringUtil::EnumToString(GetHTTPRetryDecisionValues(), 3, "HTTPRetryDecision", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPRetryDecision EnumUtil::FromString<HTTPRetryDecision>(const char *value) {
+	return static_cast<HTTPRetryDecision>(StringUtil::StringToEnum(GetHTTPRetryDecisionValues(), 3, "HTTPRetryDecision", value));
+}
+
 const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(HTTPStatusCode::INVALID), "INVALID" },
