@@ -62,10 +62,6 @@ MetaPipeline &MetaPipeline::GetLastChild() {
 	return *current_children.get().back();
 }
 
-const reference_map_t<Pipeline, vector<reference<Pipeline>>> &MetaPipeline::GetDependencies() const {
-	return pipeline_dependencies;
-}
-
 MetaPipelineType MetaPipeline::Type() const {
 	return type;
 }
@@ -116,8 +112,7 @@ Pipeline &MetaPipeline::CreatePipeline() {
 }
 
 void MetaPipeline::AddPipelineDependency(Pipeline &dependant, Pipeline &dependency) {
-	pipeline_dependencies[dependant].push_back(dependency);
-	dependant.intra_dependencies.push_back(weak_ptr<Pipeline>(dependency.shared_from_this()));
+	dependant.AddIntraDependency(dependency);
 }
 
 vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &start,
@@ -224,12 +219,7 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	state.SetPipelineSink(union_pipeline, sink, 0);
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
-	union_pipeline.dependencies = current.dependencies;
-	union_pipeline.intra_dependencies = current.intra_dependencies;
-	auto it = pipeline_dependencies.find(current);
-	if (it != pipeline_dependencies.end()) {
-		pipeline_dependencies[union_pipeline] = it->second;
-	}
+	union_pipeline.InheritDependencies(current);
 
 	if (order_matters) {
 		// if we need to preserve order, or if the sink is not parallel, we set a dependency
@@ -252,7 +242,7 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 	// between 'current' and now (including 'current') - set them up
 	AddPipelineDependency(child_pipeline, current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);
-	D_ASSERT(pipeline_dependencies.find(child_pipeline) != pipeline_dependencies.end());
+	D_ASSERT(!child_pipeline.intra_dependencies.empty());
 }
 
 } // namespace duckdb

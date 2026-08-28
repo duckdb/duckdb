@@ -260,6 +260,15 @@ vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
 	return dependencies;
 }
 
+void Pipeline::AddIntraDependency(Pipeline &dependency) {
+	intra_dependencies.emplace_back(dependency.shared_from_this());
+}
+
+void Pipeline::InheritDependencies(const Pipeline &other) {
+	dependencies = other.dependencies;
+	intra_dependencies = other.intra_dependencies;
+}
+
 vector<reference<Pipeline>> Pipeline::GetAllDependencies() const {
 	vector<reference<Pipeline>> result;
 	for (auto &weak_dep : intra_dependencies) {
