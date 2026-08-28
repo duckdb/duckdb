@@ -607,7 +607,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	g_state->InitializeScanInfo(input);
-	if (!bind_data.is_create_index) {
+	const bool repeatable_percentage_sample =
+	    input.sample_options && input.sample_options->repeatable && input.sample_options->is_percentage;
+	if (!bind_data.is_create_index && !repeatable_percentage_sample) {
 		g_state->read_ahead = CreateTableScanReadAhead(context, storage);
 	}
 	if (!input.CanRemoveFilterColumns()) {
