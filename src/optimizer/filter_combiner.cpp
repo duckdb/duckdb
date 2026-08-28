@@ -343,6 +343,10 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	return false;
 }
 
+static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
+	return type.IsNumeric() || type.IsTemporal() || type.id() == LogicalTypeId::BOOLEAN;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
                                                                const vector<ColumnIndex> &column_ids, column_t expr_id,
                                                                vector<ExpressionValueInformation> &info_list) {
@@ -417,8 +421,9 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		                                  comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 		                                  comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 		if (!supported_comparison || left.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF || !left.GetReturnType().IsNumeric() ||
-		    !right.GetReturnType().IsNumeric()) {
+		    right.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    !TypeSupportsMultiColumnComparison(left.GetReturnType()) ||
+		    !TypeSupportsMultiColumnComparison(right.GetReturnType())) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		const auto &left_ref = left.Cast<BoundColumnRefExpression>();
