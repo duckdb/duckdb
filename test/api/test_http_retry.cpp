@@ -204,7 +204,6 @@ public:
 	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &) override {
 		throw NotImplementedException("OPTIONS");
 	}
-
 };
 
 //! A client with no asynchronous transport, i.e. every backend that exists today. It does not
