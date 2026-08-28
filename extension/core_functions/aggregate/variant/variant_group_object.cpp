@@ -165,13 +165,29 @@ void VariantObjClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_dat
 	ListClusterUpdate<false>(&packed, aggr_input_data, 1, clustered, count);
 }
 
+AggregateStateLayout VariantObjStateLayout(AggregateLayoutInput &input) {
+	AggregateStateLayout layout;
+	if (input.function.GetReturnType().IsAggregateState()) {
+		layout.type = input.function.GetReturnType();
+	} else {
+		layout.type = LogicalType::LIST(GetInternalBufferType());
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(VariantObjAggState));
+	layout.field = BuildStateField<StateListType<StateReturnType>>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	return layout;
+}
+
 } // namespace
 
 AggregateFunction VariantGroupObjectFun::GetFunction() {
-	return AggregateFunction({LogicalType::VARCHAR, LogicalType::VARIANT()}, LogicalType::VARIANT(),
-	                         AggregateFunction::StateSize<VariantObjAggState>,
-	                         AggregateFunction::StateInitialize<VariantObjAggState, VariantObjFun>, VariantObjUpdate,
-	                         ListCombineFunction<VariantObjFun>, VariantObjFinalize, VariantObjClusterUpdate);
+	auto function =
+	    AggregateFunction({LogicalType::VARCHAR, LogicalType::VARIANT()}, LogicalType::VARIANT(),
+	                      AggregateFunction::StateSize<VariantObjAggState>,
+	                      AggregateFunction::StateInitialize<VariantObjAggState, VariantObjFun>, VariantObjUpdate,
+	                      ListCombineFunction<VariantObjFun>, VariantObjFinalize, VariantObjClusterUpdate);
+	function.SetStructStateExport(VariantObjStateLayout);
+	return function;
 }
 
 } // namespace duckdb
