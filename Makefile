@@ -955,7 +955,9 @@ bundle-library-obj: bundle-setup
 bundle-library: release
 	make bundle-library-o
 
-gather-libs: release
+.PHONY: gather-libs
+
+gather-libs:
 	cd build/release && \
 	rm -rf libs && \
 	mkdir -p libs && \

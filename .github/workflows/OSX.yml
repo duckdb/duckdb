@@ -110,6 +110,9 @@ jobs:
       - name: Build
         run: python3 scripts/ci/retry.py -- make
 
+      - name: Bundle static libraries
+        run: make gather-libs
+
       - name: CLI check
         run: |
           ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
@@ -157,16 +160,26 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          mkdir build/release_arm64 build/release_amd64
+          mkdir -p build/release_arm64/libs build/release_amd64/libs
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
           lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+
+          for library in build/release/libs/*.a; do
+            library_name="$(basename "$library")"
+            lipo -extract arm64 -output "build/release_arm64/libs/$library_name" "$library"
+            lipo -verify_arch arm64 "build/release_arm64/libs/$library_name"
+            lipo -extract x86_64 -output "build/release_amd64/libs/$library_name" "$library"
+            lipo -verify_arch x86_64 "build/release_amd64/libs/$library_name"
+          done
 
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
           make shared-libs-release-artifact ARTIFACT_SUFFIX=osx-universal SHARED_LIBRARIES="build/release/src/libduckdb*.dylib"
+          zip -r -j static-libs-osx-arm64.zip src/include/duckdb.h build/release_arm64/libs/
+          zip -r -j static-libs-osx-amd64.zip src/include/duckdb.h build/release_amd64/libs/
 
-          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz
+          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-osx-universal.tar.gz duckdb-cli-osx-arm64.tar.gz duckdb-cli-osx-amd64.tar.gz duckdb-shared-libs-osx-universal.tar.gz static-libs-osx-arm64.zip static-libs-osx-amd64.zip
 
       - uses: actions/upload-artifact@v7
         with:
@@ -187,6 +200,16 @@ jobs:
         with:
           path: duckdb-shared-libs-osx-universal.tar.gz
           archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-arm64
+          path: static-libs-osx-arm64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-amd64
+          path: static-libs-osx-amd64.zip
 
       - name: Unit Test
         shell: bash
