@@ -875,7 +875,7 @@ public:
 		idx_t group_index = active_group ? active_group->index : 0;
 		idx_t group_offset = active_group ? active_group->offset : 0;
 
-		idx_t remaining_to_skip = skip_count;
+		idx_t skipped = 0;
 
 		// This skips straight to the correct metadata group
 		idx_t meta_groups_to_skip = (skip_count + group_offset) / BITPACKING_METADATA_GROUP_SIZE;
@@ -888,13 +888,13 @@ public:
 
 			// Remove rows from the current offset to the start of the target group.
 			auto skipped_group_rows = meta_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE - group_offset;
-			D_ASSERT(skipped_group_rows <= remaining_to_skip);
-			remaining_to_skip -= skipped_group_rows;
+			D_ASSERT(skipped_group_rows <= skip_count);
+			skipped += skipped_group_rows;
 
 			if (target_group_index == group_count) {
 				// No group exists after the terminal position.
 				Finish();
-				D_ASSERT(remaining_to_skip == 0);
+				D_ASSERT(skipped == skip_count);
 				return;
 			}
 			LoadGroup(target_group_index);
@@ -905,19 +905,22 @@ public:
 		}
 		auto &current_group = GetCurrentGroup();
 
-		D_ASSERT(remaining_to_skip <= current_group.Remaining());
+		D_ASSERT(skipped <= skip_count);
+		D_ASSERT(skip_count - skipped <= current_group.Remaining());
 
 		if (current_group.metadata.mode == BitpackingMode::CONSTANT ||
 		    current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA ||
 		    current_group.metadata.mode == BitpackingMode::FOR) {
 			// Skipping within a non-delta group advances the current group's row offset.
+			auto remaining_to_skip = skip_count - skipped;
 			current_group.Advance(remaining_to_skip);
-			remaining_to_skip = 0;
+			skipped += remaining_to_skip;
 		} else {
 			// DELTA_FOR must decode skipped values to retain the preceding delta.
 			D_ASSERT(current_group.metadata.mode == BitpackingMode::DELTA_FOR);
 
-			while (remaining_to_skip > 0) {
+			while (skipped < skip_count) {
+				auto remaining_to_skip = skip_count - skipped;
 				idx_t offset_in_compression_group =
 				    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 				idx_t skipping_this_algorithm_group =
@@ -936,11 +939,11 @@ public:
 				    static_cast<T>(DeltaDecode<T_S>(skipped_values, static_cast<T_S>(current_group.delta_offset)));
 
 				current_group.Advance(skipping_this_algorithm_group);
-				remaining_to_skip -= skipping_this_algorithm_group;
+				skipped += skipping_this_algorithm_group;
 			}
 		}
 
-		D_ASSERT(remaining_to_skip == 0);
+		D_ASSERT(skipped == skip_count);
 		if (current_group.AtEnd() && current_group.index + 1 == group_count) {
 			Finish();
 		}
