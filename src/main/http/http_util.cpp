@@ -169,11 +169,116 @@ HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, 
 	return HTTPRequestState::COMPLETED;
 }
 
+namespace {
+
+//! Runs one request's attempts without blocking the caller: it issues each attempt through the
+//! client, and on a retryable failure asks HTTPUtil::Wait to come back later rather than sleeping
+//! here. The retry policy is the same HTTPRetryState the synchronous path uses, so a client that
+//! defers a request keeps the retry behaviour instead of losing it.
+//! Each callback holds a reference to the driver, which is what keeps it alive across a deferral.
+class AsyncRetryDriver : public enable_shared_from_this<AsyncRetryDriver> {
+public:
+	AsyncRetryDriver(HTTPUtil &http_util, BaseRequest &request, unique_ptr<HTTPClient> &client,
+	                 HTTPResponseCallback on_complete)
+	    : http_util(http_util), request(request), client(client), on_complete(std::move(on_complete)) {
+	}
+
+	//! Issue the request, reporting whether everything resolved before returning
+	HTTPRequestState Start() {
+		Attempt();
+		return delivered ? HTTPRequestState::COMPLETED : HTTPRequestState::PENDING;
+	}
+
+private:
+	void Attempt() {
+		auto self = shared_from_this();
+		// the returned state is not needed: an attempt that finished inline has already called back
+		client->Send(request, HTTPExecutionMode::DEFERRABLE,
+		             [self](unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+			             self->OnAttemptDone(std::move(response), error);
+		             });
+	}
+
+	void OnAttemptDone(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+		HTTPAttempt attempt;
+		attempt.response = std::move(response);
+		if (error) {
+			attempt.exception_error = error->RawMessage();
+		}
+		http_util.LogRequest(request, attempt.response.get());
+
+		uint64_t delay_ms = 0;
+		switch (retry_state.OnAttempt(request, attempt, delay_ms)) {
+		case HTTPRetryDecision::FINISHED:
+			Deliver(std::move(attempt.response), nullptr);
+			return;
+		case HTTPRetryDecision::FAILED:
+			DeliverFailure(attempt);
+			return;
+		case HTTPRetryDecision::RETRY: {
+			// refresh the client for the next attempt, mirroring the synchronous retry callback
+			client = http_util.InitializeClient(request.params, request.proto_host_port);
+			auto self = shared_from_this();
+			http_util.Wait(delay_ms, [self]() { self->Attempt(); });
+			return;
+		}
+		}
+	}
+
+	//! Finalize turns an exhausted request into either a failed response or a throw, and a throw has
+	//! nowhere to go from a completion, so it is delivered as an error instead
+	void DeliverFailure(HTTPAttempt &attempt) {
+		try {
+			Deliver(retry_state.Finalize(request, attempt), nullptr);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			Deliver(nullptr, &error);
+		}
+	}
+
+	void Deliver(unique_ptr<HTTPResponse> response, optional_ptr<ErrorData> error) {
+		delivered = true;
+		on_complete(std::move(response), error);
+	}
+
+private:
+	HTTPUtil &http_util;
+	BaseRequest &request;
+	unique_ptr<HTTPClient> &client;
+	HTTPResponseCallback on_complete;
+	HTTPRetryState retry_state;
+	//! Whether the completion has been invoked, read only on the synchronous unwind out of Start
+	bool delivered = false;
+};
+
+} // namespace
+
 HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &client, HTTPExecutionMode mode,
                                 HTTPResponseCallback on_complete) {
-	// default: go through SendRequest, so an implementation that overrides only that one keeps its
-	// retry, timing and logging behaviour
-	on_complete(SendRequest(request, client), nullptr);
+	if (mode == HTTPExecutionMode::BLOCKING) {
+		// the caller needs an answer now, so take the synchronous path an implementation may override
+		on_complete(SendRequest(request, client), nullptr);
+		return HTTPRequestState::COMPLETED;
+	}
+	if (!client) {
+		client = InitializeClient(request.params, request.proto_host_port);
+		if (!client) {
+			throw InvalidConfigurationException(
+			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
+		}
+	}
+	auto driver = make_shared_ptr<AsyncRetryDriver>(*this, request, client, std::move(on_complete));
+	return driver->Start();
+}
+
+HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
+	// default: this platform has a thread to wait on, which is what the retry backoff has always done
+#ifndef DUCKDB_NO_THREADS
+	if (delay_ms > 0) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+	}
+#endif
+	resume();
 	return HTTPRequestState::COMPLETED;
 }
 

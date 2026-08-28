@@ -397,10 +397,20 @@ public:
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
 	//! SendRequest, delivering the result through [on_complete] instead of returning it.
-	//! The default delegates to SendRequest above, so an implementation that only overrides that one
-	//! keeps working unchanged and stays in charge of its own retry and logging.
+	//! BLOCKING goes through SendRequest above, so an implementation that overrides that one keeps
+	//! its behaviour exactly. DEFERRABLE retries here instead, driving HTTPClient::Send one attempt
+	//! at a time, so a client that defers a request still gets the retry policy rather than losing
+	//! it - a backend implements HTTPClient::Send, and does not need to override this at all.
+	//! [request] and [client] must stay alive until the completion fires.
 	DUCKDB_API virtual HTTPRequestState Send(BaseRequest &request, unique_ptr<HTTPClient> &client,
 	                                         HTTPExecutionMode mode, HTTPResponseCallback on_complete);
+
+	//! Wait [delay_ms] before the next attempt of a request, then run [resume].
+	//! The default sleeps the calling thread and returns COMPLETED, which is what the retry backoff
+	//! has always done. An implementation that must not block - a browser, an event loop - overrides
+	//! this to schedule [resume] and return PENDING, which is the only platform-specific piece of
+	//! retrying without a thread to wait on.
+	DUCKDB_API virtual HTTPRequestState Wait(uint64_t delay_ms, std::function<void()> resume);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides
