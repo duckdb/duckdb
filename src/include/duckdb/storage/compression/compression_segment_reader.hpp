@@ -80,6 +80,18 @@ public:
 		return result;
 	}
 
+	//! Returns a view over the next length bytes aligned for T and advances the position.
+	template <class T>
+	unsafe_array_ptr<const uint8_t> ReadBytesAligned(idx_t length) {
+		CheckForwardRead(length);
+		if (DUCKDB_UNLIKELY(reinterpret_cast<uintptr_t>(data + position) % alignof(T) != 0)) { // NOLINT
+			ThrowArrayMisaligned();
+		}
+		unsafe_array_ptr<const uint8_t> result(data + position, length);
+		position += length;
+		return result;
+	}
+
 	//! Returns a view over length bytes at offset without changing the position.
 	unsafe_array_ptr<const uint8_t> GetBytes(idx_t offset, idx_t length) const {
 		CheckRange(offset, length);
