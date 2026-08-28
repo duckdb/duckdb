@@ -1,0 +1,89 @@
+module: function signature
+
+handles:
+  function_signature:
+    description: |
+      An opaque handle to a function signature. Carries the function's argument types and return type.
+
+functions:
+  function_signature_add_parameter:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    parameters:
+      sig:
+        type: function_signature
+        kind: IN
+        description: The signature to configure.
+      name:
+        type: identifier
+        kind: IN
+        description: The parameter name. Borrowed and copied.
+      type:
+        type: logical_type
+        kind: IN
+        description: The parameter type. Borrowed and copied.
+      value:
+        type: value
+        kind: IN
+        description: Optional default value, borrowed and copied. Will be cast to the parameter type.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  function_signature_set_varargs:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Sets the variadic tail type of a signature.
+
+      Makes the signature variadic: after its fixed parameters it accepts any
+      number of extra trailing arguments, each implicitly cast to type. Pass
+      ANY for a heterogeneous tail whose arguments keep their own types. A
+      NULL or INVALID type is rejected with INVALID_INPUT; ANY is accepted.
+      Calling this again overwrites the previous variadic tail type. The type
+      is borrowed and copied.
+    role: setter
+    belongs_to: function_signature
+    parameters:
+      sig:
+        type: function_signature
+        description: The signature to configure.
+      type:
+        type: logical_type
+        description: The type extra trailing arguments are cast to. ANY leaves them un-cast.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  function_signature_set_return_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Sets the return type of a signature.
+
+      Sets the signature's return type. The type is borrowed and copied.
+      Calling this again overwrites the previous return type. An INVALID
+      type is rejected with ERROR_INPUT_INVALID. Whether a concrete return
+      type is required, and whether ANY is accepted, depends on the function
+      family and is enforced when the signature is registered with a builder.
+    role: setter
+    belongs_to: function_signature
+    parameters:
+      sig:
+        type: function_signature
+        description: The signature to configure.
+      type:
+        type: logical_type
+        description: The return type. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

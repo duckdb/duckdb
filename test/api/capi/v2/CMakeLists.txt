@@ -12,6 +12,7 @@ add_library_unity(
   test_capi_v2_option.cpp
   test_capi_v2_query.cpp
   test_capi_v2_result.cpp
+  test_capi_v2_scalar_function.cpp
   test_capi_v2_statement.cpp
   test_capi_v2_static_extension.cpp
   test_capi_v2_value.cpp

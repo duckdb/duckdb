@@ -248,6 +248,79 @@ auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<Exceptio
 	}
 }
 
+auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message) noexcept -> void {
+	// Set the fallback code first (non-throwing), then render the detail.
+	code = DUCKDB_V2_ERROR_API;
+	try {
+		// The bare throw re-raises the exception currently being handled so the catch clauses can dispatch on its type.
+		try {
+			throw;
+		} catch (const duckdb::Exception &ex) {
+			ErrorData error_data(ex);
+			code = GetErrorCodeFromExceptionType(error_data.Type());
+			text = error_data.Message();
+			raw_message = error_data.RawMessage();
+		} catch (const std::bad_alloc &) {
+			code = DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+			text = "Out of memory.";
+		} catch (const std::exception &ex) {
+			text = ex.what() ? ex.what() : "An unknown error occurred.";
+		} catch (...) {
+			text = "An unknown error occurred.";
+		}
+	} catch (const std::bad_alloc &) {
+		// Rendering the detail exhausted memory: that supersedes the original report.
+		code = DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+		text.clear();
+		raw_message.clear();
+	} catch (...) {
+		// Rendering the detail failed: keep the code produced so far with no detail.
+		text.clear();
+		raw_message.clear();
+	}
+}
+
+auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, const char *argument) noexcept
+    -> DUCKDB_V2_ERROR {
+	const auto code = DUCKDB_V2_ERROR_INPUT_INVALID;
+	if (!err) {
+		return code;
+	}
+	// This runs outside WithErrorHandler, so nothing may escape across the C ABI. Only allocating the slot itself
+	// can fail unrecoverably; the return code is authoritative either way.
+	if (!*err) {
+		try {
+			*err = Convert(new CV2ErrorInfo());
+		} catch (const std::bad_alloc &) {
+			return DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+		} catch (...) { // NOLINT(bugprone-empty-catch)
+			return code;
+		}
+	}
+	// Stamp the code and drop any stale detail with non-throwing operations, so the slot is consistent even if
+	// rendering the message below fails.
+	auto &out = *Convert(*err);
+	out.code = code;
+	out.message.clear();
+	out.raw_message.clear();
+	try {
+		// Render through ErrorData so message/raw_message match what WithErrorHandler
+		// produces for a thrown InvalidInputException.
+		ErrorData error_data(ExceptionType::INVALID_INPUT,
+		                     StringUtil::Format("The '%s' argument to '%s' cannot be null", argument, function));
+		auto message = error_data.Message();
+		auto raw_message = error_data.RawMessage();
+		out.message = std::move(message);
+		out.raw_message = std::move(raw_message);
+	} catch (const std::bad_alloc &) {
+		// Rendering the detail exhausted memory: that supersedes the null-argument report.
+		out.code = DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
+		return out.code;
+	} catch (...) { // NOLINT(bugprone-empty-catch)
+	}
+	return code;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Option Construction
 //----------------------------------------------------------------------------------------------------------------------

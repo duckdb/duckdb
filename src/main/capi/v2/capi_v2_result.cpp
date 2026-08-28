@@ -503,15 +503,16 @@ DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn, du
                                             const duckdb_v2_identifier_t *parameter_names,
                                             const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
                                             duckdb_v2_result_handle *out_result, duckdb_v2_error_info_handle *err) {
+	// The refusals here never reach the engine and leave the statement intact
+	// (the spec commits to this).
+	DUCKDB_CHECK_ARG(out_result);
+	*out_result = nullptr;
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(statement);
+	if (parameter_count > 0 && !parameter_values) {
+		return NullArgumentError(err, __func__, "parameter_values");
+	}
 	return WithErrorHandler(err, [&]() {
-		if (out_result) {
-			*out_result = nullptr;
-		}
-		// The refusals below never reach the engine and leave the statement intact
-		// (the spec commits to this).
-		if (!conn || !statement || !out_result || (parameter_count > 0 && !parameter_values)) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_statement_execute");
-		}
 		auto *connection = Convert(conn);
 		auto wrapper = duckdb::make_uniq<ResultWrapperV2>();
 		// One live result per connection. The busy slot lives in the context's
@@ -583,10 +584,9 @@ DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_handle conn, du
 
 DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle result, idx_t *out_rows_changed,
                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_rows_changed);
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_rows_changed) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_drain");
-		}
 		auto *wrapper = Convert(result);
 		// Drain to completion: side effects are applied, rows of a
 		// row-producing result are discarded. CHANGED_ROWS results stream a
@@ -610,16 +610,14 @@ DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle *result, idx
                                             idx_t max_col_width, duckdb_v2_str null_value, idx_t render_mode,
                                             idx_t limit, duckdb_v2_text_sink_fn sink, void *user_data,
                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(*result);
+	DUCKDB_CHECK_ARG(sink);
+	// Validate the by-value arguments before consuming the result, so an
+	// argument rejection leaves the caller's result intact (as the null-arg
+	// rejections above do).
+	DUCKDB_CHECK_ARG(null_value);
 	return WithErrorHandler(err, [&]() {
-		if (!result || !*result || !sink) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_render_box");
-		}
-		// Validate the by-value arguments before consuming the result, so an
-		// argument rejection leaves the caller's result intact (as the null-arg
-		// rejection above does).
-		if (!null_value.ptr && null_value.len > 0) {
-			throw duckdb::InvalidInputException("null_value: null pointer with nonzero length");
-		}
 		if (render_mode > 1) {
 			throw duckdb::InvalidInputException("render_mode must be 0 (rows) or 1 (columns)");
 		}
@@ -701,11 +699,11 @@ DUCKDB_V2_ERROR duckdb_v2_result_destroy(duckdb_v2_result_handle *result) {
 
 DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result, duckdb_v2_data_chunk_handle *out_chunk,
                                       DUCKDB_V2_RESULT_STEP_STATUS *out_status, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_chunk);
+	DUCKDB_CHECK_ARG(out_status);
+	*out_chunk = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_chunk || !out_status) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_step");
-		}
-		*out_chunk = nullptr;
 		auto *wrapper = Convert(result);
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		auto status = wrapper->Step(chunk);
@@ -718,11 +716,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle result, duckdb_v2_
 
 DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handle result, duckdb_v2_data_chunk_handle *out_chunk,
                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_chunk);
+	*out_chunk = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_chunk) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_fetch_chunk");
-		}
-		*out_chunk = nullptr;
 		auto *wrapper = Convert(result);
 		auto chunk = wrapper->FetchChunkBlocking();
 		if (chunk) {
@@ -732,12 +729,8 @@ DUCKDB_V2_ERROR duckdb_v2_result_fetch_chunk(duckdb_v2_result_handle result, duc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle result, duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!result) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_wait");
-		}
-		Convert(result)->Wait();
-	});
+	DUCKDB_CHECK_ARG(result);
+	return WithErrorHandler(err, [&]() { Convert(result)->Wait(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -746,10 +739,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle result, duckdb_v2_
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_handle result, DUCKDB_V2_RESULT_TYPE *out_type,
                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_result_type");
-		}
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		*out_type = MapResultType(r->properties.return_type);
@@ -758,10 +751,10 @@ DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_handle result,
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_result_handle result, DUCKDB_V2_STATEMENT_TYPE *out_type,
                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+
 	return WithErrorHandler(err, [&]() {
-		if (!result || !out_type) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_statement_type");
-		}
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		*out_type = static_cast<DUCKDB_V2_STATEMENT_TYPE>(r->statement_type);
@@ -770,14 +763,12 @@ DUCKDB_V2_ERROR duckdb_v2_result_get_statement_type(duckdb_v2_result_handle resu
 
 DUCKDB_V2_ERROR duckdb_v2_result_get_schema(duckdb_v2_result_handle result, duckdb_v2_schema_handle *out_schema,
                                             duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (out_schema) {
-			*out_schema = nullptr;
-		}
+	DUCKDB_CHECK_ARG(out_schema);
+	*out_schema = nullptr;
 
-		if (!result || !out_schema) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_result_get_schema");
-		}
+	DUCKDB_CHECK_ARG(result);
+
+	return WithErrorHandler(err, [&]() {
 		auto *r = Convert(result);
 		r->RequireMetadata();
 		auto schema = duckdb::make_uniq<CV2Schema>();

@@ -1,0 +1,453 @@
+module: scalar
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  scalar_function:
+    description: "TODO"
+
+  scalar_function_bind_info:
+    description: "TODO"
+
+  scalar_function_init_info:
+    description: "TODO"
+
+  scalar_function_exec_info:
+    description: "TODO"
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  scalar_function_bind_callback:
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      context:
+        type: context
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  scalar_function_init_callback:
+    parameters:
+      info:
+        type: scalar_function_init_info
+      context:
+        type: context
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  scalar_function_exec_callback:
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      context:
+        type: context
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the function in.
+      function:
+        type: scalar_function
+        indirection: 1
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the function in.
+      function:
+        type: scalar_function
+        indirection: 1
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the name of.
+      name:
+        type: str
+        indirection: 1
+        description: The name to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_get_signature:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        kind: IN
+        description: The function to get the signature of.
+      sig:
+        type: function_signature
+        indirection: 1
+        kind: OUT
+        description: The returned signature. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  scalar_function_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: The user data to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the bind callback of.
+      callback:
+        type: scalar_function_bind_callback
+        description: The bind callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_set_init_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the init callback of.
+      callback:
+        type: scalar_function_init_callback
+        description: The init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_set_exec_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the exec callback of.
+      callback:
+        type: scalar_function_exec_callback
+        description: The exec callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      data:
+        type: opaque
+        indirection: 1
+        description: The bind data to set
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_bind_set_return_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_bind_info
+      return_type:
+        type: logical_type
+        description: The return type to set. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_init_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_init_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_init_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_init_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_init_set_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_init_info
+      data:
+        type: opaque
+        indirection: 1
+        description: The init data to set
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Exec Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_exec_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_init_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      data:
+        type: void
+        indirection: 2
+        description: The init data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_row_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Returns how many rows this execution must produce. The exec callback
+      must write exactly this many rows to the result vector. Note that this
+      may be less than a full vector: with all-constant arguments the function
+      is invoked for a single row and the result is expanded by the engine.
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of rows.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Returns how many argument vectors this execution carries: one per
+      argument of the call, variadic tail arguments included. Valid indices
+      for scalar_function_exec_get_arg are [0, count).
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      count:
+        type: u32
+        indirection: 1
+        kind: OUT
+        description: Receives the number of argument vectors.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_arg:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      index:
+        type: u32
+        description: The index of the argument vector to get.
+      vector:
+        type: vector
+        indirection: 1
+        description: The argument vector to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  scalar_function_exec_get_result:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      info:
+        type: scalar_function_exec_info
+      vector:
+        type: vector
+        indirection: 1
+        description: The result vector to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to register.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: TODO
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to destroy.
+        indirection: 1
+    return_type: ERROR

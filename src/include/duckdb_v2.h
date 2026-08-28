@@ -180,6 +180,24 @@ typedef uint64_t idx_t;
 typedef struct _duckdb_extension_info *duckdb_v2_extension_handle;
 
 /* ============================================================================
+ * MODULE: aggregate
+ * ============================================================================ */
+
+/* --- Enums for aggregate --- */
+
+/* --- Struct forward declarations for aggregate --- */
+
+/* --- Types for aggregate --- */
+
+/* --- Constants for aggregate --- */
+
+/* --- Function pointer typedefs for aggregate --- */
+
+/* --- Functions for aggregate --- */
+
+/* --- Struct definitions for aggregate --- */
+
+/* ============================================================================
  * MODULE: common
  * ============================================================================ */
 
@@ -1750,6 +1768,85 @@ struct duckdb_v2_extension_input {
 };
 
 /* ============================================================================
+ * MODULE: function signature
+ * ============================================================================ */
+
+/* --- Enums for function signature --- */
+
+/* --- Struct forward declarations for function signature --- */
+
+/* --- Types for function signature --- */
+
+//! An opaque handle to a function signature. Carries the function's argument types and return type.
+typedef struct _duckdb_v2_function_signature {
+	void *internal_ptr;
+} * duckdb_v2_function_signature_handle;
+
+/* --- Constants for function signature --- */
+
+/* --- Function pointer typedefs for function signature --- */
+
+/* --- Functions for function signature --- */
+
+/*!
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sig The signature to configure.
+ * @param name The parameter name. Borrowed and copied.
+ * @param type The parameter type. Borrowed and copied.
+ * @param value Optional default value, borrowed and copied. Will be cast to the parameter type.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_signature_handle sig,
+                                                                        duckdb_v2_identifier_t name,
+                                                                        duckdb_v2_logical_type_handle type,
+                                                                        duckdb_v2_value_handle value,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the variadic tail type of a signature.
+ *
+ * Makes the signature variadic: after its fixed parameters it accepts any number of extra trailing arguments, each
+ * implicitly cast to type. Pass ANY for a heterogeneous tail whose arguments keep their own types. A NULL or INVALID
+ * type is rejected with INVALID_INPUT; ANY is accepted. Calling this again overwrites the previous variadic tail type.
+ * The type is borrowed and copied.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sig The signature to configure.
+ * @param type The type extra trailing arguments are cast to. ANY leaves them un-cast.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_varargs(duckdb_v2_function_signature_handle sig,
+                                                                      duckdb_v2_logical_type_handle type,
+                                                                      duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the return type of a signature.
+ *
+ * Sets the signature's return type. The type is borrowed and copied. Calling this again overwrites the previous return
+ * type. An INVALID type is rejected with ERROR_INPUT_INVALID. Whether a concrete return type is required, and whether
+ * ANY is accepted, depends on the function family and is enforced when the signature is registered with a builder.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param sig The signature to configure.
+ * @param type The return type. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb_v2_function_signature_handle sig,
+                                                                          duckdb_v2_logical_type_handle type,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for function signature --- */
+
+/* ============================================================================
  * MODULE: logging
  * ============================================================================ */
 
@@ -3164,6 +3261,386 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress);
 
 /* --- Struct definitions for connection --- */
+
+/* ============================================================================
+ * MODULE: scalar
+ * ============================================================================ */
+
+/* --- Enums for scalar --- */
+
+/* --- Struct forward declarations for scalar --- */
+
+/* --- Types for scalar --- */
+
+//! TODO
+typedef struct _duckdb_v2_scalar_function {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_handle;
+
+//! TODO
+typedef struct _duckdb_v2_scalar_function_bind_info {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_bind_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_scalar_function_init_info {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_init_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_scalar_function_exec_info {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_exec_info_handle;
+
+/* --- Constants for scalar --- */
+
+/* --- Function pointer typedefs for scalar --- */
+
+typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_scalar_function_bind_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_scalar_function_init_callback_fn)(duckdb_v2_scalar_function_init_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_scalar_function_exec_callback_fn)(duckdb_v2_scalar_function_exec_info_handle info,
+                                                           duckdb_v2_context_handle context,
+                                                           duckdb_v2_error_info_handle *err);
+
+/* --- Functions for scalar --- */
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to create the function in.
+ * @param function
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_connection(
+    duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the function in.
+ * @param function
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                             duckdb_v2_scalar_function_handle *function,
+                                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the name of.
+ * @param name The name to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_handle function,
+                                                                duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the signature of.
+ * @param sig The returned signature. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_scalar_function_handle function,
+                                                                     duckdb_v2_function_signature_handle *sig,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the user data of.
+ * @param data The user data to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_user_data(duckdb_v2_scalar_function_handle function,
+                                                                     duckdb_v2_opaque *data,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the bind callback of.
+ * @param callback The bind callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_bind_callback(
+    duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_bind_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the init callback of.
+ * @param callback The init callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_init_callback(
+    duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_init_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the exec callback of.
+ * @param callback The exec callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
+    duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_exec_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_user_data(
+    duckdb_v2_scalar_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to set
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
+    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param return_type The return type to set. Borrowed for the call only.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_return_type(
+    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_get_user_data(
+    duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_get_bind_data(
+    duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The init data to set
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_set_init_data(
+    duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_user_data(
+    duckdb_v2_scalar_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_bind_data(
+    duckdb_v2_scalar_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The init data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_init_data(
+    duckdb_v2_scalar_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many rows this execution must produce. The exec callback must write exactly this many rows to the result
+ * vector. Note that this may be less than a full vector: with all-constant arguments the function is invoked for a
+ * single row and the result is expanded by the engine.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of rows.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_row_count(
+    duckdb_v2_scalar_function_exec_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many argument vectors this execution carries: one per argument of the call, variadic tail arguments
+ * included. Valid indices for scalar_function_exec_get_arg are [0, count).
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of argument vectors.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg_count(
+    duckdb_v2_scalar_function_exec_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument vector to get.
+ * @param vector The argument vector to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg(duckdb_v2_scalar_function_exec_info_handle info,
+                                                                    uint32_t index, duckdb_v2_vector_handle *vector,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param vector The result vector to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2_scalar_function_exec_info_handle info,
+                                                                       duckdb_v2_vector_handle *vector,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to register.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_register(duckdb_v2_scalar_function_handle function,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_destroy(duckdb_v2_scalar_function_handle *function);
+
+/* --- Struct definitions for scalar --- */
 
 /* ============================================================================
  * MODULE: sql_statement

@@ -11,6 +11,8 @@ add_library_unity(
   capi_v2_environment.cpp
   capi_v2_error.cpp
   capi_v2_extension.cpp
+  capi_v2_func_scalar.cpp
+  capi_v2_func_signature.cpp
   capi_v2_logging.cpp
   capi_v2_logical_type.cpp
   capi_v2_option.cpp

@@ -7,10 +7,11 @@ using namespace duckdb::capiv2;
 DUCKDB_V2_ERROR duckdb_v2_open(duckdb_v2_environment_handle env, duckdb_v2_str path, duckdb_v2_option_handle *options,
                                idx_t option_count, duckdb_v2_database_handle *out_db,
                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(env);
+	DUCKDB_CHECK_ARG(out_db);
+	DUCKDB_CHECK_ARG(path);
+
 	return WithErrorHandler(err, [&]() {
-		if (!env || !out_db || (!path.ptr && path.len > 0)) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_open");
-		}
 		if (option_count > 0 && !options) {
 			throw duckdb::InvalidInputException("option_count > 0 but options is null in duckdb_v2_open");
 		}
@@ -55,10 +56,9 @@ DUCKDB_V2_ERROR duckdb_v2_close(duckdb_v2_database_handle *db) {
 
 DUCKDB_V2_ERROR duckdb_v2_database_option_set(duckdb_v2_database_handle db, duckdb_v2_option_handle option,
                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(option);
 	return WithErrorHandler(err, [&]() {
-		if (!db || !option) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_database_option_set");
-		}
 		const auto *db_wrapper = Convert(db);
 		const auto *opt = Convert(option);
 		// Use the database's internal ClientContext as the bridge into PhysicalSet::ApplyVariable.
@@ -71,11 +71,11 @@ DUCKDB_V2_ERROR duckdb_v2_database_option_set(duckdb_v2_database_handle db, duck
 
 DUCKDB_V2_ERROR duckdb_v2_database_option_get(duckdb_v2_database_handle db, duckdb_v2_identifier_t name,
                                               duckdb_v2_option_handle *out_option, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(out_option);
+	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!db || (!name.ptr && name.len > 0) || !out_option) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_database_option_get");
-		}
-		*out_option = nullptr;
 		const auto *db_wrapper = Convert(db);
 		auto &client = *db_wrapper->internal_connection->context;
 		auto &config = db_wrapper->database->instance->config;
@@ -86,10 +86,9 @@ DUCKDB_V2_ERROR duckdb_v2_database_option_get(duckdb_v2_database_handle db, duck
 
 DUCKDB_V2_ERROR duckdb_v2_database_option_get_count(duckdb_v2_database_handle db, idx_t *out_count,
                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(out_count);
 	return WithErrorHandler(err, [&]() {
-		if (!db || !out_count) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_database_option_get_count");
-		}
 		const auto *db_wrapper = Convert(db);
 		const auto &config = db_wrapper->database->instance->config;
 		*out_count = duckdb::DBConfig::GetOptionCount() + config.GetExtensionSettings().size();
@@ -99,11 +98,10 @@ DUCKDB_V2_ERROR duckdb_v2_database_option_get_count(duckdb_v2_database_handle db
 DUCKDB_V2_ERROR duckdb_v2_database_option_get_by_index(duckdb_v2_database_handle db, idx_t index,
                                                        duckdb_v2_option_handle *out_option,
                                                        duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(db);
+	DUCKDB_CHECK_ARG(out_option);
+	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!db || !out_option) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_database_option_get_by_index");
-		}
-		*out_option = nullptr;
 		const auto *db_wrapper = Convert(db);
 		auto &client = *db_wrapper->internal_connection->context;
 		auto &config = db_wrapper->database->instance->config;
@@ -114,10 +112,8 @@ DUCKDB_V2_ERROR duckdb_v2_database_option_get_by_index(duckdb_v2_database_handle
 }
 
 DUCKDB_V2_ERROR duckdb_v2_library_version(duckdb_v2_str *out_version, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_version);
 	return WithErrorHandler(err, [&]() {
-		if (!out_version) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_library_version");
-		}
 		const auto version = duckdb::DuckDB::LibraryVersion();
 		*out_version = duckdb_v2_str {version, std::strlen(version)};
 	});

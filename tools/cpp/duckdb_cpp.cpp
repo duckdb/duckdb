@@ -2,6 +2,7 @@
 #include "duckdb_cpp.hpp"
 
 #include <cstring>
+#include <memory>
 
 // The V2 extension header. By default, (client library, or extension statically linked into DuckDB) this library binds
 // duckdb_v2_* symbols at link time and only needs the header for the loader-interface types of the extension
@@ -106,6 +107,14 @@ struct HandleTraits<ColumnDataCollection::WorkerScanState> {
 template <>
 struct HandleTraits<QueryResult> {
 	using handle = duckdb_v2_result_handle;
+};
+template <>
+struct HandleTraits<FunctionSignature> {
+	using handle = duckdb_v2_function_signature_handle;
+};
+template <>
+struct HandleTraits<ScalarFunction> {
+	using handle = duckdb_v2_scalar_function_handle;
 };
 
 } // namespace detail
@@ -2131,6 +2140,322 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, ToStr(null_value),
 	               render_mode, limit, sink, &out);
 	return out;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Function Signature
+//----------------------------------------------------------------------------------------------------------------------
+
+FunctionSignature::FunctionSignature(void *impl) : detail::Handle<FunctionSignature>(impl) {
+}
+
+FunctionSignature::~FunctionSignature() {
+	// The signature is borrowed from its function, so we don't destroy the handle here
+}
+
+auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type) -> FunctionSignature & {
+	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), ToStr(name), type.handle(),
+	               static_cast<duckdb_v2_value_handle>(nullptr));
+	return *this;
+}
+
+auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, const Value &default_value)
+    -> FunctionSignature & {
+	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), ToStr(name), type.handle(),
+	               default_value.handle());
+	return *this;
+}
+
+auto FunctionSignature::SetVarArgs(const LogicalType &type) -> FunctionSignature & {
+	CheckedAPICall(duckdb_v2_function_signature_set_varargs, handle(), type.handle());
+	return *this;
+}
+
+auto FunctionSignature::SetReturnType(const LogicalType &type) -> FunctionSignature & {
+	CheckedAPICall(duckdb_v2_function_signature_set_return_type, handle(), type.handle());
+	return *this;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Scalar Function
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered scalar function: rides the C user_data
+// slot so the trampolines can find it; the user's own slot (SetUserData) rides
+// inside it. Owned by the registered function, freed at engine teardown.
+struct ScalarFunctionInfo {
+	ScalarFunction::BindCallback bind_callback = nullptr;
+	ScalarFunction::InitCallback init_callback = nullptr;
+	ScalarFunction::ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+	ScalarFunctionInfo(ScalarFunction::BindCallback bind_callback, ScalarFunction::InitCallback init_callback,
+	                   ScalarFunction::ExecCallback exec_callback, detail::UserData user_data)
+	    : bind_callback(bind_callback), init_callback(init_callback), exec_callback(exec_callback),
+	      user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const ScalarFunctionInfo &other) const {
+		return bind_callback == other.bind_callback && init_callback == other.init_callback &&
+		       exec_callback == other.exec_callback && user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for the inputs' GetUserData: a clear error instead of a null deref.
+void *RequireUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call ScalarFunction::SetUserData before Register");
+	}
+	return ptr;
+}
+
+// Guard for the inputs' GetBindData: a clear error instead of a null deref.
+void *RequireBindData(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+	}
+	return ptr;
+}
+
+// Guard for ExecInput::GetInitData: a clear error instead of a null deref.
+void *RequireInitData(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException("no init data was set; call InitInput::SetInitData in the init callback");
+	}
+	return ptr;
+}
+
+} // namespace
+
+ScalarFunction::ScalarFunction(void *impl) : detail::Handle<ScalarFunction>(impl) {
+}
+
+ScalarFunction::~ScalarFunction() {
+	auto _h = handle();
+	duckdb_v2_scalar_function_destroy(&_h);
+}
+
+auto ScalarFunction::Create(const Connection &conn) -> ScalarFunction {
+	duckdb_v2_scalar_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<ScalarFunction>(_h);
+}
+
+auto ScalarFunction::Create(const Extension &extension) -> ScalarFunction {
+	duckdb_v2_scalar_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<ScalarFunction>(_h);
+}
+
+auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto ScalarFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_get_signature, handle(), &sig);
+	return detail::Factory::Make<FunctionSignature>(sig);
+}
+
+auto ScalarFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto ScalarFunction::SetBindCallback(BindCallback callback) & -> ScalarFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_scalar_function_set_bind_callback, handle(), nullptr);
+		bind_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_scalar_function_bind_get_user_data, info, &user_data);
+			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.bind_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_scalar_function_set_bind_callback, handle(), trampoline);
+	bind_callback = callback;
+	return *this;
+}
+
+auto ScalarFunction::SetInitCallback(InitCallback callback) & -> ScalarFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_scalar_function_set_init_callback, handle(), nullptr);
+		init_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_scalar_function_init_get_user_data, info, &user_data);
+			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<InitInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.init_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_scalar_function_set_init_callback, handle(), trampoline);
+	init_callback = callback;
+	return *this;
+}
+
+auto ScalarFunction::SetExecCallback(ExecCallback callback) & -> ScalarFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_scalar_function_set_exec_callback, handle(), nullptr);
+		exec_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_scalar_function_exec_get_user_data, info, &user_data);
+			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<ExecInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.exec_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_scalar_function_set_exec_callback, handle(), trampoline);
+	exec_callback = callback;
+	return *this;
+}
+
+auto ScalarFunction::Register() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<ScalarFunctionInfo>(
+	    new ScalarFunctionInfo(bind_callback, init_callback, exec_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<ScalarFunctionInfo>,
+	                         detail::TypedEquals<ScalarFunctionInfo>};
+	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
+	// The function owns the table now.
+	info.release();
+
+	CheckedAPICall(duckdb_v2_scalar_function_register, handle());
+}
+
+void *ScalarFunction::BindInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_bind_get_user_data,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(user_data);
+	return RequireUserData(function.user_data);
+}
+
+void ScalarFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                    void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_scalar_function_bind_set_bind_data,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &opaque);
+}
+
+auto ScalarFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
+	CheckedAPICall(duckdb_v2_scalar_function_bind_set_return_type,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), type.handle());
+}
+
+auto ScalarFunction::BindInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *ScalarFunction::InitInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_init_get_bind_data,
+	               static_cast<duckdb_v2_scalar_function_init_info_handle>(args), &bind_data);
+	return RequireBindData(bind_data);
+}
+
+void ScalarFunction::InitInput::SetInitDataInternal(void *data, void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, nullptr};
+	CheckedAPICall(duckdb_v2_scalar_function_init_set_init_data,
+	               static_cast<duckdb_v2_scalar_function_init_info_handle>(args), &opaque);
+}
+
+void *ScalarFunction::InitInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_init_get_user_data,
+	               static_cast<duckdb_v2_scalar_function_init_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(user_data);
+	return RequireUserData(function.user_data);
+}
+
+auto ScalarFunction::InitInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *ScalarFunction::ExecInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_bind_data,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &bind_data);
+	return RequireBindData(bind_data);
+}
+
+void *ScalarFunction::ExecInput::GetInitDataInternal() const {
+	void *init_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_init_data,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &init_data);
+	return RequireInitData(init_data);
+}
+
+void *ScalarFunction::ExecInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_user_data,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(user_data);
+	return RequireUserData(function.user_data);
+}
+
+auto ScalarFunction::ExecInput::GetRowCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_row_count,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &count);
+	return count;
+}
+
+auto ScalarFunction::ExecInput::GetArgCount() const -> idx_t {
+	uint32_t count = 0;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_arg_count,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &count);
+	return count;
+}
+
+auto ScalarFunction::ExecInput::GetArg(idx_t index) const -> Vector {
+	duckdb_v2_vector_handle vector = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_arg,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), static_cast<uint32_t>(index),
+	               &vector);
+	return detail::Factory::Make<Vector>(vector);
+}
+
+auto ScalarFunction::ExecInput::GetResult() const -> Vector {
+	duckdb_v2_vector_handle vector = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_exec_get_result,
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &vector);
+	return detail::Factory::Make<Vector>(vector);
+}
+
+auto ScalarFunction::ExecInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
 }
 
 } // namespace cxx

@@ -1,0 +1,88 @@
+module: aggregate
+#
+## Handles
+#handles:
+#  aggregate_function:
+#
+#  aggregate_function_bind_info:
+#
+#  aggregate_function_size_info:
+#
+#  aggregate_function_init_info:
+#
+#  aggregate_function_update_info:
+#
+#  aggregate_function_combine_info:
+#
+#  aggregate_function_finalize_info:
+#
+#  aggregate_function_destroy_info:
+#
+## Callbacks
+#callbacks:
+#  aggregate_function_bind_callback:
+#
+#  aggregate_function_size_callback:
+#
+#  aggregate_function_init_callback:
+#
+#  aggregate_function_update_callback:
+#
+#  aggregate_function_combine_callback:
+#
+#  aggregate_function_finalize_callback:
+#
+#  aggregate_function_destroy_callback:
+#
+## Functions
+#functions:
+#
+#  # Constructors
+#  aggregate_function_create_with_connection:
+#
+#  aggregate_function_create_with_extension:
+#
+#  # Properties
+#  aggregate_function_set_name:
+#
+#  aggregate_function_set_signature:
+#
+#  aggregate_function_set_user_data:
+#
+#  aggregate_function_set_bind_callback:
+#
+#  aggregate_function_set_size_callback:
+#
+#  aggregate_function_set_init_callback:
+#
+#  aggregate_function_set_update_callback:
+#
+#  aggregate_function_set_combine_callback:
+#
+#  aggregate_function_set_finalize_callback:
+#
+#  aggregate_function_set_destroy_callback:
+#
+#  # -- Bind Callback Functions
+#  aggregate_function_bind_get_user_data:
+#
+#  aggregate_function_bind_set_bind_data:
+#
+#  aggregate_function_bind_set_return_type:
+#
+#  # -- Size Callback Functions
+#  aggregate_function_size_get_user_data:
+#
+#  aggregate_function_size_get_bind_data:
+#
+#  aggregate_function_size_set_state_size:
+#
+#  # -- Init Callback Functions
+#  aggregate_function_init_get_user_data:
+#
+#  aggregate_function_init_get_bind_data:
+#
+#  aggregate_function_init_set_init_data:
+#
+#  # -- Update Callback Functions
+#

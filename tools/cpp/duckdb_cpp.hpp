@@ -148,6 +148,85 @@ struct Factory {
 template <class T>
 struct always_false : std::false_type {};
 
+/// @internal
+/// Deletes `ptr` as a `T *`: the destructor shape the C API's opaque data slots take.
+template <class T>
+void TypedDelete(void *ptr) {
+	delete static_cast<T *>(ptr);
+}
+
+/// @internal
+/// Compares two `T *` by `operator==`: the equality shape the C API's opaque data slots take.
+template <class T>
+bool TypedEquals(void *ptr_a, void *ptr_b) {
+	return *static_cast<T *>(ptr_a) == *static_cast<T *>(ptr_b);
+}
+
+/// @internal
+/// Whether `const T` supports `operator==`.
+template <class T, class = void>
+struct is_equality_comparable : std::false_type {};
+template <class T>
+struct is_equality_comparable<T, std::void_t<decltype(std::declval<const T &>() == std::declval<const T &>())>>
+    : std::true_type {};
+
+/// @internal
+/// The equals callback for a `T`-typed opaque slot: `TypedEquals` when `T` is equality-comparable, null otherwise,
+/// which makes the engine fall back to comparing the slots by identity.
+template <class T>
+constexpr auto SelectEquals() -> bool (*)(void *, void *) {
+	if constexpr (is_equality_comparable<T>::value) {
+		return TypedEquals<T>;
+	} else {
+		return nullptr;
+	}
+}
+
+/// @internal
+/// Move-only custody of a user-provided pointer plus the destructor that frees it.
+class UserData {
+public:
+	UserData() : data(nullptr), destructor(nullptr) {
+	}
+	UserData(void *data, void (*destructor)(void *)) : data(data), destructor(destructor) {
+	}
+
+	UserData(const UserData &) = delete;
+	UserData &operator=(const UserData &) = delete;
+
+	UserData(UserData &&other) noexcept : data(other.data), destructor(other.destructor) {
+		other.data = nullptr;
+		other.destructor = nullptr;
+	}
+
+	UserData &operator=(UserData &&other) noexcept {
+		if (this != &other) {
+			if (data && destructor) {
+				destructor(data);
+			}
+			data = other.data;
+			destructor = other.destructor;
+			other.data = nullptr;
+			other.destructor = nullptr;
+		}
+		return *this;
+	}
+
+	~UserData() {
+		if (data && destructor) {
+			destructor(data);
+		}
+	}
+
+	auto get() const -> void * {
+		return data;
+	}
+
+private:
+	void *data;
+	void (*destructor)(void *);
+};
+
 } // namespace detail
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2302,6 +2381,259 @@ public:
 
 private:
 	explicit QueryResult(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Function Signature
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A function's declared parameters, variadic tail, and return type.
+/// Borrowed from the `ScalarFunction` it was read from via `GetSignature`, and valid for as long as that function is;
+/// the setters mutate the function's signature in place. The setters return `*this` so they chain.
+class FunctionSignature final : public detail::Handle<FunctionSignature> {
+	friend detail::Factory;
+
+public:
+	FunctionSignature(FunctionSignature &&) noexcept = default;
+	FunctionSignature &operator=(FunctionSignature &&) noexcept = default;
+
+	~FunctionSignature() override;
+
+	/// Appends a parameter without a default value. `LogicalTypeId::ANY` is accepted and leaves the argument un-cast.
+	/// @param name The parameter's name.
+	/// @param type The parameter's type.
+	auto AddParameter(const std::string &name, const LogicalType &type) -> FunctionSignature &;
+
+	/// Appends a parameter with a default value: the caller may omit it, the function still receives the default.
+	/// @param name The parameter's name.
+	/// @param type The parameter's type.
+	/// @param default_value The value the parameter takes when the caller omits it.
+	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value)
+	    -> FunctionSignature &;
+
+	/// Sets the variadic tail type, allowing any number of extra arguments after the fixed parameters. Pass
+	/// `LogicalTypeId::ANY` to leave the tail un-cast. Overwrites any prior variadic tail.
+	/// @param type The type every extra argument is cast to.
+	auto SetVarArgs(const LogicalType &type) -> FunctionSignature &;
+
+	/// Sets the return type. Overwrites any prior return type.
+	/// @param type The return type.
+	auto SetReturnType(const LogicalType &type) -> FunctionSignature &;
+
+private:
+	explicit FunctionSignature(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Scalar Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined scalar function, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
+/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
+/// lives on in the catalog.
+///
+/// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
+/// callback, the bind callback may plant bind data for init and exec, and the init callback may plant init data for
+/// exec. A callback reports failure by throwing; the exception surfaces as the query's error.
+class ScalarFunction final : public detail::Handle<ScalarFunction> {
+	friend detail::Factory;
+
+public:
+	class BindInput;
+	class InitInput;
+	class ExecInput;
+
+	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
+	using BindCallback = void (*)(BindInput &input);
+	/// Called once per execution thread before the first `ExecCallback` on it. Optional.
+	using InitCallback = void (*)(InitInput &input);
+	/// Called for every batch of rows; must fill the result vector. Required.
+	using ExecCallback = void (*)(ExecInput &input);
+
+	ScalarFunction(ScalarFunction &&) noexcept = default;
+	ScalarFunction &operator=(ScalarFunction &&) noexcept = default;
+
+	~ScalarFunction() override;
+
+	/// Creates a function that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> ScalarFunction;
+	/// Creates a function that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> ScalarFunction;
+
+	/// Sets the function's name, as SQL will call it.
+	auto SetName(const std::string &name) & -> ScalarFunction &;
+
+	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
+	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> ScalarFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
+	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
+	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
+
+	/// Registers the function in the catalog it was created against. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
+	/// @throws InvalidInputException When the name, exec callback, or a usable return type is missing.
+	auto Register() -> void;
+
+private:
+	explicit ScalarFunction(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	BindCallback bind_callback = nullptr;
+	InitCallback init_callback = nullptr;
+	ExecCallback exec_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the bind callback works with. Borrowed, valid only for the callback duration.
+	class BindInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs bind data of type `T`, owned by the bound function call and readable from the init and exec
+		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
+		/// `operator==` when `T` has one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
+		/// @param type The concrete return type of this bound call.
+		auto SetReturnType(const LogicalType &type) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BindInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the init callback works with. Borrowed, valid only for the callback duration.
+	class InitInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs init data of type `T`, owned by this execution thread's function state and readable from the
+		/// exec callback via `GetInitData<T>`.
+		template <class T, class... ARGS>
+		void SetInitData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetInitDataInternal(ptr, detail::TypedDelete<T>);
+		}
+
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// The context the function is initialized in. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		InitInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetInitDataInternal(void *data, void (*destructor)(void *));
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the exec callback works with. Borrowed, valid only for the callback duration.
+	class ExecInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The init data set via `InitInput::SetInitData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetInitData() const -> T & {
+			return *static_cast<T *>(GetInitDataInternal());
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many rows this execution must produce: the exec callback writes exactly this many rows to the result
+		/// vector. May be less than a full vector; with all-constant arguments the function runs for a single row and
+		/// the engine expands the result.
+		auto GetRowCount() const -> idx_t;
+
+		/// How many argument vectors this execution carries: one per argument of the call, variadic tail arguments
+		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// One argument's vector.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArg(idx_t index) const -> Vector;
+
+		/// The result vector to fill.
+		auto GetResult() const -> Vector;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		ExecInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetInitDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 inline auto Context::CreateType() -> TypeBuilder<Context> {

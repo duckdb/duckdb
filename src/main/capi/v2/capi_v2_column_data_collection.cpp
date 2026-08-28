@@ -41,13 +41,7 @@ static auto Convert(duckdb_v2_column_data_collection_worker_scan_state_handle st
 static void CreateColumnDataCollection(ClientContext &context, const duckdb_v2_logical_type_handle *types_array,
                                        idx_t types_count, duckdb_v2_column_data_collection_handle *out_collection,
                                        const char *function_name) {
-	if (!out_collection) {
-		throw InvalidInputException("null argument to %s", function_name);
-	}
 	*out_collection = nullptr;
-	if (!types_array) {
-		throw InvalidInputException("null argument to %s", function_name);
-	}
 	if (types_count == 0) {
 		throw InvalidInputException("%s requires at least one column type", function_name);
 	}
@@ -94,11 +88,10 @@ using namespace duckdb::capiv2;
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_connection(
     duckdb_v2_connection_handle conn, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
     duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(types_array);
+	DUCKDB_CHECK_ARG(out_collection);
 	return WithErrorHandler(err, [&]() {
-		if (!conn) {
-			throw duckdb::InvalidInputException(
-			    "null argument to duckdb_v2_column_data_collection_create_with_connection");
-		}
 		CreateColumnDataCollection(*Convert(conn)->context, types_array, types_count, out_collection,
 		                           "duckdb_v2_column_data_collection_create_with_connection");
 	});
@@ -107,11 +100,10 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_connection(
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_context(
     duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
     duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(context);
+	DUCKDB_CHECK_ARG(types_array);
+	DUCKDB_CHECK_ARG(out_collection);
 	return WithErrorHandler(err, [&]() {
-		if (!context) {
-			throw duckdb::InvalidInputException(
-			    "null argument to duckdb_v2_column_data_collection_create_with_context");
-		}
 		CreateColumnDataCollection(*Convert(context), types_array, types_count, out_collection,
 		                           "duckdb_v2_column_data_collection_create_with_context");
 	});
@@ -119,12 +111,8 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_context(
 
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_reset(duckdb_v2_column_data_collection_handle collection,
                                                        duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!collection) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_column_data_collection_reset");
-		}
-		Convert(collection)->Reset();
-	});
+	DUCKDB_CHECK_ARG(collection);
+	return WithErrorHandler(err, [&]() { Convert(collection)->Reset(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_destroy(duckdb_v2_column_data_collection_handle *collection) {
@@ -139,10 +127,10 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_destroy(duckdb_v2_column_data_c
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_combine(duckdb_v2_column_data_collection_handle target,
                                                          duckdb_v2_column_data_collection_handle *source,
                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(target);
+	DUCKDB_CHECK_ARG(source);
+	DUCKDB_CHECK_ARG(*source);
 	return WithErrorHandler(err, [&]() {
-		if (!target || !source || !*source) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_column_data_collection_combine");
-		}
 		auto &target_cdc = *Convert(target);
 		auto *source_cdc = Convert(*source);
 		if (source_cdc == &target_cdc) {
@@ -160,24 +148,19 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_combine(duckdb_v2_column_data_c
 
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_row_count(duckdb_v2_column_data_collection_handle collection,
                                                            idx_t *out_row_count, duckdb_v2_error_info_handle *err) {
-	return WithErrorHandler(err, [&]() {
-		if (!collection || !out_row_count) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_column_data_collection_row_count");
-		}
-		*out_row_count = Convert(collection)->Count();
-	});
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(out_row_count);
+	return WithErrorHandler(err, [&]() { *out_row_count = Convert(collection)->Count(); });
 }
 
 DUCKDB_V2_ERROR
 duckdb_v2_column_data_collection_append_state_create(duckdb_v2_column_data_collection_handle collection,
                                                      duckdb_v2_column_data_collection_append_state_handle *out_state,
                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(out_state);
+	*out_state = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!collection || !out_state) {
-			throw duckdb::InvalidInputException(
-			    "null argument to duckdb_v2_column_data_collection_append_state_create");
-		}
-		*out_state = nullptr;
 		auto state = duckdb::make_uniq<duckdb::ColumnDataAppendState>();
 		Convert(collection)->InitializeAppend(*state);
 		*out_state = Convert(state.release());
@@ -198,10 +181,10 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_append(duckdb_v2_column_data_co
                                                         duckdb_v2_column_data_collection_append_state_handle state,
                                                         duckdb_v2_data_chunk_handle chunk,
                                                         duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(state);
+	DUCKDB_CHECK_ARG(chunk);
 	return WithErrorHandler(err, [&]() {
-		if (!collection || !state || !chunk) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_column_data_collection_append");
-		}
 		auto &cdc = *Convert(collection);
 		auto &input = *Convert(chunk);
 		VerifyChunkTypes(cdc, input, "duckdb_v2_column_data_collection_append");
@@ -212,12 +195,10 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_append(duckdb_v2_column_data_co
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_shared_scan_state_create(
     duckdb_v2_column_data_collection_handle collection,
     duckdb_v2_column_data_collection_shared_scan_state_handle *out_state, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(out_state);
+	*out_state = nullptr;
 	return WithErrorHandler(err, [&]() {
-		if (!collection || !out_state) {
-			throw duckdb::InvalidInputException(
-			    "null argument to duckdb_v2_column_data_collection_shared_scan_state_create");
-		}
-		*out_state = nullptr;
 		auto state = duckdb::make_uniq<duckdb::ColumnDataParallelScanState>();
 		// Zero-copy: scanned chunks reference buffers pinned by the worker scan
 		// state, valid until that worker's next scan or the state's destruction.
@@ -239,11 +220,9 @@ DUCKDB_V2_ERROR duckdb_v2_column_data_collection_shared_scan_state_destroy(
 DUCKDB_V2_ERROR duckdb_v2_column_data_collection_worker_scan_state_create(
     duckdb_v2_column_data_collection_handle collection,
     duckdb_v2_column_data_collection_worker_scan_state_handle *out_state, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(out_state);
 	return WithErrorHandler(err, [&]() {
-		if (!collection || !out_state) {
-			throw duckdb::InvalidInputException(
-			    "null argument to duckdb_v2_column_data_collection_worker_scan_state_create");
-		}
 		// The collection is not needed yet; keep the argument for future compatibility.
 		auto state = duckdb::make_uniq<duckdb::ColumnDataLocalScanState>();
 		*out_state = Convert(state.release());
@@ -266,10 +245,12 @@ duckdb_v2_column_data_collection_scan(duckdb_v2_column_data_collection_handle co
                                       duckdb_v2_column_data_collection_worker_scan_state_handle worker_state,
                                       duckdb_v2_data_chunk_handle out_chunk, bool *did_produce_chunk,
                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(collection);
+	DUCKDB_CHECK_ARG(shared_state);
+	DUCKDB_CHECK_ARG(worker_state);
+	DUCKDB_CHECK_ARG(out_chunk);
+	DUCKDB_CHECK_ARG(did_produce_chunk);
 	return WithErrorHandler(err, [&]() {
-		if (!collection || !shared_state || !worker_state || !out_chunk || !did_produce_chunk) {
-			throw duckdb::InvalidInputException("null argument to duckdb_v2_column_data_collection_scan");
-		}
 		auto &cdc = *Convert(collection);
 		auto &chunk = *Convert(out_chunk);
 		VerifyChunkTypes(cdc, chunk, "duckdb_v2_column_data_collection_scan");
