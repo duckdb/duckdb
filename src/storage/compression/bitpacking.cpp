@@ -870,16 +870,16 @@ public:
 		idx_t remaining_to_skip = skip_count;
 
 		// Skip over complete groups without loading their metadata, headers, or payloads.
-		idx_t metadata_groups_to_skip = (skip_count + group_offset) / BITPACKING_METADATA_GROUP_SIZE;
-		if (metadata_groups_to_skip) {
-			idx_t target_group_index = group_index + metadata_groups_to_skip;
+		idx_t meta_groups_to_skip = (skip_count + group_offset) / BITPACKING_METADATA_GROUP_SIZE;
+		if (meta_groups_to_skip) {
+			idx_t target_group_index = group_index + meta_groups_to_skip;
 			bool skip_lands_exactly_on_group_boundary =
 			    (skip_count + group_offset) % BITPACKING_METADATA_GROUP_SIZE == 0;
 			D_ASSERT(target_group_index < group_count ||
 			         (target_group_index == group_count && skip_lands_exactly_on_group_boundary));
 
 			// Remove rows from the current offset to the start of the target group.
-			auto skipped_group_rows = metadata_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE - group_offset;
+			auto skipped_group_rows = meta_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE - group_offset;
 			D_ASSERT(skipped_group_rows <= remaining_to_skip);
 			remaining_to_skip -= skipped_group_rows;
 
