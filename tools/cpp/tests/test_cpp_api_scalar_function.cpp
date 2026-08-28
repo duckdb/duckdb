@@ -275,8 +275,7 @@ TEST_CASE("Stable C++API: scalar function registration validation", "[cpp_api]")
 		auto function = ScalarFunction::Create(conn);
 		function.SetExecCallback(PlusOneExec);
 		function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException,
-		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 
 	// No exec callback.
@@ -284,8 +283,7 @@ TEST_CASE("Stable C++API: scalar function registration validation", "[cpp_api]")
 		auto function = ScalarFunction::Create(conn);
 		function.SetName("cpp_no_exec");
 		function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException,
-		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 
 	// An ANY return type without a bind callback to resolve it.
@@ -293,7 +291,313 @@ TEST_CASE("Stable C++API: scalar function registration validation", "[cpp_api]")
 		auto function = ScalarFunction::Create(conn);
 		function.SetName("cpp_unresolved_any").SetExecCallback(PlusOneExec);
 		function.GetSignature().AddParameter("a", integer).SetReturnType(conn.CreateType(LogicalTypeId::ANY));
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException,
-		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
+}
+
+// ---------------------------------------------------------------------------
+// ScalarExecutor: the row-at-a-time helper over primitive types.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Collect a single INTEGER column, keeping NULLs as (false, 0).
+std::vector<std::pair<bool, int32_t>> CollectNullableInts(QueryResult result) {
+	std::vector<std::pair<bool, int32_t>> out;
+	while (auto chunk = result.FetchChunk()) {
+		auto view = chunk.GetVector(0).GetView();
+		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
+			const auto valid = view.IsValid(i);
+			out.emplace_back(valid, valid ? view.Data<int32_t>()[view.SelAt(i)] : 0);
+		}
+	}
+	return out;
+}
+
+void ExecutorAddExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t, int32_t, int32_t>(input, [](int32_t a, int32_t b) { return a + b; });
+}
+
+void ExecutorSevenExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t>(input, []() { return 7; });
+}
+
+// Heterogeneous argument types: INTEGER + BIGINT -> BIGINT.
+void ExecutorMixedExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int64_t, int32_t, int64_t>(input, [](int32_t a, int64_t b) { return a * b; });
+}
+
+// The executor's type list disagrees with the registered signature's arity.
+void ExecutorWrongArityExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t, int32_t, int32_t>(input, [](int32_t a, int32_t b) { return a + b; });
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: ScalarExecutor computes rows and propagates NULLs", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto function = ScalarFunction::Create(conn);
+	function.SetName("exec_add").SetExecCallback(ExecutorAddExec);
+	function.GetSignature().AddParameter("a", integer).AddParameter("b", integer).SetReturnType(integer);
+	function.Register();
+
+	// Constant, flat, and filtered (selection vector) inputs.
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_add(40, 2)")) == std::vector<int32_t> {42});
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_add(r::INTEGER, 10) FROM range(4) t(r)")) ==
+	        std::vector<int32_t> {10, 11, 12, 13});
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_add(r::INTEGER, 0) FROM range(8) t(r) WHERE r % 2 = 0")) ==
+	        std::vector<int32_t> {0, 2, 4, 6});
+
+	// A NULL in either argument yields NULL for that row alone.
+	auto rows = CollectNullableInts(conn.Execute("SELECT exec_add(x, 1) FROM (VALUES (1), (NULL), (3)) t(x)"));
+	auto expected = std::vector<std::pair<bool, int32_t>> {{true, 2}, {false, 0}, {true, 4}};
+	REQUIRE(rows == expected);
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor handles nullary and mixed-type functions", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto seven = ScalarFunction::Create(conn);
+	seven.SetName("exec_seven").SetExecCallback(ExecutorSevenExec);
+	seven.GetSignature().SetReturnType(integer);
+	seven.Register();
+
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_seven()")) == std::vector<int32_t> {7});
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_seven() FROM range(3)")) == std::vector<int32_t> {7, 7, 7});
+
+	auto mixed = ScalarFunction::Create(conn);
+	mixed.SetName("exec_mixed").SetExecCallback(ExecutorMixedExec);
+	mixed.GetSignature()
+	    .AddParameter("a", integer)
+	    .AddParameter("b", conn.ParseType("BIGINT"))
+	    .SetReturnType(conn.ParseType("BIGINT"));
+	mixed.Register();
+
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_mixed(6, 7)::INTEGER")) == std::vector<int32_t> {42});
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor refuses an arity mismatch", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto function = ScalarFunction::Create(conn);
+	function.SetName("exec_wrong_arity").SetExecCallback(ExecutorWrongArityExec);
+	function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	function.Register();
+
+	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT exec_wrong_arity(1)").Drain(), InvalidInputException,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor drives vectors directly", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	// Two argument columns and a result column, no scalar function involved.
+	std::vector<LogicalType> arg_types;
+	arg_types.push_back(conn.ParseType("INTEGER"));
+	arg_types.push_back(conn.ParseType("INTEGER"));
+	DataChunk args(conn, arg_types);
+
+	constexpr idx_t kCount = 4;
+	auto a = args.GetVector(0);
+	a.SetSize(kCount);
+	auto b = args.GetVector(1);
+	b.SetSize(kCount);
+	auto *a_data = a.GetDataMutable<int32_t>();
+	auto *b_data = b.GetDataMutable<int32_t>();
+	for (idx_t i = 0; i < kCount; i++) {
+		a_data[i] = static_cast<int32_t>(i);
+		b_data[i] = 10;
+	}
+	a.SetNull(2);
+
+	std::vector<LogicalType> out_types;
+	out_types.push_back(conn.ParseType("INTEGER"));
+	DataChunk out(conn, out_types);
+	auto result = out.GetVector(0);
+	result.SetSize(kCount);
+
+	ScalarExecutor::Execute<int32_t, int32_t, int32_t>(a, b, result, kCount,
+	                                                   [](int32_t x, int32_t y) -> int32_t { return x + y; });
+
+	auto view = result.GetView();
+	REQUIRE(view.IsValid(0));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(0)] == 10);
+	REQUIRE(view.Data<int32_t>()[view.SelAt(1)] == 11);
+	REQUIRE(!view.IsValid(2)); // the NULL argument row propagated
+	REQUIRE(view.IsValid(3));
+	REQUIRE(view.Data<int32_t>()[view.SelAt(3)] == 13);
+}
+
+// ---------------------------------------------------------------------------
+// ScalarExecutor composed type forms: std::optional, std::tuple, references.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// optional result: NULL is produced by the callable itself.
+void SafeDivExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<std::optional<int32_t>, int32_t, int32_t>(
+	    input, [](int32_t a, int32_t b) -> std::optional<int32_t> {
+		    if (b == 0) {
+			    return std::nullopt;
+		    }
+		    return a / b;
+	    });
+}
+
+// optional argument: the callable sees NULL rows as nullopt instead of the
+// row being skipped. Counts them to prove it was invoked.
+std::atomic<int> nullopt_seen {0};
+
+void OptBumpExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<std::optional<int32_t>, std::optional<int32_t>>(
+	    input, [](std::optional<int32_t> a) -> std::optional<int32_t> {
+		    if (!a) {
+			    nullopt_seen++;
+			    return std::nullopt;
+		    }
+		    return *a + 1;
+	    });
+}
+
+// tuple argument: STRUCT(x INTEGER, y INTEGER) -> x + y.
+void PointSumExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t, std::tuple<int32_t, int32_t>>(
+	    input, [](const std::tuple<int32_t, int32_t> &p) { return std::get<0>(p) + std::get<1>(p); });
+}
+
+// tuple argument with an optional field: a NULL y no longer nulls the row.
+void PointSumOptYExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t, std::tuple<int32_t, std::optional<int32_t>>>(
+	    input, [](const std::tuple<int32_t, std::optional<int32_t>> &p) {
+		    return std::get<0>(p) + std::get<1>(p).value_or(0);
+	    });
+}
+
+// tuple result: INTEGER -> STRUCT(x INTEGER, y INTEGER).
+void MakePointExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<std::tuple<int32_t, int32_t>, int32_t>(input,
+	                                                               [](int32_t a) { return std::make_tuple(a, a * 2); });
+}
+
+// reference argument: reads in place instead of copying.
+void RefAddExec(ScalarFunction::ExecInput &input) {
+	ScalarExecutor::Execute<int32_t, std::reference_wrapper<const int32_t>, std::reference_wrapper<const int32_t>>(
+	    input, [](std::reference_wrapper<const int32_t> a, std::reference_wrapper<const int32_t> b) {
+		    return a.get() + b.get();
+	    });
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: ScalarExecutor optional results and arguments", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto safe_div = ScalarFunction::Create(conn);
+	safe_div.SetName("exec_safe_div").SetExecCallback(SafeDivExec);
+	safe_div.GetSignature().AddParameter("a", integer).AddParameter("b", integer).SetReturnType(integer);
+	safe_div.Register();
+
+	auto rows =
+	    CollectNullableInts(conn.Execute("SELECT exec_safe_div(a, b) FROM (VALUES (10, 2), (1, 0), (9, 3)) t(a, b)"));
+	auto expected = std::vector<std::pair<bool, int32_t>> {{true, 5}, {false, 0}, {true, 3}};
+	REQUIRE(rows == expected);
+
+	nullopt_seen = 0;
+	auto opt_bump = ScalarFunction::Create(conn);
+	opt_bump.SetName("exec_opt_bump").SetExecCallback(OptBumpExec);
+	opt_bump.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	opt_bump.Register();
+
+	rows = CollectNullableInts(conn.Execute("SELECT exec_opt_bump(x) FROM (VALUES (1), (NULL), (3)) t(x)"));
+	expected = std::vector<std::pair<bool, int32_t>> {{true, 2}, {false, 0}, {true, 4}};
+	REQUIRE(rows == expected);
+	// The callable ran for the NULL row rather than the row being skipped.
+	REQUIRE(nullopt_seen == 1);
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor tuple arguments read STRUCT fields", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+	const auto point = conn.ParseType("STRUCT(x INTEGER, y INTEGER)");
+
+	auto psum = ScalarFunction::Create(conn);
+	psum.SetName("exec_psum").SetExecCallback(PointSumExec);
+	psum.GetSignature().AddParameter("p", point).SetReturnType(integer);
+	psum.Register();
+
+	// A NULL struct row and a NULL non-optional field both null the row.
+	auto rows = CollectNullableInts(
+	    conn.Execute("SELECT exec_psum(s::STRUCT(x INTEGER, y INTEGER)) FROM (VALUES ({'x': 1, 'y': 2}), (NULL), "
+	                 "({'x': 4, 'y': NULL})) t(s)"));
+	auto expected = std::vector<std::pair<bool, int32_t>> {{true, 3}, {false, 0}, {false, 0}};
+	REQUIRE(rows == expected);
+
+	// With the field declared optional, only the whole-struct NULL nulls the row.
+	auto psum_opt = ScalarFunction::Create(conn);
+	psum_opt.SetName("exec_psum_opt").SetExecCallback(PointSumOptYExec);
+	psum_opt.GetSignature().AddParameter("p", point).SetReturnType(integer);
+	psum_opt.Register();
+
+	rows = CollectNullableInts(
+	    conn.Execute("SELECT exec_psum_opt(s::STRUCT(x INTEGER, y INTEGER)) FROM (VALUES ({'x': 1, 'y': 2}), (NULL), "
+	                 "({'x': 4, 'y': NULL})) t(s)"));
+	expected = std::vector<std::pair<bool, int32_t>> {{true, 3}, {false, 0}, {true, 4}};
+	REQUIRE(rows == expected);
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor tuple result writes STRUCT fields", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto make_point = ScalarFunction::Create(conn);
+	make_point.SetName("exec_make_point").SetExecCallback(MakePointExec);
+	make_point.GetSignature()
+	    .AddParameter("a", conn.ParseType("INTEGER"))
+	    .SetReturnType(conn.ParseType("STRUCT(x INTEGER, y INTEGER)"));
+	make_point.Register();
+
+	auto rows = CollectNullableInts(conn.Execute("SELECT (exec_make_point(r::INTEGER)).x + (exec_make_point("
+	                                             "r::INTEGER)).y FROM range(3) t(r)"));
+	auto expected = std::vector<std::pair<bool, int32_t>> {{true, 0}, {true, 3}, {true, 6}};
+	REQUIRE(rows == expected);
+
+	// A NULL argument nulls the whole struct row, fields included.
+	rows = CollectNullableInts(conn.Execute("SELECT (exec_make_point(x)).y FROM (VALUES (2), (NULL)) t(x)"));
+	expected = std::vector<std::pair<bool, int32_t>> {{true, 4}, {false, 0}};
+	REQUIRE(rows == expected);
+}
+
+TEST_CASE("Stable C++API: ScalarExecutor reference arguments", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto ref_add = ScalarFunction::Create(conn);
+	ref_add.SetName("exec_ref_add").SetExecCallback(RefAddExec);
+	ref_add.GetSignature().AddParameter("a", integer).AddParameter("b", integer).SetReturnType(integer);
+	ref_add.Register();
+
+	REQUIRE(CollectInts(conn.Execute("SELECT exec_ref_add(r::INTEGER, 100) FROM range(3) t(r)")) ==
+	        std::vector<int32_t> {100, 101, 102});
 }

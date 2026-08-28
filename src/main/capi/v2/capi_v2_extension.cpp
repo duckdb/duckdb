@@ -36,7 +36,7 @@ struct DuckDBExtensionLoadStateV2 {
 	ExtensionLoader loader;
 
 	//! The function pointer struct handed to the extension. The extension is expected to copy it during initialization
-	duckdb_ext_api_v2 api_struct;
+	duckdb_ext_api_v2 api_struct = {};
 	//! Whether the extension fetched the API struct. A loadable extension that did not has an all-null vtable
 	bool api_requested = false;
 

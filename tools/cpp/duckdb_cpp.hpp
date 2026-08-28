@@ -31,6 +31,9 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <functional>
+#include <optional>
+#include <tuple>
 #include <vector>
 #include <stdexcept>
 #include <cstdint>
@@ -173,6 +176,12 @@ struct is_equality_comparable<T, std::void_t<decltype(std::declval<const T &>() 
 /// @internal
 /// The equals callback for a `T`-typed opaque slot: `TypedEquals` when `T` is equality-comparable, null otherwise,
 /// which makes the engine fall back to comparing the slots by identity.
+/// @internal
+/// Names `const Vector &` once per element of a type pack: lets a function declare exactly one vector parameter per
+/// argument type.
+template <class T>
+using VectorPerArg = const Vector &;
+
 template <class T>
 constexpr auto SelectEquals() -> bool (*)(void *, void *) {
 	if constexpr (is_equality_comparable<T>::value) {
@@ -2634,6 +2643,314 @@ public:
 		void *GetInitDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Scalar Executor
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace detail {
+
+/// @internal
+/// Names `Vector` once per element of a type pack, to declare one owned child vector per tuple element.
+template <class T>
+using VectorPerField = Vector;
+
+/// @internal
+/// Reads one argument row as a `T`. The primary template covers the primitive types; the specializations add the
+/// composed forms: `std::reference_wrapper<const T>` reads in place, `std::optional<T>` absorbs NULLs, and
+/// `std::tuple<Ts...>` reads a STRUCT/TUPLE vector's fields through its child vectors, recursively.
+/// `IsValid` reports whether a row can produce a value: false when a non-optional part of it is NULL.
+template <class T>
+struct VectorReader {
+	VectorView view;
+
+	explicit VectorReader(const Vector &vec) : view(vec.GetView()) {
+	}
+	bool AllValid() const {
+		return view.AllValid();
+	}
+	bool IsValid(idx_t row) const {
+		return view.IsValid(row);
+	}
+	T Get(idx_t row) const {
+		return view.Data<T>()[view.SelAt(row)];
+	}
+};
+
+template <class T>
+struct VectorReader<std::reference_wrapper<const T>> {
+	VectorView view;
+
+	explicit VectorReader(const Vector &vec) : view(vec.GetView()) {
+	}
+	bool AllValid() const {
+		return view.AllValid();
+	}
+	bool IsValid(idx_t row) const {
+		return view.IsValid(row);
+	}
+	std::reference_wrapper<const T> Get(idx_t row) const {
+		return std::cref(view.Data<T>()[view.SelAt(row)]);
+	}
+};
+
+template <class T>
+struct VectorReader<std::optional<T>> {
+	VectorReader<T> inner;
+
+	explicit VectorReader(const Vector &vec) : inner(vec) {
+	}
+	bool AllValid() const {
+		return inner.AllValid();
+	}
+	// A NULL is a value here (nullopt), so the row always participates.
+	bool IsValid(idx_t) const {
+		return true;
+	}
+	std::optional<T> Get(idx_t row) const {
+		if (!inner.IsValid(row)) {
+			return std::nullopt;
+		}
+		return inner.Get(row);
+	}
+};
+
+template <class... Ts>
+struct VectorReader<std::tuple<Ts...>> {
+	VectorView view;
+	std::tuple<VectorReader<Ts>...> children;
+
+	explicit VectorReader(const Vector &vec)
+	    : view(vec.GetView()), children(MakeChildren(vec, std::index_sequence_for<Ts...> {})) {
+	}
+	bool AllValid() const {
+		return AllValidImpl(std::index_sequence_for<Ts...> {});
+	}
+	bool IsValid(idx_t row) const {
+		// The row's struct entry must be non-NULL, and so must every non-optional field of it. The children index
+		// by entry: their rows align with this vector's elements, so the selection applies once, here.
+		return view.IsValid(row) && IsValidImpl(view.SelAt(row), std::index_sequence_for<Ts...> {});
+	}
+	std::tuple<Ts...> Get(idx_t row) const {
+		return GetImpl(view.SelAt(row), std::index_sequence_for<Ts...> {});
+	}
+
+private:
+	template <size_t... Is>
+	static std::tuple<VectorReader<Ts>...> MakeChildren(const Vector &vec, std::index_sequence<Is...>) {
+		return std::tuple<VectorReader<Ts>...> {VectorReader<Ts>(vec.GetChild(Is))...};
+	}
+	template <size_t... Is>
+	bool AllValidImpl(std::index_sequence<Is...>) const {
+		return view.AllValid() && (... && std::get<Is>(children).AllValid());
+	}
+	template <size_t... Is>
+	bool IsValidImpl(idx_t entry, std::index_sequence<Is...>) const {
+		return (... && std::get<Is>(children).IsValid(entry));
+	}
+	template <size_t... Is>
+	std::tuple<Ts...> GetImpl(idx_t entry, std::index_sequence<Is...>) const {
+		return std::tuple<Ts...> {std::get<Is>(children).Get(entry)...};
+	}
+};
+
+/// @internal
+/// Writes one result row as a `T` into a FLAT vector, mirroring `VectorReader`'s type forms: primitives write the
+/// element, `std::optional<T>` turns nullopt into a NULL row, and `std::tuple<Ts...>` writes a STRUCT/TUPLE vector's
+/// fields through its child vectors, recursively. NULLs go through the validity mask directly (fetched on first use, so
+/// the all-valid path allocates no mask): the result's size is set by the engine only after the callback, so the
+/// size-checked `Vector::SetNull` is not usable here. `ResetValidity` readies the masks before a loop that may write
+/// NULLs; nulling a tuple row nulls its fields too, keeping the engine's nested-NULL invariant.
+template <class T>
+struct VectorWriter {
+	Vector &vec;
+	T *data;
+	ValidityMask mask {nullptr};
+
+	explicit VectorWriter(Vector &vec) : vec(vec), data(vec.GetDataMutable<T>()) {
+	}
+	void ResetValidity(idx_t count) {
+		Mask().SetAllValid(count);
+	}
+	void Set(idx_t row, const T &value) {
+		data[row] = value;
+	}
+	void SetNull(idx_t row) {
+		Mask().SetInvalid(row);
+	}
+
+private:
+	ValidityMask &Mask() {
+		if (!mask.words) {
+			mask = vec.GetValidityMutable();
+		}
+		return mask;
+	}
+};
+
+template <class T>
+struct VectorWriter<std::optional<T>> {
+	VectorWriter<T> inner;
+
+	explicit VectorWriter(Vector &vec) : inner(vec) {
+	}
+	void ResetValidity(idx_t count) {
+		inner.ResetValidity(count);
+	}
+	void Set(idx_t row, const std::optional<T> &value) {
+		if (value) {
+			inner.Set(row, *value);
+		} else {
+			inner.SetNull(row);
+		}
+	}
+	void SetNull(idx_t row) {
+		inner.SetNull(row);
+	}
+};
+
+template <class... Ts>
+struct VectorWriter<std::tuple<Ts...>> {
+	Vector &vec;
+	std::tuple<VectorPerField<Ts>...> child_vectors;
+	std::tuple<VectorWriter<Ts>...> children;
+	ValidityMask mask {nullptr};
+
+	explicit VectorWriter(Vector &vec)
+	    : vec(vec), child_vectors(MakeChildVectors(vec, std::index_sequence_for<Ts...> {})),
+	      children(MakeChildWriters(child_vectors, std::index_sequence_for<Ts...> {})) {
+	}
+	void ResetValidity(idx_t count) {
+		Mask().SetAllValid(count);
+		ResetValidityImpl(count, std::index_sequence_for<Ts...> {});
+	}
+	void Set(idx_t row, const std::tuple<Ts...> &value) {
+		SetImpl(row, value, std::index_sequence_for<Ts...> {});
+	}
+	void SetNull(idx_t row) {
+		// A NULL struct entry requires NULL fields, so the row nulls recursively.
+		Mask().SetInvalid(row);
+		SetNullImpl(row, std::index_sequence_for<Ts...> {});
+	}
+
+private:
+	template <size_t... Is>
+	static std::tuple<VectorPerField<Ts>...> MakeChildVectors(Vector &vec, std::index_sequence<Is...>) {
+		return std::tuple<VectorPerField<Ts>...> {vec.GetChild(Is)...};
+	}
+	template <size_t... Is>
+	static std::tuple<VectorWriter<Ts>...> MakeChildWriters(std::tuple<VectorPerField<Ts>...> &vectors,
+	                                                        std::index_sequence<Is...>) {
+		return std::tuple<VectorWriter<Ts>...> {VectorWriter<Ts>(std::get<Is>(vectors))...};
+	}
+	template <size_t... Is>
+	void ResetValidityImpl(idx_t count, std::index_sequence<Is...>) {
+		(std::get<Is>(children).ResetValidity(count), ...);
+	}
+	template <size_t... Is>
+	void SetImpl(idx_t row, const std::tuple<Ts...> &value, std::index_sequence<Is...>) {
+		(std::get<Is>(children).Set(row, std::get<Is>(value)), ...);
+	}
+	template <size_t... Is>
+	void SetNullImpl(idx_t row, std::index_sequence<Is...>) {
+		(std::get<Is>(children).SetNull(row), ...);
+	}
+	ValidityMask &Mask() {
+		if (!mask.words) {
+			mask = vec.GetValidityMutable();
+		}
+		return mask;
+	}
+};
+
+} // namespace detail
+
+/// Row-at-a-time execution helper for exec callbacks: give it the value types and a callable and it handles the
+/// vector plumbing -- argument layout (selection vectors, constants), NULL propagation, and writing the result. For a
+/// function this covers, the whole exec callback is one call:
+///
+///     void AddExec(ScalarFunction::ExecInput &input) {
+///         ScalarExecutor::Execute<int64_t, int64_t, int64_t>(input, [](int64_t a, int64_t b) { return a + b; });
+///     }
+///
+/// The type list is the result type followed by one type per argument; a nullary function passes just the result
+/// type. Each type is composed from these forms:
+///
+/// - A primitive type (`VectorView::Data`'s element types) passes or returns the value itself.
+/// - `std::reference_wrapper<const T>` (arguments only) passes a reference into the vector instead of a copy.
+/// - `std::optional<T>` makes NULL part of the value: an argument arrives as nullopt when its row is NULL instead of
+///   nulling the row, and a result of nullopt makes the row NULL. Meaningful for arguments only when the function
+///   uses special NULL handling; under the default the engine assumes NULL in, NULL out.
+/// - `std::tuple<Ts...>` maps a STRUCT/TUPLE vector to its fields, read from and written to the child vectors; the
+///   forms nest, so a field can itself be optional, a reference, or a tuple.
+///
+/// Rows follow SQL's default NULL handling: a row where any non-optional part of any argument is NULL yields NULL,
+/// and the callable is not invoked for it. Functions over strings or other unrepresented types drive the vectors
+/// directly instead.
+class ScalarExecutor {
+public:
+	/// Fills the exec callback's result vector by invoking `fun` once per participating row.
+	/// @tparam RESULT The result type; `fun` must return it (or something convertible).
+	/// @tparam ARGS One type per argument, in signature order; `fun` is invoked with one value of each.
+	/// @param input The exec callback's input.
+	/// @param fun The callable computing one row: `RESULT(ARGS...)`.
+	/// @throws InvalidInputException When the call carries a different number of arguments than `ARGS` lists.
+	template <class RESULT, class... ARGS, class FUN>
+	static void Execute(ScalarFunction::ExecInput &input, FUN fun) {
+		if (input.GetArgCount() != sizeof...(ARGS)) {
+			throw InvalidInputException("ScalarExecutor::Execute: the call carries " +
+			                            std::to_string(input.GetArgCount()) + " arguments but the type list names " +
+			                            std::to_string(sizeof...(ARGS)));
+		}
+		auto result = input.GetResult();
+		ExecuteImpl<RESULT, ARGS...>(input, result, input.GetRowCount(), fun, std::index_sequence_for<ARGS...> {});
+	}
+
+	/// The vector-level form, for vectors that come from somewhere other than an exec callback (e.g. a `DataChunk`):
+	/// one vector parameter per type in `ARGS`, so passing the wrong number of vectors is a compile error.
+	/// @tparam RESULT The result type; `fun` must return it (or something convertible).
+	/// @tparam ARGS One type per argument vector, in order; `fun` is invoked with one value of each.
+	/// @param args One vector per argument, each covering at least `count` rows.
+	/// @param result The FLAT vector to fill; must have room for `count` rows.
+	/// @param count How many rows to produce.
+	/// @param fun The callable computing one row: `RESULT(ARGS...)`.
+	template <class RESULT, class... ARGS, class FUN>
+	static void Execute(detail::VectorPerArg<ARGS>... args, Vector &result, idx_t count, FUN fun) {
+		std::tuple<detail::VectorReader<ARGS>...> readers {detail::VectorReader<ARGS>(args)...};
+		detail::VectorWriter<RESULT> writer(result);
+		Run(readers, writer, count, fun, std::index_sequence_for<ARGS...> {});
+	}
+
+private:
+	template <class RESULT, class... ARGS, class FUN, size_t... Is>
+	static void ExecuteImpl(ScalarFunction::ExecInput &input, Vector &result, idx_t count, FUN &fun,
+	                        std::index_sequence<Is...> seq) {
+		std::tuple<detail::VectorReader<ARGS>...> readers {detail::VectorReader<ARGS>(input.GetArg(Is))...};
+		detail::VectorWriter<RESULT> writer(result);
+		Run(readers, writer, count, fun, seq);
+	}
+
+	template <class RESULT, class... ARGS, class FUN, size_t... Is>
+	static void Run(const std::tuple<detail::VectorReader<ARGS>...> &readers, detail::VectorWriter<RESULT> &writer,
+	                idx_t count, FUN &fun, std::index_sequence<Is...>) {
+		if ((... && std::get<Is>(readers).AllValid())) {
+			for (idx_t i = 0; i < count; i++) {
+				writer.Set(i, fun(std::get<Is>(readers).Get(i)...));
+			}
+			return;
+		}
+
+		// Some argument row is NULL: propagate row by row through the result's mask.
+		writer.ResetValidity(count);
+		for (idx_t i = 0; i < count; i++) {
+			if ((... && std::get<Is>(readers).IsValid(i))) {
+				writer.Set(i, fun(std::get<Is>(readers).Get(i)...));
+			} else {
+				writer.SetNull(i);
+			}
+		}
+	}
 };
 
 inline auto Context::CreateType() -> TypeBuilder<Context> {
