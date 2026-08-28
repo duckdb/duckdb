@@ -20,15 +20,6 @@
 #include DUCKDB_EXTENSION_HEADER
 #endif
 
-// Every skip also emits a stable, parseable marker (consumed by the pytest collector) before
-// recording the skip with the reporter. `file_name` is the runner's member, in scope at all skip
-// sites in this TU.
-#define SKIP_TEST(reason)                                                                                              \
-	do {                                                                                                               \
-		duckdb::SQLLogicTestLogger::PrintSkip(file_name, (reason));                                                    \
-		duckdb::TestReporter::Get().Skip(reason);                                                                      \
-	} while (0)
-
 namespace duckdb {
 
 mutex SQLLogicTestRunner::skip_reason_lock;
@@ -118,7 +109,7 @@ void SQLLogicTestRunner::SkipTest(const string &reason) {
 	// Catch wrapper emit the single end {status:"skip-requirement"} terminal.
 	test_skipped_requirement = true;
 	test_skip_reason = reason;
-	SKIP_TEST(reason);
+	SQLLogicTestLogger::ReportSkip(file_name, reason);
 }
 
 string SQLLogicTestRunner::GetSkipReasonSummary() {

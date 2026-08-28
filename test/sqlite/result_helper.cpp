@@ -12,14 +12,6 @@
 
 #include <thread>
 
-// Skips here also emit the parseable marker before recording the skip with the reporter.
-// The skip sites live in TestResultHelper, which holds a `runner` reference.
-#define SKIP_TEST(reason)                                                                                              \
-	do {                                                                                                               \
-		duckdb::SQLLogicTestLogger::PrintSkip(runner.file_name, (reason));                                             \
-		duckdb::TestReporter::Get().Skip(reason);                                                                      \
-	} while (0)
-
 namespace duckdb {
 
 void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &result, idx_t ncols) {
@@ -401,7 +393,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 bool TestResultHelper::SkipErrorMessage(const string &message) {
 	for (auto &error_message : runner.ignore_error_messages) {
 		if (StringUtil::Contains(message, error_message)) {
-			SKIP_TEST(string("skip on error_message matching '") + error_message + string("'"));
+			SQLLogicTestLogger::ReportSkip(runner.file_name, "skip on error_message matching '" + error_message + "'");
 			return true;
 		}
 	}
