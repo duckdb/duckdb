@@ -277,8 +277,7 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	return aggr;
 }
 
-unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateFunction &function, bool is_distinct,
-                                             vector<unique_ptr<Expression>> &children,
+unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                              AggregateStatisticsInput &input) {
 	if (input.node_stats && input.node_stats->has_max_cardinality) {
 		auto &numeric_stats = input.child_stats[0];
@@ -308,7 +307,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			return nullptr;
 		}
 		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
+		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
 	return nullptr;
 }

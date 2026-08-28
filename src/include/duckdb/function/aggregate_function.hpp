@@ -94,8 +94,7 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &
 typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
                                                                                 optional_ptr<FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
-typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateFunction &function,
-                                                             bool is_distinct, vector<unique_ptr<Expression>> &children,
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BindAggregateFunctionInput &input);
@@ -610,9 +609,7 @@ public:
 
 	//! Statistics callback for aggregates whose result always lies within the range of their first
 	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
-	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateFunction &function,
-	                                                           bool is_distinct,
-	                                                           vector<unique_ptr<Expression>> &children,
+	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateExpression &expr,
 	                                                           AggregateStatisticsInput &input);
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {

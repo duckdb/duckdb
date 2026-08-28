@@ -154,20 +154,13 @@ struct AggregateFinalizeData {
 
 struct AggregateStatisticsInput {
 	AggregateStatisticsInput(optional_ptr<FunctionData> bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         optional_ptr<NodeStatistics> node_stats_p,
-	                         AggregateStateExportMode state_export_mode_p = AggregateStateExportMode::NONE)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p),
-	      state_export_mode(state_export_mode_p) {
+	                         optional_ptr<NodeStatistics> node_stats_p)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
 	optional_ptr<NodeStatistics> node_stats;
-	//! Whether THIS invocation exports aggregate state. The callback signature takes the
-	//! BoundAggregateFunction rather than the BoundAggregateExpression, and the export mode is a
-	//! property of the expression, so it travels here. Defaults to NONE: window aggregates do not
-	//! export state, so propagate_window needs no change.
-	AggregateStateExportMode state_export_mode;
 };
 
 } // namespace duckdb
