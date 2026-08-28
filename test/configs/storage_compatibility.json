@@ -209,6 +209,7 @@
       "reason": "Nested schemas require storage version v2.0.0.",
       "paths": [
         "test/sql/catalog/nested_schema/create_nested_schema.test",
+        "test/sql/catalog/nested_schema/deeply_nested_entries.test",
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
         "test/sql/catalog/nested_schema/nested_table.test",
         "test/sql/catalog/nested_schema/nested_table_dml.test",
