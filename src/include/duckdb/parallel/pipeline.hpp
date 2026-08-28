@@ -88,8 +88,7 @@ public:
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	//! The dependencies of this pipeline on pipelines of other MetaPipelines
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
-	//! All pipelines that must complete before this pipeline can start: the dependencies within the owning
-	//! MetaPipeline, followed by the dependencies across MetaPipelines
+	//! All pipelines this pipeline waits on before it can start: 'intra_dependencies' and 'dependencies'
 	vector<reference<Pipeline>> GetAllDependencies() const;
 
 	void Ready();
@@ -146,9 +145,11 @@ private:
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
-	//! The dependencies of this pipeline in other MetaPipelines
+	//! Pipelines that must have completed (sink finalized) before this pipeline can start
+	//! These always live in another MetaPipeline, since they have a different sink
 	vector<weak_ptr<Pipeline>> dependencies;
-	//! The dependencies of this pipeline within its own MetaPipeline
+	//! Pipelines that must have run (but not necessarily finalized) before this pipeline can start
+	//! These share this pipeline's sink, or the sink of one of its ancestor MetaPipelines
 	vector<weak_ptr<Pipeline>> intra_dependencies;
 
 	//! The base batch index of this pipeline
@@ -167,7 +168,7 @@ private:
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
 
-	//! Add a dependency on a pipeline within the same MetaPipeline
+	//! Add a dependency that only has to have run (not finalized) before this pipeline can start
 	void AddIntraDependency(Pipeline &dependency);
 	//! Copy all dependencies (within and across MetaPipelines) of 'other'
 	void InheritDependencies(const Pipeline &other);

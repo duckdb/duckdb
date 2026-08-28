@@ -90,7 +90,8 @@ public:
 	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
 
 private:
-	//! Register that 'dependant' depends on 'dependency', both within this MetaPipeline
+	//! Register that 'dependency' must have run before 'dependant' can start.
+	//! Both pipelines belong to this MetaPipeline, or to one of its descendants
 	static void AddPipelineDependency(Pipeline &dependant, Pipeline &dependency);
 
 private:

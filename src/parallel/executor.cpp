@@ -189,19 +189,20 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	auto &event_map = event_data.event_map;
 	for (auto &entry : event_map) {
 		auto &pipeline = entry.first.get();
-		for (auto &weak_dependency : pipeline.dependencies) {
-			auto dependency = weak_dependency.lock();
-			D_ASSERT(dependency);
-			auto dependency_entry = event_map.find(*dependency);
+		for (auto &dependency : pipeline.dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto dependency_entry = event_map.find(*dep);
 			if (dependency_entry == event_map.end()) {
 				continue;
 			}
+			D_ASSERT(dependency_entry != event_map.end());
 			entry.second.pipeline_event.AddDependency(dependency_entry->second.pipeline_complete_event);
 		}
-		for (auto &weak_dependency : pipeline.intra_dependencies) {
-			auto dependency = weak_dependency.lock();
-			D_ASSERT(dependency);
-			auto dependency_entry = event_map.find(*dependency);
+		for (auto &dependency : pipeline.intra_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto dependency_entry = event_map.find(*dep);
 			D_ASSERT(dependency_entry != event_map.end());
 			entry.second.pipeline_event.AddDependency(dependency_entry->second.pipeline_event);
 		}
