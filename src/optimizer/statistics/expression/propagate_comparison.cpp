@@ -110,9 +110,9 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
-                                                                const BaseStatistics &rstats,
-                                                                ExpressionType comparison) {
+FilterPropagateResult StatisticsPropagator::CheckComparisonPruning(const BaseStatistics &lstats,
+                                                                   const BaseStatistics &rstats,
+                                                                   ExpressionType comparison) {
 	if (lstats.GetStatsType() == StatisticsType::STRING_STATS &&
 	    rstats.GetStatsType() == StatisticsType::STRING_STATS) {
 		if (lstats.GetType() != rstats.GetType()) {
@@ -161,6 +161,21 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	}
 	return PropagateValueComparison(NumericStats::Min(lstats), NumericStats::Max(lstats), NumericStats::Min(rstats),
 	                                NumericStats::Max(rstats), comparison, lstats.CanHaveNull(), rstats.CanHaveNull());
+}
+
+FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatistics &lstats,
+                                                                const BaseStatistics &rstats,
+                                                                ExpressionType comparison) {
+	switch (comparison) {
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// subquery decorrelation builds delim joins around IS NOT DISTINCT FROM conditions, and the Deliminator relies
+		// on finding these conditions in the plan - folding them breaks those plans they are still used to prune data
+		// at scan time
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	default:
+		return CheckComparisonPruning(lstats, rstats, comparison);
+	}
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFunctionExpression &expr,

@@ -429,7 +429,7 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 		if (!left_stats || !right_stats) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return StatisticsPropagator::PropagateComparison(*left_stats, *right_stats, comparison_type);
+		return StatisticsPropagator::CheckComparisonPruning(*left_stats, *right_stats, comparison_type);
 	}
 	if (!filter_stats || !constant_expr) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
