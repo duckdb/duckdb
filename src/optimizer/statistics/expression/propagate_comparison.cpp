@@ -132,6 +132,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
