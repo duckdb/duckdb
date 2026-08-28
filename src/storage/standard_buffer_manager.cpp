@@ -253,7 +253,7 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 		auto &block_manager = run.handles[0]->GetBlockManager();
 		block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
 
-		// the blocks are read - now we need to assign them to the individual blocks
+		// the blocks are read, now assign them to the individual block handles
 		for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
 			auto &handle = run.handles[block_idx];
 			D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
@@ -265,14 +265,12 @@ void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
 			auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory,
 			                                      &reusable_buffer, "failed to pin block of size %s%s",
 			                                      StringUtil::BytesToHumanReadableString(required_memory));
-			// now load the block from the buffer
-			// note that we discard the buffer handle - we do not keep it around
-			// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+			// load the block, the handle is not kept, the scan pins it again before it can be evicted
 			BufferHandle buf;
 			{
 				auto lock = block_memory.GetLock();
 				if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
-					// the block is loaded already by another thread - free up the reservation and continue
+					// the block is loaded already by another thread, free up the reservation and continue
 					reservation.Resize(0);
 					continue;
 				}
