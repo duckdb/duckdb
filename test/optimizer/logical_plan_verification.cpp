@@ -183,7 +183,7 @@ static const Value &GetFact(const LogicalPlanCompilerIssue &issue, const string 
 	throw InternalException("Missing compiler issue fact");
 }
 
-TEST_CASE("Compiler verification accepts typed extension operators", "[compiler_verification]") {
+TEST_CASE("Logical plan verification accepts typed extension operators", "[logical_plan_verification]") {
 	SECTION("typed leaf") {
 		auto child_index = TableIndex(10);
 		auto plan = ReferenceProjection(TableIndex(11), ColumnBinding(child_index, ProjectionIndex(0)),
@@ -220,7 +220,7 @@ TEST_CASE("Compiler verification accepts typed extension operators", "[compiler_
 	}
 }
 
-TEST_CASE("Compiler verification reports exact binding and type paths", "[compiler_verification]") {
+TEST_CASE("Logical plan verification reports exact binding and type paths", "[logical_plan_verification]") {
 	SECTION("invalid extension expression binding") {
 		auto child_index = TableIndex(40);
 		auto child_binding = ColumnBinding(child_index, ProjectionIndex(0));
@@ -289,7 +289,7 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 	}
 }
 
-TEST_CASE("Compiler verification structures malformed expression bindings", "[compiler_verification]") {
+TEST_CASE("Logical plan verification structures malformed expression bindings", "[logical_plan_verification]") {
 	auto VerifyInvalidBinding = [](unique_ptr<LogicalOperator> plan, const LogicalPlanCompilerPath &expected_path,
 	                               const ColumnBinding &expected_binding) {
 		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
@@ -371,7 +371,7 @@ TEST_CASE("Compiler verification structures malformed expression bindings", "[co
 	}
 }
 
-TEST_CASE("Compiler verification isolates extension leaf input scope", "[compiler_verification]") {
+TEST_CASE("Logical plan verification isolates extension leaf input scope", "[logical_plan_verification]") {
 	auto left_index = TableIndex(57);
 	auto right_index = TableIndex(58);
 	auto sibling_binding = ColumnBinding(left_index, ProjectionIndex(0));
@@ -409,7 +409,8 @@ TEST_CASE("Compiler verification isolates extension leaf input scope", "[compile
 	}
 }
 
-TEST_CASE("Compiler verification rejects malformed extension output and duplicate indexes", "[compiler_verification]") {
+TEST_CASE("Logical plan verification rejects malformed extension output and duplicate indexes",
+          "[logical_plan_verification]") {
 	SECTION("output arity") {
 		auto child_index = TableIndex(60);
 		auto malformed = make_uniq<VerificationExtensionOperator>(
@@ -753,7 +754,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 	}
 }
 
-TEST_CASE("Compiler verification preserves setting and legacy extension behavior", "[compiler_verification]") {
+TEST_CASE("Logical plan verification preserves setting and legacy extension behavior", "[logical_plan_verification]") {
 	DuckDB db;
 	Connection connection(db);
 	auto child_index = TableIndex(80);
@@ -821,7 +822,7 @@ static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex c
 	                             alias);
 }
 
-TEST_CASE("Logical plan verification does not rewrite expressions", "[compiler_verification]") {
+TEST_CASE("Logical plan verification does not rewrite expressions", "[logical_plan_verification]") {
 	auto child_index = TableIndex(938);
 	auto binding = ColumnBinding(child_index, ProjectionIndex(0));
 	auto plan = ReferenceProjection(TableIndex(939), binding, LogicalType::INTEGER,
@@ -835,7 +836,7 @@ TEST_CASE("Logical plan verification does not rewrite expressions", "[compiler_v
 	REQUIRE(plan->expressions[0]->Cast<BoundColumnRefExpression>().Binding() == binding);
 }
 
-TEST_CASE("Opted-in extensions use standard column binding resolution", "[compiler_verification]") {
+TEST_CASE("Opted-in extensions use standard column binding resolution", "[logical_plan_verification]") {
 	auto child_index = TableIndex(937);
 	auto binding = ColumnBinding(child_index, ProjectionIndex(0));
 	auto plan = ExpressionPassThrough(child_index, binding, LogicalType::INTEGER, "standard_resolution");
@@ -848,7 +849,7 @@ TEST_CASE("Opted-in extensions use standard column binding resolution", "[compil
 	REQUIRE(plan->expressions[0]->GetReturnType() == LogicalType::INTEGER);
 }
 
-TEST_CASE("Normal column binding resolution preserves matching incomplete types", "[compiler_verification]") {
+TEST_CASE("Normal column binding resolution preserves matching incomplete types", "[logical_plan_verification]") {
 	auto ResolveMatchingType = [](LogicalType type) {
 		auto child_index = TableIndex(939);
 		auto child = make_uniq<IncompleteTypeLeaf>(child_index, type);
@@ -874,7 +875,7 @@ TEST_CASE("Normal column binding resolution preserves matching incomplete types"
 	}
 }
 
-TEST_CASE("Compiler verification structures incomplete expression types", "[compiler_verification]") {
+TEST_CASE("Logical plan verification structures incomplete expression types", "[logical_plan_verification]") {
 	auto VerifyIncompleteType = [](LogicalType expression_type, const string &alias) {
 		auto child_index = TableIndex(940);
 		auto plan = ExpressionPassThrough(child_index, ColumnBinding(child_index, ProjectionIndex(0)),
@@ -925,7 +926,7 @@ static unique_ptr<LogicalOperator> MultipleIssuePlan(const string &left_alias, c
 	                                      InvalidPassThrough(TableIndex(101), TableIndex(1001), right_alias));
 }
 
-TEST_CASE("Compiler verification results have deterministic structural identity", "[compiler_verification]") {
+TEST_CASE("Logical plan verification results have deterministic structural identity", "[logical_plan_verification]") {
 	auto first_plan = MultipleIssuePlan("first_left", "first_right");
 	auto second_plan = MultipleIssuePlan("second_left", "second_right");
 	auto first = LogicalPlanVerifier::VerifyAlways(*first_plan);
@@ -950,7 +951,7 @@ TEST_CASE("Compiler verification results have deterministic structural identity"
 	REQUIRE(message_only_change == first.GetIssues()[0]);
 }
 
-TEST_CASE("Compiler result records enforce their structural contract", "[compiler_verification]") {
+TEST_CASE("Logical plan compiler result records enforce their structural contract", "[logical_plan_verification]") {
 	LogicalPlanCompilerPath full_plan_path {LogicalPlanCompilerPathRoot::LOGICAL_PLAN,
 	                                        {{LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, 0},
 	                                         {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, 1},

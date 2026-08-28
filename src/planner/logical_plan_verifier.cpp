@@ -25,7 +25,7 @@ struct LogicalPlanVerificationState {
 	const LogicalPlanCompilerPath &GetPath(LogicalOperator &op) const {
 		auto entry = operator_paths.find(reference<LogicalOperator>(op));
 		if (entry == operator_paths.end()) {
-			throw InternalException("Logical operator is missing from the compiler verification path index");
+			throw InternalException("Logical operator is missing from the logical plan verification path index");
 		}
 		return entry->second;
 	}
@@ -33,7 +33,7 @@ struct LogicalPlanVerificationState {
 	const LogicalPlanCompilerPath &GetPath(Expression &expr) const {
 		auto entry = expression_paths.find(reference<Expression>(expr));
 		if (entry == expression_paths.end()) {
-			throw InternalException("Expression is missing from the compiler verification path index");
+			throw InternalException("Expression is missing from the logical plan verification path index");
 		}
 		return entry->second;
 	}
