@@ -709,8 +709,8 @@ public:
 	explicit BitpackingScanState(BufferHandle handle_p, ColumnSegment &segment)
 	    : handle(std::move(handle_p)),
 	      reader(CompressionSegmentReader::FromSegment(handle, segment, "bitpacking segment")),
-	      current_segment(segment), group_count(current_segment.count / BITPACKING_METADATA_GROUP_SIZE +
-	                                            (current_segment.count % BITPACKING_METADATA_GROUP_SIZE != 0)),
+	      segment_count(segment.count.load()), group_count(segment_count / BITPACKING_METADATA_GROUP_SIZE +
+	                                                       (segment_count % BITPACKING_METADATA_GROUP_SIZE != 0)),
 	      metadata_table_start(GetMetadataTableStart(reader, group_count)),
 	      metadata_table(reader.GetArray<bitpacking_metadata_encoded_t>(metadata_table_start, group_count)) {
 		if (metadata_table_start < BitpackingPrimitives::BITPACKING_HEADER_SIZE) {
@@ -724,7 +724,8 @@ public:
 	BufferHandle handle;
 	//! Group data between the segment header and reverse metadata table.
 	CompressionSegmentReader reader;
-	ColumnSegment &current_segment;
+	//! Segment row count retained for consistent group bounds.
+	idx_t segment_count;
 
 	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
@@ -829,7 +830,7 @@ public:
 
 		// The row count for this group comes from the segment count read from disk.
 		auto group_row_count = MinValue<idx_t>(BITPACKING_METADATA_GROUP_SIZE,
-		                                       current_segment.count - group_index * BITPACKING_METADATA_GROUP_SIZE);
+		                                       segment_count - group_index * BITPACKING_METADATA_GROUP_SIZE);
 
 		// The payload size comes from the group row count and width read from disk, so calculate and validate it.
 		idx_t algorithm_group_count = 0;
@@ -866,7 +867,9 @@ public:
 		bool skip_sign_extend = true;
 
 		if (IsFinished()) {
-			D_ASSERT(skip_count == 0);
+			if (skip_count > 0) {
+				ThrowBitpackingReadPastEnd();
+			}
 			return;
 		}
 
@@ -884,8 +887,10 @@ public:
 			idx_t target_group_index = group_index + meta_groups_to_skip;
 			bool skip_lands_exactly_on_group_boundary =
 			    (skip_count + group_offset) % BITPACKING_METADATA_GROUP_SIZE == 0;
-			D_ASSERT(target_group_index < group_count ||
-			         (target_group_index == group_count && skip_lands_exactly_on_group_boundary));
+			if (target_group_index > group_count ||
+			    (target_group_index == group_count && !skip_lands_exactly_on_group_boundary)) {
+				ThrowBitpackingReadPastEnd();
+			}
 
 			// Remove rows from the current offset to the start of the target group.
 			auto skipped_group_rows = meta_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE - group_offset;
@@ -906,14 +911,19 @@ public:
 		}
 		auto &current_group = GetCurrentGroup();
 
-		D_ASSERT(skipped <= skip_count);
-		D_ASSERT(skip_count - skipped <= current_group.Remaining());
+		if (skipped > skip_count) {
+			ThrowBitpackingReadPastEnd();
+		}
+		auto remaining_to_skip = skip_count - skipped;
+		if (current_group.offset > current_group.count ||
+		    remaining_to_skip > current_group.count - current_group.offset) {
+			ThrowBitpackingReadPastEnd();
+		}
 
 		if (current_group.metadata.mode == BitpackingMode::CONSTANT ||
 		    current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA ||
 		    current_group.metadata.mode == BitpackingMode::FOR) {
 			// Skipping within a non-delta group advances the current group's row offset.
-			auto remaining_to_skip = skip_count - skipped;
 			current_group.Advance(remaining_to_skip);
 			skipped += remaining_to_skip;
 		} else {
@@ -921,11 +931,10 @@ public:
 			D_ASSERT(current_group.metadata.mode == BitpackingMode::DELTA_FOR);
 
 			while (skipped < skip_count) {
-				auto remaining_to_skip = skip_count - skipped;
 				idx_t offset_in_compression_group =
 				    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 				idx_t skipping_this_algorithm_group =
-				    MinValue(remaining_to_skip,
+				    MinValue(skip_count - skipped,
 				             BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
 
 				current_group.UnpackAlgorithmGroup(decompression_buffer, skip_sign_extend);
