@@ -19,6 +19,7 @@ whitelist = [
     '@CXXABI',
     '__cxa_call_terminate',
     '__gnu_cxx::',
+    '_ZNSt4pairI',
     'std::',
     'N6duckdb',
     'duckdb::',
@@ -44,6 +45,7 @@ whitelist = [
     'Adbc',
     'ErrorArrayStream',
     'ErrorFromArrayStream',
+    'CreateAPIv1()',
 ]
 
 for value in res.stdout.decode('utf-8').split('\n'):
