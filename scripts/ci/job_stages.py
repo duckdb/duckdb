@@ -24,7 +24,6 @@ COMMON_JOBS = [
     "vector-sizes",
     "threadsan",
     "linux-configs",
-    "static-libs-linux",
 ]
 
 PULL_REQUEST_ONLY_JOBS = [
@@ -50,7 +49,6 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
     "staged-extension-install",
