@@ -343,6 +343,34 @@ struct SyntheticSumOperation {
 	}
 };
 
+static idx_t flipping_scalar_bind_count;
+static idx_t flipping_aggregate_bind_count;
+
+static unique_ptr<FunctionData> BindFlippingScalar(BindScalarFunctionInput &input) {
+	flipping_scalar_bind_count++;
+	if (flipping_scalar_bind_count % 2 == 1) {
+		input.GetBoundFunction().SetFunctionCallback(ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
+	} else {
+		input.GetBoundFunction().SetFunctionCallback(ScalarFunction::NopFunction);
+	}
+	return nullptr;
+}
+
+static unique_ptr<FunctionData> BindFlippingAggregate(BindAggregateFunctionInput &input) {
+	flipping_aggregate_bind_count++;
+	auto replacement = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	if (flipping_aggregate_bind_count % 2 == 1) {
+		replacement = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<1>>(
+		    LogicalType::INTEGER, LogicalType::BIGINT);
+	}
+	replacement.SetName(Identifier("flipping_sum"));
+	replacement.SetCatalogName(Identifier::SystemCatalog());
+	replacement.SetSchemaName(Identifier("synthetic_provenance_schema"));
+	input.GetBoundFunction().ReplaceImplementation(replacement);
+	return nullptr;
+}
+
 static void RequireInvalidExpressionTypes(const Expression &expression, const BoundExpressionSQLExportContext &context,
                                           const string &label) {
 	LogicalPlanCompilerPath path;
@@ -697,6 +725,15 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	    LogicalType::INTEGER, LogicalType::BIGINT);
 	sum_plus_one.SetName(Identifier("synthetic_sum_plus_one"));
 	loader.RegisterFunction(sum_plus_one);
+
+	ScalarFunction flipping_scalar(Identifier("flipping_bind"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                               ScalarFunction::NopFunction, BindFlippingScalar);
+	loader.RegisterFunction(std::move(flipping_scalar));
+	auto flipping_aggregate = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<0>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	flipping_aggregate.SetName(Identifier("flipping_sum"));
+	flipping_aggregate.SetBindCallback(BindFlippingAggregate);
+	loader.RegisterFunction(std::move(flipping_aggregate));
 	loader.RefreshSearchPath(*connection.context);
 	connection.BeginTransaction();
 
@@ -731,6 +768,60 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
 	auto &schema = catalog.GetSchema(*connection.context, Identifier::DefaultSchema());
 	FunctionBinder function_binder(*connection.context);
+
+	flipping_scalar_bind_count = 0;
+	auto flipping_scalar_result =
+	    connection.Query("SELECT synthetic_provenance_schema.flipping_bind(CAST(7 AS INTEGER))");
+	REQUIRE_FALSE(flipping_scalar_result->HasError());
+	REQUIRE(flipping_scalar_result->GetValue(0, 0) == Value::INTEGER(8));
+	REQUIRE(flipping_scalar_bind_count == 1);
+	flipping_scalar_bind_count = 0;
+	auto &flipping_scalar_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    *connection.context,
+	    QualifiedName(catalog.GetName(), Identifier("synthetic_provenance_schema"), Identifier("flipping_bind")));
+	vector<unique_ptr<Expression>> flipping_scalar_children;
+	flipping_scalar_children.push_back(Constant(Value::INTEGER(7)));
+	ErrorData flipping_scalar_error;
+	auto flipping_scalar_expression = function_binder.BindScalarFunction(
+	    flipping_scalar_entry, std::move(flipping_scalar_children), flipping_scalar_error);
+	REQUIRE(flipping_scalar_expression);
+	REQUIRE(flipping_scalar_bind_count == 1);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *flipping_scalar_expression) == Value::INTEGER(8));
+	REQUIRE_FALSE(flipping_scalar_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_scalar_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto serialized_flipping_scalar = BinaryRoundTrip(*connection.context, *flipping_scalar_expression);
+	REQUIRE_FALSE(serialized_flipping_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_scalar, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	flipping_aggregate_bind_count = 0;
+	auto flipping_aggregate_result =
+	    connection.Query("SELECT synthetic_provenance_schema.flipping_sum(CAST(7 AS INTEGER))");
+	REQUIRE_FALSE(flipping_aggregate_result->HasError());
+	REQUIRE(flipping_aggregate_result->GetValue(0, 0) == Value::BIGINT(8));
+	REQUIRE(flipping_aggregate_bind_count == 1);
+	flipping_aggregate_bind_count = 0;
+	auto &flipping_aggregate_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    *connection.context,
+	    QualifiedName(catalog.GetName(), Identifier("synthetic_provenance_schema"), Identifier("flipping_sum")));
+	vector<pair<Identifier, unique_ptr<Expression>>> flipping_aggregate_children;
+	flipping_aggregate_children.emplace_back(Identifier(), Constant(Value::INTEGER(7)));
+	ErrorData flipping_aggregate_error;
+	auto flipping_aggregate_expression = function_binder.BindAggregateFunction(
+	    flipping_aggregate_entry, std::move(flipping_aggregate_children), flipping_aggregate_error);
+	REQUIRE(flipping_aggregate_expression);
+	REQUIRE(flipping_aggregate_bind_count == 1);
+	auto plus_one_aggregate = AggregateFunction::UnaryAggregate<int64_t, int32_t, int64_t, SyntheticSumOperation<1>>(
+	    LogicalType::INTEGER, LogicalType::BIGINT);
+	REQUIRE(flipping_aggregate_expression->Function().GetCallbacks() == plus_one_aggregate.GetCallbacks());
+	REQUIRE_FALSE(flipping_aggregate_expression->Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*flipping_aggregate_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto serialized_flipping_aggregate = BinaryRoundTrip(*connection.context, *flipping_aggregate_expression);
+	REQUIRE_FALSE(serialized_flipping_aggregate->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_flipping_aggregate, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	ScalarFunction forged_abs(Identifier("abs"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                          ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
