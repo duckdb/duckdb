@@ -47,7 +47,10 @@ structs:
         description: The extension being loaded, and the token get_api takes.
       - name: context
         type: context
-        description: A context to read and run queries through, with a transaction already active.
+        description: |
+          A borrowed context to read and run queries through, with a transaction
+          already active. Valid only until the extension entrypoint returns; do
+          not retain or destroy it.
       - name: err
         type: error_info
         pointer: 1

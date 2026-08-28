@@ -1,0 +1,41 @@
+# name: test/sql/optimizer/false_or_null_segment_pruning.test
+# description: FILTER_FALSE_OR_NULL prunes segments in native scans
+# group: [optimizer]
+
+require json
+
+require no_force_storage
+
+require vector_size 2048
+
+statement ok
+SET threads = 1
+
+statement ok
+CREATE TABLE integers AS
+SELECT CASE WHEN range % 2 = 0 THEN range::INTEGER ELSE NULL END AS x
+FROM range(100000);
+
+statement ok
+PRAGMA enable_profiling = 'json'
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/false_or_null_segment_profile.json'
+
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned']
+
+query I
+SELECT count(*) FROM integers WHERE x > 100000 - x;
+----
+24999
+
+statement ok
+PRAGMA disable_profiling
+
+# A full scan is 100000 rows
+query I
+SELECT query.total_rows_scanned < 100000
+FROM '{TEST_DIR}/false_or_null_segment_profile.json'
+----
+true

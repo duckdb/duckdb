@@ -1766,7 +1766,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				}
 			}
 
-			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 				// this effectively will skip this chunk
 				state.offset_in_group = group.num_rows;
 				return;

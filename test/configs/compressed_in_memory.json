@@ -31,7 +31,8 @@
     {
       "reason": "Compression packs validity into one segment, so zonemap pruning cannot skip rows.",
       "paths": [
-        "test/sql/optimizer/nested_null_segment_pruning.test"
+        "test/sql/optimizer/nested_null_segment_pruning.test",
+        "test/sql/optimizer/false_or_null_segment_pruning.test"
       ]
     }
   ]

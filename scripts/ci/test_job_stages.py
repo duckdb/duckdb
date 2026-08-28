@@ -135,6 +135,7 @@ class JobStagesTest(unittest.TestCase):
     def test_main_includes_main_only_jobs(self):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
         self.assertIn("codecov", selection.enabled_jobs)
+        self.assertIn("osx", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)

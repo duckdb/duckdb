@@ -62,7 +62,7 @@ jobs:
       shell: pwsh
       run: |
         $commands = Get-Content compile_commands.json -Raw
-        if (!$commands.Contains('-march=x86-64-v3') -or !$commands.Contains('-mtune=generic')) {
+        if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
           throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
         }
 
@@ -273,10 +273,10 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
-     if: ${{ !inputs.skip_tests }}
      runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
+       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
        ENABLE_EXTENSION_AUTOLOADING: 1
        ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
@@ -348,4 +348,28 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
+         if: ${{ !inputs.skip_tests }}
          run: python build/release/test/run.py
+
+       - name: Bundle static libraries
+         run: make gather-libs
+
+       - name: Deploy static libraries
+         shell: bash
+         env:
+           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+         run: |
+           tmp_zip_dir="$(mktemp -d)"
+           archive_path="$(pwd)/static-libs-windows-mingw.zip"
+           cp src/include/duckdb.h "${tmp_zip_dir}/"
+           find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
+           (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
+           rm -rf "${tmp_zip_dir}"
+           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
+
+       - uses: actions/upload-artifact@v7
+         with:
+           name: duckdb-static-libs-windows-mingw
+           path: static-libs-windows-mingw.zip

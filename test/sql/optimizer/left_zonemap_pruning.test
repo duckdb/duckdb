@@ -94,11 +94,11 @@ SELECT count(*) FROM left_pruning WHERE left(s, 0) = '';
 ----
 6144
 
-# The derived bounds for a zero length are exact ('' on both sides), so an impossible comparison prunes every row group.
+# The derived bounds for a zero length are exact ('' on both sides), so the impossible comparison removes the scan.
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM left_pruning WHERE left(s, 0) > '';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<REGEX>:.*Empty Result.*
 
 query I
 SELECT count(*) FROM left_pruning WHERE left(s, 0) > '';
