@@ -4,9 +4,6 @@
 
 namespace duckdb_shell {
 
-//! Secret type holding the credentials that `-serve` and `-connect` use
-static constexpr const char *SERVER_SECRET_TYPE = "quack";
-
 // FIXME: should be moved out of a define
 #define SEP_Unit   "\x1F"
 #define SEP_Record "\x1E"
@@ -138,30 +135,8 @@ bool ShellState::ExpandCommandParameters(const string &command, string &result) 
 	return true;
 }
 
-//! Create the secret that `-serve` and `-connect` fall back on, so that both work out of the box.
-//! Only when the user has no secret of their own: quack resolves those by itself, and a fall-back
-//! secret would shadow them - `CREATE SECRET IF NOT EXISTS` does not help there, as it only considers
-//! secrets in the same (temporary) storage and would still shadow a persistent one.
-static void CreateDefaultServerSecret(ShellState &state) {
-	if (!state.conn || state.default_secret_command.empty()) {
-		return;
-	}
-	auto existing = state.conn->Query(
-	    StringUtil::Format("SELECT count(*) FROM duckdb_secrets() WHERE type = %s", SQLString(SERVER_SECRET_TYPE)));
-	if (!existing || existing->HasError() || existing->RowCount() != 1) {
-		return;
-	}
-	if (existing->GetValue(0, 0).GetValue<int64_t>() != 0) {
-		return;
-	}
-	// errors are ignored on purpose - if the secret type is unavailable, the command we are about to run
-	// reports that in a way that actually helps
-	state.conn->Query(state.default_secret_command);
-}
-
 //! Expand and run one of the configurable commands (e.g. the serve/connect command)
 static MetadataResult RunConfiguredCommand(ShellState &state, const string &command) {
-	CreateDefaultServerSecret(state);
 	string expanded_command;
 	if (!state.ExpandCommandParameters(command, expanded_command)) {
 		ShellState::Exit(1);
@@ -188,7 +163,7 @@ MetadataResult ConnectToServer(ShellState &state, const vector<string> &args) {
 MetadataResult SetSecretName(ShellState &state, const vector<string> &args) {
 	// quack resolves the credentials - and the endpoint - from the secret itself, so we only pass the name
 	auto name = StringUtil::Replace(args[1], "'", "''");
-	state.command_parameters["serve_secret"] = StringUtil::Format("secret='%s'", name);
+	state.command_parameters["serve_secret"] = StringUtil::Format(", secret='%s'", name);
 	state.command_parameters["connect_secret"] = StringUtil::Format(" (SECRET '%s')", name);
 	return MetadataResult::SUCCESS;
 }

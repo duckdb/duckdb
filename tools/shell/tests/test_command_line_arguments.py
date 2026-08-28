@@ -88,12 +88,12 @@ def test_storage_version_error(shell):
 
 # `-serve`/`-connect` only expand their command template - quack resolves the secret, its token and the
 # endpoint on its own. The probes print the expanded command instead of running it.
-SERVE_PROBE = '.serve_command ".print serve -> quack_serve({serve_secret|})"'
+SERVE_PROBE = '.serve_command ".print serve -> quack_serve(create_secret_if_not_exists=true{serve_secret|})"'
 CONNECT_PROBE = '.connect_command ".print connect -> CONNECT quack:{connect_secret|}"'
 
 def test_serve_defaults(shell):
     result = ShellTest(shell).add_argument("-cmd", SERVE_PROBE, "-serve", "-no-stdin").run()
-    result.check_stdout("serve -> quack_serve()")
+    result.check_stdout("serve -> quack_serve(create_secret_if_not_exists=true)")
 
 def test_connect_defaults(shell):
     result = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "-no-stdin").run()
@@ -101,7 +101,7 @@ def test_connect_defaults(shell):
 
 def test_serve_secret(shell):
     result = ShellTest(shell).add_argument("-cmd", SERVE_PROBE, "-serve", "-secret", "prod", "-no-stdin").run()
-    result.check_stdout("serve -> quack_serve(secret='prod')")
+    result.check_stdout("serve -> quack_serve(create_secret_if_not_exists=true, secret='prod')")
 
 def test_connect_secret(shell):
     result = ShellTest(shell).add_argument("-cmd", CONNECT_PROBE, "-connect", "-secret", "prod", "-no-stdin").run()
@@ -113,7 +113,7 @@ def test_secret_name_is_escaped(shell):
         "-cmd", '.serve_command ".print [{serve_secret|}]"', "-serve", "-secret", "we'ird", "-no-stdin"
     )
     result = test.run()
-    result.check_stdout("[secret='we''ird']")
+    result.check_stdout("[, secret='we''ird']")
 
 def test_serve_missing_parameter(shell):
     test = (
@@ -122,26 +122,6 @@ def test_serve_missing_parameter(shell):
     )
     result = test.run()
     result.check_stderr("no value provided for parameter 'unknown_parameter'")
-
-def test_default_secret_is_seeded_when_there_is_none(shell):
-    # with no credentials at all a fallback secret is created, so -serve/-connect work out of the box
-    assert_loaded(shell, "quack")
-    test = ShellTest(shell).add_argument(
-        "-cmd", ".connect_command \".print connected\"", "-connect", "-no-stdin", "-list", "-noheader",
-    ).add_argument("-cmd", "SELECT name, type FROM duckdb_secrets()")
-    result = test.run()
-    result.check_stdout("__default_quack|quack")
-
-def test_default_secret_is_not_seeded_over_an_existing_one(shell):
-    # a secret of the user's own is left alone - seeding one would shadow it
-    assert_loaded(shell, "quack")
-    test = ShellTest(shell).add_argument(
-        "-cmd", "LOAD quack; CREATE SECRET mine (TYPE quack, TOKEN 'mytoken', SCOPE 'quack:localhost:9494');",
-        "-cmd", ".connect_command \".print connected\"", "-connect", "-no-stdin", "-list", "-noheader",
-    ).add_argument("-cmd", "SELECT name FROM duckdb_secrets() ORDER BY name")
-    result = test.run()
-    result.check_stdout("mine")
-    result.check_not_exist("__default_quack")
 
 def test_serve_command_runs_against_quack(shell):
     # the built-in commands have to be valid quack SQL - a bad one would fail at parse/bind time

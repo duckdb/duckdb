@@ -200,11 +200,9 @@ public:
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
-	//! Executed before `-serve`/`-connect` when the user has no secret of their own, so that both work
-	//! without any configuration
-	string default_secret_command = "CREATE SECRET (TYPE quack, TOKEN 'quack')";
-	//! The command to execute when `-serve` is passed in
-	string serve_command = "CALL quack_serve({serve_secret|})";
+	//! The command to execute when `-serve` is passed in - `create_secret_if_not_exists` persists the
+	//! token the server picks, so that `-connect` works without any configuration
+	string serve_command = "CALL quack_serve(create_secret_if_not_exists=true{serve_secret|})";
 	//! The command to execute when `-connect` is passed in
 	string connect_command = "CONNECT 'quack:'{connect_secret|}";
 	//! Parameters used to expand placeholders in the serve/connect commands
