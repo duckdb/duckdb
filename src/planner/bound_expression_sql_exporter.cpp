@@ -358,7 +358,7 @@ private:
 	                                              const LogicalPlanCompilerPath &path) {
 		switch (expression.GetExpressionType()) {
 		case ExpressionType::OPERATOR_CAST:
-			if (BoundCastExpression::HasCanonicalDefinition(expression)) {
+			if (BoundCastExpression::HasCanonicalFunction(expression)) {
 				return ExportCast(expression, path);
 			}
 			return ExportScalarFunction(expression, path);
@@ -370,12 +370,12 @@ private:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			if (BoundComparisonExpression::HasCanonicalDefinition(expression)) {
+			if (BoundComparisonExpression::HasCanonicalFunction(expression)) {
 				return ExportComparison(expression, path);
 			}
 			return ExportScalarFunction(expression, path);
 		case ExpressionType::COMPARE_BETWEEN:
-			if (BoundBetweenExpression::HasCanonicalDefinition(expression)) {
+			if (BoundBetweenExpression::HasCanonicalFunction(expression)) {
 				return ExportBetween(expression, path);
 			}
 			return ExportScalarFunction(expression, path);

@@ -12,7 +12,8 @@ namespace duckdb {
 
 struct BetweenFunctionData : public FunctionData {
 	BetweenFunctionData(bool lower_inclusive, bool upper_inclusive)
-	    : lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
+	    : FunctionData(FunctionDataKind::BOUND_BETWEEN), lower_inclusive(lower_inclusive),
+	      upper_inclusive(upper_inclusive) {
 	}
 
 	bool lower_inclusive;
@@ -26,10 +27,6 @@ public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<BetweenFunctionData>();
 		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
-	}
-
-	FunctionDataKind GetKind() const override {
-		return FunctionDataKind::BOUND_BETWEEN;
 	}
 };
 
@@ -168,8 +165,6 @@ idx_t BetweenSelect(DataChunk &args, ExpressionState &state, optional_ptr<const 
 }
 #endif
 
-static const shared_ptr<const ScalarFunction> &GetBetweenFunctionDefinition();
-
 unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
                                                       unique_ptr<Expression> upper, bool lower_inclusive,
                                                       bool upper_inclusive) {
@@ -180,7 +175,7 @@ unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> inp
 
 	auto function_data = make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive);
 
-	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetBetweenFunctionDefinition()),
+	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(BetweenFun::GetFunction()),
 	                                                 std::move(children), std::move(function_data), false);
 	return std::move(result);
 }
@@ -228,13 +223,8 @@ ScalarFunction BetweenFun::GetFunction() {
 #if !DUCKDB_SMALLER_BINARY(between_select)
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
+	between_fun.SetFunctionExpressionIdentity(ExpressionType::COMPARE_BETWEEN);
 	return between_fun;
-}
-
-static const shared_ptr<const ScalarFunction> &GetBetweenFunctionDefinition() {
-	static const shared_ptr<const ScalarFunction> definition =
-	    make_shared_ptr<ScalarFunction>(BetweenFun::GetFunction());
-	return definition;
 }
 
 //===--------------------------------------------------------------------===//
@@ -250,8 +240,8 @@ bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &betwe
 	return data.upper_inclusive;
 }
 
-bool BoundBetweenExpression::HasCanonicalDefinition(const BoundFunctionExpression &between_expr) {
-	return between_expr.Function().GetDefinition() == GetBetweenFunctionDefinition();
+bool BoundBetweenExpression::HasCanonicalFunction(const BoundFunctionExpression &between_expr) {
+	return between_expr.Function().HasFunctionExpressionIdentity(ExpressionType::COMPARE_BETWEEN);
 }
 
 bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {

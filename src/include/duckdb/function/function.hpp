@@ -40,6 +40,10 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BetweenFunctionData;
+struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -64,15 +68,20 @@ enum class FunctionCollationHandling : uint8_t {
 enum class FunctionDataKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
 
 struct FunctionData {
+protected:
+	FunctionData() = default;
+	FunctionData(const FunctionData &) {
+		// Trusted data kinds are not inherited through arbitrary derived copies
+	}
+	FunctionData &operator=(const FunctionData &) = delete;
+
+public:
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
 	DUCKDB_API virtual bool SupportStatementCache() const;
-	virtual FunctionDataKind GetKind() const {
-		return FunctionDataKind::GENERIC;
-	}
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -89,6 +98,21 @@ struct FunctionData {
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
+
+private:
+	explicit FunctionData(FunctionDataKind kind_p) : kind(kind_p) {
+	}
+	FunctionDataKind GetKind() const {
+		return kind;
+	}
+
+private:
+	FunctionDataKind kind = FunctionDataKind::GENERIC;
+
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
+	friend struct BetweenFunctionData;
+	friend struct CastFunctionData;
 };
 
 struct TableFunctionData : public FunctionData {

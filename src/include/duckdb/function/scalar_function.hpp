@@ -56,6 +56,22 @@ class Binder;
 class BoundFunctionExpression;
 class BoundScalarFunction;
 class ScalarFunctionCatalogEntry;
+class FunctionBinder;
+class FunctionSerializer;
+
+struct BetweenFun;
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BoundComparisonExpression;
+struct CastFun;
+struct IsDistinctFromFun;
+struct IsNotDistinctFromFun;
+struct OperatorEqualFun;
+struct OperatorGreaterThanEqualsFun;
+struct OperatorGreaterThanFun;
+struct OperatorLessThanEqualsFun;
+struct OperatorLessThanFun;
+struct OperatorNotEqualFun;
 
 struct StatementProperties;
 
@@ -212,97 +228,97 @@ public:
 
 template <class IMPL>
 class BaseScalarFunction {
-	friend IMPL; // Only allow the derived class to access the protected members of this class.
+	friend IMPL; // Only allow the derived class to access the private members of this class.
 	BaseScalarFunction() = default;
 
 public:
 	// clang-format off
 	auto GetProperties() const -> const FunctionProperties & { return properties; }
-	auto GetProperties() -> FunctionProperties & { return properties; }
-	auto SetProperties(const FunctionProperties &properties_p) -> void { properties = properties_p; }
+	auto GetProperties() -> FunctionProperties & { InvalidateFunctionExpressionIdentity(); return properties; }
+	auto SetProperties(const FunctionProperties &properties_p) -> void { InvalidateFunctionExpressionIdentity(); properties = properties_p; }
 
 	auto GetCallbacks() const -> const ScalarFunctionCallbacks & { return callbacks; }
-	auto GetCallbacks() -> ScalarFunctionCallbacks & { return callbacks; }
-	auto SetCallbacks(const ScalarFunctionCallbacks &callbacks_p) -> void { callbacks = callbacks_p; }
+	auto GetCallbacks() -> ScalarFunctionCallbacks & { InvalidateFunctionExpressionIdentity(); return callbacks; }
+	auto SetCallbacks(const ScalarFunctionCallbacks &callbacks_p) -> void { InvalidateFunctionExpressionIdentity(); callbacks = callbacks_p; }
 
 public: // Properties
 
 	auto GetStability() const -> FunctionStability { return properties.stability; }
-	auto SetStability(FunctionStability value) -> void { properties.stability = value; }
+	auto SetStability(FunctionStability value) -> void { InvalidateFunctionExpressionIdentity(); properties.stability = value; }
 
 	auto GetNullHandling() const -> FunctionNullHandling { return properties.null_handling; }
-	auto SetNullHandling(FunctionNullHandling value) -> void { properties.null_handling = value; }
+	auto SetNullHandling(FunctionNullHandling value) -> void { InvalidateFunctionExpressionIdentity(); properties.null_handling = value; }
 
 	auto GetErrorMode() const -> FunctionErrors { return properties.errors; }
-	auto SetErrorMode(FunctionErrors value) -> void { properties.errors = value; }
+	auto SetErrorMode(FunctionErrors value) -> void { InvalidateFunctionExpressionIdentity(); properties.errors = value; }
 
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
-	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
+	auto SetCollationHandling(FunctionCollationHandling value) -> void { InvalidateFunctionExpressionIdentity(); properties.collation_handling = value; }
 
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
-	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+	auto SetCaptureArgumentAliases(bool value) -> void { InvalidateFunctionExpressionIdentity(); properties.capture_argument_aliases = value; }
 
 	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
-	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
+	auto SetRequiresOrderedExecution(bool value) -> void { InvalidateFunctionExpressionIdentity(); properties.requires_ordered_execution = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
-	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	void SetFallible() { InvalidateFunctionExpressionIdentity(); properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)
-	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
+	void SetVolatile() { InvalidateFunctionExpressionIdentity(); properties.stability = FunctionStability::VOLATILE; }
 
 public: // Callbacks
 
 	auto HasFunctionCallback() const -> bool { return callbacks.function != nullptr; }
 	auto GetFunctionCallback() const -> scalar_function_t { return callbacks.function; }
-	auto SetFunctionCallback(scalar_function_t callback) -> void { callbacks.function = std::move(callback); }
+	auto SetFunctionCallback(scalar_function_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.function = std::move(callback); }
 
 	auto HasSelectCallback() const -> bool { return callbacks.select_function != nullptr; }
 	auto GetSelectCallback() const -> scalar_function_select_t { return callbacks.select_function; }
-	auto SetSelectCallback(scalar_function_select_t callback) -> void { callbacks.select_function = callback; }
+	auto SetSelectCallback(scalar_function_select_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.select_function = callback; }
 
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; };
 	auto GetBindCallback() const -> bind_scalar_function_t { return callbacks.bind; };
-	auto SetBindCallback(bind_scalar_function_t callback) -> void { callbacks.bind = callback; }
+	auto SetBindCallback(bind_scalar_function_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.bind = callback; }
 
 	auto HasBindLambdaCallback() const -> bool { return callbacks.bind_lambda != nullptr; }
 	auto GetBindLambdaCallback() const -> bind_lambda_function_t { return callbacks.bind_lambda; }
-	auto SetBindLambdaCallback(bind_lambda_function_t callback) -> void { callbacks.bind_lambda = callback; }
+	auto SetBindLambdaCallback(bind_lambda_function_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.bind_lambda = callback; }
 
 	auto HasBindExpressionCallback() const -> bool { return callbacks.bind_expression != nullptr; }
 	auto GetBindExpressionCallback() const -> function_bind_expression_t { return callbacks.bind_expression; }
-	auto SetBindExpressionCallback(function_bind_expression_t callback) -> void { callbacks.bind_expression = callback; }
+	auto SetBindExpressionCallback(function_bind_expression_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.bind_expression = callback; }
 
 	auto HasInitStateCallback() const -> bool { return callbacks.init_local_state != nullptr; }
 	auto GetInitStateCallback() const -> init_local_state_t { return callbacks.init_local_state; }
-	auto SetInitStateCallback(init_local_state_t callback) -> void { callbacks.init_local_state = callback; }
+	auto SetInitStateCallback(init_local_state_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.init_local_state = callback; }
 
 	auto HasStatisticsCallback() const -> bool { return callbacks.statistics != nullptr; }
 	auto GetStatisticsCallback() const -> function_statistics_t { return callbacks.statistics; }
-	auto SetStatisticsCallback(function_statistics_t callback) -> void { callbacks.statistics = callback; }
+	auto SetStatisticsCallback(function_statistics_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.statistics = callback; }
 
 	auto HasModifiedDatabasesCallback() const -> bool { return callbacks.get_modified_databases != nullptr; }
 	auto GetModifiedDatabasesCallback() const -> get_modified_databases_t { return callbacks.get_modified_databases; }
-	auto SetModifiedDatabasesCallback(get_modified_databases_t callback) -> void { callbacks.get_modified_databases = callback; }
+	auto SetModifiedDatabasesCallback(get_modified_databases_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.get_modified_databases = callback; }
 
 	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
-	auto SetSerializeCallback(function_serialize_t callback) -> void { callbacks.serialize = callback; }
-	auto SetDeserializeCallback(function_deserialize_t callback) -> void { callbacks.deserialize = callback; }
+	auto SetSerializeCallback(function_serialize_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.serialize = callback; }
+	auto SetDeserializeCallback(function_deserialize_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> function_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> function_deserialize_t { return callbacks.deserialize; }
 
 	auto HasFilterPruneCallback() const -> bool { return callbacks.filter_prune != nullptr; }
-	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { callbacks.filter_prune = callback; }
+	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.filter_prune = callback; }
 	auto GetFilterPruneCallback() const -> propagate_filter_t { return callbacks.filter_prune; }
 
 	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
-	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
+	auto SetToStringCallback(function_to_string_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.to_string = callback; }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
 
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
-	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
+	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.legacy_serialize = callback; }
 	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
 
-	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { callbacks.get_expression_type = callback; }
+	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { InvalidateFunctionExpressionIdentity(); callbacks.get_expression_type = callback; }
 	auto GetExpressionType(FunctionToStringInput &input) const -> ExpressionType {
 		if (callbacks.get_expression_type) {
 			return callbacks.get_expression_type(input);
@@ -347,10 +363,12 @@ public:
 		return *function_info;
 	}
 	void SetExtraFunctionInfo(shared_ptr<ScalarFunctionInfo> info) {
+		InvalidateFunctionExpressionIdentity();
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
 	void SetExtraFunctionInfo(ARGS &&... args) {
+		InvalidateFunctionExpressionIdentity();
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {
@@ -361,8 +379,11 @@ private:
 	const Identifier &Name() const {
 		return static_cast<const IMPL &>(*this).GetName();
 	}
+	void InvalidateFunctionExpressionIdentity() {
+		static_cast<IMPL &>(*this).InvalidateFunctionExpressionIdentity();
+	}
 
-protected:
+private:
 	FunctionProperties properties;
 	ScalarFunctionCallbacks callbacks;
 	shared_ptr<ScalarFunctionInfo> function_info;
@@ -383,6 +404,7 @@ public:
 		return !arg_props.empty();
 	}
 	IMPL &SetArgProperties(idx_t arg_idx, ArgProperties props) {
+		InvalidateFunctionExpressionIdentity();
 		if (arg_props.size() <= arg_idx) {
 			arg_props.resize(arg_idx + 1);
 		}
@@ -390,6 +412,7 @@ public:
 		return *static_cast<IMPL *>(this);
 	}
 	IMPL &SetArgProperties(vector<ArgProperties> props) {
+		InvalidateFunctionExpressionIdentity();
 		arg_props = std::move(props);
 		return *static_cast<IMPL *>(this);
 	}
@@ -556,6 +579,30 @@ public:
 		}
 		return function;
 	}
+
+private:
+	void SetFunctionExpressionIdentity(ExpressionType type) {
+		function_expression_type = type;
+	}
+	void InvalidateFunctionExpressionIdentity() {
+		function_expression_type = ExpressionType::INVALID;
+	}
+
+private:
+	ExpressionType function_expression_type = ExpressionType::INVALID;
+
+	friend class BaseScalarFunction<ScalarFunction>;
+	friend class BoundScalarFunction;
+	friend struct BetweenFun;
+	friend struct CastFun;
+	friend struct IsDistinctFromFun;
+	friend struct IsNotDistinctFromFun;
+	friend struct OperatorEqualFun;
+	friend struct OperatorGreaterThanEqualsFun;
+	friend struct OperatorGreaterThanFun;
+	friend struct OperatorLessThanEqualsFun;
+	friend struct OperatorLessThanFun;
+	friend struct OperatorNotEqualFun;
 };
 
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
@@ -579,9 +626,31 @@ public:
 	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
 		definition = std::move(definition_p);
 	}
+	bool HasFunctionExpressionIdentity(ExpressionType type) const {
+		return function_expression_type == type;
+	}
+
+private:
+	void SetFunctionExpressionIdentity(ExpressionType type) {
+		function_expression_type = type;
+	}
+	void InvalidateFunctionExpressionIdentity() {
+		function_expression_type = ExpressionType::INVALID;
+	}
+	void RestoreFunctionExpressionIdentity() {
+		function_expression_type = definition ? definition->function_expression_type : ExpressionType::INVALID;
+	}
 
 private:
 	shared_ptr<const ScalarFunction> definition;
+	ExpressionType function_expression_type = ExpressionType::INVALID;
+
+	friend class BaseScalarFunction<BoundScalarFunction>;
+	friend class FunctionBinder;
+	friend class FunctionSerializer;
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
+	friend struct BoundComparisonExpression;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

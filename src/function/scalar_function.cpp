@@ -134,6 +134,7 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 	properties = function.GetProperties();
 	function_info = function.GetFunctionInfo();
 	arg_props = function.GetAllArgProperties();
+	function_expression_type = function.function_expression_type;
 
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)

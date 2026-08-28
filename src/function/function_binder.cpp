@@ -733,8 +733,8 @@ static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_fu
 }
 
 static void HandleCollations(ClientContext &context, BoundSimpleFunction &bound_function,
-                             const FunctionProperties &props, vector<unique_ptr<Expression>> &children) {
-	switch (props.GetCollationHandling()) {
+                             FunctionCollationHandling collation_handling, vector<unique_ptr<Expression>> &children) {
+	switch (collation_handling) {
 	case FunctionCollationHandling::IGNORE_COLLATIONS:
 		// explicitly ignoring collation handling
 		break;
@@ -1095,10 +1095,11 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 		bound_function.GetModifiedDatabasesCallback()(context, input);
 	}
 
-	HandleCollations(context, bound_function, bound_function.GetProperties(), arguments);
+	HandleCollations(context, bound_function, bound_function.GetCollationHandling(), arguments);
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, arguments);
+	bound_function.RestoreFunctionExpressionIdentity();
 
 	return {std::move(bound_function), std::move(bind_info)};
 }

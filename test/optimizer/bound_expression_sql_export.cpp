@@ -2,7 +2,11 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -150,6 +154,16 @@ static unique_ptr<Expression> Constant(Value value) {
 	return make_uniq<BoundConstantExpression>(std::move(value));
 }
 
+static unique_ptr<Expression> BinaryRoundTrip(ClientContext &context, const Expression &expression) {
+	MemoryStream stream(Allocator::Get(context));
+	SerializationOptions options;
+	options.storage_compatibility = StorageCompatibility::Latest();
+	BinarySerializer::Serialize(expression, stream, options);
+	stream.Rewind();
+	bound_parameter_map_t parameters;
+	return BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
+}
+
 struct SQLBindingEntry {
 	ColumnBinding binding;
 	LogicalType type;
@@ -196,6 +210,36 @@ public:
 
 	bool Equals(const FunctionData &) const override {
 		return true;
+	}
+};
+
+class SpoofCastFunctionData : public FunctionData {
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<SpoofCastFunctionData>();
+	}
+
+	bool Equals(const FunctionData &) const override {
+		return true;
+	}
+
+	FunctionDataKind GetKind() const {
+		return FunctionDataKind::BOUND_CAST;
+	}
+};
+
+class SpoofBetweenFunctionData : public FunctionData {
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<SpoofBetweenFunctionData>();
+	}
+
+	bool Equals(const FunctionData &) const override {
+		return true;
+	}
+
+	FunctionDataKind GetKind() const {
+		return FunctionDataKind::BOUND_BETWEEN;
 	}
 };
 
@@ -482,6 +526,91 @@ TEST_CASE("Bound expression SQL export reconstructs structural expression forms"
 	                 "CASE WHEN false THEN 10 WHEN true THEN 20 ELSE 30 END");
 }
 
+TEST_CASE("Bound expression SQL export validates durable special-function identity", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	BoundExpressionSQLExportContext context;
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+
+	auto callback_mutation = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_EQUAL, Constant(Value::INTEGER(7)), Constant(Value::INTEGER(7)));
+	callback_mutation->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionCallback(
+	    ScalarFunction::BinaryFunction<int32_t, int32_t, bool, NotEqualOperation>);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *callback_mutation) == Value::BOOLEAN(false));
+	RequireIssue(BoundExpressionSQLExporter::Export(*callback_mutation, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto property_mutation = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_DISTINCT_FROM, Constant(Value(LogicalType::INTEGER)), Constant(Value::INTEGER(1)));
+	property_mutation->Cast<BoundFunctionExpression>().FunctionMutable().SetNullHandling(
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *property_mutation).IsNull());
+	RequireIssue(BoundExpressionSQLExporter::Export(*property_mutation, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto cast_mutation =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	cast_mutation->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionCallback(ScalarFunction::NopFunction);
+	RequireIssue(BoundExpressionSQLExporter::Export(*cast_mutation, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto bound_cast_mutation =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	BoundCastExpression::GetBoundCastMutable(bound_cast_mutation->Cast<BoundFunctionExpression>())
+	    .SetFunction(DefaultCasts::TryVectorNullCast);
+	RequireIssue(BoundExpressionSQLExporter::Export(*bound_cast_mutation, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto between_mutation = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
+	                                                       Constant(Value::INTEGER(9)), true, true);
+	between_mutation->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionCallback(
+	    ScalarFunction::TernaryFunction<int32_t, int32_t, int32_t, bool, OutsideRangeOperation>);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *between_mutation) == Value::BOOLEAN(false));
+	RequireIssue(BoundExpressionSQLExporter::Export(*between_mutation, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto equivalent_definition = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_EQUAL, Constant(Value::INTEGER(7)), Constant(Value::INTEGER(7)));
+	auto &equivalent_function = equivalent_definition->Cast<BoundFunctionExpression>().FunctionMutable();
+	equivalent_function.SetDefinition(make_shared_ptr<ScalarFunction>(*equivalent_function.GetDefinition()));
+	RequireRoundTrip(connection, *equivalent_definition, context, string(), "CAST(7 AS INTEGER) = CAST(7 AS INTEGER)");
+	auto equivalent_cast =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	auto &equivalent_cast_function = equivalent_cast->Cast<BoundFunctionExpression>().FunctionMutable();
+	equivalent_cast_function.SetDefinition(make_shared_ptr<ScalarFunction>(*equivalent_cast_function.GetDefinition()));
+	RequireRoundTrip(connection, *equivalent_cast, context, string(), "CAST(7 AS BIGINT)");
+	auto equivalent_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
+	                                                         Constant(Value::INTEGER(9)), true, true);
+	auto &equivalent_between_function = equivalent_between->Cast<BoundFunctionExpression>().FunctionMutable();
+	equivalent_between_function.SetDefinition(
+	    make_shared_ptr<ScalarFunction>(*equivalent_between_function.GetDefinition()));
+	RequireRoundTrip(connection, *equivalent_between, context, string(),
+	                 "CAST(2 AS INTEGER) BETWEEN CAST(2 AS INTEGER) AND CAST(9 AS INTEGER)");
+
+	auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, Constant(Value::INTEGER(7)),
+	                                                    Constant(Value::INTEGER(7)));
+	auto serialized_comparison = BinaryRoundTrip(*connection.context, *comparison);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_comparison) == Value::BOOLEAN(true));
+	RequireRoundTrip(connection, *serialized_comparison, context, string(), "CAST(7 AS INTEGER) = CAST(7 AS INTEGER)");
+
+	auto cast =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	auto serialized_cast = BinaryRoundTrip(*connection.context, *cast);
+	auto cast_value = ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_cast);
+	REQUIRE(cast_value.type() == LogicalType::BIGINT);
+	REQUIRE(cast_value == Value::BIGINT(7));
+	RequireRoundTrip(connection, *serialized_cast, context, string(), "CAST(7 AS BIGINT)");
+
+	auto between = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
+	                                              Constant(Value::INTEGER(9)), true, true);
+	auto serialized_between = BinaryRoundTrip(*connection.context, *between);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *serialized_between) == Value::BOOLEAN(true));
+	RequireRoundTrip(connection, *serialized_between, context, string(),
+	                 "CAST(2 AS INTEGER) BETWEEN CAST(2 AS INTEGER) AND CAST(9 AS INTEGER)");
+	connection.Rollback();
+}
+
 TEST_CASE("Bound expression SQL export admits only validated bound operators", "[bound_expression_sql_export]") {
 	BoundExpressionSQLExportContext context;
 	vector<unique_ptr<BoundOperatorExpression>> expressions;
@@ -576,7 +705,8 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	REQUIRE_NO_FAIL(connection.Query("INSERT INTO scalar_values VALUES (-7, 'AbC')"));
 	connection.BeginTransaction();
 
-	auto plan = OptimizeExportQuery(connection, "SELECT abs(i), i + 2, struct_pack(value := i) FROM scalar_values");
+	auto plan = OptimizeExportQuery(connection,
+	                                "SELECT abs(i), i + 2, struct_pack(value := i), NOT (i = 7) FROM scalar_values");
 	auto abs_expression = FindExpression(*plan, [](const Expression &expression) {
 		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
 		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "abs";
@@ -608,6 +738,17 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	REQUIRE(addition_parsed.GetQualifiedName().Catalog() == addition_definition->GetCatalogName());
 	REQUIRE(addition_parsed.GetQualifiedName().Schema() == addition_definition->GetSchemaName());
 	REQUIRE(addition_parsed.GetQualifiedName().Name() == addition_definition->GetName());
+
+	auto negated_comparison = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       expression.GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL;
+	});
+	REQUIRE(negated_comparison);
+	auto &comparison_column =
+	    negated_comparison->Cast<BoundFunctionExpression>().GetChildren()[0]->Cast<BoundColumnRefExpression>();
+	auto comparison_context =
+	    ResolveBinding(comparison_column.Binding(), {Identifier("v"), Identifier("i")}, LogicalType::INTEGER);
+	RequireRoundTrip(connection, *negated_comparison, comparison_context, " FROM scalar_values AS v", "v.i != 7");
 
 	auto struct_pack = FindExpression(*plan, [](const Expression &expression) {
 		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
@@ -792,11 +933,29 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	malformed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_cast, context),
 	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	auto spoofed_cast =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	spoofed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<SpoofCastFunctionData>();
+	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_cast, context),
+	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	auto mismatched_cast_data =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	auto varchar_cast =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::VARCHAR);
+	mismatched_cast_data->Cast<BoundFunctionExpression>().BindInfoMutable() =
+	    varchar_cast->Cast<BoundFunctionExpression>().BindInfo()->Copy();
+	RequireIssue(BoundExpressionSQLExporter::Export(*mismatched_cast_data, context),
+	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
 
 	auto malformed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
 	                                                        Constant(Value::INTEGER(9)), true, true);
 	malformed_between->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
 	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_between, context),
+	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	auto spoofed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(2)), Constant(Value::INTEGER(2)),
+	                                                      Constant(Value::INTEGER(9)), true, true);
+	spoofed_between->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<SpoofBetweenFunctionData>();
+	RequireIssue(BoundExpressionSQLExporter::Export(*spoofed_between, context),
 	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
 	connection.Rollback();
 }
