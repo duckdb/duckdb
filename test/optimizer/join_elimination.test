@@ -244,3 +244,38 @@ query II
 explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# unnest repeats the key, so the distinct group below it does not survive
+
+query II
+explain select b.* from b left join (select ida, unnest([1,2,3]) as e from (select distinct ida from a) s) t on t.ida = b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+select b.* from b left join (select ida, unnest([1,2,3]) as e from (select distinct ida from a) s) t on t.ida = b.idb order by all;
+----
+1	1
+1	1
+1	1
+2	2
+2	2
+2	2
+3	3
+3	3
+3	3
+3	3
+3	3
+3	3
+3	NULL
+3	NULL
+3	NULL
+4	4
+NULL	4
+NULL	NULL
+
+# a distinct above the unnest restores uniqueness, so that join is still eliminated
+query II
+explain select b.* from b left join (select ida from (select distinct ida from (select ida, unnest([1,2,3]) e from a))) t on t.ida = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
