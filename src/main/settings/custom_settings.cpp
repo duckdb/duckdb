@@ -939,6 +939,9 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("external_threads must be a positive integer");
+	}
 	auto new_external_threads = input.GetValue<uint64_t>();
 	if (info.db) {
 		TaskScheduler::GetScheduler(*info.db).SetThreads(info.config.options.maximum_threads, new_external_threads);
@@ -1182,6 +1185,9 @@ Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("ordered_aggregate_threshold must be a positive integer");
+	}
 	const auto param = input.GetValue<uint64_t>();
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
@@ -1192,6 +1198,9 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("perfect_ht_threshold must be an integer");
+	}
 	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
@@ -1578,6 +1587,9 @@ Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
@@ -1606,6 +1618,9 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 // Async Threads
 //===----------------------------------------------------------------------===//
 void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("async_threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 0) {
 		throw SyntaxException("Cannot have negative async_threads!");
