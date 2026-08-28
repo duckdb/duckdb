@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -139,6 +140,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			order_binder.SetQueryComponent("DISTINCT ON");
 			auto &order_binders = order_binder.GetBinders();
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
+				order_binders[0].get().BindFilterStarExpressions(*distinct_on_target);
 				vector<unique_ptr<ParsedExpression>> target_list;
 				order_binders[0].get().ExpandStarExpression(std::move(distinct_on_target), target_list);
 				for (auto &target : target_list) {
@@ -235,6 +237,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 			}
 			for (auto &order_node : order.orders) {
+				order_binders[0].get().BindFilterStarExpressions(*order_node.expression);
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
 
@@ -447,6 +450,23 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
+void Binder::BindFilterStarExpressions(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.Filter()) {
+			BindWhereStarExpression(function.FilterMutable());
+		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &window = expr.Cast<WindowExpression>();
+		if (window.Filter()) {
+			BindWhereStarExpression(window.FilterMutable());
+		}
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](ParsedExpression &child) { BindFilterStarExpressions(child); });
+}
+
 Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
@@ -471,6 +491,10 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	if (statement.sample) {
 		result.from_table.plan =
 		    make_uniq<LogicalSample>(std::move(statement.sample), std::move(result.from_table.plan));
+	}
+
+	for (auto &select_element : statement.select_list) {
+		BindFilterStarExpressions(*select_element);
 	}
 
 	// visit the select list and expand any "*" statements
@@ -513,6 +537,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	}
 
 	if (statement.qualify) {
+		BindFilterStarExpressions(*statement.qualify);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 	}
 
@@ -595,6 +620,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
+		BindFilterStarExpressions(*statement.having);
 		HavingBinder having_binder(*this, context, result, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
 		result.having = having_binder.Bind(statement.having);
