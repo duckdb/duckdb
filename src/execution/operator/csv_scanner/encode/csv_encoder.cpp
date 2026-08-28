@@ -80,6 +80,13 @@ CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_
 	encoding_function = function;
 }
 
+void CSVEncoder::Reset() {
+	encoded_buffer.Reset();
+	encoded_buffer.last_buffer = false;
+	remaining_bytes_buffer.Reset();
+	has_pass_on_byte = false;
+}
+
 idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size) {
 	idx_t output_buffer_pos = 0;
 	// Check if we have some left-overs. These can either be
