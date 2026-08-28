@@ -123,6 +123,31 @@ def test_serve_missing_parameter(shell):
     result = test.run()
     result.check_stderr("no value provided for parameter 'unknown_parameter'")
 
+def test_connect_rejects_a_database_argument(shell, tmp_path):
+    db = tmp_path / "some.db"
+    test = ShellTest(shell).add_argument(str(db), "-connect", "-no-stdin")
+    result = test.run()
+    result.check_stderr("cannot open a database")
+    result.check_stderr("-connect")
+    # the database is rejected before it is opened, so it is never created
+    assert not db.exists()
+
+def test_connect_rejects_a_database_argument_in_any_order(shell, tmp_path):
+    db = tmp_path / "some.db"
+    test = ShellTest(shell).add_argument("-connect", str(db), "-no-stdin")
+    result = test.run()
+    result.check_stderr("cannot open a database")
+    assert not db.exists()
+
+def test_serve_accepts_a_database_argument(shell, tmp_path):
+    # -serve serves the database it is given, so a file is expected there
+    db = tmp_path / "served.db"
+    test = ShellTest(shell).add_argument(
+        str(db), "-cmd", SERVE_PROBE, "-serve", "-no-stdin"
+    )
+    result = test.run()
+    result.check_stdout("serve -> quack_serve(create_secret_if_not_exists=true)")
+
 def test_serve_command_runs_against_quack(shell):
     # the built-in commands have to be valid quack SQL - a bad one would fail at parse/bind time
     assert_loaded(shell, "quack")

@@ -3497,6 +3497,14 @@ int RunShell(int argc, const char **argv) {
 		command_line_calls.emplace_back(option, std::move(arguments));
 	}
 
+	if (data.started_as_client && !data.zDbFilename.empty()) {
+		// checked before OpenDB, so that a database that does not exist yet is not created either
+		data.PrintDatabaseError(
+		    StringUtil::Format("Invalid Input Error: cannot open a database (%s) together with -connect\n"
+		                       "-connect uses the database of the server it connects to",
+		                       data.zDbFilename));
+		return 1;
+	}
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
 	}
