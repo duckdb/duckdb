@@ -992,58 +992,71 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			continue;
 		}
 
-		auto remaining = scan_count - scanned;
-		auto to_scan = MinValue(remaining, current_group.Remaining());
-		T *current_result_ptr = result_data + result_offset + scanned;
+		idx_t offset_in_compression_group =
+		    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 		if (current_group.metadata.mode == BitpackingMode::CONSTANT) {
-			std::fill(current_result_ptr, current_result_ptr + to_scan, current_group.constant);
-		} else if (current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA) {
+			idx_t remaining = scan_count - scanned;
+			idx_t to_scan = MinValue(remaining, current_group.Remaining());
+			T *begin = result_data + result_offset + scanned;
+			T *end = begin + to_scan;
+			std::fill(begin, end, current_group.constant);
+			scanned += to_scan;
+			current_group.Advance(to_scan);
+			continue;
+		}
+		if (current_group.metadata.mode == BitpackingMode::CONSTANT_DELTA) {
+			idx_t remaining = scan_count - scanned;
+			idx_t to_scan = MinValue(remaining, current_group.Remaining());
+			T *target_ptr = result_data + result_offset + scanned;
+
 			for (idx_t i = 0; i < to_scan; i++) {
 				idx_t multiplier = current_group.offset + i;
 				// Operands read from disk can contain any T value, so use defined wrapping.
-				current_result_ptr[i] = static_cast<T>((static_cast<T_U>(current_group.constant) * multiplier) +
-				                                       static_cast<T_U>(current_group.frame_of_reference));
+				target_ptr[i] = static_cast<T>((static_cast<T_U>(current_group.constant) * multiplier) +
+				                               static_cast<T_U>(current_group.frame_of_reference));
 			}
+
+			scanned += to_scan;
+			current_group.Advance(to_scan);
+			continue;
+		}
+		D_ASSERT(current_group.metadata.mode == BitpackingMode::FOR ||
+		         current_group.metadata.mode == BitpackingMode::DELTA_FOR);
+
+		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
+		                                                          offset_in_compression_group);
+		to_scan = MinValue(to_scan, current_group.Remaining());
+		T *current_result_ptr = result_data + result_offset + scanned;
+
+		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
+			// Decompress directly into result vector
+			current_group.UnpackAlgorithmGroup(current_result_ptr, skip_sign_extend);
 		} else {
-			D_ASSERT(current_group.metadata.mode == BitpackingMode::FOR ||
-			         current_group.metadata.mode == BitpackingMode::DELTA_FOR);
+			// Decompress compression algorithm to buffer
+			current_group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
 
-			idx_t offset_in_compression_group =
-			    current_group.offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-			to_scan = MinValue<idx_t>(to_scan, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
-			                                       offset_in_compression_group);
-
-			if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
-				// Decompress directly into result vector
-				current_group.UnpackAlgorithmGroup(current_result_ptr, skip_sign_extend);
-			} else {
-				// Decompress compression algorithm to buffer
-				current_group.UnpackAlgorithmGroup(scan_state.decompression_buffer, skip_sign_extend);
-
-				memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
-				       to_scan * sizeof(T));
-			}
-
-			if (current_group.metadata.mode == BitpackingMode::DELTA_FOR) {
-				unsafe_array_ptr<T_S> current_results(reinterpret_cast<T_S *>(current_result_ptr), to_scan);
-				ApplyFrameOfReference<T_S>(current_results, static_cast<T_S>(current_group.frame_of_reference));
-				current_group.delta_offset =
-				    static_cast<T>(DeltaDecode<T_S>(current_results, static_cast<T_S>(current_group.delta_offset)));
-			} else {
-				ApplyFrameOfReference<T>(unsafe_array_ptr<T>(current_result_ptr, to_scan),
-				                         current_group.frame_of_reference);
-			}
+			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
+			       to_scan * sizeof(T));
 		}
 
-		current_group.Advance(to_scan);
+		if (current_group.metadata.mode == BitpackingMode::DELTA_FOR) {
+			unsafe_array_ptr<T_S> current_results(reinterpret_cast<T_S *>(current_result_ptr), to_scan);
+			ApplyFrameOfReference<T_S>(current_results, static_cast<T_S>(current_group.frame_of_reference));
+			current_group.delta_offset =
+			    static_cast<T>(DeltaDecode<T_S>(current_results, static_cast<T_S>(current_group.delta_offset)));
+		} else {
+			ApplyFrameOfReference<T>(unsafe_array_ptr<T>(current_result_ptr, to_scan),
+			                         current_group.frame_of_reference);
+		}
+
 		scanned += to_scan;
+		current_group.Advance(to_scan);
+	}
 
-		if (current_group.AtEnd() && current_group.index + 1 == scan_state.group_count) {
-			D_ASSERT(scanned == scan_count);
-			scan_state.Finish();
-			return;
-		}
+	auto &current_group = scan_state.GetCurrentGroup();
+	if (current_group.AtEnd() && current_group.index + 1 == scan_state.group_count) {
+		scan_state.Finish();
 	}
 }
 
