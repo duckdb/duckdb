@@ -664,12 +664,15 @@ private:
 	}
 	void RestoreFunctionExpressionIdentity() {
 		function_expression_type = definition ? definition->function_expression_type : ExpressionType::INVALID;
+	}
+	void RestoreRebindableDefinition() {
 		definition_is_rebindable = definition != nullptr;
 	}
 
 private:
 	shared_ptr<const ScalarFunction> definition;
 	ExpressionType function_expression_type = ExpressionType::INVALID;
+	//! Set only after the definition has been resolved from a catalog entry.
 	bool definition_is_rebindable = false;
 
 	friend class BaseScalarFunction<BoundScalarFunction>;

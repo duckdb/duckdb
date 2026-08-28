@@ -695,43 +695,63 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	connection.BeginTransaction();
 
 	BoundExpressionSQLExportContext context;
-	vector<unique_ptr<Expression>> serialized_scalar_children;
-	serialized_scalar_children.push_back(Constant(Value::INTEGER(7)));
-	auto serializable_scalar = identity.Bind(*connection.context, std::move(serialized_scalar_children));
-	REQUIRE(serializable_scalar->Function().HasRebindableDefinition());
-	auto serialized_scalar = BinaryRoundTrip(*connection.context, *serializable_scalar);
+	auto catalog_plan =
+	    BindExportQuery(connection, "SELECT synthetic_provenance_schema.synthetic_identity(CAST(7 AS INTEGER)), "
+	                                "synthetic_provenance_schema.synthetic_sum(CAST(7 AS INTEGER))");
+	auto catalog_scalar = FindExpression(*catalog_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "synthetic_identity";
+	});
+	REQUIRE(catalog_scalar);
+	REQUIRE(catalog_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	auto serialized_scalar = BinaryRoundTrip(*connection.context, *catalog_scalar);
 	REQUIRE(serialized_scalar->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
 	RequireRoundTrip(connection, *serialized_scalar, context, string(),
 	                 "synthetic_provenance_schema.synthetic_identity(CAST(7 AS INTEGER))");
 
-	vector<unique_ptr<Expression>> serialized_aggregate_children;
-	serialized_aggregate_children.push_back(Constant(Value::INTEGER(7)));
-	auto serializable_aggregate = sum.Bind(*connection.context, std::move(serialized_aggregate_children));
-	REQUIRE(serializable_aggregate->Function().HasRebindableDefinition());
-	auto serialized_aggregate = BinaryRoundTrip(*connection.context, *serializable_aggregate);
+	auto catalog_aggregate = FindExpression(*catalog_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+		       expression.Cast<BoundAggregateExpression>().Function().GetName() == "synthetic_sum";
+	});
+	REQUIRE(catalog_aggregate);
+	REQUIRE(catalog_aggregate->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
+	auto serialized_aggregate = BinaryRoundTrip(*connection.context, *catalog_aggregate);
 	REQUIRE(serialized_aggregate->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
 	RequireRoundTrip(connection, *serialized_aggregate, context, string(),
 	                 "synthetic_provenance_schema.synthetic_sum(CAST(7 AS INTEGER))");
 
-	vector<unique_ptr<Expression>> scalar_children;
-	scalar_children.push_back(Constant(Value::INTEGER(7)));
-	auto scalar = identity.Bind(*connection.context, std::move(scalar_children));
-	scalar->FunctionMutable().SetFunctionCallback(ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(8));
-
 	LogicalPlanCompilerPath path;
 	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	ScalarFunction scalar_impostor(Identifier("synthetic_identity"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                               ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
+	scalar_impostor.SetCatalogName(Identifier::SystemCatalog());
+	scalar_impostor.SetSchemaName(Identifier("synthetic_provenance_schema"));
+	vector<unique_ptr<Expression>> scalar_children;
+	scalar_children.push_back(Constant(Value::INTEGER(7)));
+	auto scalar = scalar_impostor.Bind(*connection.context, std::move(scalar_children));
+	REQUIRE_FALSE(scalar->Function().HasRebindableDefinition());
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *scalar) == Value::INTEGER(8));
 	RequireIssue(BoundExpressionSQLExporter::Export(*scalar, context),
 	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto serialized_scalar_impostor = BinaryRoundTrip(*connection.context, *scalar);
+	REQUIRE_FALSE(serialized_scalar_impostor->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_scalar_impostor, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto mutated_scalar_expression = catalog_scalar->Copy();
+	auto &mutated_scalar = mutated_scalar_expression->Cast<BoundFunctionExpression>();
+	mutated_scalar.FunctionMutable().SetFunctionCallback(
+	    ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, mutated_scalar) == Value::INTEGER(8));
+	RequireIssue(BoundExpressionSQLExporter::Export(mutated_scalar, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 
-	vector<unique_ptr<Expression>> definition_children;
-	definition_children.push_back(Constant(Value::INTEGER(7)));
-	auto changed_definition = identity.Bind(*connection.context, std::move(definition_children));
+	auto changed_definition_expression = catalog_scalar->Copy();
+	auto &changed_definition = changed_definition_expression->Cast<BoundFunctionExpression>();
 	auto replacement_definition = make_shared_ptr<ScalarFunction>(identity);
 	replacement_definition->SetName(Identifier("synthetic_sum_plus_one"));
-	changed_definition->FunctionMutable().SetDefinition(std::move(replacement_definition));
-	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *changed_definition) == Value::INTEGER(7));
-	RequireIssue(BoundExpressionSQLExporter::Export(*changed_definition, context),
+	changed_definition.FunctionMutable().SetDefinition(std::move(replacement_definition));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, changed_definition) == Value::INTEGER(7));
+	RequireIssue(BoundExpressionSQLExporter::Export(changed_definition, context),
 	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	auto ordinary_result = connection.Query("SELECT synthetic_provenance_schema.synthetic_sum(CAST(7 AS INTEGER))");
@@ -742,13 +762,30 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	REQUIRE_FALSE(replacement_result->HasError());
 	REQUIRE(replacement_result->GetValue(0, 0) == Value::BIGINT(8));
 
+	auto aggregate_impostor = sum_plus_one;
+	aggregate_impostor.SetName(Identifier("synthetic_sum"));
+	aggregate_impostor.SetCatalogName(Identifier::SystemCatalog());
+	aggregate_impostor.SetSchemaName(Identifier("synthetic_provenance_schema"));
 	vector<unique_ptr<Expression>> aggregate_children;
 	aggregate_children.push_back(Constant(Value::INTEGER(7)));
-	auto aggregate = sum.Bind(*connection.context, std::move(aggregate_children));
-	aggregate->FunctionMutable().SetCallbacks(sum_plus_one.GetCallbacks());
+	auto aggregate = aggregate_impostor.Bind(*connection.context, std::move(aggregate_children));
+	REQUIRE_FALSE(aggregate->Function().HasRebindableDefinition());
 	REQUIRE(aggregate->Function().GetCallbacks() == sum_plus_one.GetCallbacks());
-	REQUIRE(aggregate->Function().GetCallbacks() != aggregate->Function().GetDefinition()->GetCallbacks());
+	REQUIRE(aggregate->Function().GetCallbacks() != sum.GetCallbacks());
 	RequireIssue(BoundExpressionSQLExporter::Export(*aggregate, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	auto serialized_aggregate_impostor = BinaryRoundTrip(*connection.context, *aggregate);
+	REQUIRE_FALSE(serialized_aggregate_impostor->Cast<BoundAggregateExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*serialized_aggregate_impostor, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto mutated_aggregate_expression = catalog_aggregate->Copy();
+	auto &mutated_aggregate = mutated_aggregate_expression->Cast<BoundAggregateExpression>();
+	mutated_aggregate.FunctionMutable().SetCallbacks(sum_plus_one.GetCallbacks());
+	REQUIRE(mutated_aggregate.Function().GetCallbacks() == sum_plus_one.GetCallbacks());
+	REQUIRE(mutated_aggregate.Function().GetCallbacks() !=
+	        mutated_aggregate.Function().GetDefinition()->GetCallbacks());
+	RequireIssue(BoundExpressionSQLExporter::Export(mutated_aggregate, context),
 	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 	connection.Rollback();
 }
@@ -1192,6 +1229,31 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 
 	auto sum = check_aggregate("SELECT sum(i) FROM aggregate_values", "sum(v.i)", Identifier("sum"), true);
 	REQUIRE(sum.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
+	auto optimized_sum_plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM aggregate_values");
+	auto optimized_sum = FindExpression(*optimized_sum_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+		       expression.Cast<BoundAggregateExpression>().Function().GetName() == "sum_no_overflow";
+	});
+	REQUIRE(optimized_sum);
+	auto &optimized_sum_bound = optimized_sum->Cast<BoundAggregateExpression>();
+	REQUIRE(optimized_sum_bound.Function().GetDefinition());
+	REQUIRE(optimized_sum_bound.Function().GetDefinition()->GetName() == "sum");
+	REQUIRE(optimized_sum_bound.Function().HasRebindableDefinition());
+	auto &optimized_sum_child = optimized_sum_bound.GetChildren()[0]->Cast<BoundColumnRefExpression>();
+	auto optimized_sum_context =
+	    ResolveBinding(optimized_sum_child.Binding(), {Identifier("v"), Identifier("i")}, LogicalType::INTEGER);
+	auto pre_serialization = BoundExpressionSQLExporter::Export(optimized_sum_bound, optimized_sum_context);
+	REQUIRE(pre_serialization.IsSuccess());
+	REQUIRE(pre_serialization.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
+
+	auto serialized_sum = BinaryRoundTrip(*connection.context, optimized_sum_bound);
+	auto &serialized_sum_bound = serialized_sum->Cast<BoundAggregateExpression>();
+	REQUIRE(serialized_sum_bound.Function().GetName() == "sum_no_overflow");
+	REQUIRE(serialized_sum_bound.Function().GetDefinition());
+	REQUIRE(serialized_sum_bound.Function().GetDefinition()->GetName() == "sum");
+	REQUIRE(serialized_sum_bound.Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, serialized_sum_bound, optimized_sum_context, " FROM aggregate_values AS v",
+	                 "sum(v.i)");
 
 	auto distinct_filter = check_aggregate("SELECT sum(DISTINCT i) FILTER (WHERE i > 1) FROM aggregate_values",
 	                                       "sum(DISTINCT v.i) FILTER (WHERE v.i > 1)", Identifier("sum"), false);

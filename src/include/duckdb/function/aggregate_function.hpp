@@ -511,6 +511,7 @@ protected:
 		return definition_is_rebindable;
 	}
 
+	//! Set only after the definition has been resolved from a catalog entry.
 	bool definition_is_rebindable = false;
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;

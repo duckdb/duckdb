@@ -114,7 +114,6 @@ BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function
 BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
     : definition(std::move(function_p)) {
 	auto &function = *definition;
-	RestoreDefinitionRebindability();
 	name = function.name;
 	schema_name = function.GetSchemaName();
 	catalog_name = function.GetCatalogName();
