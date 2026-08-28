@@ -163,6 +163,7 @@ bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &respo
 	return response.ShouldRetry();
 }
 
+// NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPClient::Send(BaseRequest &request, HTTPExecutionMode mode, HTTPResponseCallback on_complete) {
 	// default: this client has no asynchronous transport, so the request is already done when it returns
 	on_complete(Request(request), nullptr);
@@ -271,6 +272,7 @@ HTTPRequestState HTTPUtil::Send(BaseRequest &request, unique_ptr<HTTPClient> &cl
 	return driver->Start();
 }
 
+// NOLINTNEXTLINE: taken by value so an asynchronous override can move it into its scheduler
 HTTPRequestState HTTPUtil::Wait(uint64_t delay_ms, std::function<void()> resume) {
 	// default: this platform has a thread to wait on, which is what the retry backoff has always done
 #ifndef DUCKDB_NO_THREADS
