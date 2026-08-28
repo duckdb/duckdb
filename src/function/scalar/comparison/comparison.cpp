@@ -85,29 +85,6 @@ static ScalarFunction GetComparisonFunctionInternal(const string &name) {
 	return comparison_fun;
 }
 
-static ScalarFunction GetComparisonFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::COMPARE_EQUAL:
-		return OperatorEqualFun::GetFunction();
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return OperatorNotEqualFun::GetFunction();
-	case ExpressionType::COMPARE_LESSTHAN:
-		return OperatorLessThanFun::GetFunction();
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return OperatorLessThanEqualsFun::GetFunction();
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return OperatorGreaterThanFun::GetFunction();
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return OperatorGreaterThanEqualsFun::GetFunction();
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return IsDistinctFromFun::GetFunction();
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return IsNotDistinctFromFun::GetFunction();
-	default:
-		throw InternalException("Unknown comparison type!");
-	}
-}
-
 ScalarFunction OperatorEqualFun::GetFunction() {
 	return GetComparisonFunctionInternal<ExpressionType::COMPARE_EQUAL>(OperatorEqualFun::Name);
 }
@@ -141,6 +118,53 @@ ScalarFunction IsNotDistinctFromFun::GetFunction() {
 	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOT_DISTINCT_FROM>(IsNotDistinctFromFun::Name);
 }
 
+static const shared_ptr<const ScalarFunction> &GetComparisonFunctionDefinition(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::COMPARE_EQUAL: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorEqualFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_NOTEQUAL: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorNotEqualFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_LESSTHAN: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorLessThanFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorLessThanEqualsFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_GREATERTHAN: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorGreaterThanFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(OperatorGreaterThanEqualsFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_DISTINCT_FROM: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(IsDistinctFromFun::GetFunction());
+		return definition;
+	}
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+		static const shared_ptr<const ScalarFunction> definition =
+		    make_shared_ptr<ScalarFunction>(IsNotDistinctFromFun::GetFunction());
+		return definition;
+	}
+	default:
+		throw InternalException("Unknown comparison type!");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // BoundComparisonExpression
 //===--------------------------------------------------------------------===//
@@ -150,7 +174,7 @@ unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, un
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 
-	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetComparisonFunction(type)),
+	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetComparisonFunctionDefinition(type)),
 	                                                 std::move(children), nullptr, true);
 	return std::move(result);
 }
@@ -178,6 +202,14 @@ bool BoundComparisonExpression::IsComparison(const Expression &expr) {
 	return IsComparison(expr.GetExpressionType());
 }
 
+bool BoundComparisonExpression::HasCanonicalDefinition(const BoundFunctionExpression &comparison_expr) {
+	if (!IsComparison(comparison_expr.GetExpressionType())) {
+		return false;
+	}
+	return comparison_expr.Function().GetDefinition() ==
+	       GetComparisonFunctionDefinition(comparison_expr.GetExpressionType());
+}
+
 const Expression &BoundComparisonExpression::Left(const BoundFunctionExpression &comparison_expr) {
 	return *comparison_expr.GetChildren()[0];
 }
@@ -198,7 +230,7 @@ void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr
 	auto arguments = comparison_expr.FunctionMutable().GetArguments();
 
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
-	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
+	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunctionDefinition(new_type));
 	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
 	comparison_expr.BindInfoMutable().reset();
 	comparison_expr.IsOperatorMutable() = true;

@@ -27,6 +27,10 @@ public:
 		auto &other = other_p.Cast<BetweenFunctionData>();
 		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
 	}
+
+	FunctionDataKind GetKind() const override {
+		return FunctionDataKind::BOUND_BETWEEN;
+	}
 };
 
 void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -164,6 +168,8 @@ idx_t BetweenSelect(DataChunk &args, ExpressionState &state, optional_ptr<const 
 }
 #endif
 
+static const shared_ptr<const ScalarFunction> &GetBetweenFunctionDefinition();
+
 unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
                                                       unique_ptr<Expression> upper, bool lower_inclusive,
                                                       bool upper_inclusive) {
@@ -174,7 +180,7 @@ unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> inp
 
 	auto function_data = make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive);
 
-	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(BetweenFun::GetFunction()),
+	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetBetweenFunctionDefinition()),
 	                                                 std::move(children), std::move(function_data), false);
 	return std::move(result);
 }
@@ -225,6 +231,12 @@ ScalarFunction BetweenFun::GetFunction() {
 	return between_fun;
 }
 
+static const shared_ptr<const ScalarFunction> &GetBetweenFunctionDefinition() {
+	static const shared_ptr<const ScalarFunction> definition =
+	    make_shared_ptr<ScalarFunction>(BetweenFun::GetFunction());
+	return definition;
+}
+
 //===--------------------------------------------------------------------===//
 // BoundBetweenExpression
 //===--------------------------------------------------------------------===//
@@ -238,12 +250,12 @@ bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &betwe
 	return data.upper_inclusive;
 }
 
+bool BoundBetweenExpression::HasCanonicalDefinition(const BoundFunctionExpression &between_expr) {
+	return between_expr.Function().GetDefinition() == GetBetweenFunctionDefinition();
+}
+
 bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {
-	if (!between_expr.BindInfo()) {
-		return false;
-	}
-	const FunctionData &bind_info = *between_expr.BindInfo();
-	return typeid(bind_info) == typeid(BetweenFunctionData);
+	return between_expr.BindInfo() && between_expr.BindInfo()->GetKind() == FunctionDataKind::BOUND_BETWEEN;
 }
 
 const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {
