@@ -458,3 +458,28 @@ TEST_CASE("HTTP core grants a throttled deferred request extra retries", "[api]"
 	// and it actually backed off rather than hammering
 	REQUIRE(http_util.last_delay_ms > 0);
 }
+
+TEST_CASE("HTTP retry policy never retries a non-idempotent request", "[api]") {
+	RetryFixture fixture;
+	fixture.params.retries = 3;
+	HTTPHeaders headers;
+	// POST is the one method that cannot be assumed safe to replay
+	PostRequestInfo request("http://example.com/file", headers, fixture.params, nullptr, 0);
+	HTTPRetryState state;
+	uint64_t delay_ms = 0;
+
+	// a 500 would be retried for a GET, but a POST has no retries at all
+	auto attempt = ResponseAttempt(HTTPStatusCode::InternalServerError_500);
+	REQUIRE(state.OnAttempt(request, attempt, delay_ms) == HTTPRetryDecision::FAILED);
+}
+
+TEST_CASE("HTTP retry policy still retries an idempotent request of the same shape", "[api]") {
+	RetryFixture fixture;
+	fixture.params.retries = 3;
+	HTTPRetryState state;
+	uint64_t delay_ms = 0;
+
+	// the same status on a HEAD, which is idempotent, is retried
+	auto attempt = ResponseAttempt(HTTPStatusCode::InternalServerError_500);
+	REQUIRE(state.OnAttempt(fixture.request, attempt, delay_ms) == HTTPRetryDecision::RETRY);
+}
