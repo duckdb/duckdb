@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class ARTKey;
+
 //! PrefixHandle owns the pin for a mutable prefix node.
 class PrefixHandle {
 public:
@@ -28,6 +30,13 @@ public:
 	PrefixHandle &operator=(const PrefixHandle &) = delete;
 	PrefixHandle(PrefixHandle &&) = default;
 	PrefixHandle &operator=(PrefixHandle &&) = default;
+
+public:
+	//! Create a new prefix chain. The slot points to the child of the last prefix node.
+	static void New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count);
+
+	//! Create a new deprecated prefix node and return a handle to it.
+	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
 
 public:
 	data_ptr_t Data() {
@@ -58,10 +67,6 @@ public:
 	NodeHandle TakeHandle() && {
 		return std::move(handle);
 	}
-
-public:
-	//! Create a new deprecated prefix node and return a handle to it.
-	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
 
 	//! Get a mutable reference to the child slot of the prefix.
 	static NodePtr &ChildRef(const ART &art, NodeHandle &handle) {

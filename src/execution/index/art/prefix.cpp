@@ -53,7 +53,21 @@ Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const
 	return prefix;
 }
 
-void Prefix::New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count) {
+void Prefix::New(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, const idx_t depth, idx_t count) {
+	idx_t offset = 0;
+
+	while (count) {
+		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
+		auto this_count = UnsafeNumericCast<uint8_t>(min);
+		auto prefix = NewInternal(art, node_ref, key.data, this_count, offset + depth);
+
+		node_ref = *prefix.child_slot;
+		offset += this_count;
+		count -= this_count;
+	}
+}
+
+void PrefixHandle::New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
@@ -194,65 +208,6 @@ GateStatus Prefix::Split(ART &art, reference<NodePtr> &node_ref, NodePtr &child,
 	// The subsequent node replaces the split byte.
 	node_ref = *prefix.child_slot;
 	return GateStatus::GATE_NOT_SET;
-}
-
-GateStatus Prefix::Split(ART &art, SlotHandle &slot, NodePtr &child, const uint8_t pos) {
-	D_ASSERT(slot.Ref().HasMetadata());
-	D_ASSERT(slot.Ref().GetType() == PREFIX);
-
-	GateStatus old_status = GateStatus::GATE_NOT_SET;
-	{
-		PrefixHandle prefix(NodeHandle(art, slot.Ref()));
-		const auto count = prefix.GetCount(art);
-		auto &prefix_child = prefix.Child(art);
-
-		// The split is at the last prefix byte, and the prefix is full.
-		// Keep the current prefix, then let the caller write the replacement node into its child slot.
-		if (pos + 1 == art.PrefixCount()) {
-			prefix.SetCount(art, count - 1);
-			child = prefix_child;
-
-			auto pin = std::move(prefix).TakeHandle();
-			slot.Rebind(prefix_child, std::move(pin));
-			return GateStatus::GATE_NOT_SET;
-		}
-
-		if (pos + 1 < count) {
-			// The split is not at the last prefix byte.
-			// child receives the remaining suffix and any subsequent prefix chain.
-			auto new_prefix = NewInternal(art, child, nullptr, 0, 0);
-			new_prefix.data[art.PrefixCount()] = count - pos - 1;
-			memcpy(new_prefix.data, prefix.Data() + pos + 1, new_prefix.data[art.PrefixCount()]);
-
-			if (prefix_child.GetType() == PREFIX && prefix_child.GetGateStatus() == GateStatus::GATE_NOT_SET) {
-				new_prefix.Append(art, prefix_child);
-			} else {
-				*new_prefix.child_slot = prefix_child;
-			}
-
-		} else {
-			D_ASSERT(pos + 1 == count);
-			// The split is at the last prefix byte, but the prefix is not full.
-			child = prefix_child;
-		}
-
-		// Set the new count of this node (can be empty).
-		prefix.SetCount(art, pos);
-
-		if (pos != 0) {
-			// There are bytes left before the split. The caller writes the replacement node into
-			// this prefix's child slot, so keep the prefix pinned across the return boundary.
-			auto pin = std::move(prefix).TakeHandle();
-			slot.Rebind(prefix_child, std::move(pin));
-			return GateStatus::GATE_NOT_SET;
-		}
-
-		// No bytes left before the split. Drop the prefix handle before freeing the prefix node.
-		old_status = slot.Ref().GetGateStatus();
-	}
-
-	NodePtr::FreeNode(art, slot.Ref());
-	return old_status;
 }
 
 Prefix Prefix::Append(ART &art, const uint8_t byte) {

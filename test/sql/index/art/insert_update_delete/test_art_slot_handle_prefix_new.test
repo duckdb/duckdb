@@ -1,0 +1,43 @@
+# name: test/sql/index/art/insert_update_delete/test_art_slot_handle_prefix_new.test
+# description: Test prefix creation through a SlotHandle for a new ART child
+# group: [insert_update_delete]
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+CREATE TABLE prefix_new (key VARCHAR, payload INTEGER);
+
+statement ok
+CREATE INDEX prefix_new_idx ON prefix_new(key);
+
+# The first insert creates the initial tree. The second insert creates a missing
+# child with a multi-node prefix chain through ARTOperator::InsertIntoNode.
+statement ok
+INSERT INTO prefix_new VALUES
+	('a' || repeat('x', 80), 1),
+	('b' || repeat('y', 80), 2);
+
+query II
+SELECT payload, length(key)
+FROM prefix_new
+WHERE key = 'a' || repeat('x', 80);
+----
+1	81
+
+query II
+SELECT payload, length(key)
+FROM prefix_new
+WHERE key = 'b' || repeat('y', 80);
+----
+2	81
+
+query I
+SELECT payload
+FROM prefix_new
+WHERE key = 'b' || repeat('y', 79) || 'z';
+----
+
