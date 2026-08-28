@@ -71,6 +71,13 @@ SELECT count(*) FROM nullables WHERE m IN ('sad', 'ok', 'happy');
 ----
 6144
 
+# the NOT of an IN over the full domain is false-or-NULL for every row - even a NULL
+# row does not survive, so the whole filter collapses to an empty result
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullables WHERE m NOT IN ('sad', 'ok', 'happy');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
 
 # domains above 255 values use a UINT16 physical type - coverage must hold there too
 statement ok

@@ -609,6 +609,38 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	return result;
 }
 
+static bool InCoversEnumDomain(optional_ptr<ClientContext> context_p, const Expression &expr,
+                               array_ptr<const BaseStatistics> input_stats) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return false;
+	}
+	auto &op_expr = expr.Cast<BoundOperatorExpression>();
+	if (op_expr.GetChildren().size() <= 1) {
+		return false;
+	}
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto filter_stats = TryGetFilterStats(context_p, *op_expr.GetChildren()[0], input_stats, owned_stats);
+	if (!filter_stats || filter_stats->GetType().id() != LogicalTypeId::ENUM) {
+		return false;
+	}
+	vector<Value> values;
+	values.reserve(op_expr.GetChildren().size() - 1);
+	for (idx_t i = 1; i < op_expr.GetChildren().size(); i++) {
+		if (op_expr.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &value = op_expr.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
+		if (!value.IsNull()) {
+			values.push_back(value);
+		}
+	}
+	if (values.empty()) {
+		return false;
+	}
+	array_ptr<const Value> constants(values.data(), values.size());
+	return NumericStats::ConstantsCoverDomain(*filter_stats, constants);
+}
+
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                         const BoundOperatorExpression &op_expr,
                                                         array_ptr<const BaseStatistics> input_stats) {
@@ -628,6 +660,12 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 	if (ExpressionFilter::CheckExpressionStatistics(context_p, child, input_stats) ==
 	    FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	// an IN over the full declared domain of an ENUM matches every non-NULL value and yields NULL
+	// for NULL values, so the NOT of it matches no row. The child IN itself cannot be classified
+	// as always-true when the column can be NULL (it is then true-or-NULL), so check coverage here
+	if (InCoversEnumDomain(context_p, child, input_stats)) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
