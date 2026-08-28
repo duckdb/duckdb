@@ -122,14 +122,26 @@ class ExtensionNotCleanError(Exception):
 
 
 def resolve_ref(repo_dir, ref):
-    """Resolve a git ref to a full commit hash (returns None on failure)."""
-    result = run_cmd(['git', 'rev-parse', ref + '^{}'], cwd=repo_dir, check=False)
-    if result.returncode == 0:
-        return result.stdout.strip()
-    result = run_cmd(['git', 'rev-parse', ref], cwd=repo_dir, check=False)
+    """
+    Resolve a git ref to a full commit hash that exists locally (returns None on failure).
+
+    --verify with the ^{commit} peel is required: a plain 'git rev-parse <sha>' echoes back
+    any well-formed hash, even one whose object the local clone does not have.
+    """
+    result = run_cmd(['git', 'rev-parse', '--verify', '-q', ref + '^{commit}'], cwd=repo_dir, check=False)
     if result.returncode == 0:
         return result.stdout.strip()
     return None
+
+
+def resolve_ref_or_fetch(name, repo_dir, ref):
+    """Resolve <ref> locally, fetching from the remote if it is not known yet."""
+    resolved = resolve_ref(repo_dir, ref)
+    if resolved:
+        return resolved
+    print(f"  {name}: '{ref}' not found locally, fetching ...")
+    run_cmd(['git', 'fetch', '--all', '--tags'], cwd=repo_dir)
+    return resolve_ref(repo_dir, ref)
 
 
 def get_patch_files(patch_dir):
@@ -263,10 +275,7 @@ def check_extension_clean(name, ext_dir, git_tag, patches):
         )
 
     # Resolve git_tag; fetch from remote if it is not known locally yet
-    resolved = resolve_ref(ext_dir, git_tag)
-    if not resolved:
-        run_cmd(['git', 'fetch', '--all'], cwd=ext_dir)
-        resolved = resolve_ref(ext_dir, git_tag)
+    resolved = resolve_ref_or_fetch(name, ext_dir, git_tag)
     if not resolved:
         raise ExtensionNotCleanError(f"Extension '{name}': cannot resolve ref '{git_tag}'")
 
@@ -332,10 +341,7 @@ def sync_extension(ext, external_dir, repo_root):
         export = os.environ.get('EXPORT_EXTENSION_PATCHES') == '1'
 
         if export:
-            resolved = resolve_ref(ext_dir, git_tag)
-            if not resolved:
-                run_cmd(['git', 'fetch', '--all'], cwd=ext_dir)
-                resolved = resolve_ref(ext_dir, git_tag)
+            resolved = resolve_ref_or_fetch(name, ext_dir, git_tag)
             if not resolved:
                 raise ExtensionNotCleanError(f"Extension '{name}': cannot resolve ref '{git_tag}'")
             export_commits_as_patches(
@@ -344,8 +350,8 @@ def sync_extension(ext, external_dir, repo_root):
             return
         elif force:
             print(f"  {name}: force-resetting to {git_tag[:12]} and re-applying patches ...")
-            if not resolve_ref(ext_dir, git_tag):
-                run_cmd(['git', 'fetch', '--all'], cwd=ext_dir)
+            if not resolve_ref_or_fetch(name, ext_dir, git_tag):
+                raise ExtensionNotCleanError(f"Extension '{name}': cannot resolve ref '{git_tag}'")
             run_cmd(['git', 'reset', '--hard', git_tag], cwd=ext_dir)
             run_cmd(['git', 'clean', '-fd'], cwd=ext_dir)
         else:
