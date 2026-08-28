@@ -2,7 +2,9 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -21,8 +23,8 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
 }
 
-static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPruneInput &input) {
-	auto list_stats = input.ChildStats(0);
+static FilterPropagateResult ListSearchFilterPruneImpl(optional_ptr<const BaseStatistics> list_stats,
+                                                       optional_ptr<const BaseStatistics> needle_stats) {
 	if (!list_stats || list_stats->GetStatsType() != StatisticsType::LIST_STATS) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -32,7 +34,6 @@ static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPru
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 
-	auto needle_stats = input.ChildStats(1);
 	if (!needle_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -54,6 +55,24 @@ static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPru
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+static FilterPropagateResult ListContainsFilterPrune(const FunctionStatisticsPruneInput &input) {
+	return ListSearchFilterPruneImpl(input.ChildStats(0), input.ChildStats(1));
+}
+
+static unique_ptr<BaseStatistics> ListPositionPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
+	if (input.child_stats.size() != 2) {
+		return nullptr;
+	}
+	auto prune = ListSearchFilterPruneImpl(input.child_stats[0], input.child_stats[1]);
+	if (prune != FilterPropagateResult::FILTER_ALWAYS_FALSE && prune != FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		return nullptr;
+	}
+	// Needle cannot occur: list_position is NULL for every row.
+	auto stats = NumericStats::CreateEmpty(input.expr.GetReturnType());
+	stats.SetHasNullFast();
+	return stats.ToUnique();
+}
+
 ScalarFunction ListContainsFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::BOOLEAN, ListSearchFunction<bool>);
@@ -67,6 +86,7 @@ ScalarFunction ListPositionFun::GetFunction() {
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	fun.SetStatisticsCallback(ListPositionPropagateStats);
 	return fun;
 }
 
