@@ -124,6 +124,7 @@
         "test/geoparquet/unsupported.test",
         "test/geoparquet/versions.text",
         "test/sql/types/variant/variant_distinct.test",
+        "test/sql/aggregate/variant/variant_group_object.test",
         "test/parquet/variant/variant_comparison.test",
         "test/parquet/variant/variant_json_copy.test",
         "test/parquet/variant/variant_shredding_reanalysis_bug.test",

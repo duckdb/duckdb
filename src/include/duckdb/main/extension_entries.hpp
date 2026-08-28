@@ -1011,6 +1011,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"var_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"variance", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"variant_bytes_to_variant", "parquet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"variant_group_object", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"variant_to_parquet_variant", "parquet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"vector_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"version", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
