@@ -227,12 +227,21 @@ public:
 		deserializer.Set<const LogicalType &>(return_type);
 		auto bound_data = FunctionDeserialize(deserializer, bound_function);
 		deserializer.Unset<LogicalType>();
+		RestoreFunctionExpressionIdentity(bound_function);
 
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));
 		}
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
+	}
+
+private:
+	static void RestoreFunctionExpressionIdentity(BoundScalarFunction &function) {
+		function.RestoreFunctionExpressionIdentity();
+	}
+	template <class FUNC>
+	static void RestoreFunctionExpressionIdentity(FUNC &) {
 	}
 };
 
