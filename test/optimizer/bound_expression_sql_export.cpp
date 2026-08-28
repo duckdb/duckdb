@@ -3,6 +3,8 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/comparison_functions.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
@@ -194,6 +196,36 @@ public:
 
 	bool Equals(const FunctionData &) const override {
 		return true;
+	}
+};
+
+static unique_ptr<FunctionData> BindOpaqueSQLFunction(BindScalarFunctionInput &) {
+	return make_uniq<OpaqueSQLFunctionData>();
+}
+
+static ExpressionType ClaimCastExpressionType(FunctionToStringInput &) {
+	return ExpressionType::OPERATOR_CAST;
+}
+
+static ExpressionType ClaimComparisonExpressionType(FunctionToStringInput &) {
+	return ExpressionType::COMPARE_EQUAL;
+}
+
+static ExpressionType ClaimBetweenExpressionType(FunctionToStringInput &) {
+	return ExpressionType::COMPARE_BETWEEN;
+}
+
+struct NotEqualOperation {
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+		return left != right;
+	}
+};
+
+struct OutsideRangeOperation {
+	template <class INPUT_TYPE, class LOWER_TYPE, class UPPER_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, LOWER_TYPE lower, UPPER_TYPE upper) {
+		return input < lower || input > upper;
 	}
 };
 
@@ -499,6 +531,43 @@ TEST_CASE("Bound expression SQL export admits only validated bound operators", "
 	REQUIRE(arity_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
 }
 
+TEST_CASE("Bound expression SQL export rejects TRY around volatile children", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	connection.BeginTransaction();
+	BoundExpressionSQLExportContext context;
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+
+	auto fallible_cast = BoundCastExpression::AddCastToType(*connection.context, Constant(Value("not an integer")),
+	                                                        LogicalType::INTEGER);
+	BoundOperatorExpression nonvolatile_try(ExpressionType::OPERATOR_TRY, LogicalType::INTEGER);
+	nonvolatile_try.GetChildrenMutable().push_back(std::move(fallible_cast));
+	auto original = ExpressionExecutor::EvaluateScalar(*connection.context, nonvolatile_try);
+	REQUIRE(original.type() == LogicalType::INTEGER);
+	REQUIRE(original.IsNull());
+	auto nonvolatile_result = BoundExpressionSQLExporter::Export(nonvolatile_try, context);
+	REQUIRE(nonvolatile_result.IsSuccess());
+	auto rebound = connection.Query("SELECT " + nonvolatile_result.GetValue()->ToString());
+	REQUIRE_FALSE(rebound->HasError());
+	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
+	REQUIRE(rebound->GetValue(0, 0).IsNull());
+
+	auto random_plan = BindExportQuery(connection, "SELECT random()");
+	auto random = FindExpression(*random_plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION && expression.IsVolatile() &&
+		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "random";
+	});
+	REQUIRE(random);
+	REQUIRE(BoundExpressionSQLExporter::Export(*random, context).IsSuccess());
+	BoundOperatorExpression volatile_try(ExpressionType::OPERATOR_TRY, LogicalType::DOUBLE);
+	volatile_try.GetChildrenMutable().push_back(random->Copy());
+	auto volatile_result = BoundExpressionSQLExporter::Export(volatile_try, context);
+	RequireIssue(volatile_result, LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	REQUIRE(*volatile_result.GetIssues()[0].construct->identifier == "try_volatile_child");
+	connection.Rollback();
+}
+
 TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar functions",
           "[bound_expression_sql_export]") {
 	DuckDB db;
@@ -620,6 +689,103 @@ TEST_CASE("Bound expression SQL export preserves qualified operator function ide
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
 	REQUIRE(rebound->GetValue(0, 0) == Value::INTEGER(5));
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export does not trust scalar expression type callbacks",
+          "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "synthetic_expression_type_extension");
+	loader.UseDedicatedSchemaForExtension(Identifier("synthetic_expression_type_schema"));
+
+	ScalarFunction comparison(Identifier("misleading_equal"), {LogicalType::INTEGER, LogicalType::INTEGER},
+	                          LogicalType::BOOLEAN,
+	                          ScalarFunction::BinaryFunction<int32_t, int32_t, bool, NotEqualOperation>);
+	comparison.SetGetExpressionTypeCallback(ClaimComparisonExpressionType);
+	loader.RegisterFunction(std::move(comparison));
+
+	ScalarFunction cast(Identifier("misleading_cast"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                    ScalarFunction::NopFunction, BindOpaqueSQLFunction);
+	cast.SetGetExpressionTypeCallback(ClaimCastExpressionType);
+	loader.RegisterFunction(std::move(cast));
+
+	ScalarFunction between(Identifier("misleading_between"),
+	                       {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::BOOLEAN,
+	                       ScalarFunction::TernaryFunction<int32_t, int32_t, int32_t, bool, OutsideRangeOperation>,
+	                       BindOpaqueSQLFunction);
+	between.SetGetExpressionTypeCallback(ClaimBetweenExpressionType);
+	loader.RegisterFunction(std::move(between));
+
+	loader.RefreshSearchPath(*connection.context);
+	connection.BeginTransaction();
+	auto bind_function = [&](const string &query, const Identifier &name) {
+		auto plan = BindExportQuery(connection, query);
+		auto expression = FindExpression(*plan, [&](const Expression &candidate) {
+			return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+			       candidate.Cast<BoundFunctionExpression>().Function().GetName() == name;
+		});
+		REQUIRE(expression);
+		return expression->Copy();
+	};
+
+	auto misleading_equal = bind_function(
+	    "SELECT synthetic_expression_type_schema.misleading_equal(CAST(7 AS INTEGER), CAST(7 AS INTEGER))",
+	    Identifier("misleading_equal"));
+	REQUIRE(misleading_equal->GetExpressionType() == ExpressionType::COMPARE_EQUAL);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *misleading_equal) == Value::BOOLEAN(false));
+	BoundExpressionSQLExportContext context;
+	auto comparison_result = BoundExpressionSQLExporter::Export(*misleading_equal, context);
+	REQUIRE(comparison_result.IsSuccess());
+	REQUIRE(comparison_result.GetValue()->GetExpressionClass() == ExpressionClass::FUNCTION);
+	auto &parsed = comparison_result.GetValue()->Cast<FunctionExpression>();
+	REQUIRE(parsed.GetQualifiedName().Schema() == Identifier("synthetic_expression_type_schema"));
+	REQUIRE(parsed.GetQualifiedName().Name() == Identifier("misleading_equal"));
+	auto comparison_rebound = connection.Query("SELECT " + parsed.ToString());
+	REQUIRE_FALSE(comparison_rebound->HasError());
+	REQUIRE(comparison_rebound->GetTypes() == vector<LogicalType> {LogicalType::BOOLEAN});
+	REQUIRE(comparison_rebound->GetValue(0, 0) == Value::BOOLEAN(false));
+
+	vector<pair<ExpressionType, unique_ptr<Expression>>> malformed_bind_data;
+	malformed_bind_data.emplace_back(
+	    ExpressionType::OPERATOR_CAST,
+	    bind_function("SELECT synthetic_expression_type_schema.misleading_cast(CAST(7 AS INTEGER))",
+	                  Identifier("misleading_cast")));
+	malformed_bind_data.emplace_back(
+	    ExpressionType::COMPARE_BETWEEN,
+	    bind_function(
+	        "SELECT synthetic_expression_type_schema.misleading_between(CAST(7 AS INTEGER), CAST(2 AS INTEGER), "
+	        "CAST(9 AS INTEGER))",
+	        Identifier("misleading_between")));
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	for (auto &entry : malformed_bind_data) {
+		REQUIRE(entry.second->GetExpressionType() == entry.first);
+		RequireIssue(BoundExpressionSQLExporter::Export(*entry.second, context),
+		             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+	}
+
+	auto cast_function = CastFun::GetFunction();
+	cast_function.SetReturnType(LogicalType::INTEGER);
+	BoundScalarFunction bound_cast(cast_function);
+	bound_cast.GetArguments() = {LogicalType::INTEGER};
+	vector<unique_ptr<Expression>> cast_children;
+	cast_children.push_back(Constant(Value::INTEGER(7)));
+	BoundFunctionExpression malformed_cast(std::move(bound_cast), std::move(cast_children),
+	                                       make_uniq<OpaqueSQLFunctionData>());
+	RequireIssue(BoundExpressionSQLExporter::Export(malformed_cast, context),
+	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+
+	BoundScalarFunction bound_between(BetweenFun::GetFunction());
+	bound_between.GetArguments() = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	vector<unique_ptr<Expression>> between_children;
+	between_children.push_back(Constant(Value::INTEGER(7)));
+	between_children.push_back(Constant(Value::INTEGER(2)));
+	between_children.push_back(Constant(Value::INTEGER(9)));
+	BoundFunctionExpression malformed_between(std::move(bound_between), std::move(between_children),
+	                                          make_uniq<OpaqueSQLFunctionData>());
+	RequireIssue(BoundExpressionSQLExporter::Export(malformed_between, context),
+	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
 	connection.Rollback();
 }
 
