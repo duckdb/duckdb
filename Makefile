@@ -966,9 +966,14 @@ gather-libs:
 	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.
 
-#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+#### Setup VCPKG to correct version 2026.07.29 tag is 9e593bb18ea69cc5095e012465dcd675a822ed0d
 vcpkg/scripts/buildsystems/vcpkg.cmake:
-	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	if [ -d vcpkg/.git ]; then \
+		git -C vcpkg fetch --tags && \
+		git -C vcpkg checkout --detach 2026.07.29; \
+	else \
+		git clone --branch 2026.07.29 https://github.com/microsoft/vcpkg; \
+	fi
 	cd vcpkg && ./bootstrap-vcpkg.sh
 
 setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake
