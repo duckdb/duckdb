@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -31,11 +32,10 @@ public:
 		return table_indexes;
 	}
 
-	bool SupportsTypeBindingVerification() const override {
-		return verify_types;
-	}
-
-	const string &GetTypeBindingVerificationIdentifier() const noexcept override {
+	optional_ptr<const string> GetTypeBindingVerificationIdentifier() const noexcept override {
+		if (!verify_types) {
+			return nullptr;
+		}
 		return name;
 	}
 
@@ -72,11 +72,7 @@ public:
 		return bindings;
 	}
 
-	bool SupportsTypeBindingVerification() const override {
-		return true;
-	}
-
-	const string &GetTypeBindingVerificationIdentifier() const noexcept override {
+	optional_ptr<const string> GetTypeBindingVerificationIdentifier() const noexcept override {
 		return identifier;
 	}
 
@@ -192,7 +188,7 @@ TEST_CASE("Compiler verification accepts typed extension operators", "[compiler_
 		auto child_index = TableIndex(10);
 		auto plan = ReferenceProjection(TableIndex(11), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, TypedLeaf(child_index, LogicalType::INTEGER));
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.IsSuccess());
 	}
@@ -208,7 +204,7 @@ TEST_CASE("Compiler verification accepts typed extension operators", "[compiler_
 		pass_through->children.push_back(TypedLeaf(child_index, LogicalType::INTEGER));
 		auto plan = ReferenceProjection(TableIndex(21), binding, LogicalType::INTEGER, std::move(pass_through));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.IsSuccess());
 	}
@@ -218,7 +214,7 @@ TEST_CASE("Compiler verification accepts typed extension operators", "[compiler_
 		auto child = make_uniq<LogicalDummyScan>(child_index);
 		auto plan = ReferenceProjection(TableIndex(31), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, std::move(child));
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.IsSuccess());
 	}
@@ -237,7 +233,7 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		pass_through->children.push_back(TypedLeaf(child_index, LogicalType::INTEGER));
 		auto plan = ReferenceProjection(TableIndex(41), child_binding, LogicalType::INTEGER, std::move(pass_through));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -255,7 +251,7 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		auto plan = ReferenceProjection(TableIndex(51), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::VARCHAR, TypedLeaf(child_index, LogicalType::INTEGER));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -282,7 +278,7 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 		pass_through->children.push_back(TypedLeaf(child_index, LogicalType::INTEGER));
 		auto plan = ReferenceProjection(TableIndex(56), child_binding, LogicalType::INTEGER, std::move(pass_through));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].path ==
@@ -296,7 +292,7 @@ TEST_CASE("Compiler verification reports exact binding and type paths", "[compil
 TEST_CASE("Compiler verification structures malformed expression bindings", "[compiler_verification]") {
 	auto VerifyInvalidBinding = [](unique_ptr<LogicalOperator> plan, const LogicalPlanCompilerPath &expected_path,
 	                               const ColumnBinding &expected_binding) {
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -384,7 +380,7 @@ TEST_CASE("Compiler verification isolates extension leaf input scope", "[compile
 		auto plan = make_uniq<LogicalCrossProduct>(TypedLeaf(left_index, LogicalType::INTEGER),
 		                                           ExpressionLeaf(right_index, sibling_binding, "sibling_reference"));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
@@ -401,7 +397,7 @@ TEST_CASE("Compiler verification isolates extension leaf input scope", "[compile
 		auto plan = ReferenceProjection(TableIndex(59), ColumnBinding(right_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, std::move(cross_product));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INVALID_BINDING);
@@ -424,7 +420,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		auto plan = ReferenceProjection(TableIndex(61), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, std::move(malformed));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -441,7 +437,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		auto plan = make_uniq<LogicalCrossProduct>(TypedLeaf(duplicate_index, LogicalType::INTEGER),
 		                                           TypedLeaf(duplicate_index, LogicalType::INTEGER));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -460,7 +456,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {duplicate_index});
 		plan->children.push_back(TypedLeaf(duplicate_index, LogicalType::INTEGER));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
@@ -475,7 +471,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    vector<LogicalType> {LogicalType::INTEGER},
 		    vector<TableIndex> {duplicate_index, duplicate_index, duplicate_index});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].path == LogicalPlanCompilerPath {});
@@ -484,7 +480,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 	SECTION("invalid root output type") {
 		auto plan = TypedLeaf(TableIndex(76), LogicalType::INVALID);
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -500,7 +496,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                           ColumnBinding(table_index, ProjectionIndex(1))},
 		    vector<LogicalType> {LogicalType::INVALID}, vector<TableIndex> {table_index});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 2);
 		REQUIRE(GetFact(result.GetIssues()[0], "binding_count") == Value::UBIGINT(2));
@@ -512,7 +508,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		auto plan = ReferenceProjection(TableIndex(78), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, TypedLeaf(child_index, LogicalType::INVALID));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -527,7 +523,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                                                     vector<ColumnBinding> {binding},
 		                                                     vector<LogicalType> {LogicalType::INTEGER});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -544,7 +540,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                                                      vector<LogicalType> {LogicalType::INTEGER});
 		auto plan = ReferenceProjection(TableIndex(781), binding, LogicalType::INTEGER, std::move(child));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -559,7 +555,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                                                     vector<ColumnBinding> {binding},
 		                                                     vector<LogicalType> {LogicalType::INTEGER});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -576,7 +572,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                                                      vector<LogicalType> {LogicalType::INTEGER});
 		auto plan = ReferenceProjection(TableIndex(784), binding, LogicalType::INTEGER, std::move(child));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -591,7 +587,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    "typed_verification_duplicate_binding_same_type", true, vector<ColumnBinding> {binding, binding},
 		    vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -607,7 +603,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    "typed_verification_duplicate_binding_conflicting_type", true, vector<ColumnBinding> {binding, binding},
 		    vector<LogicalType> {LogicalType::INTEGER, LogicalType::VARCHAR});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -621,7 +617,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    vector<LogicalType> {LogicalType::INTEGER, LogicalType::INTEGER});
 		auto plan = ReferenceProjection(TableIndex(788), binding, LogicalType::INTEGER, std::move(child));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -637,7 +633,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    vector<LogicalType> {LogicalType::INTEGER, LogicalType::VARCHAR});
 		auto plan = ReferenceProjection(TableIndex(790), binding, LogicalType::INTEGER, std::move(child));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -652,7 +648,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    "typed_verification_invalid_table_ownership", true, vector<ColumnBinding> {binding},
 		    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {TableIndex()});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
@@ -669,7 +665,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    vector<LogicalType> {LogicalType::INTEGER}, vector<TableIndex> {TableIndex()});
 		auto plan = ReferenceProjection(TableIndex(795), binding, LogicalType::INTEGER, std::move(child));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
@@ -686,7 +682,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		                           ColumnBinding(table_index, ProjectionIndex(1))},
 		    vector<LogicalType> {LogicalType::INTEGER});
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -701,8 +697,8 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    "second_malformed_extension", true,
 		    vector<ColumnBinding> {ColumnBinding(TableIndex(792), ProjectionIndex(0))}, vector<LogicalType> {});
 
-		auto first_result = ColumnBindingResolver::VerifyAlways(*first);
-		auto second_result = ColumnBindingResolver::VerifyAlways(*second);
+		auto first_result = LogicalPlanVerifier::VerifyAlways(*first);
+		auto second_result = LogicalPlanVerifier::VerifyAlways(*second);
 		REQUIRE(first_result.IsValid());
 		REQUIRE(second_result.IsValid());
 		REQUIRE(first_result.GetIssues().size() == 1);
@@ -712,10 +708,22 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		REQUIRE_FALSE(first_result.GetIssues()[0] == second_result.GetIssues()[0]);
 	}
 
+	SECTION("malformed extension result owns its identity") {
+		auto plan = make_uniq<VerificationExtensionOperator>(
+		    "owned_verification_identifier", true,
+		    vector<ColumnBinding> {ColumnBinding(TableIndex(796), ProjectionIndex(0))}, vector<LogicalType> {});
+
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
+		plan.reset();
+		REQUIRE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 1);
+		REQUIRE(result.GetIssues()[0].construct->identifier == "owned_verification_identifier");
+	}
+
 	SECTION("independent malformed children") {
 		auto plan = make_uniq<LogicalCrossProduct>(MalformedLeaf(TableIndex(180)), MalformedLeaf(TableIndex(181)));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 2);
 		REQUIRE(result.GetIssues()[0].path ==
@@ -732,7 +740,7 @@ TEST_CASE("Compiler verification rejects malformed extension output and duplicat
 		    MalformedLeaf(duplicate_index),
 		    ExpressionLeaf(duplicate_index, ColumnBinding(TableIndex(999), ProjectionIndex(0)), "invalid_binding"));
 
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 3);
 		REQUIRE(result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT);
@@ -755,23 +763,23 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_column_bindings=false"));
 	invalid_plan->types = {LogicalType::VARCHAR};
-	REQUIRE_NOTHROW(ColumnBindingResolver::Verify(*connection.context, *invalid_plan));
+	REQUIRE_NOTHROW(LogicalPlanVerifier::Verify(*connection.context, *invalid_plan));
 	REQUIRE(invalid_plan->types == vector<LogicalType> {LogicalType::VARCHAR});
-	REQUIRE(ColumnBindingResolver::VerifyAlways(*invalid_plan).HasError());
+	REQUIRE(LogicalPlanVerifier::VerifyAlways(*invalid_plan).HasError());
 
 	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_column_bindings=true"));
 #ifndef DUCKDB_CRASH_ON_ASSERT
-	REQUIRE_THROWS_AS(ColumnBindingResolver::Verify(*connection.context, *invalid_plan), InternalException);
+	REQUIRE_THROWS_AS(LogicalPlanVerifier::Verify(*connection.context, *invalid_plan), InternalException);
 #endif
 
 	auto valid_plan = ReferenceProjection(TableIndex(82), ColumnBinding(child_index, ProjectionIndex(0)),
 	                                      LogicalType::INTEGER, TypedLeaf(child_index, LogicalType::INTEGER));
-	REQUIRE_NOTHROW(ColumnBindingResolver::Verify(*connection.context, *valid_plan));
+	REQUIRE_NOTHROW(LogicalPlanVerifier::Verify(*connection.context, *valid_plan));
 
 	auto legacy_index = TableIndex(90);
 	auto legacy_plan = ReferenceProjection(TableIndex(91), ColumnBinding(legacy_index, ProjectionIndex(0)),
 	                                       LogicalType::VARCHAR, TypedLeaf(legacy_index, LogicalType::INTEGER, false));
-	auto legacy_result = ColumnBindingResolver::VerifyAlways(*legacy_plan);
+	auto legacy_result = LogicalPlanVerifier::VerifyAlways(*legacy_plan);
 	REQUIRE(legacy_result.IsValid());
 	REQUIRE(legacy_result.IsSuccess());
 
@@ -779,7 +787,7 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	auto unidentified_opt_in = make_uniq<VerificationExtensionOperator>(
 	    "", true, vector<ColumnBinding> {ColumnBinding(identifier_index, ProjectionIndex(0))},
 	    vector<LogicalType> {LogicalType::INTEGER});
-	auto unidentified_opt_in_result = ColumnBindingResolver::VerifyAlways(*unidentified_opt_in);
+	auto unidentified_opt_in_result = LogicalPlanVerifier::VerifyAlways(*unidentified_opt_in);
 	REQUIRE(unidentified_opt_in_result.IsValid());
 	REQUIRE(unidentified_opt_in_result.GetIssues().size() == 1);
 	REQUIRE(unidentified_opt_in_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
@@ -789,7 +797,7 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	auto unidentified_legacy = make_uniq<VerificationExtensionOperator>(
 	    "", false, vector<ColumnBinding> {ColumnBinding(identifier_index, ProjectionIndex(0))},
 	    vector<LogicalType> {LogicalType::INTEGER});
-	auto unidentified_legacy_result = ColumnBindingResolver::VerifyAlways(*unidentified_legacy);
+	auto unidentified_legacy_result = LogicalPlanVerifier::VerifyAlways(*unidentified_legacy);
 	REQUIRE(unidentified_legacy_result.IsValid());
 	REQUIRE(unidentified_legacy_result.IsSuccess());
 
@@ -798,7 +806,7 @@ TEST_CASE("Compiler verification preserves setting and legacy extension behavior
 	auto mixed_failure = ReferenceProjection(TableIndex(93), ColumnBinding(TableIndex(930), ProjectionIndex(0)),
 	                                         LogicalType::INTEGER, std::move(child_failure), "canonical_parent_first");
 	try {
-		ColumnBindingResolver::Verify(*connection.context, *mixed_failure);
+		LogicalPlanVerifier::Verify(*connection.context, *mixed_failure);
 		FAIL("Expected enabled verification to reject invalid bindings");
 	} catch (InternalException &exception) {
 		REQUIRE(StringUtil::Contains(exception.what(), "legacy_child_first"));
@@ -811,6 +819,33 @@ static unique_ptr<VerificationExtensionOperator> InvalidPassThrough(TableIndex c
                                                                     const string &alias) {
 	return ExpressionPassThrough(child_index, ColumnBinding(invalid_index, ProjectionIndex(0)), LogicalType::INTEGER,
 	                             alias);
+}
+
+TEST_CASE("Logical plan verification does not rewrite expressions", "[compiler_verification]") {
+	auto child_index = TableIndex(938);
+	auto binding = ColumnBinding(child_index, ProjectionIndex(0));
+	auto plan = ReferenceProjection(TableIndex(939), binding, LogicalType::INTEGER,
+	                                TypedLeaf(child_index, LogicalType::INTEGER));
+	REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF);
+
+	auto result = LogicalPlanVerifier::VerifyAlways(*plan);
+	REQUIRE(result.IsValid());
+	REQUIRE(result.IsSuccess());
+	REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF);
+	REQUIRE(plan->expressions[0]->Cast<BoundColumnRefExpression>().Binding() == binding);
+}
+
+TEST_CASE("Opted-in extensions use standard column binding resolution", "[compiler_verification]") {
+	auto child_index = TableIndex(937);
+	auto binding = ColumnBinding(child_index, ProjectionIndex(0));
+	auto plan = ExpressionPassThrough(child_index, binding, LogicalType::INTEGER, "standard_resolution");
+	plan->ResolveOperatorTypes();
+	REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF);
+
+	ColumnBindingResolver resolver;
+	REQUIRE_NOTHROW(resolver.VisitOperator(*plan));
+	REQUIRE(plan->expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_REF);
+	REQUIRE(plan->expressions[0]->GetReturnType() == LogicalType::INTEGER);
 }
 
 TEST_CASE("Normal column binding resolution preserves matching incomplete types", "[compiler_verification]") {
@@ -844,7 +879,7 @@ TEST_CASE("Compiler verification structures incomplete expression types", "[comp
 		auto child_index = TableIndex(940);
 		auto plan = ExpressionPassThrough(child_index, ColumnBinding(child_index, ProjectionIndex(0)),
 		                                  std::move(expression_type), alias);
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -871,7 +906,7 @@ TEST_CASE("Compiler verification structures incomplete expression types", "[comp
 		auto child = make_uniq<IncompleteTypeLeaf>(child_index, LogicalType::ANY);
 		auto plan = ReferenceProjection(TableIndex(942), ColumnBinding(child_index, ProjectionIndex(0)),
 		                                LogicalType::INTEGER, std::move(child));
-		auto result = ColumnBindingResolver::VerifyAlways(*plan);
+		auto result = LogicalPlanVerifier::VerifyAlways(*plan);
 		REQUIRE(result.IsValid());
 		REQUIRE(result.GetIssues().size() == 1);
 		auto &issue = result.GetIssues()[0];
@@ -893,8 +928,8 @@ static unique_ptr<LogicalOperator> MultipleIssuePlan(const string &left_alias, c
 TEST_CASE("Compiler verification results have deterministic structural identity", "[compiler_verification]") {
 	auto first_plan = MultipleIssuePlan("first_left", "first_right");
 	auto second_plan = MultipleIssuePlan("second_left", "second_right");
-	auto first = ColumnBindingResolver::VerifyAlways(*first_plan);
-	auto second = ColumnBindingResolver::VerifyAlways(*second_plan);
+	auto first = LogicalPlanVerifier::VerifyAlways(*first_plan);
+	auto second = LogicalPlanVerifier::VerifyAlways(*second_plan);
 
 	REQUIRE(first.IsValid());
 	REQUIRE(second.IsValid());
@@ -1006,6 +1041,30 @@ TEST_CASE("Compiler result records enforce their structural contract", "[compile
 	auto pointer_fact_issue = projection_issue;
 	pointer_fact_issue.facts = {{"pointer_fact", Value::POINTER(42)}};
 	REQUIRE_FALSE(LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({pointer_fact_issue}).IsValid());
+	auto stable_scalar_fact_issue = projection_issue;
+	stable_scalar_fact_issue.facts = {{"bit_fact", Value::BIT("101")},
+	                                  {"date_fact", Value::DATE(2026, 8, 28)},
+	                                  {"decimal_fact", Value::DECIMAL(int64_t(12345), 7, 2)},
+	                                  {"integer_fact", Value::INTEGER(42)},
+	                                  {"null_fact", Value(LogicalType::VARCHAR)},
+	                                  {"sqlnull_fact", Value(LogicalType::SQLNULL)},
+	                                  {"string_fact", Value("stable")}};
+	REQUIRE(LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({stable_scalar_fact_issue}).IsValid());
+
+	auto RequireInvalidFact = [&](const string &name, Value value) {
+		auto invalid_fact_issue = projection_issue;
+		invalid_fact_issue.facts = {{name, std::move(value)}};
+		auto result =
+		    LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure({projection_issue, invalid_fact_issue});
+		REQUIRE_FALSE(result.IsValid());
+		REQUIRE(result.GetIssues().size() == 2);
+	};
+	RequireInvalidFact("nested_fact", Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)}));
+	RequireInvalidFact("any_fact", Value(LogicalType::ANY));
+	RequireInvalidFact("template_fact", Value(LogicalType::TEMPLATE("T")));
+	RequireInvalidFact("type_fact", Value::TYPE(LogicalType::INTEGER));
+	RequireInvalidFact("validity_fact", Value(LogicalType(LogicalTypeId::VALIDITY)));
+	RequireInvalidFact("lambda_fact", Value(LogicalType::LAMBDA));
 
 	auto invalid_enum_issue = projection_issue;
 	invalid_enum_issue.code = static_cast<LogicalPlanCompilerIssueCode>(255);

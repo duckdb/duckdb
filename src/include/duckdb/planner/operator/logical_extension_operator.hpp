@@ -31,14 +31,9 @@ public:
 
 	virtual PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) = 0;
 
-	//! Opt into standard child/expression traversal with exact output binding and type verification
-	virtual bool SupportsTypeBindingVerification() const {
-		return false;
-	}
-	//! Stable registered extension identity used by type-binding verification diagnostics
-	virtual const string &GetTypeBindingVerificationIdentifier() const noexcept {
-		static const string empty_identifier;
-		return empty_identifier;
+	//! Return a non-empty stable identity to opt into standard traversal and exact output binding/type verification
+	virtual optional_ptr<const string> GetTypeBindingVerificationIdentifier() const noexcept {
+		return nullptr;
 	}
 
 	virtual void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings);

@@ -14,6 +14,7 @@ add_library_unity(
   collation_binding.cpp
   column_binding.cpp
   logical_plan_compiler_result.cpp
+  logical_plan_verifier.cpp
   column_qualifier.cpp
   expression_iterator.cpp
   expression.cpp

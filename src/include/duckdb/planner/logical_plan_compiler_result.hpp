@@ -16,9 +16,9 @@
 
 namespace duckdb {
 
-enum class LogicalPlanCompilerPathRoot : uint8_t { LOGICAL_PLAN, STANDALONE_EXPRESSION };
+enum class LogicalPlanCompilerPathRoot { LOGICAL_PLAN, STANDALONE_EXPRESSION };
 
-enum class LogicalPlanCompilerPathComponentType : uint8_t { OPERATOR_CHILD, OPERATOR_EXPRESSION, EXPRESSION_CHILD };
+enum class LogicalPlanCompilerPathComponentType { OPERATOR_CHILD, OPERATOR_EXPRESSION, EXPRESSION_CHILD };
 
 struct LogicalPlanCompilerPathComponent {
 	LogicalPlanCompilerPathComponentType type;
@@ -36,7 +36,7 @@ struct LogicalPlanCompilerPath {
 	DUCKDB_API bool operator<(const LogicalPlanCompilerPath &other) const;
 };
 
-enum class LogicalPlanCompilerConstructType : uint8_t {
+enum class LogicalPlanCompilerConstructType {
 	LOGICAL_OPERATOR,
 	EXPRESSION,
 	FUNCTION,
@@ -90,7 +90,7 @@ struct LogicalPlanCompilerConstructIdentity {
 	DUCKDB_API bool operator<(const LogicalPlanCompilerConstructIdentity &other) const;
 };
 
-enum class LogicalPlanCompilerIssueCode : uint8_t {
+enum class LogicalPlanCompilerIssueCode {
 	INVALID_BINDING,
 	TYPE_MISMATCH,
 	UNSUPPORTED_OPERATOR,
@@ -103,7 +103,7 @@ enum class LogicalPlanCompilerIssueCode : uint8_t {
 	INTERNAL_INVARIANT
 };
 
-enum class LogicalPlanCompilerPhase : uint8_t { VERIFY, EXPRESSION_EXPORT, PLAN_EXPORT };
+enum class LogicalPlanCompilerPhase { VERIFY, EXPRESSION_EXPORT, PLAN_EXPORT };
 
 struct LogicalPlanCompilerIssue {
 	LogicalPlanCompilerIssueCode code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;

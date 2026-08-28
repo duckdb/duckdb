@@ -372,47 +372,25 @@ static bool PhaseAllowsIssue(LogicalPlanCompilerPhase phase, LogicalPlanCompiler
 }
 
 static bool IsStableFactType(const LogicalType &type) {
-	if (!type.IsComplete()) {
+	if (!type.IsComplete() || type.IsNested()) {
 		return false;
 	}
 	switch (type.id()) {
-	case LogicalTypeId::SQLNULL:
-	case LogicalTypeId::BOOLEAN:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::CHAR:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIME_NS:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::BIGNUM:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::GEOMETRY:
-	case LogicalTypeId::ENUM:
-		return true;
-	default:
+	case LogicalTypeId::TYPE:
+	case LogicalTypeId::POINTER:
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
+	case LogicalTypeId::LAMBDA:
 		return false;
+	default:
+		break;
+	}
+	switch (type.InternalType()) {
+	case PhysicalType::INVALID:
+	case PhysicalType::UNKNOWN:
+	case PhysicalType::BIT:
+		return false;
+	default:
+		return true;
 	}
 }
 
