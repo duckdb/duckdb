@@ -415,7 +415,7 @@ def collect_extensions(repo_root, build_extensions_arg=None, extension_configs_a
     return extensions
 
 
-VCPKG_BUILTIN_BASELINE = '9e593bb18ea69cc5095e012465dcd675a822ed0d' # Release 2026.07.29
+VCPKG_BUILTIN_BASELINE = '9e593bb18ea69cc5095e012465dcd675a822ed0d'  # Release 2026.07.29
 VCPKG_REGISTRY_BASELINE = 'd485389ad737bb05a5e8afd1fbde5672b559f19e'
 VCPKG_REGISTRY_PACKAGES = ['avro-c', 'vcpkg-cmake']
 
