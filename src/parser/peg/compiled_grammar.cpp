@@ -125,7 +125,10 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<shared_ptr<Gram
                                                     idx_t parser_version) {
 	auto grammar = ParsedGrammar::CreateDefault();
 	for (auto &extension : grammar_extensions) {
-		extension->Apply(grammar);
+		auto changes = extension->GetChanges();
+		for (auto &change : changes) {
+			change.Apply(grammar);
+		}
 	}
 	ValidateParsedGrammarRoots(grammar);
 	for (auto &entry : grammar.rules) {

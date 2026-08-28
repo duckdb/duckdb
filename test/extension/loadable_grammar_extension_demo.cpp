@@ -168,24 +168,25 @@ public:
 	                       "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax") {
 	}
 
-	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddChoice("ReservedKeyword", "'EXTEND'");
-		grammar.AddRule("PipeSelectAtom <- PipeSource PipeStage+", TransformPipeSelectAtom);
-		grammar.AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens");
-		grammar.AddRule("PipeStage <- '|>' PipeOperator");
-		grammar.AddRule(
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddChoice("ReservedKeyword", "'EXTEND'"));
+		changes.push_back(GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", TransformPipeSelectAtom));
+		changes.push_back(GrammarChange::AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens"));
+		changes.push_back(GrammarChange::AddRule("PipeStage <- '|>' PipeOperator"));
+		changes.push_back(GrammarChange::AddRule(
 		    "PipeOperator <- PipeAggregate / PipeAggregateGroupOnly / PipeWhere / PipeSelect / PipeExtend / "
-		    "PipeDistinct / PipeOrderBy / PipeLimit");
-		grammar.AddRule("PipeWhere <- WhereClause");
-		grammar.AddRule("PipeSelect <- 'SELECT' TargetList");
-		grammar.AddRule("PipeExtend <- 'EXTEND' TargetList");
-		grammar.AddRule("PipeDistinct <- 'DISTINCT'");
-		grammar.AddRule("PipeOrderBy <- OrderByClause");
-		grammar.AddRule("PipeLimit <- LimitClause OffsetClause?");
-		grammar.AddRule("PipeAggregate <- 'AGGREGATE' TargetList GroupByClause?");
-		grammar.AddRule("PipeAggregateGroupOnly <- 'AGGREGATE' GroupByClause");
-
-		grammar.PrependChoice("SelectAtom", "PipeSelectAtom");
+		    "PipeDistinct / PipeOrderBy / PipeLimit"));
+		changes.push_back(GrammarChange::AddRule("PipeWhere <- WhereClause"));
+		changes.push_back(GrammarChange::AddRule("PipeSelect <- 'SELECT' TargetList"));
+		changes.push_back(GrammarChange::AddRule("PipeExtend <- 'EXTEND' TargetList"));
+		changes.push_back(GrammarChange::AddRule("PipeDistinct <- 'DISTINCT'"));
+		changes.push_back(GrammarChange::AddRule("PipeOrderBy <- OrderByClause"));
+		changes.push_back(GrammarChange::AddRule("PipeLimit <- LimitClause OffsetClause?"));
+		changes.push_back(GrammarChange::AddRule("PipeAggregate <- 'AGGREGATE' TargetList GroupByClause?"));
+		changes.push_back(GrammarChange::AddRule("PipeAggregateGroupOnly <- 'AGGREGATE' GroupByClause"));
+		changes.push_back(GrammarChange::PrependChoice("SelectAtom", "PipeSelectAtom"));
+		return changes;
 	}
 };
 

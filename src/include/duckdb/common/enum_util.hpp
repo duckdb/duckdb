@@ -268,6 +268,8 @@ enum class GeometryStorageType : uint8_t;
 
 enum class GeometryType : uint8_t;
 
+enum class GrammarChangeType : uint8_t;
+
 enum class GroupByExpressionInfoType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
@@ -986,6 +988,9 @@ const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
+
+template<>
+const char* EnumUtil::ToChars<GrammarChangeType>(GrammarChangeType value);
 
 template<>
 const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value);
@@ -1887,6 +1892,9 @@ GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value)
 
 template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value);
+
+template<>
+GrammarChangeType EnumUtil::FromString<GrammarChangeType>(const char *value);
 
 template<>
 GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value);

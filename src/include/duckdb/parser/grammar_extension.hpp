@@ -10,10 +10,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/parser/grammar_change.hpp"
 
 namespace duckdb {
 
-class ParsedGrammar;
 class DatabaseInstance;
 
 //! A light-weight composable extension to the grammar of the parser
@@ -35,7 +35,7 @@ public:
 	const string &Description() const {
 		return description;
 	}
-	virtual void Apply(ParsedGrammar &grammar) const = 0;
+	virtual vector<GrammarChange> GetChanges() const = 0;
 
 private:
 	string name;

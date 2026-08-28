@@ -20,6 +20,7 @@ class ParseResult;
 class PEGTransformer;
 class PEGKeywordHelper;
 class Matcher;
+class GrammarChange;
 
 using grammar_transform_function_t = std::function<unique_ptr<TransformResultValue>(PEGTransformer &, ParseResult &)>;
 using grammar_cursor_function_t = std::function<bool(const PEGExpression &)>;
@@ -66,6 +67,7 @@ private:
 	friend struct CompiledGrammar;
 	friend struct ParserCache;
 	friend class PEGTransformerFactory;
+	friend class GrammarChange;
 
 	void AddParsedRule(ParsedGrammarRule rule);
 	void InsertChoice(const string &rule_name, const string &choice, const grammar_cursor_function_t &find_cursor,

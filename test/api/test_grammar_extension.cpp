@@ -28,15 +28,18 @@ public:
 	AddGrammarExtensionTestValue() : GrammarExtension("extension_test_value", "GrammarExtensionTestValue") {
 	}
 
-	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("GrammarExtensionTestValue <- 'WRONG'");
-		grammar.AddChoice("UnreservedKeyword", "'ANSWER'");
-		grammar.AddTerminalRuleOverride("GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
-			if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-				throw InternalException("Parser change keyword is missing from the compiled keyword helper");
-			}
-			return make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper);
-		});
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestValue <- 'WRONG'"));
+		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'"));
+		changes.push_back(GrammarChange::AddTerminalRuleOverride(
+		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
+			    if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
+			    }
+			    return make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE, keyword_helper);
+		    }));
+		return changes;
 	}
 };
 
@@ -45,11 +48,16 @@ public:
 	AddGrammarExtensionTestAtom() : GrammarExtension("extension_test_atom", "GrammarExtensionTestAtom") {
 	}
 
-	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("GrammarExtensionTestAtom <- GrammarExtensionTestValue", TransformGrammarExtensionTestAtom);
-		grammar.PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
-			return expression.type == PEGExpression::Type::REFERENCE && expression.text.GetString() == "SelectParens";
-		});
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("GrammarExtensionTestAtom <- GrammarExtensionTestValue",
+		                                         TransformGrammarExtensionTestAtom));
+		changes.push_back(
+		    GrammarChange::PrependChoice("SelectAtom", "GrammarExtensionTestAtom", [](const PEGExpression &expression) {
+			    return expression.type == PEGExpression::Type::REFERENCE &&
+			           expression.text.GetString() == "SelectParens";
+		    }));
+		return changes;
 	}
 };
 
@@ -74,6 +82,18 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
+}
+
+TEST_CASE("Grammar changes expose structured metadata", "[api][grammar_extension]") {
+	auto add_rule = GrammarChange::AddRule("TrackedRule <- 'tracked'");
+	REQUIRE(add_rule.Type() == GrammarChangeType::ADD_RULE);
+	REQUIRE(add_rule.RuleName() == "TrackedRule");
+	REQUIRE(add_rule.Definition() == "TrackedRule <- 'tracked'");
+
+	auto add_choice = GrammarChange::AddChoice("TrackedRule", "'choice'");
+	REQUIRE(add_choice.Type() == GrammarChangeType::ADD_CHOICE);
+	REQUIRE(add_choice.RuleName() == "TrackedRule");
+	REQUIRE(add_choice.Definition() == "'choice'");
 }
 
 TEST_CASE("Grammar choices support cursor placement", "[api][grammar_extension]") {
@@ -151,10 +171,12 @@ public:
 	    : GrammarExtension("default_terminal_rule", "Add a terminal rule override for identifier") {
 	}
 
-	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddTerminalRuleOverride("identifier", [](const PEGKeywordHelper &) {
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddTerminalRuleOverride("identifier", [](const PEGKeywordHelper &) {
 			return make_uniq<KeywordMatcher>("replacement", KeywordInfo(0, ' '));
-		});
+		}));
+		return changes;
 	}
 };
 
@@ -196,8 +218,10 @@ public:
 	AddInvalidGrammarExtensionTestRule() : GrammarExtension("invalid_grammar_extension", "Invalid grammar extension") {
 	}
 
-	void Apply(ParsedGrammar &grammar) const override {
-		grammar.AddRule("GrammarExtensionInvalid <- GrammarExtensionMissingRule");
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddRule("GrammarExtensionInvalid <- GrammarExtensionMissingRule"));
+		return changes;
 	}
 };
 
