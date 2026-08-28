@@ -85,7 +85,7 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 		auto root = yyjson_mut_doc_get_root(mut_doc);
 
 		SortKeys(root);
-		
+
 		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
