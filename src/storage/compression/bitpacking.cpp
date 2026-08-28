@@ -695,7 +695,8 @@ public:
 				return;
 			}
 			auto algorithm_group = GetAlgorithmGroup();
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(target), algorithm_group.data(), width, skip_sign_extend);
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(target), algorithm_group.data(), width,
+			                                     skip_sign_extend);
 		}
 	};
 
@@ -778,7 +779,7 @@ public:
 		auto group_end =
 		    group_index + 1 < group_count ? GetGroupMetadata(group_index + 1).offset : metadata_table_start;
 		if (group_start < BitpackingPrimitives::BITPACKING_HEADER_SIZE || group_start > group_end ||
-		                    group_end > metadata_table_start) {
+		    group_end > metadata_table_start) {
 			ThrowBitpackingGroupOffsetsInvalid();
 		}
 		// Group offsets are relative to the segment start, while reader starts after the segment header.
@@ -844,8 +845,8 @@ public:
 		if (expected_payload_size > 0) {
 			payload = group_reader.template ReadBytesAligned<T_PACKED>(expected_payload_size);
 		}
-		CurrentGroup loaded_group {group_index, 0, group_row_count, metadata, width,
-		                           frame_of_reference, constant, delta_offset, payload, algorithm_group_count,
+		CurrentGroup loaded_group {group_index,         0,        group_row_count, metadata, width,
+		                           frame_of_reference,  constant, delta_offset,    payload,  algorithm_group_count,
 		                           algorithm_group_size};
 
 		// Publish the group only after all disk-derived values and payload bounds have been validated.
