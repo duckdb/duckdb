@@ -53,9 +53,11 @@ SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool =
 statement ok
 CALL truncate_duckdb_logs()
 
-# a memory limit below the run cap shrinks the runs, so the staging buffers of the I/O threads fit in memory
+# runs that do not fit next to what the pool holds are read in halves, the plan itself does not change
+foreach limit 48MB 16MB
+
 statement ok
-SET memory_limit='512MiB'
+SET memory_limit='{limit}'
 
 statement ok
 DETACH cap_db
@@ -68,29 +70,12 @@ SELECT sum(d) > 0 FROM cap_db.t
 ----
 true
 
-# 16MiB runs of 64 blocks, the last block joins the fourth run
 query I
 SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool = 'READ_AHEAD'
 ----
-4
+2
 
 statement ok
 CALL truncate_duckdb_logs()
 
-# the staging buffers of the runs fit even when the memory limit is far below the 32MB cap
-statement ok
-SET memory_limit='48MB'
-
-statement ok
-DETACH cap_db
-
-statement ok
-ATTACH '{TEST_DIR}/prefetch_run_cap.db' AS cap_db (READ_ONLY)
-
-query I
-SELECT sum(d) > 0 FROM cap_db.t
-----
-true
-
-statement ok
-CALL truncate_duckdb_logs()
+endloop

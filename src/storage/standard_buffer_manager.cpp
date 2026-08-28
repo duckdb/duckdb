@@ -1,7 +1,5 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
-#include "duckdb/parallel/task_scheduler.hpp"
-
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
@@ -241,6 +239,28 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 }
 
 void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
+	try {
+		StageRun(context, run);
+	} catch (OutOfMemoryException &) {
+		const idx_t block_count = run.handles.size();
+		if (block_count == 1) {
+			// a lone block that does not fit is left for the scan to pin on demand
+			return;
+		}
+		// the run does not fit next to what the pool holds, read it as two halves instead
+		const idx_t half = block_count / 2;
+		PrefetchRun first {run.first_block, {}};
+		PrefetchRun second {run.first_block + NumericCast<block_id_t>(half), {}};
+		first.handles.assign(std::make_move_iterator(run.handles.begin()),
+		                     std::make_move_iterator(run.handles.begin() + NumericCast<int64_t>(half)));
+		second.handles.assign(std::make_move_iterator(run.handles.begin() + NumericCast<int64_t>(half)),
+		                      std::make_move_iterator(run.handles.end()));
+		BatchRead(context, first);
+		BatchRead(context, second);
+	}
+}
+
+void StandardBufferManager::StageRun(QueryContext context, PrefetchRun &run) {
 	idx_t block_count = run.handles.size();
 
 	// Allocate a buffer to hold the data of all blocks.
@@ -295,16 +315,9 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 	if (to_be_loaded.empty()) {
 		return plan;
 	}
-	// each run is read with a single pread into one staging buffer, one can be in flight per I/O thread
+	// each run is read with a single pread into one staging buffer, cap the read size
 	static constexpr idx_t MAX_PREFETCH_RUN_SIZE = 32ULL * 1024 * 1024;
-	static constexpr idx_t MIN_PREFETCH_RUN_BLOCKS = 4;
-	auto &scheduler = TaskScheduler::GetScheduler(db);
-	const idx_t async_threads = scheduler.NumberOfAsyncThreads();
-	const idx_t io_threads = MaxValue<idx_t>(async_threads > 0 ? async_threads : scheduler.NumberOfThreads(), 1);
 	const idx_t block_size = to_be_loaded.begin()->second->GetBlockAllocSize();
-	const idx_t max_run_size =
-	    MaxValue<idx_t>(MinValue<idx_t>(MAX_PREFETCH_RUN_SIZE, GetMaxMemory() / (8 * io_threads)),
-	                    MIN_PREFETCH_RUN_BLOCKS * block_size);
 	for (auto it = to_be_loaded.begin(); it != to_be_loaded.end(); ++it) {
 		auto &entry = *it;
 		bool new_run = plan.empty() ||
@@ -314,7 +327,8 @@ StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles
 			auto next = std::next(it);
 			// a lone trailing block is not worth a run of its own, let a run within the cap grow by it instead
 			const bool last_of_region = next == to_be_loaded.end() || next->first != entry.first + 1;
-			new_run = run_size + block_size > max_run_size && !(last_of_region && run_size <= max_run_size);
+			new_run =
+			    run_size + block_size > MAX_PREFETCH_RUN_SIZE && !(last_of_region && run_size <= MAX_PREFETCH_RUN_SIZE);
 		}
 		if (new_run) {
 			// the block is not adjacent to the previous block or the run is full, start a new run

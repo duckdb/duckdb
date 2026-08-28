@@ -174,10 +174,12 @@ protected:
 		vector<shared_ptr<BlockHandle>> handles;
 	};
 	//! Computes the contiguous runs of blocks that still need to be loaded, without performing any I/O
-	vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
+	static vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
 	//! Synchronously executes every run in the plan through BatchRead
 	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
 	void BatchRead(QueryContext context, PrefetchRun &run);
+	//! Reads a run through one staging buffer, throws when the buffer pool cannot hold it
+	void StageRun(QueryContext context, PrefetchRun &run);
 
 	bool EncryptTemporaryFiles();
 
