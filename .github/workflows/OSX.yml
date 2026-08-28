@@ -110,6 +110,7 @@ jobs:
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
+        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
         shell: bash
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
