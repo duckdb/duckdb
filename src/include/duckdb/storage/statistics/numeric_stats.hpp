@@ -76,6 +76,9 @@ struct NumericStats {
 	//! Whether the constants cover every value in [min, max] - only meaningful for integral types
 	static bool ConstantsCoverRange(const BaseStatistics &stats, array_ptr<const Value> constants);
 
+	//! Whether the constants cover the entire declared domain of an ENUM - no zonemaps needed
+	DUCKDB_API static bool ConstantsCoverDomain(const BaseStatistics &stats, array_ptr<const Value> constants);
+
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);

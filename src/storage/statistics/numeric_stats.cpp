@@ -285,8 +285,46 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 	}
 }
 
+bool NumericStats::ConstantsCoverDomain(const BaseStatistics &stats, array_ptr<const Value> constants) {
+	auto &type = stats.GetType();
+	if (type.id() != LogicalTypeId::ENUM) {
+		return false;
+	}
+	const auto domain_size = EnumType::GetSize(type);
+	// covering the full domain requires at least one constant per enum value
+	if (constants.size() < domain_size) {
+		return false;
+	}
+	// positions are 0-based indices into the declared domain
+	vector<bool> covered(domain_size, false);
+	idx_t covered_count = 0;
+	for (auto &constant : constants) {
+		if (constant.type() != type) {
+			return false;
+		}
+		if (constant.IsNull()) {
+			continue;
+		}
+		const auto pos = constant.GetValue<uint32_t>();
+		if (pos >= domain_size) {
+			// defensive: an ENUM-typed constant is always within the declared domain
+			return false;
+		}
+		if (!covered[pos]) {
+			covered[pos] = true;
+			covered_count++;
+		}
+	}
+	return covered_count == domain_size;
+}
+
 bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<const Value> constants) {
 	auto &type = stats.GetType();
+	if (type.id() == LogicalTypeId::ENUM) {
+		// an ENUM is a closed domain: coverage is a set test against the declared domain
+		// rather than a [min, max] interval test, and requires no zonemaps
+		return ConstantsCoverDomain(stats, constants);
+	}
 	// values are compared as hugeint_t, which cannot hold large UINT128 values
 	if (!type.IsIntegral() || type.InternalType() == PhysicalType::UINT128 || !NumericStats::HasMinMax(stats)) {
 		return false;

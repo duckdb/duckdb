@@ -1,0 +1,90 @@
+# name: test/sql/optimizer/enum_domain_row_group_pruning.test
+# description: Prune row groups for ENUM predicates whose constants cover the full declared domain
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/enum_domain_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TYPE mood AS ENUM('sad', 'ok', 'happy');
+
+# 3 row groups, values spread over the full ENUM domain
+statement ok
+CREATE TABLE covered AS SELECT ['sad', 'ok', 'happy'][1 + (range % 3)]::mood AS m FROM range(6144);
+
+# NOT IN over the full declared domain matches no row and no row group
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM covered WHERE m NOT IN ('sad', 'ok', 'happy');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+# duplicates of domain values still cover the domain
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM covered WHERE m NOT IN ('sad', 'ok', 'happy', 'sad');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+# the positive form: the scan-level IN filter is eliminated (the OR rewrite above the scan remains)
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM covered WHERE m IN ('sad', 'ok', 'happy');
+----
+analyzed_plan	<!REGEX>:.*optional.*
+
+# explicit casts to VARCHAR are rewritten away before the statistics layer sees the filter
+query I
+SELECT count(*) FROM covered WHERE CAST(m AS VARCHAR) NOT IN ('sad', 'ok', 'happy');
+----
+0
+
+# NOT IN (NULL) matches no row (false or NULL for every row)
+query I
+SELECT count(*) FROM covered WHERE m NOT IN (NULL);
+----
+0
+
+# partial lists must survive: only row groups outside the listed values are pruned
+statement ok
+CREATE TABLE mixed AS SELECT CASE WHEN range < 2048 THEN ['sad', 'ok', 'happy'][1 + (range % 3)]::mood ELSE 'happy'::mood END AS m FROM range(6144);
+
+query I
+SELECT count(*) FROM mixed WHERE m NOT IN ('sad');
+----
+5461
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM mixed WHERE m IN ('sad', 'ok');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# a NULL row must not break the full-domain NOT IN classification
+statement ok
+CREATE TABLE nullables AS SELECT ['sad', 'ok', 'happy'][1 + (range % 3)]::mood AS m FROM range(6144);
+
+statement ok
+INSERT INTO nullables VALUES (NULL);
+
+query I
+SELECT count(*) FROM nullables WHERE m IN ('sad', 'ok', 'happy');
+----
+6144
+
+
+# domains above 255 values use a UINT16 physical type - coverage must hold there too
+statement ok
+CREATE TYPE big_enum AS ENUM('v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12', 'v13', 'v14', 'v15', 'v16', 'v17', 'v18', 'v19', 'v20', 'v21', 'v22', 'v23', 'v24', 'v25', 'v26', 'v27', 'v28', 'v29', 'v30', 'v31', 'v32', 'v33', 'v34', 'v35', 'v36', 'v37', 'v38', 'v39', 'v40', 'v41', 'v42', 'v43', 'v44', 'v45', 'v46', 'v47', 'v48', 'v49', 'v50', 'v51', 'v52', 'v53', 'v54', 'v55', 'v56', 'v57', 'v58', 'v59', 'v60', 'v61', 'v62', 'v63', 'v64', 'v65', 'v66', 'v67', 'v68', 'v69', 'v70', 'v71', 'v72', 'v73', 'v74', 'v75', 'v76', 'v77', 'v78', 'v79', 'v80', 'v81', 'v82', 'v83', 'v84', 'v85', 'v86', 'v87', 'v88', 'v89', 'v90', 'v91', 'v92', 'v93', 'v94', 'v95', 'v96', 'v97', 'v98', 'v99', 'v100', 'v101', 'v102', 'v103', 'v104', 'v105', 'v106', 'v107', 'v108', 'v109', 'v110', 'v111', 'v112', 'v113', 'v114', 'v115', 'v116', 'v117', 'v118', 'v119', 'v120', 'v121', 'v122', 'v123', 'v124', 'v125', 'v126', 'v127', 'v128', 'v129', 'v130', 'v131', 'v132', 'v133', 'v134', 'v135', 'v136', 'v137', 'v138', 'v139', 'v140', 'v141', 'v142', 'v143', 'v144', 'v145', 'v146', 'v147', 'v148', 'v149', 'v150', 'v151', 'v152', 'v153', 'v154', 'v155', 'v156', 'v157', 'v158', 'v159', 'v160', 'v161', 'v162', 'v163', 'v164', 'v165', 'v166', 'v167', 'v168', 'v169', 'v170', 'v171', 'v172', 'v173', 'v174', 'v175', 'v176', 'v177', 'v178', 'v179', 'v180', 'v181', 'v182', 'v183', 'v184', 'v185', 'v186', 'v187', 'v188', 'v189', 'v190', 'v191', 'v192', 'v193', 'v194', 'v195', 'v196', 'v197', 'v198', 'v199', 'v200', 'v201', 'v202', 'v203', 'v204', 'v205', 'v206', 'v207', 'v208', 'v209', 'v210', 'v211', 'v212', 'v213', 'v214', 'v215', 'v216', 'v217', 'v218', 'v219', 'v220', 'v221', 'v222', 'v223', 'v224', 'v225', 'v226', 'v227', 'v228', 'v229', 'v230', 'v231', 'v232', 'v233', 'v234', 'v235', 'v236', 'v237', 'v238', 'v239', 'v240', 'v241', 'v242', 'v243', 'v244', 'v245', 'v246', 'v247', 'v248', 'v249', 'v250', 'v251', 'v252', 'v253', 'v254', 'v255', 'v256', 'v257', 'v258', 'v259');
+
+statement ok
+CREATE TABLE wide AS SELECT ('v' || (range % 260))::big_enum AS m FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM wide WHERE m NOT IN ('v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12', 'v13', 'v14', 'v15', 'v16', 'v17', 'v18', 'v19', 'v20', 'v21', 'v22', 'v23', 'v24', 'v25', 'v26', 'v27', 'v28', 'v29', 'v30', 'v31', 'v32', 'v33', 'v34', 'v35', 'v36', 'v37', 'v38', 'v39', 'v40', 'v41', 'v42', 'v43', 'v44', 'v45', 'v46', 'v47', 'v48', 'v49', 'v50', 'v51', 'v52', 'v53', 'v54', 'v55', 'v56', 'v57', 'v58', 'v59', 'v60', 'v61', 'v62', 'v63', 'v64', 'v65', 'v66', 'v67', 'v68', 'v69', 'v70', 'v71', 'v72', 'v73', 'v74', 'v75', 'v76', 'v77', 'v78', 'v79', 'v80', 'v81', 'v82', 'v83', 'v84', 'v85', 'v86', 'v87', 'v88', 'v89', 'v90', 'v91', 'v92', 'v93', 'v94', 'v95', 'v96', 'v97', 'v98', 'v99', 'v100', 'v101', 'v102', 'v103', 'v104', 'v105', 'v106', 'v107', 'v108', 'v109', 'v110', 'v111', 'v112', 'v113', 'v114', 'v115', 'v116', 'v117', 'v118', 'v119', 'v120', 'v121', 'v122', 'v123', 'v124', 'v125', 'v126', 'v127', 'v128', 'v129', 'v130', 'v131', 'v132', 'v133', 'v134', 'v135', 'v136', 'v137', 'v138', 'v139', 'v140', 'v141', 'v142', 'v143', 'v144', 'v145', 'v146', 'v147', 'v148', 'v149', 'v150', 'v151', 'v152', 'v153', 'v154', 'v155', 'v156', 'v157', 'v158', 'v159', 'v160', 'v161', 'v162', 'v163', 'v164', 'v165', 'v166', 'v167', 'v168', 'v169', 'v170', 'v171', 'v172', 'v173', 'v174', 'v175', 'v176', 'v177', 'v178', 'v179', 'v180', 'v181', 'v182', 'v183', 'v184', 'v185', 'v186', 'v187', 'v188', 'v189', 'v190', 'v191', 'v192', 'v193', 'v194', 'v195', 'v196', 'v197', 'v198', 'v199', 'v200', 'v201', 'v202', 'v203', 'v204', 'v205', 'v206', 'v207', 'v208', 'v209', 'v210', 'v211', 'v212', 'v213', 'v214', 'v215', 'v216', 'v217', 'v218', 'v219', 'v220', 'v221', 'v222', 'v223', 'v224', 'v225', 'v226', 'v227', 'v228', 'v229', 'v230', 'v231', 'v232', 'v233', 'v234', 'v235', 'v236', 'v237', 'v238', 'v239', 'v240', 'v241', 'v242', 'v243', 'v244', 'v245', 'v246', 'v247', 'v248', 'v249', 'v250', 'v251', 'v252', 'v253', 'v254', 'v255', 'v256', 'v257', 'v258', 'v259');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM wide WHERE m NOT IN ('v0', 'v1', 'v2');
+----
+6072
