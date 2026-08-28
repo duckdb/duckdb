@@ -427,11 +427,11 @@ OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
 	return *row_groups;
 }
 
-bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-                                    CollectionScanState &scan_state, bool initialize_columns) {
+idx_t LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
+                                     CollectionScanState &scan_state, bool initialize_columns) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
-		return false;
+		return 0;
 	}
 	return storage->GetCollection().NextParallelScan(context, state, scan_state, initialize_columns);
 }

@@ -362,12 +362,13 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.processed_rows = 0;
 }
 
-bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                          CollectionScanState &scan_state, bool initialize_columns) {
+idx_t RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+                                           CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
+		idx_t assignment_rows;
 		optional_ptr<RowGroupCollection> collection;
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
@@ -395,12 +396,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 					state.vector_index = 0;
 				}
 			} else {
-				state.processed_rows += current_row_group.count;
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
 				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
+			const idx_t assignment_start = row_start + vector_index * STANDARD_VECTOR_SIZE;
+			assignment_rows = max_row > assignment_start ? max_row - assignment_start : 0;
+			state.processed_rows += assignment_rows;
 			scan_state.batch_index = ++state.batch_index;
 			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
 				state.row_number_base = scan_state.row_number_base.GetIndex();
@@ -423,11 +426,11 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 			// skip this row group
 			continue;
 		}
-		return true;
+		return assignment_rows;
 	}
 	lock_guard<mutex> l(state.lock);
 	scan_state.batch_index = state.batch_index;
-	return false;
+	return 0;
 }
 
 //===--------------------------------------------------------------------===//

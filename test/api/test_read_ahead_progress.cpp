@@ -29,4 +29,16 @@ TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding"
 	REQUIRE(percentage >= 0);
 	REQUIRE(percentage < 20);
 	stream.reset();
+
+	// with single vector assignments the claimed rows are single vectors as well, buffer only a chunk or two
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+	stream = con.SendQuery("SELECT i FROM integers");
+	REQUIRE_NO_FAIL(*stream);
+	chunk = stream->Fetch();
+	REQUIRE(chunk);
+	percentage = con.context->GetQueryProgress().GetPercentage();
+	REQUIRE(percentage > 0);
+	REQUIRE(percentage < 5);
+	stream.reset();
 }

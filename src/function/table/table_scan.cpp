@@ -538,10 +538,13 @@ public:
 			return 100;
 		}
 
+		// queued rows are read first, a claim raises the processed rows before it is queued
+		const idx_t queued = queued_rows.load();
 		idx_t scanned_rows = state.scan_state.processed_rows;
 		scanned_rows += state.local_state.processed_rows;
 		// claimed assignments count once a thread decodes them, like they do without read-ahead
-		scanned_rows -= MinValue<idx_t>(scanned_rows, queued_rows.load());
+		D_ASSERT(queued <= scanned_rows);
+		scanned_rows -= queued;
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
 			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,

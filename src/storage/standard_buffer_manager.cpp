@@ -239,66 +239,49 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 }
 
 void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
-	try {
-		StageRun(context, run);
-	} catch (OutOfMemoryException &) {
-		const idx_t block_count = run.handles.size();
-		if (block_count == 1) {
-			// a lone block that does not fit is left for the scan to pin on demand
-			return;
-		}
-		// the run does not fit next to what the pool holds, read it as two halves instead
-		const idx_t half = block_count / 2;
-		PrefetchRun first {run.first_block, {}};
-		PrefetchRun second {run.first_block + NumericCast<block_id_t>(half), {}};
-		first.handles.assign(std::make_move_iterator(run.handles.begin()),
-		                     std::make_move_iterator(run.handles.begin() + NumericCast<int64_t>(half)));
-		second.handles.assign(std::make_move_iterator(run.handles.begin() + NumericCast<int64_t>(half)),
-		                      std::make_move_iterator(run.handles.end()));
-		BatchRead(context, first);
-		BatchRead(context, second);
-	}
-}
-
-void StandardBufferManager::StageRun(QueryContext context, PrefetchRun &run) {
 	idx_t block_count = run.handles.size();
 
 	// Allocate a buffer to hold the data of all blocks.
 	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
-	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
-	auto intermediate_buffer = Pin(batch_memory);
+	// prefetching is best effort, on memory pressure the run is left for the scan to pin its blocks on demand
+	try {
+		auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
+		auto intermediate_buffer = Pin(batch_memory);
 
-	// perform a batch read of the blocks into the buffer
-	auto &block_manager = run.handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
+		// perform a batch read of the blocks into the buffer
+		auto &block_manager = run.handles[0]->GetBlockManager();
+		block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
 
-	// the blocks are read - now we need to assign them to the individual blocks
-	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		auto &handle = run.handles[block_idx];
-		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
+		// the blocks are read - now we need to assign them to the individual blocks
+		for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
+			auto &handle = run.handles[block_idx];
+			D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
 
-		// reserve memory for the block
-		auto &block_memory = handle->GetMemory();
-		idx_t required_memory = block_memory.GetMemoryUsage();
-		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
-		                                      "failed to pin block of size %s%s",
-		                                      StringUtil::BytesToHumanReadableString(required_memory));
-		// now load the block from the buffer
-		// note that we discard the buffer handle - we do not keep it around
-		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
-		BufferHandle buf;
-		{
-			auto lock = block_memory.GetLock();
-			if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
-				// the block is loaded already by another thread - free up the reservation and continue
-				reservation.Resize(0);
-				continue;
+			// reserve memory for the block
+			auto &block_memory = handle->GetMemory();
+			idx_t required_memory = block_memory.GetMemoryUsage();
+			unique_ptr<FileBuffer> reusable_buffer;
+			auto reservation = EvictBlocksOrThrow(context, block_memory.GetMemoryTag(), required_memory,
+			                                      &reusable_buffer, "failed to pin block of size %s%s",
+			                                      StringUtil::BytesToHumanReadableString(required_memory));
+			// now load the block from the buffer
+			// note that we discard the buffer handle - we do not keep it around
+			// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+			BufferHandle buf;
+			{
+				auto lock = block_memory.GetLock();
+				if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
+					// the block is loaded already by another thread - free up the reservation and continue
+					reservation.Resize(0);
+					continue;
+				}
+				auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
+				buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
 			}
-			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
-			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
 		}
+	} catch (OutOfMemoryException &) {
+		// the run does not fit next to what the pool holds, its blocks are pinned on demand during the scan
 	}
 }
 

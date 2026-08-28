@@ -53,7 +53,7 @@ SELECT max(task_count) FROM duckdb_logs_parsed('AsyncTaskSchedule') WHERE pool =
 statement ok
 CALL truncate_duckdb_logs()
 
-# runs that do not fit next to what the pool holds are read in halves, the plan itself does not change
+# a run that does not fit next to what the pool holds is abandoned, the scan still completes by pinning on demand
 foreach limit 48MB 16MB
 
 statement ok

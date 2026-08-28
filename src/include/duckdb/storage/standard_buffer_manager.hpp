@@ -178,8 +178,6 @@ protected:
 	//! Synchronously executes every run in the plan through BatchRead
 	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
 	void BatchRead(QueryContext context, PrefetchRun &run);
-	//! Reads a run through one staging buffer, throws when the buffer pool cannot hold it
-	void StageRun(QueryContext context, PrefetchRun &run);
 
 	bool EncryptTemporaryFiles();
 
