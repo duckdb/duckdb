@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/planner/logical_plan_compiler_result.hpp"
+#include "duckdb/planner/logical_plan_verification_result.hpp"
 
 namespace duckdb {
 
@@ -18,7 +18,7 @@ struct LogicalPlanVerificationState;
 class LogicalPlanVerifier : private ColumnBindingResolver {
 public:
 	static void Verify(ClientContext &context, LogicalOperator &op);
-	DUCKDB_API static LogicalPlanCompilerResult<LogicalPlanVerificationSuccess> VerifyAlways(LogicalOperator &op);
+	DUCKDB_API static LogicalPlanVerificationResult<LogicalPlanVerificationSuccess> VerifyAlways(LogicalOperator &op);
 
 private:
 	explicit LogicalPlanVerifier(LogicalPlanVerificationState &verification_state);
@@ -26,7 +26,7 @@ private:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	static bool ResolveOperatorTypes(LogicalOperator &op, LogicalPlanVerificationState &verification_state);
 	static void VerifyColumnBindings(LogicalOperator &op, LogicalPlanVerificationState &verification_state);
-	static LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>
+	static LogicalPlanVerificationResult<LogicalPlanVerificationSuccess>
 	VerifyAlwaysInternal(LogicalOperator &op, optional_ptr<string> first_error);
 
 private:

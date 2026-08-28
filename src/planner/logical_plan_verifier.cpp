@@ -12,17 +12,17 @@ namespace duckdb {
 
 struct LogicalPlanVerificationState {
 	explicit LogicalPlanVerificationState(LogicalOperator &root) {
-		LogicalPlanCompilerPath root_path;
+		LogicalPlanVerificationPath root_path;
 		IndexOperator(root, root_path);
 	}
 
-	reference_map_t<LogicalOperator, LogicalPlanCompilerPath> operator_paths;
-	reference_map_t<Expression, LogicalPlanCompilerPath> expression_paths;
+	reference_map_t<LogicalOperator, LogicalPlanVerificationPath> operator_paths;
+	reference_map_t<Expression, LogicalPlanVerificationPath> expression_paths;
 	reference_set_t<LogicalOperator> resolved_inputs;
 	reference_set_t<LogicalOperator> resolved_outputs;
-	vector<LogicalPlanCompilerIssue> issues;
+	vector<LogicalPlanVerificationIssue> issues;
 
-	const LogicalPlanCompilerPath &GetPath(LogicalOperator &op) const {
+	const LogicalPlanVerificationPath &GetPath(LogicalOperator &op) const {
 		auto entry = operator_paths.find(reference<LogicalOperator>(op));
 		if (entry == operator_paths.end()) {
 			throw InternalException("Logical operator is missing from the logical plan verification path index");
@@ -30,7 +30,7 @@ struct LogicalPlanVerificationState {
 		return entry->second;
 	}
 
-	const LogicalPlanCompilerPath &GetPath(Expression &expr) const {
+	const LogicalPlanVerificationPath &GetPath(Expression &expr) const {
 		auto entry = expression_paths.find(reference<Expression>(expr));
 		if (entry == expression_paths.end()) {
 			throw InternalException("Expression is missing from the logical plan verification path index");
@@ -39,8 +39,8 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddInvalidBinding(BoundColumnRefExpression &expr, const vector<ColumnBinding> &bindings) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INVALID_BINDING;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INVALID_BINDING;
 		issue.path = GetPath(expr);
 		AddBindingFacts(issue, expr.Binding());
 		issue.message = StringUtil::Format(
@@ -50,11 +50,11 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddTypeMismatch(BoundColumnRefExpression &expr, const LogicalType &expected_type) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::TYPE_MISMATCH;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::TYPE_MISMATCH;
 		issue.path = GetPath(expr);
 		issue.construct =
-		    LogicalPlanCompilerConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
+		    LogicalPlanVerificationConstructIdentity::BindingTypeMismatch(expected_type, expr.GetReturnType());
 		AddBindingFacts(issue, expr.Binding());
 		issue.message = StringUtil::Format(
 		    "Failed to bind column reference %s [table=%llu, column=%llu]: inequal types (%s != %s)", expr.GetAlias(),
@@ -64,10 +64,10 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddIncompleteBindingType(BoundColumnRefExpression &expr, const LogicalType &expected_type) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(expr);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Expression(expr.GetExpressionClass());
+		issue.construct = LogicalPlanVerificationConstructIdentity::Expression(expr.GetExpressionClass());
 		issue.facts.emplace_back("invariant", Value("incomplete_binding_type"));
 		issue.facts.emplace_back("expected_type_complete", Value::BOOLEAN(expected_type.IsComplete()));
 		issue.facts.emplace_back("actual_type_complete", Value::BOOLEAN(expr.GetReturnType().IsComplete()));
@@ -79,10 +79,10 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddBindingTypeArityMismatch(BoundColumnRefExpression &expr, idx_t binding_count, idx_t type_count) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(expr);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Expression(expr.GetExpressionClass());
+		issue.construct = LogicalPlanVerificationConstructIdentity::Expression(expr.GetExpressionClass());
 		issue.facts.emplace_back("invariant", Value("binding_type_arity"));
 		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
 		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
@@ -96,10 +96,10 @@ struct LogicalPlanVerificationState {
 
 	void AddMalformedExtensionArity(LogicalExtensionOperator &op, const string &identifier, idx_t binding_count,
 	                                idx_t type_count) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT;
 		issue.path = GetPath(op);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.construct = LogicalPlanVerificationConstructIdentity::Extension(identifier);
 		issue.facts.emplace_back("binding_count", Value::UBIGINT(binding_count));
 		issue.facts.emplace_back("type_count", Value::UBIGINT(type_count));
 		issue.message = StringUtil::Format("Logical extension operator returned %llu bindings and %llu types",
@@ -108,10 +108,10 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddMalformedExtensionType(LogicalExtensionOperator &op, const string &identifier, idx_t type_index) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT;
 		issue.path = GetPath(op);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.construct = LogicalPlanVerificationConstructIdentity::Extension(identifier);
 		issue.facts.emplace_back("invalid_type_index", Value::UBIGINT(type_index));
 		issue.message =
 		    StringUtil::Format("Logical extension operator returned an invalid type at index %llu", type_index);
@@ -120,10 +120,10 @@ struct LogicalPlanVerificationState {
 
 	void AddMalformedExtensionBinding(LogicalExtensionOperator &op, const string &identifier, idx_t binding_index,
 	                                  const ColumnBinding &binding) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT;
 		issue.path = GetPath(op);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.construct = LogicalPlanVerificationConstructIdentity::Extension(identifier);
 		issue.facts.emplace_back("invalid_binding_index", Value::UBIGINT(binding_index));
 		issue.facts.emplace_back("table_index_valid", Value::BOOLEAN(binding.table_index.IsValid()));
 		issue.facts.emplace_back("column_index_valid", Value::BOOLEAN(binding.column_index.IsValid()));
@@ -135,10 +135,10 @@ struct LogicalPlanVerificationState {
 	void AddDuplicateExtensionBinding(LogicalExtensionOperator &op, const string &identifier, idx_t first_index,
 	                                  idx_t duplicate_index, const ColumnBinding &binding, bool types_available,
 	                                  bool types_equal) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::MALFORMED_EXTENSION_RESULT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT;
 		issue.path = GetPath(op);
-		issue.construct = LogicalPlanCompilerConstructIdentity::Extension(identifier);
+		issue.construct = LogicalPlanVerificationConstructIdentity::Extension(identifier);
 		issue.facts.emplace_back("first_binding_index", Value::UBIGINT(first_index));
 		issue.facts.emplace_back("duplicate_binding_index", Value::UBIGINT(duplicate_index));
 		issue.facts.emplace_back("table_index", Value::UBIGINT(binding.table_index.index));
@@ -152,10 +152,10 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddMissingExtensionIdentifier(LogicalExtensionOperator &op) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(op);
-		issue.construct = LogicalPlanCompilerConstructIdentity::LogicalOperator(op.type);
+		issue.construct = LogicalPlanVerificationConstructIdentity::LogicalOperator(op.type);
 		issue.facts.emplace_back("invariant", Value("missing_type_binding_verification_identifier"));
 		issue.message = "An extension operator with type-binding verification enabled must provide a verification "
 		                "identifier";
@@ -163,8 +163,8 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddDuplicateTableIndex(LogicalOperator &op, TableIndex table_index) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(op);
 		issue.construct = GetOperatorConstruct(op);
 		issue.facts.emplace_back("invariant", Value("duplicate_table_index"));
@@ -174,8 +174,8 @@ struct LogicalPlanVerificationState {
 	}
 
 	void AddInvalidTableIndex(LogicalOperator &op, idx_t table_index_ordinal, TableIndex table_index) {
-		LogicalPlanCompilerIssue issue;
-		issue.code = LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT;
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
 		issue.path = GetPath(op);
 		issue.construct = GetOperatorConstruct(op);
 		issue.facts.emplace_back("invariant", Value("invalid_table_index"));
@@ -195,45 +195,46 @@ struct LogicalPlanVerificationState {
 	}
 
 private:
-	static void AddBindingFacts(LogicalPlanCompilerIssue &issue, const ColumnBinding &binding) {
+	static void AddBindingFacts(LogicalPlanVerificationIssue &issue, const ColumnBinding &binding) {
 		issue.facts.emplace_back("table_index", Value::UBIGINT(binding.table_index.index));
 		issue.facts.emplace_back("column_index", Value::UBIGINT(binding.column_index.GetIndexUnsafe()));
 		issue.facts.emplace_back("table_index_valid", Value::BOOLEAN(binding.table_index.IsValid()));
 		issue.facts.emplace_back("column_index_valid", Value::BOOLEAN(binding.column_index.IsValid()));
 	}
 
-	static LogicalPlanCompilerConstructIdentity GetOperatorConstruct(LogicalOperator &op) {
+	static LogicalPlanVerificationConstructIdentity GetOperatorConstruct(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 			auto identifier = op.Cast<LogicalExtensionOperator>().GetTypeBindingVerificationIdentifier();
 			if (identifier && !identifier->empty()) {
-				return LogicalPlanCompilerConstructIdentity::Extension(*identifier);
+				return LogicalPlanVerificationConstructIdentity::Extension(*identifier);
 			}
 		}
-		return LogicalPlanCompilerConstructIdentity::LogicalOperator(op.type);
+		return LogicalPlanVerificationConstructIdentity::LogicalOperator(op.type);
 	}
 
-	void IndexExpression(Expression &expr, const LogicalPlanCompilerPath &path) {
+	void IndexExpression(Expression &expr, const LogicalPlanVerificationPath &path) {
 		expression_paths.emplace(reference<Expression>(expr), path);
 		idx_t child_index = 0;
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
 			auto child_path = path;
-			child_path.components.push_back({LogicalPlanCompilerPathComponentType::EXPRESSION_CHILD, child_index++});
+			child_path.components.push_back(
+			    {LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD, child_index++});
 			IndexExpression(child, child_path);
 		});
 	}
 
-	void IndexOperator(LogicalOperator &op, const LogicalPlanCompilerPath &path) {
+	void IndexOperator(LogicalOperator &op, const LogicalPlanVerificationPath &path) {
 		operator_paths.emplace(reference<LogicalOperator>(op), path);
 		idx_t expression_index = 0;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
 			auto expression_path = path;
 			expression_path.components.push_back(
-			    {LogicalPlanCompilerPathComponentType::OPERATOR_EXPRESSION, expression_index++});
+			    {LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION, expression_index++});
 			IndexExpression(**expression, expression_path);
 		});
 		for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
 			auto child_path = path;
-			child_path.components.push_back({LogicalPlanCompilerPathComponentType::OPERATOR_CHILD, child_index});
+			child_path.components.push_back({LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, child_index});
 			IndexOperator(*op.children[child_index], child_path);
 		}
 	}
@@ -361,7 +362,7 @@ void LogicalPlanVerifier::VerifyColumnBindings(LogicalOperator &op, LogicalPlanV
 }
 
 static void VerifyTableIndexes(LogicalOperator &op, LogicalPlanVerificationState &verification_state,
-                               unordered_map<TableIndex, LogicalPlanCompilerPath> &seen_indexes) {
+                               unordered_map<TableIndex, LogicalPlanVerificationPath> &seen_indexes) {
 	for (auto &child : op.children) {
 		VerifyTableIndexes(*child, verification_state, seen_indexes);
 	}
@@ -380,25 +381,26 @@ static void VerifyTableIndexes(LogicalOperator &op, LogicalPlanVerificationState
 	}
 }
 
-LogicalPlanCompilerResult<LogicalPlanVerificationSuccess> LogicalPlanVerifier::VerifyAlways(LogicalOperator &op) {
+LogicalPlanVerificationResult<LogicalPlanVerificationSuccess> LogicalPlanVerifier::VerifyAlways(LogicalOperator &op) {
 	return VerifyAlwaysInternal(op, nullptr);
 }
 
-LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>
+LogicalPlanVerificationResult<LogicalPlanVerificationSuccess>
 LogicalPlanVerifier::VerifyAlwaysInternal(LogicalOperator &op, optional_ptr<string> first_error) {
 	LogicalPlanVerificationState verification_state(op);
 	ResolveOperatorTypes(op, verification_state);
 	VerifyColumnBindings(op, verification_state);
 
-	unordered_map<TableIndex, LogicalPlanCompilerPath> seen_indexes;
+	unordered_map<TableIndex, LogicalPlanVerificationPath> seen_indexes;
 	VerifyTableIndexes(op, verification_state, seen_indexes);
 	if (!verification_state.issues.empty()) {
 		if (first_error) {
 			*first_error = verification_state.issues[0].message;
 		}
-		return LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Failure(std::move(verification_state.issues));
+		return LogicalPlanVerificationResult<LogicalPlanVerificationSuccess>::Failure(
+		    std::move(verification_state.issues));
 	}
-	return LogicalPlanCompilerResult<LogicalPlanVerificationSuccess>::Success(LogicalPlanVerificationSuccess());
+	return LogicalPlanVerificationResult<LogicalPlanVerificationSuccess>::Success(LogicalPlanVerificationSuccess());
 }
 
 } // namespace duckdb
