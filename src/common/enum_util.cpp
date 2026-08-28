@@ -828,6 +828,24 @@ AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const 
 	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAsyncTaskExecutionResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AsyncTaskExecutionResult::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(AsyncTaskExecutionResult::PENDING), "PENDING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AsyncTaskExecutionResult>(AsyncTaskExecutionResult value) {
+	return StringUtil::EnumToString(GetAsyncTaskExecutionResultValues(), 2, "AsyncTaskExecutionResult", static_cast<uint32_t>(value));
+}
+
+template<>
+AsyncTaskExecutionResult EnumUtil::FromString<AsyncTaskExecutionResult>(const char *value) {
+	return static_cast<AsyncTaskExecutionResult>(StringUtil::StringToEnum(GetAsyncTaskExecutionResultValues(), 2, "AsyncTaskExecutionResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetBaseColumnPrunerModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BaseColumnPrunerMode::DEFAULT), "DEFAULT" },
