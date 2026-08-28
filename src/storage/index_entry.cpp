@@ -323,6 +323,7 @@ string IndexEntry::GetIndexType() const {
 void IndexEntry::Retire() {
 	auto entry_lock = lock.GetExclusiveLock();
 	deltas.Reset();
+	owned_index->ResetStorage();
 	owned_index.reset();
 	bind_state = IndexBindState::RETIRED;
 }
