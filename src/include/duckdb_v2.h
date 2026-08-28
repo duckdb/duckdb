@@ -180,24 +180,6 @@ typedef uint64_t idx_t;
 typedef struct _duckdb_extension_info *duckdb_v2_extension_handle;
 
 /* ============================================================================
- * MODULE: aggregate
- * ============================================================================ */
-
-/* --- Enums for aggregate --- */
-
-/* --- Struct forward declarations for aggregate --- */
-
-/* --- Types for aggregate --- */
-
-/* --- Constants for aggregate --- */
-
-/* --- Function pointer typedefs for aggregate --- */
-
-/* --- Functions for aggregate --- */
-
-/* --- Struct definitions for aggregate --- */
-
-/* ============================================================================
  * MODULE: common
  * ============================================================================ */
 
@@ -3021,6 +3003,740 @@ struct duckdb_v2_interval_t {
 	int32_t days;
 	int64_t micros;
 };
+
+/* ============================================================================
+ * MODULE: aggregate
+ * ============================================================================ */
+
+/* --- Enums for aggregate --- */
+
+/* --- Struct forward declarations for aggregate --- */
+
+/* --- Types for aggregate --- */
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_bind_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_bind_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_size_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_size_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_init_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_init_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_update_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_update_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_combine_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_combine_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_finalize_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_finalize_info_handle;
+
+//! TODO
+typedef struct _duckdb_v2_aggregate_function_destroy_info {
+	void *internal_ptr;
+} * duckdb_v2_aggregate_function_destroy_info_handle;
+
+/* --- Constants for aggregate --- */
+
+/* --- Function pointer typedefs for aggregate --- */
+
+typedef void (*duckdb_v2_aggregate_function_bind_callback_fn)(duckdb_v2_aggregate_function_bind_info_handle info,
+                                                              duckdb_v2_context_handle context,
+                                                              duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_size_callback_fn)(duckdb_v2_aggregate_function_size_info_handle info,
+                                                              duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_init_callback_fn)(duckdb_v2_aggregate_function_init_info_handle info,
+                                                              duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_update_callback_fn)(duckdb_v2_aggregate_function_update_info_handle info,
+                                                                duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_combine_callback_fn)(duckdb_v2_aggregate_function_combine_info_handle info,
+                                                                 duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_finalize_callback_fn)(
+    duckdb_v2_aggregate_function_finalize_info_handle info, duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_aggregate_function_destroy_callback_fn)(duckdb_v2_aggregate_function_destroy_info_handle info,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/* --- Functions for aggregate --- */
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to create the function in.
+ * @param function
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_connection(
+    duckdb_v2_connection_handle connection, duckdb_v2_aggregate_function_handle *function,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the function in.
+ * @param function
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
+    duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle *function,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the name of.
+ * @param name The name to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
+                                                                   duckdb_v2_str *name,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the signature of.
+ * @param sig The returned signature. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_signature(duckdb_v2_aggregate_function_handle function,
+                                                                        duckdb_v2_function_signature_handle *sig,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the user data of.
+ * @param data The user data to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_user_data(duckdb_v2_aggregate_function_handle function,
+                                                                        duckdb_v2_opaque *data,
+                                                                        duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the bind callback of.
+ * @param callback The bind callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_bind_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_bind_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the size callback of.
+ * @param callback The size callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_size_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_size_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the init callback of.
+ * @param callback The init callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_init_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_init_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the update callback of.
+ * @param callback The update callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_update_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_update_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the combine callback of.
+ * @param callback The combine callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_combine_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_combine_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the finalize callback of.
+ * @param callback The finalize callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_finalize_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_finalize_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the destroy callback for the aggregate function. Optional: only needed when aggregate states own resources that
+ * must be released. The callback runs on states that are discarded without being finalized; it must not fail, an error
+ * reported through its error slot is ignored.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the destroy callback of.
+ * @param callback The destroy callback to set.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
+    duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_destroy_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_user_data(
+    duckdb_v2_aggregate_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to set
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_bind_data(
+    duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param return_type The return type to set. Borrowed for the call only.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(
+    duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
+    duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_user_data(
+    duckdb_v2_aggregate_function_size_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_bind_data(
+    duckdb_v2_aggregate_function_size_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the size of a single aggregate state, in bytes. The size callback must set this; DuckDB uses it to allocate
+ * state memory.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param size The size of a single aggregate state, in bytes.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_set_state_size(
+    duckdb_v2_aggregate_function_size_info_handle info, idx_t size, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_user_data(
+    duckdb_v2_aggregate_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_bind_data(
+    duckdb_v2_aggregate_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many aggregate states this invocation must initialize. This is the length of the array returned by
+ * aggregate_function_init_get_states.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of states.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_state_count(
+    duckdb_v2_aggregate_function_init_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of aggregate states to initialize, one pointer per state. Each state points to uninitialized memory
+ * of the size reported by the size callback; the init callback must initialize all of them in place.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_init_get_states(
+    duckdb_v2_aggregate_function_init_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_user_data(
+    duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_bind_data(
+    duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many input rows this invocation carries. This is the length of the argument vectors and of the state
+ * array: row i of every argument vector must be aggregated into state i.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of rows.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_row_count(
+    duckdb_v2_aggregate_function_update_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
+ * included. Valid indices for aggregate_function_update_get_arg are [0, count).
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of argument vectors.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_arg_count(
+    duckdb_v2_aggregate_function_update_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param index The index of the argument vector to get.
+ * @param vector The argument vector to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_aggregate_function_update_get_arg(duckdb_v2_aggregate_function_update_info_handle info, uint32_t index,
+                                            duckdb_v2_vector_handle *vector, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of aggregate states to update, one pointer per input row: row i of every argument vector must be
+ * aggregated into state i. Different rows may point to the same state.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_states(
+    duckdb_v2_aggregate_function_update_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_user_data(
+    duckdb_v2_aggregate_function_combine_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_bind_data(
+    duckdb_v2_aggregate_function_combine_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many source/target state pairs this invocation must combine. This is the length of both the sources and
+ * the targets array.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of state pairs.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_state_count(
+    duckdb_v2_aggregate_function_combine_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of source aggregate states, one pointer per pair. Source i must be combined into target i; the
+ * source must not be modified.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of source aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_sources(
+    duckdb_v2_aggregate_function_combine_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of target aggregate states, one pointer per pair. Source i must be combined into target i.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of target aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_combine_get_targets(
+    duckdb_v2_aggregate_function_combine_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_user_data(
+    duckdb_v2_aggregate_function_finalize_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_bind_data(
+    duckdb_v2_aggregate_function_finalize_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many aggregate states this invocation must finalize. This is the length of the state array and the number
+ * of rows to write to the result vector.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of states.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_state_count(
+    duckdb_v2_aggregate_function_finalize_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of aggregate states to finalize, one pointer per state. State i must be finalized into result row
+ * offset + i.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_states(
+    duckdb_v2_aggregate_function_finalize_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param vector The result vector to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR
+duckdb_v2_aggregate_function_finalize_get_result(duckdb_v2_aggregate_function_finalize_info_handle info,
+                                                 duckdb_v2_vector_handle *vector, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the offset in the result vector at which to start writing: state i must be finalized into result row offset +
+ * i.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param offset Receives the result offset.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_finalize_get_result_offset(
+    duckdb_v2_aggregate_function_finalize_info_handle info, idx_t *offset, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The user data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_user_data(
+    duckdb_v2_aggregate_function_destroy_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param data The bind data to get
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_bind_data(
+    duckdb_v2_aggregate_function_destroy_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns how many aggregate states this invocation must destroy. This is the length of the state array.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param count Receives the number of states.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_state_count(
+    duckdb_v2_aggregate_function_destroy_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the array of aggregate states to destroy, one pointer per state. The callback must release any resources the
+ * states own.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info
+ * @param states The array of aggregate state pointers to get.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
+    duckdb_v2_aggregate_function_destroy_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to register.
+ * @param err
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_register(duckdb_v2_aggregate_function_handle function,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * TODO
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy(duckdb_v2_aggregate_function_handle *function);
+
+/* --- Struct definitions for aggregate --- */
 
 /* ============================================================================
  * MODULE: connection

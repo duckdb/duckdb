@@ -2397,8 +2397,9 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 
 /// A function's declared parameters, variadic tail, and return type.
-/// Borrowed from the `ScalarFunction` it was read from via `GetSignature`, and valid for as long as that function is;
-/// the setters mutate the function's signature in place. The setters return `*this` so they chain.
+/// Borrowed from the `ScalarFunction` or `AggregateFunction` it was read from via `GetSignature`.
+/// Valid for as long as the owning function is.
+/// Setters mutate the function's signature in place.
 class FunctionSignature final : public detail::Handle<FunctionSignature> {
 	friend detail::Factory;
 
@@ -2476,6 +2477,15 @@ public:
 	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
 	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
 	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the function's signature, borrowed for in-place mutation. Registration requires a return
+	/// type that is either a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	template <class F>
+	auto WithSignature(F &&configure) & -> ScalarFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
 
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
 	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
@@ -2641,6 +2651,385 @@ public:
 
 		void *GetBindDataInternal() const;
 		void *GetInitDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Aggregate Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A user-defined aggregate function, built up with the setters and made live with `Register`.
+/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
+/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
+/// lives on in the catalog.
+///
+/// The aggregate keeps one state per group. The size callback reports how large a single state is; the init callback
+/// constructs a batch of freshly allocated states; the update callback folds a batch of input rows into their rows'
+/// states; the combine callback merges partial states (e.g. across threads); the finalize callback turns a batch of
+/// states into result rows; and the optional destroy callback releases resources a state owns.
+///
+/// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
+/// callback, and the bind callback may plant bind data readable from every later callback. A callback reports failure
+/// by throwing; the exception surfaces as the query's error -- except in the destroy callback, whose errors are
+/// dropped, as it runs on a path that must not fail.
+class AggregateFunction final : public detail::Handle<AggregateFunction> {
+	friend detail::Factory;
+
+public:
+	class BindInput;
+	class SizeInput;
+	class InitInput;
+	class UpdateInput;
+	class CombineInput;
+	class FinalizeInput;
+	class DestroyInput;
+
+	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
+	using BindCallback = void (*)(BindInput &input);
+	/// Called to size a single aggregate state; must call `SetStateSize`. Required.
+	using SizeCallback = void (*)(SizeInput &input);
+	/// Called to initialize a batch of freshly allocated states in place. Required.
+	using InitCallback = void (*)(InitInput &input);
+	/// Called to fold a batch of input rows into their rows' states. Required.
+	using UpdateCallback = void (*)(UpdateInput &input);
+	/// Called to merge a batch of source states into their target states. Required.
+	using CombineCallback = void (*)(CombineInput &input);
+	/// Called to turn a batch of states into result rows. Required.
+	using FinalizeCallback = void (*)(FinalizeInput &input);
+	/// Called to release resources a batch of states owns. Optional; must not fail.
+	using DestroyCallback = void (*)(DestroyInput &input);
+
+	AggregateFunction(AggregateFunction &&) noexcept = default;
+	AggregateFunction &operator=(AggregateFunction &&) noexcept = default;
+
+	~AggregateFunction() override;
+
+	/// Creates a function that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> AggregateFunction;
+	/// Creates a function that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> AggregateFunction;
+
+	/// Sets the function's name, as SQL will call it.
+	auto SetName(const std::string &name) & -> AggregateFunction &;
+
+	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
+	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	auto GetSignature() -> FunctionSignature;
+
+	/// Calls `configure` with the function's signature, borrowed for in-place mutation. Registration requires a return
+	/// type that is either a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	template <class F>
+	auto WithSignature(F &&configure) & -> AggregateFunction & {
+		auto sig = GetSignature();
+		configure(sig);
+		return *this;
+	}
+
+	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	template <class T, class... ARGS>
+	auto SetUserData(ARGS &&... args) & -> AggregateFunction & {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetUserDataInternal(ptr, detail::TypedDelete<T>);
+		return *this;
+	}
+
+	auto SetBindCallback(BindCallback callback) & -> AggregateFunction &;
+	auto SetSizeCallback(SizeCallback callback) & -> AggregateFunction &;
+	auto SetInitCallback(InitCallback callback) & -> AggregateFunction &;
+	auto SetUpdateCallback(UpdateCallback callback) & -> AggregateFunction &;
+	auto SetCombineCallback(CombineCallback callback) & -> AggregateFunction &;
+	auto SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction &;
+	auto SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction &;
+
+	/// Registers the function in the catalog it was created against. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
+	/// @throws InvalidInputException When the name, a required callback, or a usable return type is missing.
+	auto Register() -> void;
+
+private:
+	explicit AggregateFunction(void *impl);
+
+	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
+
+	BindCallback bind_callback = nullptr;
+	SizeCallback size_callback = nullptr;
+	InitCallback init_callback = nullptr;
+	UpdateCallback update_callback = nullptr;
+	CombineCallback combine_callback = nullptr;
+	FinalizeCallback finalize_callback = nullptr;
+	DestroyCallback destroy_callback = nullptr;
+	detail::UserData user_data;
+
+public:
+	/// What the bind callback works with. Borrowed, valid only for the callback duration.
+	class BindInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
+		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
+		/// has one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
+		/// @param type The concrete return type of this bound call.
+		auto SetReturnType(const LogicalType &type) -> void;
+
+		/// The binding context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		BindInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the size callback works with. Borrowed, valid only for the callback duration.
+	class SizeInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports the size of a single aggregate state, in bytes; the callback must call this.
+		/// @param size The state size, in bytes.
+		auto SetStateSize(idx_t size) -> void;
+
+	private:
+		explicit SizeInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the init callback works with. Borrowed, valid only for the callback duration.
+	class InitInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many states this invocation must initialize: the length of `GetStates`.
+		auto GetStateCount() const -> idx_t;
+
+		/// The states to initialize, one pointer per state. Each points to uninitialized memory of the size the size
+		/// callback reported; the callback must initialize all of them in place.
+		auto GetStates() const -> void **;
+
+	private:
+		explicit InitInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the update callback works with. Borrowed, valid only for the callback duration.
+	class UpdateInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many input rows this invocation carries: the length of the argument vectors and of `GetStates`.
+		auto GetRowCount() const -> idx_t;
+
+		/// How many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
+		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// One argument's vector.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArg(idx_t index) const -> Vector;
+
+		/// The states to update, one pointer per input row: row i of every argument vector must be aggregated into
+		/// state i. Different rows may point to the same state.
+		auto GetStates() const -> void **;
+
+	private:
+		explicit UpdateInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the combine callback works with. Borrowed, valid only for the callback duration.
+	class CombineInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many source/target state pairs this invocation must combine: the length of `GetSources` and
+		/// `GetTargets`.
+		auto GetStateCount() const -> idx_t;
+
+		/// The source states, one pointer per pair. Source i must be combined into target i; the source must not be
+		/// modified.
+		auto GetSources() const -> void **;
+
+		/// The target states, one pointer per pair. Source i must be combined into target i.
+		auto GetTargets() const -> void **;
+
+	private:
+		explicit CombineInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the finalize callback works with. Borrowed, valid only for the callback duration.
+	class FinalizeInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many states this invocation must finalize: the length of `GetStates` and the number of rows to write.
+		auto GetStateCount() const -> idx_t;
+
+		/// The states to finalize, one pointer per state. State i must be finalized into result row
+		/// `GetResultOffset() + i`.
+		auto GetStates() const -> void **;
+
+		/// The result vector to fill, starting at `GetResultOffset`.
+		auto GetResult() const -> Vector;
+
+		/// The offset in the result vector at which to start writing: state i must be finalized into result row
+		/// `GetResultOffset() + i`.
+		auto GetResultOffset() const -> idx_t;
+
+	private:
+		explicit FinalizeInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the destroy callback works with. Borrowed, valid only for the callback duration.
+	class DestroyInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many states this invocation must destroy: the length of `GetStates`.
+		auto GetStateCount() const -> idx_t;
+
+		/// The states to destroy, one pointer per state. The callback must release any resources the states own.
+		auto GetStates() const -> void **;
+
+	private:
+		explicit DestroyInput(void *args) : args(args) {
+		}
+
+		void *args;
+
+		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
 };

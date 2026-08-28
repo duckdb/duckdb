@@ -1,88 +1,898 @@
 module: aggregate
-#
-## Handles
-#handles:
-#  aggregate_function:
-#
-#  aggregate_function_bind_info:
-#
-#  aggregate_function_size_info:
-#
-#  aggregate_function_init_info:
-#
-#  aggregate_function_update_info:
-#
-#  aggregate_function_combine_info:
-#
-#  aggregate_function_finalize_info:
-#
-#  aggregate_function_destroy_info:
-#
-## Callbacks
-#callbacks:
-#  aggregate_function_bind_callback:
-#
-#  aggregate_function_size_callback:
-#
-#  aggregate_function_init_callback:
-#
-#  aggregate_function_update_callback:
-#
-#  aggregate_function_combine_callback:
-#
-#  aggregate_function_finalize_callback:
-#
-#  aggregate_function_destroy_callback:
-#
-## Functions
-#functions:
-#
-#  # Constructors
-#  aggregate_function_create_with_connection:
-#
-#  aggregate_function_create_with_extension:
-#
-#  # Properties
-#  aggregate_function_set_name:
-#
-#  aggregate_function_set_signature:
-#
-#  aggregate_function_set_user_data:
-#
-#  aggregate_function_set_bind_callback:
-#
-#  aggregate_function_set_size_callback:
-#
-#  aggregate_function_set_init_callback:
-#
-#  aggregate_function_set_update_callback:
-#
-#  aggregate_function_set_combine_callback:
-#
-#  aggregate_function_set_finalize_callback:
-#
-#  aggregate_function_set_destroy_callback:
-#
-#  # -- Bind Callback Functions
-#  aggregate_function_bind_get_user_data:
-#
-#  aggregate_function_bind_set_bind_data:
-#
-#  aggregate_function_bind_set_return_type:
-#
-#  # -- Size Callback Functions
-#  aggregate_function_size_get_user_data:
-#
-#  aggregate_function_size_get_bind_data:
-#
-#  aggregate_function_size_set_state_size:
-#
-#  # -- Init Callback Functions
-#  aggregate_function_init_get_user_data:
-#
-#  aggregate_function_init_get_bind_data:
-#
-#  aggregate_function_init_set_init_data:
-#
-#  # -- Update Callback Functions
-#
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  aggregate_function:
+    description: "TODO"
+
+  aggregate_function_bind_info:
+    description: "TODO"
+
+  aggregate_function_size_info:
+    description: "TODO"
+
+  aggregate_function_init_info:
+    description: "TODO"
+
+  aggregate_function_update_info:
+    description: "TODO"
+
+  aggregate_function_combine_info:
+    description: "TODO"
+
+  aggregate_function_finalize_info:
+    description: "TODO"
+
+  aggregate_function_destroy_info:
+    description: "TODO"
+#-----------------------------------------------------------------------------------------------------------------------
+# Callbacks
+#-----------------------------------------------------------------------------------------------------------------------
+callbacks:
+  aggregate_function_bind_callback:
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+      context:
+        type: context
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_size_callback:
+    parameters:
+      info:
+        type: aggregate_function_size_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_init_callback:
+    parameters:
+      info:
+        type: aggregate_function_init_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_update_callback:
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_combine_callback:
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_finalize_callback:
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+
+  aggregate_function_destroy_callback:
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+      err:
+        type: error_info
+        indirection: 1
+    return_type: void
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_create_with_connection:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      connection:
+        type: connection
+        description: The connection to create the function in.
+      function:
+        type: aggregate_function
+        indirection: 1
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the function in.
+      function:
+        type: aggregate_function
+        indirection: 1
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the name of.
+      name:
+        type: str
+        indirection: 1
+        description: The name to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_get_signature:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        kind: IN
+        description: The function to get the signature of.
+      sig:
+        type: function_signature
+        indirection: 1
+        kind: OUT
+        description: The returned signature. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  aggregate_function_set_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the user data of.
+      data:
+        type: opaque
+        indirection: 1
+        description: The user data to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_bind_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the bind callback of.
+      callback:
+        type: aggregate_function_bind_callback
+        description: The bind callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_size_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the size callback of.
+      callback:
+        type: aggregate_function_size_callback
+        description: The size callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_init_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the init callback of.
+      callback:
+        type: aggregate_function_init_callback
+        description: The init callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_update_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the update callback of.
+      callback:
+        type: aggregate_function_update_callback
+        description: The update callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_combine_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the combine callback of.
+      callback:
+        type: aggregate_function_combine_callback
+        description: The combine callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_finalize_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the finalize callback of.
+      callback:
+        type: aggregate_function_finalize_callback
+        description: The finalize callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_set_destroy_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the destroy callback for the aggregate function. Optional: only
+      needed when aggregate states own resources that must be released. The
+      callback runs on states that are discarded without being finalized; it
+      must not fail, an error reported through its error slot is ignored.
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to set the destroy callback of.
+      callback:
+        type: aggregate_function_destroy_callback
+        description: The destroy callback to set.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_bind_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+      data:
+        type: opaque
+        indirection: 1
+        description: The bind data to set
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_bind_set_return_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_bind_info
+      return_type:
+        type: logical_type
+        description: The return type to set. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Size Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_size_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_size_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_size_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_size_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_size_set_state_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Sets the size of a single aggregate state, in bytes. The size callback
+      must set this; DuckDB uses it to allocate state memory.
+    parameters:
+      info:
+        type: aggregate_function_size_info
+      size:
+        type: idx
+        description: The size of a single aggregate state, in bytes.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Init Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_init_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_init_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_init_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_init_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_init_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must initialize.
+      This is the length of the array returned by
+      aggregate_function_init_get_states.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_init_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to initialize, one pointer per
+      state. Each state points to uninitialized memory of the size reported by
+      the size callback; the init callback must initialize all of them in
+      place.
+    parameters:
+      info:
+        type: aggregate_function_init_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Update Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_update_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_update_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_update_get_row_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many input rows this invocation carries. This is the length
+      of the argument vectors and of the state array: row i of every argument
+      vector must be aggregated into state i.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of rows.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_update_get_arg_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many argument vectors this invocation carries: one per
+      argument of the call, variadic tail arguments included. Valid indices
+      for aggregate_function_update_get_arg are [0, count).
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      count:
+        type: u32
+        indirection: 1
+        kind: OUT
+        description: Receives the number of argument vectors.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_update_get_arg:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      index:
+        type: u32
+        description: The index of the argument vector to get.
+      vector:
+        type: vector
+        indirection: 1
+        description: The argument vector to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_update_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to update, one pointer per input
+      row: row i of every argument vector must be aggregated into state i.
+      Different rows may point to the same state.
+    parameters:
+      info:
+        type: aggregate_function_update_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Combine Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_combine_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_combine_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_combine_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many source/target state pairs this invocation must combine.
+      This is the length of both the sources and the targets array.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of state pairs.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_combine_get_sources:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of source aggregate states, one pointer per pair.
+      Source i must be combined into target i; the source must not be
+      modified.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of source aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_combine_get_targets:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of target aggregate states, one pointer per pair.
+      Source i must be combined into target i.
+    parameters:
+      info:
+        type: aggregate_function_combine_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of target aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Finalize Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_finalize_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_finalize_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_finalize_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must finalize. This is
+      the length of the state array and the number of rows to write to the
+      result vector.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_finalize_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to finalize, one pointer per
+      state. State i must be finalized into result row offset + i.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_finalize_get_result:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      vector:
+        type: vector
+        indirection: 1
+        description: The result vector to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_finalize_get_result_offset:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the offset in the result vector at which to start writing:
+      state i must be finalized into result row offset + i.
+    parameters:
+      info:
+        type: aggregate_function_finalize_info
+      offset:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the result offset.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_destroy_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+      data:
+        type: void
+        indirection: 2
+        description: The user data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_destroy_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+      data:
+        type: void
+        indirection: 2
+        description: The bind data to get
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_destroy_get_state_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns how many aggregate states this invocation must destroy. This is
+      the length of the state array.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of states.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  aggregate_function_destroy_get_states:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: |
+      Returns the array of aggregate states to destroy, one pointer per state.
+      The callback must release any resources the states own.
+    parameters:
+      info:
+        type: aggregate_function_destroy_info
+      states:
+        type: void
+        indirection: 3
+        description: The array of aggregate state pointers to get.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Register
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to register.
+      err:
+        type: error_info
+        indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destroy
+  #---------------------------------------------------------------------------------------------------------------------
+  aggregate_function_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-28" ]
+    description: TODO
+    parameters:
+      function:
+        type: aggregate_function
+        description: The function to destroy.
+        indirection: 1
+    return_type: ERROR

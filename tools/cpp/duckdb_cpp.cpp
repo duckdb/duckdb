@@ -116,6 +116,10 @@ template <>
 struct HandleTraits<ScalarFunction> {
 	using handle = duckdb_v2_scalar_function_handle;
 };
+template <>
+struct HandleTraits<AggregateFunction> {
+	using handle = duckdb_v2_aggregate_function_handle;
+};
 
 } // namespace detail
 
@@ -2456,6 +2460,508 @@ auto ScalarFunction::ExecInput::GetResult() const -> Vector {
 
 auto ScalarFunction::ExecInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Aggregate Function
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The callback table for one registered aggregate function: rides the C
+// user_data slot so the trampolines can find it; the user's own slot
+// (SetUserData) rides inside it. Owned by the registered function, freed at
+// engine teardown.
+struct AggregateFunctionInfo {
+	AggregateFunction::BindCallback bind_callback = nullptr;
+	AggregateFunction::SizeCallback size_callback = nullptr;
+	AggregateFunction::InitCallback init_callback = nullptr;
+	AggregateFunction::UpdateCallback update_callback = nullptr;
+	AggregateFunction::CombineCallback combine_callback = nullptr;
+	AggregateFunction::FinalizeCallback finalize_callback = nullptr;
+	AggregateFunction::DestroyCallback destroy_callback = nullptr;
+	detail::UserData user_data;
+
+	AggregateFunctionInfo(AggregateFunction::BindCallback bind_callback, AggregateFunction::SizeCallback size_callback,
+	                      AggregateFunction::InitCallback init_callback,
+	                      AggregateFunction::UpdateCallback update_callback,
+	                      AggregateFunction::CombineCallback combine_callback,
+	                      AggregateFunction::FinalizeCallback finalize_callback,
+	                      AggregateFunction::DestroyCallback destroy_callback, detail::UserData user_data)
+	    : bind_callback(bind_callback), size_callback(size_callback), init_callback(init_callback),
+	      update_callback(update_callback), combine_callback(combine_callback), finalize_callback(finalize_callback),
+	      destroy_callback(destroy_callback), user_data(std::move(user_data)) {
+	}
+
+	bool operator==(const AggregateFunctionInfo &other) const {
+		return bind_callback == other.bind_callback && size_callback == other.size_callback &&
+		       init_callback == other.init_callback && update_callback == other.update_callback &&
+		       combine_callback == other.combine_callback && finalize_callback == other.finalize_callback &&
+		       destroy_callback == other.destroy_callback && user_data.get() == other.user_data.get();
+	}
+};
+
+// Guard for the inputs' GetUserData: a clear error instead of a null deref.
+void *RequireAggregateUserData(const detail::UserData &user_data) {
+	auto ptr = user_data.get();
+	if (!ptr) {
+		throw InvalidInputException("no user data was set; call AggregateFunction::SetUserData before Register");
+	}
+	return ptr;
+}
+
+// Guard for the inputs' GetBindData: a clear error instead of a null deref.
+void *RequireAggregateBindData(void *ptr) {
+	if (!ptr) {
+		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+	}
+	return ptr;
+}
+
+} // namespace
+
+AggregateFunction::AggregateFunction(void *impl) : detail::Handle<AggregateFunction>(impl) {
+}
+
+AggregateFunction::~AggregateFunction() {
+	auto _h = handle();
+	duckdb_v2_aggregate_function_destroy(&_h);
+}
+
+auto AggregateFunction::Create(const Connection &conn) -> AggregateFunction {
+	duckdb_v2_aggregate_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<AggregateFunction>(_h);
+}
+
+auto AggregateFunction::Create(const Extension &extension) -> AggregateFunction {
+	duckdb_v2_aggregate_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<AggregateFunction>(_h);
+}
+
+auto AggregateFunction::SetName(const std::string &name) & -> AggregateFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_aggregate_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto AggregateFunction::GetSignature() -> FunctionSignature {
+	duckdb_v2_function_signature_handle sig = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_get_signature, handle(), &sig);
+	return detail::Factory::Make<FunctionSignature>(sig);
+}
+
+auto AggregateFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
+	user_data = detail::UserData(data, destructor);
+}
+
+auto AggregateFunction::SetBindCallback(BindCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_bind_callback, handle(), nullptr);
+		bind_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_bind_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.bind_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_bind_callback, handle(), trampoline);
+	bind_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetSizeCallback(SizeCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_size_callback, handle(), nullptr);
+		size_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_size_info_handle info, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_size_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<SizeInput>(static_cast<void *>(info));
+			function.size_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_size_callback, handle(), trampoline);
+	size_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetInitCallback(InitCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_init_callback, handle(), nullptr);
+		init_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_init_info_handle info, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_init_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<InitInput>(static_cast<void *>(info));
+			function.init_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_init_callback, handle(), trampoline);
+	init_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetUpdateCallback(UpdateCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_update_callback, handle(), nullptr);
+		update_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_update_info_handle info,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_update_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<UpdateInput>(static_cast<void *>(info));
+			function.update_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_update_callback, handle(), trampoline);
+	update_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetCombineCallback(CombineCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_combine_callback, handle(), nullptr);
+		combine_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_combine_info_handle info,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_combine_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<CombineInput>(static_cast<void *>(info));
+			function.combine_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_combine_callback, handle(), trampoline);
+	combine_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_finalize_callback, handle(), nullptr);
+		finalize_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_finalize_info_handle info,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<FinalizeInput>(static_cast<void *>(info));
+			function.finalize_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_finalize_callback, handle(), trampoline);
+	finalize_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_aggregate_function_set_destroy_callback, handle(), nullptr);
+		destroy_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_aggregate_function_destroy_info_handle info,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_user_data, info, &user_data);
+			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<DestroyInput>(static_cast<void *>(info));
+			function.destroy_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_aggregate_function_set_destroy_callback, handle(), trampoline);
+	destroy_callback = callback;
+	return *this;
+}
+
+auto AggregateFunction::Register() -> void {
+	// The callback table rides the C user_data slot so the trampolines can find
+	// it; the user's own data (SetUserData, moved out here) rides inside it.
+	auto info = std::unique_ptr<AggregateFunctionInfo>(
+	    new AggregateFunctionInfo(bind_callback, size_callback, init_callback, update_callback, combine_callback,
+	                              finalize_callback, destroy_callback, std::move(user_data)));
+	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<AggregateFunctionInfo>,
+	                         detail::TypedEquals<AggregateFunctionInfo>};
+	CheckedAPICall(duckdb_v2_aggregate_function_set_user_data, handle(), &opaque);
+	// The function owns the table now.
+	info.release();
+
+	CheckedAPICall(duckdb_v2_aggregate_function_register, handle());
+}
+
+void *AggregateFunction::BindInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+void AggregateFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                       void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_set_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &opaque);
+}
+
+auto AggregateFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
+	CheckedAPICall(duckdb_v2_aggregate_function_bind_set_return_type,
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), type.handle());
+}
+
+auto AggregateFunction::BindInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *AggregateFunction::SizeInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_size_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_size_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::SizeInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_size_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_size_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::SizeInput::SetStateSize(idx_t size) -> void {
+	CheckedAPICall(duckdb_v2_aggregate_function_size_set_state_size,
+	               static_cast<duckdb_v2_aggregate_function_size_info_handle>(args), size);
+}
+
+void *AggregateFunction::InitInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_init_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_init_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::InitInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_init_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_init_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::InitInput::GetStateCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_init_get_state_count,
+	               static_cast<duckdb_v2_aggregate_function_init_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::InitInput::GetStates() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_init_get_states,
+	               static_cast<duckdb_v2_aggregate_function_init_info_handle>(args), &states);
+	return states;
+}
+
+void *AggregateFunction::UpdateInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::UpdateInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::UpdateInput::GetRowCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_row_count,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::UpdateInput::GetArgCount() const -> idx_t {
+	uint32_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_arg_count,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::UpdateInput::GetArg(idx_t index) const -> Vector {
+	duckdb_v2_vector_handle vector = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_arg,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), static_cast<uint32_t>(index),
+	               &vector);
+	return detail::Factory::Make<Vector>(vector);
+}
+
+auto AggregateFunction::UpdateInput::GetStates() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_update_get_states,
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &states);
+	return states;
+}
+
+void *AggregateFunction::CombineInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_combine_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_combine_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::CombineInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_combine_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_combine_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::CombineInput::GetStateCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_combine_get_state_count,
+	               static_cast<duckdb_v2_aggregate_function_combine_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::CombineInput::GetSources() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_combine_get_sources,
+	               static_cast<duckdb_v2_aggregate_function_combine_info_handle>(args), &states);
+	return states;
+}
+
+auto AggregateFunction::CombineInput::GetTargets() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_combine_get_targets,
+	               static_cast<duckdb_v2_aggregate_function_combine_info_handle>(args), &states);
+	return states;
+}
+
+void *AggregateFunction::FinalizeInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::FinalizeInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::FinalizeInput::GetStateCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_state_count,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::FinalizeInput::GetStates() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_states,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &states);
+	return states;
+}
+
+auto AggregateFunction::FinalizeInput::GetResult() const -> Vector {
+	duckdb_v2_vector_handle vector = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_result,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &vector);
+	return detail::Factory::Make<Vector>(vector);
+}
+
+auto AggregateFunction::FinalizeInput::GetResultOffset() const -> idx_t {
+	idx_t offset = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_finalize_get_result_offset,
+	               static_cast<duckdb_v2_aggregate_function_finalize_info_handle>(args), &offset);
+	return offset;
+}
+
+void *AggregateFunction::DestroyInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_bind_data,
+	               static_cast<duckdb_v2_aggregate_function_destroy_info_handle>(args), &bind_data);
+	return RequireAggregateBindData(bind_data);
+}
+
+void *AggregateFunction::DestroyInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_user_data,
+	               static_cast<duckdb_v2_aggregate_function_destroy_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
+	return RequireAggregateUserData(function.user_data);
+}
+
+auto AggregateFunction::DestroyInput::GetStateCount() const -> idx_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_state_count,
+	               static_cast<duckdb_v2_aggregate_function_destroy_info_handle>(args), &count);
+	return count;
+}
+
+auto AggregateFunction::DestroyInput::GetStates() const -> void ** {
+	void **states = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_destroy_get_states,
+	               static_cast<duckdb_v2_aggregate_function_destroy_info_handle>(args), &states);
+	return states;
 }
 
 } // namespace cxx
