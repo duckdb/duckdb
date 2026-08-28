@@ -111,6 +111,13 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
+    if (
+        selection_input.event_name in {"push", "pull_request"}
+        and "osx" in selection_input.changed_keys
+        and "osx" not in selected_jobs
+    ):
+        selected_jobs.append("osx")
+
     if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:
         selected_jobs.extend(RELEASE_JOBS)
 
