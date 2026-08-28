@@ -31,7 +31,7 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
       return_chunk(return_chunk), capture_old_rows(capture_old_rows), old_row_columns(std::move(old_row_columns)),
       row_id_handling(row_id_handling), index_update(false) {
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
-	auto index_columns = indexes.GetRequiredColumns();
+	auto index_columns = indexes.GetIndexedColumns();
 
 	unordered_set<column_t> update_columns;
 	for (const auto col : this->columns) {

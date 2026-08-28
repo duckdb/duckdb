@@ -26,6 +26,8 @@ class ClientContext;
 class TableIOManager;
 class Transaction;
 class ConflictManager;
+class IndexDeltas;
+class IndexEntry;
 
 struct IndexLock;
 struct IndexScanState;
@@ -45,16 +47,14 @@ public:
 
 public:
 	IndexAppendMode append_mode;
-	vector<reference<BoundIndex>> delete_indexes;
+	vector<reference<const BoundIndex>> delete_indexes;
 };
 
-enum class DeltaIndexType {
-	NONE,
-	LOCAL_APPEND,
-	LOCAL_DELETE,
-	ADDED_DURING_CHECKPOINT,
-	REMOVED_DURING_CHECKPOINT,
-	DELETED_ROWS_IN_USE
+//! Identifies the logical purpose of a delta owned by an index entry.
+enum class IndexDeltaType : uint8_t {
+	DELETED_ROWS_IN_USE,
+	ADDED_DATA_DURING_CHECKPOINT,
+	REMOVED_DATA_DURING_CHECKPOINT
 };
 
 //! The index is an abstract base class that serves as the basis for indexes
@@ -88,9 +88,6 @@ public:
 	//! and we use them when binding the unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
 
-	//! Whether or not this is a delta index - and if it is, which type it is
-	DeltaIndexType delta_index_type = DeltaIndexType::NONE;
-
 public:
 	bool IsBound() const override {
 		return true;
@@ -104,10 +101,15 @@ public:
 	IndexConstraintType GetConstraintType() const override {
 		return index_constraint_type;
 	}
+	idx_t UnboundExpressionCount() const;
+	unique_ptr<Expression> CopyUnboundExpression(idx_t index) const;
+	const vector<LogicalType> &GetLogicalTypes() const {
+		return logical_types;
+	}
 
 public:
 	//! Obtains a lock on the index.
-	void InitializeLock(IndexLock &state);
+	void InitializeLock(IndexLock &state) const;
 	//! Appends data to the locked index.
 	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
 	//! Obtains a lock and calls Append while holding that lock.
@@ -161,14 +163,11 @@ public:
 
 	//! Whether or not the index supports the creation of delta indexes
 	virtual bool SupportsDeltaIndexes() const;
-	//! Creates a delta index - an empty copy of the index with the same schema, etc
-	//! This will only be called if SupportsDeltaIndexes returns true
-	virtual unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const;
 
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
-	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
+	virtual idx_t GetInMemorySize(IndexLock &state) const = 0;
 	//! Returns the in-memory usage of the index
-	idx_t GetInMemorySize();
+	idx_t GetInMemorySize() const;
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
 	virtual void Verify(IndexLock &l) = 0;
@@ -199,12 +198,12 @@ public:
 	virtual IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
 	//! Execute the index expressions on an input chunk
-	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+	void ExecuteExpressions(DataChunk &input, DataChunk &result) const;
 	static string AppendRowError(DataChunk &input, idx_t index);
 
 	//! Throw a constraint violation exception
 	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-	                                             DataChunk &input) = 0;
+	                                             DataChunk &input) const = 0;
 
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
@@ -213,8 +212,16 @@ public:
 	                          const vector<StorageIndex> &mapped_column_ids);
 
 protected:
+	friend class IndexDeltas;
+	friend class IndexEntry;
+
+	//! Creates an empty physical copy with the requested constraint type.
+	virtual unique_ptr<BoundIndex> CreateEmptyCopy(IndexConstraintType constraint_type) const;
+	//! Merges a checkpoint delta into this index.
+	virtual ErrorData MergeCheckpointDelta(IndexDeltaType type, BoundIndex &delta_index);
+
 	//! Lock used for any changes to the index
-	mutex lock;
+	mutable mutex lock;
 
 	//! The vector of bound expressions to generate the Index keys based on a data chunk.
 	//! The leaves of the bound expressions are BoundReferenceExpressions.
@@ -226,7 +233,7 @@ protected:
 
 private:
 	//! Expression executor to execute the index expressions
-	ExpressionExecutor executor;
+	mutable ExpressionExecutor executor;
 
 	//! Bind the unbound expressions of the index
 	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
