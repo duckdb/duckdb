@@ -1,6 +1,8 @@
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/scalar/comparison_functions.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -170,6 +172,55 @@ static bool ChildrenAreConsistentWithArguments(const vector<unique_ptr<Expressio
 		}
 	}
 	return true;
+}
+
+static bool FunctionCallbacksMatch(const ScalarFunctionCallbacks &actual, const ScalarFunctionCallbacks &expected) {
+	return actual == expected && actual.function.target_type() == expected.function.target_type() &&
+	       actual.select_function == expected.select_function && actual.to_string == expected.to_string &&
+	       actual.get_expression_type == expected.get_expression_type &&
+	       actual.legacy_serialize == expected.legacy_serialize;
+}
+
+static bool IsBuiltInExpressionFunction(const BoundFunctionExpression &expression,
+                                        const ScalarFunction &built_in_function) {
+	auto &function = expression.Function();
+	auto &definition = function.GetDefinition();
+	if (!definition || !definition->GetCatalogName().GetIdentifierName().empty() ||
+	    !definition->GetSchemaName().GetIdentifierName().empty() ||
+	    definition->GetName() != built_in_function.GetName() || function.GetName() != built_in_function.GetName()) {
+		return false;
+	}
+	auto &definition_signature = definition->GetSignature();
+	auto &built_in_signature = built_in_function.GetSignature();
+	if (definition_signature.GetParameters() != built_in_signature.GetParameters() ||
+	    definition_signature.GetVarArgs() != built_in_signature.GetVarArgs()) {
+		return false;
+	}
+	return FunctionCallbacksMatch(definition->GetCallbacks(), built_in_function.GetCallbacks()) &&
+	       FunctionCallbacksMatch(function.GetCallbacks(), definition->GetCallbacks());
+}
+
+static bool IsBuiltInComparison(const BoundFunctionExpression &expression) {
+	switch (expression.GetExpressionType()) {
+	case ExpressionType::COMPARE_EQUAL:
+		return IsBuiltInExpressionFunction(expression, OperatorEqualFun::GetFunction());
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return IsBuiltInExpressionFunction(expression, OperatorNotEqualFun::GetFunction());
+	case ExpressionType::COMPARE_LESSTHAN:
+		return IsBuiltInExpressionFunction(expression, OperatorLessThanFun::GetFunction());
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return IsBuiltInExpressionFunction(expression, OperatorGreaterThanFun::GetFunction());
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return IsBuiltInExpressionFunction(expression, OperatorLessThanEqualsFun::GetFunction());
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return IsBuiltInExpressionFunction(expression, OperatorGreaterThanEqualsFun::GetFunction());
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return IsBuiltInExpressionFunction(expression, IsDistinctFromFun::GetFunction());
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return IsBuiltInExpressionFunction(expression, IsNotDistinctFromFun::GetFunction());
+	default:
+		return false;
+	}
 }
 
 template <class FUNCTION>
@@ -358,7 +409,10 @@ private:
 	                                              const LogicalPlanCompilerPath &path) {
 		switch (expression.GetExpressionType()) {
 		case ExpressionType::OPERATOR_CAST:
-			return ExportCast(expression, path);
+			if (IsBuiltInExpressionFunction(expression, CastFun::GetFunction())) {
+				return ExportCast(expression, path);
+			}
+			return ExportScalarFunction(expression, path);
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_LESSTHAN:
@@ -367,9 +421,15 @@ private:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			return ExportComparison(expression, path);
+			if (IsBuiltInComparison(expression)) {
+				return ExportComparison(expression, path);
+			}
+			return ExportScalarFunction(expression, path);
 		case ExpressionType::COMPARE_BETWEEN:
-			return ExportBetween(expression, path);
+			if (IsBuiltInExpressionFunction(expression, BetweenFun::GetFunction())) {
+				return ExportBetween(expression, path);
+			}
+			return ExportScalarFunction(expression, path);
 		case ExpressionType::BOUND_FUNCTION:
 			return ExportScalarFunction(expression, path);
 		default:
@@ -380,8 +440,8 @@ private:
 
 	BoundExpressionSQLExportResult ExportCast(const BoundFunctionExpression &expression,
 	                                          const LogicalPlanCompilerPath &path) {
-		if (expression.GetChildren().size() != 1 || !expression.GetChildren()[0] || !expression.BindInfo() ||
-		    !IsSQLRepresentableType(expression.GetReturnType()) ||
+		if (expression.GetChildren().size() != 1 || !expression.GetChildren()[0] ||
+		    !BoundCastExpression::HasValidBindData(expression) || !IsSQLRepresentableType(expression.GetReturnType()) ||
 		    !IsSQLRepresentableType(expression.GetChildren()[0]->GetReturnType())) {
 			return Failure(
 			    InternalExpressionInvariant(path, expression, "Bound cast has malformed type, data, or arity"));
@@ -420,7 +480,7 @@ private:
 	                                             const LogicalPlanCompilerPath &path) {
 		if (expression.GetReturnType() != LogicalType::BOOLEAN || expression.GetChildren().size() != 3 ||
 		    !expression.GetChildren()[0] || !expression.GetChildren()[1] || !expression.GetChildren()[2] ||
-		    !expression.BindInfo() ||
+		    !BoundBetweenExpression::HasValidBindData(expression) ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[1]->GetReturnType() ||
 		    expression.GetChildren()[0]->GetReturnType() != expression.GetChildren()[2]->GetReturnType()) {
 			return Failure(
@@ -539,8 +599,13 @@ private:
 			expected_type = expression.GetReturnType();
 			break;
 		case ExpressionType::OPERATOR_TRY:
-			if (child_count != 1 || !IsSQLRepresentableType(expression.GetReturnType())) {
+			if (child_count != 1 || !expression.GetChildren()[0] ||
+			    !IsSQLRepresentableType(expression.GetReturnType())) {
 				return Failure(InternalExpressionInvariant(path, expression, "Bound TRY has malformed type or arity"));
+			}
+			if (expression.GetChildren()[0]->IsVolatile()) {
+				return Failure(UnsupportedFeature(path, "try_volatile_child",
+				                                  "TRY cannot be rebound around a volatile expression"));
 			}
 			expected_type = expression.GetReturnType();
 			break;

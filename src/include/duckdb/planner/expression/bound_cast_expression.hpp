@@ -35,6 +35,8 @@ struct BoundCastExpression {
 	static LogicalType SourceType(const BoundFunctionExpression &cast_expr);
 	//! Whether or not this is a try_cast (cast failures become NULL instead of throwing an error)
 	static bool IsTryCast(const BoundFunctionExpression &cast_expr);
+	//! Whether the expression contains the bind data owned by the built-in cast implementation
+	static bool HasValidBindData(const BoundFunctionExpression &cast_expr);
 	//! Whether or not this cast is bound using only the built-in SQL casts
 	static bool IsDefaultCast(const BoundFunctionExpression &cast_expr);
 	static const BoundCastInfo &GetBoundCast(const BoundFunctionExpression &cast_expr);

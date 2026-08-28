@@ -238,6 +238,14 @@ bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &betwe
 	return data.upper_inclusive;
 }
 
+bool BoundBetweenExpression::HasValidBindData(const BoundFunctionExpression &between_expr) {
+	if (!between_expr.BindInfo()) {
+		return false;
+	}
+	const FunctionData &bind_info = *between_expr.BindInfo();
+	return typeid(bind_info) == typeid(BetweenFunctionData);
+}
+
 const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {
 	return *between_expr.GetChildren()[0];
 }

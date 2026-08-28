@@ -232,6 +232,14 @@ bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().try_cast;
 }
 
+bool BoundCastExpression::HasValidBindData(const BoundFunctionExpression &cast_expr) {
+	if (!cast_expr.BindInfo()) {
+		return false;
+	}
+	const FunctionData &bind_info = *cast_expr.BindInfo();
+	return typeid(bind_info) == typeid(CastFunctionData);
+}
+
 bool BoundCastExpression::IsDefaultCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().is_default_cast;
 }
