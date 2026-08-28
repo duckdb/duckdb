@@ -44,6 +44,11 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	if (inside_aggregate) {
 		return ProjectionIndex();
 	}
+	auto &bound_expressions = GetBoundExpressions();
+	if (!bound_expressions.Empty() && bound_expressions.HasBoundDescendant(expr)) {
+		// partially bound expressions never match a group
+		return ProjectionIndex();
+	}
 	// first check the group alias map, if expr is a ColumnRefExpression
 	auto &alias_map = node.bind_state.group_alias_map;
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {

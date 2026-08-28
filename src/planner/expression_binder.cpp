@@ -23,6 +23,10 @@ ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context) : bin
 ExpressionBinder::~ExpressionBinder() {
 }
 
+BoundExpressionMap &ExpressionBinder::GetBoundExpressions() const {
+	return binder.GetBoundExpressions();
+}
+
 void ExpressionBinder::InitializeStackCheck() {
 	static constexpr idx_t INITIAL_DEPTH = 5;
 	if (binder.HasActiveBinder()) {
@@ -328,6 +332,8 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
+	// open a scope for this bind cycle: entries left behind by failed bind attempts are erased on exit
+	BoundExpressionScope scope(GetBoundExpressions());
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (error_msg.HasError()) {
@@ -340,11 +346,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			CombineErrors(error_msg, std::move(result.error));
 			error_msg.Throw();
 		}
-		auto &bound_expr = expr->Cast<BoundExpression>();
-		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+		ExtractCorrelatedExpressions(binder, GetBoundExpressions().Get(*expr));
 	}
-	auto &bound_expr = expr->Cast<BoundExpression>();
-	unique_ptr<Expression> result = std::move(bound_expr.expr);
+	unique_ptr<Expression> result = GetBoundExpressions().Consume(*expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
@@ -372,13 +376,13 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	auto query_location = expr->GetQueryLocation();
 	auto &expression = *expr;
 	auto alias = expression.GetAlias();
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+	if (GetBoundExpressions().IsBound(expression)) {
 		// already bound, don't bind it again
 		return ErrorData();
 	}
 	if (expression.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &w = expression.Cast<WindowExpression>();
-		if (w.HasBoundedParts()) {
+		if (WindowHasBoundedParts(w)) {
 			BindResult result =
 			    BindResult(BinderException::Unsupported(*expr, "window expression is not supported here"));
 			if (result.HasError()) {
@@ -391,15 +395,41 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	if (result.HasError()) {
 		return std::move(result.error);
 	}
-	// successfully bound: replace the node with a BoundExpression
+	// successfully bound: store the bound expression in the map
 	result.expression->SetQueryLocation(query_location);
-	expr = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = expr->Cast<BoundExpression>();
-	be.SetAlias(alias);
 	if (!alias.empty()) {
-		be.expr->SetAlias(alias);
+		result.expression->SetAlias(alias);
 	}
+	GetBoundExpressions().Insert(*expr, std::move(result.expression));
 	return ErrorData();
+}
+
+bool ExpressionBinder::WindowHasBoundedParts(const WindowExpression &window) const {
+	auto &bound_expressions = GetBoundExpressions();
+	if (bound_expressions.Empty()) {
+		return false;
+	}
+	for (auto &child : window.GetArguments()) {
+		if (bound_expressions.IsBound(child.GetExpression())) {
+			return true;
+		}
+	}
+	for (auto &child : window.Partitions()) {
+		if (bound_expressions.IsBound(*child)) {
+			return true;
+		}
+	}
+	for (auto &order : window.OrderBy()) {
+		if (bound_expressions.IsBound(*order.expression)) {
+			return true;
+		}
+	}
+	for (auto &order : window.ArgOrders()) {
+		if (bound_expressions.IsBound(*order.expression)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message) {
