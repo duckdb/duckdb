@@ -4,6 +4,7 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
+	ExtensionRepositoryStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /

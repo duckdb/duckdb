@@ -25,6 +25,8 @@ struct MatcherToken {
 	idx_t offset = 0;
 	idx_t length = 0;
 	bool unterminated = false;
+	bool preceded_by_newline = false;
+	bool preceded_by_block_comment = false;
 };
 
 } // namespace duckdb

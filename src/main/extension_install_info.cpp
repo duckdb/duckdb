@@ -15,32 +15,55 @@ string ExtensionRepository::GetRepository(const string &repository_url) {
 	return resolved_repository;
 }
 
-string ExtensionRepository::TryGetRepositoryUrl(const string &repository) {
-	if (repository == "core") {
-		return CORE_REPOSITORY_URL;
-	} else if (repository == "core_nightly") {
-		return CORE_NIGHTLY_REPOSITORY_URL;
-	} else if (repository == "community") {
-		return COMMUNITY_REPOSITORY_URL;
-	} else if (repository == "local_build_debug") {
-		return BUILD_DEBUG_REPOSITORY_PATH;
-	} else if (repository == "local_build_release") {
-		return BUILD_RELEASE_REPOSITORY_PATH;
+//! The built-in repositories. The type determines which public keys are trusted to sign the extensions that the
+//! repository serves - it is a property of the repository itself, never something that is derived from a url
+struct KnownExtensionRepository {
+	const char *name;
+	const char *url;
+	ExtensionRepositoryType type;
+};
+
+static constexpr const KnownExtensionRepository KNOWN_REPOSITORIES[] = {
+    {"core", ExtensionRepository::CORE_REPOSITORY_URL, ExtensionRepositoryType::CORE},
+    {"core_nightly", ExtensionRepository::CORE_NIGHTLY_REPOSITORY_URL, ExtensionRepositoryType::CORE},
+    {"community", ExtensionRepository::COMMUNITY_REPOSITORY_URL, ExtensionRepositoryType::COMMUNITY},
+    {"local_build_debug", ExtensionRepository::BUILD_DEBUG_REPOSITORY_PATH, ExtensionRepositoryType::CORE},
+    {"local_build_release", ExtensionRepository::BUILD_RELEASE_REPOSITORY_PATH, ExtensionRepositoryType::CORE},
+    {nullptr, nullptr, ExtensionRepositoryType::CORE}};
+
+bool ExtensionRepository::TryGetKnownRepository(const string &repository, ExtensionRepository &result) {
+	for (idx_t i = 0; KNOWN_REPOSITORIES[i].name; i++) {
+		auto &known_repository = KNOWN_REPOSITORIES[i];
+		if (repository == known_repository.name) {
+			result = ExtensionRepository(known_repository.name, known_repository.url);
+			result.type = known_repository.type;
+			return true;
+		}
 	}
-	return "";
+	return false;
+}
+
+vector<string> ExtensionRepository::GetKnownRepositoryNames() {
+	vector<string> result;
+	for (idx_t i = 0; KNOWN_REPOSITORIES[i].name; i++) {
+		result.emplace_back(KNOWN_REPOSITORIES[i].name);
+	}
+	return result;
+}
+
+string ExtensionRepository::TryGetRepositoryUrl(const string &repository) {
+	ExtensionRepository result;
+	if (!TryGetKnownRepository(repository, result)) {
+		return "";
+	}
+	return result.path;
 }
 
 string ExtensionRepository::TryConvertUrlToKnownRepository(const string &url) {
-	if (url == CORE_REPOSITORY_URL) {
-		return "core";
-	} else if (url == CORE_NIGHTLY_REPOSITORY_URL) {
-		return "core_nightly";
-	} else if (url == COMMUNITY_REPOSITORY_URL) {
-		return "community";
-	} else if (url == BUILD_DEBUG_REPOSITORY_PATH) {
-		return "local_build_debug";
-	} else if (url == BUILD_RELEASE_REPOSITORY_PATH) {
-		return "local_build_release";
+	for (idx_t i = 0; KNOWN_REPOSITORIES[i].name; i++) {
+		if (url == KNOWN_REPOSITORIES[i].url) {
+			return KNOWN_REPOSITORIES[i].name;
+		}
 	}
 	return "";
 }
@@ -75,7 +98,8 @@ ExtensionRepository ExtensionRepository::GetRepositoryByUrl(const string &url) {
 
 ExtensionRepository::ExtensionRepository() : name("core"), path(CORE_REPOSITORY_URL) {
 }
-ExtensionRepository::ExtensionRepository(const string &name_p, const string &path_p) : name(name_p), path(path_p) {
+ExtensionRepository::ExtensionRepository(const string &name_p, const string &path_p, vector<string> public_keys_p)
+    : name(name_p), path(path_p), public_keys(std::move(public_keys_p)) {
 }
 
 string ExtensionRepository::ToReadableString() {

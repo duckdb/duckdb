@@ -687,6 +687,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto file_metadata = StatsInternal(fd, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
 
@@ -1680,6 +1681,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }
 
@@ -2047,8 +2049,7 @@ void LocalFileSystem::FillFileOptions(const FileMetadata &file_metadata, unorder
 }
 
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
-	auto stats = handle.Stats();
-	return VersionTagFromMetadata(stats);
+	return handle.Stats().version_tag;
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {

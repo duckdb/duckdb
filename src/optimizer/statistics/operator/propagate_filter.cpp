@@ -5,7 +5,9 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -226,28 +228,83 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	}
 }
 
-FilterPropagateResult StatisticsPropagator::ClassifyFilter(unique_ptr<Expression> &condition) {
-	PropagateExpression(condition);
-
-	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+FilterPropagateResult StatisticsPropagator::ClassifyFilter(Expression &condition) {
+	if (ExpressionIsConstant(condition, Value::BOOLEAN(true))) {
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
-	if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(true))) {
+	if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(true))) {
 		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
 	}
 
-	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false))) {
+	if (ExpressionIsConstant(condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	} else if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+	} else if (ExpressionIsConstantOrNull(condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 	}
 
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
+static unordered_set<TableIndex> GetFilterBindings(const Expression &condition) {
+	unordered_set<TableIndex> bindings;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    condition, [&](const BoundColumnRefExpression &column_ref) {
+		    if (column_ref.Depth() == 0) {
+			    bindings.insert(column_ref.Binding().table_index);
+		    }
+	    });
+	return bindings;
+}
+
+bool StatisticsPropagator::SimplifyFilter(unique_ptr<Expression> &condition) {
+	if (condition->GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
+		return false;
+	}
+	auto &conjunction = condition->Cast<BoundConjunctionExpression>();
+	auto &children = conjunction.GetChildrenMutable();
+	const auto is_and = conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+	bool changed = false;
+
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &child = children[child_idx];
+		changed |= SimplifyFilter(child);
+
+		const auto is_true = ExpressionIsConstant(*child, Value::BOOLEAN(true));
+		const auto is_false = ExpressionIsConstant(*child, Value::BOOLEAN(false));
+		const auto is_false_or_null = ExpressionIsConstantOrNull(*child, Value::BOOLEAN(false));
+		if ((is_and && (is_false || is_false_or_null)) || (!is_and && is_true)) {
+			condition = make_uniq<BoundConstantExpression>(Value::BOOLEAN(!is_and));
+			return true;
+		}
+		if ((is_and && is_true) || (!is_and && (is_false || is_false_or_null))) {
+			children.erase_at(child_idx);
+			child_idx--;
+			changed = true;
+		}
+	}
+	if (children.empty()) {
+		condition = make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_and));
+		return true;
+	}
+	if (children.size() == 1) {
+		condition = std::move(children[0]);
+		return true;
+	}
+	return changed;
+}
+
 FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
-	auto prune_result = ClassifyFilter(condition);
+	unordered_set<TableIndex> original_bindings;
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		original_bindings = GetFilterBindings(*condition);
+	}
+	PropagateExpression(condition);
+	if (mode == StatisticsPropagationMode::FILTER_SIMPLIFICATION) {
+		SimplifyFilter(condition);
+		filter_bindings_changed |= original_bindings != GetFilterBindings(*condition);
+	}
+	auto prune_result = ClassifyFilter(*condition);
 	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 		// cannot prune this filter: propagate statistics from the filter
 		UpdateFilterStatistics(*condition);
