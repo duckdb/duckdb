@@ -130,11 +130,19 @@ upload_extension() {
     --s3-endpoint "${AWS_ENDPOINT_URL}"
   )
 
+  # NOTE: flags largely try to simplify this to a PASS/FAIL PUT, skipping
+  # checks that otherwise normally occur; HEADs are not allowed for this 
+  # Write-Only token.
+  # --no-check-dest -> no pre-write HEAD call
+  # --s3-no-check-bucket -> don't check for bucket existence
+  # --s3-no-head -> no post-write HEAD call/check
+  #
   set -x
   rclone $DRY_RUN_PARAM copyto \
     --no-traverse \
     --ignore-times \
     --ignore-checksum \
+    --no-check-dest \
     --s3-no-check-bucket \
     --s3-no-head \
     "${rclone_s3_args[@]}" \
