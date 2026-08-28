@@ -1,0 +1,21 @@
+From 92d41bcf61fdb2d9a816874fdc23335da44dd3a6 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:12:34 +0200
+Subject: [PATCH 8/8] Preserve S3 region redirect responses
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index 27de210..a933c63 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -14522,7 +14522,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
+   }
+ 
+   auto location = res.get_header_value("location");
+-  if (location.empty()) { return false; }
++  // S3 can return redirect responses with only an x-amz-bucket-region header.
++  // Keep the response available to httpfs so it can retry in the right region.
++  if (location.empty()) { return true; }
+ 
+   detail::UrlComponents uc;
+   if (!detail::parse_url(location, uc)) { return false; }

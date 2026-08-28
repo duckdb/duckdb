@@ -1,13 +1,13 @@
-In order to bump mbedtls, we can run the helper script to download a new version and copy over existing files:
+To update cpp-httplib, change the version in the helper script and run it to download and transform the upstream header:
 
 ```
 python transform-httplib.py
 ```
 
-We then need to make it work in C++. We have a diff available that fixes these issues for the current version. It is possible / likely this does not map 1-1 to the new version, so rejects might need to be handled.
+Then apply the ordered semantic patch series. A new upstream version may require patches to be refreshed.
 
 ```
-git apply httplib.patch --reject
+git apply patches/*.patch
 ```
 
 It is recommended to test regular compilation.

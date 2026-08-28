@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-version = '0.27.0'
+version = '0.53.1'
 max_size_growth = 1.1
 
 
@@ -39,5 +39,3 @@ def apply_rules(file: str):
 
 
 apply_rules("httplib.hpp")
-
-# assert(os.system("git apply httplib.patch --reject") == 0)

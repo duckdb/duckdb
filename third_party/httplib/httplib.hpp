@@ -11,16 +11,21 @@
 #define CPPHTTPLIB_VERSION "0.53.1"
 #define CPPHTTPLIB_VERSION_NUM "0x003501"
 
-#ifdef _WIN32
-#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
-#error                                                                         \
-    "cpp-httplib doesn't support Windows 8 or lower. Please use Windows 10 or later."
-#endif
-#endif
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/original/std/memory.hpp"
 
 /*
  * Configuration
  */
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib_openssl
+#else
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib
+#endif
 
 #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 5
@@ -138,7 +143,7 @@
 #define CPPHTTPLIB_RANGE_MAX_COUNT 1024
 #endif
 
-// std::regex_match's backtracking implementation (most acutely on libstdc++)
+// RegexMatch's backtracking implementation (most acutely on libstdc++)
 // recurses roughly once per matched character for quantified patterns such
 // as "(.*)", so a long enough path can exhaust the calling thread's stack; on
 // a default ~8MB thread stack that has been observed to take on the order of
@@ -190,7 +195,11 @@
 #endif
 
 #ifndef CPPHTTPLIB_SEND_FLAGS
+#ifdef MSG_NOSIGNAL
+#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
+#else
 #define CPPHTTPLIB_SEND_FLAGS 0
+#endif
 #endif
 
 #ifndef CPPHTTPLIB_LISTEN_BACKLOG
@@ -219,6 +228,12 @@
 
 #ifndef CPPHTTPLIB_WEBSOCKET_MAX_MISSED_PONGS
 #define CPPHTTPLIB_WEBSOCKET_MAX_MISSED_PONGS 0
+#endif
+
+#ifdef __MVS__
+#define REGEX_SCOPE static
+#else
+#define REGEX_SCOPE thread_local
 #endif
 
 /*
@@ -287,6 +302,7 @@ using socklen_t = int;
 #endif
 #ifdef __MVS__
 #include <strings.h>
+#include <sys/time.h>
 #ifndef NI_MAXHOST
 #define NI_MAXHOST 1025
 #endif
@@ -413,6 +429,7 @@ using socket_t = int;
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
@@ -429,7 +446,7 @@ using socket_t = int;
 #endif
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
 #elif OPENSSL_VERSION_NUMBER < 0x30000000L
-#error Sorry, OpenSSL versions prior to 3.0.0 are not supported
+#define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
 #endif // CPPHTTPLIB_OPENSSL_SUPPORT
@@ -537,7 +554,7 @@ using socket_t = int;
 /*
  * Declaration
  */
-namespace httplib {
+namespace CPPHTTPLIB_NAMESPACE {
 
 namespace ws {
 class WebSocket;
@@ -554,16 +571,16 @@ namespace detail {
  */
 
 template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(Args &&...args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
-typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(std::size_t n) {
   typedef typename std::remove_extent<T>::type RT;
-  return std::unique_ptr<T>(new RT[n]);
+  return duckdb::unique_ptr<T>(new RT[n]);
 }
 
 // Locale-independent ASCII character classification. The <cctype>
@@ -1277,7 +1294,8 @@ using Headers =
 // Query parameter names are case-sensitive, unlike header field names.
 using Params =
     detail::insertion_ordered_multimap<std::string, std::equal_to<std::string>>;
-using Match = std::smatch;
+using Match = duckdb_re2::Match;
+using Regex = duckdb_re2::Regex;
 
 using DownloadProgress = std::function<bool(size_t current, size_t total)>;
 using UploadProgress = std::function<bool(size_t current, size_t total)>;
@@ -1298,15 +1316,15 @@ template <typename T> any_type_id any_typeid() noexcept {
 
 struct any_storage {
   virtual ~any_storage() = default;
-  virtual std::unique_ptr<any_storage> clone() const = 0;
+  virtual duckdb::unique_ptr<any_storage> clone() const = 0;
   virtual any_type_id type_id() const noexcept = 0;
 };
 
 template <typename T> struct any_value final : any_storage {
   T value;
   template <typename U> explicit any_value(U &&v) : value(std::forward<U>(v)) {}
-  std::unique_ptr<any_storage> clone() const override {
-    return std::unique_ptr<any_storage>(new any_value<T>(value));
+  duckdb::unique_ptr<any_storage> clone() const override {
+    return duckdb::unique_ptr<any_storage>(new any_value<T>(value));
   }
   any_type_id type_id() const noexcept override { return any_typeid<T>(); }
 };
@@ -1363,7 +1381,7 @@ public:
   void clear() noexcept { entries_.clear(); }
 
 private:
-  std::unordered_map<std::string, std::unique_ptr<detail::any_storage>>
+  std::unordered_map<std::string, duckdb::unique_ptr<detail::any_storage>>
       entries_;
 };
 
@@ -2000,7 +2018,7 @@ private:
 };
 
 /**
- * Performs std::regex_match on request path
+ * Performs RegexMatch on request path
  * and stores the result in Request::matches
  *
  * Note that regex match is performed directly on the whole request.
@@ -2015,7 +2033,7 @@ public:
   bool match(Request &request) const override;
 
 private:
-  std::regex regex_;
+  Regex regex_;
 };
 
 int close_socket(socket_t sock) noexcept;
@@ -2221,17 +2239,17 @@ protected:
 
 private:
   using Handlers =
-      std::vector<std::pair<std::unique_ptr<detail::MatcherBase>, Handler>>;
+      std::vector<std::pair<duckdb::unique_ptr<detail::MatcherBase>, Handler>>;
   using HandlersForContentReader =
-      std::vector<std::pair<std::unique_ptr<detail::MatcherBase>,
+      std::vector<std::pair<duckdb::unique_ptr<detail::MatcherBase>,
                             HandlerWithContentReader>>;
 
-  static std::unique_ptr<detail::MatcherBase>
+  static duckdb::unique_ptr<detail::MatcherBase>
   make_matcher(const std::string &pattern);
 
   template <typename H>
   Server &add_handler(
-      std::vector<std::pair<std::unique_ptr<detail::MatcherBase>, H>> &handlers,
+      std::vector<std::pair<duckdb::unique_ptr<detail::MatcherBase>, H>> &handlers,
       const std::string &pattern, H handler) {
     handlers.emplace_back(make_matcher(pattern), std::move(handler));
     return *this;
@@ -2315,7 +2333,7 @@ private:
   Handlers options_handlers_;
 
   struct WebSocketHandlerEntry {
-    std::unique_ptr<detail::MatcherBase> matcher;
+    duckdb::unique_ptr<detail::MatcherBase> matcher;
     WebSocketHandler handler;
     SubProtocolSelector sub_protocol_selector;
   };
@@ -2348,7 +2366,7 @@ private:
 class Result {
 public:
   Result() = default;
-  Result(std::unique_ptr<Response> &&res, Error err,
+  Result(duckdb::unique_ptr<Response> &&res, Error err,
          Headers &&request_headers = Headers{})
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)) {}
@@ -2376,17 +2394,17 @@ public:
   size_t get_request_header_value_count(const std::string &key) const;
 
 private:
-  std::unique_ptr<Response> res_;
+  duckdb::unique_ptr<Response> res_;
   Error err_ = Error::Unknown;
   Headers request_headers_;
 
 #ifdef CPPHTTPLIB_SSL_ENABLED
 public:
-  Result(std::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
+  Result(duckdb::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
          int ssl_error)
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)), ssl_error_(ssl_error) {}
-  Result(std::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
+  Result(duckdb::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
          int ssl_error, uint64_t ssl_backend_error)
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)), ssl_error_(ssl_error),
@@ -2455,7 +2473,7 @@ struct BodyReader {
   size_t bytes_read = 0;
   bool chunked = false;
   bool eof = false;
-  std::unique_ptr<ChunkedDecoder> chunked_decoder;
+  duckdb::unique_ptr<ChunkedDecoder> chunked_decoder;
   Error last_error = Error::Success;
 
   ssize_t read(char *buf, size_t len);
@@ -2512,7 +2530,7 @@ public:
   virtual bool is_valid() const;
 
   struct StreamHandle {
-    std::unique_ptr<Response> response;
+    duckdb::unique_ptr<Response> response;
     Error error = Error::Success;
 
     StreamHandle() = default;
@@ -2538,12 +2556,12 @@ public:
 
     ssize_t read_with_decompression(char *buf, size_t len);
 
-    std::unique_ptr<ClientConnection> connection_;
-    std::unique_ptr<Stream> socket_stream_;
+    duckdb::unique_ptr<ClientConnection> connection_;
+    duckdb::unique_ptr<Stream> socket_stream_;
     Stream *stream_ = nullptr;
     detail::BodyReader body_reader_;
 
-    std::unique_ptr<detail::decompressor> decompressor_;
+    duckdb::unique_ptr<detail::decompressor> decompressor_;
     std::string decompress_buffer_;
     size_t decompress_offset_ = 0;
     size_t decompressed_bytes_read_ = 0;
@@ -2858,7 +2876,7 @@ private:
   template <typename ClientType> void setup_redirect_client(ClientType &client);
   bool handle_request(Stream &strm, Request &req, Response &res,
                       bool close_connection, Error &error);
-  std::unique_ptr<Response> send_with_content_provider_and_receiver(
+  duckdb::unique_ptr<Response> send_with_content_provider_and_receiver(
       Request &req, const char *body, size_t content_length,
       ContentProvider content_provider,
       ContentProviderWithoutLength content_provider_without_length,
@@ -3102,7 +3120,7 @@ public:
   void set_error_logger(ErrorLogger error_logger);
 
 private:
-  std::unique_ptr<ClientImpl> cli_;
+  duckdb::unique_ptr<ClientImpl> cli_;
 
 #ifdef CPPHTTPLIB_SSL_ENABLED
 public:
@@ -4283,7 +4301,7 @@ public:
   bool is_open() const;
 
 private:
-  friend class httplib::Server;
+  friend class CPPHTTPLIB_NAMESPACE::Server;
   friend class WebSocketClient;
 
   WebSocket(
@@ -4297,7 +4315,7 @@ private:
   }
 
   WebSocket(
-      std::unique_ptr<Stream> &&owned_strm, const Request &req, bool is_server,
+      duckdb::unique_ptr<Stream> &&owned_strm, const Request &req, bool is_server,
       time_t ping_interval_sec = CPPHTTPLIB_WEBSOCKET_PING_INTERVAL_SECOND,
       int max_missed_pongs = CPPHTTPLIB_WEBSOCKET_MAX_MISSED_PONGS)
       : strm_(*owned_strm), owned_strm_(std::move(owned_strm)), req_(req),
@@ -4310,7 +4328,7 @@ private:
   bool send_frame(Opcode op, const char *data, size_t len, bool fin = true);
 
   Stream &strm_;
-  std::unique_ptr<Stream> owned_strm_;
+  duckdb::unique_ptr<Stream> owned_strm_;
   Request req_;
   bool is_server_;
   time_t ping_interval_sec_;
@@ -4387,7 +4405,7 @@ public:
 
 private:
   void shutdown_and_close();
-  bool create_stream(std::unique_ptr<Stream> &strm, Error &error,
+  bool create_stream(duckdb::unique_ptr<Stream> &strm, Error &error,
                      int &ssl_error, uint64_t &ssl_backend_error);
   void prepare_default_headers(Request &req);
 
@@ -4398,7 +4416,7 @@ private:
   std::string subprotocol_;
   bool is_valid_ = false;
   socket_t sock_ = INVALID_SOCKET;
-  std::unique_ptr<WebSocket> ws_;
+  duckdb::unique_ptr<WebSocket> ws_;
   time_t read_timeout_sec_ = CPPHTTPLIB_WEBSOCKET_READ_TIMEOUT_SECOND;
   time_t read_timeout_usec_ = 0;
   time_t write_timeout_sec_ = CPPHTTPLIB_CLIENT_WRITE_TIMEOUT_SECOND;
@@ -5349,7 +5367,7 @@ inline bool write_websocket_frame(Stream &strm, ws::Opcode opcode,
 
   if (mask) {
     // Generate random mask key
-    thread_local std::mt19937 rng(std::random_device{}());
+    REGEX_SCOPE std::mt19937 rng(std::random_device{}());
     uint8_t mask_key[4];
     auto r = rng();
     std::memcpy(mask_key, &r, 4);
@@ -5559,7 +5577,6 @@ inline std::string encode_path(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-    case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -5585,9 +5602,9 @@ inline std::string encode_path(const std::string &s) {
 }
 
 inline std::string file_extension(const std::string &path) {
-  std::smatch m;
-  thread_local auto re = std::regex("\\.([a-zA-Z0-9]+)$");
-  if (std::regex_search(path, m, re)) { return m[1].str(); }
+  duckdb_re2::Match m;
+  REGEX_SCOPE auto re = Regex("\\.([a-zA-Z0-9]+)$");
+  if (duckdb_re2::RegexSearch(path, m, re)) { return m[1].str(); }
   return std::string();
 }
 
@@ -5632,7 +5649,7 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
 
     // RFC 9110 §5.5: header field values are opaque octets and MUST NOT be
     // percent-decoded by the recipient. Applications that need to interpret a
-    // value as a URI component should call httplib::decode_uri_component()
+    // value as a URI component should call CPPHTTPLIB_NAMESPACE::decode_uri_component()
     // (or decode_path_component()) explicitly.
     fn(key, val);
 
@@ -5658,7 +5675,7 @@ inline bool parse_trailers(stream_line_reader &line_reader, Headers &dest,
   // chunked transfer coding data without the final CRLF.
 
   // RFC 7230 Section 4.1.2 - Headers prohibited in trailers
-  thread_local case_ignore::unordered_set<std::string> prohibited_trailers = {
+  REGEX_SCOPE case_ignore::unordered_set<std::string> prohibited_trailers = {
       "transfer-encoding",
       "content-length",
       "host",
@@ -5982,9 +5999,15 @@ inline bool mmap::open(const char *path) {
   auto wpath = u8string_to_wstring(path);
   if (wpath.empty()) { return false; }
 
-  hFile_ =
-      ::CreateFile2(wpath.c_str(), GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING, NULL);
+#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+  hFile_ = ::CreateFileW(wpath.c_str(), GENERIC_READ,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+                         FILE_ATTRIBUTE_NORMAL, NULL);
+#else
+  hFile_ = ::CreateFile2(wpath.c_str(), GENERIC_READ,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING,
+                         NULL);
+#endif
 
   if (hFile_ == INVALID_HANDLE_VALUE) { return false; }
 
@@ -6000,8 +6023,12 @@ inline bool mmap::open(const char *path) {
   }
   size_ = static_cast<size_t>(size.QuadPart);
 
+#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+  hMapping_ = ::CreateFileMappingW(hFile_, NULL, PAGE_READONLY, 0, 0, NULL);
+#else
   hMapping_ =
       ::CreateFileMappingFromApp(hFile_, NULL, PAGE_READONLY, size_, NULL);
+#endif
 
   // Special treatment for an empty file...
   if (hMapping_ == NULL && size_ == 0) {
@@ -6015,7 +6042,11 @@ inline bool mmap::open(const char *path) {
     return false;
   }
 
+#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+  addr_ = ::MapViewOfFile(hMapping_, FILE_MAP_READ, 0, 0, 0);
+#else
   addr_ = ::MapViewOfFileFromApp(hMapping_, FILE_MAP_READ, 0, 0);
+#endif
 
   if (addr_ == nullptr) {
     close();
@@ -6523,7 +6554,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   bool timed_out = false;
 
   {
-    std::unique_lock<std::mutex> lock(context.mutex);
+    duckdb::unique_lock<std::mutex> lock(context.mutex);
 
     while (!context.completed) {
       auto now = std::chrono::steady_clock::now();
@@ -6686,7 +6717,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   };
 
   // Allocate on the heap, so the resolver thread can keep using the data.
-  auto state = std::make_shared<GetAddrInfoState>();
+  auto state = duckdb::make_shared_ptr<GetAddrInfoState>();
   if (node) { state->node = node; }
   state->service = service;
   state->hints = *hints;
@@ -6703,7 +6734,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   });
 
   // Wait for completion or timeout
-  std::unique_lock<std::mutex> lock(state->mutex);
+  duckdb::unique_lock<std::mutex> lock(state->mutex);
   auto finished =
       state->result_cv.wait_for(lock, std::chrono::seconds(timeout_sec),
                                 [&] { return state->completed; });
@@ -7351,7 +7382,7 @@ inline EncodingType encoding_type(const Request &req, const Response &res) {
   return best;
 }
 
-inline std::unique_ptr<compressor> make_compressor(EncodingType type) {
+inline duckdb::unique_ptr<compressor> make_compressor(EncodingType type) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
   if (type == EncodingType::Gzip) {
     return detail::make_unique<gzip_compressor>();
@@ -7670,9 +7701,9 @@ inline bool is_known_content_encoding(const std::string &encoding) {
          is_zstd_encoding(encoding);
 }
 
-inline std::unique_ptr<decompressor>
+inline duckdb::unique_ptr<decompressor>
 create_decompressor(const std::string &encoding) {
-  std::unique_ptr<decompressor> decompressor;
+  duckdb::unique_ptr<decompressor> decompressor;
 
   if (is_zlib_encoding(encoding)) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
@@ -7693,7 +7724,7 @@ create_decompressor(const std::string &encoding) {
 
 // Returns the best available compressor and its Content-Encoding name.
 // Priority: Brotli > Gzip > Zstd (matches server-side preference).
-inline std::pair<std::unique_ptr<compressor>, const char *>
+inline std::pair<duckdb::unique_ptr<compressor>, const char *>
 create_compressor() {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
   return {detail::make_unique<brotli_compressor>(), "br"};
@@ -7821,13 +7852,14 @@ inline bool read_headers(Stream &strm, Headers &headers) {
 inline bool parse_status_line(const char *line, std::string &version,
                               int &status, std::string &reason) {
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
-  thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+  REGEX_SCOPE const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #else
-  thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+  REGEX_SCOPE const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
 #endif
 
-  std::cmatch m;
-  if (!std::regex_match(line, m, re)) { return false; }
+  Match m;
+  auto line_end = line + std::strlen(line);
+  if (!RegexMatch(line, line_end, m, re)) { return false; }
   version = std::string(m[1]);
   status = std::stoi(std::string(m[2]));
   reason = std::string(m[3]);
@@ -8056,7 +8088,7 @@ bool prepare_content_receiver(T &x, int &status,
                               bool &exceed_payload_max_length, U callback) {
   if (decompress) {
     std::string encoding = x.get_header_value("Content-Encoding");
-    std::unique_ptr<decompressor> decompressor;
+    duckdb::unique_ptr<decompressor> decompressor;
 
     if (!encoding.empty()) {
       // A coding we know about but were not built with is an error. An
@@ -8184,7 +8216,7 @@ inline ssize_t write_response_line(Stream &strm, int status) {
   std::string s = "HTTP/1.1 ";
   s += std::to_string(status);
   s += ' ';
-  s += httplib::status_message(status);
+  s += CPPHTTPLIB_NAMESPACE::status_message(status);
   s += "\r\n";
   return strm.write(s.data(), s.size());
 }
@@ -8948,7 +8980,7 @@ private:
     return true;
   }
 
-  // Parses "Content-Disposition: form-data; <params>" without std::regex.
+  // Parses "Content-Disposition: form-data; <params>" without Regex.
   // Returns true if header matches, with the params portion in `params_out`.
   bool parse_content_disposition(const std::string &header,
                                  std::string &params_out) const {
@@ -9061,7 +9093,7 @@ inline std::string random_string(size_t length) {
   constexpr const char data[] =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-  thread_local auto engine([]() {
+  REGEX_SCOPE auto engine([]() {
     // std::random_device might actually be deterministic on some
     // platforms, but due to lack of support in the c++ standard library,
     // doing better requires either some ugly hacks or breaking portability.
@@ -9213,7 +9245,7 @@ make_multipart_content_provider(const UploadFormDataItems &items,
     std::vector<MultipartSegment> segs;
     std::vector<char> buf = std::vector<char>(CPPHTTPLIB_SEND_BUFSIZ);
   };
-  auto state = std::make_shared<MultipartState>();
+  auto state = duckdb::make_shared_ptr<MultipartState>();
   state->owned = std::move(owned);
   // `segs` holds raw pointers into owned strings; std::string move preserves
   // the data pointer, so these pointers remain valid after the move above.
@@ -9553,8 +9585,8 @@ inline bool parse_www_authenticate(const Response &res,
                                    bool is_proxy) {
   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
   if (res.has_header(auth_key)) {
-    thread_local auto re =
-        std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+    REGEX_SCOPE auto re =
+        Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
     auto s = res.get_header_value(auth_key);
     auto pos = s.find(' ');
     if (pos != std::string::npos) {
@@ -9563,9 +9595,8 @@ inline bool parse_www_authenticate(const Response &res,
         return false;
       } else if (type == "Digest") {
         s = s.substr(pos + 1);
-        auto beg = std::sregex_iterator(s.begin(), s.end(), re);
-        for (auto i = beg; i != std::sregex_iterator(); ++i) {
-          const auto &m = *i;
+        auto matches = duckdb_re2::RegexFindAll(s, re);
+        for (auto &m : matches) {
           auto key = s.substr(static_cast<size_t>(m.position(1)),
                               static_cast<size_t>(m.length(1)));
           auto val = m.length(2) > 0
@@ -9657,7 +9688,7 @@ inline bool is_field_valid(const std::string &name, const std::string &value) {
 inline bool perform_websocket_handshake(Stream &strm, Request &req,
                                         WebSocketUpgradeResponse &upgrade) {
   // Generate random Sec-WebSocket-Key
-  thread_local std::mt19937 rng(std::random_device{}());
+  REGEX_SCOPE std::mt19937 rng(std::random_device{}());
   std::string key_bytes(16, '\0');
   for (size_t i = 0; i < 16; i += 4) {
     auto r = rng();
@@ -9785,7 +9816,7 @@ private:
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
-  auto context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
+  auto context = duckdb::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
       EVP_MD_CTX_new(), EVP_MD_CTX_free);
 
   unsigned int hash_length = 0;
@@ -9795,7 +9826,7 @@ inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
   EVP_DigestUpdate(context.get(), s.c_str(), s.size());
   EVP_DigestFinal_ex(context.get(), hash, &hash_length);
 
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (auto i = 0u; i < hash_length; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -9819,7 +9850,7 @@ inline std::string SHA_512(const std::string &s) {
 namespace {
 template <size_t N>
 inline std::string hash_to_hex(const unsigned char (&hash)[N]) {
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (size_t i = 0; i < N; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -9893,7 +9924,7 @@ inline std::string SHA_512(const std::string &s) {
 namespace {
 template <size_t N>
 inline std::string hash_to_hex(const unsigned char (&hash)[N]) {
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (size_t i = 0; i < N; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -9959,7 +9990,7 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
     const std::string &password, bool is_proxy = false) {
   std::string nc;
   {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << std::setfill('0') << std::setw(8) << std::hex << cnonce_count;
     nc = ss.str();
   }
@@ -10252,9 +10283,9 @@ inline bool setup_client_tls_session(
 #endif
 
   {
-    std::unique_lock<std::mutex> guard;
+    duckdb::unique_lock<std::mutex> guard;
     if (options.ctx_mutex) {
-      guard = std::unique_lock<std::mutex>(*options.ctx_mutex);
+      guard = duckdb::unique_lock<std::mutex>(*options.ctx_mutex);
     }
     session = create_session(ctx, sock);
   }
@@ -10794,8 +10825,8 @@ inline std::string sanitize_filename(const std::string &filename) {
 inline std::string append_query_params(const std::string &path,
                                        const Params &params) {
   std::string path_with_query = path;
-  thread_local const std::regex re("[^?]+\\?.*");
-  auto delm = std::regex_match(path, re) ? '&' : '?';
+  REGEX_SCOPE const Regex re("[^?]+\\?.*");
+  auto delm = RegexMatch(path, re) ? '&' : '?';
   path_with_query += delm + detail::params_to_query_str(params);
   return path_with_query;
 }
@@ -11233,7 +11264,7 @@ inline ThreadPool::ThreadPool(size_t n, size_t max_n, size_t mqr,
     // vector destructor does not see joinable threads (which would call
     // std::terminate). Then rethrow so the caller learns of the failure.
     {
-      std::unique_lock<std::mutex> lock(mutex_);
+      duckdb::unique_lock<std::mutex> lock(mutex_);
       shutdown_ = true;
     }
     cond_.notify_all();
@@ -11247,7 +11278,7 @@ inline ThreadPool::ThreadPool(size_t n, size_t max_n, size_t mqr,
 
 inline bool ThreadPool::enqueue(std::function<void()> fn) {
   {
-    std::unique_lock<std::mutex> lock(mutex_);
+    duckdb::unique_lock<std::mutex> lock(mutex_);
     if (shutdown_) { return false; }
     if (max_queued_requests_ > 0 && jobs_.size() >= max_queued_requests_) {
       return false;
@@ -11268,7 +11299,7 @@ inline bool ThreadPool::enqueue(std::function<void()> fn) {
 
 inline void ThreadPool::shutdown() {
   {
-    std::unique_lock<std::mutex> lock(mutex_);
+    duckdb::unique_lock<std::mutex> lock(mutex_);
     shutdown_ = true;
   }
 
@@ -11282,14 +11313,14 @@ inline void ThreadPool::shutdown() {
   // with worker threads that call move_to_finished() concurrently.
   std::list<std::thread> remaining_dynamic;
   {
-    std::unique_lock<std::mutex> lock(mutex_);
+    duckdb::unique_lock<std::mutex> lock(mutex_);
     remaining_dynamic = std::move(dynamic_threads_);
   }
   for (auto &t : remaining_dynamic) {
     if (t.joinable()) { t.join(); }
   }
 
-  std::unique_lock<std::mutex> lock(mutex_);
+  duckdb::unique_lock<std::mutex> lock(mutex_);
   cleanup_finished_threads();
 }
 
@@ -11316,7 +11347,7 @@ inline void ThreadPool::worker(bool is_dynamic) {
   for (;;) {
     std::function<void()> fn;
     {
-      std::unique_lock<std::mutex> lock(mutex_);
+      duckdb::unique_lock<std::mutex> lock(mutex_);
       idle_thread_count_++;
 
       if (is_dynamic) {
@@ -11610,7 +11641,7 @@ inline PathParamsMatcher::PathParamsMatcher(const std::string &pattern)
 }
 
 inline bool PathParamsMatcher::match(Request &request) const {
-  request.matches = std::smatch();
+  request.matches = duckdb_re2::Match();
   request.path_params.clear();
 
   // A pattern without parameters is just a literal path to compare against
@@ -11659,11 +11690,11 @@ inline bool PathParamsMatcher::match(Request &request) const {
 inline bool RegexMatcher::match(Request &request) const {
   request.path_params.clear();
   // See CPPHTTPLIB_REGEX_ROUTE_PATH_MAX_LENGTH: an overlong path is treated as
-  // a non-match rather than risking a stack overflow in std::regex_match.
+  // a non-match rather than risking a stack overflow in RegexMatch.
   if (request.path.length() > CPPHTTPLIB_REGEX_ROUTE_PATH_MAX_LENGTH) {
     return false;
   }
-  return std::regex_match(request.path, request.matches, regex_);
+  return RegexMatch(request.path, request.matches, regex_);
 }
 
 // Enclose IPv6 address in brackets if needed
@@ -12086,7 +12117,7 @@ inline Server::Server()
 
 inline Server::~Server() = default;
 
-inline std::unique_ptr<detail::MatcherBase>
+inline duckdb::unique_ptr<detail::MatcherBase>
 Server::make_matcher(const std::string &pattern) {
   // Path params take precedence, so "/users/:id/(.*)" keeps being matched as
   // a path params pattern
@@ -12096,7 +12127,7 @@ Server::make_matcher(const std::string &pattern) {
 
   // A pattern with no regex metacharacter only has to be compared literally,
   // which is what PathParamsMatcher already does when it captures no
-  // parameter, so std::regex is only worth building for the patterns that
+  // parameter, so Regex is only worth building for the patterns that
   // actually need it
   if (pattern.find_first_of(".^$|()[]{}*+?\\") == std::string::npos) {
     return detail::make_unique<detail::PathParamsMatcher>(pattern);
@@ -12445,7 +12476,7 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
     if (count != 3) { return false; }
   }
 
-  thread_local const std::set<std::string> methods{
+  REGEX_SCOPE const std::set<std::string> methods{
       "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
       "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
 
@@ -12832,7 +12863,7 @@ inline bool Server::handle_file_request(Request &req, Response &res) {
 
           check_if_range(req, etag, mtime);
 
-          auto mm = std::make_shared<detail::mmap>(path.c_str());
+          auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
           if (!mm->is_open()) {
             output_error_log(Error::OpenFile, &req);
             return false;
@@ -13003,7 +13034,7 @@ inline bool Server::listen_internal() {
   if (start_handler_) { start_handler_(); }
 
   {
-    std::unique_ptr<TaskQueue> task_queue(new_task_queue());
+    duckdb::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
 #ifndef _WIN32
@@ -13595,7 +13626,7 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
     auto file_open_error = false;
     if (!res.file_content_path_.empty()) {
       const auto &path = res.file_content_path_;
-      auto mm = std::make_shared<detail::mmap>(path.c_str());
+      auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
       if (!mm->is_open()) {
         res.body.clear();
         res.content_length_ = 0;
@@ -14491,7 +14522,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  // S3 can return redirect responses with only an x-amz-bucket-region header.
+  // Keep the response available to httpfs so it can retry in the right region.
+  if (location.empty()) { return true; }
 
   detail::UrlComponents uc;
   if (!detail::parse_url(location, uc)) { return false; }
@@ -14667,7 +14700,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 
   if (req.is_chunked_content_provider_) {
     auto compressor = compress_ ? detail::create_compressor().first
-                                : std::unique_ptr<detail::compressor>();
+                                : duckdb::unique_ptr<detail::compressor>();
     if (!compressor) {
       compressor = detail::make_unique<detail::nocompressor>();
     }
@@ -14882,7 +14915,7 @@ inline bool ClientImpl::write_request_body(Stream &strm, Request &req,
   return true;
 }
 
-inline std::unique_ptr<Response>
+inline duckdb::unique_ptr<Response>
 ClientImpl::send_with_content_provider_and_receiver(
     Request &req, const char *body, size_t content_length,
     ContentProvider content_provider,
@@ -14893,7 +14926,7 @@ ClientImpl::send_with_content_provider_and_receiver(
 
   auto enc = compress_
                  ? detail::create_compressor()
-                 : std::pair<std::unique_ptr<detail::compressor>, const char *>(
+                 : std::pair<duckdb::unique_ptr<detail::compressor>, const char *>(
                        nullptr, nullptr);
 
   if (enc.second) { req.set_header("Content-Encoding", enc.second); }
@@ -17511,12 +17544,12 @@ inline PeerCert get_peer_cert_from_session(const_session_t session) {
 namespace impl {
 
 inline VerifyCallback &get_verify_callback() {
-  static thread_local VerifyCallback callback;
+  static REGEX_SCOPE VerifyCallback callback;
   return callback;
 }
 
 inline VerifyCallback &get_mbedtls_verify_callback() {
-  static thread_local VerifyCallback callback;
+  static REGEX_SCOPE VerifyCallback callback;
   return callback;
 }
 
@@ -18803,7 +18836,7 @@ struct MbedTlsSession {
 // Thread-local error code accessor for Mbed TLS (since it doesn't have an error
 // queue)
 inline int &mbedtls_last_error() {
-  static thread_local int err = 0;
+  static REGEX_SCOPE int err = 0;
   return err;
 }
 
@@ -18939,7 +18972,7 @@ inline MbedTlsContext::~MbedTlsContext() {
 // This is needed because the SNI callback doesn't have a way to pass
 // session-specific data before the session is fully set up
 inline std::string &mbedpending_sni() {
-  static thread_local std::string sni;
+  static REGEX_SCOPE std::string sni;
   return sni;
 }
 
@@ -19006,7 +19039,7 @@ inline int mbedtls_verify_callback(void *data, mbedtls_x509_crt *crt,
   verify_ctx.error_code = static_cast<long>(*flags);
 
   // Convert Mbed TLS flags to error string
-  static thread_local char error_buf[256];
+  static REGEX_SCOPE char error_buf[256];
   if (*flags != 0) {
     mbedtls_x509_crt_verify_info(error_buf, sizeof(error_buf), "", *flags);
     verify_ctx.error_string = error_buf;
@@ -20224,7 +20257,7 @@ struct WolfSSLSession {
 
 // Thread-local error code accessor for wolfSSL
 inline uint64_t &wolfssl_last_error() {
-  static thread_local uint64_t err = 0;
+  static REGEX_SCOPE uint64_t err = 0;
   return err;
 }
 
@@ -20265,7 +20298,7 @@ inline WolfSSLContext::~WolfSSLContext() {
 
 // Thread-local storage for SNI captured during handshake
 inline std::string &wolfssl_pending_sni() {
-  static thread_local std::string sni;
+  static REGEX_SCOPE std::string sni;
   return sni;
 }
 
@@ -21480,7 +21513,7 @@ inline WebSocket::~WebSocket() {
 inline void WebSocket::start_heartbeat() {
   if (ping_interval_sec_ == 0) { return; }
   ping_thread_ = std::thread([this]() {
-    std::unique_lock<std::mutex> lock(ping_mutex_);
+    duckdb::unique_lock<std::mutex> lock(ping_mutex_);
     while (!closed_) {
       ping_cv_.wait_for(lock, std::chrono::seconds(ping_interval_sec_));
       if (closed_) { break; }
@@ -21607,7 +21640,7 @@ inline void WebSocketClient::shutdown_and_close() {
   }
 }
 
-inline bool WebSocketClient::create_stream(std::unique_ptr<Stream> &strm,
+inline bool WebSocketClient::create_stream(duckdb::unique_ptr<Stream> &strm,
                                            Error &error, int &ssl_error,
                                            uint64_t &ssl_backend_error) {
 #ifdef CPPHTTPLIB_SSL_ENABLED
@@ -21637,7 +21670,7 @@ inline bool WebSocketClient::create_stream(std::unique_ptr<Stream> &strm,
       return false;
     }
 
-    strm = std::unique_ptr<Stream>(new detail::SSLSocketStream(
+    strm = duckdb::unique_ptr<Stream>(new detail::SSLSocketStream(
         sock_, tls_session_, read_timeout_sec_, read_timeout_usec_,
         write_timeout_sec_, write_timeout_usec_));
     return true;
@@ -21647,7 +21680,7 @@ inline bool WebSocketClient::create_stream(std::unique_ptr<Stream> &strm,
   (void)ssl_error;
   (void)ssl_backend_error;
 #endif
-  strm = std::unique_ptr<Stream>(
+  strm = duckdb::unique_ptr<Stream>(
       new detail::SocketStream(sock_, read_timeout_sec_, read_timeout_usec_,
                                write_timeout_sec_, write_timeout_usec_));
   return true;
@@ -21689,7 +21722,7 @@ inline Result WebSocketClient::connect() {
     return Result{error, -1, Headers{}};
   }
 
-  std::unique_ptr<Stream> strm;
+  duckdb::unique_ptr<Stream> strm;
   auto stream_error = Error::SSLConnection;
   int ssl_error = 0;
   uint64_t ssl_backend_error = 0;
@@ -21715,7 +21748,7 @@ inline Result WebSocketClient::connect() {
   }
   subprotocol_ = std::move(upgrade.selected_subprotocol);
 
-  ws_ = std::unique_ptr<WebSocket>(new WebSocket(std::move(strm), req, false,
+  ws_ = duckdb::unique_ptr<WebSocket>(new WebSocket(std::move(strm), req, false,
                                                  websocket_ping_interval_sec_,
                                                  websocket_max_missed_pongs_));
   return Result{Error::Success, upgrade.status, std::move(upgrade.headers)};
@@ -21837,6 +21870,6 @@ inline void WebSocketClient::enable_system_ca(bool enabled) {
 
 // ----------------------------------------------------------------------------
 
-} // namespace httplib
+} // namespace CPPHTTPLIB_NAMESPACE
 
 #endif // CPPHTTPLIB_HTTPLIB_H
