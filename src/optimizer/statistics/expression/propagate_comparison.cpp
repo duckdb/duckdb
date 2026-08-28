@@ -24,16 +24,53 @@ static Value GetStringStatsMax(const BaseStatistics &stats) {
 	return Value();
 }
 
+static bool RangesDoNotOverlap(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return (!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax);
+}
+
+static bool RangesAreEqualConstants(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return !lmin.IsNull() && !lmax.IsNull() && !rmin.IsNull() && !rmax.IsNull() && lmin == lmax && rmin == rmax &&
+	       lmin == rmin;
+}
+
 static FilterPropagateResult PropagateValueComparison(const Value &lmin, const Value &lmax, const Value &rmin,
-                                                      const Value &rmax, ExpressionType comparison, bool has_null) {
+                                                      const Value &rmax, ExpressionType comparison, bool left_has_null,
+                                                      bool right_has_null) {
+	const bool has_null = left_has_null || right_has_null;
 	const auto always_true =
 	    has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	const auto always_false =
 	    has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
-		if ((!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax)) {
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
 			return always_false;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return always_false;
+		}
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
+			return always_true;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
+			return left_has_null && right_has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+			                                       : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
+			return left_has_null && right_has_null ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+			                                       : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
@@ -97,8 +134,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 		if (StringStats::HasMax(rstats)) {
 			rmax = GetStringStatsMax(rstats);
 		}
-		bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
-		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, has_null);
+		return PropagateValueComparison(lmin, lmax, rmin, rmax, comparison, lstats.CanHaveNull(), rstats.CanHaveNull());
 	}
 
 	switch (lstats.GetType().InternalType()) {
@@ -123,9 +159,8 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 	return PropagateValueComparison(NumericStats::Min(lstats), NumericStats::Max(lstats), NumericStats::Min(rstats),
-	                                NumericStats::Max(rstats), comparison, has_null);
+	                                NumericStats::Max(rstats), comparison, lstats.CanHaveNull(), rstats.CanHaveNull());
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFunctionExpression &expr,
