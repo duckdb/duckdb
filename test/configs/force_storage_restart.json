@@ -18,6 +18,12 @@
       ]
     },
     {
+      "reason": "Restarting resets the thread count and drops the DebugFileSystem, so the read statistics this test asserts on are gone.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_async_read.test"
+      ]
+    },
+    {
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
