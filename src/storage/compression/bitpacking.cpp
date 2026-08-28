@@ -628,6 +628,7 @@ static T DeltaDecode(unsafe_array_ptr<T> values, T previous_value) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 private:
+	//! Alignment type for UnPackGroup<T>, 64-bit and hugeint payloads are read through a uint32_t pointer.
 	using T_PACKED = std::conditional_t<(sizeof(T) <= sizeof(uint32_t)), T, uint32_t>;
 
 public:
@@ -972,7 +973,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	// FOR residuals are non-negative.
+	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
 	if (scan_state.IsInitial()) {
