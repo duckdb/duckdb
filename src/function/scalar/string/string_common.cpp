@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_common.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -8,24 +9,6 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
-
-namespace {
-
-// Update the prefix to be the next string of the given one, which is with less or equal length to the given prefix
-bool FindNextPrefix(string &prefix) {
-	for (idx_t idx = prefix.size(); idx > 0; idx--) {
-		auto c = static_cast<uint8_t>(prefix[idx - 1]);
-		if (c == 0xFF) {
-			continue;
-		}
-		prefix[idx - 1] = static_cast<char>(c + 1);
-		prefix.resize(idx);
-		return true;
-	}
-	return false;
-}
-
-} // namespace
 
 FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &input) {
 	auto &children = input.function.GetChildren();
@@ -74,7 +57,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 
 	// next(prefix) <= min, always false
 	auto upper_bound = prefix;
-	if (FindNextPrefix(upper_bound)) {
+	if (StringUtil::FindNextPrefix(upper_bound)) {
 		const auto min_compare =
 		    StringStats::CompareStringStats(string_t(upper_bound.c_str(), upper_bound.size()),
 		                                    string_t(min.c_str(), min.size()), StringStats::GetMinType(*column_stats));
