@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -142,6 +143,55 @@ void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &inp
 void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allow Extension Repositories
+//===----------------------------------------------------------------------===//
+// Ordering of the access levels, independent of the enum's numeric values: while the database is running the setting
+// can only move to a lower level ('undecided' -> 'allowed' -> 'forbidden')
+static int ExtensionRepositoryAccessLevel(ExtensionRepositoryAccess access) {
+	switch (access) {
+	case ExtensionRepositoryAccess::UNDECIDED:
+		return 2;
+	case ExtensionRepositoryAccess::ALLOWED:
+		return 1;
+	default: // FORBIDDEN
+		return 0;
+	}
+}
+
+void AllowExtensionRepositoriesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	// validate the value
+	auto new_access = ExtensionRepositoryManager::ParseAccess(StringValue::Get(input));
+	if (!info.db) {
+		// the value is set before the database is running (startup) - any value is allowed
+		return;
+	}
+	// while the database is running the setting can only move down: the 'undecided' default can be decided either way,
+	// 'allowed' can still be forbidden, but a decision cannot be reverted. This makes 'forbidden' a one-way ratchet
+	// within a session
+	auto current_access = ExtensionRepositoryManager::GetAccess(*info.db);
+	if (ExtensionRepositoryAccessLevel(new_access) > ExtensionRepositoryAccessLevel(current_access)) {
+		throw InvalidInputException("allow_extension_repositories can only be changed from 'undecided' to 'allowed' or "
+		                            "'forbidden', or from 'allowed' to 'forbidden', while the database is running");
+	}
+}
+
+void ExtensionRepositoryDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		// set before the database is running (startup) - always allowed
+		return;
+	}
+	// The repository directory is the trust anchor for user-provided repositories: it determines which signing keys
+	// are trusted. While signature checking is enabled it must be fixed at startup, so that a runtime connection
+	// cannot point it at a directory of attacker-controlled keys and thereby bypass the opt-in. When unsigned
+	// extensions are already allowed the signature-trust model is off, so there is nothing to protect
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(*info.db)) {
+		throw InvalidInputException(
+		    "extension_repository_directory can only be set at startup while signature checking "
+		    "is enabled (allow_unsigned_extensions=false)");
 	}
 }
 
@@ -939,6 +989,9 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("external_threads must be a positive integer");
+	}
 	auto new_external_threads = input.GetValue<uint64_t>();
 	if (info.db) {
 		TaskScheduler::GetScheduler(*info.db).SetThreads(info.config.options.maximum_threads, new_external_threads);
@@ -1182,6 +1235,9 @@ Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("ordered_aggregate_threshold must be a positive integer");
+	}
 	const auto param = input.GetValue<uint64_t>();
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
@@ -1192,6 +1248,9 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("perfect_ht_threshold must be an integer");
+	}
 	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
@@ -1578,6 +1637,9 @@ Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
@@ -1606,6 +1668,9 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 // Async Threads
 //===----------------------------------------------------------------------===//
 void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("async_threads must be a positive integer");
+	}
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 0) {
 		throw SyntaxException("Cannot have negative async_threads!");

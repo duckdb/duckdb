@@ -48,7 +48,7 @@ statement ok
 SET null_on_division_by_zero=true;
 
 query I nosort xnull
-EXPLAIN SELECT NULL FROM test
+EXPLAIN SELECT NULL::INTEGER FROM test
 ----
 
 query I nosort xnull

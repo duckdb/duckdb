@@ -35,6 +35,7 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info) override;
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override;

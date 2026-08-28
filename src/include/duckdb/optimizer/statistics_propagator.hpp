@@ -27,14 +27,23 @@ class LogicalOperator;
 class TableFilter;
 struct BoundOrderByNode;
 
+enum class StatisticsPropagationMode : uint8_t { FILTER_SIMPLIFICATION, FULL };
+
 class StatisticsPropagator {
 public:
-	StatisticsPropagator(Optimizer &optimizer, LogicalOperator &root);
+	StatisticsPropagator(Optimizer &optimizer, LogicalOperator &root,
+	                     StatisticsPropagationMode mode = StatisticsPropagationMode::FULL);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 
 	column_binding_map_t<unique_ptr<BaseStatistics>> GetStatisticsMap() {
 		return std::move(statistics_map);
+	}
+	bool FilterBindingsChanged() const {
+		return filter_bindings_changed;
+	}
+	bool HasRemovedAggregateChildren() const {
+		return removed_aggregate_children;
 	}
 
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
@@ -82,8 +91,10 @@ private:
 	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
-	//! Propagate a filter condition and determine whether it can be pruned; does not update any statistics
-	FilterPropagateResult ClassifyFilter(unique_ptr<Expression> &condition);
+	//! Determine whether a propagated condition can be pruned
+	FilterPropagateResult ClassifyFilter(Expression &condition);
+	//! Simplify conjunctions using filter truth semantics
+	bool SimplifyFilter(unique_ptr<Expression> &condition);
 	//! Propagate a filter condition
 	FilterPropagateResult HandleFilter(unique_ptr<Expression> &condition);
 	//! Rewrite a join whose condition can never match; returns true if the operator was replaced
@@ -133,6 +144,7 @@ private:
 private:
 	Optimizer &optimizer;
 	ClientContext &context;
+	StatisticsPropagationMode mode;
 	//! The root of the query plan
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
@@ -146,8 +158,12 @@ private:
 	};
 	//! The map of CTE index -> statistics of its definition
 	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
+	//! Whether a statistics callback removed aggregate children, leaving columns that may now be unused
+	bool removed_aggregate_children = false;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
+	//! Whether statistics changed which relations a filter depends on
+	bool filter_bindings_changed = false;
 };
 
 } // namespace duckdb

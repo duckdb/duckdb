@@ -305,8 +305,12 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		auto stats =
 		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
 		auto &expr_filter = filter->Cast<ExpressionFilter>();
-		if (stats && expr_filter.CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			page_is_filtered_out = true;
+		if (stats) {
+			auto prune_result = expr_filter.CheckStatistics(*stats);
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				page_is_filtered_out = true;
+			}
 		}
 	}
 	if (page_is_filtered_out) {

@@ -229,15 +229,25 @@ bool CachingFileSystemWrapper::DirectoryExists(const string &directory, optional
 }
 
 void CachingFileSystemWrapper::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	underlying_file_system.CreateDirectory(directory, opener);
+	CreateDirectoryExtended(directory, {CreateDirectoryMode::SINGLE}, opener);
+}
+
+bool CachingFileSystemWrapper::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                                       optional_ptr<FileOpener> opener) {
+	return underlying_file_system.CreateDirectoryExtended(directory, options, opener);
 }
 
 void CachingFileSystemWrapper::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	underlying_file_system.CreateDirectoriesRecursive(path, opener);
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 }
 
 void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	underlying_file_system.RemoveDirectory(directory, opener);
+	RemoveDirectoryExtended(directory, {RemoveDirectoryMode::RECURSIVE}, opener);
+}
+
+bool CachingFileSystemWrapper::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                                       optional_ptr<FileOpener> opener) {
+	return underlying_file_system.RemoveDirectoryExtended(directory, options, opener);
 }
 
 bool CachingFileSystemWrapper::ListFiles(const string &directory,

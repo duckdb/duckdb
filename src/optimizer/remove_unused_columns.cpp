@@ -683,7 +683,20 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			throw InternalException("CTE pruning did not traverse the entire plan. This is a bug in the optimizer.");
 		}
 
-		if (cte_map_entry.everything_referenced) {
+		// A CTE whose own output exposes its readers' bindings has no projection above the RHS. Operators above
+		// the CTE may then reference those readers directly, and the rewrite below only covers the RHS, so
+		// pruning here could leave those references stale.
+		bool readers_visible_in_output = false;
+		for (auto &binding : cte.GetColumnBindings()) {
+			if (cte_map_entry.expected_readers.find(binding.table_index) != cte_map_entry.expected_readers.end()) {
+				readers_visible_in_output = true;
+				break;
+			}
+		}
+
+		// Distinct column indexes here, unlike the per-reader map, so comparing sizes is a valid width check.
+		if (cte_map_entry.everything_referenced || readers_visible_in_output ||
+		    referenced_columns_in_rhs.size() == cte.children[0]->GetColumnBindings().size()) {
 			if (!analyze) {
 				everything_referenced = true;
 			}
@@ -772,7 +785,8 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		cte_entry.everything_referenced = cte_ref.chunk_types.size() == referenced_columns.size();
+		// Keyed per reader, so its size counts reader-column pairs, not columns. Coverage is decided at the CTE.
+		cte_entry.everything_referenced |= everything_referenced;
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:

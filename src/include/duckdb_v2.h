@@ -1319,7 +1319,10 @@ struct duckdb_v2_extension_input {
 	//! The extension being loaded, and the token get_api takes.
 	duckdb_v2_extension_handle extension;
 
-	//! A context to read and run queries through, with a transaction already active.
+	/*!
+	 * A borrowed context to read and run queries through, with a transaction already active. Valid only until the
+	 * extension entrypoint returns; do not retain or destroy it.
+	 */
 	duckdb_v2_context_handle context;
 
 	/*!
