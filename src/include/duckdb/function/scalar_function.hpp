@@ -58,6 +58,7 @@ class BoundScalarFunction;
 class ScalarFunctionCatalogEntry;
 class FunctionBinder;
 class FunctionSerializer;
+class StatisticsPropagator;
 
 struct BetweenFun;
 struct BoundBetweenExpression;
@@ -625,14 +626,37 @@ public:
 	//! Restore the definition after the bound function has been replaced wholesale, together with the
 	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition_is_rebindable = false;
 		definition = std::move(definition_p);
 		if (definition) {
 			schema_name = definition->GetSchemaName();
 			catalog_name = definition->GetCatalogName();
 		}
 	}
+	bool HasRebindableDefinition() const {
+		return definition_is_rebindable;
+	}
 	bool HasFunctionExpressionIdentity(ExpressionType type) const {
 		return function_expression_type == type;
+	}
+
+	const vector<LogicalType> &GetArguments() const {
+		return BoundSimpleFunction::GetArguments();
+	}
+	vector<LogicalType> &GetArguments() {
+		InvalidateFunctionExpressionIdentity();
+		return BoundSimpleFunction::GetArguments();
+	}
+	const LogicalType &GetReturnType() const {
+		return BoundSimpleFunction::GetReturnType();
+	}
+	LogicalType &GetReturnType() {
+		InvalidateFunctionExpressionIdentity();
+		return BoundSimpleFunction::GetReturnType();
+	}
+	void SetReturnType(LogicalType return_type_p) {
+		InvalidateFunctionExpressionIdentity();
+		BoundSimpleFunction::SetReturnType(std::move(return_type_p));
 	}
 
 private:
@@ -641,18 +665,22 @@ private:
 	}
 	void InvalidateFunctionExpressionIdentity() {
 		function_expression_type = ExpressionType::INVALID;
+		definition_is_rebindable = false;
 	}
 	void RestoreFunctionExpressionIdentity() {
 		function_expression_type = definition ? definition->function_expression_type : ExpressionType::INVALID;
+		definition_is_rebindable = definition != nullptr;
 	}
 
 private:
 	shared_ptr<const ScalarFunction> definition;
 	ExpressionType function_expression_type = ExpressionType::INVALID;
+	bool definition_is_rebindable = false;
 
 	friend class BaseScalarFunction<BoundScalarFunction>;
 	friend class FunctionBinder;
 	friend class FunctionSerializer;
+	friend class StatisticsPropagator;
 	friend struct BoundBetweenExpression;
 	friend struct BoundCastExpression;
 	friend struct BoundComparisonExpression;

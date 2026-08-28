@@ -225,6 +225,7 @@ void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
 	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
 	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
+	comparison_expr.FunctionMutable().SetFunctionExpressionIdentity(new_type);
 	comparison_expr.BindInfoMutable().reset();
 	comparison_expr.IsOperatorMutable() = true;
 }

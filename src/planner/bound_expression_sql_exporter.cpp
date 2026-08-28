@@ -596,8 +596,8 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound scalar function identity is incomplete"));
 		}
 		auto &definition = function.GetDefinition();
-		if (!definition || !HasQualifiedDefinition(function) || expression.BindInfo() ||
-		    definition->GetCaptureArgumentAliases() ||
+		if (!definition || !function.HasRebindableDefinition() || !HasQualifiedDefinition(function) ||
+		    expression.BindInfo() || definition->GetCaptureArgumentAliases() ||
 		    !DefinitionArityMatches(definition->GetSignature(), expression.GetChildren().size()) ||
 		    !ChildrenMatchArguments(expression.GetChildren(), function.GetArguments()) ||
 		    expression.GetReturnType() != function.GetReturnType() ||
@@ -641,7 +641,8 @@ private:
 			    InternalExpressionInvariant(path, expression, "Bound aggregate function identity is incomplete"));
 		}
 		auto &definition = function.GetDefinition();
-		if (!definition || !HasQualifiedDefinition(function) || expression.BindInfo() ||
+		if (!definition || !function.HasRebindableDefinition() || !HasQualifiedDefinition(function) ||
+		    expression.BindInfo() ||
 		    !DefinitionArityMatches(definition->GetSignature(), expression.GetChildren().size()) ||
 		    !ChildrenMatchArguments(expression.GetChildren(), function.GetArguments()) ||
 		    expression.GetReturnType() != function.GetReturnType() ||
