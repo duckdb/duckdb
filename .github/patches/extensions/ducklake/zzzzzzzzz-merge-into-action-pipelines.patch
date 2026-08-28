@@ -1,31 +1,3 @@
-diff --git a/src/include/storage/ducklake_catalog.hpp b/src/include/storage/ducklake_catalog.hpp
-index ce752724..3d8977b0 100644
---- a/src/include/storage/ducklake_catalog.hpp
-+++ b/src/include/storage/ducklake_catalog.hpp
-@@ -162,8 +162,9 @@ public:
- 	                             PhysicalOperator &plan) override;
- 	PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
- 	                             PhysicalOperator &plan) override;
--	PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
--	                                PhysicalOperator &plan) override;
-+	string GetMultipleMergeModificationsError() const override {
-+		return "MERGE INTO with DuckLake only supports a single UPDATE/DELETE action currently";
-+	}
- 	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
- 	                                            unique_ptr<LogicalOperator> plan) override;
- 	unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
-diff --git a/src/storage/CMakeLists.txt b/src/storage/CMakeLists.txt
-index 2e8f44cb..5fb36594 100644
---- a/src/storage/CMakeLists.txt
-+++ b/src/storage/CMakeLists.txt
-@@ -11,7 +11,6 @@ add_library(
-   ducklake_inlined_data_reader.cpp
-   ducklake_insert.cpp
-   ducklake_log_type.cpp
--  ducklake_merge_into.cpp
-   ducklake_schema_entry.cpp
-   ducklake_transaction_manager.cpp
-   ducklake_catalog_set.cpp
 diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
 index 524df867..70bf52f2 100644
 --- a/src/storage/ducklake_delete.cpp
@@ -52,15 +24,14 @@ index 524df867..70bf52f2 100644
  		// does this emit the virtual columns?
  		auto &scan = plan.Cast<PhysicalTableScan>();
 diff --git a/src/storage/ducklake_merge_into.cpp b/src/storage/ducklake_merge_into.cpp
-deleted file mode 100644
-index a79cd3da..00000000
+index a79cd3da..b5e8473f 100644
 --- a/src/storage/ducklake_merge_into.cpp
-+++ /dev/null
-@@ -1,652 +0,0 @@
--#include "storage/ducklake_catalog.hpp"
--#include "duckdb/execution/physical_plan_generator.hpp"
++++ b/src/storage/ducklake_merge_into.cpp
+@@ -1,652 +1,25 @@
+ #include "storage/ducklake_catalog.hpp"
+ #include "duckdb/execution/physical_plan_generator.hpp"
 -#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
--#include "duckdb/planner/operator/logical_merge_into.hpp"
+ #include "duckdb/planner/operator/logical_merge_into.hpp"
 -#include "storage/ducklake_update.hpp"
 -#include "storage/ducklake_delete.hpp"
 -#include "storage/ducklake_insert.hpp"
@@ -77,9 +48,9 @@ index a79cd3da..00000000
 -#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 -#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 -#include "duckdb/parallel/event.hpp"
--
--namespace duckdb {
--
+ 
+ namespace duckdb {
+ 
 -//===--------------------------------------------------------------------===//
 -// Merge Insert
 -//===--------------------------------------------------------------------===//
@@ -677,35 +648,40 @@ index a79cd3da..00000000
 -	return result;
 -}
 -
--PhysicalOperator &DuckLakeCatalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
--                                                 LogicalMergeInto &op, PhysicalOperator &plan) {
+ PhysicalOperator &DuckLakeCatalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
+                                                  LogicalMergeInto &op, PhysicalOperator &plan) {
 -	if (op.return_chunk) {
 -		throw NotImplementedException("RETURNING is not implemented for DuckLake yet");
 -	}
 -	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 -
 -	// plan the merge into clauses
--	idx_t update_delete_count = 0;
--	for (auto &entry : op.actions) {
++	// DuckLake writes a deletion file per data file, so it can apply at most one UPDATE/DELETE to a given row
+ 	idx_t update_delete_count = 0;
+ 	for (auto &entry : op.actions) {
 -		vector<unique_ptr<MergeIntoOperator>> planned_actions;
--		for (auto &action : entry.second) {
--			if (action->action_type == MergeActionType::MERGE_UPDATE ||
--			    action->action_type == MergeActionType::MERGE_DELETE) {
--				update_delete_count++;
+ 		for (auto &action : entry.second) {
+ 			if (action->action_type == MergeActionType::MERGE_UPDATE ||
+ 			    action->action_type == MergeActionType::MERGE_DELETE) {
+ 				update_delete_count++;
 -				if (update_delete_count > 1) {
 -					throw NotImplementedException(
 -					    "MERGE INTO with DuckLake only supports a single UPDATE/DELETE action currently");
 -				}
--			}
+ 			}
 -			planned_actions.push_back(DuckLakePlanMergeIntoAction(*this, context, op, planner, *action, plan));
--		}
+ 		}
 -		actions.emplace(entry.first, std::move(planned_actions));
--	}
+ 	}
 -
 -	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker,
 -	                                               true, op.return_chunk);
 -	result.children.push_back(plan);
 -	return result;
--}
--
--} // namespace duckdb
++	if (update_delete_count > 1) {
++		throw NotImplementedException("MERGE INTO with DuckLake only supports a single UPDATE/DELETE action currently");
++	}
++	return Catalog::PlanMergeInto(context, planner, op, plan);
+ }
+ 
+ } // namespace duckdb

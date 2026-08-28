@@ -1,13 +1,3 @@
-diff --git a/src/execution/operator/CMakeLists.txt b/src/execution/operator/CMakeLists.txt
-index b9c65ee9..a5972565 100644
---- a/src/execution/operator/CMakeLists.txt
-+++ b/src/execution/operator/CMakeLists.txt
-@@ -1,5 +1,4 @@
- add_subdirectory(copy)
--add_subdirectory(merge_into)
- 
- add_library(
-   iceberg_execution_operator OBJECT
 diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
 index f4430815..77725f15 100644
 --- a/src/execution/operator/iceberg_delete.cpp
@@ -31,17 +21,17 @@ index f4430815..77725f15 100644
  		// does this emit the virtual columns?
  		auto &scan = plan.Cast<PhysicalTableScan>();
 diff --git a/src/execution/operator/merge_into/CMakeLists.txt b/src/execution/operator/merge_into/CMakeLists.txt
-deleted file mode 100644
-index f9b18022..00000000
+index f9b18022..8026c9b9 100644
 --- a/src/execution/operator/merge_into/CMakeLists.txt
-+++ /dev/null
-@@ -1,6 +0,0 @@
++++ b/src/execution/operator/merge_into/CMakeLists.txt
+@@ -1,6 +1,4 @@
 -add_library(
 -  iceberg_execution_operator_merge_into OBJECT
 -  iceberg_merge_insert.cpp iceberg_merge_into.cpp iceberg_merge_update.cpp)
--set(ALL_OBJECT_FILES
--    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:iceberg_execution_operator_merge_into>
--    PARENT_SCOPE)
++add_library(iceberg_execution_operator_merge_into OBJECT iceberg_merge_into.cpp)
+ set(ALL_OBJECT_FILES
+     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:iceberg_execution_operator_merge_into>
+     PARENT_SCOPE)
 diff --git a/src/execution/operator/merge_into/iceberg_merge_insert.cpp b/src/execution/operator/merge_into/iceberg_merge_insert.cpp
 deleted file mode 100644
 index ac16204e..00000000
@@ -108,11 +98,10 @@ index ac16204e..00000000
 -
 -} // namespace duckdb
 diff --git a/src/execution/operator/merge_into/iceberg_merge_into.cpp b/src/execution/operator/merge_into/iceberg_merge_into.cpp
-deleted file mode 100644
-index 1b9233d2..00000000
+index 1b9233d2..5038bdc8 100644
 --- a/src/execution/operator/merge_into/iceberg_merge_into.cpp
-+++ /dev/null
-@@ -1,300 +0,0 @@
++++ b/src/execution/operator/merge_into/iceberg_merge_into.cpp
+@@ -1,300 +1,25 @@
 -
 -#include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 -#include "duckdb/planner/operator/logical_insert.hpp"
@@ -124,16 +113,18 @@ index 1b9233d2..00000000
 -#include "execution/operator/merge_into/iceberg_merge_insert.hpp"
 -#include "execution/operator/merge_into/iceberg_merge_update.hpp"
 -#include "execution/operator/merge_into/iceberg_merge_into.hpp"
--#include "catalog/rest/iceberg_catalog.hpp"
+ #include "catalog/rest/iceberg_catalog.hpp"
 -#include "catalog/rest/catalog_entry/table/iceberg_table_entry.hpp"
 -#include "execution/operator/iceberg_update.hpp"
 -#include "execution/operator/iceberg_delete.hpp"
 -#include "execution/operator/iceberg_insert.hpp"
 -#include "catalog/rest/transaction/iceberg_transaction.hpp"
 -#include "catalog/rest/transaction/iceberg_transaction_update.hpp"
--
--namespace duckdb {
--
++#include "duckdb/execution/physical_plan_generator.hpp"
++#include "duckdb/planner/operator/logical_merge_into.hpp"
+ 
+ namespace duckdb {
+ 
 -void IcebergMergeInto::ProjectAndCastForCopy(ClientContext &context, DataChunk &input_chunk, PhysicalOperator &copy_op,
 -                                             ExpressionExecutor *expression_executor, DataChunk &projected_chunk,
 -                                             DataChunk &cast_chunk) {
@@ -378,8 +369,8 @@ index 1b9233d2..00000000
 -	return result;
 -}
 -
--PhysicalOperator &IcebergCatalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
--                                                LogicalMergeInto &op, PhysicalOperator &plan) {
+ PhysicalOperator &IcebergCatalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
+                                                 LogicalMergeInto &op, PhysicalOperator &plan) {
 -	if (op.return_chunk) {
 -		throw NotImplementedException("RETURNING is not implemented for Iceberg yet");
 -	}
@@ -389,30 +380,35 @@ index 1b9233d2..00000000
 -	table_entry.PrepareIcebergScanFromEntry(context);
 -
 -	// plan the merge into clauses
--	idx_t update_delete_count = 0;
--	for (auto &entry : op.actions) {
++	// Iceberg writes a deletion file per data file, so it can apply at most one UPDATE/DELETE to a given row
+ 	idx_t update_delete_count = 0;
+ 	for (auto &entry : op.actions) {
 -		vector<unique_ptr<MergeIntoOperator>> planned_actions;
--		for (auto &action : entry.second) {
--			if (action->action_type == MergeActionType::MERGE_UPDATE ||
--			    action->action_type == MergeActionType::MERGE_DELETE) {
--				update_delete_count++;
+ 		for (auto &action : entry.second) {
+ 			if (action->action_type == MergeActionType::MERGE_UPDATE ||
+ 			    action->action_type == MergeActionType::MERGE_DELETE) {
+ 				update_delete_count++;
 -				if (update_delete_count > 1) {
 -					throw NotImplementedException(
 -					    "MERGE INTO with Iceberg only supports a single UPDATE/DELETE action currently");
 -				}
--			}
+ 			}
 -			planned_actions.push_back(IcebergPlanMergeIntoAction(*this, context, op, planner, *action, plan));
--		}
+ 		}
 -		actions.emplace(entry.first, std::move(planned_actions));
--	}
+ 	}
 -
 -	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker,
 -	                                               true, op.return_chunk);
 -	result.children.push_back(plan);
 -	return result;
--}
--
--} // namespace duckdb
++	if (update_delete_count > 1) {
++		throw NotImplementedException("MERGE INTO with Iceberg only supports a single UPDATE/DELETE action currently");
++	}
++	return Catalog::PlanMergeInto(context, planner, op, plan);
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/execution/operator/merge_into/iceberg_merge_update.cpp b/src/execution/operator/merge_into/iceberg_merge_update.cpp
 deleted file mode 100644
 index cc2897bf..00000000
@@ -504,22 +500,6 @@ index cc2897bf..00000000
 -}
 -
 -} // namespace duckdb
-diff --git a/src/include/catalog/rest/iceberg_catalog.hpp b/src/include/catalog/rest/iceberg_catalog.hpp
-index 6e1ab95e..4ab100a6 100644
---- a/src/include/catalog/rest/iceberg_catalog.hpp
-+++ b/src/include/catalog/rest/iceberg_catalog.hpp
-@@ -147,8 +147,9 @@ public:
- 	                             PhysicalOperator &plan) override;
- 	PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
- 	                             PhysicalOperator &plan) override;
--	PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
--	                                PhysicalOperator &plan) override;
-+	string GetMultipleMergeModificationsError() const override {
-+		return "MERGE INTO with Iceberg only supports a single UPDATE/DELETE action currently";
-+	}
- 	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
- 	                                            unique_ptr<LogicalOperator> plan) override;
- 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
 diff --git a/src/include/execution/operator/merge_into/iceberg_merge_insert.hpp b/src/include/execution/operator/merge_into/iceberg_merge_insert.hpp
 deleted file mode 100644
 index 29de6b33..00000000

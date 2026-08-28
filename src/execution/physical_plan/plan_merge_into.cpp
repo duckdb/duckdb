@@ -295,22 +295,6 @@ PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGen
 		throw NotImplementedException("RETURNING clause not yet supported for MERGE INTO for database type \"%s\"",
 		                              GetCatalogType());
 	}
-	auto multiple_modifications_error = GetMultipleMergeModificationsError();
-	if (!multiple_modifications_error.empty()) {
-		// the catalog can only apply a single UPDATE/DELETE to a row - verify that we have at most one
-		idx_t modification_count = 0;
-		for (auto &entry : op.actions) {
-			for (auto &action : entry.second) {
-				if (action->action_type == MergeActionType::MERGE_UPDATE ||
-				    action->action_type == MergeActionType::MERGE_DELETE) {
-					modification_count++;
-				}
-			}
-		}
-		if (modification_count > 1) {
-			throw NotImplementedException(multiple_modifications_error);
-		}
-	}
 	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 	idx_t append_count = 0;
 	for (auto &entry : op.actions) {
