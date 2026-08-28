@@ -145,8 +145,16 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		}
 	}
 	if (func.Function().HasStatisticsCallback()) {
+		auto definition = func.Function().GetDefinition();
+		auto restore_rebindability = func.Function().HasRebindableDefinition();
+		optional_ptr<Expression> original_expression(expr_ptr);
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
-		return func.Function().GetStatisticsCallback()(context, input);
+		auto result = func.Function().GetStatisticsCallback()(context, input);
+		if (restore_rebindability && optional_ptr<Expression>(expr_ptr) == original_expression &&
+		    func.Function().GetDefinition() == definition) {
+			func.FunctionMutable().RestoreFunctionExpressionIdentity();
+		}
+		return result;
 	}
 	return PropagateMonotoneBounds(context, func, stats);
 }

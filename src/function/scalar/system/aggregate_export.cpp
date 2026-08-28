@@ -780,6 +780,7 @@ void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate
 	bound_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	aggregate.StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
 	aggregate.SetReturnType(std::move(state_layout));
+	bound_function.RestoreRebindableDefinition();
 }
 
 unique_ptr<BoundAggregateExpression>

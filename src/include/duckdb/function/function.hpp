@@ -73,7 +73,10 @@ protected:
 	FunctionData(const FunctionData &) {
 		// Trusted data kinds are not inherited through arbitrary derived copies
 	}
-	FunctionData &operator=(const FunctionData &) = delete;
+	FunctionData &operator=(const FunctionData &) {
+		kind = FunctionDataKind::GENERIC;
+		return *this;
+	}
 
 public:
 	DUCKDB_API virtual ~FunctionData();

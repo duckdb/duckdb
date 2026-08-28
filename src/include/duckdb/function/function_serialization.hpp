@@ -206,9 +206,11 @@ public:
 				FunctionBinder binder(context);
 
 				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
+				const FUNC &const_bound_function = bound_function;
 
-				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
+				if (TypeRequiresAssignment(const_bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));
+					RestoreFunctionIdentity(bound_function);
 				}
 
 				return make_pair(std::move(bound_function), std::move(bound_data));
@@ -227,21 +229,24 @@ public:
 		deserializer.Set<const LogicalType &>(return_type);
 		auto bound_data = FunctionDeserialize(deserializer, bound_function);
 		deserializer.Unset<LogicalType>();
-		RestoreFunctionExpressionIdentity(bound_function);
 
 		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 			bound_function.SetReturnType(std::move(return_type));
 		}
+		RestoreFunctionIdentity(bound_function);
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
 	}
 
 private:
-	static void RestoreFunctionExpressionIdentity(BoundScalarFunction &function) {
+	static void RestoreFunctionIdentity(BoundScalarFunction &function) {
 		function.RestoreFunctionExpressionIdentity();
 	}
+	static void RestoreFunctionIdentity(BoundAggregateFunction &function) {
+		function.RestoreRebindableDefinition();
+	}
 	template <class FUNC>
-	static void RestoreFunctionExpressionIdentity(FUNC &) {
+	static void RestoreFunctionIdentity(FUNC &) {
 	}
 };
 

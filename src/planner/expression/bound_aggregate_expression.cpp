@@ -9,11 +9,15 @@
 
 namespace duckdb {
 
+static const LogicalType &GetAggregateReturnType(const BoundAggregateFunction &function) {
+	return function.GetReturnType();
+}
+
 BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
                                                    vector<unique_ptr<Expression>> children,
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, GetAggregateReturnType(function)),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
       aggr_type(aggr_type), state_export_mode(AggregateStateExportMode::NONE), filter(std::move(filter)) {
 	D_ASSERT(!this->function.GetName().empty());

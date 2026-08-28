@@ -1184,6 +1184,7 @@ FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function_p,
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
+	bound_function.RestoreRebindableDefinition();
 
 	return {std::move(bound_function), std::move(bind_info)};
 }

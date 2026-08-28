@@ -18,10 +18,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	if (!aggr.Function().GetCallbacks().HasStatisticsCallback()) {
 		return nullptr;
 	}
+	auto definition = aggr.Function().GetDefinition();
+	auto restore_rebindability = aggr.Function().HasRebindableDefinition();
 	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
 	const idx_t child_count = aggr.GetChildren().size();
 	auto result = aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 	removed_aggregate_children |= aggr.GetChildren().size() < child_count;
+	if (restore_rebindability && aggr.Function().GetDefinition() == definition) {
+		aggr.FunctionMutable().RestoreRebindableDefinition();
+	}
 	return result;
 }
 

@@ -10,11 +10,15 @@
 
 namespace duckdb {
 
+static const LogicalType &GetFunctionReturnType(const BoundScalarFunction &function) {
+	return function.GetReturnType();
+}
+
 BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info_p, bool is_operator)
     : Expression(GetFunctionExpressionType(bound_function, arguments, bind_info_p.get()),
-                 ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
+                 ExpressionClass::BOUND_FUNCTION, GetFunctionReturnType(bound_function)),
       function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info_p)),
       is_operator(is_operator) {
 	D_ASSERT(!function.GetName().empty());

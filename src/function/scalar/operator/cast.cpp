@@ -199,10 +199,7 @@ static unique_ptr<Expression> CreateCastExpression(unique_ptr<Expression> child,
 
 unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, const LogicalType &target_type,
                                                    BoundCastInfo bound_cast, bool try_cast) {
-	auto result = CreateCastExpression(std::move(child), target_type, std::move(bound_cast), try_cast, false);
-	result->Cast<BoundFunctionExpression>().FunctionMutable().SetFunctionExpressionIdentity(
-	    ExpressionType::OPERATOR_CAST);
-	return result;
+	return CreateCastExpression(std::move(child), target_type, std::move(bound_cast), try_cast, false);
 }
 
 unique_ptr<Expression> BoundCastExpression::CreateDefault(unique_ptr<Expression> child, const LogicalType &target_type,
