@@ -760,7 +760,8 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 		} else {
 			prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
 		}
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			return false;
 		}
 		if (ExpressionFilter::IsRootNonSelectivityOptionalFilter(filter)) {
