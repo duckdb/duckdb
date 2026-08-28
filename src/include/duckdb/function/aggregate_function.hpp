@@ -511,7 +511,7 @@ protected:
 		return definition_is_rebindable;
 	}
 
-	//! Set only after the definition has been resolved from a catalog entry.
+	//! Set only after the definition has been authenticated against the live catalog.
 	bool definition_is_rebindable = false;
 	AggregateFunctionProperties properties;
 	AggregateFunctionCallbacks callbacks;
@@ -922,6 +922,9 @@ public:
 private:
 	void RestoreRebindableDefinition() {
 		RestoreDefinitionRebindability();
+	}
+	void InvalidateRebindableDefinition() {
+		InvalidateDefinitionRebindability();
 	}
 
 	friend class FunctionBinder;

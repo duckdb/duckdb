@@ -5,10 +5,14 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -23,6 +27,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -722,6 +728,35 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 
 	LogicalPlanCompilerPath path;
 	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	auto &catalog = Catalog::GetSystemCatalog(*connection.context);
+	auto &schema = catalog.GetSchema(*connection.context, Identifier::DefaultSchema());
+	FunctionBinder function_binder(*connection.context);
+
+	ScalarFunction forged_abs(Identifier("abs"), {LogicalType::INTEGER}, LogicalType::INTEGER,
+	                          ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
+	CreateScalarFunctionInfo forged_abs_info(std::move(forged_abs));
+	ScalarFunctionCatalogEntry forged_abs_entry(catalog, schema, forged_abs_info);
+	vector<unique_ptr<Expression>> forged_abs_children;
+	forged_abs_children.push_back(Constant(Value::INTEGER(7)));
+	ErrorData forged_abs_error;
+	auto forged_abs_expression =
+	    function_binder.BindScalarFunction(forged_abs_entry, std::move(forged_abs_children), forged_abs_error);
+	REQUIRE(forged_abs_expression);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *forged_abs_expression) == Value::INTEGER(8));
+	REQUIRE_FALSE(forged_abs_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*forged_abs_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto &abs_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("abs")));
+	vector<unique_ptr<Expression>> abs_children;
+	abs_children.push_back(Constant(Value::INTEGER(7)));
+	ErrorData abs_error;
+	auto abs_expression = function_binder.BindScalarFunction(abs_entry, std::move(abs_children), abs_error);
+	REQUIRE(abs_expression);
+	REQUIRE(abs_expression->Cast<BoundFunctionExpression>().Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *abs_expression, context, string(), "abs(CAST(7 AS INTEGER))");
+
 	ScalarFunction scalar_impostor(Identifier("synthetic_identity"), {LogicalType::INTEGER}, LogicalType::INTEGER,
 	                               ScalarFunction::UnaryFunction<int32_t, int32_t, PlusOneOperation>);
 	scalar_impostor.SetCatalogName(Identifier::SystemCatalog());
@@ -761,6 +796,31 @@ TEST_CASE("Bound expression SQL export validates generic function provenance", "
 	    connection.Query("SELECT synthetic_provenance_schema.synthetic_sum_plus_one(CAST(7 AS INTEGER))");
 	REQUIRE_FALSE(replacement_result->HasError());
 	REQUIRE(replacement_result->GetValue(0, 0) == Value::BIGINT(8));
+
+	auto forged_sum = sum_plus_one;
+	forged_sum.SetName(Identifier("sum"));
+	CreateAggregateFunctionInfo forged_sum_info(std::move(forged_sum));
+	AggregateFunctionCatalogEntry forged_sum_entry(catalog, schema, forged_sum_info);
+	vector<pair<Identifier, unique_ptr<Expression>>> forged_sum_children;
+	forged_sum_children.emplace_back(Identifier(), Constant(Value::INTEGER(7)));
+	ErrorData forged_sum_error;
+	auto forged_sum_expression =
+	    function_binder.BindAggregateFunction(forged_sum_entry, std::move(forged_sum_children), forged_sum_error);
+	REQUIRE(forged_sum_expression);
+	REQUIRE(forged_sum_expression->Function().GetCallbacks() == sum_plus_one.GetCallbacks());
+	REQUIRE_FALSE(forged_sum_expression->Function().HasRebindableDefinition());
+	RequireIssue(BoundExpressionSQLExporter::Export(*forged_sum_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    *connection.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("sum")));
+	vector<pair<Identifier, unique_ptr<Expression>>> sum_children;
+	sum_children.emplace_back(Identifier(), Constant(Value::INTEGER(7)));
+	ErrorData sum_error;
+	auto sum_expression = function_binder.BindAggregateFunction(sum_entry, std::move(sum_children), sum_error);
+	REQUIRE(sum_expression);
+	REQUIRE(sum_expression->Function().HasRebindableDefinition());
+	RequireRoundTrip(connection, *sum_expression, context, string(), "sum(CAST(7 AS INTEGER))");
 
 	auto aggregate_impostor = sum_plus_one;
 	aggregate_impostor.SetName(Identifier("synthetic_sum"));
@@ -1229,6 +1289,8 @@ TEST_CASE("Bound expression SQL export preserves aggregate modifiers", "[bound_e
 
 	auto sum = check_aggregate("SELECT sum(i) FROM aggregate_values", "sum(v.i)", Identifier("sum"), true);
 	REQUIRE(sum.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
+	auto avg_sum = check_aggregate("SELECT avg(i) FROM aggregate_values", "sum(v.i)", Identifier("sum"), true);
+	REQUIRE(avg_sum.GetValue()->Cast<FunctionExpression>().FunctionName() == "sum");
 	auto optimized_sum_plan = OptimizeExportQuery(connection, "SELECT sum(i) FROM aggregate_values");
 	auto optimized_sum = FindExpression(*optimized_sum_plan, [](const Expression &expression) {
 		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
