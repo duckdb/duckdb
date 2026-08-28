@@ -9,13 +9,15 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
-                                                                       BoundAggregateExpression &expr,
+                                                                       BoundAggregateFunction &function,
+                                                                       bool is_distinct,
+                                                                       vector<unique_ptr<Expression>> &children,
                                                                        AggregateStatisticsInput &input) {
-	if (input.child_stats.empty() || expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+	if (input.child_stats.empty() || input.state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		return nullptr;
 	}
 	auto &child_stats = input.child_stats[0];
-	auto &return_type = expr.GetReturnType();
+	auto &return_type = function.GetReturnType();
 	auto result = child_stats.GetType() == return_type
 	                  ? child_stats.ToUnique()
 	                  : CastStatistics::TryPropagate(child_stats, child_stats.GetType(), return_type);
