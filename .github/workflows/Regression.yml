@@ -9,6 +9,9 @@ on:
       build_current_release:
         default: false
         type: boolean
+      images:
+        required: true
+        type: string
       run_slow_tests:
         default: false
         type: boolean
@@ -28,6 +31,10 @@ concurrency:
   group: regression-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   GIT_REF: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
@@ -38,6 +45,8 @@ jobs:
   linux-base:
     name: Linux Base
     runs-on: ${{ inputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       GEN: ninja
 
@@ -49,19 +58,18 @@ jobs:
           fetch_depth: 0
           ref: ${{ env.GIT_REF }}
 
-      - name: Install tools
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
-
       - uses: ./.github/actions/ccache-action
 
       - name: Build current release
         if: ${{ inputs.build_current_release }}
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
+          EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
+          ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+          FORCE_WARN_UNUSED: 1
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
@@ -106,7 +114,7 @@ jobs:
         env:
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
@@ -120,6 +128,8 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -148,10 +158,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -201,6 +207,8 @@ jobs:
     needs:
       - linux-base
     runs-on: namespace-profile-linux-small
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
       fail-fast: false
       matrix:
@@ -224,10 +232,6 @@ jobs:
         with:
           runner_provider: namespace
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -270,15 +274,13 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -320,15 +322,13 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -361,6 +361,8 @@ jobs:
     needs:
       - linux-base
     runs-on: ${{ inputs.runner_linux_small }}
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     env:
       EXTENSION_STATIC_BUILD: 1
 
@@ -370,10 +372,6 @@ jobs:
         with:
           runner_provider: ${{ inputs.runner_provider }}
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -406,17 +404,13 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.GIT_REF }}
-
-      - name: Install
-        run: |
-          python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-          python3 scripts/ci/retry.py --timeout 2m -- pip install tqdm
-        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -443,9 +437,9 @@ jobs:
       - name: Regression Test IMDB
         if: always()
         run: |
-          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost --extension=httpfs
 
       - name: Regression Test TPCH
         if: always()
         run: |
-          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost --extension=tpch

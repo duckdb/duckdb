@@ -186,7 +186,7 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("hive_types: '%s' must be a VARCHAR, instead: '%s' was provided",
+				throw InvalidInputException("hive_types: %s must be a VARCHAR, instead: '%s' was provided",
 				                            StructType::GetChildName(val.type(), i), child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
@@ -450,7 +450,7 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 			target_column = "\"" + bind_data.table_columns[expr_idx] + "\" ";
 		}
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column %swith type "
+		    "In file \"%s\" the column %s has type %s, but we are trying to load it into column %swith type "
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
@@ -459,7 +459,7 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 	} else {
 		// read_parquet() with multiple files
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s."
+		    "In file \"%s\" the column %s has type %s, but we are trying to read it as type %s."
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
@@ -467,8 +467,8 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
-	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
-	                                   target_type);
+	first_message =
+	    StringUtil::Format("failed to cast column %s from type %s to %s: ", local_col.name, source_type, target_type);
 	return extended_error;
 }
 

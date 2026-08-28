@@ -24,8 +24,8 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	// Do we know the type of this index now?
 	auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
 	if (!index_type) {
-		throw MissingExtensionException("Cannot bind index '%s', unknown index type '%s'. You need to load the "
-		                                "extension that provides this index type before table '%s' can be modified.",
+		throw MissingExtensionException("Cannot bind index %s, unknown index type '%s'. You need to load the "
+		                                "extension that provides this index type before table %s can be modified.",
 		                                unbound_index.GetTableName(), index_type_name, unbound_index.GetTableName());
 	}
 
@@ -83,7 +83,8 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
 		}
-		dependencies.AddDependency(entry);
+		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+		dependencies.AddDependency(entry, DependencyDependentFlags());
 	});
 
 	// Bind the index expressions.

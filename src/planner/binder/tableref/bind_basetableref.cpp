@@ -109,8 +109,8 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 		view_search_path.emplace_back(catalog_name, schema_name);
 	}
 	auto default_schema = catalog.GetDefaultSchema();
-	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog_name, default_schema);
+	if (default_schema && schema_name.empty() && schema_name != *default_schema) {
+		view_search_path.emplace_back(catalog_name, *default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
 	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);
@@ -222,9 +222,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (ctebinding) {
 			D_ASSERT(!ctebinding->CanBeReferenced());
 			throw BinderException(error_context,
-			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "Circular reference to CTE %s, use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
-			                      ref.Table().GetIdentifierName());
+			                      ref.Table());
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed

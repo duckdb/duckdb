@@ -177,16 +177,21 @@ LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t colu
 	return result;
 }
 
-//! Late materialization recreates a payload by re-scanning the base table column and re-applying a type cast at the
-//! topmost projection. That only reproduces the original value when the projection expression is a plain column
-//! reference, optionally wrapped in casts. A value-transforming expression (e.g. parse_filename(col)) cannot be
-//! rebuilt that way, so it must not be eligible for late materialization.
+//! Late materialization recreates a payload by re-scanning the base table column and re-applying a single default
+//! (strict) cast at the topmost projection. That only reproduces the original value when the projection expression
+//! is a plain column reference, optionally wrapped in a single non-try cast. A value-transforming expression
+//! (e.g. parse_filename(col)) cannot be rebuilt that way. A try cast would be reconstructed as a strict cast
+//! (losing its NULL semantics), and a deeper cast chain would lose its intermediate conversions, so none of those
+//! shapes are eligible for late materialization.
 bool IsRecreatableByLateMaterialization(const Expression &expr) {
-	reference<const Expression> current = expr;
-	while (BoundCastExpression::IsCast(current.get())) {
-		current = BoundCastExpression::Child(current.get().Cast<BoundFunctionExpression>());
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		return true;
 	}
-	return current.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	if (BoundCastExpression::IsCast(expr) && !BoundCastExpression::IsTryCast(expr.Cast<BoundFunctionExpression>())) {
+		return BoundCastExpression::Child(expr.Cast<BoundFunctionExpression>()).GetExpressionClass() ==
+		       ExpressionClass::BOUND_COLUMN_REF;
+	}
+	return false;
 }
 
 } // namespace

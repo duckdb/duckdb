@@ -1,6 +1,7 @@
 #include "duckdb/common/file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
@@ -48,20 +49,23 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 namespace duckdb {
 
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_READ;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_WRITE;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_DIRECT_IO;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
-constexpr FileOpenFlags FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
+const FileOpenFlags FileFlags::FILE_FLAGS_READ = FileOpenFlags(FileOpenFlags::FILE_FLAGS_READ);
+const FileOpenFlags FileFlags::FILE_FLAGS_WRITE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE);
+const FileOpenFlags FileFlags::FILE_FLAGS_DIRECT_IO = FileOpenFlags(FileOpenFlags::FILE_FLAGS_DIRECT_IO);
+const FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE);
+const FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW = FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
+const FileOpenFlags FileFlags::FILE_FLAGS_APPEND = FileOpenFlags(FileOpenFlags::FILE_FLAGS_APPEND);
+const FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_PRIVATE);
+const FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+const FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS);
+const FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
+const FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS);
+const FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
+const FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING = FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
+const FileOpenFlags FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -408,7 +412,8 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path,
+                                                    FileOpenFlags flags, // NOLINT: virtual, overrides mutate flags
                                                     optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: OpenFileExtended is not implemented!", GetName());
 }
@@ -420,12 +425,12 @@ bool FileSystem::ListFilesExtended(const string &directory, const std::function<
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
-		return OpenFileExtended(OpenFileInfo(path), flags, opener);
+		return OpenFileExtended(OpenFileInfo(path), std::move(flags), opener);
 	}
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, const FileOpenFlags &flags,
                                             optional_ptr<FileOpener> opener) {
 	if (SupportsOpenFileExtended()) {
 		return OpenFileExtended(file, flags, opener);
@@ -480,12 +485,22 @@ string FileSystem::GetVersionTag(FileHandle &handle) {
 	return "";
 }
 
+optional<timestamp_t> FileSystem::GetCacheValidUntil(FileHandle &handle) {
+	return nullopt;
+}
+
 FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
 FileMetadata FileSystem::Stats(FileHandle &handle) {
-	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+	FileMetadata metadata;
+	metadata.file_size = GetFileSize(handle);
+	metadata.last_modification_time = GetLastModifiedTime(handle);
+	metadata.file_type = GetFileType(handle);
+	metadata.version_tag = GetVersionTag(handle);
+	metadata.cache_valid_until = GetCacheValidUntil(handle);
+	return metadata;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -500,35 +515,58 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
+bool FileSystem::CreateDirectoryExtended(const string &directory, const CreateDirectoryOptions &options,
+                                         optional_ptr<FileOpener> opener) {
+	switch (options.mode) {
+	case CreateDirectoryMode::SINGLE:
+		if (!DirectoryExists(directory, opener)) {
+			CreateDirectory(directory, opener);
+		}
+		return false;
+	case CreateDirectoryMode::RECURSIVE: {
+		auto parsed = Path::FromString(directory);
+		vector<string> directories;
+		while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString(), opener)) {
+			directories.push_back(parsed.ToString());
+			parsed = parsed.Parent();
+		}
+		if (parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString(), opener)) {
+			directories.push_back(parsed.ToString());
+		}
+
+		bool target_created = false;
+		for (auto riter = directories.rbegin(); riter != directories.rend(); ++riter) {
+			auto created = CreateDirectoryExtended(*riter, {CreateDirectoryMode::SINGLE}, opener);
+			if (*riter == directories.front()) {
+				target_created = created;
+			}
+		}
+		return target_created;
+	}
+	default:
+		throw InternalException("Unknown CreateDirectoryMode");
+	}
+}
+
 void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
-	// To avoid hitting directories we have no permission for when using allowed_directories + enable_external_access,
-	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
-	// dir that is not in the allowed_directories list
-
-	// Walk up from the full path until we find a prefix that already exists, collecting
-	// non-existing ancestors along the way. Stop descending when segments are exhausted
-	// (to avoid Path::Parent() generating ".." paths past the root/base).
-	auto parsed = Path::FromString(path);
-	vector<string> dirs_to_create;
-	while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString())) {
-		dirs_to_create.push_back(parsed.ToString());
-		parsed = parsed.Parent();
-	}
-	// If all segments were non-existing, also check the base itself (e.g. "C:/" on an unknown drive)
-	if (!parsed.GetPathSegments().empty()) {
-		// broke because DirectoryExists returned true — nothing more needed
-	} else if (!DirectoryExists(parsed.ToString())) {
-		dirs_to_create.push_back(parsed.ToString());
-	}
-
-	// Create directories shallowest to deepest
-	for (auto riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
-		CreateDirectory(*riter);
-	}
+	CreateDirectoryExtended(path, {CreateDirectoryMode::RECURSIVE}, opener);
 }
 
 void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
+}
+
+bool FileSystem::RemoveDirectoryExtended(const string &directory, const RemoveDirectoryOptions &options,
+                                         optional_ptr<FileOpener> opener) {
+	switch (options.mode) {
+	case RemoveDirectoryMode::SINGLE:
+		return false;
+	case RemoveDirectoryMode::RECURSIVE:
+		RemoveDirectory(directory, opener);
+		return false;
+	default:
+		throw InternalException("Unknown RemoveDirectoryMode");
+	}
 }
 
 bool FileSystem::IsDirectory(const OpenFileInfo &info) {
@@ -609,6 +647,10 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
+void FileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Close();
+}
+
 bool FileSystem::HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
 		switch (str[i]) {
@@ -650,12 +692,13 @@ void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
-void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> sub_fs) {
-	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
-}
-
 void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+void FileSystem::RegisterCompressionFilesystem(unique_ptr<CompressedFileSystem> fs) {
+	throw NotImplementedException("%s: Can't register a compression filesystem on a non-virtual file system",
+	                              GetName());
 }
 
 unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
@@ -750,8 +793,8 @@ bool FileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEs
 	return false;
 }
 
-FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags)
-    : file_system(file_system), path(std::move(path_p)), flags(flags) {
+FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags_p)
+    : file_system(file_system), path(std::move(path_p)), flags(std::move(flags_p)) {
 }
 
 FileHandle::~FileHandle() {
@@ -781,11 +824,12 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (track_io && context.GetClientContext() != nullptr) {
-		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
+	auto bytes_written = file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	if (bytes_written > 0 && track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(UnsafeNumericCast<idx_t>(bytes_written));
 	}
 
-	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	return bytes_written;
 }
 
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
@@ -882,6 +926,10 @@ void FileHandle::Sync() {
 
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
+}
+
+void FileHandle::AbortWrite() {
+	file_system.AbortFileWrite(*this);
 }
 
 FileType FileHandle::GetType() {

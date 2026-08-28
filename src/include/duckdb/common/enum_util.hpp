@@ -192,8 +192,6 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
-enum class DeprecatedUsingKeySyntax : uint8_t;
-
 enum class DestroyBufferUpon : uint8_t;
 
 enum class DialectCompatibilityMode : uint8_t;
@@ -224,6 +222,10 @@ enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtensionRepositoryAccess : uint8_t;
+
+enum class ExtensionRepositoryType : uint8_t;
+
 enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExternalResourceOperation : uint8_t;
@@ -235,8 +237,6 @@ enum class ExtraPersistentColumnDataType : uint8_t;
 enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
-
-enum class FileCompressionType : uint8_t;
 
 enum class FileExpandResult : uint8_t;
 
@@ -273,6 +273,8 @@ enum class GroupByExpressionInfoType : uint8_t;
 enum class HLLStorageType : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
+
+enum class IdentifierCaseMode : uint8_t;
 
 enum class IndexAppendMode : uint8_t;
 
@@ -326,6 +328,8 @@ enum class MacroType : uint8_t;
 
 enum class MapInvalidReason : uint8_t;
 
+enum class MatchMode : uint8_t;
+
 enum class MemoryTag : uint8_t;
 
 enum class MergeActionCondition : uint8_t;
@@ -337,8 +341,6 @@ enum class MergeActionType : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
-
-enum class MultiFileAcquireResult : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -474,6 +476,8 @@ enum class SampleType : uint8_t;
 
 enum class SamplingState : uint8_t;
 
+enum class ScanReadAheadAcquire : uint8_t;
+
 enum class ScanType : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
@@ -497,6 +501,8 @@ enum class SetScope : uint8_t;
 enum class SetType : uint8_t;
 
 enum class SettingScope : uint8_t;
+
+enum class ShowBehaviorType : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -523,6 +529,8 @@ enum class StateMemoryOwnership : uint8_t;
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
+
+enum class StatisticsPropagationMode : uint8_t;
 
 enum class StatisticsType : uint8_t;
 
@@ -868,9 +876,6 @@ template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
-const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
-
-template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
 
 template<>
@@ -916,6 +921,12 @@ template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryAccess>(ExtensionRepositoryAccess value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
@@ -932,9 +943,6 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
-
-template<>
-const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
 
 template<>
 const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
@@ -989,6 +997,9 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
+
+template<>
+const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
@@ -1069,6 +1080,9 @@ template<>
 const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<MatchMode>(MatchMode value);
+
+template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
@@ -1085,9 +1099,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
-
-template<>
-const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1291,6 +1302,9 @@ template<>
 const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
 
 template<>
+const char* EnumUtil::ToChars<ScanReadAheadAcquire>(ScanReadAheadAcquire value);
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
 
 template<>
@@ -1325,6 +1339,9 @@ const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
 const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
+
+template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -1364,6 +1381,9 @@ const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value);
+
+template<>
+const char* EnumUtil::ToChars<StatisticsPropagationMode>(StatisticsPropagationMode value);
 
 template<>
 const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
@@ -1760,9 +1780,6 @@ template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
 
 template<>
-DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
-
-template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
 
 template<>
@@ -1808,6 +1825,12 @@ template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
+ExtensionRepositoryAccess EnumUtil::FromString<ExtensionRepositoryAccess>(const char *value);
+
+template<>
+ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char *value);
+
+template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
@@ -1824,9 +1847,6 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
 
 template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
-
-template<>
-FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
 
 template<>
 FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
@@ -1881,6 +1901,9 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
+
+template<>
+IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
@@ -1961,6 +1984,9 @@ template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
+MatchMode EnumUtil::FromString<MatchMode>(const char *value);
+
+template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
@@ -1977,9 +2003,6 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
-
-template<>
-MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
@@ -2183,6 +2206,9 @@ template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value);
 
 template<>
+ScanReadAheadAcquire EnumUtil::FromString<ScanReadAheadAcquire>(const char *value);
+
+template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
 
 template<>
@@ -2217,6 +2243,9 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value);
+
+template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
@@ -2256,6 +2285,9 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value);
+
+template<>
+StatisticsPropagationMode EnumUtil::FromString<StatisticsPropagationMode>(const char *value);
 
 template<>
 StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);

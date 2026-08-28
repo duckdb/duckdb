@@ -158,6 +158,19 @@ idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
 	return prefix_size;
 }
 
+bool StringUtil::FindNextPrefix(string &prefix) {
+	for (idx_t idx = prefix.size(); idx > 0; idx--) {
+		auto byte = static_cast<uint8_t>(prefix[idx - 1]);
+		if (byte == 0xFF) {
+			continue;
+		}
+		prefix[idx - 1] = static_cast<char>(byte + 1);
+		prefix.resize(idx);
+		return true;
+	}
+	return false;
+}
+
 string StringUtil::Repeat(const string &str, idx_t n) {
 	std::ostringstream os;
 	for (idx_t i = 0; i < n; i++) {
@@ -398,7 +411,8 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToUpper(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -445,7 +459,8 @@ uint64_t StringUtil::CIHash(const string &str) {
 uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
 	for (idx_t i = 0; i < size; i++) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
+		// convert through uint8_t so the hash is identical on platforms with signed and unsigned char
+		hash += static_cast<uint32_t>(static_cast<uint8_t>(StringUtil::CharacterToLower(static_cast<char>(str[i]))));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -561,13 +576,36 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	if (from.empty()) {
 		throw InternalException("Invalid argument to StringUtil::Replace - empty FROM");
 	}
+	if (source.empty() || from == to) {
+		return source;
+	}
+
+	const auto from_length = from.length();
+	const auto to_length = to.length();
+
+	idx_t match_count = 0;
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
-		source.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like
-		                          // replacing 'x' with 'yx'
+		match_count++;
+		start_pos += from_length;
 	}
-	return source;
+	if (match_count == 0) {
+		return source;
+	}
+
+	string result;
+	result.reserve(source.length() - match_count * from_length + match_count * to_length);
+
+	idx_t last_pos = 0;
+	start_pos = 0;
+	while ((start_pos = source.find(from, start_pos)) != string::npos) {
+		result.append(source, last_pos, start_pos - last_pos);
+		result += to;
+		start_pos += from_length;
+		last_pos = start_pos;
+	}
+	result.append(source, last_pos, string::npos);
+	return result;
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {

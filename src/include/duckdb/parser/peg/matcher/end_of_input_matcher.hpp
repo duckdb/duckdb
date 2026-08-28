@@ -13,24 +13,14 @@ public:
 	EndOfInputMatcher() : Matcher(TYPE) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto current = state.token_iterator.Current();
 		if (current && current->type == TokenType::END_OF_INPUT) {
 			state.token_iterator.Advance();
 			state.UpdateMaxTokenIndex();
-			return MatchResultType::SUCCESS;
+			return state.AllocateParseResult<EndOfInputParseResult>();
 		}
-		return MatchResultType::FAIL;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
-		auto current = state.token_iterator.Current();
-		if (current && current->type == TokenType::END_OF_INPUT) {
-			state.token_iterator.Advance();
-			state.UpdateMaxTokenIndex();
-			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
-		}
-		return nullptr;
+		return MatcherResult::Failure();
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

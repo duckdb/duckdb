@@ -1,0 +1,81 @@
+# name: test/sql/copy/partitioned/partitioned_asof_join.test
+# description: Test partitioned aggregates
+# group: [partitioned]
+
+require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
+
+require parquet
+
+set seed 0.8675309
+
+statement ok
+SET VARIABLE datadate='2026-04-01'::DATE;
+
+statement ok
+CREATE TYPE symbols AS ENUM ('VOE', 'ecpf', 'TRIO', 'TPZ', 'TXO', 'VEEA', 'VTP', 'TDOC', 'TSCO', 'XYLD', 'TTC', 'UNCY', 'TWN', 'TRNS', 'UE', 'TSLY', 'USB', 'mnoi', 'UFPT', 'VNO', 'TRC', 'ZYBT', 'YETH', 'TMUS.I', 'kpfi', 'TWIN', 'XHG', 'TLS', 'VDIG', 'UBS', 'VOYG', 'XISE', 'VMAR', 'VOYA.PRB', 'TMVE', 'TNON', 'USA', 'TARA', 'bofo', 'TEST', 'VTMX', 'WFC.PRZ', 'TDAY', 'WRD', 'mail', 'UK', 'VGAS.W', 'TLRY', 'WTIP', 'YOUL');
+
+statement ok
+SET VARIABLE fiftyInstrs=enum_range(NULL::symbols);
+
+statement ok
+CREATE TABLE trade AS 
+	SELECT 
+		i AS tid,
+		getvariable('fiftyInstrs')[1 + floor(random() * 40)::INTEGER]::symbols AS sym,
+		getvariable('datadate') + INTERVAL 9 HOURS + INTERVAL (floor(random() * (7 * 60 * 60 + 30 * 60) * 1000)::INTEGER) MILLISECONDS AS time
+	FROM range(10_000) t(i)
+
+statement ok
+CREATE TABLE quote AS 
+	SELECT 
+		i AS qid,
+		getvariable('fiftyInstrs')[1 + floor(random() * 50)::INTEGER]::symbols AS sym,
+		getvariable('datadate') + INTERVAL 9 HOURS + INTERVAL (floor(random() * (7 * 60 * 60 + 30 * 60) * 1000)::INTEGER) MILLISECONDS AS time
+	FROM range(100_000) t(i)
+
+query III nosort expected
+SELECT tid, t.sym::VARCHAR AS sym, t.time, qid, q.time
+FROM (
+    SELECT sym, time, tid
+    FROM trade
+    WHERE time BETWEEN getvariable('datadate') + INTERVAL '16 hours 20 minutes'
+                   AND getvariable('datadate') + INTERVAL '16 hours 30 minutes'
+) t
+ASOF LEFT JOIN (
+    SELECT sym, time, qid
+    FROM quote
+) q USING (sym, time)
+ORDER BY tid;
+----
+
+statement ok
+COPY trade TO '{TEST_DIR}/trade' (FORMAT parquet, PARTITION_BY (sym))
+
+statement ok
+DROP TABLE trade
+
+statement ok
+CREATE VIEW trade AS FROM '{TEST_DIR}/trade/**/*.parquet'
+
+statement ok
+COPY quote TO '{TEST_DIR}/quote' (FORMAT parquet, PARTITION_BY (sym))
+
+statement ok
+DROP TABLE quote
+
+statement ok
+CREATE VIEW quote AS FROM '{TEST_DIR}/quote/**/*.parquet'
+
+query III nosort expected
+SELECT tid, t.sym, t.time, qid, q.time
+FROM (
+    SELECT sym, time, tid
+    FROM trade
+    WHERE time BETWEEN getvariable('datadate') + INTERVAL '16 hours 20 minutes'
+                   AND getvariable('datadate') + INTERVAL '16 hours 30 minutes'
+) t
+ASOF LEFT JOIN (
+    SELECT sym, time, qid
+    FROM quote
+) q USING (sym, time)
+ORDER BY tid;

@@ -1,4 +1,5 @@
 #include "duckdb/main/parse_iterator.hpp"
+#include "duckdb/main/database.hpp"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
@@ -7,6 +8,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/token_iterator.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -142,8 +144,9 @@ void ParseIterator::EnsureTokenized() {
 		// we never re-tokenize. Tokenization is grammar-free.
 		auto owned_tokens = make_uniq<vector<MatcherToken>>();
 		ParserTokenizerBehavior behavior(sql, *owned_tokens);
-		Tokenizer tokenizer(behavior);
-		tokenizer.TokenizeInput();
+		auto compiled_grammar = CompiledGrammar::Get(context);
+		auto &tokenizer = compiled_grammar->GetTokenizer();
+		tokenizer.TokenizeInput(behavior);
 		token_iterator = make_uniq<TokenIterator>(std::move(owned_tokens));
 	}
 }

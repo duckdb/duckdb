@@ -11,7 +11,8 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
+	IdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper_p)
+	    : Matcher(TYPE), suggestion_type(suggestion_type), keyword_helper(keyword_helper_p) {
 	}
 
 	bool IsQuoted(const string &text) const {
@@ -44,38 +45,34 @@ public:
 		return Tokenizer::CharacterIsKeyword(text[0]);
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchIdentifier(state)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(GetTokenType());
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		const auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchIdentifier(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
+		}
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
 		}
 
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else if (!state.preserve_identifier_case) {
-			result_text = StringUtil::Lower(result_text);
-		}
-		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+		} else if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+			// a single-quoted token in a table or file-name position is a path, so it is unwrapped but never folded
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "''", "'");
+		} else {
+			state.FoldIdentifier(result_text);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
+		return state.AllocateParseResult<IdentifierParseResult>(result_text, start_offset, token_length);
 	}
 
 	TokenType GetTokenType() const {
@@ -163,7 +160,6 @@ public:
 
 private:
 	bool IsAllowedKeyword(const string &token_text) const {
-		auto &keyword_helper = PEGKeywordHelper::Instance();
 		if (!keyword_helper.IsKeyword(token_text)) {
 			return true;
 		}
@@ -188,6 +184,7 @@ private:
 	}
 
 	SuggestionState suggestion_type;
+	const PEGKeywordHelper &keyword_helper;
 };
 
 class ReservedIdentifierMatcher : public IdentifierMatcher {
@@ -195,36 +192,35 @@ public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 
 public:
-	explicit ReservedIdentifierMatcher(SuggestionState suggestion_type) : IdentifierMatcher(suggestion_type) {
+	ReservedIdentifierMatcher(SuggestionState suggestion_type, const PEGKeywordHelper &keyword_helper)
+	    : IdentifierMatcher(suggestion_type, keyword_helper) {
 	}
 
-	MatchResultType Match(MatchState &state) const override {
-		if (!MatchReservedIdentifier(state)) {
-			return MatchResultType::FAIL;
-		}
-		state.token_iterator.SetPreviousTokenType(GetTokenType());
-		return MatchResultType::SUCCESS;
-	}
-
-	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchParseResultInternal(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
-			return nullptr;
+			return MatcherResult::Failure();
 		}
 		auto &token_text = token->text;
 		auto start_offset = optional_idx(token->offset);
 		auto token_length = optional_idx(token->length);
 		if (!MatchReservedIdentifier(state)) {
-			return nullptr;
+			return MatcherResult::Failure();
+		}
+		state.token_iterator.SetPreviousTokenType(GetTokenType());
+		if (!state.BuildParseResult()) {
+			return MatcherResult::Success();
 		}
 		string result_text = token_text;
+		// unlike IdentifierMatcher this rule does not unwrap path literals, it only has to avoid folding them
+		const bool is_path_literal = IsSingleQuoted(result_text) && SupportsStringLiteral();
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else if (!state.preserve_identifier_case) {
-			result_text = StringUtil::Lower(result_text);
+		} else if (!is_path_literal) {
+			state.FoldIdentifier(result_text);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
+		return state.AllocateParseResult<IdentifierParseResult>(result_text, start_offset, token_length);
 	}
 
 private:

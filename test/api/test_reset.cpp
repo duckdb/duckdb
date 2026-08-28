@@ -1,9 +1,9 @@
 #include "catch.hpp"
 #include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
-#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/table_function_identifier_conversion.hpp"
+#include "duckdb/common/enums/show_behavior.hpp"
 #include "duckdb/parser/dialect_extension.hpp"
 #include "test_helpers.hpp"
 
@@ -70,12 +70,12 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
-	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
 	    {"table_function_identifier_conversion",
 	     {EnumUtil::ToString(TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING)}},
 	    {"dialect_compatibility_mode", {EnumUtil::ToString(DialectCompatibilityMode::SPARK)}},
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
+	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
@@ -94,6 +94,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"extension_repository_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
@@ -111,7 +112,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
 	    {"partitioned_write_flush_threshold", {123}},
-	    {"preserve_identifier_case", {false}},
+	    {"preserve_identifier_case", {"lowercase"}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
 	    {"profiling_mode", {"standard"}},
@@ -125,6 +126,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
+	    {"null_on_division_by_zero", {true}},
 	    {"progress_bar_time", {0}},
 	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
@@ -188,14 +190,16 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",            // cant change this while db is running
-	    "disabled_filesystems",          // cant change this while db is running
-	    "enable_external_access",        // cant change this while db is running
-	    "allow_unsigned_extensions",     // cant change this while db is running
-	    "allow_community_extensions",    // cant change this while db is running
-	    "allow_unredacted_secrets",      // cant change this while db is running
-	    "disable_database_invalidation", // cant change this while db is running
-	    "vacuum_rebuild_indexes",        // cant change this while db is running
+	    "lock_configuration",             // cant change this while db is running
+	    "disabled_filesystems",           // cant change this while db is running
+	    "enable_external_access",         // cant change this while db is running
+	    "allow_unsigned_extensions",      // cant change this while db is running
+	    "allow_community_extensions",     // cant change this while db is running
+	    "allow_extension_repositories",   // can only be tightened at runtime, cannot be freely reset
+	    "extension_repository_directory", // trust anchor, cant change while db is running (unless unsigned allowed)
+	    "allow_unredacted_secrets",       // cant change this while db is running
+	    "disable_database_invalidation",  // cant change this while db is running
+	    "vacuum_rebuild_indexes",         // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
