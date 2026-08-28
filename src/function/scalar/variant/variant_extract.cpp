@@ -60,9 +60,8 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
 	const auto &path = *arguments[1];
-	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER &&
-	    !path.GetReturnType().IsIntegral()) {
-		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && !path.GetReturnType().IsIntegral()) {
+		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or any integer type, not %s",
 		                      path.GetReturnType().ToString());
 	}
 
@@ -73,7 +72,7 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	} else if (constant_arg.type().IsIntegral()) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<uint32_t>());
 	} else {
-		throw InternalException("Constant-folded argument was not of type UINTEGER or VARCHAR");
+		throw InternalException("Constant-folded argument was not of type VARCHAR or any integer type");
 	}
 }
 
