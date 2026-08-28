@@ -21,7 +21,8 @@ bool DefaultKeywordMaps::IsKeywordOfCategory(const string &text, PEGKeywordCateg
 
 bool DefaultKeywordMaps::IsKeyword(const string &text) const {
 	return reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
-	       colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0;
+	       colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0 ||
+	       typename_keyword_map.count(text) != 0;
 }
 
 vector<ParserKeyword> DefaultKeywordMaps::ToList() const {
