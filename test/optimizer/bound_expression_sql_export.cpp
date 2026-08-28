@@ -2,6 +2,8 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -194,6 +196,26 @@ public:
 		return true;
 	}
 };
+
+struct SubtractOperation {
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+		return left - right;
+	}
+};
+
+static void RequireInvalidExpressionTypes(const Expression &expression, const BoundExpressionSQLExportContext &context,
+                                          const string &label) {
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	for (auto type : {ExpressionType::INVALID, static_cast<ExpressionType>(255)}) {
+		INFO("expression class=" << label << " expression type=" << static_cast<uint32_t>(type));
+		auto malformed = expression.Copy();
+		malformed->SetExpressionTypeUnsafe(type);
+		RequireIssue(BoundExpressionSQLExporter::Export(*malformed, context),
+		             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
+	}
+}
 
 } // namespace
 
@@ -508,6 +530,15 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	auto addition_context =
 	    ResolveBinding(addition_column.Binding(), {Identifier("v"), Identifier("i")}, LogicalType::INTEGER);
 	RequireRoundTrip(connection, *addition, addition_context, " FROM scalar_values AS v", "v.i + 2");
+	auto addition_result = BoundExpressionSQLExporter::Export(*addition, addition_context);
+	REQUIRE(addition_result.IsSuccess());
+	auto &addition_parsed = addition_result.GetValue()->Cast<FunctionExpression>();
+	REQUIRE_FALSE(addition_parsed.IsOperator());
+	auto &addition_definition = addition_function.Function().GetDefinition();
+	REQUIRE(addition_definition);
+	REQUIRE(addition_parsed.GetQualifiedName().Catalog() == addition_definition->GetCatalogName());
+	REQUIRE(addition_parsed.GetQualifiedName().Schema() == addition_definition->GetSchemaName());
+	REQUIRE(addition_parsed.GetQualifiedName().Name() == addition_definition->GetName());
 
 	auto struct_pack = FindExpression(*plan, [](const Expression &expression) {
 		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
@@ -547,6 +578,48 @@ TEST_CASE("Bound expression SQL export reconstructs optimizer-produced scalar fu
 	REQUIRE(volatile_result.HasError());
 	REQUIRE(volatile_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE);
 	REQUIRE(*volatile_result.GetIssues()[0].construct->identifier == "exclusive_between_input_evaluation");
+	connection.Rollback();
+}
+
+TEST_CASE("Bound expression SQL export preserves qualified operator function identity",
+          "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	ExtensionLoader loader(*db.instance, "synthetic_operator_extension");
+	loader.UseDedicatedSchemaForExtension(Identifier("synthetic_operator_schema"));
+	loader.RegisterFunction(
+	    ScalarFunction(Identifier("+"), {LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER,
+	                   ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, SubtractOperation>));
+	loader.RefreshSearchPath(*connection.context);
+	connection.BeginTransaction();
+
+	auto plan =
+	    BindExportQuery(connection, "SELECT synthetic_operator_schema.\"+\"(CAST(7 AS INTEGER), CAST(2 AS INTEGER))");
+	auto expression = FindExpression(*plan, [](const Expression &candidate) {
+		return candidate.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       candidate.Cast<BoundFunctionExpression>().Function().GetName() == "+";
+	});
+	REQUIRE(expression);
+	auto operator_expression = expression->Copy();
+	auto &operator_function = operator_expression->Cast<BoundFunctionExpression>();
+	operator_function.IsOperatorMutable() = true;
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, operator_function) == Value::INTEGER(5));
+
+	BoundExpressionSQLExportContext context;
+	auto result = BoundExpressionSQLExporter::Export(operator_function, context);
+	REQUIRE(result.IsSuccess());
+	auto &parsed = result.GetValue()->Cast<FunctionExpression>();
+	auto &definition = operator_function.Function().GetDefinition();
+	REQUIRE(definition);
+	REQUIRE_FALSE(parsed.IsOperator());
+	REQUIRE(parsed.GetQualifiedName().Catalog() == definition->GetCatalogName());
+	REQUIRE(parsed.GetQualifiedName().Schema() == definition->GetSchemaName());
+	REQUIRE(parsed.GetQualifiedName().Name() == definition->GetName());
+
+	auto rebound = connection.Query("SELECT " + parsed.ToString());
+	REQUIRE_FALSE(rebound->HasError());
+	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
+	REQUIRE(rebound->GetValue(0, 0) == Value::INTEGER(5));
 	connection.Rollback();
 }
 
@@ -682,6 +755,57 @@ TEST_CASE("Bound expression SQL export fails closed for deferred and malformed i
 	REQUIRE(malformed_result.GetIssues().size() == 2);
 	REQUIRE(malformed_result.GetIssues()[0].code == LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT);
 	REQUIRE(malformed_result.GetIssues()[1].code == LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPRESSION);
+}
+
+TEST_CASE("Bound expression SQL export rejects invalid class and type combinations", "[bound_expression_sql_export]") {
+	DuckDB db;
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE expression_type_values(i INTEGER)"));
+	connection.BeginTransaction();
+	auto plan = BindExportQuery(connection, "SELECT abs(i), sum(i) FROM expression_type_values GROUP BY i");
+	auto function = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION &&
+		       expression.Cast<BoundFunctionExpression>().Function().GetName() == "abs";
+	});
+	REQUIRE(function);
+	auto aggregate = FindExpression(*plan, [](const Expression &expression) {
+		return expression.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
+		       expression.Cast<BoundAggregateExpression>().Function().GetName() == "sum";
+	});
+	REQUIRE(aggregate);
+
+	vector<pair<string, unique_ptr<Expression>>> expressions;
+	expressions.emplace_back("constant", Constant(Value::INTEGER(1)));
+	expressions.emplace_back(
+	    "column reference",
+	    make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, ColumnBinding(TableIndex(1), ProjectionIndex(0))));
+	expressions.emplace_back("function", function->Copy());
+	auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	conjunction->GetChildrenMutable().push_back(Constant(Value::BOOLEAN(true)));
+	conjunction->GetChildrenMutable().push_back(Constant(Value::BOOLEAN(false)));
+	expressions.emplace_back("conjunction", std::move(conjunction));
+	auto case_expression = make_uniq<BoundCaseExpression>(LogicalType::INTEGER);
+	case_expression->CaseChecksMutable().push_back({Constant(Value::BOOLEAN(true)), Constant(Value::INTEGER(1))});
+	case_expression->ElseMutable() = Constant(Value::INTEGER(2));
+	expressions.emplace_back("case", std::move(case_expression));
+	auto operator_expression = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+	operator_expression->GetChildrenMutable().push_back(Constant(Value::BOOLEAN(true)));
+	expressions.emplace_back("operator", std::move(operator_expression));
+	expressions.emplace_back("aggregate", aggregate->Copy());
+
+	BoundExpressionSQLExportContext context;
+	for (auto &entry : expressions) {
+		RequireInvalidExpressionTypes(*entry.second, context, entry.first);
+	}
+
+	BoundOperatorExpression deferred(ExpressionType::ARRAY_EXTRACT, LogicalType::INTEGER);
+	deferred.GetChildrenMutable().push_back(Constant(Value::INTEGER(1)));
+	deferred.GetChildrenMutable().push_back(Constant(Value::INTEGER(2)));
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+	RequireIssue(BoundExpressionSQLExporter::Export(deferred, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_EXPORT_FEATURE, path);
+	connection.Rollback();
 }
 
 TEST_CASE("Bound expression SQL export owns outputs and propagates resolver exceptions",

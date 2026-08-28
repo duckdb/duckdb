@@ -270,6 +270,10 @@ public:
 private:
 	BoundExpressionSQLExportResult ExportConstant(const BoundConstantExpression &expression,
 	                                              const LogicalPlanCompilerPath &path) {
+		if (expression.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound constant has an invalid expression type"));
+		}
 		auto &return_type = expression.GetReturnType();
 		auto &value = expression.GetValue();
 		if (!IsSQLRepresentableType(return_type) || !IsSQLRepresentableType(value.type())) {
@@ -288,6 +292,10 @@ private:
 
 	BoundExpressionSQLExportResult ExportColumnRef(const BoundColumnRefExpression &expression,
 	                                               const LogicalPlanCompilerPath &path) {
+		if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound column reference has an invalid expression type"));
+		}
 		auto &binding = expression.Binding();
 		if (!binding.table_index.IsValid() || !binding.column_index.IsValid()) {
 			return Failure(InvalidBinding(path, binding, "Bound column reference has an incomplete binding"));
@@ -348,16 +356,26 @@ private:
 
 	BoundExpressionSQLExportResult ExportFunction(const BoundFunctionExpression &expression,
 	                                              const LogicalPlanCompilerPath &path) {
-		if (BoundCastExpression::IsCast(expression)) {
+		switch (expression.GetExpressionType()) {
+		case ExpressionType::OPERATOR_CAST:
 			return ExportCast(expression, path);
-		}
-		if (BoundComparisonExpression::IsComparison(expression)) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			return ExportComparison(expression, path);
-		}
-		if (expression.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		case ExpressionType::COMPARE_BETWEEN:
 			return ExportBetween(expression, path);
+		case ExpressionType::BOUND_FUNCTION:
+			return ExportScalarFunction(expression, path);
+		default:
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound function has an invalid expression type"));
 		}
-		return ExportScalarFunction(expression, path);
 	}
 
 	BoundExpressionSQLExportResult ExportCast(const BoundFunctionExpression &expression,
@@ -454,6 +472,9 @@ private:
 
 	BoundExpressionSQLExportResult ExportCase(const BoundCaseExpression &expression,
 	                                          const LogicalPlanCompilerPath &path) {
+		if (expression.GetExpressionType() != ExpressionType::CASE_EXPR) {
+			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has an invalid expression type"));
+		}
 		if (!IsSQLRepresentableType(expression.GetReturnType()) || expression.CaseChecks().empty()) {
 			return Failure(InternalExpressionInvariant(path, expression, "Bound CASE has malformed type or arity"));
 		}
@@ -523,9 +544,19 @@ private:
 			}
 			expected_type = expression.GetReturnType();
 			break;
-		default:
+		case ExpressionType::OPERATOR_UNPACK:
+		case ExpressionType::OPERATOR_NULLIF:
+		case ExpressionType::GROUPING_FUNCTION:
+		case ExpressionType::ARRAY_EXTRACT:
+		case ExpressionType::ARRAY_SLICE:
+		case ExpressionType::STRUCT_EXTRACT:
+		case ExpressionType::ARRAY_CONSTRUCTOR:
+		case ExpressionType::ARROW:
 			return Failure(
 			    UnsupportedFeature(path, "bound_operator", "The bound operator has no admitted parsed SQL AST form"));
+		default:
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound operator has an invalid expression type"));
 		}
 		vector<unique_ptr<ParsedExpression>> children;
 		vector<LogicalPlanCompilerIssue> issues;
@@ -574,12 +605,16 @@ private:
 			return BoundExpressionSQLExportResult::Failure(std::move(issues));
 		}
 		auto name = QualifiedName(definition->GetCatalogName(), definition->GetSchemaName(), definition->GetName());
-		return BoundExpressionSQLExportResult::Success(make_uniq<FunctionExpression>(
-		    name, std::move(children), nullptr, nullptr, false, expression.IsOperator(), false));
+		return BoundExpressionSQLExportResult::Success(
+		    make_uniq<FunctionExpression>(name, std::move(children), nullptr, nullptr, false, false, false));
 	}
 
 	BoundExpressionSQLExportResult ExportAggregate(const BoundAggregateExpression &expression,
 	                                               const LogicalPlanCompilerPath &path) {
+		if (expression.GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
+			return Failure(
+			    InternalExpressionInvariant(path, expression, "Bound aggregate has an invalid expression type"));
+		}
 		auto &function = expression.Function();
 		if (!ChildrenAreConsistentWithArguments(expression.GetChildren(), function.GetArguments()) ||
 		    expression.GetReturnType() != function.GetReturnType()) {
