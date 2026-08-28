@@ -61,8 +61,9 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	}
 	const auto &path = *arguments[1];
 	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && !path.GetReturnType().IsIntegral()) {
-		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or any integer type, not %s",
-		                      path.GetReturnType().ToString());
+		throw BinderException(
+		    "'variant_extract' expects the second argument to be of type VARCHAR or any integer type, not %s",
+		    path.GetReturnType().ToString());
 	}
 
 	auto constant_arg = input.GetNonNullConstant(1);
