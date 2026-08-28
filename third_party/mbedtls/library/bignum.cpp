@@ -2090,9 +2090,9 @@ static const mbedtls_mpi_uint small_primes_product_limbs[] = {
 /* Could make ECP_MPI_INIT_ARRAY() available outside ecp, but not doing it now
  * as it would lead to conflicts with other in-flight PRs. */
 static const mbedtls_mpi small_primes_product = {
-    .p = (mbedtls_mpi_uint *) small_primes_product_limbs,
-    .s = 1,
-    .n = sizeof(small_primes_product_limbs) / sizeof(mbedtls_mpi_uint),
+    /* .p = */ (mbedtls_mpi_uint *) small_primes_product_limbs,
+    /* .s = */ 1,
+    /* .n = */ sizeof(small_primes_product_limbs) / sizeof(mbedtls_mpi_uint),
 };
 
 /*
