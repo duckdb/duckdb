@@ -1,46 +1,12 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/parser/expression/case_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
-
-static bool ContainsSimpleCase(QueryNode &node);
-
-static bool ContainsSimpleCase(const ParsedExpression &expression) {
-	if (expression.GetExpressionClass() == ExpressionClass::CASE && expression.Cast<CaseExpression>().CaseOperand()) {
-		return true;
-	}
-	if (expression.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		auto &subquery = expression.Cast<SubqueryExpression>().Subquery();
-		if (subquery && ContainsSimpleCase(*subquery->node)) {
-			return true;
-		}
-	}
-	for (auto &child : expression.Children()) {
-		if (ContainsSimpleCase(child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool ContainsSimpleCase(QueryNode &node) {
-	bool result = false;
-	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    node, [&](unique_ptr<ParsedExpression> &expression) { result |= ContainsSimpleCase(*expression); });
-	return result;
-}
 
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()) {
 }
@@ -154,29 +120,6 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
 	}
 	return result;
-}
-
-unique_ptr<SelectStatement> CreateViewInfo::GetQueryForSerialization(Serializer &serializer) const {
-	if (!query) {
-		return nullptr;
-	}
-	auto result = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || names.empty() || !ContainsSimpleCase(*result->node)) {
-		return result;
-	}
-
-	// Preserve bound view column names when simple CASE is lowered for legacy storage.
-	const Identifier query_alias("__duckdb_legacy_view_query");
-	auto subquery = make_uniq<SubqueryRef>(std::move(result), query_alias);
-	subquery->column_name_alias = names;
-
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>(query_alias));
-	select_node->from_table = std::move(subquery);
-
-	auto wrapped_query = make_uniq<SelectStatement>();
-	wrapped_query->node = std::move(select_node);
-	return wrapped_query;
 }
 
 CreateViewInfo::CreateViewInfo(vector<Identifier> names_p, vector<Value> comments,
