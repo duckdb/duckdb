@@ -24,6 +24,15 @@ static Value GetStringStatsMax(const BaseStatistics &stats) {
 	return Value();
 }
 
+static bool RangesDoNotOverlap(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return (!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax);
+}
+
+static bool RangesAreEqualConstants(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return !lmin.IsNull() && !lmax.IsNull() && !rmin.IsNull() && !rmax.IsNull() && lmin == lmax && rmin == rmax &&
+	       lmin == rmin;
+}
+
 static FilterPropagateResult PropagateValueComparison(const Value &lmin, const Value &lmax, const Value &rmin,
                                                       const Value &rmax, ExpressionType comparison, bool has_null) {
 	const auto always_true =
@@ -32,8 +41,16 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	    has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
-		if ((!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax)) {
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
 			return always_false;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return always_false;
+		}
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
+			return always_true;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
