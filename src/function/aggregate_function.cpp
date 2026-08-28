@@ -8,11 +8,9 @@
 
 namespace duckdb {
 
-unique_ptr<BaseStatistics> AggregateFunction::PropagateInputValueStats(ClientContext &context,
-                                                                       BoundAggregateFunction &function,
-                                                                       bool is_distinct,
-                                                                       vector<unique_ptr<Expression>> &children,
-                                                                       AggregateStatisticsInput &input) {
+unique_ptr<BaseStatistics>
+AggregateFunction::PropagateInputValueStats(ClientContext &context, BoundAggregateFunction &function, bool is_distinct,
+                                            vector<unique_ptr<Expression>> &children, AggregateStatisticsInput &input) {
 	if (input.child_stats.empty() || input.state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
 		return nullptr;
 	}

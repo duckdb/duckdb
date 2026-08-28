@@ -610,8 +610,8 @@ public:
 
 	//! Statistics callback for aggregates whose result always lies within the range of their first
 	//! argument (e.g. min, max, first, median): the output inherits the input column statistics
-	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context,
-	                                                           BoundAggregateFunction &function, bool is_distinct,
+	static unique_ptr<BaseStatistics> PropagateInputValueStats(ClientContext &context, BoundAggregateFunction &function,
+	                                                           bool is_distinct,
 	                                                           vector<unique_ptr<Expression>> &children,
 	                                                           AggregateStatisticsInput &input);
 
