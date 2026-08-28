@@ -33,8 +33,7 @@ PULL_REQUEST_ONLY_JOBS = [
 PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
 
 NIGHTLY_ONLY_JOBS = [
-    "static-libs-osx",
-    "static-libs-windows-mingw",
+    "osx",
     "codecov",
 ]
 
@@ -49,8 +48,6 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "static-libs-osx",
-    "static-libs-windows-mingw",
     "staged-extension-install",
 ]
 
