@@ -68,6 +68,18 @@ shared_ptr<IndexEntry> TableIndexIterationHelper<shared_ptr<IndexEntry>>::TableI
 
 template class TableIndexIterationHelper<shared_ptr<IndexEntry>>;
 
+TableIndexList::~TableIndexList() {
+	vector<shared_ptr<IndexEntry>> entries;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		entries = std::move(index_entries);
+		unbound_count = 0;
+	}
+	for (auto &entry : entries) {
+		entry->Retire();
+	}
+}
+
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	annotated_lock_guard lock(index_entries_lock);
@@ -160,18 +172,24 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 }
 
 void TableIndexList::RemoveIndex(const Identifier &name) {
-	annotated_lock_guard lock(index_entries_lock);
-	for (idx_t i = 0; i < index_entries.size(); i++) {
-		auto &entry = index_entries[i];
-		if (entry->GetName() != name) {
-			continue;
+	shared_ptr<IndexEntry> removed_entry;
+	{
+		annotated_lock_guard lock(index_entries_lock);
+		for (idx_t i = 0; i < index_entries.size(); i++) {
+			auto &entry = index_entries[i];
+			if (entry->GetName() != name) {
+				continue;
+			}
+			if (entry->GetBindState() != IndexBindState::BOUND) {
+				unbound_count--;
+			}
+			removed_entry = std::move(entry);
+			index_entries.erase_at(i);
+			break;
 		}
-		if (entry->GetBindState() != IndexBindState::BOUND) {
-			unbound_count--;
-		}
-		entry->ResetStorage();
-		index_entries.erase_at(i);
-		return;
+	}
+	if (removed_entry) {
+		removed_entry->Retire();
 	}
 }
 

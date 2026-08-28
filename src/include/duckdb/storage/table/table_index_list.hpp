@@ -46,6 +46,8 @@ struct IndexSerializationResult {
 
 class TableIndexList {
 public:
+	~TableIndexList();
+
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries.

@@ -26,8 +26,8 @@ class IndexBinder;
 class TableIndexList;
 struct IndexStorageInfo;
 
-//! IndexBindState transitions index binding phases while preventing lock order inversion.
-enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
+//! IndexBindState transitions index binding phases and marks entries whose physical index has been destroyed.
+enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND, RETIRED };
 
 using IndexRebuildAppend = std::function<void(DataChunk &chunk, Vector &row_ids)>;
 using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, const IndexRebuildAppend &append)>;
@@ -43,6 +43,7 @@ public:
 	bool ShouldUse(optional_idx active_checkpoint) const;
 	ErrorData MergeCheckpointDeltas(BoundIndex &index);
 	void MarkWritten(transaction_t checkpoint_id);
+	void Reset();
 
 private:
 	const unique_ptr<BoundIndex> &GetPointer(IndexDeltaType type) const;
@@ -133,8 +134,8 @@ public:
 	Identifier GetName() const;
 	//! Returns the physical index type.
 	string GetIndexType() const;
-	//! Resets any storage owned by the physical index.
-	void ResetStorage();
+	//! Destroys the physical index.
+	void Retire();
 	//! Binds the unbound physical index without replacing it.
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types);
 	//! Replaces the unbound physical index with its bound representation.
@@ -207,6 +208,9 @@ template <class TARGET>
 IndexReadHandle<TARGET>::IndexReadHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
     : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 	D_ASSERT(IsValid());
+	if (!entry->owned_index) {
+		throw InternalException("Cannot acquire a handle to a retired index entry");
+	}
 	GetEntry().owned_index->template Cast<TARGET>();
 }
 
@@ -240,6 +244,9 @@ template <class TARGET>
 IndexWriteHandle<TARGET>::IndexWriteHandle(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
     : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 	D_ASSERT(IsValid());
+	if (!entry->owned_index) {
+		throw InternalException("Cannot acquire a handle to a retired index entry");
+	}
 	GetMutableEntry().owned_index->template Cast<TARGET>();
 }
 

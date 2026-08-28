@@ -320,9 +320,11 @@ string IndexEntry::GetIndexType() const {
 	return owned_index->GetIndexType();
 }
 
-void IndexEntry::ResetStorage() {
+void IndexEntry::Retire() {
 	auto entry_lock = lock.GetExclusiveLock();
-	owned_index->ResetStorage();
+	deltas.Reset();
+	owned_index.reset();
+	bind_state = IndexBindState::RETIRED;
 }
 
 unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<LogicalType> &table_types) {
@@ -575,6 +577,13 @@ ErrorData IndexDeltas::MergeCheckpointDeltas(BoundIndex &index) {
 
 void IndexDeltas::MarkWritten(const transaction_t checkpoint_id) {
 	checkpoint.last_written_checkpoint = checkpoint_id;
+}
+
+void IndexDeltas::Reset() {
+	deleted_rows_in_use.reset();
+	checkpoint.added_data.reset();
+	checkpoint.removed_data.reset();
+	checkpoint.last_written_checkpoint = optional_idx();
 }
 
 } // namespace duckdb
