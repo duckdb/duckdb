@@ -344,7 +344,8 @@ static bool TypeSupportsConstantFilter(const LogicalType &type) {
 }
 
 static bool TypeSupportsMultiColumnComparison(const LogicalType &type) {
-	return type.IsNumeric() || type.IsTemporal() || type.id() == LogicalTypeId::BOOLEAN;
+	auto physical = type.InternalType();
+	return TypeIsNumeric(physical) || physical == PhysicalType::BOOL;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
