@@ -117,11 +117,11 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 		if (has_pass_on_byte) {
 			encoded_buffer.Ptr()[pass_on_buffer.size()] = pass_on_byte;
 		}
-		auto actual_encoded_bytes = static_cast<idx_t>(
-		    file_handle_input.Read(context, encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte,
-		                           encoded_buffer.GetCapacity() - pass_on_buffer.size() - has_pass_on_byte));
+		const idx_t bytes_to_read = encoded_buffer.GetCapacity() - pass_on_buffer.size() - has_pass_on_byte;
+		auto actual_encoded_bytes = static_cast<idx_t>(file_handle_input.Read(
+		    context, encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte, bytes_to_read));
 		encoded_buffer.SetSize(actual_encoded_bytes + pass_on_buffer.size() + has_pass_on_byte);
-		if (actual_encoded_bytes < encoded_buffer.GetCapacity() - pass_on_buffer.size()) {
+		if (actual_encoded_bytes < bytes_to_read) {
 			encoded_buffer.last_buffer = true;
 			has_pass_on_byte = false;
 		} else {
