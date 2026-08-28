@@ -745,6 +745,30 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	REQUIRE_FALSE(comparison_rebound->HasError());
 	REQUIRE(comparison_rebound->GetTypes() == vector<LogicalType> {LogicalType::BOOLEAN});
 	REQUIRE(comparison_rebound->GetValue(0, 0) == Value::BOOLEAN(false));
+	LogicalPlanCompilerPath path;
+	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
+
+	auto callback_spoof = OperatorEqualFun::GetFunction();
+	callback_spoof.SetFunctionCallback(ScalarFunction::BinaryFunction<int32_t, int32_t, bool, NotEqualOperation>);
+	vector<unique_ptr<Expression>> callback_children;
+	callback_children.push_back(Constant(Value::INTEGER(7)));
+	callback_children.push_back(Constant(Value::INTEGER(7)));
+	auto callback_expression = callback_spoof.Bind(*connection.context, std::move(callback_children));
+	REQUIRE(callback_expression->GetExpressionType() == ExpressionType::COMPARE_EQUAL);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *callback_expression) == Value::BOOLEAN(false));
+	RequireIssue(BoundExpressionSQLExporter::Export(*callback_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
+
+	auto property_spoof = IsDistinctFromFun::GetFunction();
+	property_spoof.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	vector<unique_ptr<Expression>> property_children;
+	property_children.push_back(Constant(Value(LogicalType::INTEGER)));
+	property_children.push_back(Constant(Value::INTEGER(1)));
+	auto property_expression = property_spoof.Bind(*connection.context, std::move(property_children));
+	REQUIRE(property_expression->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *property_expression).IsNull());
+	RequireIssue(BoundExpressionSQLExporter::Export(*property_expression, context),
+	             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 
 	vector<pair<ExpressionType, unique_ptr<Expression>>> malformed_bind_data;
 	malformed_bind_data.emplace_back(
@@ -757,34 +781,22 @@ TEST_CASE("Bound expression SQL export does not trust scalar expression type cal
 	        "SELECT synthetic_expression_type_schema.misleading_between(CAST(7 AS INTEGER), CAST(2 AS INTEGER), "
 	        "CAST(9 AS INTEGER))",
 	        Identifier("misleading_between")));
-	LogicalPlanCompilerPath path;
-	path.root = LogicalPlanCompilerPathRoot::STANDALONE_EXPRESSION;
 	for (auto &entry : malformed_bind_data) {
 		REQUIRE(entry.second->GetExpressionType() == entry.first);
 		RequireIssue(BoundExpressionSQLExporter::Export(*entry.second, context),
 		             LogicalPlanCompilerIssueCode::UNSUPPORTED_FUNCTION, path);
 	}
 
-	auto cast_function = CastFun::GetFunction();
-	cast_function.SetReturnType(LogicalType::INTEGER);
-	BoundScalarFunction bound_cast(cast_function);
-	bound_cast.GetArguments() = {LogicalType::INTEGER};
-	vector<unique_ptr<Expression>> cast_children;
-	cast_children.push_back(Constant(Value::INTEGER(7)));
-	BoundFunctionExpression malformed_cast(std::move(bound_cast), std::move(cast_children),
-	                                       make_uniq<OpaqueSQLFunctionData>());
-	RequireIssue(BoundExpressionSQLExporter::Export(malformed_cast, context),
+	auto malformed_cast =
+	    BoundCastExpression::AddCastToType(*connection.context, Constant(Value::INTEGER(7)), LogicalType::BIGINT);
+	malformed_cast->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_cast, context),
 	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
 
-	BoundScalarFunction bound_between(BetweenFun::GetFunction());
-	bound_between.GetArguments() = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
-	vector<unique_ptr<Expression>> between_children;
-	between_children.push_back(Constant(Value::INTEGER(7)));
-	between_children.push_back(Constant(Value::INTEGER(2)));
-	between_children.push_back(Constant(Value::INTEGER(9)));
-	BoundFunctionExpression malformed_between(std::move(bound_between), std::move(between_children),
-	                                          make_uniq<OpaqueSQLFunctionData>());
-	RequireIssue(BoundExpressionSQLExporter::Export(malformed_between, context),
+	auto malformed_between = BoundBetweenExpression::Create(Constant(Value::INTEGER(7)), Constant(Value::INTEGER(2)),
+	                                                        Constant(Value::INTEGER(9)), true, true);
+	malformed_between->Cast<BoundFunctionExpression>().BindInfoMutable() = make_uniq<OpaqueSQLFunctionData>();
+	RequireIssue(BoundExpressionSQLExporter::Export(*malformed_between, context),
 	             LogicalPlanCompilerIssueCode::INTERNAL_INVARIANT, path);
 	connection.Rollback();
 }

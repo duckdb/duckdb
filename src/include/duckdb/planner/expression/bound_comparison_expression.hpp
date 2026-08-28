@@ -16,6 +16,8 @@ namespace duckdb {
 struct BoundComparisonExpression {
 	static bool IsComparison(ExpressionType type);
 	static bool IsComparison(const Expression &expr);
+	//! Whether the expression retains the built-in definition for its comparison type
+	static bool HasCanonicalDefinition(const BoundFunctionExpression &comparison_expr);
 
 	static const Expression &Left(const BoundFunctionExpression &comparison_expr);
 	static const Expression &Right(const BoundFunctionExpression &comparison_expr);

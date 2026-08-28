@@ -61,6 +61,8 @@ enum class FunctionCollationHandling : uint8_t {
 	IGNORE_COLLATIONS = 2
 };
 
+enum class FunctionDataKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
 
@@ -68,6 +70,9 @@ struct FunctionData {
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
 	DUCKDB_API virtual bool SupportStatementCache() const;
+	virtual FunctionDataKind GetKind() const {
+		return FunctionDataKind::GENERIC;
+	}
 
 	template <class TARGET>
 	TARGET &Cast() {

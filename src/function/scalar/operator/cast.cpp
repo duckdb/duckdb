@@ -73,6 +73,10 @@ public:
 		return source_type == other.source_type && target_type == other.target_type && try_cast == other.try_cast &&
 		       is_default_cast == other.is_default_cast && bound_cast.Equals(other.bound_cast);
 	}
+
+	FunctionDataKind GetKind() const override {
+		return FunctionDataKind::BOUND_CAST;
+	}
 };
 
 void CastFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -167,6 +171,11 @@ ScalarFunction CastFun::GetFunction() {
 	return cast_fun;
 }
 
+static const shared_ptr<const ScalarFunction> &GetCastFunctionDefinition() {
+	static const shared_ptr<const ScalarFunction> definition = make_shared_ptr<ScalarFunction>(CastFun::GetFunction());
+	return definition;
+}
+
 //===--------------------------------------------------------------------===//
 // BoundCastExpression
 //===--------------------------------------------------------------------===//
@@ -181,14 +190,12 @@ static unique_ptr<Expression> CreateCastExpression(unique_ptr<Expression> child,
 	auto function_data =
 	    make_uniq<CastFunctionData>(source_type, target_type, std::move(bound_cast), try_cast, is_default_cast);
 
-	auto scalar_function = CastFun::GetFunction();
-	scalar_function.SetReturnType(target_type);
+	BoundScalarFunction bound_function(GetCastFunctionDefinition());
+	bound_function.SetReturnType(target_type);
 	if (BoundCastCanThrow(bound_cast, source_type, target_type, try_cast)) {
-		scalar_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
+		bound_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
-	SetCastNullHandling(scalar_function, target_type);
-
-	BoundScalarFunction bound_function(scalar_function);
+	SetCastNullHandling(bound_function, target_type);
 	bound_function.GetArguments() = {source_type};
 
 	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
@@ -232,12 +239,12 @@ bool BoundCastExpression::IsTryCast(const BoundFunctionExpression &cast_expr) {
 	return cast_expr.BindInfo()->Cast<CastFunctionData>().try_cast;
 }
 
+bool BoundCastExpression::HasCanonicalDefinition(const BoundFunctionExpression &cast_expr) {
+	return cast_expr.Function().GetDefinition() == GetCastFunctionDefinition();
+}
+
 bool BoundCastExpression::HasValidBindData(const BoundFunctionExpression &cast_expr) {
-	if (!cast_expr.BindInfo()) {
-		return false;
-	}
-	const FunctionData &bind_info = *cast_expr.BindInfo();
-	return typeid(bind_info) == typeid(CastFunctionData);
+	return cast_expr.BindInfo() && cast_expr.BindInfo()->GetKind() == FunctionDataKind::BOUND_CAST;
 }
 
 bool BoundCastExpression::IsDefaultCast(const BoundFunctionExpression &cast_expr) {
