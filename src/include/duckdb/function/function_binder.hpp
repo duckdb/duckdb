@@ -284,26 +284,20 @@ public:
 	}
 
 private:
-	enum class FunctionDefinitionProvenance : uint8_t { CALLER_SUPPLIED, CATALOG };
-
 	pair<BoundScalarFunction, unique_ptr<FunctionData>>
 	ResolveScalarFunction(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &children,
-	                      vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                      FunctionDefinitionProvenance provenance);
+	                      vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	unique_ptr<Expression> BindScalarFunctionInternal(shared_ptr<const ScalarFunction> function,
 	                                                  vector<unique_ptr<Expression>> children,
 	                                                  vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-	                                                  bool is_operator, optional_ptr<Binder> binder,
-	                                                  FunctionDefinitionProvenance provenance);
+	                                                  bool is_operator, optional_ptr<Binder> binder);
 	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 	ResolveAggregateFunction(shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> &children,
-	                         vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
-	                         FunctionDefinitionProvenance provenance);
+	                         vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	unique_ptr<BoundAggregateExpression>
 	BindAggregateFunctionInternal(shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> children,
 	                              vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
-	                              unique_ptr<Expression> filter, AggregateType aggr_type,
-	                              FunctionDefinitionProvenance provenance);
+	                              unique_ptr<Expression> filter, AggregateType aggr_type);
 
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);

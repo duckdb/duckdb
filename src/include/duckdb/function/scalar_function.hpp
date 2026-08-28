@@ -668,11 +668,14 @@ private:
 	void RestoreRebindableDefinition() {
 		definition_is_rebindable = definition != nullptr;
 	}
+	void InvalidateRebindableDefinition() {
+		definition_is_rebindable = false;
+	}
 
 private:
 	shared_ptr<const ScalarFunction> definition;
 	ExpressionType function_expression_type = ExpressionType::INVALID;
-	//! Set only after the definition has been resolved from a catalog entry.
+	//! Set only after the definition has been authenticated against the live catalog.
 	bool definition_is_rebindable = false;
 
 	friend class BaseScalarFunction<BoundScalarFunction>;

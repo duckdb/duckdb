@@ -291,6 +291,7 @@ private:
 			function.RestoreRebindableDefinition();
 			return;
 		}
+		function.InvalidateRebindableDefinition();
 		function.RestoreFunctionExpressionIdentity();
 	}
 	static void RestoreFunctionIdentity(BoundAggregateFunction &function,
@@ -298,7 +299,9 @@ private:
 		if (sql_definition) {
 			function.SetDefinition(std::move(sql_definition));
 			function.RestoreRebindableDefinition();
+			return;
 		}
+		function.InvalidateRebindableDefinition();
 	}
 	template <class FUNC, class DEFINITION>
 	static void RestoreFunctionIdentity(FUNC &, DEFINITION) {

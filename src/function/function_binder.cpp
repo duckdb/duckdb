@@ -24,6 +24,27 @@ FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), cont
 FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
+template <class FUNCTION, class CATALOG_ENTRY>
+static shared_ptr<const FUNCTION> GetLiveCatalogDefinition(ClientContext &context,
+                                                           const shared_ptr<const FUNCTION> &function) {
+	if (!function || function->GetCatalogName().empty() || function->GetSchemaName().empty() ||
+	    function->GetName().empty()) {
+		return nullptr;
+	}
+	auto entry = Catalog::GetEntry<CATALOG_ENTRY>(
+	    context, QualifiedName(function->GetCatalogName(), function->GetSchemaName(), function->GetName()),
+	    OnEntryNotFound::RETURN_NULL);
+	if (!entry) {
+		return nullptr;
+	}
+	for (auto &candidate : entry->functions.functions) {
+		if (candidate == function) {
+			return candidate;
+		}
+	}
+	return nullptr;
+}
+
 // Split the full (maybe-named) argument list into positional types + named (name, type) pairs.
 // Returns false if a positional argument follows a named one, which is not allowed.
 static bool TrySplitArgumentTypes(const vector<pair<Identifier, unique_ptr<Expression>>> &arguments,
@@ -624,7 +645,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 		}
 	}
 	return BindScalarFunctionInternal(std::move(selected_function), std::move(regular_args), std::move(keyword_args),
-	                                  is_operator, binder, FunctionDefinitionProvenance::CATALOG);
+	                                  is_operator, binder);
 }
 
 static bool RequiresCollationPropagation(const LogicalType &type) {
@@ -1058,9 +1079,11 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, vecto
 	return argument_names;
 }
 
-pair<BoundScalarFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveScalarFunction(
-    shared_ptr<const ScalarFunction> function_p, vector<unique_ptr<Expression>> &arguments,
-    vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, FunctionDefinitionProvenance provenance) {
+pair<BoundScalarFunction, unique_ptr<FunctionData>>
+FunctionBinder::ResolveScalarFunction(shared_ptr<const ScalarFunction> function_p,
+                                      vector<unique_ptr<Expression>> &arguments,
+                                      vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	auto catalog_definition = GetLiveCatalogDefinition<ScalarFunction, ScalarFunctionCatalogEntry>(context, function_p);
 	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, arguments, named_arguments);
@@ -1099,7 +1122,7 @@ pair<BoundScalarFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveScala
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, arguments);
-	if (provenance == FunctionDefinitionProvenance::CATALOG) {
+	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
 		bound_function.RestoreFunctionExpressionIdentity();
 		bound_function.RestoreRebindableDefinition();
 	}
@@ -1110,8 +1133,7 @@ pair<BoundScalarFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveScala
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	return ResolveScalarFunction(std::move(function), arguments, named_arguments,
-	                             FunctionDefinitionProvenance::CALLER_SUPPLIED);
+	return ResolveScalarFunction(std::move(function), arguments, named_arguments);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const ScalarFunction> function,
@@ -1139,14 +1161,13 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(shared_ptr<const Scala
                                                           vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	return BindScalarFunctionInternal(std::move(function), std::move(children), std::move(keyword_args), is_operator,
-	                                  binder, FunctionDefinitionProvenance::CALLER_SUPPLIED);
+	                                  binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(
     shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> children,
-    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, bool is_operator, optional_ptr<Binder> binder,
-    FunctionDefinitionProvenance provenance) {
-	auto [bound_function, bind_info] = ResolveScalarFunction(std::move(function), children, keyword_args, provenance);
+    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, bool is_operator, optional_ptr<Binder> binder) {
+	auto [bound_function, bind_info] = ResolveScalarFunction(std::move(function), children, keyword_args);
 
 	unique_ptr<Expression> result;
 
@@ -1167,9 +1188,12 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(
 	return result;
 }
 
-pair<BoundAggregateFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveAggregateFunction(
-    shared_ptr<const AggregateFunction> function_p, vector<unique_ptr<Expression>> &children,
-    vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, FunctionDefinitionProvenance provenance) {
+pair<BoundAggregateFunction, unique_ptr<FunctionData>>
+FunctionBinder::ResolveAggregateFunction(shared_ptr<const AggregateFunction> function_p,
+                                         vector<unique_ptr<Expression>> &children,
+                                         vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	auto catalog_definition =
+	    GetLiveCatalogDefinition<AggregateFunction, AggregateFunctionCatalogEntry>(context, function_p);
 	auto &function = *function_p;
 	// Reorder named args
 	auto argument_names = ResolveArguments(function, children, named_arguments);
@@ -1201,7 +1225,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveAg
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
-	if (provenance == FunctionDefinitionProvenance::CATALOG) {
+	if (catalog_definition && bound_function.GetDefinition() == catalog_definition) {
 		bound_function.RestoreRebindableDefinition();
 	}
 
@@ -1211,8 +1235,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>> FunctionBinder::ResolveAg
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
-	return ResolveAggregateFunction(std::move(function), children, named_arguments,
-	                                FunctionDefinitionProvenance::CALLER_SUPPLIED);
+	return ResolveAggregateFunction(std::move(function), children, named_arguments);
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> function,
@@ -1244,15 +1267,15 @@ FunctionBinder::BindAggregateFunction(shared_ptr<const AggregateFunction> functi
                                       vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
 	return BindAggregateFunctionInternal(std::move(function), std::move(children), std::move(keyword_args),
-	                                     std::move(filter), aggr_type, FunctionDefinitionProvenance::CALLER_SUPPLIED);
+	                                     std::move(filter), aggr_type);
 }
 
-unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunctionInternal(
-    shared_ptr<const AggregateFunction> function, vector<unique_ptr<Expression>> children,
-    vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, unique_ptr<Expression> filter,
-    AggregateType aggr_type, FunctionDefinitionProvenance provenance) {
-	auto [bound_function, bind_info] =
-	    ResolveAggregateFunction(std::move(function), children, keyword_args, provenance);
+unique_ptr<BoundAggregateExpression>
+FunctionBinder::BindAggregateFunctionInternal(shared_ptr<const AggregateFunction> function,
+                                              vector<unique_ptr<Expression>> children,
+                                              vector<pair<Identifier, unique_ptr<Expression>>> keyword_args,
+                                              unique_ptr<Expression> filter, AggregateType aggr_type) {
+	auto [bound_function, bind_info] = ResolveAggregateFunction(std::move(function), children, keyword_args);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);
@@ -1276,7 +1299,7 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	return BindAggregateFunctionInternal(std::move(bound_function), std::move(regular_args), std::move(keyword_args),
-	                                     std::move(filter), aggr_type, FunctionDefinitionProvenance::CATALOG);
+	                                     std::move(filter), aggr_type);
 }
 
 pair<BoundWindowFunction, unique_ptr<FunctionData>>
