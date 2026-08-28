@@ -530,6 +530,52 @@ CREATE VIEW legacy.simple_case AS
 	END AS result
 	FROM legacy.simple_case_input
 
+# Legacy result-name preservation must not freeze dynamic star projections.
+statement ok
+CREATE TABLE legacy.simple_case_add_input(i INT, w INT, t INT, e INT, extra INT)
+
+statement ok
+INSERT INTO legacy.simple_case_add_input VALUES (1, 1, 10, 0, 99)
+
+statement ok
+CREATE VIEW legacy.simple_case_add AS
+	SELECT *, CASE i WHEN w THEN t ELSE e END FROM legacy.simple_case_add_input
+
+statement ok
+CREATE VIEW legacy.simple_case_add_dependent AS
+	SELECT "CASE i WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_add
+
+statement ok
+ALTER TABLE legacy.simple_case_add_input ADD COLUMN added INT DEFAULT 777
+
+statement ok
+CREATE TABLE legacy.simple_case_drop_input(i INT, w INT, t INT, e INT, extra INT)
+
+statement ok
+INSERT INTO legacy.simple_case_drop_input VALUES (1, 1, 10, 0, 99)
+
+statement ok
+CREATE VIEW legacy.simple_case_drop AS
+	SELECT *, CASE i WHEN w THEN t ELSE e END FROM legacy.simple_case_drop_input
+
+statement ok
+CREATE VIEW legacy.simple_case_drop_dependent AS
+	SELECT "CASE i WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_drop
+
+statement ok
+ALTER TABLE legacy.simple_case_drop_input DROP COLUMN extra
+
+# Deferred views derive the same result names regardless of the target storage version.
+statement ok
+CREATE TABLE legacy.simple_case_deferred_input(i INT, w INT, t INT, e INT)
+
+statement ok
+INSERT INTO legacy.simple_case_deferred_input VALUES (1, 1, 10, 0)
+
+statement ok
+CREATE VIEW legacy.simple_case_deferred WITH (DEFER_BINDING) AS
+	SELECT CASE i WHEN w THEN t ELSE e END FROM legacy.simple_case_deferred_input
+
 statement ok
 DETACH legacy
 
@@ -542,3 +588,18 @@ SELECT i, result FROM legacy.simple_case ORDER BY i
 ----
 0	zero
 1	other
+
+query I
+SELECT result FROM legacy.simple_case_add_dependent
+----
+10
+
+query I
+SELECT result FROM legacy.simple_case_drop_dependent
+----
+10
+
+query I
+SELECT "CASE i WHEN (w) THEN (t) ELSE e END" FROM legacy.simple_case_deferred
+----
+10

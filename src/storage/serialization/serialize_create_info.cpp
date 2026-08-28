@@ -257,7 +257,7 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(200, "view_name", qualified_name.Name());
 	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "aliases", aliases);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", GetQueryForSerialization(serializer));
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(204, "names", names);
 	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
