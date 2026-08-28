@@ -170,7 +170,8 @@ typedef struct {
 	}                                                                                                                  \
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
 
-// Custom entrypoint: just forwards the info and access
+// Custom entrypoint: just forwards info and access. Both, and any database returned by access->get_database(info), are
+// borrowed for the duration of the entrypoint and must not be retained or destroyed.
 #define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM                                                                             \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_extension_info info, struct duckdb_extension_access * access);                                          \
