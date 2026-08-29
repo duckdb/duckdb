@@ -246,10 +246,8 @@ void Optimizer::RunBuiltInOptimizers() {
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {
 		rewriter.VisitOperator(*plan);
-		if (!plan->HasSideEffects()) {
-			ConstantOrNullSimplification constant_or_null_simplification(context);
-			plan = constant_or_null_simplification.Optimize(std::move(plan));
-		}
+		ConstantOrNullSimplification constant_or_null_simplification(context);
+		plan = constant_or_null_simplification.Optimize(std::move(plan));
 	});
 
 	// try to inline CTEs instead of materialization

@@ -102,7 +102,7 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	vector<unique_ptr<Expression>> in_children;
 	in_children.emplace_back(enum_expr.Copy());
 
-	unordered_set<uint64_t> matched_enum_values{};
+	unordered_set<uint64_t> matched_enum_values {};
 	for (idx_t i = 1; i < children.size(); ++i) {
 		auto &child = *children[i];
 		auto &v = child.Cast<BoundConstantExpression>().GetValue();
