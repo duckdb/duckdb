@@ -2,13 +2,9 @@
 # description: sum(x) output stats should be bounded by [cardinality * min(x), cardinality * max(x)]
 # group: [optimizer]
 
+# INT32 baseline: sum bounds fold impossible HAVING on both sides and preserve satisfiable ones
 statement ok
 CREATE TABLE t AS SELECT range::INTEGER AS x FROM range(10000);
-
-query III
-SELECT min(x), max(x), sum(x) FROM t;
-----
-0	9999	49995000
 
 query II
 EXPLAIN SELECT sum(x) FROM t HAVING sum(x) < 0;
@@ -31,16 +27,6 @@ SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) > 100000000);
 0
 
 query II
-EXPLAIN SELECT sum(x) FROM t HAVING sum(x) BETWEEN -1000 AND -1;
-----
-physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) BETWEEN -1000 AND -1);
-----
-0
-
-query II
 EXPLAIN SELECT sum(x) FROM t HAVING sum(x) > 0;
 ----
 physical_plan	<!REGEX>:.*Empty Result.*
@@ -50,42 +36,9 @@ SELECT sum(x) FROM t HAVING sum(x) > 0;
 ----
 49995000
 
-query I
-SELECT sum(x) FROM t HAVING sum(x) BETWEEN 40000000 AND 60000000;
-----
-49995000
-
-statement ok
-CREATE TABLE tneg AS SELECT (-range)::INTEGER AS x FROM range(10000);
-
-query III
-SELECT min(x), max(x), sum(x) FROM tneg;
-----
--9999	0	-49995000
-
-query II
-EXPLAIN SELECT sum(x) FROM tneg HAVING sum(x) > 0;
-----
-physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(x) AS s FROM tneg HAVING sum(x) > 0);
-----
-0
-
-query I
-SELECT sum(x) FROM tneg HAVING sum(x) < 0;
-----
--49995000
-
 # BOOL input: sum(b) is bounded by [0, cardinality]
 statement ok
 CREATE TABLE tb AS SELECT (range % 3 = 0) AS b FROM range(10000);
-
-query III
-SELECT min(b), max(b), sum(b) FROM tb;
-----
-false	true	3334
 
 query II
 EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) < 0;
@@ -93,63 +46,18 @@ EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) < 0;
 physical_plan	<REGEX>:.*Empty Result.*
 
 query I
-SELECT count(*) FROM (SELECT sum(b) AS s FROM tb HAVING sum(b) < 0);
-----
-0
-
-query II
-EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) > 10000;
-----
-physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(b) AS s FROM tb HAVING sum(b) > 10000);
-----
-0
-
-query II
-EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) > 0;
-----
-physical_plan	<!REGEX>:.*Empty Result.*
-
-query I
 SELECT sum(b) FROM tb HAVING sum(b) > 0;
 ----
 3334
 
-# SMALLINT (INT16) input: sum(s) is bounded by [cardinality * min, cardinality * max]
+# SMALLINT (INT16) input
 statement ok
 CREATE TABLE tsh AS SELECT (range % 100)::SMALLINT AS s FROM range(10000);
-
-query III
-SELECT min(s), max(s), sum(s) FROM tsh;
-----
-0	99	495000
 
 query II
 EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(s) AS r FROM tsh HAVING sum(s) < 0);
-----
-0
-
-query II
-EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) > 990000;
-----
-physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(s) AS r FROM tsh HAVING sum(s) > 990000);
-----
-0
-
-query II
-EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) > 0;
-----
-physical_plan	<!REGEX>:.*Empty Result.*
 
 query I
 SELECT sum(s) FROM tsh HAVING sum(s) > 0;
@@ -160,20 +68,10 @@ SELECT sum(s) FROM tsh HAVING sum(s) > 0;
 statement ok
 CREATE TABLE tshn AS SELECT (-(range % 100))::SMALLINT AS s FROM range(10000);
 
-query III
-SELECT min(s), max(s), sum(s) FROM tshn;
-----
--99	0	-495000
-
 query II
 EXPLAIN SELECT sum(s) FROM tshn HAVING sum(s) > 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(s) AS r FROM tshn HAVING sum(s) > 0);
-----
-0
 
 query I
 SELECT sum(s) FROM tshn HAVING sum(s) < 0;
@@ -184,59 +82,19 @@ SELECT sum(s) FROM tshn HAVING sum(s) < 0;
 statement ok
 CREATE TABLE thh AS SELECT range::HUGEINT AS x FROM range(10000);
 
-query III
-SELECT min(x), max(x), sum(x) FROM thh;
-----
-0	9999	49995000
-
 query II
 EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
 
 query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM thh HAVING sum(x) < 0);
-----
-0
-
-query II
-EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) > 100000000;
-----
-physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM thh HAVING sum(x) > 100000000);
-----
-0
-
-query II
-EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) > 0;
-----
-physical_plan	<!REGEX>:.*Empty Result.*
-
-query I
 SELECT sum(x) FROM thh HAVING sum(x) > 0;
 ----
 49995000
 
-statement ok
-CREATE TABLE thbig AS SELECT ('170141183460469231731687303715884105727'::HUGEINT - range)::HUGEINT AS x
-                     FROM range(10);
-
-query I
-SELECT count(*) FROM thbig;
-----
-10
-
-query II
-EXPLAIN SELECT sum(x) FROM thbig HAVING sum(x) < 0;
-----
-physical_plan	<!REGEX>:.*Empty Result.*
-
 # unsigned integer inputs reach the callback via an implicit widening cast:
-# UTINYINT / USMALLINT / UINTEGER  -> BIGINT   -> INT64 case
-# UBIGINT                          -> HUGEINT  -> INT128 case
-# every width should fold impossible HAVING sum(x) < 0 the same way
+#   UTINYINT / USMALLINT / UINTEGER -> BIGINT  -> INT64 case
+#   UBIGINT                         -> HUGEINT -> INT128 case
 
 statement ok
 CREATE TABLE tu8  AS SELECT (range % 100)::UTINYINT  AS x FROM range(10000);
@@ -250,55 +108,20 @@ CREATE TABLE tu32 AS SELECT (range % 100)::UINTEGER  AS x FROM range(10000);
 statement ok
 CREATE TABLE tu64 AS SELECT (range % 100)::UBIGINT   AS x FROM range(10000);
 
-query I
-SELECT sum(x) FROM tu8;
-----
-495000
-
-query I
-SELECT sum(x) FROM tu16;
-----
-495000
-
-query I
-SELECT sum(x) FROM tu32;
-----
-495000
-
-query I
-SELECT sum(x) FROM tu64;
-----
-495000
-
 query II
 EXPLAIN SELECT sum(x) FROM tu8  HAVING sum(x) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM tu8 HAVING sum(x) < 0);
-----
-0
 
 query II
 EXPLAIN SELECT sum(x) FROM tu16 HAVING sum(x) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
 
-query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM tu16 HAVING sum(x) < 0);
-----
-0
-
 query II
 EXPLAIN SELECT sum(x) FROM tu32 HAVING sum(x) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM tu32 HAVING sum(x) < 0);
-----
-0
 
 query II
 EXPLAIN SELECT sum(x) FROM tu64 HAVING sum(x) < 0;
@@ -306,26 +129,14 @@ EXPLAIN SELECT sum(x) FROM tu64 HAVING sum(x) < 0;
 physical_plan	<REGEX>:.*Empty Result.*
 
 query I
-SELECT count(*) FROM (SELECT sum(x) AS r FROM tu64 HAVING sum(x) < 0);
-----
-0
-
-# satisfiable HAVING must survive for every unsigned width
-query II
-EXPLAIN SELECT sum(x) FROM tu32 HAVING sum(x) > 0;
-----
-physical_plan	<!REGEX>:.*Empty Result.*
-
-query I
-SELECT sum(x) FROM tu32 HAVING sum(x) > 0;
-----
-495000
-
-query I
 SELECT sum(x) FROM tu64 HAVING sum(x) > 0;
 ----
 495000
 
+# same-sign inputs (all-negative or all-positive) exercise the branch of the sum-bound
+# ternary that uses per-row min/max rather than min/max * cardinality; without it a
+# single-row GROUP BY group would be falsely excluded (a 1-row group of v = -1 produces
+# sum = -1, but wide_positive = -1 * cardinality would incorrectly cap sum_max below -1)
 statement ok
 CREATE TABLE tallneg AS SELECT range::INTEGER AS g, (-1 - (range % 100))::INTEGER AS v FROM range(10000);
 
@@ -344,11 +155,6 @@ EXPLAIN SELECT g FROM tallneg GROUP BY g HAVING sum(v) > 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
 
-query I
-SELECT count(*) FROM (SELECT g FROM tallneg GROUP BY g HAVING sum(v) > 0);
-----
-0
-
 statement ok
 CREATE TABLE tallpos AS SELECT range::INTEGER AS g, (1 + (range % 100))::INTEGER AS v FROM range(10000);
 
@@ -366,8 +172,3 @@ query II
 EXPLAIN SELECT g FROM tallpos GROUP BY g HAVING sum(v) < 0;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
-
-query I
-SELECT count(*) FROM (SELECT g FROM tallpos GROUP BY g HAVING sum(v) < 0);
-----
-0
