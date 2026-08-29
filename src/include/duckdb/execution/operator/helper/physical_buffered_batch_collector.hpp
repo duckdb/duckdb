@@ -15,9 +15,6 @@ namespace duckdb {
 
 class BufferedBatchCollectorLocalState : public LocalSinkState {
 public:
-	BufferedBatchCollectorLocalState();
-
-public:
 	idx_t current_batch = 0;
 };
 
