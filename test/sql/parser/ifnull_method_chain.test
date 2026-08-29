@@ -31,8 +31,14 @@ SELECT ['abc'].ifnull(['def']);
 ----
 [abc]
 
-# a non-null first argument short-circuits
+# a non-null first argument wins over a NULL second argument
 query I
 SELECT ['abc'].ifnull(NULL);
 ----
 [abc]
+
+# nested chains resolve inner-first
+query I
+SELECT (NULL::VARCHAR).ifnull('x').ifnull('y');
+----
+x
