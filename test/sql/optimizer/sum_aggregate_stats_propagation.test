@@ -1,0 +1,101 @@
+# name: test/sql/optimizer/sum_aggregate_stats_propagation.test
+# description: sum(x) output stats should be bounded by [cardinality * min(x), cardinality * max(x)]
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT range::INTEGER AS x FROM range(10000);
+
+query III
+SELECT min(x), max(x), sum(x) FROM t;
+----
+0	9999	49995000
+
+# baseline: min / max propagate stats and fold impossible HAVING to Empty Result
+query II
+EXPLAIN SELECT max(x) FROM t HAVING max(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT max(x) AS m FROM t HAVING max(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT min(x) FROM t HAVING min(x) > 9999;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT min(x) AS m FROM t HAVING min(x) > 9999);
+----
+0
+
+# sum(x) should also be bounded and fold impossible HAVING
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) > 100000000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) > 100000000);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) BETWEEN -1000 AND -1;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM t HAVING sum(x) BETWEEN -1000 AND -1);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM t HAVING sum(x) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM t HAVING sum(x) > 0;
+----
+49995000
+
+query I
+SELECT sum(x) FROM t HAVING sum(x) BETWEEN 40000000 AND 60000000;
+----
+49995000
+
+statement ok
+CREATE TABLE tneg AS SELECT (-range)::INTEGER AS x FROM range(10000);
+
+query III
+SELECT min(x), max(x), sum(x) FROM tneg;
+----
+-9999	0	-49995000
+
+query II
+EXPLAIN SELECT sum(x) FROM tneg HAVING sum(x) > 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS s FROM tneg HAVING sum(x) > 0);
+----
+0
+
+query I
+SELECT sum(x) FROM tneg HAVING sum(x) < 0;
+----
+-49995000
