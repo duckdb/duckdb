@@ -99,3 +99,105 @@ query I
 SELECT sum(x) FROM tneg HAVING sum(x) < 0;
 ----
 -49995000
+
+# BOOL input: sum(b) is bounded by [0, cardinality]
+statement ok
+CREATE TABLE tb AS SELECT (range % 3 = 0) AS b FROM range(10000);
+
+query III
+SELECT min(b), max(b), sum(b) FROM tb;
+----
+false	true	3334
+
+query II
+EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(b) AS s FROM tb HAVING sum(b) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) > 10000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(b) AS s FROM tb HAVING sum(b) > 10000);
+----
+0
+
+query II
+EXPLAIN SELECT sum(b) FROM tb HAVING sum(b) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(b) FROM tb HAVING sum(b) > 0;
+----
+3334
+
+# SMALLINT (INT16) input: sum(s) is bounded by [cardinality * min, cardinality * max]
+statement ok
+CREATE TABLE tsh AS SELECT (range % 100)::SMALLINT AS s FROM range(10000);
+
+query III
+SELECT min(s), max(s), sum(s) FROM tsh;
+----
+0	99	495000
+
+query II
+EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(s) AS r FROM tsh HAVING sum(s) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) > 990000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(s) AS r FROM tsh HAVING sum(s) > 990000);
+----
+0
+
+query II
+EXPLAIN SELECT sum(s) FROM tsh HAVING sum(s) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(s) FROM tsh HAVING sum(s) > 0;
+----
+495000
+
+# negative-valued SMALLINT: sum bounds must flip direction
+statement ok
+CREATE TABLE tshn AS SELECT (-(range % 100))::SMALLINT AS s FROM range(10000);
+
+query III
+SELECT min(s), max(s), sum(s) FROM tshn;
+----
+-99	0	-495000
+
+query II
+EXPLAIN SELECT sum(s) FROM tshn HAVING sum(s) > 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(s) AS r FROM tshn HAVING sum(s) > 0);
+----
+0
+
+query I
+SELECT sum(s) FROM tshn HAVING sum(s) < 0;
+----
+-495000
