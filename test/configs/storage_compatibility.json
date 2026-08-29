@@ -150,6 +150,7 @@
         "test/parquet/variant/variant_legacy_encoding.test",
         "test/sql/types/variant/tpch_test.test",
         "test/sql/optimizer/pushdown_extract_reapplied.test",
+        "test/sql/index/art/scan/test_art_position_list_compression.test",
         "test/sql/storage/compression/default_storage_dict_fsst.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",

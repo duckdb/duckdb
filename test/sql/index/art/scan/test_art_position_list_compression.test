@@ -1,0 +1,182 @@
+# name: test/sql/index/art/scan/test_art_position_list_compression.test
+# description: Test ART position-list scans over compressed and mixed-codec payloads
+# group: [scan]
+
+load {TEST_DIR}/art_position_list_compression.db
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+SET threads = 4;
+
+# Multiple selected windows in one output batch cross a DICT_FSST ColumnSegment boundary.
+statement ok
+ATTACH '{TEST_DIR}/art_position_list_compression_segments.db' AS position_segments
+    (BLOCK_SIZE 16384, ROW_GROUP_SIZE 32768);
+
+statement ok
+CREATE TABLE position_segments.position_dict_segments(
+    id BIGINT,
+    payload VARCHAR USING COMPRESSION DICT_FSST
+);
+
+statement ok
+INSERT INTO position_segments.position_dict_segments
+SELECT CASE WHEN i % 32 = 0 THEN i / 32 ELSE 1000000 + i END,
+       'value-' || (i % 8)
+FROM range(32768) r(i);
+
+statement ok
+CHECKPOINT position_segments;
+
+statement ok
+CREATE INDEX position_dict_segments_id
+ON position_segments.position_dict_segments USING ART(id);
+
+query II
+SELECT count(*) > 1, count(*) FILTER (WHERE start % 2048 != 0) > 0
+FROM pragma_storage_info('position_segments.position_dict_segments')
+WHERE column_name = 'payload' AND compression = 'DICT_FSST' AND segment_type = 'VARCHAR';
+----
+true	true
+
+query ITT
+SELECT count(*), min(payload), max(payload)
+FROM position_segments.position_dict_segments WHERE id < 1024;
+----
+1024	value-0	value-0
+
+# Mixed codec projections and transaction semantics
+statement ok
+CREATE TABLE position_payloads(
+    id BIGINT,
+    bucket INTEGER,
+    u BIGINT USING COMPRESSION UNCOMPRESSED,
+    a DOUBLE USING COMPRESSION ALP,
+    d VARCHAR USING COMPRESSION DICT_FSST,
+    z VARCHAR USING COMPRESSION ZSTD,
+    nullable BIGINT,
+    arr BIGINT[2],
+    lst BIGINT[] USING COMPRESSION RLE,
+    s STRUCT(x BIGINT, y VARCHAR)
+);
+
+statement ok
+INSERT INTO position_payloads
+SELECT i,
+       i % 128,
+       i * 3,
+       i::DOUBLE / 10,
+       'dict-' || (i % 23),
+       repeat('z', 80) || (i % 31),
+       CASE WHEN i % 512 = 7 THEN NULL ELSE i END,
+       [i, i + 1]::BIGINT[2],
+       [i, i + 1, i + 2],
+       struct_pack(x := i * 2, y := 's-' || i)
+FROM range(10000) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE INDEX position_payloads_bucket ON position_payloads USING ART(bucket);
+
+query IIIII
+SELECT count(*) FILTER (
+           WHERE column_name = 'u' AND compression = 'Uncompressed' AND segment_type = 'BIGINT'
+       ) > 0,
+       count(*) FILTER (
+           WHERE column_name = 'a' AND compression = 'ALP' AND segment_type = 'DOUBLE'
+       ) > 0,
+       count(*) FILTER (
+           WHERE column_name = 'd' AND compression = 'DICT_FSST' AND segment_type = 'VARCHAR'
+       ) > 0,
+       count(*) FILTER (
+           WHERE column_name = 'z' AND compression = 'ZSTD' AND segment_type = 'VARCHAR'
+       ) > 0,
+       count(*) FILTER (
+           WHERE column_name = 'lst' AND compression = 'RLE' AND segment_type = 'BIGINT[]'
+       ) > 0
+FROM pragma_storage_info('position_payloads');
+----
+true	true	true	true	true
+
+query IIIIIII
+SELECT sum(u), CAST(round(sum(a) * 10) AS BIGINT), count(nullable), sum(nullable),
+       sum(arr[1]), sum(lst[1]), sum(s.x)
+FROM position_payloads WHERE bucket = 7;
+----
+1184763	394921	59	297501	394921	394921	789842
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*), sum(u)
+FROM (SELECT u, d FROM position_payloads WHERE bucket = 7 OFFSET 0) q
+WHERE d = 'dict-7';
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT count(*), sum(u)
+FROM (SELECT u, d FROM position_payloads WHERE bucket = 7 OFFSET 0) q
+WHERE d = 'dict-7';
+----
+4	53076
+
+statement ok
+UPDATE position_payloads SET u = u + 100000 WHERE id = 7;
+
+statement ok
+DELETE FROM position_payloads WHERE id = 135;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO position_payloads VALUES (
+    10119, 7, 30357, 1011.9, 'dict-local', 'z-local', NULL,
+    [10119, 10120]::BIGINT[2], [10119, 10120, 10121], struct_pack(x := 20238, y := 's-local')
+), (
+    10120, 8, -999, 1012.0, 'dict-other', 'z-other', NULL,
+    [10120, 10121]::BIGINT[2], [10120, 10121, 10122], struct_pack(x := 20240, y := 's-other')
+);
+
+query IIITTIIIII
+SELECT count(*), sum(u), CAST(round(sum(a) * 10) AS BIGINT), min(d), min(z),
+       count(nullable), sum(nullable), sum(arr[1]), sum(lst[1]), sum(s.x)
+FROM position_payloads WHERE bucket = 7;
+----
+79	1314715	404905	dict-0	z-local	58	297366	404905	404905	809810
+
+statement ok
+COMMIT;
+
+# The committed tail is uncompressed while the checkpointed payload is DICT_FSST.
+query II
+SELECT count(*), count(*) FILTER (WHERE d = 'dict-local')
+FROM position_payloads WHERE bucket = 7;
+----
+79	1
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE position_payloads SET u = -1 WHERE id = 263;
+
+query I
+SELECT min(u) FROM position_payloads WHERE bucket = 7;
+----
+-1
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT min(u) FROM position_payloads WHERE bucket = 7;
+----
+789

@@ -1,0 +1,248 @@
+# name: test/sql/index/art/scan/test_art_position_list_scan.test
+# description: Test ART position-list scan geometry, materialization, and transaction semantics
+# group: [scan]
+
+load {TEST_DIR}/art_position_list_scan.db
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+SET threads = 4;
+
+# Position geometry and count-only scans
+statement ok
+CREATE TABLE position_geometry(id BIGINT, payload BIGINT);
+
+statement ok
+INSERT INTO position_geometry SELECT i, i * 10 FROM range(130000) r(i);
+
+statement ok
+CREATE INDEX position_geometry_id ON position_geometry USING ART(id);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM position_geometry WHERE id BETWEEN 0 AND 2048;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Empty persistent ART results still scan matching transaction-local rows.
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO position_geometry VALUES (-1, -10);
+
+query II
+EXPLAIN ANALYZE SELECT id, payload FROM position_geometry WHERE id = -1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT id, payload FROM position_geometry WHERE id = -1;
+----
+-1	-10
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM position_geometry WHERE id = 0;
+----
+1
+
+query I
+SELECT count(*) FROM position_geometry WHERE id BETWEEN 0 AND 1;
+----
+2
+
+query III
+SELECT count(*), min(payload), max(payload) FROM position_geometry WHERE id BETWEEN 0 AND 2047;
+----
+2048	0	20470
+
+query III
+SELECT count(*), min(payload), max(payload) FROM position_geometry WHERE id BETWEEN 0 AND 2048;
+----
+2049	0	20480
+
+query III
+SELECT count(*), min(payload), max(payload) FROM position_geometry WHERE id BETWEEN 122878 AND 122882;
+----
+5	1228780	1228820
+
+query III
+SELECT count(*), min(payload), max(payload) FROM position_geometry WHERE id BETWEEN 129998 AND 129999;
+----
+2	1299980	1299990
+
+query I
+SELECT id FROM position_geometry WHERE id IN (1, 2049, 122881, 129999) ORDER BY id;
+----
+1
+2049
+122881
+129999
+
+query III
+SELECT count(*), bool_and(id = rowid), sum(payload)
+FROM position_geometry WHERE id BETWEEN 0 AND 31;
+----
+32	true	4960
+
+# Dense and sparse physical windows
+statement ok
+CREATE TABLE position_sparse(id BIGINT, payload VARCHAR USING COMPRESSION UNCOMPRESSED);
+
+statement ok
+INSERT INTO position_sparse
+SELECT CASE WHEN i < 17 THEN i
+            WHEN i % 2048 = 0 THEN 16 + i / 2048
+            ELSE 1000000 + i END,
+       'value-' || (i % 8)
+FROM range(131072) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE INDEX position_sparse_id ON position_sparse USING ART(id);
+
+statement ok
+SET threads = 1;
+
+query ITT
+SELECT count(*), min(payload), max(payload) FROM position_sparse WHERE id < 79;
+----
+79	value-0	value-7
+
+statement ok
+SET debug_force_fetch_row = true;
+
+# Forced Fetch still applies the index predicate to transaction-local rows.
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO position_sparse VALUES
+    (-1, 'local-match'),
+    (2000000, 'local-other');
+
+query II
+SELECT count(*), count(*) FILTER (WHERE payload = 'local-match')
+FROM position_sparse WHERE id < 32;
+----
+33	1
+
+statement ok
+ROLLBACK;
+
+statement ok
+SET debug_force_fetch_row = false;
+
+# The first position window is empty after MVCC selection.
+statement ok
+DELETE FROM position_sparse WHERE id < 17;
+
+query ITT
+SELECT count(*), min(payload), max(payload) FROM position_sparse WHERE id < 32;
+----
+15	value-0	value-0
+
+# Use a separate database for non-default RowGroup geometry.
+statement ok
+ATTACH '{TEST_DIR}/art_position_dict_segments.db' AS position_segments
+    (BLOCK_SIZE 16384, ROW_GROUP_SIZE 32768);
+
+# Position windows use RowGroup-relative offsets across a non-aligned boundary.
+statement ok
+CREATE TABLE position_segments.position_unaligned_row_groups(
+    id BIGINT,
+    bucket INTEGER,
+    payload BIGINT USING COMPRESSION UNCOMPRESSED
+);
+
+statement ok
+INSERT INTO position_segments.position_unaligned_row_groups
+SELECT i, CASE WHEN i >= 18433 THEN 7 ELSE 8 END, i
+FROM range(18449) r(i);
+
+statement ok
+CHECKPOINT position_segments;
+
+statement ok
+INSERT INTO position_segments.position_unaligned_row_groups
+SELECT i, CASE WHEN i < 18465 THEN 7 ELSE 8 END, i
+FROM range(18449, 20497) r(i);
+
+statement ok
+CHECKPOINT position_segments;
+
+statement ok
+CREATE INDEX position_unaligned_row_groups_bucket
+ON position_segments.position_unaligned_row_groups USING ART(bucket);
+
+query III
+WITH row_groups AS (
+    SELECT row_group_id, sum(count)::BIGINT AS row_count
+    FROM pragma_storage_info('position_segments.position_unaligned_row_groups')
+    WHERE column_name = 'id' AND segment_type = 'BIGINT'
+    GROUP BY row_group_id
+), row_group_starts AS (
+    SELECT row_group_id,
+           coalesce(sum(row_count) OVER (
+               ORDER BY row_group_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+           ), 0)::BIGINT AS row_group_start
+    FROM row_groups
+)
+SELECT row_group_id, row_group_start, row_group_start % 2048
+FROM row_group_starts WHERE row_group_id = 1;
+----
+1	18449	17
+
+query III
+SELECT count(*), bool_and(id = rowid AND payload = id), sum(payload)
+FROM position_segments.position_unaligned_row_groups WHERE bucket = 7;
+----
+32	true	590352
+
+# Position scans across RowGroups must not bypass filters on local rows.
+statement ok
+CREATE TABLE position_segments.position_row_group_boundary(payload BIGINT, bucket INTEGER);
+
+statement ok
+INSERT INTO position_segments.position_row_group_boundary
+SELECT i, 7 FROM range(65536) r(i);
+
+statement ok
+CHECKPOINT position_segments;
+
+statement ok
+CREATE INDEX position_row_group_boundary_bucket
+ON position_segments.position_row_group_boundary USING ART(bucket);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO position_segments.position_row_group_boundary
+SELECT 65536 + i, CASE WHEN i % 2 = 0 THEN 7 ELSE 8 END
+FROM range(5000) r(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*), sum(payload)
+FROM position_segments.position_row_group_boundary WHERE bucket = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query IIIII
+SELECT count(*), count(DISTINCT payload), min(payload), max(payload), sum(payload)
+FROM position_segments.position_row_group_boundary WHERE bucket = 7;
+----
+68036	68036	0	70534	2317538380
+
+statement ok
+ROLLBACK;
