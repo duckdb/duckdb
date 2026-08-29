@@ -135,8 +135,8 @@ TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	// Stream result
 	test_progress.Start();
 	auto result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {10000}));
 	test_progress.End();
-	REQUIRE_NO_FAIL(*result);
 
 	// Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=2"));
@@ -164,8 +164,8 @@ TEST_CASE("Test Progress Bar Fast", "[progress-bar]") {
 	// Stream result
 	test_progress.Start();
 	result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {10000}));
 	test_progress.End();
-	REQUIRE_NO_FAIL(*result);
 }
 
 TEST_CASE("Test Progress Bar", "[progress-bar][.]") {
