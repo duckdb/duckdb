@@ -61,6 +61,12 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 		return v;
 	}
 
+	// A zero fraction has no sign to negate (-0 == 0), which would drop the descending order.
+	// Emit a negative zero so the sign survives to the aggregate bind data.
+	if (frac == 0) {
+		return Value::DOUBLE(-0.0);
+	}
+
 	const auto &type = v.type();
 	switch (type.id()) {
 	case LogicalTypeId::DECIMAL: {

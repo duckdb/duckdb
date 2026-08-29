@@ -1,0 +1,2 @@
+{"id":1,"loc":{"type":"Point","coordinates":[1.0,2.0]},"tag":"x"}
+{"id":2,"loc":{"type":"Polygon","coordinates":[[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,0.0]]]},"tag":"y"}

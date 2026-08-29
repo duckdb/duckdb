@@ -1,0 +1,274 @@
+# name: test/sql/cte/materialized/materialized_cte_order_preservation.test
+# description: Test order preservation for materialized CTE scans
+# group: [materialized]
+
+require vector_size 2048
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+CREATE TABLE cte_order_batch AS SELECT i FROM range(1000000) tbl(i);
+
+query II
+EXPLAIN ANALYZE
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t LIMIT 5 OFFSET 500000;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Order Mode: BATCH_INDEX.*
+
+query II
+EXPLAIN ANALYZE
+CREATE TABLE cte_order_direct AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: DIRECT.*Order Mode: BATCH_INDEX.*Preferred Batch Size: 122880.*
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_order_direct;
+----
+1000000	0	999999
+
+statement ok
+PRAGMA verify_parallelism;
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t LIMIT 5 OFFSET 500000;
+----
+500000
+500001
+500002
+500003
+500004
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t WHERE i % 100000 = 0;
+----
+0
+100000
+200000
+300000
+400000
+500000
+600000
+700000
+800000
+900000
+
+query I
+CREATE TABLE cte_order_sparse AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch WHERE i % 100000 = 0
+)
+SELECT i FROM t;
+----
+10
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_order_sparse;
+----
+10	0	900000
+
+query I
+CREATE TABLE cte_order_empty AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch WHERE false
+)
+SELECT i FROM t;
+----
+0
+
+query I
+SELECT count(*) FROM cte_order_empty;
+----
+0
+
+query II
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM range(1000000) tbl(i)
+)
+SELECT (SELECT i FROM t LIMIT 1 OFFSET 500000), (SELECT sum(i) FROM t);
+----
+500000	499999500000
+
+query II
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM range(1000000) tbl(i)
+)
+SELECT (SELECT i FROM t LIMIT 1 OFFSET 100000), (SELECT i FROM t LIMIT 1 OFFSET 900000);
+----
+100000	900000
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM range(200000) tbl(i)
+	UNION ALL
+	SELECT i + 200000 FROM range(200000) tbl(i)
+)
+SELECT i FROM t LIMIT 5 OFFSET 250000;
+----
+250000
+250001
+250002
+250003
+250004
+
+statement ok
+CREATE TABLE cte_order_left AS SELECT i FROM range(4000) tbl(i);
+
+statement ok
+CREATE TABLE cte_order_right AS SELECT i + 4000 AS i FROM range(4000) tbl(i);
+
+query II
+EXPLAIN ANALYZE
+CREATE TABLE cte_order_union_copy AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_order_left
+	UNION ALL
+	SELECT * FROM cte_order_right
+)
+SELECT i FROM t;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Order Mode: BATCH_INDEX.*Preferred Batch Size: 122880.*
+
+query I
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_order_left
+	UNION ALL
+	SELECT * FROM cte_order_right
+)
+SELECT i FROM t LIMIT 5 OFFSET 5000;
+----
+5000
+5001
+5002
+5003
+5004
+
+statement ok
+PREPARE ordered_cte AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM range(500000) tbl(i)
+)
+SELECT i FROM t LIMIT 1 OFFSET 300000;
+
+loop i 0 5
+
+query I
+EXECUTE ordered_cte;
+----
+300000
+
+endloop
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+query I
+CREATE TABLE cte_order_sorted_copy AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t;
+----
+10000
+
+query I
+SELECT i FROM cte_order_sorted_copy LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+statement ok
+SET preserve_insertion_order=false;
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+query II
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT (SELECT i FROM t LIMIT 1), (SELECT i FROM t LIMIT 1);
+----
+9999	9999
+
+statement ok
+SET preserve_insertion_order=true;
+
+query I
+WITH t(i, j) AS MATERIALIZED (
+	SELECT i, i + 1
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT j FROM t LIMIT 5;
+----
+10000
+9999
+9998
+9997
+9996
+
+query I
+WITH t(i, j) AS MATERIALIZED (
+	SELECT i, i + 1
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT count(*) FROM t;
+----
+10000
+
+statement ok
+SET threads=1;
+
+query I
+WITH t(i) AS MATERIALIZED (
+	VALUES (1), (2), (3), (4), (5)
+)
+SELECT i FROM t LIMIT 3 OFFSET 1;
+----
+2
+3
+4

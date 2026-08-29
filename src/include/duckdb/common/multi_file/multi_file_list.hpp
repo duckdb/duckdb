@@ -20,6 +20,7 @@ class MultiFileList;
 class NodeStatistics;
 class LogicalGet;
 class TableFilterSet;
+struct MultiFileDynamicPushdownInfo;
 
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
 enum class MultiFileListScanType { ALWAYS_FETCH, FETCH_IF_AVAILABLE };
@@ -74,7 +75,7 @@ public:
 struct MultiFilePushdownInfo {
 	explicit MultiFilePushdownInfo(LogicalGet &get);
 	MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
-	                      const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info);
+	                      const vector<ColumnIndex> &column_indexes, ExtraOperatorInfo &extra_info);
 
 	TableIndex table_index;
 	const vector<Identifier> &column_names;
@@ -108,11 +109,7 @@ public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        MultiFilePushdownInfo &info,
 	                                                        vector<unique_ptr<Expression>> &filters) const;
-	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-	                                                        const vector<Identifier> &names,
-	                                                        const vector<LogicalType> &types,
-	                                                        const vector<column_t> &column_ids,
-	                                                        TableFilterSet &filters) const;
+	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(MultiFileDynamicPushdownInfo &dynamic_pushdown_info) const;
 
 	virtual vector<OpenFileInfo> GetAllFiles() const = 0;
 	virtual FileExpandResult GetExpandResult() const = 0;

@@ -11,6 +11,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -83,7 +84,7 @@ struct HandleCastError {
 	static void AssignError(const string &error_message, CastParameters &parameters);
 	static void AssignError(const string &error_message, string *error_message_ptr,
 	                        optional_ptr<const Expression> cast_source = nullptr,
-	                        optional_idx error_location = optional_idx());
+	                        QueryLocation error_location = QueryLocation());
 };
 
 //===--------------------------------------------------------------------===//

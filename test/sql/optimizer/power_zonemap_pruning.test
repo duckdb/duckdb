@@ -1,0 +1,88 @@
+# name: test/sql/optimizer/power_zonemap_pruning.test
+# description: Power expressions use numeric statistics for row-group pruning
+# group: [optimizer]
+
+statement ok
+CREATE TABLE power_pruning AS
+SELECT CASE WHEN i < 122880 THEN 1 ELSE 100 END::INTEGER AS x
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM power_pruning WHERE power(x, 2) > 2500;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(x) FROM power_pruning WHERE power(x, 2) > 2500;
+----
+12288000
+
+statement ok
+CREATE TABLE power_stats(x INTEGER);
+
+statement ok
+INSERT INTO power_stats VALUES (-3), (2);
+
+# Even powers have an interior minimum when the input range crosses zero
+query II
+SELECT s.min, s.max FROM (SELECT stats(power(x, 2)) s FROM power_stats LIMIT 1);
+----
+0.0	9.0
+
+# Odd powers are increasing over the complete input range
+query II
+SELECT s.min, s.max FROM (SELECT stats(power(x, 3)) s FROM power_stats LIMIT 1);
+----
+-27.0	8.0
+
+# Any non-NULL input raised to zero is one
+query II
+SELECT s.min, s.max FROM (SELECT stats(power(x, 0)) s FROM power_stats LIMIT 1);
+----
+1.0	1.0
+
+statement ok
+CREATE TABLE power_zero AS
+SELECT CASE WHEN i < 122880 THEN 'inf'::DOUBLE ELSE 1.0 END AS x
+FROM range(245760) tbl(i);
+
+# Zero powers do not require finite base statistics
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM power_zero WHERE power(x, 0) > 1;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM power_zero WHERE power(x, 0) > 1;
+----
+0
+
+statement ok
+CREATE TABLE negative_power_stats(x INTEGER);
+
+statement ok
+INSERT INTO negative_power_stats VALUES (-3), (-2);
+
+# Even powers reverse the bounds of a negative-only input range
+query II
+SELECT s.min, s.max FROM (SELECT stats(power(x, 2)) s FROM negative_power_stats LIMIT 1);
+----
+4.0	9.0
+
+statement ok
+CREATE TABLE negative_exponent(x INTEGER);
+
+statement ok
+INSERT INTO negative_exponent VALUES (0), (1);
+
+statement ok
+SET ieee_floating_point_ops = false;
+
+# Unsupported negative exponents must not prune inputs that throw
+statement error
+SELECT count(*) FROM negative_exponent WHERE power(x, -2) < 0;
+----
+zero raised to a negative power is undefined
+
+statement ok
+RESET ieee_floating_point_ops;

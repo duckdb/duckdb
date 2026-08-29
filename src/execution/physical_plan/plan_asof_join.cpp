@@ -59,8 +59,12 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	LogicalComparisonJoin join_op(InverseJoinType(op.join_type));
 
-	join_op.types = op.children[1]->types;
-	const auto &probe_types = op.children[0]->types;
+	// Use the types of the planned children: planning a child can change the types of the logical operator
+	// (EXCEPT ALL/INTERSECT ALL append a ROW_NUMBER column to it)
+	const auto &probe_types = probe.GetTypes();
+	const auto &build_types = build.GetTypes();
+
+	join_op.types = build_types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
 	// Project pk
@@ -72,14 +76,14 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	//	we have to track this carefully...
 	join_op.left_projection_map = op.right_projection_map;
 	if (join_op.left_projection_map.empty()) {
-		for (idx_t i = 0; i < op.children[1]->types.size(); ++i) {
+		for (idx_t i = 0; i < build_types.size(); ++i) {
 			join_op.left_projection_map.emplace_back(i);
 		}
 	}
 
 	join_op.right_projection_map = op.left_projection_map;
 	if (join_op.right_projection_map.empty()) {
-		for (idx_t i = 0; i < op.children[0]->types.size(); ++i) {
+		for (idx_t i = 0; i < probe_types.size(); ++i) {
 			join_op.right_projection_map.emplace_back(i);
 		}
 	}
@@ -87,8 +91,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Remap predicate column references.
 	auto predicate = CreatePredicateFromConditions(op.conditions);
 	if (predicate) {
-		const auto lhs_width = op.children[0]->types.size();
-		const auto rhs_width = op.children[1]->types.size();
+		const auto lhs_width = probe_types.size();
+		const auto rhs_width = build_types.size();
 
 		ExpressionIterator::EnumerateExpression(predicate, [&](Expression &child) {
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
@@ -191,7 +195,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Wrap all the projected non-pk probe fields in `first` aggregates;
 	vector<unique_ptr<Expression>> aggregates;
 	for (const auto &right_proj : join_op.right_projection_map) {
-		const auto col_idx = op.children[1]->types.size() + right_proj;
+		const auto col_idx = build_types.size() + right_proj;
 		const auto col_type = join_op.types[col_idx];
 		aggr_types.emplace_back(col_type);
 
@@ -286,6 +290,35 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	return proj;
 }
 
+static idx_t ValidateAsOfConditions(LogicalComparisonJoin &op, vector<idx_t> &equi_indexes) {
+	equi_indexes.clear();
+	auto asof_idx = op.conditions.size();
+	for (size_t c = 0; c < op.conditions.size(); ++c) {
+		auto &cond = op.conditions[c];
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		switch (cond.GetComparisonType()) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			equi_indexes.emplace_back(c);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+			D_ASSERT(asof_idx == op.conditions.size());
+			asof_idx = c;
+			break;
+		default:
+			throw InternalException("Invalid ASOF JOIN comparison");
+		}
+	}
+	D_ASSERT(asof_idx < op.conditions.size());
+
+	return asof_idx;
+}
+
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
 	// If we have a predicate and its a "simple" join, then we can just plan a regular join
 	switch (op.join_type) {
@@ -311,29 +344,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	//	Validate
 	vector<idx_t> equi_indexes;
-	auto asof_idx = op.conditions.size();
-	for (size_t c = 0; c < op.conditions.size(); ++c) {
-		auto &cond = op.conditions[c];
-		if (!cond.IsComparison()) {
-			continue;
-		}
-		switch (cond.GetComparisonType()) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			equi_indexes.emplace_back(c);
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_LESSTHAN:
-			D_ASSERT(asof_idx == op.conditions.size());
-			asof_idx = c;
-			break;
-		default:
-			throw InternalException("Invalid ASOF JOIN comparison");
-		}
-	}
-	D_ASSERT(asof_idx < op.conditions.size());
+	(void)ValidateAsOfConditions(op, equi_indexes);
 
 	// If there is a non-comparison predicate, we have to use NLJ.
 	const bool has_predicate = op.HasArbitraryConditions();
@@ -346,8 +357,39 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 				return *result;
 			}
 		}
-		return Make<PhysicalAsOfJoin>(op, left, right);
+
+		//	Check to see if we can leverage partitioning
+
+		//	TODO: HasSingleValuePartitions takes expressions instead of pointers.
+		//	Which is convenient for the other clients, but not for us...
+		vector<unique_ptr<Expression>> lhs_equalities;
+		vector<unique_ptr<Expression>> rhs_equalities;
+		for (auto equi_idx : equi_indexes) {
+			lhs_equalities.emplace_back(op.conditions[equi_idx].GetLHS().Copy());
+			rhs_equalities.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
+		}
+		vector<column_t> lhs_partition_cols;
+		vector<column_t> rhs_partition_cols;
+		if (!HasSingleValuePartitions(context, lhs_equalities, left, lhs_partition_cols) ||
+		    !HasSingleValuePartitions(context, rhs_equalities, right, rhs_partition_cols)) {
+			lhs_partition_cols.clear();
+			rhs_partition_cols.clear();
+		}
+
+		return Make<PhysicalAsOfJoin>(op, left, right, lhs_partition_cols, rhs_partition_cols);
 	}
+
+	return *PlanAsOfInequalityJoin(op, left, right, lhs_cardinality, rhs_cardinality);
+}
+
+optional_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfInequalityJoin(LogicalComparisonJoin &op,
+                                                                             PhysicalOperator &left,
+                                                                             PhysicalOperator &right,
+                                                                             const idx_t lhs_cardinality,
+                                                                             const idx_t rhs_cardinality) {
+	//	Caller already did this but it is cheap...
+	vector<idx_t> equi_indexes;
+	const auto asof_idx = ValidateAsOfConditions(op, equi_indexes);
 
 	//	Strip extra column from rhs projections
 	auto &right_projection_map = op.right_projection_map;
@@ -403,7 +445,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	vector<unique_ptr<Expression>> window_select;
 	window_select.emplace_back(std::move(asof_end));
 
-	auto &window_types = op.children[1]->types;
+	// Copy the types of the planned child instead of mutating the logical operator's types.
+	auto window_types = right.GetTypes();
 	window_types.emplace_back(asof_type);
 
 	auto &window = Make<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);

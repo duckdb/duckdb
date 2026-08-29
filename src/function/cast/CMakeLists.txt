@@ -8,6 +8,7 @@ add_library_unity(
   blob_cast.cpp
   bit_cast.cpp
   cast_function_set.cpp
+  cast_statistics.cpp
   decimal_cast.cpp
   default_casts.cpp
   enum_casts.cpp

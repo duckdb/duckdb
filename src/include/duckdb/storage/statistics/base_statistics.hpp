@@ -123,6 +123,7 @@ public:
 	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
 	void Copy(const BaseStatistics &other);
+	void ResetAdditiveStatistics();
 
 	unique_ptr<BaseStatistics> PushdownExtract(const StorageIndex &index) const;
 	BaseStatistics Copy() const;
@@ -187,9 +188,6 @@ private:
 	unsafe_unique_array<BaseStatistics> child_stats;
 };
 
-template <>
-inline void BaseStatistics::UpdateNumericStats<interval_t>(interval_t new_value) {
-}
 template <>
 inline void BaseStatistics::UpdateNumericStats<list_entry_t>(list_entry_t new_value) {
 }

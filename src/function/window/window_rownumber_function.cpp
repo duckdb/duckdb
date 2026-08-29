@@ -194,7 +194,8 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
+				const auto frame_idx = MaxValue(frame_begin[i], MinValue(row_idx, frame_end[i]));
+				rdata.WriteValue(UnsafeNumericCast<int64_t>(frame_idx - frame_begin[i] + 1));
 			}
 		}
 		return;
@@ -272,8 +273,14 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			if (n_param < 1) {
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
+			const auto begin = partition_begin[i];
+			const auto end = MaxValue(partition_end[i], begin);
 			// With thanks from SQLite's ntileValueFunc()
-			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
+			auto n_total = NumericCast<int64_t>(end - begin);
+			if (n_total == 0) {
+				rdata.WriteNull();
+				continue;
+			}
 			if (n_param > n_total) {
 				// more groups allowed than we have values
 				// map every entry to a unique group
@@ -281,12 +288,12 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			}
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
-			D_ASSERT(row_idx >= partition_begin[i]);
+			D_ASSERT(row_idx >= begin);
 			idx_t partition_idx = 0;
 			if (grstate.token_tree) {
-				partition_idx = grstate.token_tree->Rank(partition_begin[i], partition_end[i], row_idx) - 1;
+				partition_idx = grstate.token_tree->Rank(begin, end, row_idx) - 1;
 			} else {
-				partition_idx = row_idx - partition_begin[i];
+				partition_idx = row_idx - begin;
 			}
 			auto adjusted_row_idx = NumericCast<int64_t>(partition_idx);
 

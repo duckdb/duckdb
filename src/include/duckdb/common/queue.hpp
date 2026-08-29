@@ -44,35 +44,35 @@ public:
 
 	reference front() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'front' called on an empty queue!");
+			ThrowQueueFrontOnEmpty();
 		}
 		return original::front();
 	}
 
 	const_reference front() const {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'front' called on an empty queue!");
+			ThrowQueueFrontOnEmpty();
 		}
 		return original::front();
 	}
 
 	reference back() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty queue!");
+			ThrowQueueBackOnEmpty();
 		}
 		return original::back();
 	}
 
 	const_reference back() const {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty queue!");
+			ThrowQueueBackOnEmpty();
 		}
 		return original::back();
 	}
 
 	void pop() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'pop' called on an empty queue!");
+			ThrowQueuePopOnEmpty();
 		}
 		original::pop();
 	}

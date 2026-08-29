@@ -10,7 +10,7 @@ create type u as struct (i int, j int);
 statement error
 select cast (null as huh.what.u array);
 ----
-Binder Error: Catalog "huh" does not exist!
+Type with name "huh.what.u" does not exist because schema "huh.what" does not exist.
 
 statement error
 select cast (null as what.u array);

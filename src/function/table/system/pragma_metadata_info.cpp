@@ -21,7 +21,7 @@ struct PragmaMetadataOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("block_id");
 	return_types.emplace_back(LogicalType::BIGINT);
 

@@ -33,7 +33,7 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-          TARGET=$(git log -1 --format=%h)
+          TARGET=$(git log -1 --format=%H | cut -c1-10)
           mkdir to_be_uploaded
           rclone copy \
             --no-traverse \

@@ -1,0 +1,159 @@
+# name: test/sql/catalog/nested_schema/nested_schema_limits.test
+# description: Behaviour of nested schemas in areas that do not (yet) support them
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t(i INTEGER);
+
+statement ok
+INSERT INTO s1.s2.t VALUES (1);
+
+# a dotted name is at most three components: a nested table cannot additionally be qualified with its catalog
+
+statement error
+SELECT * FROM memory.s1.s2.t;
+----
+<REGEX>:.*syntax error.*
+
+statement error
+CREATE TABLE memory.s1.s2.t2(i INTEGER);
+----
+<REGEX>:.*syntax error.*
+
+# nested schemas cannot be used in the search path - the error says so explicitly
+
+statement error
+USE s1.s2;
+----
+<REGEX>:.*nested schema.*cannot be used in the search path.*
+
+statement error
+SET search_path='s1.s2';
+----
+<REGEX>:.*nested schema.*cannot be used in the search path.*
+
+# a path that is neither a catalog+schema nor a nested schema still reports "not found"
+
+statement error
+USE s1.nope;
+----
+<REGEX>:.*No catalog \+ schema named.*
+
+# "a.b.x" is ambiguous: "a" can be an attached catalog (with schema "b") or a schema (with nested schema "b").
+# The leading component is resolved as the catalog whenever it names an attached database - the same rule for every
+# entry type. There is no fallback to the nested-schema reading, so a nested schema is unreachable while a catalog
+# of the same name is attached.
+
+statement ok
+ATTACH ':memory:' AS shadow;
+
+statement ok
+CREATE SCHEMA shadow.inner_schema;
+
+# the catalog wins for tables ...
+statement ok
+CREATE TABLE shadow.inner_schema.tbl(i INTEGER);
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'tbl';
+----
+shadow	inner_schema	tbl
+
+# ... for types ...
+statement ok
+CREATE TYPE shadow.inner_schema.ty AS ENUM ('from_catalog');
+
+query I
+SELECT 'from_catalog'::shadow.inner_schema.ty;
+----
+from_catalog
+
+query II
+SELECT database_name, schema_name FROM duckdb_types() WHERE type_name = 'ty';
+----
+shadow	inner_schema
+
+# ... and for views
+statement ok
+CREATE VIEW shadow.inner_schema.v AS SELECT 1 AS x;
+
+query II
+SELECT database_name, schema_name FROM duckdb_views() WHERE view_name = 'v';
+----
+shadow	inner_schema
+
+# a nested schema shadowed by an attached catalog of the same name cannot be created
+statement ok
+CREATE SCHEMA shadow;
+
+statement error
+CREATE SCHEMA shadow.inner_schema;
+----
+<REGEX>:.*already exists.*
+
+statement ok
+DETACH shadow;
+
+# an explicitly qualified type that is not in that schema is an error - it does not fall back to the search path.
+# A nested qualification behaves exactly like a single-level one here.
+statement ok
+CREATE TYPE fallback_ty AS ENUM ('q');
+
+statement error
+SELECT 'q'::s1.fallback_ty;
+----
+<REGEX>:.*Type with name fallback_ty does not exist.*
+
+statement error
+SELECT 'q'::s1.s2.fallback_ty;
+----
+<REGEX>:.*Type with name fallback_ty does not exist.*
+
+# an unqualified reference does resolve through the search path
+query I
+SELECT 'q'::fallback_ty;
+----
+q
+
+# SHOW TABLES FROM resolves nested schemas
+
+query I
+SHOW TABLES FROM s1.s2;
+----
+t
+
+statement error
+SHOW TABLES FROM s1.nope;
+----
+<REGEX>:.*No catalog \+ schema named.*
+
+# the metadata functions report the innermost schema name; the parent is available via duckdb_schemas()
+
+query II
+SELECT schema_name, table_name FROM duckdb_tables() WHERE table_name = 't';
+----
+s2	t
+
+query I
+SELECT s.parent_schema FROM duckdb_tables() t JOIN duckdb_schemas() s ON t.schema_oid = s.oid
+WHERE t.table_name = 't';
+----
+s1
+
+# information_schema and pg_catalog also report the innermost schema name
+
+query II
+SELECT table_schema, table_name FROM information_schema.tables WHERE table_name = 't';
+----
+s2	t
+
+query I
+SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = 's2';
+----
+s2

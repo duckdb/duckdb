@@ -1,0 +1,76 @@
+# name: test/sql/storage/piecemeal_delete_checkpoint_compress.test
+# description: Test that version info compressed during a checkpoint is correctly serialized and restored
+# group: [storage]
+
+load {TEST_DIR}/piecemeal_delete_checkpoint_compress.db
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(122880) t(i);
+
+statement ok
+CHECKPOINT
+
+# fully delete the first 30 vectors (61440 rows) across two transactions
+# the per-vector delete ids differ between the two transactions, so the deletes cannot be compressed on commit
+query I
+DELETE FROM tbl WHERE i < 61440 AND i % 2 = 0
+----
+30720
+
+query I
+DELETE FROM tbl WHERE i < 61440 AND i % 2 = 1
+----
+30720
+
+# the checkpoint compresses the version info before serializing it
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+61440	61440	122879
+
+restart
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+61440	61440	122879
+
+# an old snapshot must still block the compression: deletes that are not yet visible to all
+# transactions are not compressed
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+query I con2
+DELETE FROM tbl WHERE i < 100000
+----
+38560
+
+statement ok con2
+CHECKPOINT
+
+# con1 started before the delete committed - it must still see the rows
+query I con1
+SELECT COUNT(*) FROM tbl
+----
+61440
+
+statement ok con1
+COMMIT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+22880	100000	122879
+
+restart
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+22880	100000	122879

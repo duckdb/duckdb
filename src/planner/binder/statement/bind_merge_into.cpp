@@ -438,7 +438,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	}
 
 	merge_into->row_id_start = projection_expressions.size();
-	// finally bind the row id column and add them to the projection list
+	// Row ID columns must remain last: PhysicalMergeInto treats the trailing columns as one composite key.
 	BindRowIdColumns(table, get, projection_expressions);
 
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));

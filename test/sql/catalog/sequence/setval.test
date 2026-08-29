@@ -1,0 +1,391 @@
+# name: test/sql/catalog/sequence/setval.test
+# description: Test setval() function
+# group: [sequence]
+
+require skip_reload
+
+statement ok
+CREATE SEQUENCE myseq;
+
+# two params (default is_called = true)
+query I
+SELECT setval('myseq', 42);
+----
+42
+
+query I
+SELECT nextval('myseq');
+----
+43
+
+statement ok
+DROP SEQUENCE myseq;
+
+# three params
+statement ok
+CREATE SEQUENCE myseq;
+
+query I
+SELECT setval('myseq', 42, true);
+----
+42
+
+query I
+SELECT nextval('myseq');
+----
+43
+
+statement ok
+DROP SEQUENCE myseq;
+
+statement ok
+CREATE SEQUENCE myseq;
+
+query I
+SELECT setval('myseq', 42, false);
+----
+42
+
+query I
+SELECT nextval('myseq');
+----
+42
+
+query I
+SELECT nextval('myseq');
+----
+43
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# currval interaction
+#
+
+statement ok
+CREATE SEQUENCE myseq;
+
+# currval is not defined until nextval/setval(is_called=true) has been called in this session
+statement error
+SELECT currval('myseq');
+----
+<REGEX>:.*Sequence Error.*sequence is not yet defined in this session.*
+
+# setval(..., true) sets currval as if nextval had been called
+query I
+SELECT setval('myseq', 42, true);
+----
+42
+
+query I
+SELECT currval('myseq');
+----
+42
+
+statement ok
+DROP SEQUENCE myseq;
+
+statement ok
+CREATE SEQUENCE myseq;
+
+# setval(..., false) does not affect currval - currval is still undefined
+query I
+SELECT setval('myseq', 42, false);
+----
+42
+
+statement error
+SELECT currval('myseq');
+----
+<REGEX>:.*Sequence Error.*sequence is not yet defined in this session.*
+
+# once currval is established, setval(..., false) does not change it
+query I
+SELECT nextval('myseq');
+----
+42
+
+query I
+SELECT currval('myseq');
+----
+42
+
+query I
+SELECT setval('myseq', 100, false);
+----
+100
+
+# currval is unaffected by the is_called = false setval
+query I
+SELECT currval('myseq');
+----
+42
+
+query I
+SELECT nextval('myseq');
+----
+100
+
+query I
+SELECT currval('myseq');
+----
+100
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# boundary / out-of-range values
+#
+
+statement ok
+CREATE SEQUENCE myseq MINVALUE 10 MAXVALUE 20;
+
+# exactly MINVALUE and MAXVALUE succeed
+query I
+SELECT setval('myseq', 10, false);
+----
+10
+
+query I
+SELECT setval('myseq', 20, false);
+----
+20
+
+# one below MINVALUE / one above MAXVALUE error
+statement error
+SELECT setval('myseq', 9, false);
+----
+<REGEX>:.*Sequence Error.*setval: value 9 is out of bounds for sequence.*\(10\.\.20\).*
+
+statement error
+SELECT setval('myseq', 21, false);
+----
+<REGEX>:.*Sequence Error.*setval: value 21 is out of bounds for sequence.*\(10\.\.20\).*
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# invalid parameters
+#
+
+# wrong number of arguments
+statement error
+SELECT setval('myseq');
+----
+<REGEX>:.*Binder Error.*
+
+statement error
+SELECT setval();
+----
+<REGEX>:.*Binder Error.*
+
+statement error
+SELECT setval('myseq', 1, true, true);
+----
+<REGEX>:.*Binder Error.*
+
+# non-existent sequence
+statement error
+SELECT setval('nonexistent_seq', 1);
+----
+<REGEX>:.*Catalog Error.*nonexistent_seq.*does not exist.*
+
+#
+# NULL values
+#
+
+# NULL sequence name (2 and 3 parameter forms)
+query I
+SELECT setval(NULL, 42);
+----
+NULL
+
+query I
+SELECT setval(NULL, 42, true);
+----
+NULL
+
+statement ok
+CREATE SEQUENCE myseq;
+
+# NULL value, valid sequence name and is_called
+query I
+SELECT setval('myseq', NULL);
+----
+NULL
+
+query I
+SELECT setval('myseq', NULL, true);
+----
+NULL
+
+# NULL is_called, valid sequence name and value
+query I
+SELECT setval('myseq', 42, NULL);
+----
+NULL
+
+# NULL sequence name and NULL value
+query I
+SELECT setval(NULL, NULL);
+----
+NULL
+
+# NULL sequence name and NULL is_called
+query I
+SELECT setval(NULL, 42, NULL);
+----
+NULL
+
+# NULL value and NULL is_called, valid sequence name
+query I
+SELECT setval('myseq', NULL, NULL);
+----
+NULL
+
+# all three parameters NULL
+query I
+SELECT setval(NULL, NULL, NULL);
+----
+NULL
+
+# the sequence should be untouched by all of the above NULL calls
+query I
+SELECT nextval('myseq');
+----
+1
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# non-numeric / non-boolean values
+#
+
+statement ok
+CREATE SEQUENCE myseq;
+
+statement error
+SELECT setval('myseq', 'abc');
+----
+<REGEX>:.*Error.*
+
+statement error
+SELECT setval('myseq', 42, 'not_a_bool');
+----
+<REGEX>:.*Error.*
+
+statement error
+SELECT setval('myseq', [1, 2, 3]);
+----
+<REGEX>:.*Binder Error: No function matches.*
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# transactional behavior
+#
+
+statement ok
+CREATE SEQUENCE myseq;
+
+statement ok
+BEGIN TRANSACTION;
+
+query I
+SELECT setval('myseq', 42, true);
+----
+42
+
+statement ok
+ROLLBACK;
+
+# sequences (including setval) are not transactional, matching postgres semantics:
+# the counter advance is not undone by ROLLBACK
+query I
+SELECT nextval('myseq');
+----
+43
+
+statement ok
+DROP SEQUENCE myseq;
+
+#
+# persistence across checkpoint / restart
+#
+
+statement ok
+SET storage_compatibility_version = 'v2.0.0';
+
+load {TEST_DIR}/setval_restart.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE SEQUENCE persisted_seq;
+
+query I
+SELECT setval('persisted_seq', 42, true);
+----
+42
+
+restart
+
+query I
+SELECT currval('persisted_seq');
+----
+42
+
+query I
+SELECT nextval('persisted_seq');
+----
+43
+
+statement ok
+DROP SEQUENCE persisted_seq;
+
+#
+# TABLES
+#
+
+statement ok
+CREATE SEQUENCE t_seq;
+
+statement ok
+CREATE TABLE t (a BIGINT, b BOOLEAN);
+
+statement ok
+INSERT INTO t VALUES (42, true), (100, false), (10, true);
+
+statement ok
+INSERT INTO t VALUES (42, true), (NULL, true), (10, NULL);
+
+query I
+SELECT setval('t_seq', a, b) FROM t;
+----
+42
+100
+10
+42
+NULL
+NULL
+
+# the sequence counter reflects the last row processed (is_called = true)
+query I
+SELECT nextval('t_seq');
+----
+43
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP SEQUENCE t_seq;

@@ -1,0 +1,37 @@
+# name: test/sql/copy/parquet/union_by_name_struct_projection.test
+# description: Test projecting a struct field missing from a unioned Parquet file
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT {'a': 1, 'b': 2}::STRUCT(a INT, b INT) AS s, 1 AS id)
+TO '{TEST_DIR}/struct.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (SELECT 2 AS id)
+TO '{TEST_DIR}/no_struct.parquet' (FORMAT PARQUET);
+
+query II
+SELECT id, s.a
+FROM read_parquet(['{TEST_DIR}/struct.parquet', '{TEST_DIR}/no_struct.parquet'], union_by_name = true)
+ORDER BY id;
+----
+1	1
+2	NULL
+
+query I
+SELECT id
+FROM read_parquet(['{TEST_DIR}/struct.parquet', '{TEST_DIR}/no_struct.parquet'], union_by_name = true)
+WHERE s.a IS NULL
+ORDER BY id;
+----
+2
+
+query I
+SELECT id
+FROM read_parquet(['{TEST_DIR}/struct.parquet', '{TEST_DIR}/no_struct.parquet'], union_by_name = true)
+WHERE s.a = 1
+ORDER BY id;
+----
+1

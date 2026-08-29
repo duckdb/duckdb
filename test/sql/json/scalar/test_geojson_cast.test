@@ -1,0 +1,78 @@
+# name: test/sql/json/scalar/test_geojson_cast.test
+# description: Test casting between JSON and GEOMETRY
+# group: [scalar]
+
+require json
+
+# A JSON object is never valid WKT, so GeoJSON fragments can always be cast to GEOMETRY
+query I
+SELECT ST_AsText('{"type":"Point","coordinates":[1,2]}'::JSON::GEOMETRY);
+----
+POINT (1 2)
+
+query I
+SELECT ST_AsText('{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}'::JSON::GEOMETRY);
+----
+POLYGON ((0 0, 1 0, 1 1, 0 0))
+
+# WKT strings inside JSON still work
+query I
+SELECT ST_AsText('"POINT(9 9)"'::JSON::GEOMETRY);
+----
+POINT (9 9)
+
+query I
+SELECT '{"type":"Point","coordinates":[1,2]}'::JSON::GEOMETRY::VARCHAR;
+----
+POINT (1 2)
+
+# Mixing WKT strings and GeoJSON objects in one vector
+statement ok
+CREATE TABLE mixed (j JSON);
+
+statement ok
+INSERT INTO mixed VALUES ('{"type":"Point","coordinates":[1,2]}'), ('"LINESTRING(0 0, 1 1)"'), (NULL);
+
+query I
+SELECT ST_AsText(j::GEOMETRY) FROM mixed;
+----
+POINT (1 2)
+LINESTRING (0 0, 1 1)
+NULL
+
+# Writing GEOMETRY to JSON still produces WKT - GeoJSON output is opt-in via ST_AsGeoJSON or FORMAT GEOJSON
+query I
+SELECT to_json('POINT(1 2)'::GEOMETRY);
+----
+"POINT (1 2)"
+
+query I
+SELECT 'POINT(1 2)'::GEOMETRY::JSON;
+----
+"POINT (1 2)"
+
+query I
+SELECT to_json({a: 1, g: 'POINT(3 4)'::GEOMETRY});
+----
+{"a":1,"g":"POINT (3 4)"}
+
+query I
+SELECT to_json(['POINT(1 2)'::GEOMETRY, 'POINT(3 4)'::GEOMETRY]);
+----
+["POINT (1 2)","POINT (3 4)"]
+
+query I
+SELECT to_json(NULL::GEOMETRY);
+----
+NULL
+
+# json_transform into a GEOMETRY column
+query I
+SELECT ST_AsText(from_json('{"g":{"type":"Point","coordinates":[5,6]}}', '{"g":"GEOMETRY"}').g);
+----
+POINT (5 6)
+
+statement error
+SELECT '{"type":"Point","coordinates":["a","b"]}'::JSON::GEOMETRY;
+----
+<REGEX>:.*must contain only numbers.*

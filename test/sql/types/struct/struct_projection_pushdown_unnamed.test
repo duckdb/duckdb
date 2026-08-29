@@ -1,0 +1,28 @@
+# name: test/sql/types/struct/struct_projection_pushdown_unnamed.test
+# description: Test projection pushdown through mixed named and unnamed structs
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# Unnamed struct followed by a named struct
+query I
+SELECT x[2].k
+FROM (SELECT unnest([(0, {'k': 42})]) AS x)
+WHERE x[2] IS NOT NULL;
+----
+42
+
+# Switch between unnamed and named structs multiple times in one extract path
+query I
+SELECT x[2].payload[2].value
+FROM (SELECT unnest([(0, {'payload': (10, {'value': 42})})]) AS x);
+----
+42
+
+# Named struct followed by an unnamed struct
+query I
+SELECT x.payload[2].value
+FROM (SELECT unnest([{'payload': (10, {'value': 42})}]) AS x);
+----
+42

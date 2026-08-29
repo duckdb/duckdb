@@ -734,9 +734,10 @@ void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, start_ptr);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, start_ptr);
 	}
 }
 
@@ -757,9 +758,10 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-		                  "at location %llu",
-		                  computed_checksum, stored_checksum, location);
+		throw DataCorruptionException(
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		    "at location %llu",
+		    computed_checksum, stored_checksum, location);
 	}
 }
 
@@ -812,6 +814,13 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
+	try {
+		Storage::VerifyBlockAllocSize(header.block_alloc_size);
+	} catch (const InvalidInputException &) {
+		throw DataCorruptionException("Corrupt database file: invalid block allocation size %llu",
+		                              header.block_alloc_size);
+	}
+
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;

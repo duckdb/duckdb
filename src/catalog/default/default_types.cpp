@@ -31,8 +31,12 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (width_value.IsNull()) {
 			throw BinderException("DECIMAL type width cannot be NULL");
 		}
-		if (width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-			width = width_value.GetValueUnsafe<uint8_t>();
+		if (!width_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type width must be an integral type");
+		}
+		auto cast_width = width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+		if (cast_width) {
+			width = cast_width->GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
 		} else {
 			throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
@@ -44,8 +48,12 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (scale_value.IsNull()) {
 			throw BinderException("DECIMAL type scale cannot be NULL");
 		}
-		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-			scale = scale_value.GetValueUnsafe<uint8_t>();
+		if (!scale_value.type().IsIntegral()) {
+			throw BinderException("DECIMAL type scale must be an integral type");
+		}
+		auto cast_scale = scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+		if (cast_scale) {
+			scale = cast_scale->GetValueUnsafe<uint8_t>();
 		} else {
 			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL);
 		}
@@ -84,8 +92,9 @@ LogicalType BindTimestampType(BindLogicalTypeInput &input) {
 		throw BinderException("TIMESTAMP type precision cannot be NULL");
 	}
 	uint8_t precision;
-	if (precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
-		precision = precision_value.GetValueUnsafe<uint8_t>();
+	auto cast_precision = precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT);
+	if (cast_precision) {
+		precision = cast_precision->GetValueUnsafe<uint8_t>();
 	} else {
 		throw BinderException("TIMESTAMP type precision must be between 0 and 9");
 	}
@@ -238,11 +247,12 @@ LogicalType BindArrayType(BindLogicalTypeInput &input) {
 	if (!size_val.type().IsIntegral()) {
 		throw BinderException("ARRAY type size modifier must be an integral type");
 	}
-	if (!size_val.DefaultTryCastAs(LogicalTypeId::BIGINT)) {
+	auto cast_size = size_val.DefaultTryCastAs(LogicalTypeId::BIGINT);
+	if (!cast_size) {
 		throw BinderException("ARRAY type size modifier must be a BIGINT");
 	}
 
-	auto array_size = size_val.GetValueUnsafe<int64_t>();
+	auto array_size = cast_size->GetValueUnsafe<int64_t>();
 
 	if (array_size < 1) {
 		throw BinderException("ARRAY type size must be at least 1");
@@ -577,7 +587,7 @@ LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vecto
 		if (params.empty()) {
 			return LogicalType(entry->type);
 		} else {
-			throw InvalidInputException("Type '%s' does not take any type parameters", name);
+			throw InvalidInputException("Type %s does not take any type parameters", name);
 		}
 	}
 

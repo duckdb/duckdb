@@ -19,4 +19,4 @@ ALP
 statement error
 SELECT * FROM alp LIMIT 1;
 ----
-IO Error: Corrupted ALP segment: Invalid bit_width encountered: 255
+Data Corruption Error: Corrupted ALP segment: Invalid bit_width encountered: 255

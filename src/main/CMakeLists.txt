@@ -43,6 +43,7 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   external_resource_type_registry.cpp
+  external_resources_manager.cpp
   extension.cpp
   extension_callback_manager.cpp
   extension_install_info.cpp

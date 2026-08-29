@@ -263,7 +263,7 @@ struct TestVectorDictionary {
 };
 
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<TestVectorBindData>();
 	for (idx_t i = 0; i < input.inputs.size(); i++) {
 		string name = "test_vector";

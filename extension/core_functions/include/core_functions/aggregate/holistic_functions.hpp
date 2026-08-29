@@ -101,4 +101,14 @@ struct ApproxTopKFun {
 	static AggregateFunction GetFunction();
 };
 
+struct LttbFun {
+	static constexpr const char *Name = "lttb";
+	static constexpr const char *Parameters = "x,y,n";
+	static constexpr const char *Description = "Downsamples the (x, y) points to (at most) n representative points using the Largest Triangle Three Buckets algorithm. Returns a LIST of STRUCT(x, y); the points must be ordered by x (use lttb(x, y, n ORDER BY x)).";
+	static constexpr const char *Example = "lttb(x, y, 500 ORDER BY x)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

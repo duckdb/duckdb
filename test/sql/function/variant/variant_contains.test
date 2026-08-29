@@ -1,0 +1,354 @@
+# name: test/sql/function/variant/variant_contains.test
+# description: Test variant_contains
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_contains.db readwrite v1.5.0
+
+# Primitive values of the same type and same value should be equal.
+foreach haystack,needle 42,42 true,true 'duck','duck'
+
+query I
+SELECT variant_contains(({haystack})::VARIANT, ({needle})::VARIANT);
+----
+true
+
+endloop
+
+# Primitive values of the same type with a different value should not be equal.
+foreach haystack,needle 42,43 -1,0 0,1 1.0,1.1 -1.0,1.0 true,false 'duck','goose'
+
+query I
+SELECT variant_contains(({haystack})::VARIANT, ({needle})::VARIANT);
+----
+false
+
+endloop
+
+# Primitive values of the same rank and same value should be equal.
+foreach dst TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL BIGNUM
+
+foreach src TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT DECIMAL BIGNUM
+
+query I
+SELECT variant_contains(1::{dst}::VARIANT, 1::{src}::VARIANT);
+----
+true
+
+endloop
+
+endloop
+
+foreach dst FLOAT DOUBLE
+
+foreach src FLOAT DOUBLE
+
+query I
+SELECT variant_contains(1.0::{dst}::VARIANT, 1.0::{src}::VARIANT);
+----
+true
+
+endloop
+
+endloop
+
+# TIMESTAMP rank.
+foreach dst DATE TIMESTAMP_S TIMESTAMP_MS TIMESTAMP TIMESTAMP_NS
+
+foreach src DATE TIMESTAMP_S TIMESTAMP_MS TIMESTAMP TIMESTAMP_NS
+
+query I
+SELECT variant_contains('2020-01-01'::{dst}::VARIANT, '2020-01-01'::{src}::VARIANT);
+----
+true
+
+endloop
+
+endloop
+
+# TIMESTAMP_TZ rank.
+foreach dst TIMESTAMPTZ TIMESTAMPTZ_NS
+
+foreach src TIMESTAMPTZ TIMESTAMPTZ_NS
+
+query I
+SELECT variant_contains('2020-01-01 12:34:56+00'::{dst}::VARIANT,
+                        '2020-01-01 12:34:56+00'::{src}::VARIANT);
+----
+true
+
+endloop
+
+endloop
+
+# TIME rank.
+foreach dst TIME TIME_NS
+
+foreach src TIME TIME_NS
+
+query I
+SELECT variant_contains('12:34:56'::{dst}::VARIANT, '12:34:56'::{src}::VARIANT);
+----
+true
+
+endloop
+
+endloop
+
+# Primitive values with a different rank and similar value should not be equal.
+foreach value,haystack_type,needle_type '1',VARCHAR,BLOB 1,VARCHAR,BIT
+
+query I
+SELECT variant_contains({value}::{haystack_type}::VARIANT, {value}::{needle_type}::VARIANT);
+----
+false
+
+endloop
+
+# Other scalar categories compare by category and normalized value.
+query IIII
+SELECT
+    variant_contains('550e8400-e29b-41d4-a716-446655440000'::UUID::VARIANT,
+                     '550e8400-e29b-41d4-a716-446655440000'::UUID::VARIANT),
+    variant_contains(INTERVAL '1 month 2 days'::VARIANT, INTERVAL '1 month 2 days'::VARIANT),
+    variant_contains('1010'::BIT::VARIANT, '1010'::BIT::VARIANT),
+    variant_contains('duck'::BLOB::VARIANT, 'duck'::BLOB::VARIANT);
+----
+true	true	true	true
+
+query IIII
+SELECT
+    variant_contains('550e8400-e29b-41d4-a716-446655440000'::UUID::VARIANT,
+                     '550e8400-e29b-41d4-a716-446655440001'::UUID::VARIANT),
+    variant_contains(INTERVAL '1 month 2 days'::VARIANT, INTERVAL '1 month 3 days'::VARIANT),
+    variant_contains('1010'::BIT::VARIANT, '1011'::BIT::VARIANT),
+    variant_contains('duck'::BLOB::VARIANT, 'goose'::BLOB::VARIANT);
+----
+false	false	false	false
+
+# Every supported primitive VARIANT value contains itself.
+statement ok
+CREATE MACRO variant_contains_self(value) AS variant_contains(value::VARIANT, value::VARIANT);
+
+query I
+SELECT list_bool_and(results) AND list_count(results) = length(results)
+FROM (
+	SELECT [*COLUMNS(*)] AS results
+	FROM (
+		SELECT variant_contains_self(
+			COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))
+		)
+		FROM test_all_types()
+		WHERE bool IS NOT NULL
+	)
+);
+----
+true
+true
+
+# Primitive values can occur at any depth, but object keys are not values.
+query IIII
+SELECT
+    variant_contains('{"a": {"b": [1, 2, 3]}}'::JSON::VARIANT, 2::VARIANT),
+    variant_contains('{"a": {"b": [1, 2, 3]}}'::JSON::VARIANT, 4::VARIANT),
+    variant_contains('{"a": 1}'::JSON::VARIANT, 'a'::VARIANT),
+    variant_contains('[{"a": "needle"}]'::JSON::VARIANT, 'needle'::VARIANT);
+----
+true	false	false	true
+
+# Object containment is subset matching and is independent of key order.
+query IIII
+SELECT
+    variant_contains('{"a": 1, "b": 2}'::JSON::VARIANT, '{"a": 1}'::JSON::VARIANT),
+    variant_contains('{"a": 1, "b": 2}'::JSON::VARIANT, '{"b": 2, "a": 1}'::JSON::VARIANT),
+    variant_contains('{"a": 1}'::JSON::VARIANT, '{"a": 1, "b": 2}'::JSON::VARIANT),
+    variant_contains('{"a": 1}'::JSON::VARIANT, '{"b": 1}'::JSON::VARIANT);
+----
+true	true	false	false
+
+query III
+SELECT
+    variant_contains('{"a": {"b": [{"c": 1, "d": 2}]}}'::JSON::VARIANT,
+                     '{"d": 2}'::JSON::VARIANT),
+    variant_contains('{"a": {"b": [{"c": 1, "d": 2}]}}'::JSON::VARIANT,
+                     '{"a": {"b": [{"c": 1}]}}'::JSON::VARIANT),
+    variant_contains('{"a": {"b": 42}}'::JSON::VARIANT, '{"a": 42}'::JSON::VARIANT);
+----
+true	true	false
+
+query I
+SELECT variant_contains('[{"a": 1}, {"b": 2}]'::JSON::VARIANT, '{"a": 1, "b": 2}'::JSON::VARIANT);
+----
+false
+
+# Empty objects are contained only where an object occurs.
+query III
+SELECT
+    variant_contains('{"a": 1}'::JSON::VARIANT, '{}'::JSON::VARIANT),
+    variant_contains('[1, {"a": 2}]'::JSON::VARIANT, '{}'::JSON::VARIANT),
+    variant_contains('[1, 2]'::JSON::VARIANT, '{}'::JSON::VARIANT);
+----
+true	true	false
+
+# Array containment is order-independent.
+query III
+SELECT
+    variant_contains('[1, 2, 3]'::JSON::VARIANT, '[3, 1]'::JSON::VARIANT),
+    variant_contains('[1, 2]'::JSON::VARIANT, '[1, 2, 3]'::JSON::VARIANT),
+    variant_contains('[1, 2]'::JSON::VARIANT, '[3]'::JSON::VARIANT);
+----
+true	false	false
+
+# Array elements are not consumed, so one element can satisfy repeated needle elements.
+query III
+SELECT
+    variant_contains([1]::VARIANT, [1, 1]::VARIANT),
+    variant_contains('[{"a": 1, "b": 2}]'::JSON::VARIANT, '[{"a": 1}]'::JSON::VARIANT),
+    variant_contains('[{"a": 1}]'::JSON::VARIANT, '[{"a": 2}]'::JSON::VARIANT);
+----
+true	true	false
+
+# Empty arrays are contained only where an array occurs.
+query III
+SELECT
+    variant_contains([1, 2]::VARIANT, []::INTEGER[]::VARIANT),
+    variant_contains('{"a": [1, 2]}'::JSON::VARIANT, '[]'::JSON::VARIANT),
+    variant_contains('{"a": 1}'::JSON::VARIANT, '[]'::JSON::VARIANT);
+----
+true	true	false
+
+# Number values compare by normalized value, while NUMBER and REAL remain distinct categories.
+query II
+SELECT
+    variant_contains('100000000000000000000000000000000000000'::BIGNUM::VARIANT,
+                     '100000000000000000000000000000000000000.0'::BIGNUM::VARIANT),
+    variant_contains(1::INTEGER::VARIANT, 1::DOUBLE::VARIANT);
+----
+true	false
+
+# Signed, zero, fractional, and BIGNUM values compare across NUMBER types.
+query IIII
+SELECT
+    variant_contains((-1)::INTEGER::VARIANT, (-1)::DECIMAL(3, 2)::VARIANT),
+    variant_contains((0)::INTEGER::VARIANT, (-0.00)::DECIMAL(3, 2)::VARIANT),
+    variant_contains('-1'::BIGNUM::VARIANT, (-1)::BIGINT::VARIANT),
+    variant_contains(1::BIGINT::VARIANT, 1.1::DECIMAL(4, 2)::VARIANT);
+----
+true	true	true	false
+
+# FLOAT and DOUBLE compare by their normalized REAL value.
+query IIII
+SELECT
+    variant_contains(1.5::FLOAT::VARIANT, 1.5::DOUBLE::VARIANT),
+    variant_contains('NaN'::FLOAT::VARIANT, 'NaN'::DOUBLE::VARIANT),
+    variant_contains('-0.0'::DOUBLE::VARIANT, '0.0'::FLOAT::VARIANT),
+    variant_contains('Infinity'::FLOAT::VARIANT, 'Infinity'::DOUBLE::VARIANT);
+----
+true	true	true	true
+
+# Temporal values with different normalized values do not compare equal.
+query IIII
+SELECT
+    variant_contains('2020-01-01'::DATE::VARIANT, '2020-01-02'::TIMESTAMP::VARIANT),
+    variant_contains('2020-01-01 00:00:00.000001'::TIMESTAMP::VARIANT,
+                     '2020-01-01 00:00:00'::TIMESTAMP_S::VARIANT),
+    variant_contains('12:34:56'::TIME::VARIANT, '12:34:57'::TIME_NS::VARIANT),
+    variant_contains('2020-01-01 00:00:00+00'::TIMESTAMPTZ::VARIANT,
+                     '2020-01-01 00:00:00+01'::TIMESTAMPTZ::VARIANT);
+----
+false	false	false	false
+
+# TIMESTAMPTZ values compare by instant, not by their textual offset.
+query II
+SELECT
+    variant_contains('2020-01-01 00:00:00+00'::TIMESTAMPTZ::VARIANT,
+                     '2020-01-01 01:00:00+01'::TIMESTAMPTZ::VARIANT),
+    variant_contains('2020-01-01 00:00:00+00'::TIMESTAMPTZ::VARIANT,
+                     '2020-01-01 00:00:00+01'::TIMESTAMPTZ::VARIANT);
+----
+true	false
+
+query IIII
+SELECT
+    variant_contains('2020-01-01 12:34:56'::TIMESTAMP::VARIANT,
+                     '2020-01-01 12:34:56+00'::TIMESTAMPTZ::VARIANT),
+    variant_contains('12:34:56'::TIME::VARIANT, '12:34:56+00'::TIMETZ::VARIANT),
+    variant_contains('12:34:56+02'::TIMETZ::VARIANT, '12:34:56+02'::TIMETZ::VARIANT),
+    variant_contains('12:34:56+02'::TIMETZ::VARIANT, '12:34:56+03'::TIMETZ::VARIANT);
+----
+false	false	true	false
+
+# VARIANT_NULL is a value within a container.
+query IIII
+SELECT
+    variant_contains({'a': NULL}::VARIANT, {'a': NULL}::VARIANT),
+    variant_contains({'x': {'a': NULL}}::VARIANT, {'a': NULL}::VARIANT),
+    variant_contains([{'a': NULL}]::VARIANT, {'a': NULL}::VARIANT),
+    variant_contains({'a': 1}::VARIANT, {'a': NULL}::VARIANT);
+----
+true	true	true	false
+
+# SQL NULL propagates.
+query IIII
+SELECT
+    variant_contains(NULL::VARIANT, 1::VARIANT),
+    variant_contains(1::VARIANT, NULL::VARIANT),
+    variant_contains(NULL::VARIANT, NULL::VARIANT),
+    variant_contains(NULL, NULL);
+----
+NULL	NULL	NULL	NULL
+
+# Varying haystacks and needles exercise vectorized execution.
+statement ok
+CREATE TABLE contains_data(id INTEGER, haystack VARIANT, needle VARIANT);
+
+statement ok
+INSERT INTO contains_data VALUES
+	(1, '{"a": 1}'::JSON::VARIANT, '{"a": 1}'::JSON::VARIANT),
+	(2, '{"a": 1}'::JSON::VARIANT, '{"b": 1}'::JSON::VARIANT),
+	(3, '[1, 2, 3]'::JSON::VARIANT, 2::VARIANT),
+	(4, '[1, 2, 3]'::JSON::VARIANT, 4::VARIANT),
+	(5, NULL::VARIANT, 1::VARIANT),
+	(6, '{"a": 1}'::JSON::VARIANT, NULL::VARIANT);
+
+query II
+SELECT id, variant_contains(haystack, needle) FROM contains_data ORDER BY id;
+----
+1	true
+2	false
+3	true
+4	false
+5	NULL
+6	NULL
+
+# Objects with varying shapes exercise repeated vectorized object matching.
+statement ok
+CREATE TABLE varying_objects AS
+SELECT
+	range AS id,
+	CASE
+		WHEN range % 2 = 0 THEN {'duck': 42}::VARIANT
+		ELSE {'duck': 42, 'goose': 43}::VARIANT
+	END AS haystack
+FROM range(4096);
+
+query II
+SELECT id % 2, count_if(variant_contains(haystack, {'goose': 43}::VARIANT))
+FROM varying_objects
+GROUP BY ALL
+ORDER BY ALL;
+----
+0	0
+1	2048
+
+# Incorrect parameter counts should produce binder errors.
+statement error
+SELECT variant_contains(1::VARIANT);
+----
+<REGEX>:.*No function matches.*variant_contains.*
+
+statement error
+SELECT variant_contains(1::VARIANT, 1::VARIANT, 1::VARIANT);
+----
+<REGEX>:.*No function matches.*variant_contains.*

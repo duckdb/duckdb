@@ -166,7 +166,7 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 			} else if (alias == "keep_parent_names") {
 				keep_parent_names = value.GetValue<bool>();
 			} else if (!alias.empty()) {
-				throw BinderException("Unsupported parameter \"%s\" for unnest", alias.GetIdentifierName());
+				throw BinderException("Unsupported parameter %s for unnest", alias);
 			} else {
 				break;
 			}

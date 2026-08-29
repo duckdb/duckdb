@@ -16,6 +16,7 @@
 namespace duckdb {
 class BlockMemory;
 class Allocator;
+class AsyncTask;
 class BufferPool;
 class TemporaryMemoryManager;
 class AttachedDatabase;
@@ -65,6 +66,9 @@ public:
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
 	virtual void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) = 0;
+	//! Creates one async task per contiguous run of blocks needing load
+	virtual vector<unique_ptr<AsyncTask>> CreatePrefetchTasks(QueryContext context,
+	                                                          vector<shared_ptr<BlockHandle>> &handles);
 	//! Unpin a block handle.
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 

@@ -18,18 +18,39 @@ void CSVRandomAccessBufferManager::Initialize() {
 }
 
 shared_ptr<CSVBufferHandle> CSVRandomAccessBufferManager::GetBuffer(const idx_t pos) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (pos >= cached_buffers.size()) {
-		return nullptr;
+	shared_ptr<CSVBuffer> buffer;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (pos >= cached_buffers.size()) {
+			return nullptr;
+		}
+		if (!cached_buffers[pos]) {
+			cached_buffers[pos] = make_shared_ptr<CSVBuffer>(context, buffer_size, KnownBufferSize(pos),
+			                                                 pos * buffer_size, pos, pos + 1 == cached_buffers.size());
+		}
+		buffer = cached_buffers[pos];
 	}
-	if (!cached_buffers[pos]) {
-		cached_buffers[pos] = make_shared_ptr<CSVBuffer>(context, buffer_size, KnownBufferSize(pos), pos * buffer_size,
-		                                                 pos, pos + 1 == cached_buffers.size());
-		cached_buffers[pos]->LoadRandomAccess(*file_handle);
-	}
-	// an evicted buffer reloads inside Pin through the same positional read
+	// the load of a fresh or evicted buffer runs inside Pin, under the buffer's own lock,
+	// so loads of different buffers proceed in parallel
 	bool has_seeked = false;
-	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
+	return buffer->Pin(*file_handle, has_seeked);
+}
+
+CSVBufferResidency CSVRandomAccessBufferManager::GetBufferResidency(const idx_t pos,
+                                                                    shared_ptr<CSVBufferHandle> &handle) {
+	shared_ptr<CSVBuffer> buffer;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (pos >= cached_buffers.size()) {
+			return CSVBufferResidency::END_OF_FILE;
+		}
+		if (!cached_buffers[pos]) {
+			return CSVBufferResidency::NEEDS_LOAD;
+		}
+		buffer = cached_buffers[pos];
+	}
+	// a buffer with a load in flight reports NEEDS_LOAD, the caller's load task then doubles as a wait handle
+	return buffer->TryPin(handle) ? CSVBufferResidency::IN_MEMORY : CSVBufferResidency::NEEDS_LOAD;
 }
 
 void CSVRandomAccessBufferManager::ResetBuffer(const idx_t buffer_idx) {

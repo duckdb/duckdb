@@ -8,7 +8,7 @@
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
-                                     vector<LogicalType> types, vector<string> names,
+                                     vector<LogicalType> types, vector<Identifier> names,
                                      ClientProperties client_properties, shared_ptr<BufferedData> data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
                   std::move(names), std::move(client_properties)),
@@ -24,7 +24,7 @@ StreamQueryResult::~StreamQueryResult() {
 
 string StreamQueryResult::ToString() {
 	string result;
-	if (success) {
+	if (!HasError()) {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
@@ -142,7 +142,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetTypes());
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -157,8 +157,8 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	auto result = make_uniq<MaterializedQueryResult>(GetStatementType(), GetStatementProperties(), GetNames(),
+	                                                 std::move(collection), client_properties);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
@@ -166,7 +166,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 }
 
 bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
+	bool invalidated = HasError() || !context;
 	if (!invalidated) {
 		invalidated = !context->IsActiveResult(lock, *this);
 	}
@@ -184,7 +184,7 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 bool StreamQueryResult::IsOpen() {
-	if (!success || !context) {
+	if (HasError() || !context) {
 		return false;
 	}
 	auto lock = LockContext();

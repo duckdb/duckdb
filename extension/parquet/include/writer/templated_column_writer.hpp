@@ -295,8 +295,10 @@ public:
 		         state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY);
 
 		if (writer.EnableBloomFilters()) {
+			auto bloom_filter_entries =
+			    state.dictionary.GetSize() * OP::template BloomFilterEntriesPerValue<SRC, TGT>();
 			state.bloom_filter =
-			    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+			    make_uniq<ParquetBloomFilter>(bloom_filter_entries, writer.BloomFilterFalsePositiveRatio());
 		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
@@ -306,6 +308,10 @@ public:
 				// update the bloom filter
 				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
 				state.bloom_filter->FilterInsert(hash);
+				auto extra_hash = OP::template GetExtraBloomFilterHash<SRC, TGT>(src_value, tgt_value);
+				if (extra_hash) {
+					state.bloom_filter->FilterInsert(*extra_hash);
+				}
 			}
 		});
 

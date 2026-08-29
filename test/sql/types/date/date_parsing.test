@@ -78,6 +78,43 @@ SELECT '1992\09\20'::DATE::VARCHAR == '1992-09-20'
 ----
 1
 
+# trailing content must be a valid timestamp, rather than an ignored suffix
+statement error
+SELECT CAST('2020-01-01 garbage' AS DATE)
+----
+<REGEX>:.*Conversion Error.*invalid date field format.*
+
+statement error
+SELECT CAST('2020-01-01          garbage' AS DATE)
+----
+<REGEX>:.*Conversion Error.*invalid date field format.*
+
+statement error
+SELECT CAST('2020-01-01abc' AS DATE)
+----
+<REGEX>:.*Conversion Error.*invalid date field format.*
+
+query I
+SELECT TRY_CAST('2020-01-01 garbage' AS DATE) IS NULL
+----
+1
+
+query I
+SELECT CAST('2020-01-01          12:34:56' AS DATE)
+----
+2020-01-01
+
+query I
+SELECT CAST('2020-01-01          ' AS DATE)
+----
+2020-01-01
+
+query TT
+SELECT CAST(CAST('2020-01-01 24:00:00' AS DATE) AS VARCHAR),
+	COALESCE(CAST(TRY_CAST('294247-01-11 00:00:00' AS DATE) AS VARCHAR), 'NULL');
+----
+2020-01-01	294247-01-11
+
 # verify bounds of each month
 # January - 31 days
 # February - 28 days in non-leap year, 29 days in leap year

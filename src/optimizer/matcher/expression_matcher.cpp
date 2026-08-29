@@ -49,11 +49,14 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expressio
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
+	if (!BoundCastExpression::IsCast(expr_p)) {
+		return false;
+	}
 	if (!matcher) {
 		return true;
 	}
-	auto &expr = expr_p.Cast<BoundCastExpression>();
-	return matcher->Match(*expr.ChildMutable(), bindings);
+	auto &expr = expr_p.Cast<BoundFunctionExpression>();
+	return matcher->Match(*BoundCastExpression::ChildMutable(expr), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -148,6 +151,11 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 bool FoldableConstantMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
 	// we match on ANY expression that is a scalar expression
 	if (!expr.IsFoldable()) {
+		return false;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		// a lambda has no value of its own, so it cannot be replaced by a constant - it does not stop the
+		// function it belongs to from being folded though
 		return false;
 	}
 	bindings.push_back(expr);

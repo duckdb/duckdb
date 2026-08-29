@@ -1,0 +1,10 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [recursive_cte]
+
+name ${BENCHMARK_NAME}
+group Recursive CTE
+
+run benchmark/recursive_cte/queries/${TIER}/${QUERY}.sql
+
+result benchmark/recursive_cte/answers/${TIER}/${QUERY}.csv

@@ -31,6 +31,8 @@ class StringColumnReader : public ColumnReader {
 public:
 	enum class StringColumnType : uint8_t { VARCHAR, JSON, OTHER };
 
+	enum class Utf8ValidationOption : uint8_t { STRICT_UTF8 = 1, REPLACE_UTF8 = 2, IGNORE_UTF8 = 3 };
+
 	static StringColumnType GetStringColumnType(const LogicalType &type) {
 		if (type.IsJSONType()) {
 			return StringColumnType::JSON;
@@ -41,8 +43,23 @@ public:
 		return StringColumnType::OTHER;
 	}
 
+	static Utf8ValidationOption GetUtf8ValidationOption(const string &value) {
+		if (StringUtil::CIEquals(value, "strict")) {
+			return Utf8ValidationOption::STRICT_UTF8;
+		} else if (StringUtil::CIEquals(value, "replace")) {
+			return Utf8ValidationOption::REPLACE_UTF8;
+		} else if (StringUtil::CIEquals(value, "ignore")) {
+			return Utf8ValidationOption::IGNORE_UTF8;
+		}
+		throw BinderException(
+		    "utf8_validation option \"%s\" not recognized, must be one of 'strict', 'replace', 'ignore'", value);
+	}
+
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
+	void SetCurrentResult(Vector &result) const {
+		current_plain_result = &result;
+	}
 
 public:
 	StringColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
@@ -52,8 +69,8 @@ public:
 public:
 	static bool IsValid(const char *str_data, uint32_t str_len, bool is_varchar);
 	static bool IsValid(const string &str, bool is_varchar);
-	void VerifyString(const char *str_data, uint32_t str_len, bool is_varchar) const;
-	void VerifyString(const char *str_data, uint32_t str_len) const;
+	string_t VerifyString(const char *str_data, uint32_t str_len, bool is_varchar) const;
+	string_t VerifyString(const char *str_data, uint32_t str_len) const;
 
 	static void ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block);
 
@@ -74,6 +91,9 @@ protected:
 	bool SupportsDirectSelect() const override {
 		return true;
 	}
+
+private:
+	mutable optional_ptr<Vector> current_plain_result;
 };
 
 struct StringParquetValueConversion {
@@ -84,8 +104,7 @@ struct StringParquetValueConversion {
 		    scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 		plain_data.available(str_len);
 		auto plain_str = char_ptr_cast(plain_data.ptr);
-		scr.VerifyString(plain_str, str_len);
-		auto ret_str = string_t(plain_str, str_len);
+		auto ret_str = scr.VerifyString(plain_str, str_len);
 		plain_data.inc(str_len);
 		return ret_str;
 	}

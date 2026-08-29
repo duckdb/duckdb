@@ -11,12 +11,17 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "debug_fs_extension.hpp"
 
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
 namespace duckdb {
+
+static constexpr const char *BENCHMARK_EXTENSION_DIRECTORY_ENV = "DUCKDB_BENCHMARK_EXTENSION_DIRECTORY";
 
 static string ParseGroupFromPath(string file) {
 	string extension = "";
@@ -47,6 +52,9 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	explicit InterpretedBenchmarkState(string path, const string &version)
 	    : benchmark_config(GetBenchmarkConfig(version)),
 	      db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()), con(db) {
+		//! Statically load the debug_fs extension so benchmarks can inject artificial I/O latency
+		//! (e.g. SET GLOBAL debug_fs_delay_mean_ms=...), mirroring how the unittest runner loads it.
+		db.LoadStaticExtension<DebugFsExtension>();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
@@ -62,6 +70,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 			result->options.storage_compatibility = StorageCompatibility::FromString(version);
 		}
 		result->options.load_extensions = false;
+		auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+		if (extension_directory && extension_directory[0]) {
+			result->SetOptionByName("allow_unsigned_extensions", true);
+		}
 		return result;
 	}
 };
@@ -495,6 +507,21 @@ void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			auto extension_directory = std::getenv(BENCHMARK_EXTENSION_DIRECTORY_ENV);
+			if (extension_directory && extension_directory[0]) {
+				auto fs = FileSystem::CreateLocal();
+				auto extension_path = fs->JoinPath(extension_directory, extension + ".duckdb_extension");
+				if (!fs->FileExists(extension_path)) {
+					throw InvalidInputException("Extension %s is not linked and was not found at %s", extension,
+					                            extension_path);
+				}
+				auto load_result = state.con.Query("LOAD " + SQLString(extension_path));
+				if (load_result->HasError()) {
+					throw InvalidInputException("Failed to load benchmark extension %s from %s: %s", extension,
+					                            extension_path, load_result->GetError());
+				}
+				continue;
+			}
 			throw InvalidInputException("Extension " + extension +
 			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}
@@ -657,14 +684,14 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto result_collector_setting = PrepareResultCollector(config, *this);
 	const bool use_streaming = result_type == QueryResultType::STREAM_RESULT;
 	auto temp_result = context->Query(run_query, use_streaming);
-	if (temp_result->type != result_type) {
+	if (temp_result->GetResultType() != result_type) {
 		throw InternalException("Query did not produce the right result type, expected %s but got %s",
-		                        EnumUtil::ToString(result_type), EnumUtil::ToString(temp_result->type));
+		                        EnumUtil::ToString(result_type), EnumUtil::ToString(temp_result->GetResultType()));
 	}
-	if (temp_result->type == QueryResultType::STREAM_RESULT) {
+	if (temp_result->GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_query = temp_result->Cast<StreamQueryResult>();
 		state.result = stream_query.Materialize();
-	} else if (temp_result->type == QueryResultType::ARROW_RESULT) {
+	} else if (temp_result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		/* no-op, this is only used to test the overhead of the result collector */
 		state.result = nullptr;
 	} else {
@@ -770,9 +797,9 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	// we are running a result query
 	// store the current result in a table called "__answer"
 	auto &collection = state.result->Collection();
-	auto &names = state.result->names;
-	auto &types = state.result->types;
-	case_insensitive_set_t name_set;
+	auto &names = state.result->GetNames();
+	auto &types = state.result->GetTypes();
+	identifier_set_t name_set;
 	// first create the (empty) table
 	string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
 	for (idx_t i = 0; i < names.size(); i++) {

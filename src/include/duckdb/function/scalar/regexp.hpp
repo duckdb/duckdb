@@ -17,14 +17,14 @@ namespace duckdb {
 
 namespace regexp_util {
 
-bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
+bool TryParseConstantPattern(optional<Value> pattern_value, string &constant_string);
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr,
                        bool *no_match_returns_input = nullptr);
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr,
+void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace = nullptr,
                        bool *no_match_returns_input = nullptr);
-void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
-                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
-                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
+void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
+                        RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
+                        child_list_t<LogicalType> &out_struct_children);
 
 idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base);
 

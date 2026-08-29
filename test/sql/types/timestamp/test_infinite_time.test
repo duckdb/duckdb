@@ -144,8 +144,9 @@ FROM specials;
 ----
 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01 00:00:00
 
+# MODE ties are order-sensitive, so make the infinity check deterministic.
 query III
-SELECT MODE(ts), MODE(tstz), MODE(dt)
+SELECT MODE(ts ORDER BY ts DESC), MODE(tstz ORDER BY tstz DESC), MODE(dt ORDER BY dt DESC)
 FROM specials;
 ----
 infinity	infinity	infinity

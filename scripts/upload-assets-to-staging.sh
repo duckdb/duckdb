@@ -49,7 +49,7 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   fi
 fi
 
-TARGET=$(git log -1 --format=%h)
+TARGET=$(git log -1 --format=%H | cut -c1-10)
 
 if [ "${UPLOAD_ASSETS_TO_STAGING_TARGET:-}" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"

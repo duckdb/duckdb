@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -266,6 +267,12 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 
+	auto &function_args = bound_function.GetArguments();
+	function_args.clear();
+	function_args.reserve(arguments.size());
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		function_args.push_back(child_type);
+	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
@@ -284,6 +291,21 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 
 } // namespace
 
+//! The arguments are cast to the child type of the list at execution time - if any of those casts can throw the
+//! function is fallible
+unique_ptr<FunctionData> ListValueBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &child_type = ListType::GetChildType(bound_function.GetReturnType());
+	for (auto &argument : input.GetArguments()) {
+		auto argument_type = ExpressionBinder::GetExpressionReturnType(*argument);
+		if (BoundCastExpression::CastCanThrow(argument_type, child_type, false)) {
+			bound_function.SetFallible();
+			break;
+		}
+	}
+	return nullptr;
+}
+
 ScalarFunctionSet ListValueFun::GetFunctions() {
 	ScalarFunctionSet set("list_value");
 
@@ -293,7 +315,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.
 	auto element_type = LogicalType::TEMPLATE("T");
-	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr,
+	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind,
 	                         ListValueStats);
 	value_fun.SetVarArgs(element_type);
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

@@ -1,0 +1,20 @@
+"""substring""(r_reason_desc, 1, 20)"|avg1|avg2|avg(wr_fee)
+Did not like the mak|75.0|82.96|87.46
+Did not like the mod|50.0|291.86|47.92
+Did not like the war|37.0|1252.26|86.64
+No service location |76.0|464.36|8.62
+Parts missing|9.0|15.3|52.18
+Stopped working|18.0|414.14|55.74
+reason 31|56.0|213.15|46.66
+reason 33|19.0|75.72|51.81
+reason 34|9.0|83.76|14.38
+reason 36|52.0|362.62|45.26
+reason 46|4.0|211.23|94.19
+reason 50|28.0|1747.56|8.14
+reason 52|29.0|762.91|57.32
+reason 56|55.0|396.38|22.63
+reason 58|19.0|484.965|38.135
+reason 64|70.0|876.67|46.67
+reason 72|3.0|115.38|89.12
+reason 73|5.0|192.06|61.01
+unauthoized purchase|15.0|391.08|99.99

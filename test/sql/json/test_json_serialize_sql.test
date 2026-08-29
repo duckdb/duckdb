@@ -171,3 +171,8 @@ query II
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM ms PIVOT (SUM(amount) FOR month IN (''JAN'') GROUP BY "$id")'));
 ----
 1	10
+
+statement error
+PRAGMA json_execute_serialized_sql(NULL);
+----
+Binder Error: json_execute_serialized_sql cannot execute NULL plan

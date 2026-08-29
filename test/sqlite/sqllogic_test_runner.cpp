@@ -39,6 +39,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	config = GetTestConfig();
 	config->SetOptionByName("allow_unredacted_secrets", true);
 	config->options.load_extensions = false;
+	test_dir_prefix = TestDirectoryPath();
 
 	auto &test_config = TestConfiguration::Get();
 	autoloading_mode = test_config.GetExtensionAutoLoadingMode();
@@ -46,6 +47,9 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	bool autoload_known_extensions = false;
 	bool autoinstall_known_extensions = false;
 	config->SetOptionByName("allow_unsigned_extensions", true);
+	// enable custom trusted extension repositories at startup (they cannot be enabled at runtime), mirroring the
+	// permissive allow_unsigned_extensions default above. Tests can still tighten this at runtime
+	config->SetOptionByName("allow_extension_repositories", "allowed");
 	local_extension_repo = "";
 	autoinstall_is_checked = false;
 
@@ -96,7 +100,7 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 				continue;
 			}
 			// only delete database files that were created during the tests
-			if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+			if (!StringUtil::StartsWith(loaded_path, test_dir_prefix)) {
 				continue;
 			}
 			DeleteDatabase(loaded_path);
@@ -149,6 +153,10 @@ void SQLLogicTestRunner::CountSkipMode() {
 }
 
 void SQLLogicTestRunner::EmitBegin(const string &test_name) {
+	// Snapshotted before the enabled check and before the body runs: this is the dir the harness just
+	// assigned, and it must survive any test-env rewrite so end still reports what begin did.
+	auto entry = environment_variables.find("TEMP_DIR");
+	emit_temp_dir = entry == environment_variables.end() ? "" : entry->second;
 	if (!EmitTestEventsEnabled()) {
 		return;
 	}
@@ -156,6 +164,9 @@ void SQLLogicTestRunner::EmitBegin(const string &test_name) {
 	auto obj = writer.CreateObject();
 	obj.AddString("event", "begin");
 	obj.AddString("name", test_name);
+	// Lets a consumer verify which invocation emitted this rather than inferring it from which
+	// subprocess it launched: under --temp-dir-root the prefix is what the driver passed in.
+	obj.AddString("temp_dir", emit_temp_dir);
 	writer.SetRoot(obj);
 	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 }
@@ -177,6 +188,7 @@ void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, 
 	if (!data.empty()) {
 		obj.AddString("data", data);
 	}
+	obj.AddString("temp_dir", emit_temp_dir);
 	writer.SetRoot(obj);
 	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 }
@@ -1094,11 +1106,11 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				if (token.parameters.size() != 2) {
 					parser.Fail("set seed requires a single seed value");
 				}
-				Value seed(token.parameters[1]);
-				if (!seed.DefaultTryCastAs(LogicalType::DOUBLE)) {
+				auto seed = Value(token.parameters[1]).DefaultTryCastAs(LogicalType::DOUBLE);
+				if (!seed) {
 					parser.Fail("set seed requires a floating point parameter");
 				}
-				auto res = con->Query("SELECT SETSEED(" + seed.ToString() + ")");
+				auto res = con->Query("SELECT SETSEED(" + seed->ToString() + ")");
 				if (res->HasError()) {
 					parser.Fail("Failed to set seed: %s", res->GetError());
 				}
@@ -1202,9 +1214,10 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
 			auto test_env_defined = test_config.HasTestEnv(env_var);
+			auto env_passed_through = GetEnvPassthroughNames().count(env_var) != 0;
 			string env_actual_value;
 			const char *env_actual = nullptr;
-			if (test_env_defined) {
+			if (test_env_defined || env_passed_through) {
 				env_actual_value = test_config.GetTestEnv(env_var, "");
 				env_actual = env_actual_value.c_str();
 			} else {
@@ -1236,7 +1249,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (!test_env_defined && environment_variables.count(env_var)) {
+			if (!test_env_defined && !env_passed_through && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;

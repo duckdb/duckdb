@@ -18,14 +18,17 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true);
+	enum class ProjectionMode : uint8_t { ALLOW_COMPUTED_EXPRESSIONS, PRESERVE_COMPUTED_EXPRESSIONS };
+
+	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true,
+	                        ProjectionMode projection_mode = ProjectionMode::ALLOW_COMPUTED_EXPRESSIONS);
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
-	void CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings);
+	void CheckMarkToSemi(LogicalOperator &op, const unordered_set<TableIndex> &table_bindings);
 
 	struct Filter {
 		unordered_set<TableIndex> bindings;
@@ -43,6 +46,7 @@ private:
 	Optimizer &optimizer;
 	FilterCombiner combiner;
 	bool convert_mark_joins;
+	ProjectionMode projection_mode;
 
 	vector<unique_ptr<Filter>> filters;
 	//! Push down a LogicalAggregate op
@@ -57,6 +61,9 @@ private:
 	unique_ptr<LogicalOperator> PushdownJoin(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
+	//! Split a projection so filters can reuse computed outputs without forcing all expressions to be evaluated early
+	unique_ptr<LogicalOperator> SplitProjection(unique_ptr<LogicalOperator> op,
+	                                            vector<unique_ptr<Expression>> split_expressions);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownUnnest(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op

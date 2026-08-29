@@ -10,6 +10,12 @@ SELECT aliases FROM duckdb_extensions() WHERE extension_name='postgres_scanner';
 ----
 [postgres]
 
+# statically linked extensions are not signed, so they have no signing key fingerprint
+query I
+SELECT DISTINCT signature_key_fingerprint FROM duckdb_extensions() WHERE install_mode='STATICALLY_LINKED';
+----
+NULL
+
 require tpch
 
 statement ok

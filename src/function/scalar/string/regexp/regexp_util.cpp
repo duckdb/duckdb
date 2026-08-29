@@ -7,16 +7,12 @@ namespace duckdb {
 
 namespace regexp_util {
 
-bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string) {
-	if (!expr.IsFoldable()) {
+bool TryParseConstantPattern(optional<Value> pattern_value, string &constant_string) {
+	if (!pattern_value || pattern_value->IsNull() || pattern_value->type().id() != LogicalTypeId::VARCHAR) {
 		return false;
 	}
-	Value pattern_str = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-		constant_string = StringValue::Get(pattern_str);
-		return true;
-	}
-	return false;
+	constant_string = StringValue::Get(*pattern_value);
+	return true;
 }
 
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace,
@@ -72,15 +68,8 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 	}
 }
 
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace,
+void ParseRegexOptions(const Value &options_str, RE2::Options &target, bool *global_replace,
                        bool *no_match_returns_input) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw InvalidInputException("Regex options field must be a constant");
-	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(context, expr);
 	if (options_str.IsNull()) {
 		throw InvalidInputException("Regex options field must not be NULL");
 	}
@@ -90,16 +79,9 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
 }
 
-void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
-                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
-                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
-	if (group_expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!group_expr.IsFoldable()) {
-		throw InvalidInputException("Group specification field must be a constant list");
-	}
-	Value list_val = ExpressionExecutor::EvaluateScalar(context, group_expr);
+void ParseGroupNameList(const string &function_name, const Value &list_val, const string &pattern_string,
+                        RE2::Options &options, bool require_constant_pattern, vector<string> &out_names,
+                        child_list_t<LogicalType> &out_struct_children) {
 	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST) {
 		throw BinderException("Group specification must be a non-NULL LIST");
 	}

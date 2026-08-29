@@ -86,21 +86,22 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundCaseExpression &expr) {
 	return case_cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
+idx_t ExpressionHeuristics::CastExpressionCost(const BoundFunctionExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
+	auto source_type = BoundCastExpression::SourceType(expr);
 	idx_t cast_cost = 0;
-	if (expr.GetReturnType() != expr.source_type()) {
+	if (expr.GetReturnType() != source_type) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
-		if (expr.GetReturnType().id() == LogicalTypeId::VARCHAR || expr.source_type().id() == LogicalTypeId::VARCHAR ||
-		    expr.GetReturnType().id() == LogicalTypeId::BLOB || expr.source_type().id() == LogicalTypeId::BLOB) {
+		if (expr.GetReturnType().id() == LogicalTypeId::VARCHAR || source_type.id() == LogicalTypeId::VARCHAR ||
+		    expr.GetReturnType().id() == LogicalTypeId::BLOB || source_type.id() == LogicalTypeId::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;
 		}
 	}
-	return Cost(expr.Child()) + cast_cost;
+	return Cost(BoundCastExpression::Child(expr)) + cast_cost;
 }
 
 idx_t ExpressionHeuristics::ComparisonExpressionCost(const BoundFunctionExpression &expr) {
@@ -126,6 +127,9 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 	}
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return ComparisonExpressionCost(expr);
+	}
+	if (BoundCastExpression::IsCast(expr)) {
+		return CastExpressionCost(expr);
 	}
 	identifier_map_t<idx_t> function_costs = {{"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
 	                                          {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
@@ -185,10 +189,6 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		return ExpressionCost(case_expr);
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		return ExpressionCost(cast_expr);
-	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 		return ExpressionCost(conj_expr);
@@ -229,8 +229,20 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
 	auto &expr = *expr_filter.expr;
-	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME) ||
-	    ExpressionFilter::IsOptionalExpression(expr)) {
+	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME)) {
+		return 0;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			return 0;
+		}
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+			return data.child_filter_expr ? Cost(*data.child_filter_expr) : 0;
+		}
+	}
+	if (ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
 	}
 	return Cost(expr);

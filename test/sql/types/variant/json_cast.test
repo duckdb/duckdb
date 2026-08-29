@@ -1,4 +1,5 @@
 # name: test/sql/types/variant/json_cast.test
+# description: Test casts between JSON and VARIANT
 # group: [variant]
 
 require json
@@ -30,6 +31,40 @@ FROM src;
 ----
 1.2345678901234568e+29	DOUBLE
 
+# Duplicate object keys use the last value
+query III
+SELECT (v).a, variant_keys(v), v::JSON
+FROM (SELECT '{"a":1,"a":2}'::JSON::VARIANT AS v);
+----
+2	[a]	{"a":2}
+
+query III
+SELECT (v.outer).a, variant_keys(v, 'outer'), v::JSON
+FROM (SELECT '{"outer":{"a":1,"b":2,"a":3}}'::JSON::VARIANT AS v);
+----
+3	[a, b]	{"outer":{"a":3,"b":2}}
+
+query III
+SELECT (v).a, variant_keys(v), v::JSON
+FROM (
+	VALUES
+		('{"a":null,"a":[1,2]}'::JSON::VARIANT),
+		('{"a":[1,2],"a":null}'::JSON::VARIANT)
+) t(v);
+----
+[1, 2]	[a]	{"a":[1,2]}
+NULL	[a]	{"a":null}
+
+query II
+SELECT (v).a, variant_keys(v)
+FROM (
+	SELECT j::VARIANT AS v
+	FROM (VALUES ('{"a":1,"a":2}'::JSON), ('{"a":3,"b":4,"a":5}'::JSON)) t(j)
+);
+----
+2	[a]
+5	[a, b]
+
 # ---------- VARIANT -> JSON ----------
 
 query I
@@ -60,6 +95,37 @@ select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob",
 {"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
 {"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
 {"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+
+# Issue #23996: DECIMALs with no integer digit still produce valid JSON numbers
+query II
+SELECT 0.5::DECIMAL(1,1)::VARIANT::JSON, (-0.5::DECIMAL(1,1))::VARIANT::JSON;
+----
+0.5	-0.5
+
+query IIII
+SELECT 0.5::DECIMAL(4,4)::VARIANT::JSON,
+       0.5::DECIMAL(9,9)::VARIANT::JSON,
+       0.5::DECIMAL(18,18)::VARIANT::JSON,
+       0.5::DECIMAL(38,38)::VARIANT::JSON;
+----
+0.5000	0.500000000	0.500000000000000000	0.50000000000000000000000000000000000000
+
+query I
+SELECT [0.5::DECIMAL(1,1), -0.5::DECIMAL(1,1)]::VARIANT::JSON;
+----
+[0.5,-0.5]
+
+query I
+SELECT {'positive': 0.5::DECIMAL(1,1), 'negative': -0.5::DECIMAL(1,1)}::VARIANT::JSON;
+----
+{"negative":-0.5,"positive":0.5}
+
+query III
+SELECT json_valid(0.5::DECIMAL(1,1)::VARIANT::JSON),
+       json_valid([0.5::DECIMAL(1,1)]::VARIANT::JSON),
+       json_valid({'value': -0.5::DECIMAL(1,1)}::VARIANT::JSON);
+----
+true	true	true
 
 statement ok
 create table tbl(var JSON);

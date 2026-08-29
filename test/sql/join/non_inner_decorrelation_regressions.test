@@ -1,0 +1,523 @@
+# name: test/sql/join/non_inner_decorrelation_regressions.test
+# description: Regression tests for non-inner join decorrelation
+# group: [join]
+
+# Pair-dependent FULL OUTER JOIN followed by a correlated scalar subquery.
+query III
+SELECT l.a, r.b, (SELECT l.a + r.b) AS z
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by a correlated EXISTS filter.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+WHERE EXISTS (SELECT 1 WHERE l.a + r.b = 11)
+ORDER BY ALL;
+----
+1	10
+
+# Pair-dependent FULL OUTER JOIN followed by a lateral subquery.
+query III
+SELECT l.a, r.b, x.z
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+LEFT JOIN LATERAL (SELECT l.a + r.b AS z) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by another dependent LEFT JOIN.
+query III
+SELECT l.a, r.b, s.c
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+LEFT JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10	100
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by a dependent SEMI JOIN.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+SEMI JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10
+
+# Pair-dependent FULL OUTER JOIN followed by a dependent ANTI JOIN.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+ANTI JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+2	NULL
+NULL	20
+
+# SEMI JOIN whose correlation exists only in the join condition.
+query IT
+SELECT o.x, EXISTS (
+  SELECT *
+  FROM (VALUES (1)) l(a)
+  SEMI JOIN (VALUES (2)) r(b)
+    ON l.a = 1 AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	0
+
+# ANTI JOIN whose correlation exists only in the join condition.
+query IT
+SELECT o.x, EXISTS (
+  SELECT *
+  FROM (VALUES (1)) l(a)
+  ANTI JOIN (VALUES (2)) r(b)
+    ON l.a = 1 AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# A rewritten FULL OUTER JOIN can sit below an explicit materialization
+# boundary and another dependent join.
+query III
+WITH joined AS MATERIALIZED (
+	SELECT l.a, r.b
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+)
+SELECT joined.a, joined.b, x.z
+FROM joined
+LEFT JOIN LATERAL (SELECT joined.a + joined.b AS z) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Two sibling binding-changing rewrites preserve both child layouts.
+query IIII
+SELECT l.a, r.b, s.c, t.d
+FROM ((VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10))
+CROSS JOIN ((VALUES (3), (4)) s(c)
+FULL OUTER JOIN (VALUES (30), (40)) t(d)
+	ON EXISTS (SELECT 1 WHERE s.c = 3 AND t.d = 30))
+ORDER BY ALL;
+----
+1	10	3	30
+1	10	4	NULL
+1	10	NULL	40
+2	NULL	3	30
+2	NULL	4	NULL
+2	NULL	NULL	40
+NULL	20	3	30
+NULL	20	4	NULL
+NULL	20	NULL	40
+
+# Nested binding-changing rewrites preserve payload order for a subsequent
+# correlated scalar subquery.
+query IIII
+SELECT l.a, r.b, s.c, (SELECT coalesce(l.a, r.b, s.c)) AS first_value
+FROM ((VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10))
+FULL OUTER JOIN (VALUES (100), (200)) s(c)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10	100	1
+2	NULL	NULL	2
+NULL	20	NULL	20
+NULL	NULL	200	200
+
+# The correlated input of the inner MARK join appears only in its predicate.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	WHERE o.x = ANY (SELECT r.b FROM (VALUES (10)) r(b))
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	0
+
+# An aggregate above a binding-changing rewrite can feed another dependent join.
+query II
+SELECT q.cnt, x.v
+FROM (
+	SELECT count(*)::BIGINT AS cnt
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+) q
+LEFT JOIN LATERAL (SELECT q.cnt + 1 AS v) x ON true;
+----
+3	4
+
+# A window above a binding-changing rewrite can feed another dependent join.
+query IIII
+SELECT q.a, q.b, q.rn, x.v
+FROM (
+	SELECT l.a, r.b, row_number() OVER (ORDER BY l.a NULLS LAST, r.b NULLS LAST) AS rn
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+) q
+LEFT JOIN LATERAL (SELECT q.rn + coalesce(q.a, q.b) AS v) x ON true
+ORDER BY q.rn;
+----
+1	10	1	2
+2	NULL	2	4
+NULL	20	3	23
+
+# A set operation above a binding-changing rewrite can feed another dependent join.
+query III
+SELECT q.a, q.b, x.v
+FROM (
+	SELECT l.a, r.b
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+	UNION ALL
+	SELECT 9, 90
+) q
+LEFT JOIN LATERAL (SELECT coalesce(q.a, 0) + coalesce(q.b, 0) AS v) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	2
+9	90	99
+NULL	20	20
+
+# A preserved-side predicate is part of ANTI match evaluation, not a filter
+# above the ANTI join.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# Join ordering must preserve the same ANTI match dependency when the
+# preserved-side value is already local.
+query I
+SELECT o.x
+FROM (VALUES (10), (20)) o(x)
+CROSS JOIN (VALUES (1)) l(a)
+ANTI JOIN (VALUES (1)) r(b)
+	ON l.a = r.b AND o.x = 10
+ORDER BY o.x;
+----
+20
+
+# A non-matching RHS never eliminates the preserved row.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (2)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	1
+
+# Duplicate matching rows do not change ANTI match semantics.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1), (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# NULL-safe comparisons retain the same predicate-only ANTI semantics.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (NULL::INTEGER)) l(a)
+	ANTI JOIN (VALUES (NULL::INTEGER)) r(b)
+		ON l.a IS NOT DISTINCT FROM r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# Correlation rewriting can turn one side of a comparison into a both-child
+# expression. It must then be represented as an arbitrary join predicate.
+statement ok
+SET debug_verify_column_bindings=true;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	SEMI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0
+
+# RIGHT JOIN normalization must preserve syntactic input visibility while
+# binding a lateral reference from the syntactic left input.
+query III
+SELECT o.b, q.a, q.b
+FROM (VALUES (1), (2)) o(b)
+LEFT JOIN LATERAL (
+	SELECT l.a, r.b
+	FROM LATERAL (SELECT b) l(a)
+	RIGHT JOIN (VALUES (1)) r(b) ON EXISTS (
+		SELECT 1 WHERE l.a = r.b
+	)
+) q ON true
+ORDER BY o.b;
+----
+1	1	1
+2	NULL	1
+
+# The syntactic right input is not visible from the syntactic left input,
+# even when RIGHT JOIN normalization swaps their planning roles.
+statement error
+SELECT *
+FROM LATERAL (SELECT r.b) l(a)
+RIGHT JOIN (VALUES (1)) r(b) ON EXISTS (
+	SELECT 1 WHERE l.a = r.b
+);
+----
+<REGEX>:.*Referenced table "r" not found.*
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	0
+1	1
+
+# The same reclassification is required for other non-inner join types.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	LEFT JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+	WHERE r.b IS NOT NULL
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0
+
+statement ok
+SET debug_verify_column_bindings=false;
+
+# The CTE-delim path reaches the same ANTI planning and join-ordering path.
+statement ok
+SET delim_join_as_cte=true;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+statement ok
+SET delim_join_as_cte=false;
+
+# A semantic LEFT edge keeps two comparison keys and its residual predicate
+# together. The nullable-side operands are written first, and the preserved
+# side spans two relations.
+query IITII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     p(flag) AS (VALUES (true), (false)),
+     b(k, v) AS (VALUES (1, 10), (2, 99), (4, 40))
+SELECT a.k, a.v, p.flag, b.k, b.v
+FROM a
+CROSS JOIN p
+LEFT JOIN b ON b.k = a.k AND b.v = a.v AND p.flag
+ORDER BY ALL;
+----
+1	10	false	NULL	NULL
+1	10	true	1	10
+2	20	false	NULL	NULL
+2	20	true	NULL	NULL
+3	30	false	NULL	NULL
+3	30	true	NULL	NULL
+
+# Distinct LEFT, SEMI, and ANTI non-inner edges can have overlapping endpoint
+# sets. Join ordering must retain each edge identity and reconstruct it once.
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+# Exact and greedy enumeration must select the same owned non-inner edges.
+foreach threshold 0 30
+
+statement ok
+SET approximate_join_order_threshold={threshold};
+
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+# The greedy fallback must add a cross product only between relation sets that
+# have no current query-graph connection.
+query IIIIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99)),
+     e(x) AS (VALUES (7)),
+     f(y) AS (VALUES (8))
+SELECT a.k, a.v, b.k, b.v, e.x, f.y
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+CROSS JOIN e
+CROSS JOIN f
+ORDER BY ALL;
+----
+1	10	1	10	7	8
+
+endloop
+
+statement ok
+SET disabled_optimizers='join_order';
+
+# The unreordered plan is the semantic baseline for the overlapping-edge case.
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+# The unreordered plan is also the semantic baseline for the disconnected case.
+query IIIIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99)),
+     e(x) AS (VALUES (7)),
+     f(y) AS (VALUES (8))
+SELECT a.k, a.v, b.k, b.v, e.x, f.y
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+CROSS JOIN e
+CROSS JOIN f
+ORDER BY ALL;
+----
+1	10	1	10	7	8
+
+statement ok
+SET disabled_optimizers='';
+
+# Reclassified predicates remain valid without optimizer plan repair.
+statement ok
+PRAGMA disable_optimizer;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	SEMI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0

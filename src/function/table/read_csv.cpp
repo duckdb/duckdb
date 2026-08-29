@@ -20,6 +20,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
@@ -142,10 +143,10 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 }
 
 static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
-	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+	if (!BoundCastExpression::IsCast(input.expr)) {
 		return false;
 	}
-	const auto &cast = input.expr.Cast<BoundCastExpression>();
+	const auto &cast = input.expr.Cast<BoundFunctionExpression>();
 	const auto &target_type = cast.GetReturnType();
 	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
 	const idx_t idx = input.get.GetColumnIds()[input.column_index].GetPrimaryIndex();

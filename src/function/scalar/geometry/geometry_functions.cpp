@@ -91,6 +91,8 @@ static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input)
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
 	function.SetStatisticsCallback(FromWKBStats);
+	// throws when the input is not valid WKB
+	function.SetFallible();
 	return function;
 }
 
@@ -183,7 +185,13 @@ static FilterPropagateResult IntersectsExtentFilterPrune(const FunctionStatistic
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	if (const_extent.ContainsXY(col_extent)) {
-		// The constant fully covers the column zonemap, so every non-null row's bbox intersects it.
+		// The constant fully covers the column zonemap, so every row that is represented in the zonemap
+		// matches. Rows that are not represented in it do not: NULL rows (the predicate evaluates to NULL
+		// for them) and empty geometries (which contribute no vertices, but never intersect anything).
+		// Only when neither can be present may we prune the filter away entirely.
+		if (column_stats->CanHaveNull() || GeometryStats::GetFlags(*column_stats).HasEmptyGeometry()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -243,30 +251,23 @@ ScalarFunction StCrsFun::GetFunction() {
 static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 
 	// Check if the CRS is set in the second argument
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("ST_SetCRS: CRS argument must be constant!");
-	}
-	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (!crs_val.IsNull()) {
-		const auto &crs_str = StringValue::Get(crs_val);
-
-		// Try to convert to identify
-		const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
-		if (lookup) {
-			bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
-		} else {
-			// Pass on the raw string (better than nothing)
-			bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
-		}
+	const auto crs_val = input.GetConstant(1);
+	if (crs_val.IsNull()) {
+		return nullptr;
 	}
 
-	// Erase the CRS argument expression
+	const auto &crs_str = StringValue::Get(crs_val);
+
+	// Try to convert to identify
+	const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
+	if (lookup) {
+		bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
+	} else {
+		// Pass on the raw string (better than nothing)
+		bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
+	}
 	return nullptr;
 }
 
@@ -275,8 +276,8 @@ static void SetCRSFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunction StSetcrsFun::GetFunction() {
-	ScalarFunction geom_func({LogicalType::GEOMETRY(), LogicalType::VARCHAR}, LogicalType::GEOMETRY(), SetCRSFunction,
-	                         SetCRSBind);
+	ScalarFunction geom_func({{"geom", LogicalType::GEOMETRY()}, {"crs", LogicalType::VARCHAR}},
+	                         LogicalType::GEOMETRY(), SetCRSFunction, SetCRSBind);
 	return geom_func;
 }
 
@@ -301,18 +302,7 @@ struct VertexExtractBindData final : public FunctionData {
 } // namespace
 
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
-	auto &arguments = input.GetArguments();
-
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("vertex_extract: vertex argument must be constant!");
-	}
-	const auto vertex_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[1]);
-	if (vertex_val.IsNull()) {
-		throw BinderException("vertex_extract: vertex argument cannot be NULL!");
-	}
+	const auto vertex_val = input.GetNonNullConstant(1);
 	const auto vertex_str = StringUtil::Lower(StringValue::Get(vertex_val));
 	if (vertex_str == "x") {
 		return make_uniq<VertexExtractBindData>(static_cast<idx_t>(0));

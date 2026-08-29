@@ -1,0 +1,47 @@
+# name: test/sql/storage/prefetch/async_native_scan_pool.test
+# description: Native storage scans route their prefetch I/O tasks onto the dedicated ASYNC pool
+# group: [prefetch]
+
+load {TEST_DIR}/async_native_scan_pool.db
+
+statement ok
+CREATE TABLE integers AS SELECT range AS i FROM range(1000000);
+
+statement ok
+CHECKPOINT
+
+# restart so the payload blocks begin cold
+restart
+
+statement ok
+SET debug_physical_table_scan_execution_strategy=DEFAULT
+
+statement ok
+SET threads=1
+
+statement ok
+SET async_threads=4
+
+statement ok
+SET storage_block_prefetch='debug_force_always'
+
+statement ok
+CALL enable_logging('AsyncTaskSchedule')
+
+query I
+SELECT sum(i) FROM integers
+----
+499999500000
+
+query I
+SELECT DISTINCT pool FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+ASYNC
+
+query I
+SELECT sum(task_count) > 0 FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()

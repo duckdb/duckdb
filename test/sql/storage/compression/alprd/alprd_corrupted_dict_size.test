@@ -18,4 +18,4 @@ SELECT compression FROM pragma_storage_info('t') WHERE segment_type = 'DOUBLE' A
 statement error
 SELECT * FROM t LIMIT 1;
 ----
-IO Error: Corrupted ALPRD segment: exceptions payload too large
+Data Corruption Error: Corrupted ALPRD segment: exceptions payload too large

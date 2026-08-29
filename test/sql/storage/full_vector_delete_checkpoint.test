@@ -1,0 +1,50 @@
+# name: test/sql/storage/full_vector_delete_checkpoint.test
+# description: Verify that full-vector deletes survive checkpoints and restarts
+# group: [storage]
+
+load {TEST_DIR}/full_vector_delete_checkpoint.db
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(8192) t(i);
+
+# delete some full vectors and a partial vector
+query I
+DELETE FROM tbl WHERE i < 5000
+----
+5000
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+3192	5000	8191
+
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+3192	5000	8191
+
+restart
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+3192	5000	8191
+
+# delete the remainder and restart again
+query I
+DELETE FROM tbl
+----
+3192
+
+restart
+
+query I
+SELECT COUNT(*) FROM tbl
+----
+0

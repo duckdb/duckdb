@@ -1,0 +1,398 @@
+# name: test/sql/timezone/test_icu_timezone_edge_cases.test
+# description: Edge cases of the built-in time zones and Gregorian calendar
+# group: [timezone]
+
+require icu
+
+statement ok
+SET Calendar='gregorian'
+
+# dst gaps and overlaps
+statement ok
+SET TimeZone='America/New_York'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('2024-03-10 01:59:59'::TIMESTAMP), ('2024-03-10 02:00:00'), ('2024-03-10 02:30:00'),
+  ('2024-03-10 02:59:59'), ('2024-03-10 03:00:00'),
+  ('2024-11-03 00:59:59'), ('2024-11-03 01:00:00'), ('2024-11-03 01:30:00'),
+  ('2024-11-03 01:59:59'), ('2024-11-03 02:00:00')) t(ts)
+----
+2024-03-10 01:59:59	2024-03-10 01:59:59-05
+2024-03-10 02:00:00	2024-03-10 03:00:00-04
+2024-03-10 02:30:00	2024-03-10 03:30:00-04
+2024-03-10 02:59:59	2024-03-10 03:59:59-04
+2024-03-10 03:00:00	2024-03-10 03:00:00-04
+2024-11-03 00:59:59	2024-11-03 00:59:59-04
+2024-11-03 01:00:00	2024-11-03 01:00:00-05
+2024-11-03 01:30:00	2024-11-03 01:30:00-05
+2024-11-03 01:59:59	2024-11-03 01:59:59-05
+2024-11-03 02:00:00	2024-11-03 02:00:00-05
+
+# lord howe half hour dst
+statement ok
+SET TimeZone='Australia/Lord_Howe'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('2024-04-07 01:29:59'::TIMESTAMP), ('2024-04-07 01:30:00'), ('2024-04-07 01:45:00'),
+  ('2024-10-06 01:59:59'), ('2024-10-06 02:00:00'), ('2024-10-06 02:15:00')) t(ts)
+----
+2024-04-07 01:29:59	2024-04-07 01:29:59+11
+2024-04-07 01:30:00	2024-04-07 01:30:00+10:30
+2024-04-07 01:45:00	2024-04-07 01:45:00+10:30
+2024-10-06 01:59:59	2024-10-06 01:59:59+10:30
+2024-10-06 02:00:00	2024-10-06 02:30:00+11
+2024-10-06 02:15:00	2024-10-06 02:45:00+11
+
+# date line move
+statement ok
+SET TimeZone='Pacific/Apia'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('2011-12-29 23:59:59'::TIMESTAMP), ('2011-12-30 00:00:00'), ('2011-12-30 12:00:00'),
+  ('2011-12-31 00:00:00'), ('2011-12-31 23:59:59')) t(ts)
+----
+2011-12-29 23:59:59	2011-12-29 23:59:59-10
+2011-12-30 00:00:00	2011-12-31 00:00:00+14
+2011-12-30 12:00:00	2011-12-31 12:00:00+14
+2011-12-31 00:00:00	2011-12-31 00:00:00+14
+2011-12-31 23:59:59	2011-12-31 23:59:59+14
+
+query I
+SELECT '2011-12-29 23:59:59+13'::TIMESTAMPTZ + INTERVAL 1 DAY
+----
+2011-12-31 00:59:59+14
+
+query I
+SELECT '2011-12-29 23:59:59+13'::TIMESTAMPTZ + INTERVAL 1 MONTH
+----
+2012-01-29 00:59:59+14
+
+# negative dst
+statement ok
+SET TimeZone='Europe/Dublin'
+
+query III
+SELECT ts, ts::TIMESTAMPTZ, date_part('timezone', ts::TIMESTAMPTZ) FROM (VALUES
+  ('2024-01-15 12:00:00'::TIMESTAMP), ('2024-07-15 12:00:00'),
+  ('1970-01-15 12:00:00'), ('1970-07-15 12:00:00')) t(ts)
+----
+2024-01-15 12:00:00	2024-01-15 12:00:00+00	0
+2024-07-15 12:00:00	2024-07-15 12:00:00+01	3600
+1970-01-15 12:00:00	1970-01-15 12:00:00+01	3600
+1970-07-15 12:00:00	1970-07-15 12:00:00+01	3600
+
+# local mean time before the first transition
+statement ok
+SET TimeZone='Europe/Amsterdam'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('1800-01-01 00:00:00'::TIMESTAMP), ('1900-01-01 00:00:00'),
+  ('1937-06-30 23:59:59'), ('1937-07-01 00:00:00')) t(ts)
+----
+1800-01-01 00:00:00	1800-01-01 00:00:00+00:17
+1900-01-01 00:00:00	1900-01-01 00:00:00+00
+1937-06-30 23:59:59	1937-06-30 23:59:59+01
+1937-07-01 00:00:00	1937-07-01 00:00:00+01
+
+statement ok
+SET TimeZone='Asia/Kathmandu'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('1500-01-01 00:00:00'::TIMESTAMP), ('1919-12-31 00:00:00'),
+  ('1986-01-01 00:00:00')) t(ts)
+----
+1500-01-01 00:00:00	1500-01-01 00:00:00+05:41
+1919-12-31 00:00:00	1919-12-31 00:00:00+05:41
+1986-01-01 00:00:00	1986-01-01 00:15:00+05:45
+
+# far past and far future
+statement ok
+SET TimeZone='America/Los_Angeles'
+
+query II
+SELECT ts, ts::TIMESTAMPTZ FROM (VALUES
+  ('4000-01-01 (BC) 00:00:00'::TIMESTAMP), ('0001-01-01 00:00:00'),
+  ('1582-10-04 00:00:00'), ('1582-10-15 00:00:00'),
+  ('9999-12-31 23:59:59'), ('99999-01-01 00:00:00')) t(ts)
+----
+4000-01-01 (BC) 00:00:00	4000-01-01 (BC) 00:00:00-07:52
+0001-01-01 00:00:00	0001-01-01 00:00:00-07:52
+1582-10-04 00:00:00	1582-10-04 00:00:00-07:52
+1582-10-15 00:00:00	1582-10-15 00:00:00-07:52
+9999-12-31 23:59:59	9999-12-31 23:59:59-08
+99999-01-01 00:00:00	99999-01-01 00:00:00-08
+
+# date_trunc across a spring forward
+statement ok
+SET TimeZone='America/New_York'
+
+query II
+SELECT part, date_trunc(part, '2024-03-10 03:30:00-04'::TIMESTAMPTZ)
+FROM (VALUES ('millennium'),('century'),('decade'),('year'),('quarter'),('month'),('week'),
+             ('day'),('hour'),('minute'),('second'),('millisecond'),('microsecond')) t(part)
+----
+millennium	2000-01-01 00:00:00-05
+century	2000-01-01 00:00:00-05
+decade	2020-01-01 00:00:00-05
+year	2024-01-01 00:00:00-05
+quarter	2024-01-01 00:00:00-05
+month	2024-03-01 00:00:00-05
+week	2024-03-04 00:00:00-05
+day	2024-03-10 00:00:00-05
+hour	2024-03-10 03:00:00-04
+minute	2024-03-10 03:30:00-04
+second	2024-03-10 03:30:00-04
+millisecond	2024-03-10 03:30:00-04
+microsecond	2024-03-10 03:30:00-04
+
+# date_trunc across a fall back
+query II
+SELECT part, date_trunc(part, '2024-11-03 01:30:00-05'::TIMESTAMPTZ)
+FROM (VALUES ('year'),('quarter'),('month'),('week'),('day'),('hour'),('minute')) t(part)
+----
+year	2024-01-01 00:00:00-05
+quarter	2024-10-01 00:00:00-04
+month	2024-11-01 00:00:00-04
+week	2024-10-28 00:00:00-04
+day	2024-11-03 00:00:00-04
+hour	2024-11-03 01:00:00-05
+minute	2024-11-03 01:30:00-05
+
+# date parts around a transition
+query II
+SELECT part, date_part(part, '2024-03-10 03:30:00-04'::TIMESTAMPTZ)
+FROM (VALUES ('era'),('year'),('quarter'),('month'),('day'),('dayofweek'),('isodow'),
+             ('dayofyear'),('week'),('isoyear'),('yearweek'),('hour'),('minute'),('second'),
+             ('timezone'),('timezone_hour'),('timezone_minute')) t(part)
+----
+era	1
+year	2024
+quarter	1
+month	3
+day	10
+dayofweek	0
+isodow	7
+dayofyear	70
+week	10
+isoyear	2024
+yearweek	202410
+hour	3
+minute	30
+second	0
+timezone	-14400
+timezone_hour	-4
+timezone_minute	0
+
+query I
+SELECT date_part('epoch', '2024-03-10 03:30:00-04'::TIMESTAMPTZ)
+----
+1710055800.0
+
+# interval arithmetic across transitions
+query II
+SELECT i, '2024-03-09 12:00:00-05'::TIMESTAMPTZ + i FROM (VALUES
+  (INTERVAL 1 DAY), (INTERVAL 24 HOUR), (INTERVAL 1 MONTH), (INTERVAL 1 YEAR),
+  (INTERVAL '1 day 2 hours'), (-INTERVAL 1 DAY), (-INTERVAL 24 HOUR)) t(i)
+----
+1 day	2024-03-10 12:00:00-04
+24:00:00	2024-03-10 13:00:00-04
+1 month	2024-04-09 12:00:00-04
+1 year	2025-03-09 12:00:00-04
+1 day 02:00:00	2024-03-10 14:00:00-04
+-1 day	2024-03-08 12:00:00-05
+-24:00:00	2024-03-08 12:00:00-05
+
+query II
+SELECT i, '2024-11-02 12:00:00-04'::TIMESTAMPTZ + i FROM (VALUES
+  (INTERVAL 1 DAY), (INTERVAL 24 HOUR), (INTERVAL 1 MONTH), (-INTERVAL 1 DAY)) t(i)
+----
+1 day	2024-11-03 12:00:00-05
+24:00:00	2024-11-03 11:00:00-05
+1 month	2024-12-02 12:00:00-05
+-1 day	2024-11-01 12:00:00-04
+
+# month end pinning
+query III
+SELECT ts, ts + INTERVAL 1 MONTH, ts + INTERVAL 1 YEAR FROM (VALUES
+  ('2024-01-31 12:00:00-05'::TIMESTAMPTZ), ('2024-02-29 12:00:00-05'),
+  ('2023-03-31 12:00:00-04'), ('2024-05-31 12:00:00-04')) t(ts)
+----
+2024-01-31 12:00:00-05	2024-02-29 12:00:00-05	2025-01-31 12:00:00-05
+2024-02-29 12:00:00-05	2024-03-29 12:00:00-04	2025-02-28 12:00:00-05
+2023-03-31 12:00:00-04	2023-04-30 12:00:00-04	2024-03-31 12:00:00-04
+2024-05-31 12:00:00-04	2024-06-30 12:00:00-04	2025-05-31 12:00:00-04
+
+# age and date_diff across transitions
+query I
+SELECT age('2024-03-11 12:00:00-04'::TIMESTAMPTZ, '2024-03-09 12:00:00-05'::TIMESTAMPTZ)
+----
+2 days
+
+query I
+SELECT age('2025-03-09 12:00:00-05'::TIMESTAMPTZ, '2024-03-09 12:00:00-05'::TIMESTAMPTZ)
+----
+1 year 01:00:00
+
+query I
+SELECT age('2024-02-29 12:00:00-05'::TIMESTAMPTZ, '2020-02-29 12:00:00-05'::TIMESTAMPTZ)
+----
+4 years
+
+query II
+SELECT part, date_diff(part, '2024-03-09 12:00:00-05'::TIMESTAMPTZ, '2024-11-05 12:00:00-05'::TIMESTAMPTZ)
+FROM (VALUES ('year'),('quarter'),('month'),('week'),('day'),('hour'),('minute')) t(part)
+----
+year	0
+quarter	3
+month	8
+week	34
+day	241
+hour	5784
+minute	347040
+
+# make_timestamptz with out of range parts
+query I
+SELECT make_timestamptz(2024, 3, 10, 2, 30, 0.0, 'America/New_York')
+----
+2024-03-10 03:30:00-04
+
+query I
+SELECT make_timestamptz(2024, 13, 1, 0, 0, 0.0, 'UTC')
+----
+2024-12-31 19:00:00-05
+
+query I
+SELECT make_timestamptz(2024, 0, 1, 0, 0, 0.0, 'UTC')
+----
+2023-11-30 19:00:00-05
+
+query I
+SELECT make_timestamptz(2024, 2, 30, 0, 0, 0.0, 'UTC')
+----
+2024-02-29 19:00:00-05
+
+query I
+SELECT make_timestamptz(2024, 1, 1, 25, 70, 90.5, 'UTC')
+----
+2024-01-01 21:11:30.5-05
+
+query I
+SELECT make_timestamptz(0, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0002-12-31 (BC) 19:03:58-04:56
+
+query I
+SELECT make_timestamptz(-1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0002-12-31 (BC) 19:03:58-04:56
+
+query I
+SELECT make_timestamptz(-4713, 11, 24, 12, 0, 0.0, 'UTC')
+----
+4713-11-24 (BC) 07:03:58-04:56
+
+# time bucket across transitions
+query II
+SELECT b, time_bucket(b, '2024-03-10 03:30:00-04'::TIMESTAMPTZ) FROM (VALUES
+  (INTERVAL 1 DAY), (INTERVAL 2 DAY), (INTERVAL 1 MONTH), (INTERVAL 1 HOUR),
+  (INTERVAL 30 MINUTE), (INTERVAL 1 YEAR)) t(b)
+----
+1 day	2024-03-09 19:00:00-05
+2 days	2024-03-08 19:00:00-05
+1 month	2024-02-29 19:00:00-05
+01:00:00	2024-03-10 03:00:00-04
+00:30:00	2024-03-10 03:30:00-04
+1 year	2023-12-31 19:00:00-05
+
+# generate_series across a transition
+query I
+SELECT * FROM generate_series('2024-03-09 12:00:00-05'::TIMESTAMPTZ, '2024-03-12 12:00:00-04'::TIMESTAMPTZ, INTERVAL 1 DAY)
+----
+2024-03-09 12:00:00-05
+2024-03-10 12:00:00-04
+2024-03-11 12:00:00-04
+2024-03-12 12:00:00-04
+
+query I
+SELECT * FROM generate_series('2024-11-02 12:00:00-04'::TIMESTAMPTZ, '2024-11-05 12:00:00-05'::TIMESTAMPTZ, INTERVAL 1 DAY)
+----
+2024-11-02 12:00:00-04
+2024-11-03 12:00:00-05
+2024-11-04 12:00:00-05
+2024-11-05 12:00:00-05
+
+# strptime and strftime with offsets
+query I
+SELECT strptime('2024-03-10 02:30:00', '%Y-%m-%d %H:%M:%S')::TIMESTAMPTZ
+----
+2024-03-10 03:30:00-04
+
+query I
+SELECT strptime('2024-03-10 02:30:00 +0530', '%Y-%m-%d %H:%M:%S %z')
+----
+2024-03-09 16:00:00-05
+
+query I
+SELECT strptime('2024-11-03 01:30:00', '%Y-%m-%d %H:%M:%S')::TIMESTAMPTZ
+----
+2024-11-03 01:30:00-05
+
+query I
+SELECT strftime('2024-03-10 03:30:00-04'::TIMESTAMPTZ, '%Y-%m-%d %H:%M:%S %Z')
+----
+2024-03-10 03:30:00 America/New_York
+
+# timezone() at a transition
+query I
+SELECT timezone('America/New_York', '2024-03-10 02:30:00'::TIMESTAMP)
+----
+2024-03-10 03:30:00-04
+
+query I
+SELECT timezone('America/New_York', '2024-11-03 01:30:00'::TIMESTAMP)
+----
+2024-11-03 01:30:00-05
+
+query I
+SELECT timezone('America/New_York', '2024-03-10 07:30:00+00'::TIMESTAMPTZ)
+----
+2024-03-10 03:30:00
+
+# last day and month names
+statement ok
+SET TimeZone='UTC'
+
+query IIII
+SELECT ts, last_day(ts), monthname(ts), dayname(ts) FROM (VALUES
+  ('2024-02-15 12:00:00+00'::TIMESTAMPTZ), ('2023-02-15 12:00:00+00'),
+  ('2024-12-31 23:59:59+00'), ('2024-01-01 00:00:00+00')) t(ts)
+----
+2024-02-15 12:00:00+00	2024-02-29	February	Thursday
+2023-02-15 12:00:00+00	2023-02-28	February	Wednesday
+2024-12-31 23:59:59+00	2024-12-31	December	Tuesday
+2024-01-01 00:00:00+00	2024-01-31	January	Monday
+
+# timetz conversions
+statement ok
+SET TimeZone='America/New_York'
+
+query I
+SELECT '2024-03-10 03:30:00-04'::TIMESTAMPTZ::TIMETZ
+----
+03:30:00-04
+
+query I
+SELECT '2024-01-10 03:30:00-05'::TIMESTAMPTZ::TIMETZ
+----
+03:30:00-05
+
+query I
+SELECT timezone('Asia/Kathmandu', '12:00:00+00'::TIMETZ)
+----
+17:45:00+05:45
+

@@ -534,15 +534,14 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
-		memset(handle.GetDataMutable(), 0xFF, segment.SegmentSize());
+		auto buffer_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
+		memset(buffer_ptr, 0xFF, segment.SegmentSize());
 	}
 	return nullptr;
 }
 
 idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &validity_stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
-	D_ASSERT(segment.GetBlockOffset() == 0);
-
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
 	if (data.validity.CannotHaveNull()) {
@@ -575,12 +574,13 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
+	auto buffer_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	idx_t revert_start;
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.GetDataMutable()), segment.count);
+		ValidityMask mask(reinterpret_cast<validity_t *>(buffer_ptr), segment.count);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i);
 		}
@@ -589,7 +589,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 		revert_start = start_bit / 8;
 	}
 	// for the rest, we just memset
-	memset(handle.GetDataMutable() + revert_start, 0xFF, segment.SegmentSize() - revert_start);
+	memset(buffer_ptr + revert_start, 0xFF, segment.SegmentSize() - revert_start);
 }
 
 //===--------------------------------------------------------------------===//

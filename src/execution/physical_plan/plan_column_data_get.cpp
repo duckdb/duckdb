@@ -7,8 +7,9 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalColumnDataGet &op) {
 	D_ASSERT(op.children.empty());
 	D_ASSERT(op.collection);
+	op.ResolveOperatorTypes();
 	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
-	                                    std::move(op.collection));
+	                                    std::move(op.collection), op.GetColumnIds());
 }
 
 } // namespace duckdb
