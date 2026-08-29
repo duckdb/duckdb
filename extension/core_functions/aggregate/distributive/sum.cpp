@@ -321,22 +321,21 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	    !Hugeint::TryMultiply(max_positive, max_card, wide_positive)) {
 		return nullptr;
 	}
-	// only INT32/INT64 have a narrower no-overflow implementation to swap in; BOOL/INT16 already
-	// accumulate in int64 and cannot overflow given any realistic row count
-	if ((internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64) &&
-	    wide_positive < NumericLimits<int64_t>::Maximum() && wide_negative > NumericLimits<int64_t>::Minimum()) {
+
+	// Relace fast implementation when possible: only INT32/INT64 have a narrower no-overflow implementation to swap in.
+	const bool has_no_overflow_variant = internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64;
+	const bool sum_fits_in_int64 =
+	    wide_negative > NumericLimits<int64_t>::Minimum() && wide_positive < NumericLimits<int64_t>::Maximum();
+	if (has_no_overflow_variant && sum_fits_in_int64) {
 		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
-	// a group may contain 1..cardinality rows, so the tightest sound bound multiplies by
-	// cardinality only on the side that straddles zero; a single-row group can produce a
-	// sum equal to the per-row min/max on the other side
+
+	// Propagate stats.
 	auto sum_min = max_negative <= 0 ? wide_negative : max_negative;
 	auto sum_max = max_positive >= 0 ? wide_positive : max_positive;
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType()).ToUnique();
 	NumericStats::SetMin(*result, Value::HUGEINT(sum_min));
 	NumericStats::SetMax(*result, Value::HUGEINT(sum_max));
-	// sum returns NULL only on an empty/all-NULL group and a non-NULL value otherwise:
-	// mark both possibilities so downstream passes don't mistake this for an all-NULL column
 	result->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 	return result;
 }
