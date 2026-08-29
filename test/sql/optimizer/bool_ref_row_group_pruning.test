@@ -1,6 +1,5 @@
 # name: test/sql/optimizer/bool_ref_row_group_pruning.test
 # description: Bare boolean column filters (WHERE b, WHERE NOT b) should prune row groups
-#              whose stats prove every value is FALSE / TRUE, like the explicit b = TRUE forms
 # group: [optimizer]
 
 statement ok

@@ -609,8 +609,8 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	return result;
 }
 
-static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr,
-                                                    array_ptr<const BaseStatistics> input_stats, bool negated) {
+static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr, array_ptr<const BaseStatistics> input_stats,
+                                                    bool negated) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF ||
 	    expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -628,8 +628,7 @@ static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr,
 	if ((negated ? !min_v : min_v) == false) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	return stats.CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
-	                           : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	return stats.CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
