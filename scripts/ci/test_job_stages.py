@@ -133,6 +133,8 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
+        self.assertFalse(selection.optimized_release)
+        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -176,12 +178,25 @@ class JobStagesTest(unittest.TestCase):
             )
             self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
 
-    def test_regular_branch_excludes_main_only_jobs(self):
+    def test_pull_request_uses_optimized_release_for_canonical_artifact(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         self.assertNotIn("codecov", selection.enabled_jobs)
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
-        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertTrue(selection.optimized_release)
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix],
+            ["amd64 compatibility", "amd64 optimized"],
+        )
+        self.assertEqual(
+            [config["build_artifact"] for config in selection.linux_release_matrix],
+            ["linux-release-compat-build", "linux-release-build"],
+        )
+        self.assertEqual(selection.linux_release_matrix[0]["ccache_key"], "linux-cli-amd64-glibc")
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix if config["is_canonical_build"]],
+            ["amd64 optimized"],
+        )
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
 
@@ -195,9 +210,12 @@ class JobStagesTest(unittest.TestCase):
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_with_skipped_tests_includes_optimized_release(self):
-        selection = self._compute_job_selection("workflow_dispatch", "main", "duckdb/duckdb", skip_tests=True)
+        selection = self._compute_job_selection(
+            "workflow_dispatch", "feature/my-branch", "duckdb/duckdb", skip_tests=True
+        )
         self.assertIn("linux-release", selection.enabled_jobs)
         self.assertNotIn("linux-release-tests", selection.enabled_jobs)
+        self.assertNotIn("regression", selection.enabled_jobs)
         self.assertTrue(selection.optimized_release)
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],

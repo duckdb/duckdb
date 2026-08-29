@@ -226,12 +226,9 @@ def linux_release_matrix(selection_input: JobSelectionInput, optimized_release: 
             )
         )
     if optimized_release:
-        result.extend(
-            [
-                optimized_release_config(runner=selection_input.runners.get("linux_x64", ""), arch="amd64"),
-                optimized_release_config(runner=selection_input.runners.get("linux_arm64", ""), arch="arm64"),
-            ]
-        )
+        result.append(optimized_release_config(runner=selection_input.runners.get("linux_x64", ""), arch="amd64"))
+        if selection_input.event_name == "workflow_dispatch":
+            result.append(optimized_release_config(runner=selection_input.runners.get("linux_arm64", ""), arch="arm64"))
     return result
 
 
@@ -263,7 +260,9 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
 
 def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
     selected_jobs = enabled_jobs(selection_input)
-    optimized_release = selection_input.event_name == "workflow_dispatch" and "linux-release" in selected_jobs
+    optimized_release = (
+        selection_input.event_name in {"pull_request", "workflow_dispatch"} and "linux-release" in selected_jobs
+    )
     return JobSelection(
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
