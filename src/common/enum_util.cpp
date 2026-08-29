@@ -178,6 +178,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
+#include "duckdb/parallel/pipeline_result_ready_event.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
@@ -4595,6 +4596,25 @@ const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value) {
 template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value) {
 	return static_cast<PipelineInputMode>(StringUtil::StringToEnum(GetPipelineInputModeValues(), 2, "PipelineInputMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPipelineResultReadyEventStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineResultReadyEventState::WAITING), "WAITING" },
+		{ static_cast<uint32_t>(PipelineResultReadyEventState::READY), "READY" },
+		{ static_cast<uint32_t>(PipelineResultReadyEventState::OPENED), "OPENED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineResultReadyEventState>(PipelineResultReadyEventState value) {
+	return StringUtil::EnumToString(GetPipelineResultReadyEventStateValues(), 3, "PipelineResultReadyEventState", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineResultReadyEventState EnumUtil::FromString<PipelineResultReadyEventState>(const char *value) {
+	return static_cast<PipelineResultReadyEventState>(StringUtil::StringToEnum(GetPipelineResultReadyEventStateValues(), 3, "PipelineResultReadyEventState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPipelineScheduleModeValues() {
