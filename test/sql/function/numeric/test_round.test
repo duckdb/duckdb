@@ -58,6 +58,82 @@ SELECT round(1.0, (-2147483648)::INT);
 ----
 0
 
+# integer overflow when rounding at negative precision
+query I
+SELECT round(9223372036854775803::BIGINT, -1)
+----
+9223372036854775800
+
+query I
+SELECT round(-9223372036854775803::BIGINT, -1)
+----
+-9223372036854775800
+
+query I
+SELECT round(9223372036854775807::BIGINT, -2)
+----
+9223372036854775800
+
+statement error
+SELECT round(9223372036854775807::BIGINT, -1)
+----
+Out of Range Error: Overflow in ROUND
+
+query I
+SELECT round(123::TINYINT, -1)
+----
+120
+
+query I
+SELECT round(-123::TINYINT, -1)
+----
+-120
+
+query I
+SELECT round(99::TINYINT, -2)
+----
+100
+
+statement error
+SELECT round(127::TINYINT, -1)
+----
+Out of Range Error: Overflow in ROUND
+
+statement error
+SELECT round((-128)::TINYINT, -1)
+----
+Out of Range Error: Overflow in ROUND
+
+query I
+SELECT round(32760::SMALLINT, -1)
+----
+32760
+
+statement error
+SELECT round(32765::SMALLINT, -1)
+----
+Out of Range Error: Overflow in ROUND
+
+query I
+SELECT round(2147483640::INTEGER, -1)
+----
+2147483640
+
+statement error
+SELECT round(2147483645::INTEGER, -1)
+----
+Out of Range Error: Overflow in ROUND
+
+query I
+SELECT round(170141183460469231731687303715884105723::HUGEINT, -1)
+----
+170141183460469231731687303715884105720
+
+statement error
+SELECT round(170141183460469231731687303715884105727::HUGEINT, -1)
+----
+Out of Range Error: Overflow in ROUND
+
 query I
 SELECT round(1.0::DOUBLE, (-2147483648)::INT);
 ----
