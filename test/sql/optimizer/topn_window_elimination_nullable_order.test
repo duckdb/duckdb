@@ -57,3 +57,34 @@ ORDER BY g, rn;
 2	5	1
 2	4	2
 2	6	3
+
+# ASC with NULLS LAST takes the arg_min nulls-last variant through the same guard.
+query II
+SELECT id, ROW_NUMBER() OVER (ORDER BY NULLIF(id % 3, 0) ASC NULLS LAST) AS rn
+FROM t
+QUALIFY rn <= 3
+ORDER BY rn;
+----
+1	1
+2	2
+3	3
+
+# Payload-free projection: only the row number is projected, exercising the synthesized argument.
+query I
+SELECT ROW_NUMBER() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM t
+QUALIFY rn <= 3
+ORDER BY rn;
+----
+1
+2
+3
+
+# N=1 keeps a non-NULL-keyed winner and still goes through the guarded path.
+query II
+SELECT id, ROW_NUMBER() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM t
+QUALIFY rn <= 1
+ORDER BY rn;
+----
+2	1
