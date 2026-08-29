@@ -17,6 +17,7 @@
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_initialize_event.hpp"
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
+#include "duckdb/parallel/pipeline_result_ready_event.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -78,6 +79,88 @@ static shared_ptr<Event> CreatePipelineScheduleEvent(const PipelineScheduleStage
 	}
 }
 
+static reference_set_t<Pipeline> GetStreamingResultFrontier(const PipelineSchedule &schedule) {
+	reference_set_t<Pipeline> frontier;
+	vector<reference<Pipeline>> to_visit;
+	for (auto &stage : schedule.stages) {
+		if (stage.type != PipelineScheduleStageType::EXECUTE) {
+			continue;
+		}
+		auto sink = stage.pipeline->GetSink();
+		if (!sink || sink->type != PhysicalOperatorType::RESULT_COLLECTOR ||
+		    !sink->Cast<PhysicalResultCollector>().IsStreaming()) {
+			continue;
+		}
+		if (frontier.insert(*stage.pipeline).second) {
+			to_visit.push_back(*stage.pipeline);
+		}
+	}
+
+	for (idx_t visit_idx = 0; visit_idx < to_visit.size(); visit_idx++) {
+		auto &pipeline = to_visit[visit_idx].get();
+		for (auto &producer_ref : pipeline.GetExternalInputProducers()) {
+			auto producer = producer_ref.lock();
+			D_ASSERT(producer);
+			if (frontier.insert(*producer).second) {
+				to_visit.push_back(*producer);
+			}
+		}
+	}
+	return frontier;
+}
+
+static bool HasStreamingExecuteDependency(const PipelineSchedule &schedule, idx_t stage_idx,
+                                          const vector<bool> &streaming_execute_stages) {
+	vector<bool> visited(schedule.stages.size(), false);
+	vector<idx_t> to_visit = schedule.stages[stage_idx].dependencies;
+	while (!to_visit.empty()) {
+		auto dependency = to_visit.back();
+		to_visit.pop_back();
+		if (visited[dependency]) {
+			continue;
+		}
+		visited[dependency] = true;
+		if (streaming_execute_stages[dependency]) {
+			return true;
+		}
+		for (auto child_dependency : schedule.stages[dependency].dependencies) {
+			to_visit.push_back(child_dependency);
+		}
+	}
+	return false;
+}
+
+static vector<idx_t> GetStreamingResultFrontierEntries(const PipelineSchedule &schedule) {
+	auto frontier = GetStreamingResultFrontier(schedule);
+	vector<bool> streaming_execute_stages(schedule.stages.size(), false);
+	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
+		auto &stage = schedule.stages[stage_idx];
+		if (stage.type == PipelineScheduleStageType::EXECUTE && frontier.find(*stage.pipeline) != frontier.end()) {
+			streaming_execute_stages[stage_idx] = true;
+		}
+	}
+
+	vector<idx_t> result;
+	for (idx_t stage_idx = 0; stage_idx < schedule.stages.size(); stage_idx++) {
+		if (streaming_execute_stages[stage_idx] &&
+		    !HasStreamingExecuteDependency(schedule, stage_idx, streaming_execute_stages)) {
+			result.push_back(stage_idx);
+		}
+	}
+	return result;
+}
+
+void Executor::NotifyResultReady() {
+	lock_guard<mutex> guard(executor_lock);
+	if (cancelled) {
+		return;
+	}
+	D_ASSERT(result_ready_event);
+	D_ASSERT(!result_ready);
+	result_ready = true;
+	task_reschedule.notify_all();
+}
+
 void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	auto &events = event_data.events;
 	D_ASSERT(events.empty());
@@ -86,7 +169,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	if (schedule->HasCycle()) {
 		throw InternalException("Cyclic dependency in pipeline schedule");
 	}
-	events.reserve(schedule->stages.size());
+	events.reserve(schedule->stages.size() + 1);
 	for (auto &stage : schedule->stages) {
 		events.push_back(CreatePipelineScheduleEvent(stage, event_data.initial_schedule));
 	}
@@ -94,6 +177,27 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		for (auto dependency : schedule->stages[stage_idx].dependencies) {
 			events[stage_idx]->AddDependency(*events[dependency]);
 		}
+	}
+	if (event_data.initial_schedule && HasStreamingResultCollector()) {
+		auto frontier_entries = GetStreamingResultFrontierEntries(*schedule);
+		if (frontier_entries.empty()) {
+			throw InternalException("Failed to find an entry pipeline for the streaming result frontier");
+		}
+		set<idx_t> gate_dependencies;
+		for (auto entry_idx : frontier_entries) {
+			for (auto dependency : schedule->stages[entry_idx].dependencies) {
+				gate_dependencies.insert(dependency);
+			}
+		}
+		auto gate = make_shared_ptr<PipelineResultReadyEvent>(*this);
+		for (auto dependency : gate_dependencies) {
+			gate->AddDependency(*events[dependency]);
+		}
+		for (auto entry_idx : frontier_entries) {
+			events[entry_idx]->AddDependency(*gate);
+		}
+		result_ready_event = gate;
+		events.push_back(std::move(gate));
 	}
 	for (auto &pipeline : schedule->initialize_on_schedule_pipelines) {
 		pipeline.get().ResetSource(true);
@@ -323,6 +427,8 @@ void Executor::CancelTasks() {
 	root_pipelines.clear();
 	to_be_rescheduled_tasks.clear();
 	events.clear();
+	result_ready_event.reset();
+	result_ready = false;
 }
 
 bool Executor::WorkOnTasks() {
@@ -371,8 +477,7 @@ void Executor::WaitForTask() {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-	if (ResultCollectorIsBlocked()) {
-		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+	if (result_ready) {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
@@ -407,19 +512,6 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	}
 }
 
-bool Executor::ResultCollectorIsBlocked() {
-	if (!HasStreamingResultCollector()) {
-		return false;
-	}
-	for (auto &kv : to_be_rescheduled_tasks) {
-		auto &task = kv.second;
-		if (task->TaskBlockedOnResult()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
@@ -443,6 +535,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
+	{
+		lock_guard<mutex> guard(executor_lock);
+		if (result_ready) {
+			return PendingExecutionResult::RESULT_READY;
+		}
+	}
 	// check if there are any incomplete pipelines
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (completed_pipelines < total_pipelines) {
@@ -459,14 +557,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		}
 
 		if (!current_task && !HasError()) {
-			// there are no tasks to be scheduled and there are tasks blocked
 			lock_guard<mutex> l(executor_lock);
+			if (result_ready) {
+				return PendingExecutionResult::RESULT_READY;
+			}
 			if (to_be_rescheduled_tasks.empty()) {
 				return PendingExecutionResult::NO_TASKS_AVAILABLE;
-			}
-			// At least one task is blocked
-			if (ResultCollectorIsBlocked()) {
-				return PendingExecutionResult::RESULT_READY;
 			}
 			return PendingExecutionResult::BLOCKED;
 		}
@@ -489,6 +585,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 			}
 		}
 		if (!HasError()) {
+			{
+				lock_guard<mutex> guard(executor_lock);
+				if (result_ready) {
+					return PendingExecutionResult::RESULT_READY;
+				}
+			}
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
 			if (task && Settings::Get<SchedulerProcessPartialSetting>(context)) {
@@ -532,6 +634,8 @@ void Executor::Reset() {
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();
+	result_ready_event.reset();
+	result_ready = false;
 	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
@@ -627,6 +731,19 @@ unique_ptr<QueryResult> Executor::GetResult() {
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);
+}
+
+void Executor::OpenResultPipeline() {
+	shared_ptr<PipelineResultReadyEvent> gate;
+	{
+		lock_guard<mutex> guard(executor_lock);
+		if (!result_ready || !result_ready_event) {
+			throw InternalException("Attempted to open a streaming result pipeline before it was ready");
+		}
+		result_ready = false;
+		gate = result_ready_event;
+	}
+	gate->Open();
 }
 
 } // namespace duckdb

@@ -95,11 +95,14 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 	}
 
 	SECTION("Runtime error in pending query (streaming)") {
-		// this succeeds initially
+		// The result-producing pipeline starts only after the StreamQueryResult has been installed.
 		auto pending_query =
 		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)", true);
 		REQUIRE(!pending_query->HasError());
 		auto result = pending_query->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(!result->HasError());
+		REQUIRE(!result->Fetch());
 		REQUIRE(result->HasError());
 
 		// query the connection as normal after
@@ -227,9 +230,8 @@ TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
 	DuckDB db;
 	Connection con(db);
 
-	// Single thread + tiny streaming buffer make the parked-collector RESULT_READY state reachable fast.
+	// A single thread makes the result gate transition deterministic.
 	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
-	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
 
 	auto pending = con.PendingQuery("SELECT * FROM range(10000000)", true);
 	REQUIRE(!pending->HasError());
@@ -245,7 +247,7 @@ TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
 
 	con.Interrupt();
 
-	// Without the fix the parked collector keeps reporting RESULT_READY and the interrupt is never seen.
+	// A pending interrupt takes precedence over a result gate that is ready but has not been opened.
 	bool saw_error = false;
 	for (idx_t j = 0; j < 1000; j++) {
 		if (pending->ExecuteTask() == PendingExecutionResult::EXECUTION_ERROR) {
@@ -254,6 +256,51 @@ TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
 		}
 	}
 	REQUIRE(saw_error);
+}
+
+TEST_CASE("Streaming result pipeline gate lifecycle", "[api]") {
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+
+	SECTION("result readiness is stable until the stream is created") {
+		auto pending = con.PendingQuery("SELECT * FROM range(10000)", true);
+		PendingExecutionResult state = PendingExecutionResult::RESULT_NOT_READY;
+		for (idx_t i = 0; i < 1000 && state != PendingExecutionResult::RESULT_READY; i++) {
+			state = pending->ExecuteTask();
+			if (state == PendingExecutionResult::BLOCKED) {
+				pending->WaitForTask();
+			}
+		}
+		REQUIRE(state == PendingExecutionResult::RESULT_READY);
+		REQUIRE(pending->ExecuteTask() == PendingExecutionResult::RESULT_READY);
+
+		auto result = pending->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->Fetch());
+		REQUIRE(!result->HasError());
+	}
+
+	SECTION("empty stream executes after the gate opens") {
+		auto result = con.SendQuery("SELECT * FROM range(0)");
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(!result->HasError());
+		REQUIRE(!result->Fetch());
+		REQUIRE(!result->HasError());
+	}
+
+	SECTION("abandoning a ready pending result does not open the gate") {
+		auto pending = con.PendingQuery("SELECT * FROM range(10000)", true);
+		PendingExecutionResult state = PendingExecutionResult::RESULT_NOT_READY;
+		for (idx_t i = 0; i < 1000 && state != PendingExecutionResult::RESULT_READY; i++) {
+			state = pending->ExecuteTask();
+		}
+		REQUIRE(state == PendingExecutionResult::RESULT_READY);
+		pending->Close();
+
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
 }
 
 TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
@@ -421,8 +468,11 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		parameters = {Value::INTEGER(0)};
 		auto pending_query = prepared->PendingQuery(parameters, true);
 		REQUIRE(!pending_query->HasError());
-		// still succeeds...
+		// The streaming result is installed before the result-producing pipeline starts.
 		auto result = pending_query->Execute();
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+		REQUIRE(!result->HasError());
+		REQUIRE(!result->Fetch());
 		REQUIRE(result->HasError());
 
 		// query the connection as normal after

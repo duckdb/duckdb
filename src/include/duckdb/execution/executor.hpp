@@ -25,6 +25,7 @@ class ClientContext;
 class DataChunk;
 class PhysicalOperator;
 class PipelineExecutor;
+class PipelineResultReadyEvent;
 class OperatorState;
 class QueryProfiler;
 class ThreadContext;
@@ -106,6 +107,8 @@ public:
 	bool HasStreamingResultCollector();
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
+	//! Opens the result-producing pipeline frontier after the streaming result has been installed
+	void OpenResultPipeline();
 
 	//! Returns true if all pipelines have been completed
 	bool ExecutionIsFinished();
@@ -124,8 +127,9 @@ public:
 	}
 
 private:
-	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
-	bool ResultCollectorIsBlocked();
+	friend class PipelineResultReadyEvent;
+	//! Mark the streaming result as ready and wake a thread waiting on the executor
+	void NotifyResultReady();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
@@ -182,6 +186,10 @@ private:
 	reference_map_t<Task, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
+	//! Gate holding back the result-producing pipeline frontier until the streaming result is installed
+	shared_ptr<PipelineResultReadyEvent> result_ready_event;
+	//! Whether the result gate is ready to be opened
+	atomic<bool> result_ready {false};
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;

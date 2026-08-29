@@ -147,17 +147,19 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// create a big table with strings that are numbers
+	// create a big table with one non-numeric value followed by strings that are numbers
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello')"));
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE * 2 - 1; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('" + to_string(i) + "')"));
 	}
-	// now insert one non-numeric value
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello')"));
 
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
-	REQUIRE_FAIL(result);
+	REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
+	REQUIRE(!result->HasError());
+	REQUIRE(!result->Fetch());
+	REQUIRE(result->HasError());
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {

@@ -70,8 +70,8 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	if (buffered_count >= BufferSize()) {
 		return StreamExecutionResult::CHUNK_READY;
 	}
-	if (execution_result == PendingExecutionResult::BLOCKED ||
-	    execution_result == PendingExecutionResult::RESULT_READY) {
+	D_ASSERT(execution_result != PendingExecutionResult::RESULT_READY);
+	if (execution_result == PendingExecutionResult::BLOCKED) {
 		return StreamExecutionResult::BLOCKED;
 	}
 	if (result.HasError()) {

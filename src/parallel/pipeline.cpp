@@ -6,7 +6,6 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
@@ -34,14 +33,6 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 		// Account for every task before lazy executor construction can advance the batch minimum.
 		reserved_batch_index = pipeline.RegisterNewBatchIndex();
 	}
-}
-
-bool PipelineTask::TaskBlockedOnResult() const {
-	return pipeline.IsStreamingResultPipeline() && pipeline_executor->RemainingSinkChunk();
-}
-
-const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
-	return *pipeline_executor;
 }
 
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
@@ -252,14 +243,6 @@ bool Pipeline::HasExternalInputProducer(const Pipeline &pipeline) const {
 		}
 	}
 	return false;
-}
-
-bool Pipeline::IsStreamingResultPipeline() const {
-	if (external_streaming_result_producer) {
-		return true;
-	}
-	return sink && sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
-	       sink->Cast<PhysicalResultCollector>().IsStreaming();
 }
 
 bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const {

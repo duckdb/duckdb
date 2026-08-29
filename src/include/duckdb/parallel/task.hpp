@@ -48,10 +48,6 @@ public:
 		throw InternalException("Cannot reschedule task of base Task class");
 	}
 
-	virtual bool TaskBlockedOnResult() const {
-		return false;
-	}
-
 	virtual string TaskType() const {
 		return "UnnamedTask";
 	}

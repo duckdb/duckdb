@@ -453,6 +453,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		active_query->SetOpenResult(*result);
+		executor.OpenResultPipeline();
 	}
 	return result;
 }
