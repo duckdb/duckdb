@@ -10,22 +10,6 @@ on:
         type: boolean
       run_all:
         type: boolean
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-      - 'gh-readonly-queue/**'
-    paths:
-      - '**'
-      - '!**.md'
-      - '!test/configs/**'
-      - '!tools/**'
-      - 'tools/shell/**'
-      - '!.github/patches/duckdb-wasm/**'
-      - '!.github/workflows/**'
-      - '.github/workflows/OSX.yml'
-
 
 concurrency:
   group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -126,6 +110,7 @@ jobs:
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
+        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
         shell: bash
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
@@ -167,9 +152,9 @@ jobs:
           for library in build/release/libs/*.a; do
             library_name="$(basename "$library")"
             lipo -extract arm64 -output "build/release_arm64/libs/$library_name" "$library"
-            lipo -verify_arch arm64 "build/release_arm64/libs/$library_name"
+            lipo "build/release_arm64/libs/$library_name" -verify_arch arm64
             lipo -extract x86_64 -output "build/release_amd64/libs/$library_name" "$library"
-            lipo -verify_arch x86_64 "build/release_amd64/libs/$library_name"
+            lipo "build/release_amd64/libs/$library_name" -verify_arch x86_64
           done
 
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
