@@ -1159,6 +1159,32 @@ struct BinaryZeroCheckWrapper {
 	}
 };
 
+// Signed-integer modulo. `right == -1` must short-circuit to 0: for every x the
+// remainder x % -1 is 0, and computing it via the raw `%` operator is UB because
+// the intermediate quotient <minimum> / -1 is not representable (on x86 the IDIV
+// raises SIGFPE). Only division has that overflow; the remainder does not.
+template <bool NULL_ON_ZERO>
+struct BinaryModuloWrapper {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+		if (right == 0) {
+			if (!NULL_ON_ZERO) {
+				ThrowDivisionByZero(fun.get());
+			}
+			mask.SetInvalid(idx);
+			return left;
+		}
+		if (right == -1) {
+			return 0;
+		}
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+	}
+
+	static bool AddsNulls() {
+		return NULL_ON_ZERO;
+	}
+};
+
 template <bool NULL_ON_ZERO>
 struct BinaryNumericDivideHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
@@ -1229,6 +1255,49 @@ scalar_function_t GetBinaryFunctionZeroCheck(PhysicalType type, bool null_on_zer
 	return GetBinaryFunctionZeroCheck<OP, false>(type);
 }
 
+// Modulo must NOT throw on <minimum> % -1: the remainder is always 0 and is
+// well-defined (only division has the INT_MIN / -1 overflow). Use the
+// zero-check-only wrapper for every numeric type.
+template <class OP, bool NULL_ON_ZERO>
+scalar_function_t GetBinaryFunctionModuloZeroCheck(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT8:
+		return BinaryScalarFunctionZeroCheck<int8_t, int8_t, int8_t, OP, BinaryModuloWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT16:
+		return BinaryScalarFunctionZeroCheck<int16_t, int16_t, int16_t, OP, BinaryModuloWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT32:
+		return BinaryScalarFunctionZeroCheck<int32_t, int32_t, int32_t, OP, BinaryModuloWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT64:
+		return BinaryScalarFunctionZeroCheck<int64_t, int64_t, int64_t, OP, BinaryModuloWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT8:
+		return BinaryScalarFunctionZeroCheck<uint8_t, uint8_t, uint8_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT16:
+		return BinaryScalarFunctionZeroCheck<uint16_t, uint16_t, uint16_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT32:
+		return BinaryScalarFunctionZeroCheck<uint32_t, uint32_t, uint32_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT64:
+		return BinaryScalarFunctionZeroCheck<uint64_t, uint64_t, uint64_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::INT128:
+		return BinaryScalarFunctionZeroCheck<hugeint_t, hugeint_t, hugeint_t, OP, BinaryModuloWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::UINT128:
+		return BinaryScalarFunctionZeroCheck<uhugeint_t, uhugeint_t, uhugeint_t, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::FLOAT:
+		return BinaryScalarFunctionZeroCheck<float, float, float, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	case PhysicalType::DOUBLE:
+		return BinaryScalarFunctionZeroCheck<double, double, double, OP, BinaryZeroCheckWrapper<NULL_ON_ZERO>>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetBinaryFunctionModuloZeroCheck");
+	}
+}
+
+template <class OP>
+scalar_function_t GetBinaryFunctionModuloZeroCheck(PhysicalType type, bool null_on_zero) {
+	if (null_on_zero) {
+		return GetBinaryFunctionModuloZeroCheck<OP, true>(type);
+	}
+	return GetBinaryFunctionModuloZeroCheck<OP, false>(type);
+}
+
 template <class OP>
 unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
@@ -1236,6 +1305,16 @@ unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
 	bound_function.SetFunctionCallback(
 	    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
+	return nullptr;
+}
+
+template <class OP>
+unique_ptr<FunctionData> BindModuloByZero(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+	bound_function.SetFunctionCallback(
+	    GetBinaryFunctionModuloZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	return nullptr;
 }
 
@@ -1394,7 +1473,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else {
-			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDivisionByZero<ModuloOperator>));
+			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindModuloByZero<ModuloOperator>));
 		}
 	}
 	modulo.SetFallible();
