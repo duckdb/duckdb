@@ -609,6 +609,29 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	return result;
 }
 
+static FilterPropagateResult CheckBoolRefStatistics(const Expression &expr,
+                                                    array_ptr<const BaseStatistics> input_stats, bool negated) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    expr.GetReturnType().id() != LogicalTypeId::BOOLEAN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto index = expr.Cast<BoundReferenceExpression>().Index();
+	if (index >= input_stats.size() || !NumericStats::HasMinMax(input_stats[index])) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto &stats = input_stats[index];
+	const auto min_v = NumericStats::Min(stats).GetValue<bool>();
+	const auto max_v = NumericStats::Max(stats).GetValue<bool>();
+	if (min_v != max_v) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if ((negated ? !min_v : min_v) == false) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return stats.CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+	                           : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+}
+
 static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                         const BoundOperatorExpression &op_expr,
                                                         array_ptr<const BaseStatistics> input_stats) {
@@ -622,6 +645,10 @@ static FilterPropagateResult CheckNotOperatorStatistics(optional_ptr<ClientConte
 		    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 			return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 		}
+	}
+	auto bool_ref = CheckBoolRefStatistics(child, input_stats, true);
+	if (bool_ref != FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return bool_ref;
 	}
 	// a child matching every row makes NOT match no row - the converse does not hold, since a child
 	// that matches no row may be NULL rather than false, and NOT NULL does not match either
@@ -709,6 +736,8 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(optional_ptr<C
 		return CheckOperatorStatistics(context_p, expr.Cast<BoundOperatorExpression>(), input_stats);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return CheckConjunctionStatistics(context_p, expr.Cast<BoundConjunctionExpression>(), input_stats);
+	case ExpressionClass::BOUND_REF:
+		return CheckBoolRefStatistics(expr, input_stats, false);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

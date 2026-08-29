@@ -24,7 +24,6 @@ FROM range(6144);
 statement ok
 CHECKPOINT;
 
-# correctness sanity checks
 query III
 SELECT count(*) FILTER (WHERE b),
        count(*) FILTER (WHERE NOT b),
@@ -75,7 +74,6 @@ SELECT sum(x) FROM tb WHERE b IS FALSE;
 11533312
 
 # bare bool refs should prune the same way
-# `WHERE b` should prune row group 1 (all FALSE).
 query II
 EXPLAIN ANALYZE SELECT sum(x) FROM tb WHERE b;
 ----
