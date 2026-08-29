@@ -6,7 +6,8 @@
 namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-                                                 vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
+                                                 vector<Identifier> names_p,
+                                                 unique_ptr<ColumnDataCollection> collection_p,
                                                  ClientProperties client_properties)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
                   std::move(names_p), std::move(client_properties)),
@@ -19,7 +20,7 @@ MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
 
 string MaterializedQueryResult::ToString() {
 	string result;
-	if (success) {
+	if (!HasError()) {
 		result = HeaderToString();
 		result += "[ Rows: " + to_string(collection->Count()) + "]\n";
 		auto &coll = Collection();
@@ -41,7 +42,7 @@ string MaterializedQueryResult::ToString() {
 }
 
 string MaterializedQueryResult::ToBox(BoxRendererContext &context, const BoxRendererConfig &config) {
-	if (!success) {
+	if (HasError()) {
 		return GetError() + "\n";
 	}
 	if (!collection) {
@@ -49,7 +50,7 @@ string MaterializedQueryResult::ToBox(BoxRendererContext &context, const BoxRend
 	}
 	BoxRenderer renderer(config);
 	ColumnDataCollectionWrapper wrapper(Collection());
-	return renderer.ToString(context, names, wrapper);
+	return renderer.ToString(context, IdentifiersToStrings(GetNames()), wrapper);
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {

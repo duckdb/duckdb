@@ -95,6 +95,8 @@ ScalarFunctionSet BarFun::GetFunctions() {
 	                               LogicalType::VARCHAR, BarFunction));
 	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
 	                               LogicalType::VARCHAR, BarFunction));
+	// throws if the bar width is out of range
+	bar.SetFallible();
 	return bar;
 }
 

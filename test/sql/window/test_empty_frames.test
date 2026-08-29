@@ -82,6 +82,70 @@ ORDER BY 1;
 2	2
 NULL	3
 
+# Reversed frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
+
+# Empty frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
+
 # All zeroes
 #
 foreach agg approx_count_distinct count entropy

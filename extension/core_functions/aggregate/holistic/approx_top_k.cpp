@@ -4,10 +4,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/function/aggregate/sort_key_helpers.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -551,6 +547,8 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
+	//	k must be constant
+	auto k = input.GetConstant(1);
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR) {
 		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
 		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);

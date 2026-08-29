@@ -200,6 +200,7 @@ struct OperatorSourceInput {
 	GlobalSourceState &global_state;
 	LocalSourceState &local_state;
 	InterruptState &interrupt_state;
+	SourceBatchIndexState batch_index_state = SourceBatchIndexState::UNCHANGED;
 };
 
 struct OperatorSinkCombineInput {

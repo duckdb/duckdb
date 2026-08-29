@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -232,7 +234,7 @@ string AddColumnInfo::ToString() const {
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
 	}
-	result += " " + this->new_column.GetName();
+	result += " " + SQLIdentifier(this->new_column.GetName());
 	result += " " + this->new_column.GetType().ToString();
 	if (this->new_column.HasDefaultValue()) {
 		result += " DEFAULT ";

@@ -237,6 +237,34 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 	ColumnSegment::FilterSelection(sel, result, filter_state, vector_count, sel_count);
 }
 
+static string DictFSSTModeToString(const DictFSSTMode mode) {
+	switch (mode) {
+	case DictFSSTMode::DICTIONARY:
+		return "DICTIONARY";
+	case DictFSSTMode::DICT_FSST:
+		return "DICT_FSST";
+	case DictFSSTMode::FSST_ONLY:
+		return "FSST_ONLY";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// GetSegmentInfo
+//===--------------------------------------------------------------------===//
+static InsertionOrderPreservingMap<string> DictFSSTGetSegmentInfo(QueryContext, ColumnSegment &segment) {
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.GetBlockHandle()));
+	state->Initialize(false);
+
+	const auto tuple_count = segment.count.load();
+
+	InsertionOrderPreservingMap<string> result;
+	result[DictFSSTModeToString(state->mode)] = StringUtil::Format("%d", tuple_count);
+	return result;
+}
+
 } // namespace dict_fsst
 
 //===--------------------------------------------------------------------===//
@@ -255,6 +283,7 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
 	res.select = dict_fsst::DictFSSTSelect;
 	res.filter = dict_fsst::DictFSSTFilter;
+	res.get_segment_info = dict_fsst::DictFSSTGetSegmentInfo;
 	return res;
 }
 

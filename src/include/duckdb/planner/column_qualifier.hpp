@@ -51,6 +51,10 @@ private:
 private:
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,
 	                                                                   idx_t &struct_extract_start);
+	//! Whether the given (possibly nested) table qualification matches a binding in the current bind context
+	bool TableBindingExists(const BindingAlias &alias);
+	//! Whether any binding in the current bind context has the given table name (ignoring catalog/schema)
+	bool TableNameExists(const Identifier &table_name);
 
 	unique_ptr<ParsedExpression> QualifyColumnNameInternal(ColumnRefExpression &col_ref, ErrorData &error);
 };

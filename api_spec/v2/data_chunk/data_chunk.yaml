@@ -1,0 +1,149 @@
+module: data_chunk
+#
+# Construct and inspect data chunks.
+#
+# A chunk is a set of vectors of equal logical length plus a row-count
+# cardinality. It does not carry types: the column types of a streamed chunk
+# come from the producing result's schema (result_get_schema, in the
+# query_result module).
+#
+# Chunks produced by a streaming result (result_step / result_fetch_chunk, in
+# the query_result module) are caller-owned and must be destroyed via
+# data_chunk_destroy. Vectors borrowed with data_chunk_get_vector stay valid
+# for the lifetime of the chunk and are read via vector_get_view. The row count
+# for top-level vectors is data_chunk_get_size; it lives on the chunk, not on
+# the view. Nested children take their row count from the parent's geometry
+# instead; see vector.yaml.
+
+functions:
+  # -----------------------------------------------------------------------
+  # DataChunk construction
+  # -----------------------------------------------------------------------
+  data_chunk_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Creates an empty data chunk with the given column types.
+
+      Allocates one FLAT vector per element of the types array, each at default
+      capacity. Every vector starts at size 0; set it with vector_set_size once
+      the vector is populated. The chunk is caller-owned and must be destroyed
+      via data_chunk_destroy.
+    role: constructor
+    belongs_to: data_chunk
+    parameters:
+      types:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: Pointer to an array of logical_type handles, one per column.
+      column_count:
+        type: idx
+        description: Number of elements in the types array.
+      out_chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: Receives the new chunk handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+  # -----------------------------------------------------------------------
+  # Chunk-level accessors
+  # -----------------------------------------------------------------------
+  data_chunk_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Destroys a data chunk handle.
+
+      Null-safe: passing nullptr or a slot already set to nullptr is a no-op.
+      On success the slot is set to nullptr. Any vector previously borrowed
+      from this chunk becomes invalid.
+    role: destructor
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        indirection: 1
+        description: The chunk to destroy.
+    return_type: ERROR
+
+  data_chunk_get_size:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: Returns the row count of a data chunk.
+    role: getter
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The chunk.
+      out_size:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the row count.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  data_chunk_get_vector_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Returns the number of vectors in a data chunk.
+
+      Equals the column count of the producing result.
+    role: getter
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The chunk.
+      out_count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the vector count.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  data_chunk_get_vector:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Borrows the vector at the given index in a data chunk.
+
+      The returned handle is borrowed and valid until the chunk is destroyed;
+      do not destroy it. An out-of-range index returns ERROR_INPUT_INVALID.
+    role: getter
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The chunk.
+      index:
+        type: idx
+        description: The vector index, in [0, vector_count).
+      out_vector:
+        type: vector
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed vector handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

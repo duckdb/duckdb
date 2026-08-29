@@ -15,3 +15,73 @@ query II
 EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid BETWEEN 0 AND 10;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# Row group ranges are half-open: [0, 122880), [122880, 245760), [245760, 300000).
+# Boundary row IDs should not keep the previous row group alive.
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid = 122879;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid = 122879;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid = 122880;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid = 122880;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid = 245759;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid = 245759;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid = 245760;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid = 245760;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid = 300000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid = 300000;
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM rowid_prune WHERE rowid >= 300000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM rowid_prune WHERE rowid >= 300000;
+----
+0
+
+statement ok
+CREATE TABLE empty_rowid_prune(i INTEGER);
+
+query I
+SELECT count(*) FROM empty_rowid_prune WHERE rowid = 0;
+----
+0

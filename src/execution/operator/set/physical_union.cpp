@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -46,7 +47,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		order_matters = true;
 	}
 	if (sink) {
-		if (sink->SinkOrderDependent()) {
+		if (Settings::Get<PreserveInsertionOrderSetting>(current.GetClientContext()) && sink->SinkOrderDependent()) {
 			order_matters = true;
 		}
 		auto partition_info = sink->RequiredPartitionInfo();
@@ -79,7 +80,9 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		if (order_matters || can_saturate_threads) {
 			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building
 			// current
-			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
+			auto dependency_type =
+			    order_matters ? MetaPipelineDependencyType::REQUIRED : MetaPipelineDependencyType::OPTIONAL_DEPENDENCY;
+			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false, dependency_type);
 			// we also add dependencies if the LHS child can saturate all available threads
 			// in that case, we recursively make all RHS children depend on the LHS.
 			// This prevents breadth-first plan evaluation

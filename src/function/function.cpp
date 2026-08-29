@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -10,7 +11,8 @@ namespace duckdb {
 
 bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
-	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases;
+	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases &&
+	       requires_ordered_execution == rhs.requires_ordered_execution;
 }
 
 bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {
@@ -69,9 +71,9 @@ static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, c
 
 string FunctionParameter::ToString() const {
 	if (default_value) {
-		return StringUtil::Format("%s %s := %s", name, type.ToString(), default_value->ToString());
+		return StringUtil::Format("%s %s := %s", SQLIdentifier(name), type.ToString(), default_value->ToString());
 	}
-	return StringUtil::Format("%s %s", name, type.ToString());
+	return StringUtil::Format("%s %s", SQLIdentifier(name), type.ToString());
 }
 
 string FunctionSignature::ToString() const {
@@ -92,9 +94,10 @@ string FunctionSignature::ToString() const {
 
 string SimpleFunction::ToString() const {
 	if (RequiresCatalogAndSchemaNamePrefix(GetCatalogName(), GetSchemaName())) {
-		return StringUtil::Format("%s.%s.%s%s", GetCatalogName(), GetSchemaName(), name, signature.ToString());
+		return StringUtil::Format("%s.%s.%s%s", SQLIdentifier(GetCatalogName()), SQLIdentifier(GetSchemaName()),
+		                          SQLIdentifier(name), signature.ToString());
 	}
-	return name + signature.ToString();
+	return SQLIdentifier::ToString(name.GetIdentifierName()) + signature.ToString();
 }
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(Identifier name_p, vector<LogicalType> arguments_p,
@@ -188,24 +191,13 @@ string Function::CallToString(const Identifier &catalog_name, const Identifier &
 		input_arguments.push_back(arg.ToString());
 	}
 	for (auto &kv : named_parameters) {
-		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
+		input_arguments.push_back(StringUtil::Format("%s : %s", SQLIdentifier(kv.first), kv.second.ToString()));
 	}
 	string prefix = "";
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
-		prefix = StringUtil::Format("%s.%s.", catalog_name, schema_name);
+		prefix = StringUtil::Format("%s.%s.", SQLIdentifier(catalog_name), SQLIdentifier(schema_name));
 	}
 	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
-}
-
-void Function::EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-                             idx_t argument_index) {
-	if (bound_function.GetOriginalArguments().empty()) {
-		bound_function.GetOriginalArguments() = bound_function.GetArguments();
-	}
-	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
-	D_ASSERT(argument_index < arguments.size());
-	arguments.erase_at(argument_index);
-	bound_function.GetArguments().erase_at(argument_index);
 }
 
 hash_t BoundSimpleFunction::Hash() const {
@@ -252,6 +244,81 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 		return false;
 	}
 	return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Bind Function Input
+//----------------------------------------------------------------------------------------------------------------------
+Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
+	if (arg_idx >= arguments.size()) {
+		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
+	}
+	const auto &expr = *arguments[arg_idx];
+	// an unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument) - defer binding
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
+	// Use the argument name if available, otherwise use the argument index
+	string argument_name;
+	if (argument_names && arg_idx < argument_names->size() && !argument_names->at(arg_idx).empty()) {
+		argument_name = StringUtil::Format("The %s argument", argument_names->at(arg_idx));
+	} else {
+		argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
+	}
+	if (!expr.IsFoldable()) {
+		throw BinderException(expr, "%s in function %s must be a constant expression", argument_name,
+		                      function.GetName());
+	}
+	auto value = ExpressionExecutor::EvaluateScalar(context, expr);
+	if (!accept_null && value.IsNull()) {
+		throw BinderException(expr, "%s in function '%s' must not be NULL", argument_name, function.GetName());
+	}
+	return value;
+}
+
+Value BindFunctionInput::GetConstant(const Identifier &name, bool accept_null) const {
+	const auto arg_idx = GetArgumentIndex(name);
+	if (!arg_idx.IsValid()) {
+		throw InternalException("Function %s does not have a parameter named %s", function.GetName(), name);
+	}
+	return GetConstant(arg_idx.GetIndex(), accept_null);
+}
+
+optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
+	if (arg_idx >= arguments.size()) {
+		return {};
+	}
+	const auto &expr = *arguments[arg_idx];
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		return {};
+	}
+	if (!expr.IsFoldable()) {
+		return {};
+	}
+	return ExpressionExecutor::EvaluateScalar(context, expr);
+}
+
+optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
+	const auto arg_idx = GetArgumentIndex(name);
+	if (arg_idx.IsValid()) {
+		return TryGetConstant(arg_idx.GetIndex());
+	}
+	return {};
+}
+
+optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
+	if (!argument_names) {
+		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
+		                        function.GetName(), name);
+	}
+	// The binder resolves every argument to a slot and reports its name: the signature parameter name for positional
+	// slots, or the name the caller used for named varargs.
+	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
+		if ((*argument_names)[arg_idx] == name) {
+			return optional_idx(arg_idx);
+		}
+	}
+	return optional_idx();
 }
 
 } // namespace duckdb

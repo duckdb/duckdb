@@ -1,0 +1,122 @@
+# name: test/sql/storage/rowid_gaps/indexed_incremental_vacuum_remap.test
+# description: indexed vacuum incrementally remaps ART rowids for shifted rows
+# group: [rowid_gaps]
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_incremental_remap.db' AS rowid_gap_remap (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE rowid_gap_remap.t(i INTEGER, g INTEGER, n INTEGER);
+
+statement ok
+INSERT INTO rowid_gap_remap.t
+SELECT
+	i,
+	CASE WHEN i IN (1000, 1001) THEN 7 ELSE i + 10000 END,
+	CASE WHEN i BETWEEN 1000 AND 1010 THEN NULL ELSE i END
+FROM range(2048) tbl(i);
+
+statement ok
+CHECKPOINT rowid_gap_remap;
+
+statement ok
+INSERT INTO rowid_gap_remap.t
+SELECT i, i + 10000, i FROM range(2048, 3048) tbl(i);
+
+statement ok
+CHECKPOINT rowid_gap_remap;
+
+statement ok
+CREATE UNIQUE INDEX t_i_idx ON rowid_gap_remap.t(i);
+
+statement ok
+CREATE INDEX t_g_idx ON rowid_gap_remap.t(g);
+
+statement ok
+CREATE INDEX t_n_idx ON rowid_gap_remap.t(n);
+
+# Before vacuum
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE i IN (1000, 1001, 2048, 3047) ORDER BY i;
+----
+1000	1000
+1001	1001
+2048	2048
+3047	3047
+
+statement ok
+DELETE FROM rowid_gap_remap.t WHERE i < 1000;
+
+statement ok
+FORCE CHECKPOINT rowid_gap_remap;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_remap.t');
+----
+1
+
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE i IN (1000, 1001, 2048, 3047) ORDER BY i;
+----
+0	1000
+1	1001
+1048	2048
+2047	3047
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rowid_gap_remap.t WHERE i = 2048;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rowid_gap_remap.t WHERE g = 7;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE g = 7 ORDER BY i;
+----
+0	1000
+1	1001
+
+query I
+SELECT count(*) FROM rowid_gap_remap.t WHERE n IS NULL;
+----
+11
+
+query II
+SELECT rowid, n FROM rowid_gap_remap.t WHERE n = 2048;
+----
+1048	2048
+
+# Reopen and check the serialized remap.
+statement ok
+DETACH rowid_gap_remap;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_incremental_remap.db' AS rowid_gap_remap;
+
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE i IN (1000, 3047) ORDER BY i;
+----
+0	1000
+2047	3047
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rowid_gap_remap.t WHERE i = 2048;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE g = 7 ORDER BY i;
+----
+0	1000
+1	1001
+
+query II
+SELECT rowid, n FROM rowid_gap_remap.t WHERE n = 2048;
+----
+1048	2048

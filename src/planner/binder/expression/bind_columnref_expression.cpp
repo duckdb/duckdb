@@ -103,7 +103,9 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	BindResult result;
 	auto &col_ref = expr->Cast<ColumnRefExpression>();
 	D_ASSERT(col_ref.IsQualified());
-	auto &table_name = col_ref.GetTableName();
+	// the table qualifier is the component directly before the column name
+	auto &names = col_ref.ColumnNames();
+	auto &table_name = names[names.size() - 2];
 
 	if (binder.macro_binding && table_name == binder.macro_binding->GetAlias()) {
 		result = binder.macro_binding->Bind(col_ref, depth);

@@ -129,12 +129,8 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
-		if (deserialized_results->names.size() == expected_results->names.size()) {
-			// ignore names
-			deserialized_results->names = expected_results->names;
-		}
-
-		if (!deserialized_results->Equals(*expected_results)) {
+		// ignore names
+		if (!deserialized_results->Equals(*expected_results, false)) {
 			fprintf(stderr, "-----------------------------------\n");
 			fprintf(stderr, "Deserialized result does not match!\n");
 			fprintf(stderr, "-----------------------------------\n");

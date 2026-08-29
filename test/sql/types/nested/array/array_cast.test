@@ -170,3 +170,37 @@ query I
 SELECT TRY_CAST(l AS INTEGER[][3]) FROM VALUES (['foo']) as v(l);
 ----
 NULL
+
+# The LIST->ARRAY cast must only look at the child entries the lists point at. A filter leaves the
+# list child intact, so a surviving row can point past array_size * row_count.
+statement ok
+CREATE TABLE list_child_offset AS
+    SELECT i, [(i * 3 + 1)::VARCHAR, (i * 3 + 2)::VARCHAR, (i * 3 + 3)::VARCHAR] AS l
+    FROM range(100) t(i);
+
+query II
+SELECT i, l::INT[3] FROM list_child_offset WHERE i = 99
+----
+99	[298, 299, 300]
+
+query II
+SELECT i, l::INT[3] FROM list_child_offset WHERE i IN (50, 99) ORDER BY i
+----
+50	[151, 152, 153]
+99	[298, 299, 300]
+
+# ... and entries that no surviving row points at must not raise a cast error
+statement ok
+CREATE TABLE unreferenced_bad_child AS
+    SELECT i, CASE WHEN i = 0 THEN ['1', '2', '3'] ELSE ['x', 'y', 'z'] END AS l
+    FROM range(100) t(i);
+
+query I
+SELECT l::INT[3] FROM unreferenced_bad_child WHERE i = 0
+----
+[1, 2, 3]
+
+query I
+SELECT TRY_CAST(l AS INT[3]) FROM unreferenced_bad_child WHERE i = 1
+----
+[NULL, NULL, NULL]

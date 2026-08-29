@@ -70,6 +70,7 @@ public:
 	virtual_column_map_t GetVirtualColumns() const override;
 
 	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	optional_ptr<CatalogEntry> GetTrigger(CatalogTransaction transaction, const Identifier &name) const override;
 	void ScanTriggers(CatalogTransaction transaction,
 	                  const std::function<void(CatalogEntry &)> &callback) const override;
 	//! Scan all triggers without a transaction (used by checkpoint writer)
@@ -85,7 +86,8 @@ private:
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> RemoveField(ClientContext &context, RemoveFieldInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
-	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
+	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
+	                                          AlterTableType alter_table_type);
 	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
 	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(AlterForeignKeyInfo &info);

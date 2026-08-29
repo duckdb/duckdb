@@ -73,6 +73,16 @@ select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 test
 
 query I
+select ([10, 20, 30]::VARIANT)[1];
+----
+10
+
+statement error
+select ([10, 20, 30]::VARIANT)[1.5];
+----
+<REGEX>:.*No function matches the given name and argument types 'variant_extract\(VARIANT, DECIMAL\(2,1\)\)'.*
+
+query I
 SELECT [
 	x.a for x in [
 		{'a': 42, 'b': [1,2,3]}::VARIANT,

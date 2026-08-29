@@ -2,10 +2,11 @@
 
 namespace duckdb {
 
-HighlightTokenizer::HighlightTokenizer(const string &sql) : BaseTokenizer(sql, tokens) {
+HighlightTokenizerBehavior::HighlightTokenizerBehavior(const string &sql, vector<MatcherToken> &tokens)
+    : TokenizerBehavior(sql, tokens) {
 }
 
-void HighlightTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
+void HighlightTokenizerBehavior::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
 	if (start >= end) {
 		return;
 	}
@@ -13,7 +14,7 @@ void HighlightTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool 
 	tokens.emplace_back(std::move(last_token), start, type, unterminated);
 }
 
-void HighlightTokenizer::OnStatementEnd(idx_t pos) {
+void HighlightTokenizerBehavior::OnStatementEnd(idx_t pos) {
 	tokens.emplace_back(";", pos, TokenType::TERMINATOR);
 }
 } // namespace duckdb

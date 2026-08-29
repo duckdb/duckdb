@@ -241,6 +241,13 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 		it++;
 	}
 
+	//! The caller slices this vector into a dictionary that still spans every key slot, but only the distinct keys are
+	//! written above - zero the remaining slots so they hold empty strings instead of uninitialized memory
+	auto keys_entry_size = ListVector::GetListSize(keys);
+	if (dictionary.size() < keys_entry_size) {
+		memset(keys_entry_data + dictionary.size(), 0, sizeof(string_t) * (keys_entry_size - dictionary.size()));
+	}
+
 	if (!already_sorted) {
 		//! Adjust the selection vector to point to the right dictionary index
 		for (idx_t i = 0; i < sel_size; i++) {

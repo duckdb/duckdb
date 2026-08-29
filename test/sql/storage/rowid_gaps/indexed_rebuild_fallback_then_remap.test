@@ -1,0 +1,123 @@
+# name: test/sql/storage/rowid_gaps/indexed_rebuild_fallback_then_remap.test
+# description: vacuum falls back to index rebuild on old storage, then remaps incrementally after a storage upgrade
+# group: [rowid_gaps]
+
+require noforcestorage
+
+# Old storage cannot persist rowid gaps, so the rebuild fallback is used.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048, vacuum_rebuild_indexes 100000);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE rebuild_then_remap.t AS SELECT i FROM range(6144) tbl(i);
+
+statement ok
+CHECKPOINT rebuild_then_remap;
+
+statement ok
+CREATE INDEX t_i_idx ON rebuild_then_remap.t(i);
+
+# Before vacuum (rebuild / dense-renumber)
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
+----
+4096	4096
+
+statement ok
+DELETE FROM rebuild_then_remap.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rebuild_then_remap;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rebuild_then_remap.t');
+----
+2
+
+# Old storage densely renumbered rowids.
+query T
+SELECT CASE rowid WHEN 2048 THEN 'dense-renumbered' WHEN 4096 THEN 'preserved' ELSE CAST(rowid AS VARCHAR) END
+FROM rebuild_then_remap.t WHERE i = 4096;
+----
+dense-renumbered
+
+# The rebuilt index finds the new rowid.
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
+----
+2048	4096
+
+# Upgrade storage and reattach without the rebuild threshold.
+statement ok
+DETACH rebuild_then_remap;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap (STORAGE_VERSION 'latest');
+
+# Before vacuum (remap). i=4096..6143 were dense-renumbered to rid 2048..4095 in phase 1.
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i IN (0, 1023, 5120, 6143) ORDER BY i;
+----
+0	0
+1023	1023
+3072	5120
+4095	6143
+
+# Merge partially live row groups, shifting the second group's rowids.
+statement ok
+DELETE FROM rebuild_then_remap.t WHERE i >= 1024 AND i < 5120;
+
+statement ok
+FORCE CHECKPOINT rebuild_then_remap;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rebuild_then_remap.t');
+----
+1
+
+# First group's rows stay put; second group's rows are remapped.
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i IN (0, 1023, 5120, 6143) ORDER BY i;
+----
+0	0
+1023	1023
+1024	5120
+2047	6143
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 5120;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 5120;
+----
+1024	5120
+
+# Reopen and check the serialized remap.
+statement ok
+DETACH rebuild_then_remap;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap;
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 5120;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i IN (1023, 5120, 6143) ORDER BY i;
+----
+1023	1023
+1024	5120
+2047	6143

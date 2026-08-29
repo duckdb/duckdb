@@ -85,13 +85,26 @@ public:
 		return make_uniq<PrefixRangeBitmapBuildState>(std::move(state_data), state_bitmap);
 	}
 
-	template <typename T, typename CONVERTER>
+	template <bool PARALLEL>
+	static void SetBit(uint64_t *state_bitmap, idx_t bit_idx) {
+		const auto word_idx = bit_idx >> WORD_SHIFT;
+		const auto mask = 1ULL << (bit_idx & WORD_MASK);
+		if (PARALLEL) {
+			// Shared build lanes are published only after every finalize task completes.
+			auto &slot = *reinterpret_cast<atomic<uint64_t> *>(&state_bitmap[word_idx]);
+			slot.fetch_or(mask, std::memory_order_relaxed);
+		} else {
+			state_bitmap[word_idx] |= mask;
+		}
+	}
+
+	template <typename T, typename CONVERTER, bool PARALLEL>
 	void InsertKeys(Vector &keys, uint64_t *state_bitmap) const {
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U y = CONVERTER::Convert(entry.GetValue()) - min;
 			// All keys are in-range by construction, so the range check can be omitted here.
 			const U idx = y >> shift;
-			state_bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
+			SetBit<PARALLEL>(state_bitmap, UnsafeNumericCast<idx_t>(idx));
 		}
 	}
 
@@ -100,6 +113,10 @@ public:
 			bitmap[word_idx] |= state.bitmap[word_idx];
 		}
 		initialized = true;
+	}
+
+	idx_t GetBuildStateSize() const {
+		return word_count * sizeof(uint64_t) + 64;
 	}
 
 	template <typename T, typename CONVERTER>
@@ -282,11 +299,20 @@ public:
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, bitmap_state.bitmap);
+		bitmap.template InsertKeys<T, NumericConverter<T>, false>(keys, bitmap_state.bitmap);
+	}
+
+	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
+		bitmap.template InsertKeys<T, NumericConverter<T>, true>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
 		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	}
+
+	idx_t GetBuildStateSize() const override {
+		return bitmap.GetBuildStateSize();
 	}
 
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
@@ -345,11 +371,20 @@ public:
 
 	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, bitmap_state.bitmap);
+		bitmap.template InsertKeys<string_t, StringPrefixConverter, false>(keys, bitmap_state.bitmap);
+	}
+
+	void InsertKeysParallel(Vector &keys, BuildState &state) const override {
+		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
+		bitmap.template InsertKeys<string_t, StringPrefixConverter, true>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
 		bitmap.MergeBuildState(state.Cast<PrefixRangeBitmapBuildState>());
+	}
+
+	idx_t GetBuildStateSize() const override {
+		return bitmap.GetBuildStateSize();
 	}
 
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const override {
@@ -508,27 +543,53 @@ bool PrefixRangeFilter::SupportedType(const LogicalType &type) {
 	}
 }
 
-PrefixRangeFunctionData::PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p,
+PrefixRangeFunctionData::PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p, bool filters_null_values_p,
                                                  const string &key_column_name_p, const LogicalType &key_type_p,
                                                  float selectivity_threshold_p, idx_t n_vectors_to_check_p)
-    : filter(filter_p), key_column_name(key_column_name_p), key_type(key_type_p),
-      selectivity_threshold(selectivity_threshold_p), n_vectors_to_check(n_vectors_to_check_p) {
+    : filter(filter_p), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p),
+      key_type(key_type_p), selectivity_threshold(selectivity_threshold_p), n_vectors_to_check(n_vectors_to_check_p) {
 }
 
 unique_ptr<FunctionData> PrefixRangeFunctionData::Copy() const {
-	return make_uniq<PrefixRangeFunctionData>(filter, key_column_name, key_type, selectivity_threshold,
-	                                          n_vectors_to_check);
+	return make_uniq<PrefixRangeFunctionData>(filter, filters_null_values, key_column_name, key_type,
+	                                          selectivity_threshold, n_vectors_to_check);
 }
 
 bool PrefixRangeFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<PrefixRangeFunctionData>();
-	return filter.get() == other.filter.get() && key_column_name == other.key_column_name && key_type == other.key_type;
+	return filter.get() == other.filter.get() && filters_null_values == other.filters_null_values &&
+	       key_column_name == other.key_column_name && key_type == other.key_type;
 }
 
 static idx_t SelectPrefixRange(Vector &input, const PrefixRangeFunctionData &func_data, SelectionVector &result_sel,
                                idx_t count) {
 	D_ASSERT(func_data.filter);
-	return func_data.filter->LookupKeys(input, result_sel, count);
+	const auto filter_count = func_data.filter->LookupKeys(input, result_sel, count);
+	if (func_data.filters_null_values || filter_count == count) {
+		return filter_count;
+	}
+
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(input_data);
+	if (input_data.validity.CannotHaveNull()) {
+		return filter_count;
+	}
+
+	SelectionVector filter_sel(filter_count);
+	for (idx_t i = 0; i < filter_count; i++) {
+		filter_sel.set_index(i, result_sel.get_index_unsafe(i));
+	}
+	idx_t result_count = 0;
+	idx_t filter_idx = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto matched = filter_idx < filter_count && filter_sel.get_index_unsafe(filter_idx) == i;
+		filter_idx += matched;
+		const auto input_idx = input_data.sel->get_index(i);
+		if (matched || !input_data.validity.RowIsValid(input_idx)) {
+			result_sel.set_index(result_count++, i);
+		}
+	}
+	return result_count;
 }
 
 static unique_ptr<FunctionLocalState>
@@ -587,6 +648,9 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	}
 	auto &data = input.bind_data->Cast<PrefixRangeFunctionData>();
 	if (!data.filter || !data.filter->IsInitialized()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!data.filters_null_values) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto column_stats = input.ChildStats(0);

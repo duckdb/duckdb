@@ -290,7 +290,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
-				throw BinderException("Duplicate column name \"%s\" in INSERT", columns[i]);
+				throw BinderException("Duplicate column name %s in INSERT", columns[i]);
 			}
 			auto column_index = table.GetColumnIndex(columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -599,8 +599,14 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	BindSchemaOrCatalog(node.qualified_name);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.qualified_name);
+	node.qualified_name = BindTableName(node.qualified_name);
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, node.qualified_name);
+	auto &table_entry = *entry_retriever.GetEntry(table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	if (table_entry.type != CatalogType::TABLE_ENTRY) {
+		throw CatalogException("%s is not an %s", node.qualified_name.Name().GetIdentifierName(),
+		                       TableCatalogEntry::Name);
+	}
+	auto &table = table_entry.Cast<TableCatalogEntry>();
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);

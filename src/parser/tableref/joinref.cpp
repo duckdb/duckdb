@@ -52,8 +52,21 @@ string JoinRef::ToString() const {
 	case JoinRefType::DEPENDENT:
 		result += "DEPENDENT JOIN ";
 		break;
+	case JoinRefType::NEAREST:
+		result += EnumUtil::ToString(type) + " JOIN ";
+		break;
 	}
 	result += right->ToString();
+	if (ref_type == JoinRefType::NEAREST) {
+		result += nearest_approx ? " APPROX" : " EXACT";
+		result += " NEAREST " + to_string(nearest_count);
+		result += nearest_order_type == OrderType::DESCENDING ? " BY SIMILARITY " : " BY DISTANCE ";
+		result += ranking_expression->ToString();
+		if (!is_implicit) {
+			result += ")";
+		}
+		return result;
+	}
 	if (condition) {
 		D_ASSERT(using_columns.empty());
 		result += " ON (";
@@ -88,8 +101,13 @@ bool JoinRef::Equals(const TableRef &other_p) const {
 			return false;
 		}
 	}
+	if (nearest_count != other.nearest_count || nearest_order_type != other.nearest_order_type ||
+	    nearest_approx != other.nearest_approx) {
+		return false;
+	}
 	return left->Equals(*other.left) && right->Equals(*other.right) &&
-	       ParsedExpression::Equals(condition, other.condition) && type == other.type;
+	       ParsedExpression::Equals(condition, other.condition) &&
+	       ParsedExpression::Equals(ranking_expression, other.ranking_expression) && type == other.type;
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {
@@ -108,7 +126,25 @@ unique_ptr<TableRef> JoinRef::Copy() {
 		copy->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
 	copy->is_implicit = is_implicit;
+	if (ranking_expression) {
+		copy->ranking_expression = ranking_expression->Copy();
+	}
+	copy->nearest_count = nearest_count;
+	copy->nearest_order_type = nearest_order_type;
+	copy->nearest_approx = nearest_approx;
 	return std::move(copy);
+}
+
+JoinRefType JoinRef::SerializedRefType(Serializer &serializer) const {
+	// The NEAREST properties are only written from v2.0.0 onwards - rather than silently dropping them (and turning
+	// the join into something else entirely), refuse to serialize to an older storage version
+	if (ref_type == JoinRefType::NEAREST && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		throw SerializationException(
+		    "Cannot serialize a NEAREST BY join to storage version \"%s\" - NEAREST BY requires storage version "
+		    "\"v2.0.0\" or newer",
+		    serializer.GetOptions().storage_compatibility.duckdb_version);
+	}
+	return ref_type;
 }
 
 } // namespace duckdb

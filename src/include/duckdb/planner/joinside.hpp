@@ -84,8 +84,20 @@ public:
 		}
 		return left;
 	}
+	const unique_ptr<Expression> &LeftReference() const {
+		if (!IsComparison()) {
+			throw InternalException("LeftReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return left;
+	}
 
 	unique_ptr<Expression> &RightReference() {
+		if (!IsComparison()) {
+			throw InternalException("RightReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return right;
+	}
+	const unique_ptr<Expression> &RightReference() const {
 		if (!IsComparison()) {
 			throw InternalException("RightReference used on a JoinCondition that is not a left/right comparison");
 		}
@@ -200,6 +212,9 @@ public:
 	                            const unordered_set<TableIndex> &right_bindings);
 	static JoinSide GetJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
 	                            const unordered_set<TableIndex> &right_bindings);
+	//! Like GetJoinSide, but treats references outside the current join as NONE.
+	static JoinSide GetCurrentJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
+	                                   const unordered_set<TableIndex> &right_bindings);
 	static JoinSide GetJoinSide(const unordered_set<TableIndex> &bindings,
 	                            const unordered_set<TableIndex> &left_bindings,
 	                            const unordered_set<TableIndex> &right_bindings);

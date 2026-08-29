@@ -1,0 +1,251 @@
+# name: test/sql/cte/recursive_cte_aoc2024_using_key.test_slow
+# description: USING KEY reformulations of recursive Advent of Code 2024 workloads
+# group: [cte]
+
+statement ok
+SET threads=2;
+
+statement ok
+SET max_execution_time=30000;
+
+# Day 16: retain only the cheapest directional state for each grid position.
+statement ok
+CREATE TABLE aoc2024_day16_field(x SMALLINT, y SMALLINT, value VARCHAR);
+
+statement ok
+INSERT INTO aoc2024_day16_field
+SELECT x::SMALLINT, y::SMALLINT, substr(row, x::INTEGER, 1)
+FROM (
+	VALUES
+		(1, '###############'),
+		(2, '#.......#....E#'),
+		(3, '#.#.###.#.###.#'),
+		(4, '#.....#.#...#.#'),
+		(5, '#.###.#####.#.#'),
+		(6, '#.#.#.......#.#'),
+		(7, '#.#.#####.###.#'),
+		(8, '#...........#.#'),
+		(9, '###.#.#####.#.#'),
+		(10, '#...#.....#.#.#'),
+		(11, '#.#.#.###.#.#.#'),
+		(12, '#.....#...#.#.#'),
+		(13, '#.###.#.#.#.#.#'),
+		(14, '#S..#.....#...#'),
+		(15, '###############')
+) rows(y, row),
+LATERAL generate_series(1, length(row)) columns(x);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2024_day16_using_key.sql')
+);
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+7036	45
+
+# The physical plan must retain the recurring-state comparison.
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+query II
+EXPLAIN SELECT * FROM query(getvariable('aoc_sql'));
+----
+physical_plan	<REGEX>:.*REC_REC_CTE_SCAN.*
+
+# Day 20: compare the original history-producing flood with keyed visited-state storage.
+statement ok
+CREATE TABLE aoc2024_day20_field(x SMALLINT, y SMALLINT, value VARCHAR);
+
+statement ok
+INSERT INTO aoc2024_day20_field
+SELECT x::SMALLINT,
+       y::SMALLINT,
+       CASE
+           WHEN x = 0 OR y = 0 OR x = 25 OR y = 25 THEN '#'
+           WHEN x = 1 AND y = 1 THEN 'S'
+           WHEN x = 24 AND y = 24 THEN 'E'
+           WHEN x % 8 = 0 AND y % 8 NOT IN (1, 2) THEN '#'
+           ELSE '.'
+       END
+FROM range(26) xs(x), range(26) ys(y);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2024_day20.sql')
+);
+
+query IIIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+46	523	11809	12849	eac7d6d7efdc33f104f91316b87b389b
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2024_day20_using_key.sql')
+);
+
+query IIIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+46	523	11809	12849	eac7d6d7efdc33f104f91316b87b389b
+
+query II
+EXPLAIN SELECT * FROM query(getvariable('aoc_sql'));
+----
+physical_plan	<REGEX>:.*REC_REC_CTE_SCAN.*
+
+# Day 6: nested loop detectors must rebind complete-key recurring probes for every candidate obstacle.
+statement ok
+CREATE TABLE aoc2024_day06_field(x SMALLINT, y SMALLINT, value VARCHAR);
+
+statement ok
+INSERT INTO aoc2024_day06_field
+SELECT x::SMALLINT,
+       y::SMALLINT,
+       CASE
+           WHEN x = 5 AND y = 7 THEN '^'
+           WHEN (x = 1 OR x = 11 OR y = 11 OR (y = 1 AND x <> 5)) THEN '#'
+           ELSE '.'
+       END
+FROM range(1, 12) xs(x), range(1, 12) ys(y);
+
+query III
+WITH RECURSIVE
+field(x, y, value) AS (
+	SELECT x, y, CASE WHEN value = '^' THEN '.' ELSE value END
+	FROM aoc2024_day06_field
+),
+start_position(x, y) AS (
+	SELECT x, y
+	FROM aoc2024_day06_field
+	WHERE value = '^'
+),
+bounds(max_x, max_y) AS (
+	SELECT max(x), max(y)
+	FROM field
+),
+directions(direction, delta_x, delta_y) AS (
+	VALUES
+	    (0, 0::SMALLINT, -1::SMALLINT),
+	    (1, 1::SMALLINT, 0::SMALLINT),
+	    (2, 0::SMALLINT, 1::SMALLINT),
+	    (3, -1::SMALLINT, 0::SMALLINT)
+),
+path(x, y, direction) AS (
+	SELECT x, y, 0
+	FROM start_position
+	UNION
+	SELECT CASE WHEN can_move THEN x + delta_x ELSE x END,
+	       CASE WHEN can_move THEN y + delta_y ELSE y END,
+	       CASE WHEN can_move THEN direction ELSE (direction + 1) % 4 END
+	FROM (
+		SELECT path.*,
+		       directions.delta_x,
+		       directions.delta_y,
+		       next.value IS DISTINCT FROM '#' AS can_move
+		FROM path
+		JOIN directions USING (direction)
+		LEFT JOIN field next
+		  ON next.x = path.x + directions.delta_x
+		 AND next.y = path.y + directions.delta_y
+	)
+	CROSS JOIN bounds
+	WHERE x > 0 AND y > 0 AND x <= max_x AND y <= max_y
+),
+candidates(x, y) AS (
+	SELECT DISTINCT path.x, path.y
+	FROM path
+	CROSS JOIN bounds
+	CROSS JOIN start_position
+	WHERE path.x > 0 AND path.y > 0 AND path.x <= max_x AND path.y <= max_y
+	  AND (path.x <> start_position.x OR path.y <> start_position.y)
+),
+ordinary_loops(value) AS (
+	SELECT count(*)
+	FROM candidates
+	WHERE NOT EXISTS (
+		WITH RECURSIVE detector(x, y, direction) AS (
+			SELECT start_position.x, start_position.y, 0
+			FROM start_position
+			UNION
+			SELECT CASE WHEN can_move THEN x + delta_x ELSE x END,
+			       CASE WHEN can_move THEN y + delta_y ELSE y END,
+			       CASE WHEN can_move THEN direction ELSE (direction + 1) % 4 END
+			FROM (
+				SELECT detector.*,
+				       directions.delta_x,
+				       directions.delta_y,
+				       next.value IS DISTINCT FROM '#'
+				           AND (detector.x + directions.delta_x <> candidates.x
+				                OR detector.y + directions.delta_y <> candidates.y) AS can_move
+				FROM detector
+				JOIN directions USING (direction)
+				LEFT JOIN field next
+				  ON next.x = detector.x + directions.delta_x
+				 AND next.y = detector.y + directions.delta_y
+			)
+			CROSS JOIN bounds
+			WHERE x > 0 AND y > 0
+			  AND x <= max_x AND y <= max_y
+		)
+		SELECT 1
+		FROM detector
+		CROSS JOIN bounds
+		WHERE detector.x < 1 OR detector.y < 1
+		   OR detector.x > max_x OR detector.y > max_y
+	)
+),
+keyed_loops(value) AS (
+	SELECT count(*)
+	FROM candidates
+	WHERE NOT EXISTS (
+		WITH RECURSIVE detector(x, y, direction) USING KEY (x, y, direction) AS (
+			SELECT start_position.x, start_position.y, 0
+			FROM start_position
+			UNION ALL
+			(
+				WITH candidate AS (
+					SELECT CASE WHEN can_move THEN x + delta_x ELSE x END AS x,
+					       CASE WHEN can_move THEN y + delta_y ELSE y END AS y,
+					       CASE WHEN can_move THEN direction ELSE (direction + 1) % 4 END AS direction
+					FROM (
+						SELECT detector.*,
+						       directions.delta_x,
+						       directions.delta_y,
+						       next.value IS DISTINCT FROM '#'
+						           AND (detector.x + directions.delta_x <> candidates.x
+						                OR detector.y + directions.delta_y <> candidates.y) AS can_move
+						FROM detector
+						JOIN directions USING (direction)
+						LEFT JOIN field next
+						  ON next.x = detector.x + directions.delta_x
+						 AND next.y = detector.y + directions.delta_y
+					)
+					CROSS JOIN bounds
+					WHERE x > 0 AND y > 0
+					  AND x <= max_x AND y <= max_y
+				)
+				SELECT candidate.*
+				FROM candidate
+				LEFT JOIN recurring.detector previous USING (x, y, direction)
+				WHERE previous.x IS NULL
+			)
+		)
+		SELECT 1
+		FROM detector
+		CROSS JOIN bounds
+		WHERE detector.x < 1 OR detector.y < 1
+		   OR detector.x > max_x OR detector.y > max_y
+	)
+)
+SELECT ordinary_loops.value,
+       keyed_loops.value,
+       ordinary_loops.value = keyed_loops.value
+FROM ordinary_loops, keyed_loops;
+----
+6	6	1

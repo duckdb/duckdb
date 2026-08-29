@@ -1,0 +1,19 @@
+# name: test/sql/show_select/show_settings_extension.test
+# description: "SHOW setting_name" works for settings provided by extensions
+# group: [show_select]
+
+require icu
+
+statement ok
+SET TimeZone='Europe/Amsterdam';
+
+# "timezone" is a setting registered by the icu extension, SHOW resolves it just like current_setting()
+query I
+SHOW timezone
+----
+Europe/Amsterdam
+
+query I
+SHOW TimeZone
+----
+Europe/Amsterdam

@@ -8,10 +8,10 @@
 
 namespace duckdb {
 
-// Remove this when we switch C++17: https://stackoverflow.com/a/53350948
-constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
+const FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS =
+    FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE);
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags,
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, const FileOpenFlags &open_flags,
                                        QueryContext context_p)
     : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
       total_written(0), context(context_p) {

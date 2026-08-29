@@ -99,6 +99,15 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
+void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result, const SelectionVector &sel, idx_t count) {
+	SetChunk(&input);
+	D_ASSERT(!expressions.empty());
+	auto &expression = expressions[0];
+	auto &state = states[0];
+	D_ASSERT(result.GetType().id() == expression->GetReturnType().id());
+	Execute(*expression, state->root_state.get(), &sel, count, result);
+}
+
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	return SelectExpression(input, sel, nullptr, input.size());
 }
@@ -166,10 +175,11 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		Vector::DebugTransformToDictionary(vector);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
+		// LAMBDA is not a value - its slot only holds a placeholder, so there is nothing to round-trip
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE ||
-			        type.id() == LogicalTypeId::TUPLE) {
+			        type.id() == LogicalTypeId::TUPLE || type.id() == LogicalTypeId::LAMBDA) {
 				    return true;
 			    }
 			    return false;
@@ -226,14 +236,14 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
 		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
-	case ExpressionClass::BOUND_CAST:
-		return InitializeState(expr.Cast<BoundCastExpression>(), state);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
 		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
 	case ExpressionClass::BOUND_FUNCTION:
 		return InitializeState(expr.Cast<BoundFunctionExpression>(), state);
+	case ExpressionClass::BOUND_LAMBDA:
+		return InitializeState(expr.Cast<BoundLambdaExpression>(), state);
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -273,9 +283,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_CASE:
 		Execute(expr.Cast<BoundCaseExpression>(), state, sel, count, result);
 		break;
-	case ExpressionClass::BOUND_CAST:
-		Execute(expr.Cast<BoundCastExpression>(), state, sel, count, result);
-		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		Execute(expr.Cast<BoundConjunctionExpression>(), state, sel, count, result);
 		break;
@@ -284,6 +291,9 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
 		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result);
+		break;
+	case ExpressionClass::BOUND_LAMBDA:
+		Execute(expr.Cast<BoundLambdaExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);

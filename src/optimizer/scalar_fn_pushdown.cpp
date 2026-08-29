@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -34,6 +35,11 @@ unique_ptr<Expression> ScalarFnCollect::VisitReplace(BoundColumnRefExpression &e
 }
 
 unique_ptr<Expression> ScalarFnCollect::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (BoundCastExpression::IsCast(expr)) {
+		// Casts are handled by the dedicated cast pushdown (CastCollect/CastReplace). Descend into the cast so its
+		// child column is registered as a conflict for scalar-function pushdown, matching the pre-function behavior.
+		return nullptr;
+	}
 	if (expr.GetChildren().size() != 1 ||
 	    expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// Descend into children so e.g. fn(col, other) still sees "col" and
@@ -78,6 +84,10 @@ unique_ptr<Expression> ScalarFnReplace::VisitReplace(BoundColumnRefExpression &e
 }
 
 unique_ptr<Expression> ScalarFnReplace::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (BoundCastExpression::IsCast(expr)) {
+		// Casts are handled by the dedicated cast pushdown (CastCollect/CastReplace).
+		return nullptr;
+	}
 	if (expr.GetChildren().size() != 1 ||
 	    expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr; // Same as in ScalarFnCollect::VisitReplace

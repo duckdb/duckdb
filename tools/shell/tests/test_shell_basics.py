@@ -389,6 +389,12 @@ def test_read(shell, generated_file):
     result = test.run()
     result.check_stdout("42")
 
+def test_recursive_read(shell, tmp_path):
+    sql_file = tmp_path / "recursive_read.sql"
+    sql_file.write_text(f".read {sql_file.as_posix()}")
+    result = ShellTest(shell).statement(f".read {sql_file.as_posix()}").run()
+    result.check_stderr("recursive .read")
+
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_execute_file(shell, generated_file):
     test = (
@@ -1120,6 +1126,35 @@ def test_duckbox(shell):
     )
     result = test.run()
     result.check_stdout('0 rows')
+
+def test_duckbox_enum_type_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("SELECT 'A'::ENUM('A','a') AS upper_a, 'A'::ENUM('a','A') AS lower_a LIMIT 0")
+    )
+    result = test.run()
+    result.check_stdout("enum('A', 'a')")
+    result.check_stdout("enum('a', 'A')")
+    result.check_not_exist("enum('a', 'a')")
+
+def test_duckbox_malformed_json(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '}');")
+    )
+    result = test.run()
+    result.check_stdout('}')
+
+    # nested object
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '[\"a\", {]');")
+    )
+    result = test.run()
+    result.check_stdout('[\"a\", {]')
 
 # Original comment: #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
 def test_maxrows(shell):

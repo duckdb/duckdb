@@ -1,0 +1,93 @@
+# name: test/sql/function/variant/variant_array_length_shredded.test
+# description: Test variant_array_length with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_array_length_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(arr INTEGER[], scalar INTEGER)';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+    -- array with items
+	(1, {'arr': [10, 20], 'scalar': 7}::VARIANT),
+	-- empty array
+	(2, {'arr': [], 'scalar': 8}::VARIANT),
+	-- VARIANT_NULL
+	(3, {'arr': NULL, 'scalar': 9}::VARIANT),
+	-- missing value in shredded schema
+	(4, {'scalar': 10}::VARIANT),
+	-- root with different type than shredded schema
+	(5, 42::VARIANT),
+	-- SQL-NULL
+	(6, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_array_length(v, 'arr') FROM variants ORDER BY id;
+----
+2
+0
+0
+NULL
+NULL
+NULL
+
+query I
+SELECT variant_array_length(v, ['arr', 'scalar', 'missing']) FROM variants ORDER BY id;
+----
+[2, 0, NULL]
+[0, 0, NULL]
+[0, 0, NULL]
+[NULL, 0, NULL]
+[NULL, NULL, NULL]
+NULL
+
+# --- Fully consistent array VARIANT ---
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'INTEGER[]';
+
+statement ok
+CREATE TABLE fully_shredded_arrays(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO fully_shredded_arrays VALUES
+	(1, [1, 2, 3]::VARIANT),
+	(2, []::INTEGER[]::VARIANT),
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM fully_shredded_arrays;
+----
+SHREDDED_VECTOR
+
+query I
+SELECT variant_array_length(v) FROM fully_shredded_arrays ORDER BY id;
+----
+3
+0
+NULL

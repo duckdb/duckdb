@@ -77,11 +77,14 @@ NULL	NULL
 2	NULL
 3	NULL
 
-# left outer join on arbitrary correlated subquery: not supported
-statement error
+# left outer join on arbitrary correlated subquery
+query TT
 SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT CASE WHEN s1.i+s2.i>10 THEN TRUE ELSE FALSE END) ORDER BY s1.i;
 ----
-<REGEX>:.*Correlated subquery in a non-inner join condition cannot reference both sides of the join.*
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
 
 # left outer join on subquery only involving RHS works
 query TT
@@ -131,18 +134,49 @@ NULL	6
 
 # REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 # REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 9, 12}));
-# full outer join: both sqlite and postgres actually cannot run this one
-statement error
+# full outer join in correlated expression
+query II
 SELECT i, (SELECT SUM(s1.i) FROM integers s1 FULL OUTER JOIN integers s2 ON s1.i=s2.i OR s1.i=i1.i-1) AS j FROM integers i1 ORDER BY i;
 ----
-
-# REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-# REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 9, 12}));
+NULL	6
+1	6
+2	9
+3	12
 
 # correlated expression inside window function not supported
 statement error
 SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;
 ----
+
+# independently decorrelated ANY below an outer correlated aggregate
+query IR
+SELECT i1.i,
+	(SELECT SUM(s1.i)
+	 FROM integers s1
+	 WHERE s1.i = i1.i
+	   AND s1.i = ANY (SELECT i2.i FROM integers i2 WHERE i2.i = s1.i))
+FROM integers i1
+ORDER BY i1.i;
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
+
+# independently decorrelated EXISTS below an outer correlated aggregate
+query IR
+SELECT i1.i,
+	(SELECT SUM(s1.i)
+	 FROM integers s1
+	 WHERE s1.i = i1.i
+	   AND EXISTS (SELECT 1 FROM integers i2 WHERE i2.i = s1.i))
+FROM integers i1
+ORDER BY i1.i;
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
 
 # union with correlated expression
 query II

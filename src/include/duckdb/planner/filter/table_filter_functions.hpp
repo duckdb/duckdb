@@ -152,7 +152,9 @@ public:
 	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max, idx_t max_bits) = 0;
 	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
 	virtual void InsertKeys(Vector &keys, BuildState &state) const = 0;
+	virtual void InsertKeysParallel(Vector &keys, BuildState &state) const = 0;
 	virtual void MergeBuildState(BuildState &state) = 0;
+	virtual idx_t GetBuildStateSize() const = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	//! result_sel contains local positions into sel rather than source row ids.
 	virtual idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel,
@@ -166,10 +168,12 @@ public:
 
 //! FunctionData for prefix range internal function
 struct PrefixRangeFunctionData : public FunctionData {
-	PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
-	                        const LogicalType &key_type_p, float selectivity_threshold_p, idx_t n_vectors_to_check_p);
+	PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p, bool filters_null_values_p,
+	                        const string &key_column_name_p, const LogicalType &key_type_p,
+	                        float selectivity_threshold_p, idx_t n_vectors_to_check_p);
 
 	optional_ptr<PrefixRangeFilter> filter;
+	bool filters_null_values;
 	string key_column_name;
 	LogicalType key_type;
 	float selectivity_threshold;

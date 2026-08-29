@@ -31,6 +31,10 @@ struct LambdaExecuteInfo {
 		}
 		input_types.push_back(child_vector.GetType());
 		for (idx_t i = 1; i < args.ColumnCount(); i++) {
+			if (args.data[i].GetType().id() == LogicalTypeId::LAMBDA) {
+				// placeholder slot for the lambda argument itself
+				continue;
+			}
 			input_types.push_back(args.data[i].GetType());
 		}
 
@@ -164,8 +168,11 @@ struct ListFilterFunctor {
 
 vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &args, const idx_t row_count) {
 	vector<ColumnInfo> data;
-	// skip the input list and then insert all remaining input vectors
+	// skip the input list and the lambda placeholder, then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetType().id() == LogicalTypeId::LAMBDA) {
+			continue;
+		}
 		data.emplace_back(args.data[i]);
 		args.data[i].ToUnifiedFormat(data.back().format);
 	}
@@ -384,9 +391,10 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 		return bind_data;
 	}
 
-	// get the lambda expression and put it in the bind info
+	// copy the lambda expression into the bind info - the argument keeps its own copy, so that the
+	// bound lambda expression stays intact as a child of the function
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
+	auto lambda_expr = bound_lambda_expr.LambdaExpr()->Copy();
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}

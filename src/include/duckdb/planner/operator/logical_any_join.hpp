@@ -20,6 +20,8 @@ public:
 
 public:
 	explicit LogicalAnyJoin(JoinType type);
+	//! Convert a stable, non-volatile ANY join into a comparison join when possible.
+	static void TrySpecialize(unique_ptr<LogicalOperator> &op);
 
 	//! The JoinCondition on which this join is performed
 	unique_ptr<Expression> condition;

@@ -112,3 +112,10 @@ select 'a' like 'a' escape NULL;
 ----
 NULL
 
+# Empty ESCAPE disables escaping; it must be distinct from a NUL escape byte.
+query III
+SELECT '%' LIKE (chr(0) || '%') ESCAPE chr(0),
+       '%' LIKE (chr(0) || '%') ESCAPE '',
+       (chr(0) || 'abc') LIKE (chr(0) || '%') ESCAPE ''
+----
+true	false	true

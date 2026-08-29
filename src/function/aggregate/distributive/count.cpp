@@ -271,7 +271,8 @@ struct CountFunction : public BaseCountFunction {
 
 AggregateStateLayout GetCountStateType(AggregateLayoutInput &input) {
 	auto &function = input.function;
-	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
+	AggregateStateInput state_input(function, input.bind_data.get());
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(state_input)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,

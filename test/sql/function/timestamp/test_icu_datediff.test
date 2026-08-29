@@ -42,6 +42,24 @@ SELECT DATEDIFF('isoyear', '2022-01-01 00:00:00-08'::TIMESTAMPTZ, '2022-01-03 00
 ----
 1
 
+# Calendar boundaries across the BC/AD era transition
+query IIII
+SELECT
+	date_diff('isoyear', '1-01-01 (BC)'::TIMESTAMPTZ, '1-01-01'::TIMESTAMPTZ),
+	date_diff('isoyear', '1-01-01'::TIMESTAMPTZ, '1-01-01 (BC)'::TIMESTAMPTZ),
+	date_diff('era', '1-01-01 (BC)'::TIMESTAMPTZ, '1-01-01'::TIMESTAMPTZ),
+	date_diff('era', '1-01-01'::TIMESTAMPTZ, '1-01-01 (BC)'::TIMESTAMPTZ);
+----
+2	-2	1	-1
+
+# Unequal dates in the same era have no era boundaries between them
+query II
+SELECT
+	date_diff('era', '2000-01-01'::TIMESTAMPTZ, '2020-01-01'::TIMESTAMPTZ),
+	date_diff('era', '2020-01-01'::TIMESTAMPTZ, '2000-01-01'::TIMESTAMPTZ);
+----
+0	0
+
 #
 # TIMESTAMPTZ_NS
 #
@@ -69,9 +87,10 @@ endloop
 
 query II rowsort
 SELECT part, date_diff(part, startdate, enddate)
-FROM datetime_ns, (VALUES ('year'), ('month'), ('day'), ('hour')) parts(part)
+FROM datetime_ns, (VALUES ('era'), ('year'), ('month'), ('day'), ('hour')) parts(part)
 ----
 day	1
+era	0
 hour	1
 month	1
 year	1
@@ -280,3 +299,48 @@ query I
 select date_diff('day', '2022-01-04 19:00:00'::timestamptz, '2024-03-01'::date) as c1;
 ----
 787
+
+# Era differences count boundaries according to each calendar's era numbering
+statement ok
+SET TimeZone = 'UTC';
+
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+CREATE TEMP TABLE era_boundaries(name VARCHAR, startdate TIMESTAMPTZ, enddate TIMESTAMPTZ);
+
+statement ok
+INSERT INTO era_boundaries VALUES
+	('coptic', '0283-08-29 12:00:00+00', '0284-08-29 12:00:00+00'),
+	('roc', '1911-12-31 12:00:00+00', '1912-01-01 12:00:00+00'),
+	('japanese', '1912-07-29 00:00:00+00', '2019-05-01 00:00:00+00');
+
+foreach calendar coptic roc
+
+statement ok
+SET Calendar = '{calendar}';
+
+query II
+SELECT date_diff('era', startdate, enddate), date_diff('era', enddate, startdate)
+FROM era_boundaries WHERE name = '{calendar}';
+----
+1	-1
+
+endloop
+
+statement ok
+SET TimeZone = 'Asia/Tokyo';
+
+statement ok
+SET Calendar = 'japanese';
+
+query IIII
+SELECT
+	date_diff('era', startdate, enddate),
+	date_diff('era', enddate, startdate),
+	date_diff('era', '1912-07-29 00:00:00+00'::TIMESTAMPTZ_NS, '2019-05-01 00:00:00+00'::TIMESTAMPTZ_NS),
+	date_diff('era', '2019-05-01 00:00:00+00'::TIMESTAMPTZ_NS, '1912-07-29 00:00:00+00'::TIMESTAMPTZ_NS)
+FROM era_boundaries WHERE name = 'japanese';
+----
+4	-4	4	-4

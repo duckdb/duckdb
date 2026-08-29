@@ -131,12 +131,16 @@ duckdb_fsst_export(
 void
 duckdb_fsst_destroy(duckdb_fsst_encoder_t*);
 
+#define DUCKDB_FSST_IMPORT_VERSION_MISMATCH 0xFFFFFFFEu
+#define DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS    0xFFFFFFFFu
+
 /* Return a decoder structure from serialized format (typically used in a block-, file- or row-group header). */
-unsigned int                /* OUT: number of bytes consumed in buf (0 on failure). */
+unsigned int                /* OUT: bytes consumed (a symbol table was decoded), or one of the sentinels above on failure. */
 duckdb_fsst_import(
    duckdb_fsst_decoder_t *decoder, /* IN: this symbol table will be overwritten. */
-   unsigned char *buf       /* OUT: pointer to a byte-buffer where duckdb_fsst_export() serialized this symbol table. */
-); 
+   unsigned char *buf,      /* IN: pointer to a byte-buffer where duckdb_fsst_export() serialized this symbol table. */
+   size_t buf_size          /* IN: number of readable bytes in buf; import never reads past this. */
+);
 
 /* Return a decoder structure from an encoder. */
 duckdb_fsst_decoder_t

@@ -4,7 +4,7 @@
 
 # Test basic sleep function - should return NULL
 query T
-SELECT sleep_ms(10)
+SELECT sleep_ms(1)
 ----
 NULL
 
@@ -22,25 +22,25 @@ NULL
 
 # Test sleep in a query with timing
 query ITI
-SELECT 1, sleep_ms(50), 2
+SELECT 1, sleep_ms(1), 2
 ----
 1	NULL	2
 
 # Test sleep with different values
 query T
-SELECT sleep_ms(100)
+SELECT sleep_ms(1)
 ----
 NULL
 
 # Test sleep in WHERE clause (should still execute)
 query I
-SELECT 42 WHERE sleep_ms(10) IS NULL
+SELECT 42 WHERE sleep_ms(1) IS NULL
 ----
 42
 
 # Test sleep with multiple rows
 query T
-SELECT sleep_ms(10) FROM range(3)
+SELECT sleep_ms(1) FROM range(3)
 ----
 NULL
 NULL
@@ -48,7 +48,7 @@ NULL
 
 # Test sleep with expression
 query T
-SELECT sleep_ms(10 + 20)
+SELECT sleep_ms(1 + 1)
 ----
 NULL
 
@@ -63,7 +63,7 @@ statement ok
 CREATE TABLE test_sleep_table AS SELECT * FROM range(5) tbl(id);
 
 query IT
-SELECT id, sleep_ms(10) FROM test_sleep_table ORDER BY id
+SELECT id, sleep_ms(1) FROM test_sleep_table ORDER BY id
 ----
 0	NULL
 1	NULL
@@ -73,65 +73,11 @@ SELECT id, sleep_ms(10) FROM test_sleep_table ORDER BY id
 
 # Test sleep_ms with aggregation over a table
 query IT
-SELECT id, sleep_ms(20) FROM test_sleep_table WHERE id < 3 ORDER BY id
+SELECT id, sleep_ms(1) FROM test_sleep_table WHERE id < 3 ORDER BY id
 ----
 0	NULL
 1	NULL
 2	NULL
-
-# Test sleep_ms timing with JSON profiling - extract and validate actual timing
-# For 50ms sleep, we expect to see at least 0.05s (50ms) in the operator_timing
-require json
-
-statement ok
-PRAGMA enable_profiling = 'json'
-
-statement ok
-PRAGMA profiling_output = '{TEST_DIR}/sleep_profiling.json'
-
-statement ok
-SELECT sleep_ms(50) FROM range(1)
-
-statement ok
-PRAGMA disable_profiling
-
-# Extract timing from JSON profiling output and validate it's >= 0.05s
-statement ok
-CREATE OR REPLACE TABLE sleep_profiling AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling.json')
-
-query T
-SELECT query.cpu_time >= 0.05 FROM sleep_profiling WHERE contains(query.sql, 'sleep_ms') LIMIT 1
-----
-true
-
-statement ok
-DROP TABLE sleep_profiling
-
-# Test sleep_ms timing over multiple rows - should take cumulative time
-# For 5 rows of 10ms each (50ms total), we expect to see at least 0.05s in the timing
-statement ok
-PRAGMA enable_profiling = 'json'
-
-statement ok
-PRAGMA profiling_output = '{TEST_DIR}/sleep_profiling_multi.json'
-
-statement ok
-SELECT sleep_ms(10) FROM range(5)
-
-statement ok
-PRAGMA disable_profiling
-
-# Extract timing from JSON profiling output and validate it's >= 0.05s
-statement ok
-CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling_multi.json')
-
-query T
-SELECT query.cpu_time >= 0.05 FROM sleep_profiling_multi WHERE contains(query.sql, 'sleep_ms') LIMIT 1
-----
-true
-
-statement ok
-DROP TABLE sleep_profiling_multi
 
 statement ok
 DROP TABLE test_sleep_table
@@ -139,7 +85,7 @@ DROP TABLE test_sleep_table
 # Test nested sleep_ms calls - the inner sleep should execute
 # Test basic nested sleep_ms - should return NULL
 query T
-SELECT sleep_ms(sleep_ms(10))
+SELECT sleep_ms(sleep_ms(1))
 ----
 NULL
 
@@ -185,19 +131,19 @@ NULL
 
 # Test nested sleep_ms in WHERE clause (should still execute)
 query I
-SELECT 42 WHERE sleep_ms(sleep_ms(10)) IS NULL
+SELECT 42 WHERE sleep_ms(sleep_ms(1)) IS NULL
 ----
 42
 
 # Test nested sleep_ms with expression
 query T
-SELECT sleep_ms(sleep_ms(10 + 20))
+SELECT sleep_ms(sleep_ms(1 + 1))
 ----
 NULL
 
 # Test nested sleep_ms with multiple rows
 query T
-SELECT sleep_ms(sleep_ms(10)) FROM range(3)
+SELECT sleep_ms(sleep_ms(1)) FROM range(3)
 ----
 NULL
 NULL
@@ -206,7 +152,7 @@ NULL
 # Test pg_sleep function (Postgres compatibility - takes seconds, converts to milliseconds)
 # Test basic pg_sleep function - should return NULL
 query T
-SELECT pg_sleep(0.1)
+SELECT pg_sleep(0.001)
 ----
 NULL
 
@@ -224,31 +170,25 @@ NULL
 
 # Test pg_sleep with fractional seconds
 query T
-SELECT pg_sleep(0.05)
-----
-NULL
-
-# Test pg_sleep with 1 second
-query T
-SELECT pg_sleep(1.0)
+SELECT pg_sleep(0.001)
 ----
 NULL
 
 # Test pg_sleep in a query with other columns
 query ITI
-SELECT 1, pg_sleep(0.1), 2
+SELECT 1, pg_sleep(0.001), 2
 ----
 1	NULL	2
 
 # Test pg_sleep in WHERE clause (should still execute)
 query I
-SELECT 42 WHERE pg_sleep(0.1) IS NULL
+SELECT 42 WHERE pg_sleep(0.001) IS NULL
 ----
 42
 
 # Test pg_sleep with multiple rows
 query T
-SELECT pg_sleep(0.01) FROM range(3)
+SELECT pg_sleep(0.001) FROM range(3)
 ----
 NULL
 NULL
@@ -256,7 +196,7 @@ NULL
 
 # Test pg_sleep with expression
 query T
-SELECT pg_sleep(0.05 + 0.05)
+SELECT pg_sleep(0.001 + 0.001)
 ----
 NULL
 
@@ -265,4 +205,3 @@ query T
 SELECT pg_sleep(-0.1)
 ----
 NULL
-

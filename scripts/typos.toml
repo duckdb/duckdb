@@ -10,7 +10,6 @@ extend-exclude = [
   "/src/common/crypto/md5.cpp",
   "/src/include/duckdb/main/extension_entries.hpp",
   "/test/",
-  "/tools/juliapkg/",
   "/tools/shell/tests/test_*.py",
   "/tools/swift/duckdb-swift/",
   "third_party",

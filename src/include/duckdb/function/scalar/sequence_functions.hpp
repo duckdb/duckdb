@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct CurrvalFun {
 	static constexpr const char *Name = "currval";
-	static constexpr const char *Parameters = "'sequence_name'";
+	static constexpr const char *Parameters = "sequence_name";
 	static constexpr const char *Description = "Return the current value of the sequence. Note that nextval must be called at least once prior to calling currval.";
 	static constexpr const char *Example = "currval('my_sequence_name')";
 	static constexpr const char *Categories = "";
@@ -27,12 +27,22 @@ struct CurrvalFun {
 
 struct NextvalFun {
 	static constexpr const char *Name = "nextval";
-	static constexpr const char *Parameters = "'sequence_name'";
+	static constexpr const char *Parameters = "sequence_name";
 	static constexpr const char *Description = "Return the following value of the sequence.";
 	static constexpr const char *Example = "nextval('my_sequence_name')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+};
+
+struct SetvalFun {
+	static constexpr const char *Name = "setval";
+	static constexpr const char *Parameters = "sequence_name,value[,is_called]";
+	static constexpr const char *Description = "Set the value of the sequence to the specified value. If is_called is true, the sequence is called. If is_called is false, the sequence is not called.";
+	static constexpr const char *Example = "setval('my_sequence_name', 100, true)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

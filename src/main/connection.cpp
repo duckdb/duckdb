@@ -89,7 +89,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	QueryParameters query_parameters;
 	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto result = context->Query(query, query_parameters);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
@@ -99,7 +99,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	query_parameters.memory_type = memory_type;
 	auto result = context->Query(std::move(statement), query_parameters);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 

@@ -16,7 +16,7 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
 
 AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
     : AggregateObject(aggr.Function(), aggr.BindInfoMutable().get(), aggr.GetChildren().size(),
-                      AlignValue(aggr.Function().GetStateSizeCallback()(aggr.Function())), aggr.GetAggregateType(),
+                      AlignValue(aggr.Function().GetStateSize(aggr.BindInfoMutable().get())), aggr.GetAggregateType(),
                       aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
 }
 
@@ -25,7 +25,7 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObje
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)
     : AggregateObject(*window.AggregateFunction(), window.BindInfo().get(), window.GetChildren().size(),
-                      AlignValue(window.AggregateFunction()->GetStateSizeCallback()(*window.AggregateFunction())),
+                      AlignValue(window.AggregateFunction()->GetStateSize(window.BindInfo().get())),
                       window.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
                       window.GetReturnType().InternalType(), window.Filter().get()) {
 }

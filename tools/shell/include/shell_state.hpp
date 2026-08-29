@@ -38,6 +38,7 @@ using duckdb::optional_ptr;
 using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::unordered_map;
+using duckdb::unordered_set;
 struct ShellState;
 using duckdb::InternalException;
 using duckdb::InvalidInputException;
@@ -246,6 +247,8 @@ public:
 	OptionType highlight_results = OptionType::DEFAULT;
 	//! Path to .duckdbrc file
 	string duckdb_rc_path;
+	//! Canonical paths of files currently being processed by .read
+	unordered_set<string> active_read_files;
 	//! Startup text to display
 	StartupText startup_text = StartupText::ALL;
 	//! Whether or not the loading resources message was displayed

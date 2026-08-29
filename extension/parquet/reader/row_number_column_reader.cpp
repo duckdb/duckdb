@@ -29,8 +29,8 @@ RowNumberColumnReader::RowNumberColumnReader(const ParquetReader &reader, const 
     : ColumnReader(reader, schema) {
 }
 
-void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
-                                           TProtocol &protocol_p) {
+void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                           const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	row_group_offset = 0;
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	for (idx_t i = 0; i < row_group_idx_p; i++) {
@@ -71,8 +71,8 @@ RowGroupColumnReader::RowGroupColumnReader(const ParquetReader &reader, const Pa
     : ColumnReader(reader, schema) {
 }
 
-void RowGroupColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
-                                          TProtocol &protocol_p) {
+void RowGroupColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                          const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	row_group_idx = row_group_idx_p;
 }
 

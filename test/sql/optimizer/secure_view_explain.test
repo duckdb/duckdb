@@ -1,0 +1,134 @@
+# name: test/sql/optimizer/secure_view_explain.test
+# description: Test that EXPLAIN and EXPLAIN ANALYZE do not expose the internals of a secure view
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE hidden_table AS SELECT i, i % 10 AS j, ('hidden' || i) AS s FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE other AS SELECT i, i * 2 AS k FROM range(500) t(i);
+
+# a view whose body contains a scan, a filter, a join and an aggregate - none of which may show up in any plan
+statement ok
+CREATE SECURE VIEW secure_view AS
+    SELECT hidden_table.j, count(*) AS c, max(other.k) AS mk
+    FROM hidden_table JOIN other ON hidden_table.i = other.i
+    WHERE hidden_table.j <> 7
+    GROUP BY hidden_table.j;
+
+statement ok
+CREATE VIEW regular_view AS
+    SELECT hidden_table.j, count(*) AS c, max(other.k) AS mk
+    FROM hidden_table JOIN other ON hidden_table.i = other.i
+    WHERE hidden_table.j <> 7
+    GROUP BY hidden_table.j;
+
+# the regular view exposes its internals
+query II
+EXPLAIN SELECT * FROM regular_view WHERE c > 0
+----
+physical_plan	<REGEX>:[\s\S]*hidden_table[\s\S]*
+
+# the secure view exposes nothing but its own name
+query II
+EXPLAIN SELECT * FROM secure_view WHERE c > 0
+----
+physical_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*View: secure_view[\s\S]*
+
+query II
+EXPLAIN SELECT * FROM secure_view WHERE c > 0
+----
+physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
+
+# ... in the unoptimized and optimized logical plans too
+statement ok
+SET explain_output='all'
+
+query II
+EXPLAIN SELECT * FROM secure_view WHERE c > 0
+----
+logical_plan	<!REGEX>:[\s\S]*(hidden_table|COMPARISON_JOIN|AGGREGATE|GET|other)[\s\S]*
+logical_opt	<!REGEX>:[\s\S]*(hidden_table|COMPARISON_JOIN|AGGREGATE|GET|other)[\s\S]*
+physical_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|other)[\s\S]*
+
+statement ok
+SET explain_output='physical_only'
+
+# EXPLAIN ANALYZE must not expose the internals either
+query II
+EXPLAIN ANALYZE SELECT * FROM secure_view WHERE c > 0
+----
+analyzed_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|other)[\s\S]*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM secure_view WHERE c > 0
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]*View: secure_view[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM secure_view WHERE c > 0
+----
+analyzed_plan	<!REGEX>:[\s\S]*(hidden_table|HASH_JOIN|HASH_GROUP_BY|SEQ_SCAN|TABLE_SCAN|"other")[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM secure_view WHERE c > 0
+----
+analyzed_plan	<REGEX>:[\s\S]*"type": "SECURE_VIEW"[\s\S]*
+
+statement ok
+CREATE SECURE VIEW counting_view AS SELECT * FROM hidden_table WHERE j = 3;
+
+# The secure view reports the number of rows that left it - that is observable through the query anyway - but none
+# of the counters that describe what happened inside it. In particular there is no "Row Groups Scanned: 1 / 7",
+# which would say how much of the table behind the view was read.
+query II
+EXPLAIN ANALYZE SELECT * FROM counting_view
+----
+analyzed_plan	<REGEX>:[\s\S]*SECURE_VIEW[\s\S]* 1,000 rows[\s\S]*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM counting_view
+----
+analyzed_plan	<!REGEX>:[\s\S]*Row Groups Scanned[\s\S]*
+
+query I
+SELECT count(*) FROM counting_view
+----
+1000
+
+# the query-wide totals are sums over the operator tree, so they must not include the scan counters of the
+# operators inside the view - total_rows_scanned would otherwise report the full size of the table behind the view
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM counting_view
+----
+analyzed_plan	<REGEX>:[\s\S]*"total_rows_scanned": 0[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM counting_view
+----
+analyzed_plan	<REGEX>:[\s\S]*"total_row_groups_scanned": 0[\s\S]*
+
+# Unlike the counters above, the time spent inside the view *is* accumulated onto the secure view node, so the
+# profile still accounts for the whole query. The magnitude cannot be asserted portably - some configurations report
+# no operator timings at all - so we only check that the secure view carries a timing.
+statement ok
+CREATE SECURE VIEW heavy_view AS SELECT j, count(*) AS c FROM hidden_table GROUP BY j;
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT * FROM heavy_view
+----
+analyzed_plan	<REGEX>:[\s\S]*"timing":[\s\S]*"type": "SECURE_VIEW"[\s\S]*
+
+# results are unaffected
+query III
+SELECT * FROM secure_view WHERE j = 1 ORDER BY j
+----
+1	50	982
+
+query I
+SELECT count(*) FROM counting_view
+----
+1000

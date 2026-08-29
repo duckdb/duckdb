@@ -220,10 +220,21 @@ SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
 <REGEX>:Binder Error.*No function matches.*
 
 # division by zero
+statement error
+SELECT INTERVAL '1 year 2 days 2 seconds' / 0;
+----
+<REGEX>:.*Division by zero.*
+
+statement ok
+SET null_on_division_by_zero=true;
+
 query T
 SELECT INTERVAL '1 year 2 days 2 seconds' / 0;
 ----
 NULL
+
+statement ok
+SET null_on_division_by_zero=false;
 
 # invalid intervals
 # empty interval

@@ -11,6 +11,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -70,11 +71,11 @@ public:
 
 	//! Returns the typed_value stats of a shredded stats entry
 	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &stats);
-	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
+	static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
 
 	//! Returns the untyped_value_index stats of a shredded stats entry - if there is any
 	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &stats);
-	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
+	static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
 
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
@@ -86,6 +87,8 @@ public:
 	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
+	//! Determine if a given path inside the variant stats is shredded
+	DUCKDB_API static bool IsShredded(const BaseStatistics &stats, const ColumnIndex &column_index);
 	DUCKDB_API static const BaseStatistics &GetShreddedStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetShreddedStats(BaseStatistics &stats);
 

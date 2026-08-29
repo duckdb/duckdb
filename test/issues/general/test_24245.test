@@ -1,0 +1,117 @@
+# name: test/issues/general/test_24245.test
+# description: Regex optimizations preserve collation-independent matching
+# group: [general]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+statement ok
+CREATE TABLE nocase_strings(s VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO nocase_strings VALUES ('Abc'), ('abc'), ('xA'), ('xa'), ('Axxc')
+
+query I
+SELECT s
+FROM nocase_strings
+WHERE regexp_matches(s, 'A')
+ORDER BY s, s COLLATE C
+----
+Abc
+Axxc
+xA
+
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, 'A', 'l')
+----
+Abc,Axxc,xA
+
+# Regex case-insensitivity remains controlled by regex options, not SQL collations
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, 'a', 'i')
+----
+Abc,Axxc,abc,xA,xa
+
+query II
+EXPLAIN SELECT s FROM nocase_strings WHERE regexp_matches(s, 'A')
+----
+logical_opt	<REGEX>:.*regexp_matches\(s, 'A'\).*
+
+# LIKE-compatible rewrites must also retain the regex's case-sensitive semantics
+query I
+SELECT s
+FROM nocase_strings
+WHERE regexp_matches(s, 'A.*c', 's')
+ORDER BY s COLLATE C
+----
+Abc
+Axxc
+
+# Subsequent LIKE rewrites to prefix, suffix, equality, and contains are unsafe too
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, '^A')
+----
+Abc,Axxc
+
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, 'A$')
+----
+xA
+
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, '^Abc$')
+----
+Abc
+
+query I
+SELECT string_agg(s, ',' ORDER BY s COLLATE C)
+FROM nocase_strings
+WHERE regexp_matches(s, '.*A.*', 's')
+----
+Abc,Axxc,xA
+
+# A collation attached to the pattern is likewise irrelevant to regex matching
+statement ok
+CREATE TABLE plain_strings(s VARCHAR)
+
+statement ok
+INSERT INTO plain_strings VALUES ('A'), ('a'), ('É'), ('é'), ('e')
+
+query I
+SELECT s
+FROM plain_strings
+WHERE regexp_matches(s, 'A' COLLATE NOCASE)
+ORDER BY s
+----
+A
+
+statement ok
+CREATE TABLE noaccent_strings(s VARCHAR COLLATE NOACCENT)
+
+statement ok
+INSERT INTO noaccent_strings VALUES ('resume'), ('résumé'), ('é'), ('e')
+
+query I
+SELECT s
+FROM noaccent_strings
+WHERE regexp_matches(s, 'é')
+ORDER BY s COLLATE C
+----
+résumé
+é
+
+# Keep optimizing ordinary uncollated inputs
+query II
+EXPLAIN SELECT s FROM plain_strings WHERE regexp_matches(s, 'A')
+----
+logical_opt	<REGEX>:.*contains\(s, 'A'\).*

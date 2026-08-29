@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/connected_components_performance.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=connected_components
+BENCHMARK_NAME=Recursive CTE connected-components performance
+DESCRIPTION=Run row-equality propagation over a medium chain graph

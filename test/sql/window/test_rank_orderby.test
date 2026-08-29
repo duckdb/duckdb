@@ -72,3 +72,31 @@ ORDER BY 1
 7	3	3	0.4
 8	4	4	0.75
 9	4	3	0.6666666666666666
+
+# Argument ordering that is only a prefix of the window ordering must not split peers
+query III
+SELECT
+	id,
+	k,
+	percent_rank(ORDER BY k) OVER (ORDER BY k, id) AS arg_percent_rank,
+FROM (VALUES (1, 1), (2, 1)) tbl(id, k)
+ORDER BY id
+----
+1	1	0.0
+2	1	0.0
+
+query IIII
+SELECT
+	id,
+	k,
+	rank(ORDER BY k) OVER w,
+	percent_rank(ORDER BY k) OVER w,
+FROM (VALUES (1, 1), (2, 1), (3, 2)) tbl(id, k)
+WINDOW w AS (
+	ORDER BY k, id
+)
+ORDER BY id
+----
+1	1	1	0.0
+2	1	1	0.0
+3	2	3	1.0

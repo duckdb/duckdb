@@ -152,6 +152,40 @@
     ]
   },
   {
+    "class": "BoundExternalResource",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "operation",
+        "type": "ExternalResourceOperation"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "params",
+        "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 104,
+        "name": "handle",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"
@@ -610,6 +644,12 @@
         "type": "map<ProjectionIndex, TableFilter*>",
         "serialize_property": "GetTableFiltersForSerialization(serializer)",
         "deserialize_property": "GetTableFiltersForDeserialization(deserializer)"
+      },
+      {
+        "id": 101,
+        "name": "multi_column_filters",
+        "type": "vector<TableFilter*>",
+        "default": "vector<unique_ptr<TableFilter>>()"
       }
     ],
     "pointer_type": "none"
@@ -750,8 +790,9 @@
       {
         "id": 103,
         "name": "compression",
-        "type": "FileCompressionType",
-        "property": "options.compression"
+        "type": "string",
+        "serialize_property": "options.compression.ToString()",
+        "deserialize_property": "options.compression"
       },
       {
         "id": 104,
@@ -932,7 +973,7 @@
       {
         "id": 133,
         "name": "name_list",
-        "type": "vector<string>",
+        "type": "vector<Identifier>",
         "property": "options.name_list"
       },
       {
@@ -1203,9 +1244,21 @@
         "id": 5,
         "name": "not_null_columns",
         "type": "vector<Identifier>"
+      },
+      {
+        "id": 6,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
     ],
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = std::move(qualified_name);",
+      "}"
+    ],
     "methods": {
       "SetQualifiedName": [
         "database_name",

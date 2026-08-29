@@ -125,6 +125,8 @@ public:
 		D_ASSERT(idx < capacity);
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
+	//! Shift entries left by `offset`, i.e. sel[i] = sel[i + offset] for i in [0, count). No-op if offset == 0.
+	void ShiftLeft(const idx_t offset, const idx_t count);
 	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(i < capacity && j < capacity);
 		sel_t tmp = sel_vector[i];

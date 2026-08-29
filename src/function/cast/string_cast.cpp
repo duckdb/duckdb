@@ -161,6 +161,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 		auto varchar_vector_validity = varchar_vector.Validity();
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
+			if (!result_mask.RowIsValid(i)) {
+				continue;
+			}
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
 				if (!result_child_validity.IsValid(j) && varchar_vector_validity.IsValid(j)) {
 					result_mask.SetInvalid(i);

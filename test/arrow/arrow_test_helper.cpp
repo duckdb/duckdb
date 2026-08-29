@@ -32,7 +32,7 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 
 static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
                                 struct ArrowArray *out) {
-	auto &types = res.types;
+	auto &types = res.GetTypes();
 	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
@@ -81,11 +81,11 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		throw InternalException("No private data!?");
 	}
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
-	if (data.factory.result->type == QueryResultType::MATERIALIZED_RESULT) {
+	if (data.factory.result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized_result = data.factory.result->Cast<MaterializedQueryResult>();
 		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
 	} else {
-		D_ASSERT(data.factory.result->type == QueryResultType::ARROW_RESULT);
+		D_ASSERT(data.factory.result->GetResultType() == QueryResultType::ARROW_RESULT);
 		return NextFromArrow(data.factory, out);
 	}
 }
@@ -135,7 +135,7 @@ void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
 	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
-	if (arrow_result->type != QueryResultType::MATERIALIZED_RESULT) {
+	if (arrow_result->GetResultType() != QueryResultType::MATERIALIZED_RESULT) {
 		printf("Arrow Result must materialized");
 		return nullptr;
 	}
@@ -157,8 +157,7 @@ bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow
 		auto query_result = con.Query(query);
 		auto duck_collection = query_result->TakeCollection();
 		regular_result = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection),
-		                                                       duckdb::StringsToIdentifiers(query_result->names),
-		                                                       duckdb::Identifier("duck"));
+		                                                       query_result->GetNames(), duckdb::Identifier("duck"));
 	} else {
 		regular_result = con.RelationFromQuery(query, "regular_result");
 	}
@@ -254,8 +253,8 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	}
 
 	auto client_properties = con.context->GetClientProperties();
-	auto types = initial_result->types;
-	auto names = initial_result->names;
+	auto types = initial_result->GetTypes();
+	auto names = duckdb::IdentifiersToStrings(initial_result->GetNames());
 	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
 	                         client_properties, *con.context);

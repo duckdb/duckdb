@@ -12,7 +12,7 @@ QueryResultChunkScanState::~QueryResultChunkScanState() {
 
 bool QueryResultChunkScanState::InternalLoad(ErrorData &error) {
 	D_ASSERT(!finished);
-	if (result.type == QueryResultType::STREAM_RESULT) {
+	if (result.GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			return true;
@@ -31,11 +31,11 @@ ErrorData &QueryResultChunkScanState::GetError() {
 }
 
 const vector<LogicalType> &QueryResultChunkScanState::Types() const {
-	return result.types;
+	return result.GetTypes();
 }
 
-const vector<string> &QueryResultChunkScanState::Names() const {
-	return result.names;
+const vector<Identifier> &QueryResultChunkScanState::Names() const {
+	return result.GetNames();
 }
 
 bool QueryResultChunkScanState::LoadNextChunk(ErrorData &error) {

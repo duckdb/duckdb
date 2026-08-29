@@ -69,6 +69,9 @@ public:
 	bool SinkOrderDependent() const override {
 		return false;
 	}
+	PipelineSourceConsumption GetSourceConsumption() const override {
+		return PipelineSourceConsumption::MAY_STOP_EARLY;
+	}
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

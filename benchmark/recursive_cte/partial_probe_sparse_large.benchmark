@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/partial_probe_sparse_large.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=partial_probe_sparse_large
+BENCHMARK_NAME=Recursive CTE large sparse partial-key probes
+DESCRIPTION=Run sparse partial-key probes over one million composite-key state rows

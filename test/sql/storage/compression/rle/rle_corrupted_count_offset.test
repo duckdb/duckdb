@@ -13,4 +13,4 @@ RLE
 statement error
 SELECT * FROM t LIMIT 1;
 ----
-IO Error: Corrupted RLE segment: rle_count_offset is corrupted
+Data Corruption Error: Corrupted RLE segment: rle_count_offset is corrupted

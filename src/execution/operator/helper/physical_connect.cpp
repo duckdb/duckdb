@@ -65,7 +65,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 
 	auto target = db_manager.GetDatabase(info->name);
 	if (!target) {
-		throw InvalidInputException("Database \"%s\" is not attached", info->name);
+		throw InvalidInputException("Database %s is not attached", info->name);
 	}
 	// ConnectToCatalog resolves and caches the dispatch function name; throws if the catalog returns
 	// empty from GetConnectFunctionName (i.e. CONNECT is not supported in this context).

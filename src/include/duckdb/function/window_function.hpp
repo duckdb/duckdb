@@ -57,25 +57,22 @@ struct WindowFunctionInfo {
 	}
 };
 
-class BindWindowFunctionInput {
+class BindWindowFunctionInput : public BindFunctionInput {
 public:
 	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
 
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
+	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        OptionalOrdering orders_p = nullptr, OptionalOrdering arg_orders_p = nullptr);
+
+	//! Construct without argument names - looking arguments up by name is not available in this case.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
-	                        OptionalOrdering arg_orders_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), orders(orders_p),
-	      arg_orders(arg_orders_p) {
-	}
+	                        OptionalOrdering arg_orders_p = nullptr);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
-	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
 	}
 	bool HasOrders() const {
 		return orders.get();
@@ -91,9 +88,7 @@ public:
 	}
 
 private:
-	ClientContext &context;
 	BoundWindowFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 	OptionalOrdering orders;
 	OptionalOrdering arg_orders;
 };
@@ -359,12 +354,26 @@ public:
 class BoundWindowFunction : public BaseWindowFunction, public BoundSimpleFunction {
 public:
 	explicit BoundWindowFunction(const WindowFunction &base);
+	explicit BoundWindowFunction(shared_ptr<const WindowFunction> base);
 
 public:
 	const ExpressionType window_enum;
 
 	DUCKDB_API bool operator==(const BoundWindowFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundWindowFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function. For a function bound
+	//! from a WindowFunctionSet this is the set's own overload, so it compares equal by pointer across binds.
+	//! Functions bound outside of a set are copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const WindowFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale
+	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
+		definition = std::move(definition_p);
+	}
 
 public:
 	void GetBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr) const {
@@ -422,6 +431,9 @@ public:
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
+
+private:
+	shared_ptr<const WindowFunction> definition;
 };
 
 } // namespace duckdb

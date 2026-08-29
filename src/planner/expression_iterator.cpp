@@ -42,11 +42,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		callback(case_expr.ElseMutable());
 		break;
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		callback(cast_expr.ChildMutable());
-		break;
-	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj_expr.GetChildrenMutable()) {
@@ -106,6 +101,10 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:
+	// TODO: enumerate the lambda body here. That would give volatility, CanThrow and Hash for free,
+	// but the body's BoundReferenceExpressions index the lambda's own input chunk rather than the
+	// outer one, so every pass that rewrites references must first be shown to leave them alone.
+	case ExpressionClass::BOUND_LAMBDA:
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:

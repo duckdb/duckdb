@@ -133,6 +133,15 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
+void ArenaAllocator::FreeAll() {
+	Reset();
+	if (head) {
+		head.reset();
+		tail = nullptr;
+	}
+	allocated_size = 0;
+}
+
 void ArenaAllocator::Reset() {
 	if (head) {
 		// destroy all chunks except the current one

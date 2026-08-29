@@ -46,12 +46,6 @@ public:
 	}
 };
 
-void ThrowIfNotConstant(const Expression &arg) {
-	if (!arg.IsFoldable()) {
-		throw BinderException("write_log: argument '%s' must be constant", arg.GetAlias());
-	}
-}
-
 unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
@@ -77,30 +71,25 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 		if (arg->GetAlias() == "disable_logging") {
-			ThrowIfNotConstant(*arg);
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("write_log: 'disable_logging' argument must be a boolean");
 			}
-			result->disable_logging = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			result->disable_logging = BooleanValue::Get(input.GetConstant(i));
 		} else if (arg->GetAlias() == "scope") {
-			ThrowIfNotConstant(*arg);
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'scope' argument must be a string");
 			}
-			result->scope = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			result->scope = StringValue::Get(input.GetConstant(i));
 		} else if (arg->GetAlias() == "level") {
-			ThrowIfNotConstant(*arg);
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'level' argument must be a string");
 			}
-			result->level =
-			    EnumUtil::FromString<LogLevel>(StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg)));
+			result->level = EnumUtil::FromString<LogLevel>(StringValue::Get(input.GetConstant(i)));
 		} else if (arg->GetAlias() == "log_type") {
-			ThrowIfNotConstant(*arg);
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'log_type' argument must be a string");
 			}
-			result->type = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			result->type = StringValue::Get(input.GetConstant(i));
 		} else if (arg->GetAlias() == "return_value") {
 			result->return_type = arg->GetReturnType();
 			result->output_col = i;
@@ -163,8 +152,8 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr,
-	                               nullptr, LogicalType::ANY, FunctionStability::VOLATILE));
+	set.AddFunction(ScalarFunction({{"string", LogicalType::VARCHAR}}, LogicalType::ANY, WriteLogFunction, WriteLogBind,
+	                               nullptr, nullptr, LogicalType::ANY, FunctionStability::VOLATILE));
 
 	return set;
 }

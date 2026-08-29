@@ -46,6 +46,8 @@ ScalarFunction ListFilterFun::GetFunction() {
 	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
 	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
 	fun.SetBindLambdaCallback(ListFilterBindLambda);
+	// the lambda expression that is executed for every element can throw
+	fun.SetFallible();
 
 	return fun;
 }

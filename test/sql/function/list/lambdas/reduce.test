@@ -441,3 +441,14 @@ list_reduce(
 )
 ----
 {'a': 2, 'b': 2}
+
+# errors thrown by the reduce lambda propagate as clean errors, not INTERNAL errors (#24616)
+statement error
+SELECT list_reduce([1, 2], lambda x, y: error('test error'));
+----
+Invalid Input Error: test error
+
+statement error
+SELECT list_reduce(['1', 'a'], lambda x, y: (x::INT + y::INT)::VARCHAR);
+----
+Conversion Error

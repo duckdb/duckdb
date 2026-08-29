@@ -10,7 +10,7 @@
 namespace duckdb {
 class ClientContext;
 
-ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<identifier_map_t<ShreddingType>>()) {
+ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<unordered_map<string, ShreddingType>>()) {
 }
 
 ChildShreddingTypes ChildShreddingTypes::Copy() const {
@@ -31,10 +31,7 @@ bool ShreddingType::operator==(const ShreddingType &other) const {
 	if (set != other.set) {
 		return false;
 	}
-	if (!set) {
-		return true;
-	}
-	if (type != other.type) {
+	if (set && type != other.type) {
 		return false;
 	}
 	if (!children.types && !other.children.types) {
@@ -104,7 +101,7 @@ void ShreddingType::AddChild(const Identifier &name, ShreddingType &&child) {
 }
 
 optional_ptr<const ShreddingType> ShreddingType::GetChild(const Identifier &name) const {
-	auto it = children.types->find(name);
+	auto it = children.types->find(name.GetIdentifierName());
 	if (it == children.types->end()) {
 		return nullptr;
 	}

@@ -57,6 +57,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+	PipelineSourceConsumption GetSourceConsumption() const override {
+		return PipelineSourceConsumption::MAY_STOP_EARLY;
+	}
 
 	OperatorPartitionInfo RequiredPartitionInfo() const override {
 		return OperatorPartitionInfo::BatchIndex();

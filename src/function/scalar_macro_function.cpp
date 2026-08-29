@@ -33,8 +33,7 @@ void RemoveQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
 		    auto &col_names = col_ref.ColumnNamesMutable();
-		    if (col_names.size() == 2 &&
-		        col_names[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos) {
+		    if (col_names.size() == 2 && col_names[0].StartsWith(DummyBinding::DUMMY_NAME)) {
 			    col_names.erase(col_names.begin());
 		    }
 	    });

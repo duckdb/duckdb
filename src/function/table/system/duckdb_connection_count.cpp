@@ -14,7 +14,8 @@ struct DuckDBConnectionCountData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBConnectionCountBind(ClientContext &context, TableFunctionBindInput &input,
-                                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                                          vector<LogicalType> &return_types,
+                                                          vector<Identifier> &names) {
 	names.emplace_back("count");
 	return_types.emplace_back(LogicalType::UBIGINT);
 	return nullptr;

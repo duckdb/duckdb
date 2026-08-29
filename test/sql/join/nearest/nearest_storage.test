@@ -1,0 +1,82 @@
+# name: test/sql/join/nearest/nearest_storage.test
+# description: NEAREST BY - serialization requires v2.0.0 storage
+# group: [nearest]
+
+# NEAREST BY is only representable in v2.0.0 storage and up, so pin the storage version of the databases
+# we serialize into instead of relying on the (configurable) default
+statement ok
+ATTACH '{TEST_DIR}/nearest_latest.db' AS latest_db (STORAGE_VERSION 'latest');
+
+statement ok
+CREATE TABLE latest_db.users(user_id INT, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO latest_db.users VALUES (1,[1,0,0]),(2,[0,1,0]);
+
+statement ok
+CREATE TABLE latest_db.products(product_id VARCHAR, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO latest_db.products VALUES ('P1',[0.9,0.1,0.1]),('P2',[0.1,0.9,0.1]),('P3',[0.5,0.5,0.0]);
+
+# The clause round-trips through ToString (via a view definition) and re-parses
+statement ok
+CREATE VIEW latest_db.nearest_view AS
+  SELECT q.user_id, t.product_id FROM latest_db.users q
+    INNER JOIN latest_db.products t APPROX NEAREST 2 BY SIMILARITY array_cosine_similarity(q.embedding, t.embedding);
+
+query I
+SELECT sql LIKE '%APPROX NEAREST 2 BY SIMILARITY%' FROM duckdb_views() WHERE view_name = 'nearest_view';
+----
+true
+
+# The stored (re-parsed) view is executable
+query I
+SELECT count(*) FROM latest_db.nearest_view;
+----
+4
+
+# Omitting APPROX/EXACT means EXACT
+statement ok
+CREATE VIEW latest_db.default_view AS
+  SELECT q.user_id, t.product_id FROM latest_db.users q
+    INNER JOIN latest_db.products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding);
+
+query I
+SELECT sql LIKE '%EXACT NEAREST 2 BY DISTANCE%' FROM duckdb_views() WHERE view_name = 'default_view';
+----
+true
+
+# Writing to a storage version that predates NEAREST BY errors out rather than silently dropping the clause
+statement ok
+ATTACH '{TEST_DIR}/nearest_old.db' AS old_db (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+CREATE TABLE old_db.users AS SELECT * FROM latest_db.users;
+
+statement ok
+CREATE TABLE old_db.products AS SELECT * FROM latest_db.products;
+
+statement error
+CREATE VIEW old_db.nearest_view AS
+  SELECT q.user_id, t.product_id FROM old_db.users q
+    INNER JOIN old_db.products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding);
+----
+Cannot serialize a NEAREST BY join to storage version "v1.4.0"
+
+statement error
+CREATE MACRO old_db.nearest_macro() AS TABLE
+  SELECT q.user_id, t.product_id FROM old_db.users q
+    INNER JOIN old_db.products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding);
+----
+Cannot serialize a NEAREST BY join to storage version "v1.4.0"
+
+# Regular joins are unaffected
+statement ok
+CREATE VIEW old_db.regular_view AS
+  SELECT q.user_id, t.product_id FROM old_db.users q INNER JOIN old_db.products t ON (TRUE);
+
+query I
+SELECT count(*) FROM old_db.regular_view;
+----
+6

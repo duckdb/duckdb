@@ -14,6 +14,14 @@
 
 namespace duckdb {
 
+bool CacheValidationInfo::IsCacheReuseProhibited() const {
+	return cache_valid_until && *cache_valid_until == timestamp_t::ninfinity();
+}
+
+bool CacheValidationInfo::IsExpired() const {
+	return cache_valid_until && Timestamp::GetCurrentTimestamp() > *cache_valid_until;
+}
+
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
 	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p, idx_t generation_p)
@@ -37,7 +45,7 @@ public:
 		idx_t file_size = 0;
 		{
 			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-			file_size = cached_file->file_size;
+			file_size = cached_file->validation_info.file_size;
 		}
 		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
 		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
@@ -88,6 +96,11 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
 			continue;
 		}
+		if (block.block_handle->GetMemory().IsUnloaded()) {
+			// Evicted blocks do not survive a re-index, whether they spilled or were dropped:
+			// pinning all of them to copy them over could exceed the memory limit
+			continue;
+		}
 		auto pin = buffer_manager.Pin(block.block_handle);
 		if (pin.IsValid()) {
 			pinned.emplace(old_idx, make_pair(std::move(pin), block.nr_bytes));
@@ -129,7 +142,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_size);
+			auto buf = AllocateCacheBuffer(buffer_manager, cached_file.path, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -174,7 +187,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	idx_t file_size = 0;
 	{
 		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		file_size = cached_file.file_size;
+		file_size = cached_file.validation_info.file_size;
 	}
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
@@ -199,17 +212,26 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	return blocks;
 }
 
+void ExternalFileCache::RetireBlocks(CachedFile &cached_file, idx_t first_block,
+                                     const vector<shared_ptr<CacheBlock>> &blocks) {
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	for (idx_t idx = 0; idx < blocks.size(); idx++) {
+		const auto block_idx = first_block + idx;
+		auto entry = cached_file.blocks.find(block_idx);
+		if (entry == cached_file.blocks.end() || entry->second != blocks[idx]) {
+			continue;
+		}
+		cached_file.blocks.erase(entry);
+	}
+}
+
 ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
     : path(std::move(path_p)), generation(generation_p) {
 }
 
-bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
-                                            timestamp_t current_last_modified) {
-	if (!validate) {
-		return true; // Assume valid
-	}
-	annotated_lock_guard<annotated_mutex> guard(meta_lock);
-	return ExternalFileCache::IsValid(validate, version_tag, last_modified, current_version_tag, current_last_modified);
+//! Whether the last modified timestamp is usable as a cache validator
+static bool HasUsableLastModified(timestamp_t last_modified) {
+	return last_modified.IsFinite() && last_modified != timestamp_t(0);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
@@ -224,7 +246,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false; // The file has certainly been modified
 	}
 
-	// If the modified time is not assigned (i.e., storage backend does not provide it), we can't validate it.
+	// If the modified time is not assigned, we can't validate it.
 	if (!current_last_modified.IsFinite() || !cached_last_modified.IsFinite()) {
 		return false;
 	}
@@ -243,6 +265,31 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false;
 	}
 	return last_modified_time > LAST_MODIFIED_THRESHOLD;
+}
+
+bool ExternalFileCache::HasValidationMetadata(const CacheValidationInfo &info) {
+	return !info.version_tag.empty() || HasUsableLastModified(info.last_modified);
+}
+
+bool ExternalFileCache::IsValid(bool validate, const CacheValidationInfo &cached, const CacheValidationInfo &current) {
+	if (cached.IsCacheReuseProhibited() || current.IsCacheReuseProhibited()) {
+		return false;
+	}
+	if (!validate) {
+		return true; // Assume valid
+	}
+	if (HasValidationMetadata(cached) || HasValidationMetadata(current)) {
+		return IsValid(validate, cached.version_tag, cached.last_modified, current.version_tag, current.last_modified);
+	}
+	// No validators at all: cached data may be served within the freshness deadline the storage backend granted
+	// when the cache entry was created (e.g., HTTP Cache-Control), as long as the file size is unchanged.
+	if (cached.file_size != current.file_size) {
+		return false; // The file has certainly been modified
+	}
+	if (!cached.cache_valid_until) {
+		return false; // The backend does not provide expiry information, so we cannot validate at all
+	}
+	return Timestamp::GetCurrentTimestamp() <= *cached.cache_valid_until;
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
@@ -306,8 +353,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 				continue;
 			}
 			const idx_t location = block_idx * block_size;
-			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
-			result.push_back({file->path, block.nr_bytes, location, loaded});
+			const auto &memory = block.block_handle->GetMemory();
+			const bool loaded = !memory.IsUnloaded();
+			// An unloaded cache block is spilled if it still has a temporary file backing
+			const bool spilled = !loaded && memory.MustWriteToTemporaryFile();
+			result.push_back({file->path, block.nr_bytes, location, loaded, spilled});
 		}
 	}
 	return result;
@@ -328,6 +378,13 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 
 BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
+}
+
+BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, const string &path, idx_t nr_bytes) {
+	const bool spill = Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase()) &&
+	                   FileSystem::IsRemoteFile(path) && buffer_manager.HasTemporaryDirectory() &&
+	                   nr_bytes >= buffer_manager.GetBlockAllocSize();
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, !spill);
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {

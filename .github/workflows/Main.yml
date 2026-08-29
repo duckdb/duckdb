@@ -24,7 +24,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -32,6 +31,7 @@ on:
       - '.github/workflows/Windows.yml'
       - '.github/workflows/Regression.yml'
       - '.github/workflows/Extensions.yml'
+      - '.github/workflows/OSX.yml'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
@@ -40,7 +40,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -48,6 +47,7 @@ on:
       - '.github/workflows/Windows.yml'
       - '.github/workflows/Regression.yml'
       - '.github/workflows/Extensions.yml'
+      - '.github/workflows/OSX.yml'
 
 
 concurrency:
@@ -81,9 +81,8 @@ jobs:
       runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
       runners: ${{ steps.runners.outputs.runners }}
+      images: ${{ steps.config.outputs.images }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
-      linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
-      static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
@@ -94,6 +93,8 @@ jobs:
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
+      staged_version: ${{ steps.version.outputs.staged_version }}
+      extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
       GEN: ninja
     steps:
@@ -118,8 +119,22 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
-          echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
+          staged_version=""
+          extension_allow_failure_archs=
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
+            effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+            commit="${{ steps.resolve_git_sha.outputs.git_sha }}"
+            staged_version="${commit:0:10}/$effective_git_describe"
+            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
+          fi
+          {
+            echo "effective_git_describe=$effective_git_describe"
+            echo "staged_version=$staged_version"
+            echo "extension_allow_failure_archs=$extension_allow_failure_archs"
+          } >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
+          echo "Using staged_version=$staged_version"
+          echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -135,6 +150,15 @@ jobs:
           files_yaml: |
             github:
               - .github/**
+            osx:
+              - '**'
+              - '!**.md'
+              - '!test/configs/**'
+              - '!tools/**'
+              - 'tools/shell/**'
+              - '!.github/patches/duckdb-wasm/**'
+              - '!.github/workflows/**'
+              - '.github/workflows/OSX.yml'
             extensions:
               - .github/config/**
               - .github/patches/**
@@ -144,13 +168,6 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
-            capi:
-              - src/include/duckdb.h
-              - src/common/types.cpp
-              - src/include/duckdb/common/types.hpp
-              - src/function/table/system/test_all_types.cpp
-            julia:
-              - tools/juliapkg/**
 
       - name: Lint CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -181,38 +198,51 @@ jobs:
 
           runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
           runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
+          image_version="$(<scripts/ci/image_version.txt)"
+
+          images=$(
+            jq -nc --arg image_version "$image_version" \
+              '{
+                manylinux_amd64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:" + $image_version),
+                manylinux_arm64_main: ("ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_main:" + $image_version),
+                alpine_amd64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_main:" + $image_version),
+                alpine_arm64_main: ("ghcr.io/duckdb/duckdb-ci/alpine_3_22_aarch64_main:" + $image_version),
+                ubuntu_24_04_amd64_lint: ("ghcr.io/duckdb/duckdb-ci/ubuntu_24_04_amd64_lint:" + $image_version)
+              }'
+          )
 
           linux_cli_matrix=$(
-            jq -nc --arg runner "$runner_linux_x64" \
-              '[{runner: $runner, arch: "amd64", image: "x86_64"}]'
-          )
-
-          linux_musl_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_arm64" \
-              '[{runner: $runner, arch: "arm64"}]'
-          )
-
-          static_libs_linux_matrix=$(
-            jq -nc --arg runner "$runner_linux_x64" \
-              '[{runner: $runner, arch: "amd64", image: "quay.io/pypa/manylinux_2_28_x86_64"}]'
+              '[{
+                runner: $runner,
+                arch: "arm64",
+                image: "alpine_arm64_main",
+                name: "arm64-musl",
+                artifact_suffix: "linux-arm64-musl",
+                cache_suffix: "arm64-musl"
+              }]'
           )
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
-              jq -c --arg runner "$runner_linux_arm64" \
-                '. += [{runner: $runner, arch: "arm64", image: "aarch64"}]' <<<"$linux_cli_matrix"
-            )
-
-            linux_musl_cli_matrix=$(
-              jq -c --arg runner "$runner_linux_x64" \
-                '. |= [{runner: $runner, arch: "amd64"}] + .' <<<"$linux_musl_cli_matrix"
-            )
-          fi
-
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            static_libs_linux_matrix=$(
-              jq -c --arg runner "$runner_linux_arm64" \
-                '. += [{runner: $runner, arch: "arm64", image: "quay.io/pypa/manylinux_2_28_aarch64"}]' <<<"$static_libs_linux_matrix"
+              jq -c \
+                --arg runner_arm64 "$runner_linux_arm64" \
+                --arg runner_x64 "$runner_linux_x64" \
+                '. = [{
+                  runner: $runner_arm64,
+                  arch: "arm64",
+                  image: "manylinux_arm64_main",
+                  name: "arm64",
+                  artifact_suffix: "linux-arm64",
+                  cache_suffix: "arm64-glibc"
+                }, {
+                  runner: $runner_x64,
+                  arch: "amd64",
+                  image: "alpine_amd64_main",
+                  name: "amd64-musl",
+                  artifact_suffix: "linux-amd64-musl",
+                  cache_suffix: "amd64-musl"
+                }] + .' <<<"$linux_cli_matrix"
             )
           fi
 
@@ -225,14 +255,23 @@ jobs:
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           {
+            echo "images=$images"
             echo "linux_cli_matrix=$linux_cli_matrix"
-            echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
-            echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
 
       - name: Install tools
         timeout-minutes: 10
         run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install C API header generation tools
+        run: |
+          python3 -m pip install -U pip
+          python3 -m pip install --group api_spec/pyproject.toml:generate
+          python3 -m pip install cxxheaderparser pcpp
 
       - name: Check format
         run: |
@@ -248,9 +287,9 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -271,28 +310,13 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Fix ASan runtime
-      shell: bash
-      run: |
-        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
-        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
-        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
-        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
-          sudo mkdir -p "${asan_static_dir}"
-          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
-        fi
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
@@ -302,7 +326,7 @@ jobs:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
-        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        test: make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
@@ -318,15 +342,15 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
@@ -365,39 +389,34 @@ jobs:
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+      images: ${{ needs.prepare.outputs.images }}
 
  tidy-check:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    env:
-      CC: gcc
-      CXX: g++
-      GEN: ninja
-      CLANGD_BINARY: clangd-20
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).ubuntu_24_04_amd64_lint }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install
-      timeout-minutes: 10
+    - name: Tidy Check (clangd)
       run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
-        python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-
-    - name: Install clangd-tidy
-      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
-
-    - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}
@@ -421,8 +440,10 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
-      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || (github.event_name == 'pull_request' && needs.prepare.outputs.extensions_changed == 'true' && 'linux_arm64_musl') || '' }}
+      allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  wasm-eh:
@@ -432,21 +453,21 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
       GEN: make
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: emscripten-core/setup-emsdk@v16
       with:
         version: latest
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -460,7 +481,10 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
+      GEN: ninja
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
@@ -471,24 +495,23 @@ jobs:
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Write changed tests file
       shell: bash
-      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "$RUNNER_TEMP/changed_tests.txt"
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+        FORCE_WARN_UNUSED: 1
         DISABLE_SANITIZER: 1
         SMOKE_RUNNER: build/release/test/run
       with:
@@ -499,16 +522,25 @@ jobs:
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Clean
-      run: make clean
-
-    - name: Build linux default release
-      uses: duckdb/duckdb-ci/build-duckdb@main
-      with:
-        build: python3 scripts/ci/retry.py -- make release
-
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
+
+    - name: CLI check
+      shell: bash
+      run: |
+        ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
+
+    - name: Verify architecture flags
+      run: |
+        grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        grep -Fq -- '-mtune=generic' build/release/compile_commands.json
+
+    - name: Bundle static libraries
+      run: make gather-libs
 
     - name: Deploy
       shell: bash
@@ -518,7 +550,25 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+        zip -r -j static-libs-linux-amd64.zip src/include/duckdb.h build/release/libs/
+        make cli-release-artifact ARTIFACT_SUFFIX=linux-amd64 CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=linux-amd64 SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip duckdb-cli-linux-amd64.tar.gz duckdb-shared-libs-linux-amd64.tar.gz static-libs-linux-amd64.zip
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-cli-linux-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-linux-amd64.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: duckdb-static-libs-linux-amd64
+        path: static-libs-linux-amd64.zip
 
  codecov:
     name: Code Coverage
@@ -527,9 +577,9 @@ jobs:
       - prepare
       - linux-release
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
       GEN: ninja
 
     steps:
@@ -540,14 +590,6 @@ jobs:
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - name: Install tools
-      timeout-minutes: 10
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq lcov llvm-20
-        echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
-
     - uses: ./.github/actions/ccache-action
       with:
         key: codecov
@@ -556,7 +598,7 @@ jobs:
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
       with:
         build-type: codecov
         build: python3 scripts/ci/retry.py -- make codecov
@@ -580,6 +622,8 @@ jobs:
     needs:
       - prepare
       - linux-release
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
@@ -589,10 +633,6 @@ jobs:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -608,8 +648,25 @@ jobs:
     - name: Run all release unit tests
       run: make allunit
 
+    - name: Release tests
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
+
+    - name: Tools Tests
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: Examples
+      run: |
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+
  linux-release-cli:
-    name: Linux CLI (${{ matrix.config.arch }})
+    name: Linux CLI (${{ matrix.config.name }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
     needs:
       - prepare
@@ -619,59 +676,37 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images)[matrix.config.image] }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - name: Install pytest
-      timeout-minutes: 10
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: |
-        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
-
-    - uses: ./.github/actions/cleanup_runner
+        fetch_depth: 0
 
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-        key: linux-cli-${{ matrix.config.arch }}-glibc
+        key: linux-cli-${{ matrix.config.cache_suffix }}
 
     - name: Build
-      run: |
-        docker run                                                             \
-        -v"$PWD:$PWD"                                                          \
-        -e GEN=ninja                                                           \
-        -e CC='ccache gcc'                                                     \
-        -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR="$PWD/.ccache"                                           \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
-        -e BUILD_BENCHMARK=1                                                   \
-        -e FORCE_WARN_UNUSED=1                                                 \
-        -e OVERRIDE_GIT_DESCRIBE                                               \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
-        bash -c "
-          set -e
-          cat /etc/os-release
-          dnf install -y \
-            ccache       \
-            ninja-build  \
-            python3.12   \
-            perl-IPC-Cmd
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
-        "
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+        ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
+        BUILD_BENCHMARK: 1
+        FORCE_WARN_UNUSED: 1
+      with:
+        build: make
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: linux-cli-${{ matrix.config.cache_suffix }}
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: CLI check
       shell: bash
@@ -682,24 +717,56 @@ jobs:
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
         fi
 
+    - name: Verify architecture flags
+      shell: bash
+      run: |
+        if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
+          grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
+        else
+          grep -Fq -- '-march=armv8-a' build/release/compile_commands.json
+        fi
+        grep -Fq -- '-mtune=generic' build/release/compile_commands.json
+
+    - name: Bundle static libraries
+      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
+      run: make gather-libs
+
     - name: Deploy
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
+        make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
+        ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        path: duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz
+        archive: false
+
+    - name: Deploy static libraries
+      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -r -j static-libs-linux-arm64.zip src/include/duckdb.h build/release/libs/
+        ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-arm64.zip
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.artifact_suffix == 'linux-arm64' }}
+      with:
+        name: duckdb-static-libs-linux-arm64
+        path: static-libs-linux-arm64.zip
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -713,7 +780,7 @@ jobs:
 
     - name: Tools Tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+      run: python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -727,12 +794,14 @@ jobs:
     needs:
       - prepare
       - extensions
-      - linux-release-cli
-    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Check staged extension install/load
@@ -742,183 +811,6 @@ jobs:
           --git-sha "${{ needs.prepare.outputs.git_sha }}" \
           --version "${{ needs.prepare.outputs.effective_git_describe }}" \
           --extensions "httpfs,json,parquet,ducklake,iceberg,icu"
-
- linux-musl-release-cli:
-    name: Linux CLI (${{ matrix.config.arch }}-musl)
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
-    needs:
-      - prepare
-      - linux-release
-    strategy:
-      fail-fast: false
-      matrix:
-        config: ${{ fromJson(needs.prepare.outputs.linux_musl_cli_matrix) }}
-    runs-on: ${{ matrix.config.runner }}
-    env:
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
-
-    - name: Install tools
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
-
-    - uses: ./.github/actions/cleanup_runner
-
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-        key: linux-cli-${{ matrix.config.arch }}-musl
-
-    - name: Build
-      shell: bash
-      run: |
-        docker run                                                          \
-        -v"$PWD:$PWD"                                                       \
-        -e GEN=ninja                                                        \
-        -e CC='ccache gcc'                                                  \
-        -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR="$PWD/.ccache"                                        \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
-        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
-        -e BUILD_BENCHMARK=1                                                \
-        -e FORCE_WARN_UNUSED=1                                              \
-        -e OVERRIDE_GIT_DESCRIBE                                            \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add   \
-            ccache  \
-            cmake   \
-            g++     \
-            git     \
-            make    \
-            python3 \
-            samurai
-          git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
-        "
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-
-    - uses: actions/upload-artifact@v7
-      with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}-musl
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-
-    - name: Test
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      shell: bash
-      env:
-        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
-      run: |
-        docker run   \
-        -v"$PWD:$PWD" \
-        -e CI=1      \
-        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
-        alpine:3.22                                                         \
-        sh -c "
-          set -e
-          cat /etc/os-release
-          apk add      \
-            make       \
-            python3    \
-            py3-pytest
-          cd \"$PWD\"
-          echo Release tests
-          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
-            make alltest_release_tag
-          else
-            make test_release_tag
-          fi
-          echo Tools Tests
-          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-          echo Examples
-          build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
-          build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
-        "
-
- main_julia:
-    name: Julia ${{ matrix.version }}
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'main_julia') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.10'
-          - '1'
-        arch:
-          - x64
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: julia-actions/setup-julia@v2
-      with:
-        version: ${{ matrix.version }}
-        arch: ${{ matrix.arch }}
-
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-linux-amd64
-        path: linux-release-artifacts
-
-    - name: Extract DuckDB Linux release artifacts
-      shell: bash
-      run: |
-        mkdir -p build/release/src
-        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
-        chmod +x build/release/duckdb
-        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
-        ls -lah build/release/duckdb
-        ls -lah build/release/src/libduckdb.so*
-
-    - name: Run Tests
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      shell: bash
-      run: |
-        JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
-        export JULIA_DUCKDB_LIBRARY
-        export JULIA_NUM_THREADS=2
-        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-        ls "$JULIA_DUCKDB_LIBRARY"
-        cd tools/juliapkg
-        julia --project -e "import Pkg; Pkg.test()"
-
-    - name: Format Check
-      if: ${{ always() && matrix.version == '1.10' }}
-      shell: bash
-      run: |
-        cd tools/juliapkg
-        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-        ./format_check.sh
 
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
@@ -930,6 +822,7 @@ jobs:
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
  windows:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'windows') }}
@@ -942,6 +835,7 @@ jobs:
       override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -956,265 +850,25 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
- static-libs-linux:
-    name: Static Libs Linux (${{ matrix.config.arch }})
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-linux') }}
-    needs:
-      - prepare
-      - linux-release
-    strategy:
-      fail-fast: false
-      matrix:
-        config: ${{ fromJson(needs.prepare.outputs.static_libs_linux_matrix) }}
-    runs-on: ${{ matrix.config.runner }}
-    container:
-      image: ${{ matrix.config.image }}
-    env:
-      EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
-      GEN: ninja
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install dependencies
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache python3.12 ninja-build zip python3-pip
-
-      - uses: ./.github/actions/ccache-action
-        with:
-          key: static-libs-linux-${{ matrix.config.arch }}
-          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-      - name: Build
-        shell: bash
-        run: |
-          source /opt/rh/gcc-toolset-12/enable
-          export CC='ccache gcc'
-          export CXX='ccache g++'
-          git config --global --add safe.directory "$PWD"
-          make gather-libs
-
-      - name: CLI check
-        shell: bash
-        run: |
-          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Fail on non-zero major version.
-            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
-          fi
-
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
-          ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: duckdb-static-libs-linux-${{ matrix.config.arch }}
-          path: |
-            static-libs-linux-${{ matrix.config.arch }}.zip
-
-      - name: Trim ccache
-        if: ${{ always() }}
-        uses: ./.github/actions/trim-ccache
-
- static-libs-osx:
-    name: Static Libs OSX (${{ matrix.architecture }})
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-osx') }}
-    needs:
-      - prepare
-      - linux-release
-    strategy:
-      matrix:
-        include:
-          - xcode_target_flag: "x86_64"
-            architecture: "amd64"
-          - xcode_target_flag: "arm64"
-            architecture: "arm64"
-    runs-on: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
-    env:
-      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      GEN: ninja
-      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
-      DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
-
-    steps:
-      - name: "Checkout"
-        uses: duckdb/duckdb-ci/.github/actions/checkout@main
-        with:
-          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          fetch_depth: 0
-          ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install Ninja
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- brew install ninja
-
-      - uses: ./.github/actions/ccache-action
-        with:
-          key: static-libs-osx-${{ matrix.architecture }}
-          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-      - name: Build
-        shell: bash
-        run: python3 scripts/ci/retry.py -- make
-
-      - name: Bundle static library
-        shell: bash
-        run: make gather-libs
-
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
-          ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: duckdb-static-libs-osx-${{ matrix.architecture }}
-          path: |
-            static-libs-osx-${{ matrix.architecture }}.zip
-
- static-libs-windows-mingw:
-    name: Static Libs Windows Mingw
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-windows-mingw') }}
-    needs:
-      - prepare
-      - linux-release
-    runs-on: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-    env:
-      GEN: ninja
-      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
-    steps:
-      - name: "Checkout"
-        uses: duckdb/duckdb-ci/.github/actions/checkout@main
-        with:
-          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
-          fetch_depth: 0
-          ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Dependencies
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          python scripts/ci/retry.py -- choco install \
-            ccache \
-            make \
-            --no-progress
-          python scripts/ci/retry.py -- choco install \
-            mingw --version 14.2.0 \
-            --no-progress
-
-      - uses: ./.github/actions/ccache-action
-        with:
-          key: static-libs-windows-mingw
-          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-      - name: Build Environment
-        shell: bash
-        run: |
-          {
-            # bash from Git
-            echo 'C:/Program Files/Git/bin'
-            # make, ninja and ccache from Chocolatey
-            echo 'C:/ProgramData/Chocolatey/bin'
-            # g++ from Chocolatey
-            echo 'C:/ProgramData/mingw64/mingw64/bin'
-          } >> "${GITHUB_PATH}"
-
-      - name: Build Environment Check
-        shell: cmd
-        run: |
-          where bash
-          bash --version
-          where make
-          make --version
-          where ninja
-          ninja --version
-          where ccache
-          ccache --version
-          where g++
-          g++ --version
-          echo %PATH%
-
-      - name: Bundle static library
-        shell: cmd
-        run: |
-          make gather-libs
-
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        run: |
-          tmp_zip_dir="$(mktemp -d)"
-          archive_path="$(pwd)/static-libs-windows-mingw.zip"
-          cp src/include/duckdb.h "${tmp_zip_dir}/"
-          find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
-          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
-          rm -rf "${tmp_zip_dir}"
-          ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: duckdb-static-libs-windows-mingw
-          path: |
-            static-libs-windows-mingw.zip
-
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
     env:
-      CC: clang-20
-      CXX: clang++-20
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1246,27 +900,71 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
- vector-sizes:
-    name: Vector Sizes
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
+ no-rtti:
+    name: No RTTI
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-rtti') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-relassert
     env:
+      # Job-level on purpose: the Test step's `make unittest_release` depends on `release`, so a
+      # step-scoped flag would silently reconfigure and rebuild WITH rtti and test the wrong binary.
+      DISABLE_RTTI: 1
+      EXTENSION_CONFIGS: .github/config/in_tree_extensions.cmake
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with DISABLE_RTTI=1 (-fno-rtti).'
+
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        with:
+          build-type: release
+          build: python3 scripts/ci/retry.py -- make release
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_rtti
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      # Loadable extensions are the part a plain build cannot check: each one links its own
+      # copy of duckdb, so a type identity that is not stable across images only fails here.
+      - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+        run: make unittest_release
+
+ vector-sizes:
+    name: Vector Sizes
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
+    needs:
+      - prepare
+      - linux-relassert
+    env:
+      # Explicitly use GCC here so we check compiler support in the PR CI run.
+      # Other CI job use Clang but GCC should continue to work well.
       CC: gcc
       CXX: g++
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
-
-      - name: Install
-        timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1286,20 +984,18 @@ jobs:
       - prepare
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     env:
-      CC: clang-20
-      CXX: clang++-20
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -1329,25 +1025,33 @@ jobs:
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
-    name: Tests a release build with different configurations
+    name: Linux Config (${{ matrix.group }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-configs') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    container:
+      image: ${{ fromJson(needs.prepare.outputs.images).manylinux_amd64_main }}
     needs:
       - prepare
       - linux-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: Query Verification
+            target: test_configs_query_verification
+          - group: Execution
+            target: test_configs_execution
+          - group: Persistence
+            target: test_configs_persistence
+          - group: Storage Engine
+            target: test_configs_storage_engine
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Install
-      timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -1363,22 +1067,22 @@ jobs:
     - name: Test Configurations
       if: success() || failure()
       run: |
-        make test_configs
+        make ${{ matrix.target }}
+
+    - name: Test Storage Compatibility
+      if: ${{ (success() || failure()) && matrix.group == 'Persistence' }}
+      run: |
+        make test_storage
 
     - name: Test Vector Verification
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_vector
 
     - name: Test Synchronous Table Scan
-      if: success() || failure()
+      if: ${{ (success() || failure()) && matrix.group == 'Execution' }}
       run: |
         make test_table_scan
-
-    - name: Test Storage Compatibility
-      if: success() || failure()
-      run: |
-        make test_storage
 
  summary:
     name: Summary
@@ -1397,15 +1101,11 @@ jobs:
       - linux-release-tests
       - linux-release-cli
       - staged-extension-install
-      - linux-musl-release-cli
-      - main_julia
       - swift
       - windows
       - osx
-      - static-libs-linux
-      - static-libs-osx
-      - static-libs-windows-mingw
       - no-string-inline
+      - no-rtti
       - vector-sizes
       - threadsan
       - linux-configs
@@ -1418,9 +1118,8 @@ jobs:
           if [[ "${{ needs.extensions.result }}" == "success" && \
                 "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.static-libs-linux.result }}" == "success" && \
-                ( "${{ needs.static-libs-osx.result }}" == "success" || "${{ needs.static-libs-osx.result }}" == "skipped" ) && \
-                ( "${{ needs.static-libs-windows-mingw.result }}" == "success" || "${{ needs.static-libs-windows-mingw.result }}" == "skipped" ) ]]; then
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.linux-release-cli.result }}" == "success" ]]; then
             echo "success=true" >> "$GITHUB_OUTPUT"
           else
             echo "success=false" >> "$GITHUB_OUTPUT"
@@ -1433,9 +1132,8 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
-          GIT_REF: ${{ github.ref }}
-          INPUT_GIT_REF: ${{ inputs.git_ref }}
           OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+          STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
           is_release_event=false
@@ -1448,96 +1146,54 @@ jobs:
             is_duckdb_repo=true
           fi
 
-          target_branch="$GIT_REF"
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_GIT_REF" ]]; then
-            target_branch="$INPUT_GIT_REF"
-          fi
-
           has_no_override=false
           if [[ "$EVENT_NAME" != "workflow_dispatch" || -z "$OVERRIDE_GIT_DESCRIBE" ]]; then
             has_no_override=true
           fi
 
-          run_vendor=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && "$has_no_override" == "true" ]]; then
-            run_vendor=true
+          run_release_dispatch=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$OVERRIDE_GIT_DESCRIBE" ]]; then
+            run_release_dispatch=true
           fi
 
-          run_nightly=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" ]]; then
-            run_nightly=true
-          fi
-
-          run_python=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$has_no_override" == "true" ]]; then
-            run_python=true
+          publish_latest_alpha=false
+          if [[ "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$STAGED_VERSION" ]]; then
+            publish_latest_alpha=true
           fi
 
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
-          echo "  git_ref=$GIT_REF"
-          echo "  input_git_ref=$INPUT_GIT_REF"
-          echo "  target_branch=$target_branch"
           echo "  override_git_describe=$OVERRIDE_GIT_DESCRIBE"
           echo "  release_status_success=$RELEASE_STATUS_SUCCESS"
           echo "  is_release_event=$is_release_event"
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  has_no_override=$has_no_override"
-          echo "  run_vendor=$run_vendor"
-          echo "  run_nightly=$run_nightly"
-          echo "  run_python=$run_python"
+          echo "  run_release_dispatch=$run_release_dispatch"
+          echo "  staged_version=$STAGED_VERSION"
+          echo "  publish_latest_alpha=$publish_latest_alpha"
 
           {
-            echo "target_branch=$target_branch"
-            echo "run_vendor=$run_vendor"
-            echo "run_nightly=$run_nightly"
-            echo "run_python=$run_python"
+            echo "run_release_dispatch=$run_release_dispatch"
+            echo "publish_latest_alpha=$publish_latest_alpha"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run ODBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
+      - name: Run release dispatch
+        if: ${{ always() && steps.summary-context.outputs.run_release_dispatch == 'true' }}
         shell: bash
         env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run JDBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run Nightly build status
-        if: ${{ always() && steps.summary-context.outputs.run_nightly == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"event": "${{ github.event_name }}", "should_publish": "true"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Call /dispatch
-        if: ${{ always() && steps.summary-context.outputs.run_python == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}", "pypi-index": "prod" }}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+          gh workflow run dispatch.yml \
+            --repo duckdb/duckdb-workflow-trigger \
+            --ref main \
+            --field event=core_ready \
+            --field duckdb_version="${{ needs.prepare.outputs.effective_git_describe }}" \
+            --field duckdb_commit="${{ needs.prepare.outputs.git_sha }}" \
+            --field status=success \
+            --field source_run_url="$SOURCE_RUN_URL" \
+            --field message="DuckDB Main CI release artifacts are ready"
 
       - name: Check CI status
         shell: bash
@@ -1557,3 +1213,40 @@ jobs:
             echo "$failed_or_cancelled"
             exit 1
           fi
+
+      - name: Install rclone
+        if: ${{ steps.summary-context.outputs.publish_latest_alpha == 'true' }}
+        shell: bash
+        run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
+
+      - name: Publish latest alpha version
+        if: ${{ steps.summary-context.outputs.publish_latest_alpha == 'true' }}
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+          STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
+        run: |
+          set -euo pipefail
+
+          pointer_file="$(mktemp "${TMPDIR:-/tmp}/latest-alpha-version.XXXXXX")"
+          trap 'rm -f "$pointer_file"' EXIT
+          printf '%s\n' "$STAGED_VERSION" > "$pointer_file"
+
+          s3_provider="AWS"
+          if [[ "$AWS_ENDPOINT_URL" == *"r2.cloudflarestorage.com"* ]]; then
+            s3_provider="Cloudflare"
+          fi
+
+          rclone copyto \
+            --s3-provider "$s3_provider" \
+            --s3-endpoint "$AWS_ENDPOINT_URL" \
+            --s3-access-key-id "$AWS_ACCESS_KEY_ID" \
+            --s3-secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+            --s3-no-check-bucket \
+            --s3-no-head \
+            --header-upload "Content-Type: text/plain" \
+            --header-upload "Cache-Control: no-cache" \
+            "$pointer_file" \
+            ":s3:duckdb-staging/latest_alpha_version.txt"
