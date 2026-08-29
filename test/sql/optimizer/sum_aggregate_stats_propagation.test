@@ -201,3 +201,56 @@ query I
 SELECT sum(s) FROM tshn HAVING sum(s) < 0;
 ----
 -495000
+
+# HUGEINT (INT128) input: overflow-checked bounds still fold impossible HAVING
+statement ok
+CREATE TABLE thh AS SELECT range::HUGEINT AS x FROM range(10000);
+
+query III
+SELECT min(x), max(x), sum(x) FROM thh;
+----
+0	9999	49995000
+
+query II
+EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) < 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM thh HAVING sum(x) < 0);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) > 100000000;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM (SELECT sum(x) AS r FROM thh HAVING sum(x) > 100000000);
+----
+0
+
+query II
+EXPLAIN SELECT sum(x) FROM thh HAVING sum(x) > 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(x) FROM thh HAVING sum(x) > 0;
+----
+49995000
+
+statement ok
+CREATE TABLE thbig AS SELECT ('170141183460469231731687303715884105727'::HUGEINT - range)::HUGEINT AS x
+                     FROM range(10);
+
+query I
+SELECT count(*) FROM thbig;
+----
+10
+
+query II
+EXPLAIN SELECT sum(x) FROM thbig HAVING sum(x) < 0;
+----
+physical_plan	<!REGEX>:.*Empty Result.*
