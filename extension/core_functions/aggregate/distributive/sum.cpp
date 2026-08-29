@@ -325,8 +325,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	// only INT32/INT64 have a narrower no-overflow implementation to swap in; BOOL/INT16 already
 	// accumulate in int64 and cannot overflow given any realistic row count
 	if ((internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64) &&
-	    wide_positive < NumericLimits<int64_t>::Maximum() &&
-	    wide_negative > NumericLimits<int64_t>::Minimum()) {
+	    wide_positive < NumericLimits<int64_t>::Maximum() && wide_negative > NumericLimits<int64_t>::Minimum()) {
 		expr.FunctionMutable().ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
 	// a group may contain 1..cardinality rows, so the tightest sound bound multiplies by
