@@ -113,10 +113,19 @@ CREATE INDEX position_sparse_id ON position_sparse USING ART(id);
 statement ok
 SET threads = 1;
 
+# Cover sparse plans at the 63/64-window boundary.
 query ITT
 SELECT count(*), min(payload), max(payload) FROM position_sparse WHERE id < 79;
 ----
 79	value-0	value-7
+
+query ITT
+SELECT count(*), min(payload), max(payload) FROM position_sparse WHERE id < 80;
+----
+80	value-0	value-7
+
+statement ok
+SET threads = 4;
 
 statement ok
 SET debug_force_fetch_row = true;

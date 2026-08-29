@@ -76,11 +76,38 @@ struct PositionScanLocalState {
 	TableScanState scan_state;
 };
 
+//! Bound the physical-window work and lock duration of each position batch.
+static constexpr idx_t MAX_POSITION_SCAN_WINDOWS_PER_BATCH = 32;
+//! Keep bulk Fetch for lists that would otherwise create many nearly empty position windows.
+static constexpr idx_t MIN_POSITION_SCAN_WINDOWS_FOR_FETCH_FALLBACK = 2 * MAX_POSITION_SCAN_WINDOWS_PER_BATCH;
+static constexpr idx_t MAX_AVERAGE_HITS_PER_WINDOW_FOR_FETCH_FALLBACK = 2;
+static constexpr idx_t POSITION_SCAN_BATCHES_PER_THREAD_TO_FETCH_BATCHES_FOR_FALLBACK = 2;
+
+static bool ShouldFallbackToFetch(const PositionScanData &position_data, const idx_t fetch_batch_count,
+                                  const idx_t available_threads) {
+	D_ASSERT(available_threads > 0);
+	if (position_data.windows.size() < MIN_POSITION_SCAN_WINDOWS_FOR_FETCH_FALLBACK || fetch_batch_count == 0) {
+		return false;
+	}
+
+	// Compare the average without a floating-point division. The original row-id count is used for the
+	// Fetch estimate; the planned positions can be smaller when a concurrent append is not in the pinned tree.
+	const auto low_window_density =
+	    position_data.positions.size() <= position_data.windows.size() * MAX_AVERAGE_HITS_PER_WINDOW_FOR_FETCH_FALLBACK;
+	// Require the excess position-batch overhead to remain large after distributing it over available workers.
+	const auto position_batches_per_thread = position_data.batches.size() / available_threads;
+	const auto position_batches_are_more_expensive =
+	    position_batches_per_thread >=
+	    fetch_batch_count * POSITION_SCAN_BATCHES_PER_THREAD_TO_FETCH_BATCHES_FOR_FALLBACK;
+	return low_window_density && position_batches_are_more_expensive;
+}
+
 static void BuildPositionScanBatches(const vector<PositionScanWindow> &windows, vector<PositionScanBatch> &batches) {
 	D_ASSERT(batches.empty());
 	for (idx_t window_idx = 0; window_idx < windows.size(); window_idx++) {
 		auto &window = windows[window_idx];
-		if (batches.empty() || batches.back().candidate_count + window.candidate_count > STANDARD_VECTOR_SIZE) {
+		if (batches.empty() || batches.back().candidate_count + window.candidate_count > STANDARD_VECTOR_SIZE ||
+		    batches.back().window_count >= MAX_POSITION_SCAN_WINDOWS_PER_BATCH) {
 			batches.push_back({window_idx, 0, 0});
 		}
 		auto &batch = batches.back();
@@ -718,8 +745,12 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		position_data->positions.assign(row_ids.begin(), row_ids.end());
 		BuildPositionScanPlan(*position_data->row_groups, position_data->positions, position_data->windows,
 		                      position_data->batches);
-		g_state->max_threads = MinValue(g_state->max_threads, position_data->batches.size() + 1);
-		g_state->position_data = std::move(position_data);
+		const auto fetch_batch_count = (row_ids.size() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		const auto available_threads = MinValue(g_state->max_threads, context.db->NumberOfThreads());
+		if (!ShouldFallbackToFetch(*position_data, fetch_batch_count, available_threads)) {
+			g_state->max_threads = MinValue<idx_t>(g_state->max_threads, position_data->batches.size() + 1);
+			g_state->position_data = std::move(position_data);
+		}
 	}
 
 	// Keep the original ART row IDs for the existing Fetch path, including IDs that were not present in the pinned tree
