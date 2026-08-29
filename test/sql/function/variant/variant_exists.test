@@ -87,12 +87,10 @@ select variant_exists(a, [NULL, 'c']) from struct_cast_data();
 ----
 Binder Error: 'variant_exists' does not accept NULL paths
 
-# FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce true)
-
 query I
 select variant_exists(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
 ----
-false
+true
 
 # NULL returns NULL
 

@@ -109,12 +109,10 @@ select variant_keys({'a': 1, 'b': ['duck', 'goose']}::VARIANT, 'b');
 ----
 []
 
-# FIXME: map type is currently casted into a shape inconsistent with respect to JSON
-
 query I
 select variant_keys(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
 ----
-NULL
+[]
 
 # Primitive values do not have keys
 

@@ -109,12 +109,10 @@ select variant_type({'a': 1, 'b': ['duck', 'goose']}::VARIANT, 'b');
 ----
 ARRAY
 
-# FIXME: map type is currently casted into a shape inconsistent with respect to JSON
-
 query I
 select variant_type(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
 ----
-NULL
+INT32
 
 # Primitive values
 
