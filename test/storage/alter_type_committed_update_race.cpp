@@ -15,21 +15,6 @@ using namespace duckdb;
 
 #ifdef D_ASSERT_IS_ENABLED
 
-namespace {
-
-//! Joins the thread even when a REQUIRE fails; the sync point guard must be
-//! declared after this joiner so it is destroyed first and releases the thread.
-struct AlterTypeThreadJoiner {
-	std::thread thread;
-	~AlterTypeThreadJoiner() {
-		if (thread.joinable()) {
-			thread.join();
-		}
-	}
-};
-
-} // namespace
-
 //! The ALTER TYPE rewrite swaps in a new column that does not inherit the old
 //! column's update segments, so an UPDATE committing while the rewrite runs must
 //! not be silently dropped (PR #25008).
@@ -41,10 +26,11 @@ TEST_CASE("Test ALTER TYPE does not drop a concurrently committed update", "[sto
 	REQUIRE_NO_FAIL(conn.Query("CREATE TABLE t(id INTEGER, v INTEGER)"));
 	REQUIRE_NO_FAIL(conn.Query("INSERT INTO t VALUES (1, 0)"));
 
+	std::string alter_error;
+	// joiner before the guard: the guard is destroyed first and releases the parked thread
+	ThreadJoiner joiner;
 	// the alter thread parks at the sync point until released below
 	auto guard = SyncPointCtl::EnableInScope("alter_type.rewrite_scan_complete");
-	std::string alter_error;
-	AlterTypeThreadJoiner joiner;
 	joiner.thread = std::thread([&] {
 		Connection alter(db);
 		auto res = alter.Query("ALTER TABLE t ALTER COLUMN v SET DATA TYPE BIGINT");
