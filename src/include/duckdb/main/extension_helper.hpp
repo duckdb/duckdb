@@ -182,6 +182,13 @@ public:
 	static vector<string> GetTrustedPublicKeys(DatabaseInstance &db, ExtensionRepositoryType repository_type,
 	                                           const string &repository_name);
 
+	//! The origin whose signing keys a load trusts. Without an explicit FROM (a bare load, which is also what
+	//! autoloading performs) only the fixed core and community keys are trusted: a community extension keeps its
+	//! community keys, while every other origin - including a user-provided repository that merely redeploys an
+	//! extension - is verified against the core keys, never the repository's own. With a FROM the named origin is used.
+	static ExtensionRepositoryType ResolveTrustedSignatureOrigin(bool has_from_clause,
+	                                                             ExtensionRepositoryType recorded_origin);
+
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 

@@ -933,4 +933,18 @@ vector<string> ExtensionHelper::GetTrustedPublicKeys(DatabaseInstance &db, Exten
 	}
 }
 
+ExtensionRepositoryType ExtensionHelper::ResolveTrustedSignatureOrigin(bool has_from_clause,
+                                                                       ExtensionRepositoryType recorded_origin) {
+	if (has_from_clause) {
+		// an explicit FROM names the origin, so its keys are the ones to trust
+		return recorded_origin;
+	}
+	// a bare load trusts only the fixed core and community keys: a community extension keeps its community keys, every
+	// other origin (including a user-provided repository) is verified against the core keys, never its own
+	if (recorded_origin == ExtensionRepositoryType::COMMUNITY) {
+		return ExtensionRepositoryType::COMMUNITY;
+	}
+	return ExtensionRepositoryType::CORE;
+}
+
 } // namespace duckdb

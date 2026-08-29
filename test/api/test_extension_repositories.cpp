@@ -1,7 +1,13 @@
 #include "catch.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "test_helpers.hpp"
+
+#include <fstream>
 
 using namespace duckdb;
 
@@ -208,4 +214,79 @@ TEST_CASE("Test that the extension repository directory is a startup-only trust 
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("SET extension_repository_directory='" + repository_directory + "'"));
 	}
+}
+
+
+TEST_CASE("Test that a bare load trusts only core and community keys", "[api]") {
+	using T = ExtensionRepositoryType;
+	// with an explicit FROM, the named origin's keys are the ones trusted
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::CORE) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::COMMUNITY) == T::COMMUNITY);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(true, T::USER_PROVIDED) == T::USER_PROVIDED);
+
+	// a bare load (no FROM, which is also how autoloading loads) trusts only the fixed core/community keys: core stays
+	// core, a community extension keeps its community keys, and a user-provided origin is verified against the core
+	// keys - never the repository's own. This is what stops a repointed extension_directory from loading native code
+	// under a user-provided key off an on-disk .info
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::CORE) == T::CORE);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::COMMUNITY) == T::COMMUNITY);
+	REQUIRE(ExtensionHelper::ResolveTrustedSignatureOrigin(false, T::USER_PROVIDED) == T::CORE);
+}
+
+// Write raw bytes to a path directly, bypassing DuckDB's filesystem (which reserves the '.duckdb_extension' trust
+// domain from writes). A test legitimately stages the on-disk state an install would produce.
+static void WriteFileRaw(const string &path, const char *data, idx_t size) {
+	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	REQUIRE(out.good());
+	out.write(data, static_cast<std::streamsize>(size));
+	out.close();
+}
+
+// Stage <extension_directory>/<version>/<platform>/<name>.duckdb_extension plus a .info recording a user-provided
+// origin, in the flat top-level layout a bare load resolves - as pointing extension_directory at a repository's own
+// prefix would expose. The binary is a stub: these tests assert the origin handling, not a real load.
+static void StageUserRepoExtensionFlat(DatabaseInstance &db, const string &name, const string &repository_name) {
+	auto fs = FileSystem::CreateLocal();
+	string dir = ExtensionHelper::ExtensionDirectory(db, *fs);
+	fs->CreateDirectoriesRecursive(dir);
+
+	string ext_path = fs->JoinPath(dir, name + ".duckdb_extension");
+	string zeros(ParsedExtensionMetaData::FOOTER_SIZE, '\0');
+	WriteFileRaw(ext_path, zeros.c_str(), zeros.size());
+
+	ExtensionInstallInfo info;
+	info.mode = ExtensionInstallMode::REPOSITORY;
+	info.repository_type = ExtensionRepositoryType::USER_PROVIDED;
+	info.repository_name = repository_name;
+	info.version = "";
+	MemoryStream stream;
+	BinarySerializer::Serialize(info, stream);
+	WriteFileRaw(ext_path + ".info", const_char_ptr_cast(stream.GetData()), stream.GetPosition());
+}
+
+TEST_CASE("Test that a user-provided repository does not block loading when unsigned extensions are allowed", "[api]") {
+	auto repository_directory = TestCreatePath("extension_repositories_devflow");
+	auto extension_directory = TestCreatePath("extension_repositories_devflow_extdir");
+
+	// pointing at a build folder (or a repository prefix) to test autoloading is a real workflow: when the signature
+	// trust model is off (allow_unsigned_extensions), a user-provided origin must NOT impose an extra load barrier -
+	// the extension load is attempted like any other and fails only on the stub binary, not on an origin rule
+	DBConfig config;
+	config.SetOptionByName("extension_repository_directory", repository_directory);
+	config.SetOptionByName("extension_directory", extension_directory);
+	config.SetOptionByName("allow_extension_repositories", "allowed");
+	config.SetOptionByName("allow_unsigned_extensions", true);
+	config.SetOptionByName("allow_extensions_metadata_mismatch", true);
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format(
+	    "CREATE EXTENSION REPOSITORY quackquack WITH PREFIX 'http://quackquack.com' USING PUBLIC KEY '%s'",
+	    TEST_PUBLIC_KEY)));
+	StageUserRepoExtensionFlat(*db.instance, "some_ext", "quackquack");
+
+	auto bare = con.Query("LOAD some_ext");
+	REQUIRE(bare->HasError());
+	// it fails on the stub binary, not on a user-provided-origin rule: the dev flow is not blocked
+	REQUIRE(!StringUtil::Contains(bare->GetError(), "installed from a user-provided repository"));
 }
