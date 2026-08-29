@@ -1,0 +1,20 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_invalid_metadata_offset.test
+# description: Test that corrupt bitpacking metadata offsets are rejected
+# group: [bitpacking]
+
+require block_size 262144
+
+require vector_size 2048
+
+unzip data/storage/bitpacking_invalid_metadata_offset.db.gz {TEST_DIR}/bitpacking_invalid_metadata_offset.db
+
+statement ok
+ATTACH '{TEST_DIR}/bitpacking_invalid_metadata_offset.db' AS invalid_bitpacking_db (READ_ONLY)
+
+statement ok
+USE invalid_bitpacking_db
+
+statement error
+SELECT count(k), sum(k), min(k), max(k), bit_xor(k) FROM probe
+----
+IO Error: Failed to scan bitpacking segment - metadata offset was not aligned. Database file appears to be corrupted.
