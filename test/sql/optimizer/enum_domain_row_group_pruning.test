@@ -98,6 +98,21 @@ SELECT currval('seq_test');
 ----
 <REGEX>:.*currval.*not yet defined.*
 
+# the empty-result collapse reaches DML plans: no rows flow to the DELETE,
+# so nothing is removed while every row group is pruned
+query II
+EXPLAIN DELETE FROM covered WHERE m NOT IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+statement ok
+DELETE FROM covered WHERE m NOT IN ('sad', 'ok', 'happy');
+
+query I
+SELECT count(*) FROM covered;
+----
+6144
+
 
 # domains above 255 values use a UINT16 physical type - coverage must hold there too
 statement ok
