@@ -78,6 +78,26 @@ EXPLAIN ANALYZE SELECT count(*) FROM nullables WHERE m NOT IN ('sad', 'ok', 'hap
 ----
 analyzed_plan	<REGEX>:.*Empty Result.*
 
+# volatile expressions in the query must not block the empty-result collapse
+query II
+EXPLAIN ANALYZE SELECT random() FROM covered WHERE m NOT IN ('sad', 'ok', 'happy');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+statement ok
+CREATE SEQUENCE seq_test;
+
+# EXPLAIN ANALYZE executes the plan: nextval must not be evaluated at all
+query II
+EXPLAIN ANALYZE SELECT nextval('seq_test') FROM nullables WHERE m NOT IN ('sad', 'ok', 'happy');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+statement error
+SELECT currval('seq_test');
+----
+<REGEX>:.*currval.*not yet defined.*
+
 
 # domains above 255 values use a UINT16 physical type - coverage must hold there too
 statement ok
@@ -95,3 +115,21 @@ query I
 SELECT count(*) FROM wide WHERE m NOT IN ('v0', 'v1', 'v2');
 ----
 6072
+
+# the minimal domain: a single enum value sits at position 0 - coverage must not
+# mistake it for a NULL sentinel
+statement ok
+CREATE TYPE solo AS ENUM('only');
+
+statement ok
+CREATE TABLE solo_tab AS SELECT 'only'::solo AS m FROM range(2048);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM solo_tab WHERE m NOT IN ('only');
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM solo_tab WHERE m IN ('only');
+----
+2048
