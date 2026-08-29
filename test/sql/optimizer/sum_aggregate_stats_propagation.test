@@ -348,12 +348,6 @@ SELECT sum(x) FROM tu64 HAVING sum(x) > 0;
 ----
 495000
 
-# same-sign inputs (all-negative or all-positive) exercise the branch of the sum-bound
-# ternary that uses the per-row min/max rather than min/max * cardinality. Without it,
-# a single-row GROUP BY group would falsely be excluded: e.g. for v in [-100, -1] one
-# group can produce sum = -1, but wide_positive = -1 * cardinality = -10000 would
-# incorrectly cap sum_max below -1 and fold satisfiable HAVING clauses.
-
 statement ok
 CREATE TABLE tallneg AS SELECT range::INTEGER AS g, (-1 - (range % 100))::INTEGER AS v FROM range(10000);
 
