@@ -34,10 +34,10 @@ static constexpr hash_t HASH_SKEW_SELECTOR_SEED = 0xc3a5c85c97cb3127ULL;
 //! `percent * distinct_values` entries, so the useful setting depends on data size.
 static constexpr double HASH_SKEW_PERCENT = DUCKDB_HASH_SKEW;
 static constexpr hash_t HASH_SKEW_THRESHOLD =
-    HASH_SKEW_PERCENT >= 100.0 ? ~hash_t(0)
-                               : (HASH_SKEW_PERCENT <= 0.0
-                                      ? hash_t(0)
-                                      : static_cast<hash_t>(HASH_SKEW_PERCENT * 0.01 * 18446744073709551616.0));
+    HASH_SKEW_PERCENT >= 100.0
+        ? ~hash_t(0)
+        : (HASH_SKEW_PERCENT <= 0.0 ? hash_t(0)
+                                    : static_cast<hash_t>(HASH_SKEW_PERCENT * 0.01 * 18446744073709551616.0));
 
 //! A private mixer. Deliberately NOT MurmurHash64: the skew is applied inside that function, so
 //! calling it here would recurse.
