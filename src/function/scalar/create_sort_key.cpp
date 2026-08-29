@@ -239,6 +239,53 @@ struct SortKeyConstantOperator {
 	}
 };
 
+struct SortKeyIntervalOperator {
+	using TYPE = interval_t;
+
+	static idx_t GetEncodeLength(TYPE input) {
+		return sizeof(interval_t);
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		// Encode the NORMALIZED interval. interval_t::operator> (used by comparisons,
+		// ORDER BY and aggregates) normalizes the interval (1 month = 30 days, 1 day = 24h,
+		// carrying into a canonical form with days in [0, 30) and micros in [0, MICROS_PER_DAY))
+		// and then compares (months, days, micros) lexicographically. Radix-encoding the
+		// normalized value here yields the same byte-comparison order, so list_sort,
+		// list_reverse_sort, list_grade_up, list_distinct and create_sort_key all agree
+		// with comparison/ORDER BY. (#25108)
+		Radix::EncodeData<interval_t>(result, input.Normalize());
+		if (FLIP_BYTES) {
+			// flip word-at-a-time - the encoded size is a compile-time constant, so this fully unrolls
+			idx_t b = 0;
+			for (; b + SortKeyWord::SIZE <= sizeof(interval_t); b += SortKeyWord::SIZE) {
+				Store<uint64_t>(~Load<uint64_t>(result + b), result + b);
+			}
+			for (; b < sizeof(interval_t); b++) {
+				result[b] = static_cast<data_t>(~result[b]);
+			}
+		}
+		return sizeof(interval_t);
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
+		D_ASSERT(input_size >= sizeof(interval_t));
+		if (FLIP_BYTES) {
+			// descending order - so flip bytes
+			data_t flipped_bytes[sizeof(interval_t)];
+			for (idx_t b = 0; b < sizeof(interval_t); b++) {
+				flipped_bytes[b] = static_cast<data_t>(~input[b]);
+			}
+			result_value = Radix::DecodeData<interval_t>(flipped_bytes);
+		} else {
+			result_value = Radix::DecodeData<interval_t>(input);
+		}
+		return sizeof(interval_t);
+	}
+};
+
 struct SortKeyVarcharOperator {
 	using TYPE = string_t;
 
@@ -562,7 +609,7 @@ void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<double>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<interval_t>>(vector_data, chunk, result);
+		TemplatedGetSortKeyLength<SortKeyIntervalOperator>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT128:
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<uhugeint_t>>(vector_data, chunk, result);
@@ -778,7 +825,7 @@ void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		TemplatedConstructSortKey<SortKeyConstantOperator<double>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedConstructSortKey<SortKeyConstantOperator<interval_t>>(vector_data, chunk, info);
+		TemplatedConstructSortKey<SortKeyIntervalOperator>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT128:
 		TemplatedConstructSortKey<SortKeyConstantOperator<uhugeint_t>>(vector_data, chunk, info);
@@ -1389,7 +1436,7 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 		TemplatedDecodeSortKey<SortKeyConstantOperator<double>>(decode_data, vector_data, result, result_offset, count);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedDecodeSortKey<SortKeyConstantOperator<interval_t>>(decode_data, vector_data, result, result_offset,
+		TemplatedDecodeSortKey<SortKeyIntervalOperator>(decode_data, vector_data, result, result_offset,
 		                                                            count);
 		break;
 	case PhysicalType::UINT128:

@@ -1,0 +1,41 @@
+# name: test/sql/function/list/list_sort_interval.test
+# description: list_sort for INTERVAL must order consistently with comparison/ORDER BY
+# group: [list]
+
+# Regression test for #25108:
+# list_sort encodes the raw interval struct; comparisons/ORDER BY normalize
+# (1 month = 30 days, 1 day = 24h) so the sort key must normalize too.
+
+query I
+SELECT i FROM (VALUES (INTERVAL '31 days'), (INTERVAL '1 month')) t(i) ORDER BY i
+----
+1 month
+31 days
+
+query I
+SELECT list_sort([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[1 month, 31 days]
+
+query I
+SELECT list_reverse_sort([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[31 days, 1 month]
+
+# list_grade_up returns the rank of each element (grade 1 = smallest).
+# 31 days > 1 month, so 31 days gets grade 2, 1 month grade 1.
+query I
+SELECT list_grade_up([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[2, 1]
+
+query I
+SELECT list_distinct([INTERVAL '31 days', INTERVAL '1 month', INTERVAL '31 days'])
+----
+[1 month, 1 month 1 day]
+
+# create_sort_key consistency: 31 days > 1 month, so ASC key must sort after
+query I
+SELECT create_sort_key(INTERVAL '31 days', 'ASC NULLS LAST') > create_sort_key(INTERVAL '1 month', 'ASC NULLS LAST')
+----
+true
